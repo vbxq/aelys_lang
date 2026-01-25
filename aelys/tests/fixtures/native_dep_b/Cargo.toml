@@ -1,0 +1,12 @@
+[package]
+name = "aelys-native-dep-b"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+aelys-native = { path = "../../../../aelys-native" }
+
+[workspace]

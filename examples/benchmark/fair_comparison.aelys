@@ -1,0 +1,58 @@
+needs std.io
+needs std.time
+needs std.convert
+
+fn gc_work() -> int {
+    let s = "x"
+    let mut total = 0
+    let mut i = 0
+    while i < 100 {
+        let g = s + s
+        total = total + i
+        i = i + 1
+    }
+    return total
+}
+
+@no_gc
+fn manual_work(arr: int) -> int {
+    let mut total = 0
+    let mut i = 0
+    while i < 100 {
+        store(arr, i, i)
+        total = total + i
+        i = i + 1
+    }
+    return total
+}
+
+fn pure_work() -> int {
+    let mut total = 0
+    let mut i = 0
+    while i < 100 {
+        total = total + i
+        i = i + 1
+    }
+    return total
+}
+
+let n = 50000
+
+io.print("=== Overhead comparison ===")
+
+let t0 = time.timer()
+let mut i = 0
+while i < n { let r = pure_work(); i = i + 1 }
+io.print("Pure arithmetic: " + convert.to_string(time.elapsed_ms(t0)) + "ms")
+
+let t1 = time.timer()
+i = 0
+while i < n { let r = gc_work(); i = i + 1 }
+io.print("GC (s + s):      " + convert.to_string(time.elapsed_ms(t1)) + "ms")
+
+let arr = alloc(100)
+let t2 = time.timer()
+i = 0
+while i < n { let r = manual_work(arr); i = i + 1 }
+free(arr)
+io.print("@no_gc (store):  " + convert.to_string(time.elapsed_ms(t2)) + "ms")

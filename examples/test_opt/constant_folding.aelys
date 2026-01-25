@@ -1,0 +1,48 @@
+needs std.io
+needs std.convert
+
+// Arithmétique entière simple
+let a = 2 + 3           // devrait devenir 5
+let b = 10 - 4          // devrait devenir 6
+let c = 6 * 7           // devrait devenir 42
+let d = 100 / 5         // devrait devenir 20
+let e = 17 % 5          // devrait devenir 2
+
+// Expressions imbriquées
+let f = (2 + 3) * (4 + 1)   // devrait devenir 25
+let g = 100 / (2 + 3)       // devrait devenir 20
+let h = (10 - 5) * (8 / 2)  // devrait devenir 20
+
+// Opérations flottantes
+let pi_approx = 22.0 / 7.0
+let area = 3.14159 * 10.0 * 10.0  // devrait être précalculé
+
+// Opérations logiques
+let l1 = true and true      // devrait devenir true
+let l2 = true and false     // devrait devenir false
+let l3 = false or true      // devrait devenir true
+let l4 = not false          // devrait devenir true
+
+// Comparaisons constantes
+let cmp1 = 5 > 3            // devrait devenir true
+let cmp2 = 10 == 10         // devrait devenir true
+let cmp3 = 7 <= 7           // devrait devenir true
+let cmp4 = 3 != 3           // devrait devenir false
+
+// Concaténation de strings (si supporté)
+let s = "Hello, " + "World!"
+
+// Opérations unaires
+let neg = -42
+let neg2 = -(10 + 5)        // devrait devenir -15
+
+io.print("Constant folding test:")
+io.print("a = " + convert.to_string(a))
+io.print("b = " + convert.to_string(b))
+io.print("c = " + convert.to_string(c))
+io.print("d = " + convert.to_string(d))
+io.print("e = " + convert.to_string(e))
+io.print("f = " + convert.to_string(f))
+io.print("g = " + convert.to_string(g))
+io.print("h = " + convert.to_string(h))
+io.print("s = " + s)

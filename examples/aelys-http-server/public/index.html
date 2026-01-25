@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>aelys http server</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>aelys http server</h1>
+        <p>a functional web server written in aelys</p>
+    </header>
+
+    <main>
+        <section>
+            <h2>features</h2>
+            <ul>
+                <li>static file serving</li>
+                <li>restful api endpoints</li>
+                <li>request logging</li>
+                <li>error handling</li>
+                <li>mime type detection</li>
+                <li>path traversal protection</li>
+            </ul>
+        </section>
+
+        <section>
+            <h2>api endpoints</h2>
+            <div class="endpoint">
+                <code>GET /api/hello</code>
+                <button onclick="fetchAPI('/api/hello')">test</button>
+                <span>simple hello message</span>
+            </div>
+            <div class="endpoint">
+                <code>GET /api/status</code>
+                <button onclick="fetchAPI('/api/status')">test</button>
+                <span>server status and statistics</span>
+            </div>
+            <div class="endpoint">
+                <code>GET /api/time</code>
+                <button onclick="fetchAPI('/api/time')">test</button>
+                <span>current server timestamp</span>
+            </div>
+            <div class="endpoint">
+                <code>POST /api/echo</code>
+                <button onclick="testEcho()">test</button>
+                <span>echo back your message</span>
+            </div>
+        </section>
+
+        <section>
+            <h2>response</h2>
+            <pre id="response">click a test button to see api response</pre>
+        </section>
+    </main>
+
+    <footer>
+        <p>built with <a href="https://github.com/vbxq/aelys_lang">aelys</a></p>
+    </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

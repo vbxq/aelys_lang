@@ -1,0 +1,34 @@
+needs std.io
+needs std.convert
+needs std.string
+
+// Recursive factorial with type annotations
+fn factorial(n: int) -> int {
+    if n <= 1 {
+        return 1
+    }
+    return n * factorial(n - 1)
+}
+
+// Iterative version for comparison
+fn factorial_iter(n: int) -> int {
+    let mut result: int = 1
+    for i in 2..=n {
+        result = result * i
+    }
+    return result
+}
+
+io.print("Factorial Calculator ===")
+io.print("")
+io.print(string.pad_right("n", 5, " ") + string.pad_right("Recursive", 20, " ") + "Iterative")
+io.print(string.repeat("-", 40))
+
+for i in 1..=15 {
+    let rec = factorial(i)
+    let iter = factorial_iter(i)
+    let n_str = string.pad_right(convert.to_string(i), 5, " ")
+    let rec_str = string.pad_right(convert.to_string(rec), 20, " ")
+    let iter_str = convert.to_string(iter)
+    io.print(n_str + rec_str + iter_str)
+}

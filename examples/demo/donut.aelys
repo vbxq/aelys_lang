@@ -1,0 +1,238 @@
+// donut.c port
+
+needs std.math
+needs std.time
+needs std.io
+needs std.convert
+
+let WIDTH: int = 80
+let HEIGHT: int = 40
+
+// Torus parameters
+let R1: float = 1.0      // Radius of the tube
+let R2: float = 2.0      // Distance from center to tube center
+let K2: float = 5.0      // Distance from viewer to donut
+let K1: float = WIDTH * K2 * 3.0 / (8.0 * (R1 + R2))  // Scaling factor
+
+// Luminance characters (from dark to bright)
+let CHARS: string = ".,-~:;=!*#$@"
+
+@no_gc
+fn fb_new(width: int, height: int) -> int {
+    let size = width * height
+    let fb = alloc(size + 2)
+    store(fb, 0, width)
+    store(fb, 1, height)
+    fb
+}
+
+@no_gc
+fn fb_free(fb: int) {
+    free(fb)
+}
+
+@no_gc
+fn fb_clear(fb: int) {
+    let width: int = load(fb, 0)
+    let height: int = load(fb, 1)
+    let size = width * height
+    for i in 0..size {
+        store(fb, 2 + i, 32)  // Space character
+    }
+}
+
+@no_gc
+fn fb_set(fb: int, x: int, y: int, char_code: int) {
+    let width: int = load(fb, 0)
+    let idx = 2 + y * width + x
+    store(fb, idx, char_code)
+}
+
+@no_gc
+fn fb_get(fb: int, x: int, y: int) -> int {
+    let width: int = load(fb, 0)
+    let idx = 2 + y * width + x
+    load(fb, idx)
+}
+
+@no_gc
+fn zbuf_new(width: int, height: int) -> int {
+    let size = width * height
+    let zb = alloc(size + 2)
+    store(zb, 0, width)
+    store(zb, 1, height)
+    zb
+}
+
+@no_gc
+fn zbuf_free(zb: int) {
+    free(zb)
+}
+
+@no_gc
+fn zbuf_clear(zb: int) {
+    let width: int = load(zb, 0)
+    let height: int = load(zb, 1)
+    let size = width * height
+    for i in 0..size {
+        store(zb, 2 + i, 0.0)
+    }
+}
+
+@no_gc
+fn zbuf_get(zb: int, x: int, y: int) -> float {
+    let width: int = load(zb, 0)
+    let idx = 2 + y * width + x
+    load(zb, idx)
+}
+
+@no_gc
+fn zbuf_set(zb: int, x: int, y: int, z: float) {
+    let width: int = load(zb, 0)
+    let idx = 2 + y * width + x
+    store(zb, idx, z)
+}
+
+fn char_code(idx: int) -> int {
+    // Return ASCII code of character at index
+    if idx == 0 { return 46 }   // '.'
+    if idx == 1 { return 44 }   // ','
+    if idx == 2 { return 45 }   // '-'
+    if idx == 3 { return 126 }  // '~'
+    if idx == 4 { return 58 }   // ':'
+    if idx == 5 { return 59 }   // ';'
+    if idx == 6 { return 61 }   // '='
+    if idx == 7 { return 33 }   // '!'
+    if idx == 8 { return 42 }   // '*'
+    if idx == 9 { return 35 }   // '#'
+    if idx == 10 { return 36 }  // '$'
+    if idx == 11 { return 64 }  // '@'
+    return 32  // space
+}
+
+fn code_to_char(code: int) -> string {
+    if code == 32 { return " " }
+    if code == 46 { return "." }
+    if code == 44 { return "," }
+    if code == 45 { return "-" }
+    if code == 126 { return "~" }
+    if code == 58 { return ":" }
+    if code == 59 { return ";" }
+    if code == 61 { return "=" }
+    if code == 33 { return "!" }
+    if code == 42 { return "*" }
+    if code == 35 { return "#" }
+    if code == 36 { return "$" }
+    if code == 64 { return "@" }
+    return " "
+}
+
+fn render_frame(fb: int, zbuf: int, A: float, B: float) {
+    fb_clear(fb)
+    zbuf_clear(zbuf)
+
+    let cosA = math.cos(A)
+    let sinA = math.sin(A)
+    let cosB = math.cos(B)
+    let sinB = math.sin(B)
+
+    // Sample the torus surface
+    let mut theta: float = 0.0
+    while theta < 2.0 * math.PI {
+        let cosTheta = math.cos(theta)
+        let sinTheta = math.sin(theta)
+
+        let mut phi: float = 0.0
+        while phi < 2.0 * math.PI {
+            let cosPhi = math.cos(phi)
+            let sinPhi = math.sin(phi)
+
+            // 3D coordinates of point on torus
+            let circleX = R2 + R1 * cosTheta
+            let circleY = R1 * sinTheta
+
+            // Rotation and projection
+            let x = circleX * (cosB * cosPhi + sinA * sinB * sinPhi) - circleY * cosA * sinB
+            let y = circleX * (sinB * cosPhi - sinA * cosB * sinPhi) + circleY * cosA * cosB
+            let z = K2 + cosA * circleX * sinPhi + circleY * sinA
+
+            let ooz = 1.0 / z
+
+            let xp: int = math.floor(WIDTH / 2.0 + K1 * ooz * x)
+            let yp: int = math.floor(HEIGHT / 2.0 - K1 * ooz * y * 0.5)
+
+            // Compute luminance
+            let L = cosPhi * cosTheta * sinB - cosA * cosTheta * sinPhi - sinA * sinTheta + cosB * (cosA * sinTheta - cosTheta * sinA * sinPhi)
+
+            if L > 0.0 {
+                if xp >= 0 and xp < WIDTH and yp >= 0 and yp < HEIGHT {
+                    if ooz > zbuf_get(zbuf, xp, yp) {
+                        zbuf_set(zbuf, xp, yp, ooz)
+                        let mut lum_idx: int = math.floor(L * 8.0)
+                        if lum_idx > 11 { lum_idx = 11 }
+                        if lum_idx < 0 { lum_idx = 0 }
+                        fb_set(fb, xp, yp, char_code(lum_idx))
+                    }
+                }
+            }
+            phi = phi + 0.14
+        }
+        theta = theta + 0.14
+    }
+}
+
+fn display_frame(fb: int) {
+    let width: int = load(fb, 0)
+    let height: int = load(fb, 1)
+
+    for y in 0..height {
+        let mut row: string = ""
+        for x in 0..width {
+            let code = fb_get(fb, x, y)
+            row = row + code_to_char(code)
+        }
+        io.print(row)
+    }
+}
+
+fn main() {
+    io.print("Initializing 3D Donut Renderer...")
+    io.print("Screen: " + convert.to_string(WIDTH) + "x" + convert.to_string(HEIGHT))
+    io.print("")
+
+    let fb = fb_new(WIDTH, HEIGHT)
+    let zbuf = zbuf_new(WIDTH, HEIGHT)
+
+    let mut A: float = 0.0
+    let mut B: float = 0.0
+    let num_frames: int = 500
+    let frame_delay: int = 15
+
+    io.print("Rendering " + convert.to_string(num_frames) + " frames...")
+    time.sleep(1000)
+
+    io.hide_cursor()
+    io.clear_screen()
+
+    for frame in 0..num_frames {
+        io.cursor_home()
+        render_frame(fb, zbuf, A, B)
+        display_frame(fb)
+
+        io.print("")
+        io.print("Frame " + convert.to_string(frame + 1) + "/" + convert.to_string(num_frames) + " | A=" + convert.to_string(math.floor(A * 100.0) / 100.0) + " B=" + convert.to_string(math.floor(B * 100.0) / 100.0))
+
+        A = A + 0.07
+        B = B + 0.03
+        time.sleep(frame_delay)
+    }
+
+    fb_free(fb)
+    zbuf_free(zbuf)
+    io.show_cursor()
+
+    io.print("")
+    io.print("Animation complete!")
+}
+
+main()

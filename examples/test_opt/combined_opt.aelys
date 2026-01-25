@@ -1,0 +1,65 @@
+needs std.io
+needs std.convert
+
+// Constantes globales
+let MAX_ITERATIONS = 100
+let THRESHOLD = 0.001
+
+// Test: constant folding + propagation
+let COMPUTED = (MAX_ITERATIONS / 2) + 10   // devrait devenir 60
+
+fn fibonacci_limit() -> int {
+    // Devrait propager MAX_ITERATIONS et folder l'expression
+    return MAX_ITERATIONS - 10   // devrait devenir 90
+}
+
+// Test: toutes les optimisations
+fn complex_test(n: int) -> int {
+    // Constant folding
+    let base = 2 * 3 * 4       // devrait devenir 24
+
+    // Global const propagation
+    let limit = MAX_ITERATIONS  // devrait propager 100
+
+    // Dead code elimination
+    if false {
+        return -999            // dead code
+    }
+
+    // Expression mixte
+    let result = base + (limit / 10) + n   // 24 + 10 + n = 34 + n
+
+    // Return avec calcul
+    return result
+}
+
+// Test d'expression arithmétique complexe
+fn arithmetic_chain() -> int {
+    // tout ceci devrait être foldé en une seule constante
+    let a = 1 + 2              // 3
+    let b = a * 3              // 9 (si propagation locale)
+    let c = 10 + 20 + 30       // 60
+    let d = c / 6              // 10
+    let e = 100 - 50 - 25      // 25
+
+    return (2 + 3) * (4 + 6)   // devrait devenir 50
+}
+
+// Test de conditions constantes
+fn const_conditions() -> int {
+    // Ces conditions devraient être évaluées à la compilation
+    if 10 > 5 {                // toujours vrai
+        if 3 < 2 {             // toujours faux
+            return 0           // dead code
+        }
+        return 42              // seul code exécuté
+    }
+    return -1                  // dead code
+}
+
+io.print("Combined optimization test:")
+io.print("COMPUTED = " + convert.to_string(COMPUTED))
+io.print("fibonacci_limit() = " + convert.to_string(fibonacci_limit()))
+io.print("complex_test(6) = " + convert.to_string(complex_test(6)))
+io.print("arithmetic_chain() = " + convert.to_string(arithmetic_chain()))
+io.print("const_conditions() = " + convert.to_string(const_conditions()))

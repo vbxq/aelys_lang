@@ -1,0 +1,21 @@
+[package]
+name = "aelys"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../aelys-common" }
+aelys-syntax = { path = "../aelys-syntax" }
+aelys-frontend = { path = "../aelys-frontend" }
+aelys-sema = { path = "../aelys-sema" }
+aelys-opt = { path = "../aelys-opt" }
+aelys-bytecode = { path = "../aelys-bytecode" }
+aelys-backend = { path = "../aelys-backend" }
+aelys-runtime = { path = "../aelys-runtime" }
+aelys-modules = { path = "../aelys-modules" }
+aelys-driver = { path = "../aelys-driver" }
+
+[dev-dependencies]
+tempfile = "3"
+aelys-opt = { path = "../aelys-opt" }
+aelys-bytecode = { path = "../aelys-bytecode" }

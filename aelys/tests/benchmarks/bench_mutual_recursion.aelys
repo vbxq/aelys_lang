@@ -1,0 +1,20 @@
+// Mutual recursion benchmark - is_even/is_odd
+// Each function calls a different global, testing cache separation
+
+fn is_even(n: int) -> bool {
+    if n == 0 { return true }
+    return is_odd(n - 1)
+}
+
+fn is_odd(n: int) -> bool {
+    if n == 0 { return false }
+    return is_even(n - 1)
+}
+
+// Call both functions many times
+let mut result = 0
+for i in 0..1000000 {
+    if is_even(20) { result = result + 1 }
+    if is_odd(21) { result = result + 1 }
+}
+result

@@ -1,0 +1,66 @@
+needs std.net as net
+needs std.io
+needs print from std.io
+needs std.time
+needs std.string as str
+needs to_string from std.convert
+
+needs config
+
+needs lib.http as http
+needs lib.utils as utils
+needs lib.router as router
+
+fn handle_client(client: int) {
+    let start_time = time.timer()
+
+    net.set_nodelay(client, true)
+
+    let request_line = net.recv_line(client)
+    let trimmed = str.trim(request_line)
+
+    if str.len(trimmed) == 0 {
+        utils.log_error("Empty request received")
+        http.send_error(client, 400, "Bad Request: Empty request line")
+        net.close(client)
+        return
+    }
+
+    let method = http.parse_method(request_line)
+    let path = http.parse_path(request_line)
+
+    let headers = http.parse_headers(client)
+
+    let status = router.route_request(client, method, path, headers)
+
+    net.close(client)
+
+    if config.LOG_REQUESTS {
+        let duration = time.elapsed_ms(start_time)
+        utils.log_request(method, path, status, duration)
+    }
+}
+
+fn start_server() {
+    let host = config.HOST
+    let port = config.PORT
+
+    router.init_router()
+
+    let listener = net.listen(host, port)
+
+    print("aelys http server")
+    print("listening on http://" + host + ":" + to_string(port))
+    print("")
+
+    while true {
+        let client = net.accept(listener)
+        handle_client(client)
+    }
+}
+
+fn main() {
+    start_server()
+}
+
+main()

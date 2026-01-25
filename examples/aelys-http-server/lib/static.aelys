@@ -1,0 +1,120 @@
+needs std.fs as fs
+needs std.string as str
+needs utils
+needs http
+
+pub fn serve_static(client: int, path: string, public_dir: string, index_file: string) -> bool {
+    if not utils.is_safe_path(path) {
+        utils.log_error("Directory traversal attempt: " + path)
+        http.send_error(client, 403, "Access forbidden: invalid path")
+        return false
+    }
+
+    let mut file_path = path
+
+    if str.len(file_path) == 0 {
+        file_path = "/" + index_file
+    } else if str.len(file_path) == 1 and str.starts_with(file_path, "/") {
+        file_path = "/" + index_file
+    }
+
+    let mut full_path = public_dir + file_path
+
+    if fs.is_dir(full_path) {
+        full_path = fs.join(full_path, index_file)
+        file_path = file_path + "/" + index_file
+    }
+
+    if not fs.exists(full_path) {
+        http.send_error(client, 404, "File not found: " + file_path)
+        return false
+    }
+
+    if not fs.is_file(full_path) {
+        http.send_error(client, 403, "Cannot serve directory without index file")
+        return false
+    }
+
+    let content = fs.read_text(full_path)
+
+    let mut content_type = "application/octet-stream"
+
+    if str.ends_with(file_path, ".html") or str.ends_with(file_path, ".htm") {
+        content_type = "text/html; charset=utf-8"
+    } else if str.ends_with(file_path, ".css") {
+        content_type = "text/css; charset=utf-8"
+    } else if str.ends_with(file_path, ".js") {
+        content_type = "application/javascript; charset=utf-8"
+    } else if str.ends_with(file_path, ".json") {
+        content_type = "application/json; charset=utf-8"
+    } else if str.ends_with(file_path, ".png") {
+        content_type = "image/png"
+    } else if str.ends_with(file_path, ".jpg") or str.ends_with(file_path, ".jpeg") {
+        content_type = "image/jpeg"
+    } else if str.ends_with(file_path, ".gif") {
+        content_type = "image/gif"
+    } else if str.ends_with(file_path, ".svg") {
+        content_type = "image/svg+xml"
+    } else if str.ends_with(file_path, ".ico") {
+        content_type = "image/x-icon"
+    }
+
+    http.send_response(client, 200, content_type, content)
+
+    return true
+}
+
+fn generate_directory_listing(path: string, public_dir: string) -> string {
+    let mut html = "<!DOCTYPE html>\n"
+    html = html + "<html>\n<head>\n"
+    html = html + "<title>Directory: " + path + "</title>\n"
+    html = html + "<style>\n"
+    html = html + "body { font-family: monospace; max-width: 800px; margin: 40px auto; }\n"
+    html = html + "h1 { border-bottom: 2px solid #333; }\n"
+    html = html + "ul { list-style: none; padding: 0; }\n"
+    html = html + "li { padding: 5px 0; }\n"
+    html = html + "a { text-decoration: none; color: #0066cc; }\n"
+    html = html + "a:hover { text-decoration: underline; }\n"
+    html = html + "</style>\n"
+    html = html + "</head>\n<body>\n"
+    html = html + "<h1>Directory: " + path + "</h1>\n"
+    html = html + "<ul>\n"
+
+    html = html + "<li><em>Directory listing not yet implemented</em></li>\n"
+
+    html = html + "</ul>\n"
+    html = html + "<hr><small>Aelys HTTP Server</small>\n"
+    html = html + "</body>\n</html>"
+
+    return html
+}
+
+fn is_servable_extension(extension: string) -> bool {
+    let mut ext = str.to_lower(extension)
+
+    if str.starts_with(ext, ".") {
+        ext = str.substr(ext, 1, str.len(ext) - 1)
+    }
+
+    if ext == "html" { return true }
+    if ext == "htm" { return true }
+    if ext == "css" { return true }
+    if ext == "js" { return true }
+    if ext == "json" { return true }
+    if ext == "txt" { return true }
+    if ext == "md" { return true }
+    if ext == "png" { return true }
+    if ext == "jpg" { return true }
+    if ext == "jpeg" { return true }
+    if ext == "gif" { return true }
+    if ext == "svg" { return true }
+    if ext == "ico" { return true }
+    if ext == "webp" { return true }
+    if ext == "woff" { return true }
+    if ext == "woff2" { return true }
+    if ext == "ttf" { return true }
+    if ext == "otf" { return true }
+    if ext == "pdf" { return true }
+
+    return false
+}

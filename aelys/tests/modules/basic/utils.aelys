@@ -1,0 +1,6 @@
+// utils.aelys - Basic module with public and private symbols
+pub fn double(x) { x * 2 }
+pub let FACTOR = 10
+
+fn private_helper() { 42 }
+let private_state = 0

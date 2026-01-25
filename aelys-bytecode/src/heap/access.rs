@@ -1,0 +1,54 @@
+use super::Heap;
+use crate::object::{GcObject, GcRef, ObjectKind};
+
+impl Heap {
+    pub fn get(&self, gc_ref: GcRef) -> Option<&GcObject> {
+        self.objects.get(gc_ref.index())?.as_ref()
+    }
+
+    // SAFETY: caller guarantees valid index and non-empty slot.
+    // Used in hot paths where we've already validated the ref.
+    #[inline(always)]
+    pub unsafe fn get_unchecked(&self, gc_ref: GcRef) -> &GcObject {
+        unsafe {
+            self.objects
+                .get_unchecked(gc_ref.index())
+                .as_ref()
+                .unwrap_unchecked()
+        }
+    }
+
+    pub fn get_mut(&mut self, gc_ref: GcRef) -> Option<&mut GcObject> {
+        self.objects.get_mut(gc_ref.index())?.as_mut()
+    }
+
+    pub fn get_type_name(&self, gc_ref: GcRef) -> &'static str {
+        if let Some(obj) = self.get(gc_ref) {
+            match &obj.kind {
+                ObjectKind::String(_) => "String",
+                ObjectKind::Function(_) => "Function",
+                ObjectKind::Native(_) => "NativeFunction",
+                ObjectKind::Upvalue(_) => "Upvalue",
+                ObjectKind::Closure(_) => "Closure",
+            }
+        } else {
+            "Unknown"
+        }
+    }
+
+    pub fn should_collect(&self) -> bool {
+        self.bytes_allocated >= self.next_gc
+    }
+
+    pub fn bytes_allocated(&self) -> usize {
+        self.bytes_allocated
+    }
+
+    pub fn next_gc_threshold(&self) -> usize {
+        self.next_gc
+    }
+
+    pub fn object_count(&self) -> usize {
+        self.objects.iter().filter(|o| o.is_some()).count()
+    }
+}

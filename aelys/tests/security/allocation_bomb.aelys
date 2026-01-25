@@ -1,0 +1,23 @@
+// check if we handle OOM (out of memory) error correctly
+// crashes if everything is good
+
+needs std.io
+
+@no_gc
+fn alloc_bomb() {
+    let mut i = 0
+    while i < 10000000000 {
+        let p = alloc(4)
+        store(p, 0, i);
+	// io.print(p)
+        // no free on purpose
+        i = i + 1
+    }
+}
+
+fn main() {
+    alloc_bomb()
+}
+
+main()
+

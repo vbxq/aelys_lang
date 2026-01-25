@@ -1,0 +1,6 @@
+[package]
+name = "aelys-syntax"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]

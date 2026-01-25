@@ -1,0 +1,16 @@
+// Benchmark: Many global function calls in a loop
+// Tests cache efficiency for repeated calls to same global
+
+fn add(a: int, b: int) -> int { return a + b }
+fn sub(a: int, b: int) -> int { return a - b }
+fn mul(a: int, b: int) -> int { return a * b }
+
+// Call these functions many times in a loop
+let mut result = 0
+for i in 0..10000000 {
+    result = add(result, 1)
+    result = sub(result, 1)
+    result = add(result, mul(2, 3))
+    result = sub(result, 6)
+}
+result

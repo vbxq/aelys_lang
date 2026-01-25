@@ -1,0 +1,3 @@
+// a.aelys - Creates circular dependency with b.aelys
+needs b
+pub fn from_a() { 1 }

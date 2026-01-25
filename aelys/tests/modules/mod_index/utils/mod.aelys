@@ -1,0 +1,2 @@
+// utils/mod.aelys - Module index file
+pub fn utility() { "from mod.aelys" }

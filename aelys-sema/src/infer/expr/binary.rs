@@ -1,0 +1,139 @@
+use super::TypeInference;
+use crate::constraint::{Constraint, ConstraintReason};
+use crate::typed_ast::TypedExpr;
+use crate::types::InferType;
+use aelys_syntax::{BinaryOp, Span, UnaryOp};
+
+impl TypeInference {
+    /// Infer type for binary operation
+    pub(super) fn infer_binary_op(
+        &mut self,
+        op: BinaryOp,
+        left: &TypedExpr,
+        right: &TypedExpr,
+        span: Span,
+    ) -> InferType {
+        match op {
+            BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
+                let result_type = self.type_gen.fresh();
+
+                self.constraints.push(Constraint::equal(
+                    left.ty.clone(),
+                    right.ty.clone(),
+                    span,
+                    ConstraintReason::BinaryOp { op: op.to_string() },
+                ));
+
+                self.constraints.push(Constraint::equal(
+                    left.ty.clone(),
+                    result_type.clone(),
+                    span,
+                    ConstraintReason::BinaryOp { op: op.to_string() },
+                ));
+
+                if op == BinaryOp::Add {
+                    self.constraints.push(Constraint::one_of(
+                        left.ty.clone(),
+                        vec![InferType::Int, InferType::Float, InferType::String],
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
+                } else {
+                    self.constraints.push(Constraint::one_of(
+                        left.ty.clone(),
+                        vec![InferType::Int, InferType::Float],
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
+                }
+
+                result_type
+            }
+
+            BinaryOp::Lt | BinaryOp::Le | BinaryOp::Gt | BinaryOp::Ge => {
+                self.constraints.push(Constraint::equal(
+                    left.ty.clone(),
+                    right.ty.clone(),
+                    span,
+                    ConstraintReason::Comparison,
+                ));
+
+                self.constraints.push(Constraint::one_of(
+                    left.ty.clone(),
+                    vec![InferType::Int, InferType::Float],
+                    span,
+                    ConstraintReason::Comparison,
+                ));
+
+                InferType::Bool
+            }
+
+            BinaryOp::Eq | BinaryOp::Ne => {
+                self.constraints.push(Constraint::equal(
+                    left.ty.clone(),
+                    right.ty.clone(),
+                    span,
+                    ConstraintReason::Comparison,
+                ));
+
+                InferType::Bool
+            }
+
+            BinaryOp::Shl
+            | BinaryOp::Shr
+            | BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor => {
+                self.constraints.push(Constraint::equal(
+                    InferType::Int,
+                    left.ty.clone(),
+                    span,
+                    ConstraintReason::BitwiseOp { op: op.to_string() },
+                ));
+
+                self.constraints.push(Constraint::equal(
+                    InferType::Int,
+                    right.ty.clone(),
+                    span,
+                    ConstraintReason::BitwiseOp { op: op.to_string() },
+                ));
+
+                InferType::Int
+            }
+        }
+    }
+
+    /// Infer type for unary operation
+    pub(super) fn infer_unary_op(
+        &mut self,
+        op: UnaryOp,
+        operand: &TypedExpr,
+        span: Span,
+    ) -> InferType {
+        match op {
+            UnaryOp::Neg => {
+                self.constraints.push(Constraint::one_of(
+                    operand.ty.clone(),
+                    vec![InferType::Int, InferType::Float],
+                    span,
+                    ConstraintReason::BinaryOp {
+                        op: "-".to_string(),
+                    },
+                ));
+                operand.ty.clone()
+            }
+            UnaryOp::Not => InferType::Bool,
+            UnaryOp::BitNot => {
+                self.constraints.push(Constraint::equal(
+                    InferType::Int,
+                    operand.ty.clone(),
+                    span,
+                    ConstraintReason::BitwiseOp {
+                        op: "~".to_string(),
+                    },
+                ));
+                InferType::Int
+            }
+        }
+    }
+}

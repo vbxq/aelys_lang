@@ -1,0 +1,24 @@
+needs sqrt from std.math
+
+fn compute(x: int) -> int {
+    return x * 2 + 1
+}
+
+fn process(a: int, b: int) -> int {
+    return a + b
+}
+
+let ptr = alloc(1)
+store(ptr, 0, 0)
+
+let mut result = 0
+
+for i in 0..5000000 {
+    let v = load(ptr, 0)
+    let c = compute(v)
+    let p = process(c, i)
+    store(ptr, 0, p % 1000)
+    result = result + 1
+}
+
+result

@@ -1,0 +1,186 @@
+# Changelog
+
+All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
+
+## 0.17.x (Current)
+
+**0.17.6-a**
+- Direct opcodes for `alloc`/`free`/`load`/`store` (~45% faster)
+- Fixed disassembler output for memory opcodes
+
+**0.17.5-a**
+- Syntax highlighting fixes for various editors
+- Minor bugfixes
+
+**0.17.3-a**
+- Added unused variable elimination optimization pass
+- Improved for loop handling in optimizer
+
+**0.17.2-a**
+- Combined optimization test cases
+- Fixed some optimizer edge cases
+
+**0.17.0-a** - Project Restructure
+- Major codebase reorganization
+- Consolidated dispatch and ops call files
+- Fixed module loading in REPL
+- Exported VM and Value types in public API for embedding
+
+## 0.16.x
+
+**0.16.0-a** - Bitwise Operators
+- Added bitwise operators: `&`, `|`, `^`, `~`, `<<`, `>>`
+- Function calling and caching mechanism for embedded usage
+
+## 0.15.x - Inline Caching & Security
+
+This was a big release focused on performance and security.
+
+**0.15.20-a**
+- Documentation about safety
+- Integer overflow in offsets fix
+- Native transmute safety improvements
+
+**0.15.14-a - 0.15.16-a** - Security Hardening
+- Register bounds checking
+- Bytecode patching bounds validation
+- Cache slot DoS prevention
+- Module path duplication fix
+- Compiler clone epidemic cleanup
+- 48-bit integer documentation
+
+**0.15.4-a - 0.15.6-a** - CallGlobalNative
+- Added `CallGlobalNative` opcode for optimized native function calls
+- Support for known native globals
+- Significant performance improvement for stdlib calls
+
+**0.15.0-a - 0.15.2-a** - Monomorphic Inline Cache
+- Implemented MIC via bytecode patching
+- CallGlobal caching for globals
+- Major call overhead reduction
+
+## 0.14.x - Optimizer & Security
+
+**0.14.6-a - 0.14.7-a**
+- Fixed func_idx validation during bytecode deserialization
+- Fixed parser peek() bounds panic
+- Bounded expression recursion
+- Bounded block comment nesting
+
+**0.14.3-a - 0.14.5-a** - Buffer Safety
+- Fixed unbounded buffer allocation in std
+- Path traversal prevention via fs.join
+- Bounded network data accumulation
+- Register allocation overflow fix
+- Constant index truncation fix
+
+**0.14.1-a**
+- Critical fix: global constant propagation
+- Liveness analysis improvements
+
+## 0.13.x - Bytecode Optimization
+
+**0.13.1-a**
+- Working optimization system
+- Pipeline integration
+- Default optimization level set
+
+**0.13.0-a** - Optimization Module
+- Bytecode optimization module
+- Constant folding
+- Dead code elimination
+
+## 0.12.x - HTTP Server & Native Modules
+
+**0.12.3-a**
+- Fixed native system module
+
+**0.12.x**
+- Added HTTP server example
+- Native module support (alpha)
+- Module system improvements
+
+## 0.10.x - Security Overhaul
+
+**0.10.2-a**
+- Global layout tests
+
+**0.10.0-a** - Security Update
+- Bytecode verifier
+- Register/constant out-of-bounds checking
+- No more unchecked heap access
+- Capability system for stdlib (fs, net require explicit permission)
+
+## 0.9.x
+
+**0.9.0-a** - Compilation Pipeline
+- Stage-based compilation pipeline with caching
+- Faster incremental builds
+
+## 0.8.x - Type System & Closures
+
+**0.8.10-a - 0.8.11-a**
+- Memory safety improvements
+- Pre-allocate register vec to prevent pointer invalidation
+- Path traversal validation in module loader
+- Bounds checking in LoadK opcode
+
+**0.8.7-a**
+- Unchecked load/store methods for manual heap
+- Globals by index cache
+- Direct register access optimization
+- Fixed memory leak in @no_gc (ExitNoGc wasn't emitted)
+
+**0.8.1-a - 0.8.2-a** - Typed Pipeline
+- Typed compilation pipeline
+- Lambda upvalue capture from outer scopes
+- Upvalue capture mechanism for nested functions
+
+**0.8.0-a**
+- Type inference with guarded operations
+
+## 0.7.x - Standard Library
+
+**0.7.2-a**
+- 6.2x faster nested calls
+- 6.7x faster function calls
+
+**0.7.0-a** - Standard Library
+- Standard library module support
+- Global layout hash computation
+- Global sync with mapping IDs
+
+## 0.6.x
+
+- Working module system
+- Global index allocator
+- Import handling
+
+## 0.3.x - Performance
+
+**0.3.3-a**
+- Benchmark test files
+
+**0.3.2-a**
+- IncGlobalI superinstruction
+- Significant performance boost for incrementing globals
+
+**0.3.0-a**
+- 50% closure performance improvement via caching
+
+## 0.1.x - Foundations
+
+**0.1.2-a**
+- 30% performance improvement
+- Garbage collection optimization
+- Upvalues support in call frames
+
+**0.1.x**
+- Initial closures and upvalues
+- Basic GC implementation
+- Compiler mutability tracking
+
+## Initial Commit
+
+- Project started
+- BSD 3-Clause License

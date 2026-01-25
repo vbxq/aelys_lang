@@ -1,0 +1,145 @@
+needs std.io
+needs std.convert
+needs std.math
+needs std.time
+
+// Variables with type annotations
+let x: int = 42
+let pi: float = 3.14159
+let name: string = "Aelys"
+let flag: bool = true
+
+io.print("Variables with Types ===")
+io.print("x: int = " + convert.to_string(x))
+io.print("pi: float = " + convert.to_string(pi))
+io.print("name: string = " + name)
+io.print("flag: bool = " + convert.to_string(flag))
+
+// Mutable variables with types
+let mut counter: int = 0
+counter = counter + 10
+io.print("")
+io.print("Mutable Variable ===")
+io.print("counter (after +10) = " + convert.to_string(counter))
+
+// Function with typed parameters
+fn add(a: int, b: int) -> int {
+    return a + b
+}
+
+io.print("")
+io.print("Typed Function (add) ===")
+io.print("add(100, 200) = " + convert.to_string(add(100, 200)))
+
+// Function with typed parameters and return type
+fn multiply(x: int, y: int) -> int {
+    return x * y
+}
+
+io.print("")
+io.print("Typed Function with Return Type (multiply) ===")
+io.print("multiply(6, 7) = " + convert.to_string(multiply(6, 7)))
+
+// Lambda with type annotations
+let square = fn(n: int) -> int {
+    return n * n
+}
+
+io.print("")
+io.print("Typed Lambda (square) ===")
+io.print("square(9) = " + convert.to_string(square(9)))
+
+// Function with float types
+fn average(a: float, b: float) -> float {
+    return (a + b) / 2.0
+}
+
+io.print("")
+io.print("Float Function (average) ===")
+io.print("average(10.0, 20.0) = " + convert.to_string(average(10.0, 20.0)))
+
+// Type inference (no annotations needed)
+let inferred_int = 123
+let inferred_float = 4.56
+let inferred_sum = inferred_int + 77
+
+io.print("")
+io.print("Type Inference ===")
+io.print("inferred_int = " + convert.to_string(inferred_int))
+io.print("inferred_float = " + convert.to_string(inferred_float))
+io.print("inferred_sum = " + convert.to_string(inferred_sum))
+
+// Loop with typed counter (using for loop)
+fn sum_to_n(n: int) -> int {
+    let mut sum: int = 0
+    for i in 1..=n {
+        sum = sum + i
+    }
+    return sum
+}
+
+io.print("")
+io.print("Sum 1 to 10 ===")
+io.print("sum_to_n(10) = " + convert.to_string(sum_to_n(10)))
+
+// Recursive function with types
+fn fibonacci(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return fibonacci(n - 1) + fibonacci(n - 2)
+}
+
+io.print("")
+io.print("Fibonacci(15) ===")
+io.print("fibonacci(15) = " + convert.to_string(fibonacci(15)))
+
+// Higher-order function with closure
+fn make_multiplier(factor: int) {
+    return fn(x: int) -> int {
+        return x * factor
+    }
+}
+
+let double = make_multiplier(2)
+let triple = make_multiplier(3)
+
+io.print("")
+io.print("Higher-Order Functions ===")
+io.print("double(10) = " + convert.to_string(double(10)))
+io.print("triple(10) = " + convert.to_string(triple(10)))
+
+// Using stdlib with types
+io.print("")
+io.print("Using Standard Library ===")
+io.print("math.sqrt(16) = " + convert.to_string(math.sqrt(16)))
+io.print("math.pow(2, 8) = " + convert.to_string(math.pow(2, 8)))
+io.print("math.PI = " + convert.to_string(math.PI))
+
+// Performance comparison: typed vs untyped
+io.print("")
+io.print("Performance: Typed vs Untyped ===")
+
+fn fib_typed(n: int) -> int {
+    if n <= 1 { return n }
+    return fib_typed(n - 1) + fib_typed(n - 2)
+}
+
+fn fib_untyped(n) {
+    if n <= 1 { return n }
+    return fib_untyped(n - 1) + fib_untyped(n - 2)
+}
+
+let t1 = time.timer()
+let r1 = fib_typed(30)
+let e1 = time.elapsed_ms(t1)
+
+let t2 = time.timer()
+let r2 = fib_untyped(30)
+let e2 = time.elapsed_ms(t2)
+
+io.print("fib_typed(30) = " + convert.to_string(r1) + " in " + convert.to_string(e1) + " ms")
+io.print("fib_untyped(30) = " + convert.to_string(r2) + " in " + convert.to_string(e2) + " ms")
+
+io.print("")
+io.print("Done! ===")

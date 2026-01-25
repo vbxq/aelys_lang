@@ -1,0 +1,108 @@
+use crate::Span;
+
+#[derive(Debug, Clone)]
+pub struct TypeAnnotation {
+    pub name: String, // "int", "float64", "string", etc
+    pub span: Span,
+}
+
+impl TypeAnnotation {
+    pub fn new(name: String, span: Span) -> Self { Self { name, span } }
+}
+
+#[derive(Debug, Clone)]
+pub struct Parameter {
+    pub name: String,
+    pub type_annotation: Option<TypeAnnotation>, // None = inferred
+    pub span: Span,
+}
+
+impl Parameter {
+    pub fn new(name: String, type_annotation: Option<TypeAnnotation>, span: Span) -> Self {
+        Self { name, type_annotation, span }
+    }
+
+    pub fn untyped(name: String, span: Span) -> Self {
+        Self { name, type_annotation: None, span }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+impl Expr {
+    pub fn new(kind: ExprKind, span: Span) -> Self { Self { kind, span } }
+}
+
+#[derive(Debug, Clone)]
+pub enum ExprKind {
+    // literals
+    Int(i64),
+    Float(f64),
+    String(String),
+    Bool(bool),
+    Null,
+
+    Identifier(String),
+
+    Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
+    Unary { op: UnaryOp, operand: Box<Expr> },
+
+    // short-circuit (separate from Binary because different codegen)
+    And { left: Box<Expr>, right: Box<Expr> },
+    Or { left: Box<Expr>, right: Box<Expr> },
+
+    Call { callee: Box<Expr>, args: Vec<Expr> },
+    Assign { name: String, value: Box<Expr> },
+    Grouping(Box<Expr>), // for precedence
+
+    // ternary: cond ? then : else
+    If { condition: Box<Expr>, then_branch: Box<Expr>, else_branch: Box<Expr> },
+
+    Lambda {
+        params: Vec<Parameter>,
+        return_type: Option<TypeAnnotation>,
+        body: Vec<crate::ast::Stmt>,
+    },
+
+    Member { object: Box<Expr>, member: String }, // module.symbol
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add, Sub, Mul, Div, Mod,
+    Eq, Ne, Lt, Le, Gt, Ge,
+    Shl, Shr, BitAnd, BitOr, BitXor,
+}
+
+impl BinaryOp {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Add => "+", Self::Sub => "-", Self::Mul => "*", Self::Div => "/", Self::Mod => "%",
+            Self::Eq => "==", Self::Ne => "!=",
+            Self::Lt => "<", Self::Le => "<=", Self::Gt => ">", Self::Ge => ">=",
+            Self::Shl => "<<", Self::Shr => ">>",
+            Self::BitAnd => "&", Self::BitOr => "|", Self::BitXor => "^",
+        }
+    }
+}
+
+impl std::fmt::Display for BinaryOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.as_str()) }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Neg,    // -
+    Not,    // not
+    BitNot, // ~
+}
+
+impl UnaryOp {
+    pub fn as_str(&self) -> &'static str {
+        match self { Self::Neg => "-", Self::Not => "not", Self::BitNot => "~" }
+    }
+}

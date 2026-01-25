@@ -1,0 +1,96 @@
+needs print from std.io
+needs to_string from std.convert
+needs std.string as str
+needs std.time
+
+pub fn mime_type(extension: string) -> string {
+    let mut ext = str.to_lower(extension)
+
+    if str.starts_with(ext, ".") {
+        ext = str.substr(ext, 1, str.len(ext) - 1)
+    }
+
+    if ext == "html" { return "text/html; charset=utf-8" }
+    if ext == "css" { return "text/css; charset=utf-8" }
+    if ext == "js" { return "application/javascript; charset=utf-8" }
+    if ext == "json" { return "application/json; charset=utf-8" }
+    if ext == "xml" { return "application/xml; charset=utf-8" }
+    if ext == "txt" { return "text/plain; charset=utf-8" }
+    if ext == "md" { return "text/markdown; charset=utf-8" }
+
+    if ext == "png" { return "image/png" }
+    if ext == "jpg" { return "image/jpeg" }
+    if ext == "jpeg" { return "image/jpeg" }
+    if ext == "gif" { return "image/gif" }
+    if ext == "svg" { return "image/svg+xml" }
+    if ext == "ico" { return "image/x-icon" }
+    if ext == "webp" { return "image/webp" }
+
+    if ext == "woff" { return "font/woff" }
+    if ext == "woff2" { return "font/woff2" }
+    if ext == "ttf" { return "font/ttf" }
+    if ext == "otf" { return "font/otf" }
+
+    if ext == "pdf" { return "application/pdf" }
+    if ext == "zip" { return "application/zip" }
+
+    return "application/octet-stream"
+}
+
+pub fn status_text(code: int) -> string {
+    if code == 200 { return "OK" }
+    if code == 201 { return "Created" }
+    if code == 204 { return "No Content" }
+    if code == 301 { return "Moved Permanently" }
+    if code == 302 { return "Found" }
+    if code == 304 { return "Not Modified" }
+    if code == 400 { return "Bad Request" }
+    if code == 401 { return "Unauthorized" }
+    if code == 403 { return "Forbidden" }
+    if code == 404 { return "Not Found" }
+    if code == 405 { return "Method Not Allowed" }
+    if code == 500 { return "Internal Server Error" }
+    if code == 501 { return "Not Implemented" }
+    if code == 503 { return "Service Unavailable" }
+    return "Unknown"
+}
+
+pub fn log_request(method: string, path: string, status: int, duration_ms: int) {
+    let log_line = method + " " + path + " " + to_string(status) + " " + to_string(duration_ms) + "ms"
+    print(log_line)
+}
+
+pub fn log_error(message: string) {
+    print("error: " + message)
+}
+
+pub fn log_info(message: string) {
+    print(message)
+}
+
+pub fn log_success(message: string) {
+    print(message)
+}
+
+pub fn is_safe_path(path: string) -> bool {
+    if str.contains(path, "..") {
+        return false
+    }
+    if str.contains(path, "//") {
+        return false
+    }
+    if str.contains(path, "\\") {
+        return false
+    }
+    return true
+}
+
+pub fn normalize_path(path: string) -> string {
+    let mut normalized = path
+
+    if str.len(normalized) > 1 and str.ends_with(normalized, "/") {
+        normalized = str.substr(normalized, 0, str.len(normalized) - 1)
+    }
+
+    return normalized
+}
