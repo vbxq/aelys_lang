@@ -59,6 +59,7 @@ pub fn load_modules_for_program(
         module_aliases,
         known_globals,
         known_native_globals,
+        next_call_site_slot: loader.next_call_site_slot,
     })
 }
 
@@ -116,6 +117,7 @@ pub fn load_modules_with_loader(
             module_aliases,
             known_globals,
             known_native_globals,
+            next_call_site_slot: loader.next_call_site_slot,
         },
         loader,
     ))

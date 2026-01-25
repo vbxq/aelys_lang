@@ -125,14 +125,17 @@ impl ModuleLoader {
         let mut optimizer = Optimizer::new(aelys_opt::OptimizationLevel::Standard);
         let typed_program = optimizer.optimize(typed_program);
 
-        let (mut function, mut compile_heap, _globals) = Compiler::with_modules(
+        let mut compiler = Compiler::with_modules(
             Some(module_path_str.to_string()),
             module_source.clone(),
             module_aliases,
             known_globals,
             known_native_globals,
-        )
-        .compile_typed(&typed_program)?;
+        );
+        compiler.next_call_site_slot = self.next_call_site_slot;
+        let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;
+        // update call_site_slot from the compiled function (it includes slots used during compilation)
+        self.next_call_site_slot = function.call_site_count;
 
         let remap = vm.merge_heap(&mut compile_heap)?;
         function.remap_constants(&remap);

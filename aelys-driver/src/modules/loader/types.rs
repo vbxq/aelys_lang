@@ -31,6 +31,7 @@ pub struct ModuleImports {
     pub module_aliases: HashSet<String>,      // "utils" from `needs utils`
     pub known_globals: HashSet<String>,       // direct imports
     pub known_native_globals: HashSet<String>, // native funcs for codegen opt
+    pub next_call_site_slot: u16,            // next available call site slot after loading all modules
 }
 
 pub enum LoadResult {
@@ -47,4 +48,5 @@ pub struct ModuleLoader {
     pub(crate) native_fingerprints: HashMap<String, FileFingerprint>,
     pub(crate) manifest: Option<Manifest>,
     pub(crate) loaded_native_modules: HashMap<String, LoadedNativeInfo>,
+    pub(crate) next_call_site_slot: u16,
 }

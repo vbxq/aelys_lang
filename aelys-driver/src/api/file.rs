@@ -89,14 +89,15 @@ pub fn run_file_with_config_and_opt(
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
 
-    let (mut function, mut compile_heap, _globals) = Compiler::with_modules(
+    let mut compiler = Compiler::with_modules(
         None,
         src.clone(),
         imports.module_aliases,
         imports.known_globals,
         imports.known_native_globals,
-    )
-    .compile_typed(&typed_program)?;
+    );
+    compiler.next_call_site_slot = imports.next_call_site_slot;
+    let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;
 
     let remap = vm
         .merge_heap(&mut compile_heap)

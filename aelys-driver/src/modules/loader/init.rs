@@ -16,6 +16,7 @@ impl ModuleLoader {
             native_fingerprints: std::collections::HashMap::new(),
             manifest: Manifest::for_source_file(entry_file),
             loaded_native_modules: std::collections::HashMap::new(),
+            next_call_site_slot: 0,
         }
     }
 
@@ -30,6 +31,7 @@ impl ModuleLoader {
             native_fingerprints: std::collections::HashMap::new(),
             manifest,
             loaded_native_modules: std::collections::HashMap::new(),
+            next_call_site_slot: 0,
         }
     }
 
