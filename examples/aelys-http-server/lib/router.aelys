@@ -1,0 +1,117 @@
+needs std.string as str
+needs std.time
+needs std.convert as convert
+needs static
+needs http
+needs config
+
+let mut total_requests = 0
+let mut server_start_time = 0
+
+pub fn init_router() {
+    server_start_time = time.now()
+    total_requests = 0
+}
+
+pub fn route_request(client: int, method: string, path: string, headers) -> int {
+    total_requests = total_requests + 1
+
+    let api_prefix = config.API_PREFIX
+
+    if str.starts_with(path, api_prefix) {
+        return route_api(client, method, path, headers)
+    }
+
+    let public_dir = config.PUBLIC_DIR
+    let index_file = config.INDEX_FILE
+
+    if static.serve_static(client, path, public_dir, index_file) {
+        return 200
+    } else {
+        return 404
+    }
+}
+
+fn route_api(client: int, method: string, path: string, headers) -> int {
+    let api_prefix = config.API_PREFIX
+
+    let mut api_path = str.substr(path, str.len(api_prefix), str.len(path) - str.len(api_prefix))
+
+    if not str.starts_with(api_path, "/") {
+        api_path = "/" + api_path
+    }
+
+    if str.contains(api_path, "status") {
+        return handle_status(client)
+    }
+
+    if str.contains(api_path, "time") {
+        return handle_time(client)
+    }
+
+    if str.contains(api_path, "echo") {
+        return handle_echo(client, headers)
+    }
+
+    return handle_hello(client)
+}
+
+fn handle_status(client: int) -> int {
+    let uptime = time.now() - server_start_time
+    let uptime_minutes = uptime / 60.0
+
+    let mut json = "{\n"
+    json = json + "  \"status\": \"running\",\n"
+    json = json + "  \"uptime_seconds\": " + convert.to_string(uptime) + ",\n"
+    json = json + "  \"uptime_minutes\": " + convert.to_string(uptime_minutes) + ",\n"
+    json = json + "  \"total_requests\": " + convert.to_string(total_requests) + ",\n"
+    json = json + "  \"server\": \"Aelys-HTTP/0.1.0\"\n"
+    json = json + "}"
+
+    http.send_json(client, 200, json)
+    return 200
+}
+
+fn handle_time(client: int) -> int {
+    let current_time = time.now()
+
+    let mut json = "{\n"
+    json = json + "  \"timestamp\": " + convert.to_string(current_time) + ",\n"
+    json = json + "  \"server\": \"Aelys-HTTP/0.1.0\"\n"
+    json = json + "}"
+
+    http.send_json(client, 200, json)
+    return 200
+}
+
+fn handle_echo(client: int, headers) -> int {
+    let body = http.read_body(client, headers)
+
+    if str.len(body) == 0 {
+        let mut json = "{\n"
+        json = json + "  \"error\": \"No body provided\",\n"
+        json = json + "  \"message\": \"Send a POST request with body content to echo\"\n"
+        json = json + "}"
+        http.send_json(client, 400, json)
+        return 400
+    }
+
+    let mut json = "{\n"
+    json = json + "  \"echo\": \"" + body + "\",\n"
+    json = json + "  \"length\": " + convert.to_string(str.len(body)) + "\n"
+    json = json + "}"
+
+    http.send_json(client, 200, json)
+    return 200
+}
+
+fn handle_hello(client: int) -> int {
+    let mut json = "{\n"
+    json = json + "  \"message\": \"Hello from Aelys HTTP Server!\",\n"
+    json = json + "  \"version\": \"0.1.0\",\n"
+    json = json + "  \"language\": \"Aelys\"\n"
+    json = json + "}"
+
+    http.send_json(client, 200, json)
+    return 200
+}

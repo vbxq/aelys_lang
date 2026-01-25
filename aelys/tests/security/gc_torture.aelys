@@ -1,0 +1,17 @@
+  needs std.io
+  needs std.string as string
+  needs to_string from std.convert
+  needs len from std.string
+
+  fn gc_collect_ok() {
+      let mut i = 0
+      let mut tmp = "seed"
+      while i < 2000000000 {
+          tmp = string.repeat("x", 2048 + (i % 64)) + to_string(i)
+          if i % 5000 == 0 { io.print(len(tmp)) }
+          i = i + 1
+      }
+  }
+
+  fn main() { gc_collect_ok() }
+  main()

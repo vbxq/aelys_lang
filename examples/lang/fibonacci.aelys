@@ -1,0 +1,28 @@
+needs std.io
+needs std.convert
+needs std.time
+
+// Typed recursive fibonacci for performance (uses specialized opcodes)
+fn fib(n: int) -> int {
+    if n <= 1 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+
+io.print("Fibonacci Sequence ===")
+io.print("")
+
+// Calculate first 35 fibonacci numbers
+for i in 0..35 {
+    io.print("fib(" + convert.to_string(i) + ") = " + convert.to_string(fib(i)))
+}
+
+// Benchmark fib(35)
+io.print("")
+io.print("Benchmarking fib(35)...")
+let t = time.timer()
+let result = fib(35)
+let elapsed = time.elapsed_ms(t)
+io.print("fib(35) = " + convert.to_string(result))
+io.print("Time: " + convert.to_string(elapsed) + " ms")

@@ -1,0 +1,10 @@
+// Pure call overhead benchmark
+// Simple function that just returns, to measure call/return cost
+
+fn noop() -> int { return 42 }
+
+let mut sum = 0
+for i in 0..50000000 {
+    sum = sum + noop()
+}
+sum

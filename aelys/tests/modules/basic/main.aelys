@@ -1,0 +1,5 @@
+// main.aelys - Basic module import test
+needs utils
+
+print(utils.double(5))  // Should print 10
+print(utils.FACTOR)     // Should print 10

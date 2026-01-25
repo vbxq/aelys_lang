@@ -1,0 +1,58 @@
+needs std.io
+needs std.convert
+
+// Code inaccessible après return
+fn test_return(x: int) -> int {
+    return x * 2
+    let dead = x + 100   // dead code
+    return dead          // dead code
+}
+
+// Branches toujours fausses
+fn test_false_branch() {
+    if false {
+        io.print("This should never print")  // dead code
+    }
+
+    if true {
+        io.print("Always executed")
+    }
+}
+
+// Variables non utilisées
+fn test_unused() {
+    let unused1 = 42           // devrait être éliminé
+    let unused2 = 100 + 200    // devrait être éliminé
+    let used = 10
+    io.print("used = " + convert.to_string(used))
+}
+
+// Conditions constantes
+fn test_const_conditions() {
+    let x = 10
+
+    // Cette condition est constante après propagation
+    if 5 > 3 {
+        io.print("5 > 3 is always true")
+    }
+
+    if 2 > 5 {
+        io.print("This is dead code")  // dead code
+    }
+}
+
+// Boucle qui ne s'exécute jamais
+fn test_empty_loop() {
+    for i in 0..0 {
+        io.print("Never executed")  // dead code (empty range)
+    }
+}
+
+// Test principal
+io.print("Dead code elimination test:")
+io.print("test_return(5) = " + convert.to_string(test_return(5)))
+test_false_branch()
+test_unused()
+test_const_conditions()
+test_empty_loop()
+io.print("Done!")

@@ -1,0 +1,26 @@
+needs std.io
+needs std.convert
+
+io.print("Testing for loop ranges:")
+
+io.print("for i in 0..0 (should print nothing):")
+for i in 0..0 {
+    io.print("  iteration: " + convert.to_string(i))
+}
+
+io.print("for i in 0..1 (should print 0):")
+for i in 0..1 {
+    io.print("  iteration: " + convert.to_string(i))
+}
+
+io.print("for i in 0..3 (should print 0,1,2):")
+for i in 0..3 {
+    io.print("  iteration: " + convert.to_string(i))
+}
+
+io.print("for i in 5..5 (should print nothing):")
+for i in 5..5 {
+    io.print("  iteration: " + convert.to_string(i))
+}
+
+io.print("Done!")

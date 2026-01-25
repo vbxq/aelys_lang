@@ -1,0 +1,9 @@
+[module.opengl]
+kind = "native"
+path = "libopengl.so"
+capabilities = ["gpu", "window"]
+checksum = "de5a97cf4cff3f95"
+required_version = ">=0.1.0"
+
+[build]
+bundle_native_modules = true

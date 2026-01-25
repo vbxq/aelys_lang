@@ -1,0 +1,21 @@
+needs std.fs as fs
+needs std.sys as sys
+
+fn get_public_dir() -> string {
+    let script_dir = sys.script_dir()
+    if script_dir == null {
+        return "./public"
+    }
+
+    return fs.join(script_dir, "public")
+}
+
+pub let HOST = "127.0.0.1"
+pub let PORT = 8000
+pub let TIMEOUT_MS = 10000
+pub let PUBLIC_DIR = get_public_dir()
+pub let INDEX_FILE = "index.html"
+pub let ENABLE_LOGGING = true
+pub let LOG_REQUESTS = true
+pub let LOG_ERRORS = true
+pub let API_PREFIX = "/api"

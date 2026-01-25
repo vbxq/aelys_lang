@@ -1,0 +1,6 @@
+// main.aelys - Nested module imports test
+needs utils.math
+needs utils.string as str
+
+print(math.square(4))        // Should print 16
+print(str.repeat("ab", 3))   // Should print ababab

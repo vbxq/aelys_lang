@@ -1,0 +1,53 @@
+needs std.io
+needs std.convert
+
+// Nested @no_gc functions to test depth tracking
+@no_gc
+fn outer() {
+    io.print("Entering outer @no_gc context...")
+    inner()
+    io.print("Back in outer @no_gc context")
+}
+
+@no_gc
+fn inner() {
+    io.print("  Entering inner @no_gc context...")
+    let x: int = 42
+    io.print("  Created variable x = " + convert.to_string(x))
+    io.print("  Exiting inner @no_gc context")
+}
+
+// Manual memory management example
+@no_gc
+fn manual_memory_demo() {
+    io.print("")
+    io.print("Manual Memory Demo ===")
+
+    // Allocate a small buffer
+    let buf = alloc(5)
+    io.print("Allocated buffer with 5 slots")
+
+    // Store values
+    for i in 0..5 {
+        store(buf, i, i * 10)
+    }
+    io.print("Stored values: 0, 10, 20, 30, 40")
+
+    // Load and display values
+    io.print("Reading back:")
+    for i in 0..5 {
+        let val = load(buf, i)
+        io.print("  buf[" + convert.to_string(i) + "] = " + convert.to_string(val))
+    }
+
+    // Free the buffer
+    free(buf)
+    io.print("Freed buffer")
+}
+
+io.print("GC Control Demo ===")
+io.print("")
+outer()
+manual_memory_demo()
+io.print("")
+io.print("Demo complete!")

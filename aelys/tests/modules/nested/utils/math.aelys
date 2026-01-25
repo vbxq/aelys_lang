@@ -1,0 +1,3 @@
+// utils/math.aelys - Math utility module
+pub fn square(x) { x * x }
+pub fn cube(x) { x * x * x }

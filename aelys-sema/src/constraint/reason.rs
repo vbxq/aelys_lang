@@ -1,0 +1,57 @@
+use std::fmt;
+
+/// Reason for a constraint (for error messages)
+#[derive(Debug, Clone)]
+pub enum ConstraintReason {
+    /// Binary operation requires compatible types
+    BinaryOp { op: String },
+    /// Bitwise operation requires integer types (FATAL error - not recoverable)
+    BitwiseOp { op: String },
+    /// Function call argument type
+    Argument { func_name: String, arg_index: usize },
+    /// Function return type
+    Return { func_name: String },
+    /// Variable assignment
+    Assignment { var_name: String },
+    /// If condition must be bool
+    IfCondition,
+    /// If branches must have same type
+    IfBranches,
+    /// While condition must be bool
+    WhileCondition,
+    /// For loop bounds must be int
+    ForBounds,
+    /// Comparison operands
+    Comparison,
+    /// Generic constraint
+    Other(String),
+}
+
+impl fmt::Display for ConstraintReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ConstraintReason::BinaryOp { op } => write!(f, "binary operator '{}'", op),
+            ConstraintReason::BitwiseOp { op } => {
+                write!(f, "bitwise operator '{}' (requires integers)", op)
+            }
+            ConstraintReason::Argument {
+                func_name,
+                arg_index,
+            } => {
+                write!(f, "argument {} to function '{}'", arg_index + 1, func_name)
+            }
+            ConstraintReason::Return { func_name } => {
+                write!(f, "return type of function '{}'", func_name)
+            }
+            ConstraintReason::Assignment { var_name } => {
+                write!(f, "assignment to variable '{}'", var_name)
+            }
+            ConstraintReason::IfCondition => write!(f, "if condition"),
+            ConstraintReason::IfBranches => write!(f, "if/else branches"),
+            ConstraintReason::WhileCondition => write!(f, "while condition"),
+            ConstraintReason::ForBounds => write!(f, "for loop bounds"),
+            ConstraintReason::Comparison => write!(f, "comparison"),
+            ConstraintReason::Other(s) => write!(f, "{}", s),
+        }
+    }
+}

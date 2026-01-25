@@ -1,0 +1,12 @@
+[package]
+name = "aelys-runtime"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../aelys-common" }
+aelys-syntax = { path = "../aelys-syntax" }
+aelys-bytecode = { path = "../aelys-bytecode" }
+aelys-modules = { path = "../aelys-modules" }
+aelys-native = { path = "../aelys-native" }
+libc = "0.2"

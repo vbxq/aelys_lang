@@ -1,0 +1,15 @@
+needs std.io
+needs std.time
+needs std.convert
+
+fn fib(n: int) -> int {
+    if n <= 1 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+let t = time.timer()
+let result = fib(35)
+let elapsed = time.elapsed_ms(t)
+
+io.print("fib(35) = " + convert.to_string(result))
+io.print("time: " + convert.to_string(elapsed) + "ms")

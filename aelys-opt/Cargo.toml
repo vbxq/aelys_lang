@@ -1,0 +1,9 @@
+[package]
+name = "aelys-opt"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../aelys-common" }
+aelys-syntax = { path = "../aelys-syntax" }
+aelys-sema = { path = "../aelys-sema" }

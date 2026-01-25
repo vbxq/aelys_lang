@@ -1,0 +1,57 @@
+needs std.io
+needs std.time
+needs std.convert
+
+fn create_garbage() -> string {
+    let a = "aaaaaaaaaa"
+    let b = a + a + a + a
+    return b + b
+}
+
+@no_gc
+fn work(arr: int, len: int) -> int {
+    let mut i = 0
+    while i < len {
+        store(arr, i, i * i)
+        i = i + 1
+    }
+    let mut sum = 0
+    i = 0
+    while i < len {
+        sum = sum + load(arr, i)
+        i = i + 1
+    }
+    return sum
+}
+
+io.print("=== GC version ===")
+let t1 = time.timer()
+let mut i = 0
+let mut max1 = 0
+while i < 20000 {
+    let t0 = time.timer()
+    let g1 = create_garbage()
+    let g2 = create_garbage()
+    let p = time.elapsed_us(t0)
+    if p > max1 { max1 = p }
+    i = i + 1
+}
+io.print("Total: " + convert.to_string(time.elapsed_ms(t1)) + "ms")
+io.print("Max pause: " + convert.to_string(max1) + "us")
+
+io.print("")
+io.print("=== @no_gc version ===")
+let arr = alloc(1024)
+let t2 = time.timer()
+i = 0
+let mut max2 = 0
+while i < 5000 {
+    let t0 = time.timer()
+    let r = work(arr, 1024)
+    let p = time.elapsed_us(t0)
+    if p > max2 { max2 = p }
+    i = i + 1
+}
+free(arr)
+io.print("Total: " + convert.to_string(time.elapsed_ms(t2)) + "ms")
+io.print("Max pause: " + convert.to_string(max2) + "us")

@@ -1,0 +1,235 @@
+// doom psx fire effect
+
+needs std.time
+needs std.io
+needs std.math
+needs std.convert
+
+let WIDTH: int = 70
+let HEIGHT: int = 30
+let FIRE_HEIGHT: int = 36  // Full intensity at bottom
+
+// Fire palette characters (from cold/dark to hot/bright)
+let PALETTE_SIZE: int = 37
+
+fn fire_char(intensity: int) -> string {
+    // Dark to bright: space -> dots -> chars -> flames
+    if intensity == 0 { return " " }
+    if intensity <= 3 { return "." }
+    if intensity <= 6 { return ":" }
+    if intensity <= 9 { return "-" }
+    if intensity <= 12 { return "=" }
+    if intensity <= 15 { return "+" }
+    if intensity <= 18 { return "x" }
+    if intensity <= 21 { return "o" }
+    if intensity <= 24 { return "O" }
+    if intensity <= 27 { return "#" }
+    if intensity <= 30 { return "&" }
+    if intensity <= 33 { return "@" }
+    return "*"
+}
+
+// Random state stored in manual memory
+@no_gc
+fn rng_new(seed: int) -> int {
+    let rng = alloc(1)
+    store(rng, 0, seed)
+    rng
+}
+
+@no_gc
+fn rng_free(rng: int) {
+    free(rng)
+}
+
+@no_gc
+fn rand(rng: int) -> int {
+    let state: int = load(rng, 0)
+    let new_state = (state * 1103515245 + 12345) % 2147483648
+    store(rng, 0, new_state)
+    math.abs(new_state)
+}
+
+@no_gc
+fn rand_range(rng: int, max: int) -> int {
+    rand(rng) % max
+}
+
+@no_gc
+fn fire_new(width: int, height: int) -> int {
+    let size = width * height
+    let fire = alloc(size + 2)
+    store(fire, 0, width)
+    store(fire, 1, height)
+
+    // Initialize all to 0 (cold)
+    for i in 0..size {
+        store(fire, 2 + i, 0)
+    }
+    fire
+}
+
+@no_gc
+fn fire_free(fire: int) {
+    free(fire)
+}
+
+@no_gc
+fn fire_get(fire: int, x: int, y: int) -> int {
+    let width: int = load(fire, 0)
+    load(fire, 2 + y * width + x)
+}
+
+@no_gc
+fn fire_set(fire: int, x: int, y: int, value: int) {
+    let width: int = load(fire, 0)
+    store(fire, 2 + y * width + x, value)
+}
+
+fn init_fire_source(fire: int) {
+    let width: int = load(fire, 0)
+    let height: int = load(fire, 1)
+
+    // Set bottom row to maximum intensity (fire source)
+    for x in 0..width {
+        fire_set(fire, x, height - 1, FIRE_HEIGHT)
+    }
+}
+
+fn spread_fire(fire: int, rng: int) {
+    let width: int = load(fire, 0)
+    let height: int = load(fire, 1)
+
+    // Process each pixel except the bottom row
+    for y in 0..(height - 1) {
+        for x in 0..width {
+            // Get the pixel below
+            let src_y = y + 1
+            let intensity = fire_get(fire, x, src_y)
+
+            if intensity == 0 {
+                fire_set(fire, x, y, 0)
+            } else {
+                // Random decay (0 to 3)
+                let decay = rand_range(rng, 4)
+
+                // Random horizontal drift (-1, 0, or 1)
+                let drift = rand_range(rng, 3) - 1
+                let new_x = x + drift
+
+                // Calculate new intensity (with decay)
+                let mut new_intensity: int = intensity - decay
+                if new_intensity < 0 {
+                    new_intensity = 0
+                }
+
+                // Apply to drifted position (with bounds check)
+                if new_x >= 0 and new_x < width {
+                    fire_set(fire, new_x, y, new_intensity)
+                } else {
+                    fire_set(fire, x, y, new_intensity)
+                }
+            }
+        }
+    }
+}
+
+fn render_fire(fire: int) {
+    let width: int = load(fire, 0)
+    let height: int = load(fire, 1)
+
+    for y in 0..height {
+        let mut row: string = ""
+        for x in 0..width {
+            let intensity = fire_get(fire, x, y)
+            row = row + fire_char(intensity)
+        }
+        io.print(row)
+    }
+}
+
+fn vary_fire_source(fire: int, rng: int) {
+    let width: int = load(fire, 0)
+    let height: int = load(fire, 1)
+
+    // Occasionally vary the fire source for more natural look
+    for x in 0..width {
+        let variation = rand_range(rng, 8)
+        let mut intensity: int = FIRE_HEIGHT - variation
+        if intensity < FIRE_HEIGHT - 6 {
+            intensity = FIRE_HEIGHT - 6
+        }
+        fire_set(fire, x, height - 1, intensity)
+    }
+}
+
+fn main() {
+    let rng = rng_new(42)
+    let fire = fire_new(WIDTH, HEIGHT)
+
+    // Initialize fire source at bottom
+    init_fire_source(fire)
+
+    let num_frames: int = 500
+    let frame_delay: int = 30
+
+    io.hide_cursor()
+    io.clear_screen()
+
+    for frame in 0..num_frames {
+        io.cursor_home()
+
+        // Vary the source for natural movement
+        if frame % 3 == 0 {
+            vary_fire_source(fire, rng)
+        }
+
+        // Spread the fire upward
+        spread_fire(fire, rng)
+
+        // Render
+        render_fire(fire)
+
+        io.print("")
+        io.print("DOOM FIRE | Frame " + convert.to_string(frame + 1) + "/" + convert.to_string(num_frames))
+
+        time.sleep(frame_delay)
+    }
+
+    // Cool down effect - remove fire source
+    io.print("")
+    io.print("Cooling down...")
+
+    for cool_frame in 0..60 {
+        io.cursor_home()
+
+        // Gradually reduce fire source
+        let width: int = load(fire, 0)
+        let height: int = load(fire, 1)
+        for x in 0..width {
+            let current = fire_get(fire, x, height - 1)
+            let mut new_val: int = current - rand_range(rng, 3)
+            if new_val < 0 {
+                new_val = 0
+            }
+            fire_set(fire, x, height - 1, new_val)
+        }
+
+        spread_fire(fire, rng)
+        render_fire(fire)
+
+        io.print("")
+        io.print("Cooling... " + convert.to_string(cool_frame + 1) + "/60")
+
+        time.sleep(frame_delay)
+    }
+
+    fire_free(fire)
+    rng_free(rng)
+    io.show_cursor()
+
+    io.print("")
+    io.print("The fire has died down. The algorithm lives on!")
+}
+
+main()

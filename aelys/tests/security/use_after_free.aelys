@@ -1,0 +1,31 @@
+// pointer already freed check
+// crashes if everything is good
+
+needs std.convert 
+
+@no_gc
+fn use_after_free() {
+    let p = alloc(8)
+    store(p, 0, 111)
+    store(p, 1, 222)
+
+    free(p)
+
+    // Still writing after free
+    store(p, 0, 999)
+    store(p, 1, 888)
+
+    // Allocate again
+    let q = alloc(8)
+    store(q, 0, 333)
+    store(q, 1, 444)
+
+    io.print("p[0] = " + convert.to_string(load(p, 0)))
+    io.print("q[0] = " + convert.to_string(load(q, 0)))
+}
+
+fn main() {
+    use_after_free()
+}
+
+main()

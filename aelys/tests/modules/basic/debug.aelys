@@ -1,0 +1,6 @@
+needs utils
+
+print(type(utils.double))
+print(type(utils.FACTOR))
+print(utils.FACTOR)
+print(utils.double(5))

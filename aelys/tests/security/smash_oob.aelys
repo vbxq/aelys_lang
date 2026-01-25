@@ -1,0 +1,27 @@
+// check if the runtime really prevents OOB writes
+// crashes if everything is good
+
+@no_gc
+fn smash_oob() {
+    let fb = alloc(4)
+    store(fb, 0, 123)
+    store(fb, 1, 456)
+    store(fb, 2, 789)
+    store(fb, 3, 999)
+
+    // OOB writes
+    let mut i: int = 4
+    while i < 40 {
+        store(fb, i, i * 1337)
+        i = i + 1
+    }
+
+    free(fb)
+}
+
+fn main() {
+    smash_oob()
+    io.print("OOB test done")
+}
+
+main()

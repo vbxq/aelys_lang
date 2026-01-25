@@ -1,0 +1,35 @@
+needs opengl
+
+let result = opengl.init()
+
+opengl.clear_color(0.05, 0.05, 0.12, 1.0)
+
+while opengl.is_open() {
+    opengl.clear()
+
+    opengl.draw_triangle(0, 0, 400, 300, 0, 600, 0.15, 0.08, 0.25)
+    opengl.draw_triangle(800, 0, 400, 300, 800, 600, 0.12, 0.06, 0.22)
+
+    opengl.draw_triangle(400, 80, 180, 520, 620, 520, 0.6, 0.2, 0.5)
+    opengl.draw_triangle(400, 100, 200, 500, 600, 500, 0.8, 0.15, 0.55)
+    opengl.draw_triangle(400, 140, 240, 470, 560, 470, 0.7, 0.25, 0.75)
+    opengl.draw_triangle(400, 180, 280, 440, 520, 440, 0.3, 0.85, 0.9)
+    opengl.draw_triangle(400, 220, 320, 410, 480, 410, 0.95, 0.95, 1.0)
+    opengl.draw_triangle(400, 260, 350, 385, 450, 385, 1.0, 0.9, 0.5)
+
+    opengl.draw_triangle(150, 300, 100, 450, 220, 400, 0.9, 0.4, 0.6)
+    opengl.draw_triangle(120, 200, 80, 320, 180, 280, 0.4, 0.7, 0.9)
+    opengl.draw_triangle(650, 300, 580, 400, 700, 450, 0.9, 0.4, 0.6)
+    opengl.draw_triangle(680, 200, 620, 280, 720, 320, 0.4, 0.7, 0.9)
+
+    opengl.draw_triangle(400, 30, 370, 70, 430, 70, 1.0, 0.6, 0.8)
+    opengl.draw_triangle(300, 100, 280, 140, 340, 130, 0.5, 0.9, 0.95)
+    opengl.draw_triangle(500, 100, 460, 130, 520, 140, 0.5, 0.9, 0.95)
+
+    opengl.draw_triangle(250, 520, 200, 580, 300, 570, 0.95, 0.75, 0.3)
+    opengl.draw_triangle(550, 520, 500, 570, 600, 580, 0.95, 0.75, 0.3)
+
+    opengl.swap_buffers()
+}
+
+opengl.close()

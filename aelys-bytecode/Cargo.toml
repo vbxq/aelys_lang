@@ -1,0 +1,8 @@
+[package]
+name = "aelys-bytecode"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../aelys-common" }
+thiserror = "2.0.17"

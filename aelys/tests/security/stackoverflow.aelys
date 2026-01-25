@@ -1,0 +1,19 @@
+// should handle stackoverflow
+// crashes if everything is good
+
+needs std.io
+needs std.convert
+
+fn recurse(n: int) -> int {
+    if n <= 0 {
+        return 0
+    }
+    return recurse(n - 1) + 1
+}
+
+fn main() {
+    let r = recurse(100000)
+    io.print("Result = " + convert.to_string(r))
+}
+
+main()

@@ -1,0 +1,7 @@
+[package]
+name = "aelys-sema"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+aelys-syntax = { path = "../aelys-syntax" }

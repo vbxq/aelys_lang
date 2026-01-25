@@ -1,0 +1,3 @@
+// utils.aelys - Module with private function for testing
+fn private() { 42 }
+pub fn public() { 1 }

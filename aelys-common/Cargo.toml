@@ -1,0 +1,9 @@
+[package]
+name = "aelys-common"
+version = "0.17.6-a"
+edition = "2024"
+
+[dependencies]
+thiserror = "2.0.17"
+serde = { version = "1", features = ["derive"] }
+aelys-syntax = { path = "../aelys-syntax" }

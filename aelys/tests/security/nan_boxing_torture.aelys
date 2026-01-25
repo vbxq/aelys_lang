@@ -1,0 +1,30 @@
+// float -> pointer confusion
+// crashes if everything is good
+
+needs std.io
+needs std.convert
+
+@no_gc
+fn nan_poison() {
+    let p = alloc(2)
+    store(p, 0, 42)
+
+    // Create NaN
+    let z: float = 0.0
+    let nan = z / z
+
+    // Store NaN where an int/pointer is expected
+    store(p, 1, nan)
+
+    // Reload and reinterpret
+    let x = load(p, 1)
+    io.print("Loaded value: " + convert.to_string(x))
+
+    free(p)
+}
+
+fn main() {
+    nan_poison()
+}
+
+main()

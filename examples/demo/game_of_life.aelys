@@ -1,0 +1,212 @@
+needs std.math
+needs std.time
+needs std.sys
+needs std.io
+needs std.convert
+
+let WIDTH: int = 60
+let HEIGHT: int = 25
+let DEAD: int = 0
+let ALIVE: int = 1
+let DEAD_CHAR: string = " "
+let ALIVE_CHAR: string = "#"
+
+@no_gc
+fn grid_new(width: int, height: int) -> int {
+    let size = width * height
+    let grid = alloc(size + 2)
+    store(grid, 0, width)
+    store(grid, 1, height)
+    for i in 0..size {
+        store(grid, 2 + i, DEAD)
+    }
+    grid
+}
+
+@no_gc
+fn grid_free(grid: int) {
+    free(grid)
+}
+
+@no_gc
+fn grid_get(grid: int, x: int, y: int) -> int {
+    let width: int = load(grid, 0)
+    let height: int = load(grid, 1)
+    let wx = (x + width) % width
+    let wy = (y + height) % height
+    load(grid, 2 + wy * width + wx)
+}
+
+@no_gc
+fn grid_set(grid: int, x: int, y: int, value: int) {
+    let width: int = load(grid, 0)
+    let idx = 2 + y * width + x
+    store(grid, idx, value)
+}
+
+@no_gc
+fn count_neighbors(grid: int, x: int, y: int) -> int {
+    let mut count: int = 0
+    count = count + grid_get(grid, x - 1, y - 1)
+    count = count + grid_get(grid, x, y - 1)
+    count = count + grid_get(grid, x + 1, y - 1)
+    count = count + grid_get(grid, x - 1, y)
+    count = count + grid_get(grid, x + 1, y)
+    count = count + grid_get(grid, x - 1, y + 1)
+    count = count + grid_get(grid, x, y + 1)
+    count = count + grid_get(grid, x + 1, y + 1)
+    count
+}
+
+@no_gc
+fn rng_new(seed: int) -> int {
+    let rng = alloc(1)
+    store(rng, 0, seed)
+    rng
+}
+
+@no_gc
+fn rng_free(rng: int) {
+    free(rng)
+}
+
+@no_gc
+fn rand(rng: int) -> int {
+    let state: int = load(rng, 0)
+    let new_state = (state * 1103515245 + 12345) % 2147483648
+    store(rng, 0, new_state)
+    math.abs(new_state)
+}
+
+fn random_bool(rng: int, probability: int) -> bool {
+    let r = rand(rng) % 100
+    r < probability
+}
+
+fn init_random(grid: int, rng: int, density: int) {
+    let width: int = load(grid, 0)
+    let height: int = load(grid, 1)
+
+    for y in 0..height {
+        for x in 0..width {
+            if random_bool(rng, density) {
+                grid_set(grid, x, y, ALIVE)
+            }
+        }
+    }
+}
+
+fn add_glider(grid: int, x: int, y: int) {
+    grid_set(grid, x + 1, y, ALIVE)
+    grid_set(grid, x + 2, y + 1, ALIVE)
+    grid_set(grid, x, y + 2, ALIVE)
+    grid_set(grid, x + 1, y + 2, ALIVE)
+    grid_set(grid, x + 2, y + 2, ALIVE)
+}
+
+fn add_rpentomino(grid: int, x: int, y: int) {
+    // R-pentomino: takes 1103 generations to stabilize!
+    grid_set(grid, x + 1, y, ALIVE)
+    grid_set(grid, x + 2, y, ALIVE)
+    grid_set(grid, x, y + 1, ALIVE)
+    grid_set(grid, x + 1, y + 1, ALIVE)
+    grid_set(grid, x + 1, y + 2, ALIVE)
+}
+
+fn next_generation(current: int, next: int) {
+    let width: int = load(current, 0)
+    let height: int = load(current, 1)
+
+    for y in 0..height {
+        for x in 0..width {
+            let cell = grid_get(current, x, y)
+            let neighbors = count_neighbors(current, x, y)
+
+            // Conway's rules
+            if cell == ALIVE {
+                if neighbors == 2 or neighbors == 3 {
+                    grid_set(next, x, y, ALIVE)
+                } else {
+                    grid_set(next, x, y, DEAD)
+                }
+            } else {
+                if neighbors == 3 {
+                    grid_set(next, x, y, ALIVE)
+                } else {
+                    grid_set(next, x, y, DEAD)
+                }
+            }
+        }
+    }
+}
+
+fn display(grid: int, generation: int) {
+    let width: int = load(grid, 0)
+    let height: int = load(grid, 1)
+
+    let mut population: int = 0
+    for y in 0..height {
+        let mut row: string = ""
+        for x in 0..width {
+            let cell = grid_get(grid, x, y)
+            if cell == ALIVE {
+                row = row + ALIVE_CHAR
+                population = population + 1
+            } else {
+                row = row + DEAD_CHAR
+            }
+        }
+        io.print(row)
+    }
+    io.print("Generation: " + convert.to_string(generation) + " | Population: " + convert.to_string(population))
+}
+
+fn main() {
+    io.print("Conway's Game of Life ===")
+    io.print("The universe where simple rules create infinite complexity!")
+    io.print("Platform: " + sys.platform())
+    io.print("")
+    time.sleep(1500)
+
+    let rng = rng_new(12345)
+    let grid1 = grid_new(WIDTH, HEIGHT)
+    let grid2 = grid_new(WIDTH, HEIGHT)
+
+    init_random(grid1, rng, 15)
+    add_glider(grid1, 5, 5)
+    add_glider(grid1, 50, 18)
+    add_rpentomino(grid1, WIDTH / 2, HEIGHT / 2)
+
+    let num_generations: int = 500
+    let delay: int = 50
+
+    io.hide_cursor()
+    io.clear_screen()
+
+    let mut gen: int = 0
+    let mut current = grid1
+    let mut next = grid2
+
+    while gen < num_generations {
+        io.cursor_home()
+        display(current, gen)
+        next_generation(current, next)
+
+        let temp = current
+        current = next
+        next = temp
+
+        time.sleep(delay)
+        gen = gen + 1
+    }
+
+    io.show_cursor()
+    grid_free(grid1)
+    grid_free(grid2)
+    rng_free(rng)
+
+    io.print("")
+    io.print("Simulation complete! Life finds a way.")
+}
+
+main()

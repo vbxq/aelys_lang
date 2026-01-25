@@ -1,0 +1,43 @@
+needs std.io
+needs std.convert
+
+// Constantes globales
+let WIDTH = 800
+let HEIGHT = 600
+let ASPECT = WIDTH / HEIGHT
+let HALF_WIDTH = WIDTH / 2
+let HALF_HEIGHT = HEIGHT / 2
+
+// Utilisation des constantes
+let total_pixels = WIDTH * HEIGHT        // devrait devenir 480000
+let center_x = HALF_WIDTH                 // devrait propager 400
+let center_y = HALF_HEIGHT                // devrait propager 300
+let double_width = WIDTH * 2              // devrait devenir 1600
+
+// Constantes avec calculs
+let PI = 3.14159
+let RADIUS = 10.0
+let CIRCLE_AREA = PI * RADIUS * RADIUS    // devrait être précalculé
+
+// Propagation en cascade
+let BASE = 100
+let LEVEL1 = BASE * 2       // 200
+let LEVEL2 = LEVEL1 + 50    // 250
+let LEVEL3 = LEVEL2 * 2     // 500
+
+fn calculate_area(r: float) -> float {
+    // PI devrait être propagé ici
+    return PI * r * r
+}
+
+fn screen_center() -> int {
+    // WIDTH et HEIGHT devraient être propagés
+    return (WIDTH / 2) + (HEIGHT / 2)
+}
+
+io.print("Global constant propagation test:")
+io.print("WIDTH = " + convert.to_string(WIDTH))
+io.print("HEIGHT = " + convert.to_string(HEIGHT))
+io.print("total_pixels = " + convert.to_string(total_pixels))
+io.print("LEVEL3 = " + convert.to_string(LEVEL3))
+io.print("screen_center() = " + convert.to_string(screen_center()))

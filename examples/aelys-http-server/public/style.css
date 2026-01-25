@@ -1,0 +1,172 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #000000;
+    --bg-alt: #0a0a0a;
+    --text: #a8a8ab;
+    --text-muted: #6b6b70;
+    --border: #1a1a1a;
+    --accent: #ffffff;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 2rem;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+header {
+    margin-bottom: 3rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+    color: var(--accent);
+    font-size: 1.5rem;
+    font-weight: normal;
+    margin-bottom: 0.5rem;
+}
+
+header p {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+main {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+}
+
+section {
+    padding-bottom: 1.5rem;
+}
+
+h2 {
+    color: var(--accent);
+    font-size: 1.1rem;
+    font-weight: normal;
+    margin-bottom: 1rem;
+}
+
+ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+ul li {
+    padding: 0.3rem 0;
+    color: var(--text);
+}
+
+ul li:before {
+    content: "- ";
+    color: var(--text-muted);
+}
+
+.endpoint {
+    background: var(--bg-alt);
+    padding: 1rem;
+    margin-bottom: 0.8rem;
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.endpoint code {
+    color: var(--accent);
+    flex: 1;
+    min-width: 180px;
+}
+
+.endpoint span {
+    flex: 2;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+button {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--border);
+    padding: 0.4rem 1rem;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+button:hover {
+    background: var(--bg-alt);
+    border-color: var(--accent);
+}
+
+button:active {
+    transform: scale(0.98);
+}
+
+pre {
+    background: var(--bg-alt);
+    color: var(--text);
+    padding: 1rem;
+    border: 1px solid var(--border);
+    overflow-x: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+footer a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+    body {
+        padding: 1rem;
+        font-size: 14px;
+    }
+
+    header h1 {
+        font-size: 1.3rem;
+    }
+
+    .endpoint {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .endpoint code {
+        min-width: 100%;
+    }
+}
