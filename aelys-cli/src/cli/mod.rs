@@ -28,13 +28,10 @@ pub fn run() -> i32 {
         return 0;
     }
 
-    match dispatch(parsed) {
-        Ok(code) => code,
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            1
-        }
-    }
+    dispatch(parsed).unwrap_or_else(|err| {
+        eprintln!("Error: {}", err);
+        1
+    })
 }
 
 #[allow(dead_code)]
@@ -65,7 +62,12 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
             }
             commands::asm::run_with_options(&path, output, stdout, parsed.opt_level)
         }
-        args::Command::Repl => commands::repl::run_with_options(parsed.opt_level, parsed.vm_args),
+        args::Command::Repl => {
+            // REPL uses Basic optimization to preserve top-level variables across inputs
+            // (UnusedVarEliminator in Standard/Aggressive would remove unused let bindings)
+            let repl_opt = aelys_opt::OptimizationLevel::Basic;
+            commands::repl::run_with_options(repl_opt, parsed.vm_args)
+        }
         args::Command::Version => Ok(0),
     }
 }

@@ -7,6 +7,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 **0.17.6-a**
 - Direct opcodes for `alloc`/`free`/`load`/`store` (~45% faster)
 - Fixed disassembler output for memory opcodes
+- Fixed REPL "forgetting" variables (wrong optimization level used)
 
 **0.17.5-a**
 - Syntax highlighting fixes for various editors
