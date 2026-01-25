@@ -263,3 +263,66 @@ fn test_explicit_semicolon() {
         ]
     );
 }
+
+#[test]
+fn test_logical_operators_double_symbol() {
+    let tokens = Lexer::new("&& ||").scan().unwrap();
+    let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
+
+    assert_eq!(
+        kinds,
+        vec![
+            &TokenKind::And,
+            &TokenKind::Or,
+            &TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn test_bitwise_vs_logical() {
+    let tokens = Lexer::new("& && | ||").scan().unwrap();
+    let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
+
+    assert_eq!(
+        kinds,
+        vec![
+            &TokenKind::Ampersand,  // single &
+            &TokenKind::And,         // &&
+            &TokenKind::Pipe,        // single |
+            &TokenKind::Or,          // ||
+            &TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn test_logical_operators_in_expression() {
+    let tokens = Lexer::new("true && false || true").scan().unwrap();
+    let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
+
+    assert_eq!(
+        kinds,
+        vec![
+            &TokenKind::True,
+            &TokenKind::And,
+            &TokenKind::False,
+            &TokenKind::Or,
+            &TokenKind::True,
+            &TokenKind::Semicolon,
+            &TokenKind::Eof,
+        ]
+    );
+}
+
+#[test]
+fn test_logical_operators_word_and_symbol() {
+    // Test that both syntaxes work and produce the same tokens
+    let tokens1 = Lexer::new("and or").scan().unwrap();
+    let tokens2 = Lexer::new("&& ||").scan().unwrap();
+
+    let kinds1: Vec<_> = tokens1.iter().map(|t| &t.kind).collect();
+    let kinds2: Vec<_> = tokens2.iter().map(|t| &t.kind).collect();
+
+    assert_eq!(kinds1, kinds2);
+}

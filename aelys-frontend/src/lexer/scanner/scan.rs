@@ -101,8 +101,20 @@ impl Lexer {
                 }
             }
 
-            '&' => self.add_token(TokenKind::Ampersand),
-            '|' => self.add_token(TokenKind::Pipe),
+            '&' => {
+                if self.match_char('&') {
+                    self.add_token(TokenKind::And);
+                } else {
+                    self.add_token(TokenKind::Ampersand);
+                }
+            }
+            '|' => {
+                if self.match_char('|') {
+                    self.add_token(TokenKind::Or);
+                } else {
+                    self.add_token(TokenKind::Pipe);
+                }
+            }
             '^' => self.add_token(TokenKind::Caret),
             '~' => self.add_token(TokenKind::Tilde),
 
