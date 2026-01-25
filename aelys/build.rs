@@ -22,36 +22,8 @@ fn main() {
 
             if content != new_content {
                 fs::write(&full_path, new_content.as_ref()).unwrap();
-                println!("Updated version in {}", file_path);
+                println!("cargo:warning=Updated version in {}", file_path);
             }
-        }
-    }
-
-    update_workspace_crate_versions(version, &workspace_root);
-}
-
-fn update_workspace_crate_versions(version: &str, workspace_root: &Path) {
-    let crates = [
-        "aelys", "aelys-common", "aelys-syntax", "aelys-frontend",
-        "aelys-sema", "aelys-opt", "aelys-bytecode", "aelys-backend",
-        "aelys-runtime", "aelys-modules", "aelys-driver", "aelys-cli",
-        "aelys-native", "aelys-native-macros",
-    ];
-
-    for crate_name in crates {
-        let cargo_path = workspace_root.join(format!("{}/Cargo.toml", crate_name));
-        if cargo_path.exists() {
-            let content = fs::read_to_string(&cargo_path).unwrap();
-            let mut doc = content.parse::<toml_edit::DocumentMut>().unwrap();
-
-            if let Some(package) = doc.get_mut("package") {
-                if let Some(table) = package.as_table_mut() {
-                    table["version"] = toml_edit::value(version);
-                }
-            }
-
-            fs::write(&cargo_path, doc.to_string()).unwrap();
-            println!("Updated version in {}/Cargo.toml", crate_name);
         }
     }
 }

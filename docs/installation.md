@@ -37,7 +37,7 @@ For Windows, you can add it manually to your PATH via System Properties, or copy
 
 ```bash
 aelys-cli version
-# Aelys v0.17.8-a
+# Aelys v0.17.9-a
 ```
 
 Run the hello world example:
@@ -45,7 +45,7 @@ Run the hello world example:
 ```bash
 aelys-cli examples/hello.aelys
 # Hello, World!
-# Welcome to Aelys v0.17.8-a!
+# Welcome to Aelys v0.17.9-a!
 # Platform: linux (x86_64)
 ```
 
@@ -221,4 +221,4 @@ If you want to verify the build:
 cargo test
 ```
 
-This runs the full test suite, there's 596 of them at the time of writing this (0.17.8-a).
+This runs the full test suite, there's 596 of them at the time of writing this (0.17.9-a).

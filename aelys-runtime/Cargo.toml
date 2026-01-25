@@ -1,6 +1,6 @@
 [package]
 name = "aelys-runtime"
-version = "0.17.8-a"
+version.workspace = true
 edition = "2024"
 
 [dependencies]
