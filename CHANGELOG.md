@@ -2,7 +2,7 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.17.x (Current)
+## 0.17.x (Current) - Security Hardening
 
 **0.17.12-a**
 - Fixed nested function marker collision with heap pointers (now uses dedicated NaN tag)
