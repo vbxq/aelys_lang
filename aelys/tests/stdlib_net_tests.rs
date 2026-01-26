@@ -193,19 +193,6 @@ net.close(s)
 }
 
 #[test]
-fn listen_and_accept() {
-    // Start listener first
-    let listener_code = r#"
-needs std.net
-let listener = net.listen("127.0.0.1", 19876)
-listener
-"#;
-
-    // This test is hard to do without blocking, skip for now
-    // Would need async or thread coordination
-}
-
-#[test]
 fn listen_invalid_port() {
     let code = r#"
 needs std.net
