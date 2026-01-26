@@ -38,6 +38,29 @@ impl Lexer {
         self.current >= self.chars.len()
     }
 
+    pub(super) fn next_token_is_else(&self) -> bool {
+        let mut i = self.current;
+        // skip whitespace (but not newlines because we're already on a newline)
+        while i < self.chars.len() {
+            let c = self.chars[i];
+            if c == ' ' || c == '\t' || c == '\r' || c == '\n' {
+                i += 1;
+            } else {
+                break;
+            }
+        }
+        // check for "else"
+        if i + 4 <= self.chars.len() {
+            let word: String = self.chars[i..i + 4].iter().collect();
+            if word == "else" {
+                // make sure it's not a prefix of another identifier
+                let next = self.chars.get(i + 4).copied().unwrap_or('\0');
+                return !next.is_alphanumeric() && next != '_';
+            }
+        }
+        false
+    }
+
     pub(super) fn error(&self, kind: CompileErrorKind) -> CompileError {
         CompileError::new(
             kind,

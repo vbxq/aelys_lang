@@ -60,7 +60,6 @@ impl TokenKind {
     }
 
     // semicolon insertion (Go-style, roughly)
-    // TODO: RBrace causes issues with `if x { y } else { z }` - revisit
     pub fn can_end_statement(&self) -> bool {
         matches!(self,
             Self::Identifier(_) | Self::Int(_) | Self::Float(_) | Self::String(_)

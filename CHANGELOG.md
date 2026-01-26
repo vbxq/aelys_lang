@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.18.x (Current)
 
+**0.18.4-a**
+- Fixed auto-semicolon breaking `if { } else { }` on separate lines
+
 **0.18.3-a**
 - Fixed register counting and verifier to skip cache words after CallGlobal opcodes
 - Removed unsound Send/Sync from BytecodeBuffer (UnsafeCell patching)
