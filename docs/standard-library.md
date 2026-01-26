@@ -610,4 +610,81 @@ io.print("Running on " + sys.platform() + " " + sys.arch())
 // "Running on linux x86_64"
 ```
 
-That's all for now. More modules might be added in future versions !
+---
+
+## std.bytes
+
+Byte-level memory operations for binary data manipulation. Use with `@no_gc` functions for best performance.
+
+```rust
+needs std.bytes
+```
+
+### Allocation
+
+| Function | Description |
+|----------|-------------|
+| `alloc(size)` | Allocate `size` bytes, initialized to zero. Returns handle. |
+| `free(handle)` | Free buffer. `free(null)` is a no-op. |
+| `size(handle)` | Return buffer size in bytes. |
+
+### Integer Operations
+
+All multi-byte operations use little-endian byte order.
+
+| Function | Description |
+|----------|-------------|
+| `read_u8(buf, offset)` | Read unsigned byte (0-255) |
+| `write_u8(buf, offset, value)` | Write byte (value 0-255) |
+| `read_u16(buf, offset)` | Read 16-bit unsigned int |
+| `write_u16(buf, offset, value)` | Write 16-bit unsigned int |
+| `read_u32(buf, offset)` | Read 32-bit unsigned int |
+| `write_u32(buf, offset, value)` | Write 32-bit unsigned int |
+| `read_u64(buf, offset)` | Read 64-bit int |
+| `write_u64(buf, offset, value)` | Write 64-bit int |
+
+### Float Operations
+
+| Function | Description |
+|----------|-------------|
+| `read_f32(buf, offset)` | Read 32-bit float |
+| `write_f32(buf, offset, value)` | Write 32-bit float |
+| `read_f64(buf, offset)` | Read 64-bit float |
+| `write_f64(buf, offset, value)` | Write 64-bit float |
+
+### Bulk Operations
+
+| Function | Description |
+|----------|-------------|
+| `copy(src, src_offset, dst, dst_offset, len)` | Copy `len` bytes. Handles overlapping regions. |
+| `fill(buf, offset, len, value)` | Fill `len` bytes with `value` (0-255). |
+
+### Example
+
+```rust
+needs std.bytes
+
+@no_gc
+fn parse_header() {
+    let buf = bytes.alloc(8)
+    bytes.write_u32(buf, 0, 0x12345678)
+    bytes.write_u32(buf, 4, 256)
+
+    let magic = bytes.read_u32(buf, 0)
+    let size = bytes.read_u32(buf, 4)
+
+    bytes.free(buf)
+    return magic == 0x12345678 and size == 256
+}
+```
+
+### Notes
+
+- All operations are bounds-checked
+- Invalid handles produce runtime errors (not panics)
+- Maximum allocation size: 256MB
+- Buffers are NOT garbage collected—always call `free()`
+
+---
+
+That's all for now. More modules might be added in future versions!

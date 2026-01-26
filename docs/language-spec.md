@@ -420,7 +420,7 @@ fn internal_function() {
 
 ### @no_gc (Manual Memory)
 
-This is Aelys's distinguishing feature ! By default, everything is garbage collected. But for performance-critical code, you can disable GC on a per-function basis:
+This is Aelys's distinguishing feature! By default, everything is garbage collected. But for performance-critical code, you can disable GC on a per-function basis:
 
 ```rust
 @no_gc
@@ -437,7 +437,9 @@ fn hot_path(data: int, size: int) {
 }
 ```
 
-Inside `@no_gc` functions, you get four primitives:
+#### Value-Based Allocation (Original)
+
+Inside `@no_gc` functions, you get four primitives for working with Value slots:
 
 | Function | Description |
 |----------|-------------|
@@ -445,6 +447,49 @@ Inside `@no_gc` functions, you get four primitives:
 | `store(buf, index, value)` | Store value at index |
 | `load(buf, index)` | Load value from index |
 | `free(buf)` | Deallocate buffer |
+
+Each slot holds one Value (int, float, bool, or pointer).
+
+#### Byte-Level Allocation (std.bytes)
+
+For true byte-level access, use the `std.bytes` module:
+
+```rust
+needs std.bytes
+
+@no_gc
+fn parse_binary() {
+    let buf = bytes.alloc(1024)        // Allocate 1024 bytes
+    bytes.write_u32(buf, 0, 0xDEADBEEF) // Write 32-bit int
+    let magic = bytes.read_u32(buf, 0)  // Read it back
+    bytes.free(buf)
+}
+```
+
+| Function | Description |
+|----------|-------------|
+| `bytes.alloc(size)` | Allocate `size` raw bytes |
+| `bytes.free(buf)` | Free byte buffer |
+| `bytes.size(buf)` | Get buffer size |
+| `bytes.read_u8(buf, off)` | Read byte (0-255) |
+| `bytes.write_u8(buf, off, val)` | Write byte |
+| `bytes.read_u16(buf, off)` | Read 16-bit int (little-endian) |
+| `bytes.write_u16(buf, off, val)` | Write 16-bit int |
+| `bytes.read_u32(buf, off)` | Read 32-bit int (little-endian) |
+| `bytes.write_u32(buf, off, val)` | Write 32-bit int |
+| `bytes.read_u64(buf, off)` | Read 64-bit int (little-endian) |
+| `bytes.write_u64(buf, off, val)` | Write 64-bit int |
+| `bytes.read_f32(buf, off)` | Read 32-bit float |
+| `bytes.write_f32(buf, off, val)` | Write 32-bit float |
+| `bytes.read_f64(buf, off)` | Read 64-bit float |
+| `bytes.write_f64(buf, off, val)` | Write 64-bit float |
+| `bytes.copy(src, soff, dst, doff, len)` | Copy bytes between buffers |
+| `bytes.fill(buf, off, len, val)` | Fill bytes with value |
+
+**When to use which:**
+
+- **Value-based (`alloc/store/load`)**: Simple arrays of mixed types (ints, floats, bools)
+- **Byte-level (`std.bytes`)**: Binary protocols, image buffers, audio data, FFI, zero-copy I/O
 
 **Important details:**
 
@@ -454,15 +499,17 @@ Inside `@no_gc` functions, you get four primitives:
 
 3. You can call `@no_gc` functions from normal code, and vice versa.
 
-4. Memory allocated with `alloc` is not garbage collected ! If you don't `free` it, it leaks.
+4. Memory allocated with `alloc` or `bytes.alloc` is not garbage collected! If you don't free it, it leaks.
 
-5. Each buffer slot holds one value (int, float, bool, or pointer). There's no byte-level access.
+5. All byte operations are bounds-checked for safety.
 
-**When to use it:**
+**When to use `@no_gc`:**
 
 - Game loops
 - Audio processing
 - Real-time graphics
+- Binary file parsing
+- Network protocol handling
 - Any code where GC pauses are unacceptable
 
 **When not to use it:**

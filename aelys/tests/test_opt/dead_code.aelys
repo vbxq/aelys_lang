@@ -41,14 +41,12 @@ fn test_const_conditions() {
     }
 }
 
-// Boucle qui ne s'exécute jamais
 fn test_empty_loop() {
     for i in 0..0 {
         io.print("Never executed")  // dead code (empty range)
     }
 }
 
-// Test principal
 io.print("Dead code elimination test:")
 io.print("test_return(5) = " + convert.to_string(test_return(5)))
 test_false_branch()

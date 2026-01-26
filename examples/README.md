@@ -26,7 +26,7 @@ Several fibonacci implementations comparing different approaches.
 
 Demonstrates the type system: annotations, inference, closures, and higher-order functions.
 
-### [lang/gc.aelys](lang/gc.aelys)
+### [lang/gc.aelys](lang/simple_no_gc_demo.aelys)
 
 Shows `@no_gc` usage with manual memory:
 - `alloc` / `free` for buffer management
@@ -36,23 +36,23 @@ Shows `@no_gc` usage with manual memory:
 
 Visual demos that run in the terminal.
 
-### [demo/mandelbrot.aelys](demo/mandelbrot.aelys)
+### [graphical_demo/mandelbrot.aelys](graphical_demo/mandelbrot.aelys)
 
 Animated ASCII Mandelbrot set with zoom. Uses `@no_gc` for the framebuffer.
 
 ```bash
-aelys-cli examples/demo/mandelbrot.aelys
+aelys-cli examples/graphical_demo/mandelbrot.aelys
 ```
 
-### [demo/game_of_life.aelys](demo/game_of_life.aelys)
+### [graphical_demo/game_of_life.aelys](graphical_demo/game_of_life.aelys)
 
 Conway's Game of Life. Runs in a terminal.
 
-### [demo/doom_fire.aelys](demo/doom_fire.aelys)
+### [graphical_demo/doom_fire.aelys](graphical_demo/doom_fire.aelys)
 
 Recreation of the PSX Doom fire effect.
 
-### [demo/donut.aelys](demo/donut.aelys)
+### [graphical_demo/donut.aelys](graphical_demo/donut.aelys)
 
 Spinning 3D donut rendered in ASCII. The classic demo.
 
