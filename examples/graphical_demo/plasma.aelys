@@ -1,0 +1,70 @@
+needs std.io
+needs std.bytes
+needs std.time
+needs std.math
+needs std.convert
+
+let W = 60
+let H = 25
+let ESC = convert.chr(27)
+
+@no_gc
+fn run() {
+    let sintab = bytes.alloc(256)
+
+    for i in 0..256 {
+        let rad = (i * 2 * math.PI) / 256.0
+        let s = math.sin(rad)
+        let v = convert.to_int((s + 1.0) * 127.5)
+        bytes.write_u8(sintab, i, v)
+    }
+
+    io.print_inline(ESC + "[?25l")
+    io.print_inline(ESC + "[2J")
+
+    for t in 0..400 {
+        io.print_inline(ESC + "[H")
+
+        for y in 0..H {
+            for x in 0..W {
+                let v1 = bytes.read_u8(sintab, (x * 4 + t * 3) % 256)
+                let v2 = bytes.read_u8(sintab, (y * 3 + t * 2) % 256)
+                let v3 = bytes.read_u8(sintab, ((x + y) * 2 + t) % 256)
+                let v4 = bytes.read_u8(sintab, ((x * 2 - y + t * 4) % 256 + 256) % 256)
+
+                let val = (v1 + v2 + v3 + v4) / 4
+                let hue = (val + t) % 256
+
+                let h = hue
+                let hi = h / 43
+                let f = (h % 43) * 6
+                let q = 255 - f
+                let tt = f
+
+                let mut r = 0
+                let mut g = 0
+                let mut b = 0
+                if hi == 0 { r = 255; g = tt; b = 0 }
+                if hi == 1 { r = q; g = 255; b = 0 }
+                if hi == 2 { r = 0; g = 255; b = tt }
+                if hi == 3 { r = 0; g = q; b = 255 }
+                if hi == 4 { r = tt; g = 0; b = 255 }
+                if hi == 5 { r = 255; g = 0; b = q }
+
+                io.print_inline(ESC + "[48;2;" + convert.to_string(r) + ";" + convert.to_string(g) + ";" + convert.to_string(b) + "m ")
+            }
+            io.print_inline(ESC + "[0m")
+            io.print("")
+        }
+        io.flush()
+        time.sleep(25)
+    }
+
+    io.print_inline(ESC + "[?25h")
+    io.print_inline(ESC + "[2J" + ESC + "[H")
+
+    bytes.free(sintab)
+}
+
+run()
+io.print("Plasma demo complete!")

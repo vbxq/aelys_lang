@@ -30,25 +30,22 @@ match opcode_byte {
         }
         let constant = unsafe { *constants_ptr.add(k) };
 
-        // Check if nested function (rare case)
-        if let Some(ptr_val) = constant.as_ptr() {
-            if (ptr_val & (1 << 20)) != 0 {
-                // Slow path for nested functions
-                self.frames[current_frame_idx].ip = ip;
-                let func_idx = ptr_val & 0xFFFFF;
-                match self.get_nested_function(func_ref, func_idx) {
-                    Ok(nested_func) => {
-                        self.verify_function_value(&nested_func)?;
-                        self.maybe_collect();
-                        let func_obj_ref = match self.alloc_function(nested_func) {
-                            Ok(func_obj_ref) => func_obj_ref,
-                            Err(e) => return Err(e),
-                        };
-                        reg_set!(base + a as usize, Value::ptr(func_obj_ref.index()));
-                        continue;
-                    }
-                    Err(e) => return Err(e),
+        // Check if nested function marker (uses dedicated tag, can't collide with heap ptrs)
+        if let Some(func_idx) = constant.as_nested_fn_marker() {
+            // Slow path for nested functions
+            self.frames[current_frame_idx].ip = ip;
+            match self.get_nested_function(func_ref, func_idx) {
+                Ok(nested_func) => {
+                    self.verify_function_value(&nested_func)?;
+                    self.maybe_collect();
+                    let func_obj_ref = match self.alloc_function(nested_func) {
+                        Ok(func_obj_ref) => func_obj_ref,
+                        Err(e) => return Err(e),
+                    };
+                    reg_set!(base + a as usize, Value::ptr(func_obj_ref.index()));
+                    continue;
                 }
+                Err(e) => return Err(e),
             }
         }
         reg_set!(base + a as usize, constant);

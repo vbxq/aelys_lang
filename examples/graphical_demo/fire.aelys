@@ -1,0 +1,93 @@
+needs std.io
+needs std.bytes
+needs std.time
+needs std.sys
+needs std.convert
+
+let W = 80
+let H = 25
+let ESC = convert.chr(27)
+
+@no_gc
+fn run() {
+    let fire = bytes.alloc(W * H)
+    let pal_r = bytes.alloc(256)
+    let pal_g = bytes.alloc(256)
+    let pal_b = bytes.alloc(256)
+
+    for i in 0..256 {
+        let mut r = 0
+        let mut g = 0
+        let mut b = 0
+        if i < 32 {
+            r = i * 4
+        } else if i < 96 {
+            r = 128 + (i - 32) * 2
+            g = (i - 32) * 2
+        } else {
+            r = 255
+            g = 128 + (i - 96)
+            b = (i - 96) * 2
+        }
+        if r > 255 { r = 255 }
+        if g > 255 { g = 255 }
+        if b > 255 { b = 255 }
+        bytes.write_u8(pal_r, i, r)
+        bytes.write_u8(pal_g, i, g)
+        bytes.write_u8(pal_b, i, b)
+    }
+
+    io.print_inline(ESC + "[?25l")
+    io.print_inline(ESC + "[2J")
+
+    for frame in 0..200 {
+        for x in 0..W {
+            let v = sys.random_int(180, 255)
+            bytes.write_u8(fire, (H - 1) * W + x, v)
+        }
+
+        for y in 0..(H - 1) {
+            for x in 0..W {
+                let mut sum = bytes.read_u8(fire, (y + 1) * W + x)
+                if x > 0 {
+                    sum = sum + bytes.read_u8(fire, (y + 1) * W + x - 1)
+                }
+                if x < W - 1 {
+                    sum = sum + bytes.read_u8(fire, (y + 1) * W + x + 1)
+                }
+                if y < H - 2 {
+                    sum = sum + bytes.read_u8(fire, (y + 2) * W + x)
+                }
+                let mut avg = sum / 4 - sys.random_int(0, 2)
+                if avg < 0 { avg = 0 }
+                bytes.write_u8(fire, y * W + x, avg)
+            }
+        }
+
+        io.print_inline(ESC + "[H")
+        for y in 0..H {
+            for x in 0..W {
+                let v = bytes.read_u8(fire, y * W + x)
+                let r = bytes.read_u8(pal_r, v)
+                let g = bytes.read_u8(pal_g, v)
+                let b = bytes.read_u8(pal_b, v)
+                io.print_inline(ESC + "[48;2;" + convert.to_string(r) + ";" + convert.to_string(g) + ";" + convert.to_string(b) + "m ")
+            }
+            io.print_inline(ESC + "[0m")
+            io.print("")
+        }
+        io.flush()
+        time.sleep(30)
+    }
+
+    io.print_inline(ESC + "[?25h")
+    io.print_inline(ESC + "[2J" + ESC + "[H")
+
+    bytes.free(fire)
+    bytes.free(pal_r)
+    bytes.free(pal_g)
+    bytes.free(pal_b)
+}
+
+run()
+io.print("Fire demo complete!")

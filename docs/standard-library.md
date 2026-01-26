@@ -620,30 +620,59 @@ Byte-level memory operations for binary data manipulation. Use with `@no_gc` fun
 needs std.bytes
 ```
 
-### Allocation
+### Allocation & Buffer Management
 
 | Function | Description |
 |----------|-------------|
 | `alloc(size)` | Allocate `size` bytes, initialized to zero. Returns handle. |
 | `free(handle)` | Free buffer. `free(null)` is a no-op. |
 | `size(handle)` | Return buffer size in bytes. |
+| `resize(handle, new_size)` | Resize buffer (preserves existing data). |
+| `clone(handle)` | Create a copy of the buffer. |
+| `equals(a, b)` | Compare two buffers for equality. |
 
-### Integer Operations
-
-All multi-byte operations use little-endian byte order.
+### Unsigned Integer Operations (Little-Endian)
 
 | Function | Description |
 |----------|-------------|
 | `read_u8(buf, offset)` | Read unsigned byte (0-255) |
-| `write_u8(buf, offset, value)` | Write byte (value 0-255) |
+| `write_u8(buf, offset, value)` | Write unsigned byte |
 | `read_u16(buf, offset)` | Read 16-bit unsigned int |
 | `write_u16(buf, offset, value)` | Write 16-bit unsigned int |
 | `read_u32(buf, offset)` | Read 32-bit unsigned int |
 | `write_u32(buf, offset, value)` | Write 32-bit unsigned int |
-| `read_u64(buf, offset)` | Read 64-bit int |
-| `write_u64(buf, offset, value)` | Write 64-bit int |
+| `read_u64(buf, offset)` | Read 64-bit unsigned int |
+| `write_u64(buf, offset, value)` | Write 64-bit unsigned int |
 
-### Float Operations
+### Signed Integer Operations (Little-Endian)
+
+| Function | Description |
+|----------|-------------|
+| `read_i8(buf, offset)` | Read signed byte (-128 to 127) |
+| `write_i8(buf, offset, value)` | Write signed byte |
+| `read_i16(buf, offset)` | Read 16-bit signed int |
+| `write_i16(buf, offset, value)` | Write 16-bit signed int |
+| `read_i32(buf, offset)` | Read 32-bit signed int |
+| `write_i32(buf, offset, value)` | Write 32-bit signed int |
+| `read_i64(buf, offset)` | Read 64-bit signed int |
+| `write_i64(buf, offset, value)` | Write 64-bit signed int |
+
+### Big-Endian Operations
+
+All `_be` variants for network byte order:
+
+| Function | Description |
+|----------|-------------|
+| `read_u16_be`, `write_u16_be` | 16-bit unsigned big-endian |
+| `read_i16_be`, `write_i16_be` | 16-bit signed big-endian |
+| `read_u32_be`, `write_u32_be` | 32-bit unsigned big-endian |
+| `read_i32_be`, `write_i32_be` | 32-bit signed big-endian |
+| `read_u64_be`, `write_u64_be` | 64-bit unsigned big-endian |
+| `read_i64_be`, `write_i64_be` | 64-bit signed big-endian |
+| `read_f32_be`, `write_f32_be` | 32-bit float big-endian |
+| `read_f64_be`, `write_f64_be` | 64-bit float big-endian |
+
+### Float Operations (Little-Endian)
 
 | Function | Description |
 |----------|-------------|
@@ -656,8 +685,19 @@ All multi-byte operations use little-endian byte order.
 
 | Function | Description |
 |----------|-------------|
-| `copy(src, src_offset, dst, dst_offset, len)` | Copy `len` bytes. Handles overlapping regions. |
+| `copy(src, src_off, dst, dst_off, len)` | Copy `len` bytes. Handles overlapping regions. |
 | `fill(buf, offset, len, value)` | Fill `len` bytes with `value` (0-255). |
+| `reverse(buf, offset, len)` | Reverse bytes in range. |
+| `swap(buf, i, j)` | Swap bytes at indices i and j. |
+| `find(buf, start, end, byte)` | Find first occurrence of byte. Returns -1 if not found. Use -1 for end to search to buffer end. |
+
+### String Operations
+
+| Function | Description |
+|----------|-------------|
+| `from_string(str)` | Create buffer from UTF-8 string. |
+| `to_string(buf, offset, len)` | Read UTF-8 string from buffer. |
+| `write_string(buf, offset, str)` | Write string to buffer. Returns bytes written. |
 
 ### Example
 
@@ -665,25 +705,31 @@ All multi-byte operations use little-endian byte order.
 needs std.bytes
 
 @no_gc
-fn parse_header() {
-    let buf = bytes.alloc(8)
-    bytes.write_u32(buf, 0, 0x12345678)
-    bytes.write_u32(buf, 4, 256)
+fn parse_network_packet() {
+    let buf = bytes.alloc(16)
 
-    let magic = bytes.read_u32(buf, 0)
-    let size = bytes.read_u32(buf, 4)
+    // Write big-endian header (network byte order)
+    bytes.write_u32_be(buf, 0, 0xDEADBEEF)  // magic
+    bytes.write_u16_be(buf, 4, 1024)         // length
+    bytes.write_i16_be(buf, 6, -100)         // signed field
+
+    // String data
+    bytes.write_string(buf, 8, "Meow")
+
+    // Read back
+    let magic = bytes.read_u32_be(buf, 0)
+    let msg = bytes.to_string(buf, 8, 6)
 
     bytes.free(buf)
-    return magic == 0x12345678 and size == 256
 }
 ```
 
 ### Notes
 
 - All operations are bounds-checked
-- Invalid handles produce runtime errors (not panics)
+- Invalid handles produce runtime errors
 - Maximum allocation size: 256MB
-- Buffers are NOT garbage collected—always call `free()`
+- Buffers are NOT garbage collected, always call `free()`
 
 ---
 

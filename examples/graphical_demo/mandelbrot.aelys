@@ -1,169 +1,107 @@
-needs std.math
 needs std.io
-needs std.convert
+needs std.bytes
 needs std.time
+needs std.math
+needs std.convert
 
-let WIDTH: int = 110
-let HEIGHT: int = 32
-
-fn code_to_char(code: int) -> string {
-    if code == 0 { return " " }
-    if code == 1 { return "`" }
-    if code == 2 { return "." }
-    if code == 3 { return "'" }
-    if code == 4 { return "-" }
-    if code == 5 { return ":" }
-    if code == 6 { return ";" }
-    if code == 7 { return "~" }
-    if code == 8 { return "!" }
-    if code == 9 { return "=" }
-    if code == 10 { return "+" }
-    if code == 11 { return "?" }
-    if code == 12 { return "*" }
-    if code == 13 { return "o" }
-    if code == 14 { return "x" }
-    if code == 15 { return "X" }
-    if code == 16 { return "O" }
-    if code == 17 { return "0" }
-    if code == 18 { return "#" }
-    if code == 19 { return "%" }
-    if code == 20 { return "&" }
-    if code == 21 { return "$" }
-    if code == 22 { return "@" }
-    if code == 23 { return "M" }
-    return " "
-}
+let W = 160
+let H = 90
+let ROWS = H / 2
+let MAX_ITER = 80
+let ESC = convert.chr(27)
+let HALF = convert.chr(9600)
 
 @no_gc
-fn fb_new(width: int, height: int) -> int {
-    let size = width * height
-    let fb = alloc(size + 2)
-    store(fb, 0, width)
-    store(fb, 1, height)
-    fb
-}
+fn run() {
+    let fb = bytes.alloc(W * H)
+    let pal_r = bytes.alloc(MAX_ITER + 1)
+    let pal_g = bytes.alloc(MAX_ITER + 1)
+    let pal_b = bytes.alloc(MAX_ITER + 1)
 
-@no_gc
-fn fb_free(fb: int) {
-    free(fb)
-}
-
-@no_gc
-fn fb_set(fb: int, x: int, y: int, val: int) {
-    let width: int = load(fb, 0)
-    store(fb, 2 + y * width + x, val)
-}
-
-@no_gc
-fn fb_get(fb: int, x: int, y: int) -> int {
-    let width: int = load(fb, 0)
-    load(fb, 2 + y * width + x)
-}
-
-// Mandelbrot iteration - pure computation, no allocations
-@no_gc
-fn mandelbrot(cr: float, ci: float, max_iter: int) -> int {
-    let mut zr: float = 0.0
-    let mut zi: float = 0.0
-    let mut iter: int = 0
-
-    while iter < max_iter {
-        let zr2: float = zr * zr
-        let zi2: float = zi * zi
-
-        if zr2 + zi2 > 4.0 {
-            return iter
+    for i in 0..MAX_ITER {
+        let t = (i * 255) / MAX_ITER
+        let mut r = 0
+        let mut g = 0
+        let mut b = 0
+        if t < 85 {
+            r = t * 3; g = 0; b = t * 3
+        } else if t < 170 {
+            r = 255; g = (t - 85) * 3; b = 255 - (t - 85) * 3
+        } else {
+            r = 255; g = 255; b = (t - 170) * 3
         }
-
-        let new_zr = zr2 - zi2 + cr
-        zi = 2.0 * zr * zi + ci
-        zr = new_zr
-        iter = iter + 1
+        if r > 255 { r = 255 }
+        if g > 255 { g = 255 }
+        if b > 255 { b = 255 }
+        bytes.write_u8(pal_r, i, r)
+        bytes.write_u8(pal_g, i, g)
+        bytes.write_u8(pal_b, i, b)
     }
-    return 0
-}
+    bytes.write_u8(pal_r, MAX_ITER, 0)
+    bytes.write_u8(pal_g, MAX_ITER, 0)
+    bytes.write_u8(pal_b, MAX_ITER, 0)
 
-@no_gc
-fn compute_frame(fb: int, x_min: float, x_max: float, y_min: float, y_max: float, max_iter: int) {
-    let x_step: float = (x_max - x_min) / WIDTH
-    let y_step: float = (y_max - y_min) / HEIGHT
-    let chars_len: int = 24
+    io.print_inline(ESC + "[?25l")
+    io.print_inline(ESC + "[2J")
 
-    for y in 0..HEIGHT {
-        let ci: float = y_max - y * y_step
+    let cx = -0.745
+    let cy = 0.186
+    let mut zoom = 0.4
 
-        for x in 0..WIDTH {
-            let cr: float = x_min + x * x_step
-            let iter = mandelbrot(cr, ci, max_iter)
+    for frame in 0..250 {
+        let scale = 2.0 / zoom / H
+        let ox = cx - (W / 2) * scale
+        let oy = cy - (H / 2) * scale
 
-            let mut char_idx: int = 0
-            if iter > 0 {
-                char_idx = (iter * chars_len) / max_iter
-                if char_idx >= chars_len {
-                    char_idx = chars_len - 1
+        for py in 0..H {
+            let y0 = oy + py * scale
+            for px in 0..W {
+                let x0 = ox + px * scale
+                let mut x = 0.0
+                let mut y = 0.0
+                let mut i = 0
+                while i < MAX_ITER and x * x + y * y <= 4.0 {
+                    let xt = x * x - y * y + x0
+                    y = 2.0 * x * y + y0
+                    x = xt
+                    i = i + 1
                 }
+                bytes.write_u8(fb, py * W + px, i)
             }
-            fb_set(fb, x, y, char_idx)
         }
+
+        io.print_inline(ESC + "[H")
+        for row in 0..ROWS {
+            let y1 = row * 2
+            let y2 = y1 + 1
+            for px in 0..W {
+                let i1 = bytes.read_u8(fb, y1 * W + px)
+                let i2 = bytes.read_u8(fb, y2 * W + px)
+                let r1 = bytes.read_u8(pal_r, i1)
+                let g1 = bytes.read_u8(pal_g, i1)
+                let b1 = bytes.read_u8(pal_b, i1)
+                let r2 = bytes.read_u8(pal_r, i2)
+                let g2 = bytes.read_u8(pal_g, i2)
+                let b2 = bytes.read_u8(pal_b, i2)
+                io.print_inline(ESC + "[38;2;" + convert.to_string(r1) + ";" + convert.to_string(g1) + ";" + convert.to_string(b1) + ";48;2;" + convert.to_string(r2) + ";" + convert.to_string(g2) + ";" + convert.to_string(b2) + "m" + HALF)
+            }
+            io.print_inline(ESC + "[0m")
+            io.print("")
+        }
+        io.flush()
+
+        zoom = zoom * 1.06
+        time.sleep(30)
     }
+
+    io.print_inline(ESC + "[?25h")
+    io.print_inline(ESC + "[2J" + ESC + "[H")
+
+    bytes.free(fb)
+    bytes.free(pal_r)
+    bytes.free(pal_g)
+    bytes.free(pal_b)
 }
 
-fn display_frame(fb: int) {
-    for y in 0..HEIGHT {
-        for x in 0..WIDTH {
-            let val = fb_get(fb, x, y)
-            io.print_inline(code_to_char(val))
-        }
-        io.print("")  // newline
-    }
-}
-
-fn main() {
-    let fb = fb_new(WIDTH, HEIGHT)
-
-    // Target: Famous spiral on the boundary (Misiurewicz point)
-    let target_x: float = -0.74543
-    let target_y: float = 0.11301
-    let zoom_speed: float = 0.97
-
-    let mut x_size: float = 3.5
-    let mut y_size: float = 2.4
-    let mut frame: int = 0
-    let mut max_iter: int = 32
-
-    io.hide_cursor()
-    io.clear_screen()
-
-    let start_time = time.now()
-
-    // Infinite zoom
-    while true {
-        io.cursor_home()
-
-        let x_min = target_x - x_size / 2.0
-        let x_max = target_x + x_size / 2.0
-        let y_min = target_y - y_size / 2.0
-        let y_max = target_y + y_size / 2.0
-
-        compute_frame(fb, x_min, x_max, y_min, y_max, max_iter)
-        display_frame(fb)
-
-        let elapsed = time.now() - start_time
-        let mut fps: int = 0
-        if elapsed > 0.0 {
-            fps = frame / elapsed
-        }
-        let zoom: int = math.floor(3.5 / x_size)
-        io.print("Frame: " + convert.to_string(frame) + " | FPS: " + convert.to_string(fps) + " | Zoom: " + convert.to_string(zoom) + "x | Iter: " + convert.to_string(max_iter))
-
-        x_size = x_size * zoom_speed
-        y_size = y_size * zoom_speed
-        frame = frame + 1
-
-        if frame % 50 == 0 and max_iter < 200 {
-            max_iter = max_iter + 16
-        }
-    }
-}
-
-main()
+run()
+io.print("Mandelbrot zoom complete!")

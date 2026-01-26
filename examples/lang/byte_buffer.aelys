@@ -1,0 +1,35 @@
+needs std.io
+needs std.bytes
+needs std.convert
+
+@no_gc
+fn parse_packet() {
+    // simulate a binary packet
+    let packet = bytes.alloc(16)
+
+    // write header (4-byte magic number)
+    bytes.write_u32(packet, 0, 0xDEADBEEF)
+
+    // write payload length (2 bytes)
+    bytes.write_u16(packet, 4, 1024)
+
+    // write ASCII data
+    bytes.write_u8(packet, 6, 65)  // 'A'
+    bytes.write_u8(packet, 7, 66)  // 'B'
+    bytes.write_u8(packet, 8, 67)  // 'C'
+
+    // parse it back
+    let magic = bytes.read_u32(packet, 0)
+    let len = bytes.read_u16(packet, 4)
+    let c1 = bytes.read_u8(packet, 6)
+    let c2 = bytes.read_u8(packet, 7)
+    let c3 = bytes.read_u8(packet, 8)
+
+    io.print("Magic: " + convert.to_string(magic))
+    io.print("Length: " + convert.to_string(len))
+    io.print("Data: " + convert.to_string(c1) + " " + convert.to_string(c2) + " " + convert.to_string(c3))
+
+    bytes.free(packet)
+}
+
+parse_packet()

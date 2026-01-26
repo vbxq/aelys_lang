@@ -1,0 +1,90 @@
+needs std.io
+needs std.bytes
+needs std.time
+needs std.sys
+needs std.convert
+
+let W = 60
+let H = 30
+let ESC = convert.chr(27)
+
+@no_gc
+fn run() {
+    let grid = bytes.alloc(W * H)
+    let next = bytes.alloc(W * H)
+
+    bytes.fill(grid, 0, W * H, 0)
+
+    for i in 0..((W * H) / 4) {
+        let x = sys.random_int(0, W - 1)
+        let y = sys.random_int(0, H - 1)
+        bytes.write_u8(grid, y * W + x, 1)
+    }
+
+    let gx = 5
+    let gy = 5
+    bytes.write_u8(grid, gy * W + gx + 1, 1)
+    bytes.write_u8(grid, (gy + 1) * W + gx + 2, 1)
+    bytes.write_u8(grid, (gy + 2) * W + gx, 1)
+    bytes.write_u8(grid, (gy + 2) * W + gx + 1, 1)
+    bytes.write_u8(grid, (gy + 2) * W + gx + 2, 1)
+
+    io.print_inline(ESC + "[?25l")
+    io.print_inline(ESC + "[2J")
+
+    for gen in 0..300 {
+        io.print_inline(ESC + "[H")
+        io.print_inline(ESC + "[97mGen " + convert.to_string(gen) + ESC + "[0m")
+        io.print("")
+
+        for y in 0..H {
+            for x in 0..W {
+                let cell = bytes.read_u8(grid, y * W + x)
+                if cell == 1 {
+                    io.print_inline(ESC + "[42m  " + ESC + "[0m")
+                } else {
+                    io.print_inline(ESC + "[40m  " + ESC + "[0m")
+                }
+            }
+            io.print("")
+        }
+        io.flush()
+
+        for y in 0..H {
+            for x in 0..W {
+                let mut n = 0
+                for dy in -1..2 {
+                    for dx in -1..2 {
+                        if dx != 0 or dy != 0 {
+                            let nx = (x + dx + W) % W
+                            let ny = (y + dy + H) % H
+                            n = n + bytes.read_u8(grid, ny * W + nx)
+                        }
+                    }
+                }
+
+                let alive = bytes.read_u8(grid, y * W + x)
+                let mut new_state = 0
+                if alive == 1 and (n == 2 or n == 3) {
+                    new_state = 1
+                }
+                if alive == 0 and n == 3 {
+                    new_state = 1
+                }
+                bytes.write_u8(next, y * W + x, new_state)
+            }
+        }
+
+        bytes.copy(next, 0, grid, 0, W * H)
+        time.sleep(80)
+    }
+
+    io.print_inline(ESC + "[?25h")
+    io.print_inline(ESC + "[2J" + ESC + "[H")
+
+    bytes.free(grid)
+    bytes.free(next)
+}
+
+run()
+io.print("Game of Life complete!")
