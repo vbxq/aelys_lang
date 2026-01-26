@@ -443,9 +443,8 @@ impl<'a> AasmParser<'a> {
                         // func @N
                         self.expect(Token::At)?;
                         if let Token::Int(n) = self.advance()? {
-                            // Encode as nested function marker
-                            let marker = (1 << 20) | ((n - 1) as usize); // -1 because main is @0
-                            Ok(Value::ptr(marker))
+                            // Encode as nested function marker (uses dedicated tag)
+                            Ok(Value::nested_fn_marker((n - 1) as usize)) // -1 because main is @0
                         } else {
                             Err(AssemblerError::Expected {
                                 expected: "function index".to_string(),

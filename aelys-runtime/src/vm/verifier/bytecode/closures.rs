@@ -17,9 +17,9 @@ pub(super) fn verify(
             verify_reg(a, num_regs, "MakeClosure")?;
             verify_const(b, constants_len, "MakeClosure")?;
             let constant = func.constants[b];
-            let func_idx = match constant.as_ptr() {
-                Some(ptr) if (ptr & (1 << 20)) != 0 => ptr & 0xFFFFF,
-                _ => {
+            let func_idx = match constant.as_nested_fn_marker() {
+                Some(idx) => idx,
+                None => {
                     return Err(format!(
                         "MakeClosure constant {} is not a nested function marker",
                         b

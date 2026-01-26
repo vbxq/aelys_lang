@@ -1,6 +1,6 @@
 use super::{
-    CANONICAL_NAN, IntegerOverflowError, PAYLOAD_MASK, QNAN, TAG_BOOL, TAG_INT, TAG_NULL, TAG_PTR,
-    Value,
+    CANONICAL_NAN, IntegerOverflowError, PAYLOAD_MASK, QNAN, TAG_BOOL, TAG_INT, TAG_NESTED_FN,
+    TAG_NULL, TAG_PTR, Value,
 };
 
 impl Value {
@@ -28,5 +28,12 @@ impl Value {
     pub fn ptr(p: usize) -> Self {
         debug_assert!(p <= PAYLOAD_MASK as usize, "ptr too big for NaN boxing");
         Self(QNAN | TAG_PTR | (p as u64))
+    }
+
+    /// create a nested function marker for use in constants array.
+    /// this uses a dedicated tag that can't collide with heap pointers.
+    pub fn nested_fn_marker(idx: usize) -> Self {
+        debug_assert!(idx <= PAYLOAD_MASK as usize, "nested fn index too big");
+        Self(QNAN | TAG_NESTED_FN | (idx as u64))
     }
 }

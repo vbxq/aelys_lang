@@ -225,32 +225,29 @@ impl BinaryWriter {
                 self.write_u8(3); // TAG_FLOAT
                 self.write_f64(f);
             }
+        } else if let Some(func_idx) = value.as_nested_fn_marker() {
+            // Nested function marker (uses dedicated tag)
+            self.write_u8(5); // TAG_FUNC
+            self.write_u32(func_idx as u32);
         } else if let Some(ptr) = value.as_ptr() {
-            // Check if it's a nested function marker
-            if (ptr & (1 << 20)) != 0 {
-                self.write_u8(5); // TAG_FUNC
-                let func_idx = ptr & 0xFFFFF;
-                self.write_u32(func_idx as u32);
-            } else {
-                // Try to resolve from heap
-                if let Some(obj) = heap.get(GcRef::new(ptr)) {
-                    match &obj.kind {
-                        ObjectKind::String(s) => {
-                            self.write_u8(4); // TAG_STRING
-                            let bytes = s.as_bytes();
-                            self.write_u32(bytes.len() as u32);
-                            self.write_bytes(bytes);
-                        }
-                        _ => {
-                            // Other object types: store as ptr
-                            self.write_u8(6); // TAG_PTR
-                            self.write_u64(ptr as u64);
-                        }
+            // Try to resolve from heap
+            if let Some(obj) = heap.get(GcRef::new(ptr)) {
+                match &obj.kind {
+                    ObjectKind::String(s) => {
+                        self.write_u8(4); // TAG_STRING
+                        let bytes = s.as_bytes();
+                        self.write_u32(bytes.len() as u32);
+                        self.write_bytes(bytes);
                     }
-                } else {
-                    self.write_u8(6); // TAG_PTR
-                    self.write_u64(ptr as u64);
+                    _ => {
+                        // Other object types: store as ptr
+                        self.write_u8(6); // TAG_PTR
+                        self.write_u64(ptr as u64);
+                    }
                 }
+            } else {
+                self.write_u8(6); // TAG_PTR
+                self.write_u64(ptr as u64);
             }
         } else {
             // Unknown: store as null
@@ -532,15 +529,12 @@ impl<'a> BinaryReader<'a> {
 
     fn validate_func_markers(constants: &[Value], nested_count: usize) -> Result<()> {
         for constant in constants {
-            if let Some(ptr) = constant.as_ptr() {
-                if (ptr & (1 << 20)) != 0 {
-                    let func_idx = ptr & 0xFFFFF;
-                    if func_idx >= nested_count {
-                        return Err(BinaryError::InvalidNestedFunctionIndex {
-                            index: func_idx,
-                            max: nested_count.saturating_sub(1),
-                        });
-                    }
+            if let Some(func_idx) = constant.as_nested_fn_marker() {
+                if func_idx >= nested_count {
+                    return Err(BinaryError::InvalidNestedFunctionIndex {
+                        index: func_idx,
+                        max: nested_count.saturating_sub(1),
+                    });
                 }
             }
         }
@@ -582,10 +576,9 @@ impl<'a> BinaryReader<'a> {
                 Ok(Value::ptr(str_ref.index()))
             }
             5 => {
-                // TAG_FUNC (nested function marker)
+                // TAG_FUNC (nested function marker with dedicated tag)
                 let func_idx = self.read_u32()? as usize;
-                let marker = (1 << 20) | func_idx;
-                Ok(Value::ptr(marker))
+                Ok(Value::nested_fn_marker(func_idx))
             }
             6 => {
                 // TAG_PTR

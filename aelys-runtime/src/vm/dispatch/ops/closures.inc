@@ -24,40 +24,37 @@ match opcode_byte {
         }
         let constant = unsafe { *constants_ptr.add(const_idx as usize) };
 
-        // Check if this is a nested function marker
-        let (nested_func_ref, upvalue_descriptors) = if let Some(ptr_val) = constant.as_ptr() {
-            if (ptr_val & (1 << 20)) != 0 {
-                // Nested function marker: extract index and resolve
-                let nested_idx = ptr_val & 0xFFFFF;
-                self.frames[current_frame_idx].ip = ip;
-                let nested_func = self.get_nested_function(func_ref, nested_idx)?;
-                let upvalue_descs = nested_func.upvalue_descriptors.clone();
-                self.verify_function_value(&nested_func)?;
-                self.maybe_collect();
-                let nested_ref = self.alloc_function(nested_func)?;
-                (nested_ref, upvalue_descs)
-            } else {
-                // Direct heap pointer - get function object
-                let func_ref = GcRef::new(ptr_val);
-                match self.heap.get(func_ref) {
-                    Some(obj) => {
-                        if let ObjectKind::Function(f) = &obj.kind {
-                            (func_ref, f.function.upvalue_descriptors.clone())
-                        } else {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::TypeError {
-                                operation: "MakeClosure",
-                                expected: "function",
-                                got: "non-function object".to_string(),
-                            }));
-                        }
-                    }
-                    None => {
+        // Check if this is a nested function marker (uses dedicated tag, can't collide with heap ptrs)
+        let (nested_func_ref, upvalue_descriptors) = if let Some(nested_idx) = constant.as_nested_fn_marker() {
+            // Nested function marker: resolve from nested_functions array
+            self.frames[current_frame_idx].ip = ip;
+            let nested_func = self.get_nested_function(func_ref, nested_idx)?;
+            let upvalue_descs = nested_func.upvalue_descriptors.clone();
+            self.verify_function_value(&nested_func)?;
+            self.maybe_collect();
+            let nested_ref = self.alloc_function(nested_func)?;
+            (nested_ref, upvalue_descs)
+        } else if let Some(ptr_val) = constant.as_ptr() {
+            // Direct heap pointer - get function object
+            let func_ref = GcRef::new(ptr_val);
+            match self.heap.get(func_ref) {
+                Some(obj) => {
+                    if let ObjectKind::Function(f) = &obj.kind {
+                        (func_ref, f.function.upvalue_descriptors.clone())
+                    } else {
                         self.frames[current_frame_idx].ip = ip;
-                        return Err(self.runtime_error(RuntimeErrorKind::InvalidBytecode(
-                            "MakeClosure function not found in heap".to_string(),
-                        )));
+                        return Err(self.runtime_error(RuntimeErrorKind::TypeError {
+                            operation: "MakeClosure",
+                            expected: "function",
+                            got: "non-function object".to_string(),
+                        }));
                     }
+                }
+                None => {
+                    self.frames[current_frame_idx].ip = ip;
+                    return Err(self.runtime_error(RuntimeErrorKind::InvalidBytecode(
+                        "MakeClosure function not found in heap".to_string(),
+                    )));
                 }
             }
         } else {

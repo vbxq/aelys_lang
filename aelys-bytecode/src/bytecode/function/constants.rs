@@ -35,7 +35,8 @@ impl Function {
         let func_idx = self.nested_functions.len();
         self.nested_functions.push(func);
 
-        let marker = Value::ptr((1 << 20) | func_idx);
+        // Use dedicated tag to avoid collision with heap pointers
+        let marker = Value::nested_fn_marker(func_idx);
 
         let idx = self.constants.len() as u16;
         self.constants.push(marker);

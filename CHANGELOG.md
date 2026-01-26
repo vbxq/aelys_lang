@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.17.x (Current)
 
+**0.17.12-a**
+- Fixed nested function marker collision with heap pointers (now uses dedicated NaN tag)
+
 **0.17.11-a**
 - Fixed OOB read/write vulnerability in CallGlobal opcodes (verifier now validates cache words)
 - Fixed integer truncation vulnerability in call site cache (verifier now validates function size limits)

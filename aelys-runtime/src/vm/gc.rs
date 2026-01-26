@@ -70,7 +70,8 @@ impl VM {
         }
 
         self.heap.sweep();
-        // call_site_cache is not cleared; validation happens via pointer comparison.
+        // call_site_cache is not cleared here; it's invalidated on global mutation
+        // (set_global/set_global_by_index), which prevents use-after-free.
         self.globals_by_index_cache.clear();
     }
 }

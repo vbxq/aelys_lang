@@ -759,37 +759,34 @@ impl<'a> DisasmContext<'a> {
             } else {
                 format!("float {}", f)
             }
+        } else if let Some(func_idx) = value.as_nested_fn_marker() {
+            // Nested function marker (uses dedicated tag)
+            format!("func @{}", func_idx + 1) // +1 because main is @0
         } else if let Some(ptr) = value.as_ptr() {
-            // Check if it's a nested function reference (marker pattern)
-            if (ptr & (1 << 20)) != 0 {
-                let func_idx = ptr & 0xFFFFF;
-                format!("func @{}", func_idx + 1) // +1 because main is @0
-            } else {
-                if let Some(heap) = self.heap {
-                    if let Some(obj) = heap.get(GcRef::new(ptr)) {
-                        match &obj.kind {
-                            ObjectKind::String(s) => {
-                                format!("string \"{}\"", escape_string(s.as_str()))
-                            }
-                            ObjectKind::Function(f) => {
-                                if let Some(name) = f.name() {
-                                    format!("func \"{}\"", escape_string(name))
-                                } else {
-                                    "func <anonymous>".to_string()
-                                }
-                            }
-                            ObjectKind::Native(n) => {
-                                format!("native \"{}\"", escape_string(&n.name))
-                            }
-                            ObjectKind::Upvalue(_) => "upvalue".to_string(),
-                            ObjectKind::Closure(_) => "closure".to_string(),
+            if let Some(heap) = self.heap {
+                if let Some(obj) = heap.get(GcRef::new(ptr)) {
+                    match &obj.kind {
+                        ObjectKind::String(s) => {
+                            format!("string \"{}\"", escape_string(s.as_str()))
                         }
-                    } else {
-                        format!("ptr {}", ptr)
+                        ObjectKind::Function(f) => {
+                            if let Some(name) = f.name() {
+                                format!("func \"{}\"", escape_string(name))
+                            } else {
+                                "func <anonymous>".to_string()
+                            }
+                        }
+                        ObjectKind::Native(n) => {
+                            format!("native \"{}\"", escape_string(&n.name))
+                        }
+                        ObjectKind::Upvalue(_) => "upvalue".to_string(),
+                        ObjectKind::Closure(_) => "closure".to_string(),
                     }
                 } else {
                     format!("ptr {}", ptr)
                 }
+            } else {
+                format!("ptr {}", ptr)
             }
         } else {
             format!("unknown 0x{:016x}", value.as_int().unwrap_or(0) as u64)

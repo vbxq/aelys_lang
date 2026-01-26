@@ -1,4 +1,4 @@
-use super::{PAYLOAD_MASK, Value};
+use super::{PAYLOAD_MASK, QNAN, TAG_MASK, TAG_NESTED_FN, Value};
 
 impl Value {
     pub fn as_int(&self) -> Option<i64> {
@@ -17,6 +17,15 @@ impl Value {
 
     pub fn as_ptr(&self) -> Option<usize> {
         self.is_ptr().then(|| (self.0 & PAYLOAD_MASK) as usize)
+    }
+
+    /// Check if this is a nested function marker and return the index if so.
+    pub fn as_nested_fn_marker(&self) -> Option<usize> {
+        if (self.0 & (QNAN | TAG_MASK)) == (QNAN | TAG_NESTED_FN) {
+            Some((self.0 & PAYLOAD_MASK) as usize)
+        } else {
+            None
+        }
     }
 
     #[inline(always)]
