@@ -7,9 +7,7 @@ impl VM {
         for (idx, name) in global_names.iter().enumerate() {
             if !name.is_empty() && idx < self.globals_by_index.len() {
                 let value = self.globals_by_index[idx];
-                if !value.is_null() || !self.globals.contains_key(name) {
-                    self.globals.insert(name.clone(), value);
-                }
+                self.globals.insert(name.clone(), value);
             }
         }
     }
@@ -54,9 +52,7 @@ impl VM {
                 for (idx, name) in layout.names().iter().enumerate() {
                     if !name.is_empty() && idx < self.globals_by_index.len() {
                         let value = self.globals_by_index[idx];
-                        if !value.is_null() {
-                            self.globals.insert(name.clone(), value);
-                        }
+                        self.globals.insert(name.clone(), value);
                     }
                 }
             }

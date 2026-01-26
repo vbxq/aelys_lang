@@ -6,6 +6,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 **0.18.1-a**
 - Fixed register index overflow in loop instruction verification (ForLoopI, WhileLoopLt)
+- Fixed globals sync ignoring null values (caused inconsistency between indexed/named access)
 
 **0.18.0-a**
 - New `std.bytes` module for binary data manipulation

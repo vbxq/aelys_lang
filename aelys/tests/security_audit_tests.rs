@@ -837,3 +837,37 @@ fn variable_shadowing() {
     let result = run_file(&path).unwrap();
     assert_eq!(result.as_int(), Some(1));
 }
+
+#[test]
+fn globals_sync_includes_null_values() {
+    /* verifies that setting a global to null via one module is visible in another
+       previously, null values were skipped during sync causing inconsistencies. */
+    let dir = tempfile::tempdir().unwrap();
+
+    let helper = dir.path().join("helper.aelys");
+    std::fs::write(&helper, r#"
+pub let mut shared = 42
+
+pub fn set_to_null() {
+    shared = null
+}
+
+pub fn get_shared() {
+    return shared
+}
+"#).unwrap();
+
+    let main = dir.path().join("main.aelys");
+    std::fs::write(&main, r#"
+needs shared, set_to_null, get_shared from helper
+
+let before = get_shared()
+set_to_null()
+let after = get_shared()
+
+if before == 42 and after == null { 1 } else { 0 }
+"#).unwrap();
+
+    let result = run_file(&main).unwrap();
+    assert_eq!(result.as_int(), Some(1));
+}
