@@ -7,7 +7,8 @@ impl Heap {
     }
 
     // SAFETY: caller guarantees valid index and non-empty slot.
-    // Used in hot paths where we've already validated the ref.
+    // TODO: Future optimization for faster heap access in hot paths.
+    #[allow(dead_code)]
     #[inline(always)]
     pub unsafe fn get_unchecked(&self, gc_ref: GcRef) -> &GcObject {
         unsafe {
