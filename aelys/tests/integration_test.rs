@@ -111,8 +111,9 @@ fn test_logical_operators() {
 
 #[test]
 fn test_if_statement() {
-    let result = run_ok("if true { 42; } else { 0; }");
-    assert!(result.is_null());
+    // if with else at top level returns the value of the taken branch
+    let result = run_ok("if true { 42 } else { 0 }");
+    assert_eq!(result.as_int(), Some(42));
 
     let result = run_ok("let x = if true { 42 } else { 0 }; x;");
     assert_eq!(result.as_int(), Some(42));

@@ -48,6 +48,32 @@ impl Compiler {
                     self.compile_typed_expr(expr, result_reg)?;
                     self.emit_a(OpCode::Return, result_reg, 0, 0, last_stmt.span);
                 }
+                // If with else branch can return a value
+                TypedStmtKind::If {
+                    condition,
+                    then_branch,
+                    else_branch: Some(else_branch),
+                } => {
+                    let result_reg = self.alloc_register()?;
+                    let cond_reg = self.alloc_register()?;
+                    self.compile_typed_expr(condition, cond_reg)?;
+                    let else_jump = self.emit_jump_if(OpCode::JumpIfNot, cond_reg, condition.span);
+                    self.free_register(cond_reg);
+
+                    self.compile_typed_if_branch_for_return(then_branch, result_reg)?;
+                    let end_jump = self.emit_jump(OpCode::Jump, then_branch.span);
+                    self.patch_jump(else_jump);
+                    self.compile_typed_if_branch_for_return(else_branch, result_reg)?;
+                    self.patch_jump(end_jump);
+
+                    self.emit_a(OpCode::Return, result_reg, 0, 0, last_stmt.span);
+                }
+                // Block can return value of its last expression
+                TypedStmtKind::Block(_) => {
+                    let result_reg = self.alloc_register()?;
+                    self.compile_typed_if_branch_for_return(last_stmt, result_reg)?;
+                    self.emit_a(OpCode::Return, result_reg, 0, 0, last_stmt.span);
+                }
                 _ => {
                     self.compile_typed_stmt(last_stmt)?;
                     self.emit_return0(last_stmt.span);
