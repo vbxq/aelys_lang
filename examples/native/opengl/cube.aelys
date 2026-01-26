@@ -1,0 +1,230 @@
+// rotating 3D Cube inspired by vkcube code
+// important, parts of this was written by AI, i really just to get something working and not waste time on writing myself a cube in aelys
+
+needs opengl
+needs std.math
+needs std.time
+
+let WIDTH: float = 500.0
+let HEIGHT: float = 500.0
+
+let mut sx0: int = 0
+let mut sy0: int = 0
+let mut sx1: int = 0
+let mut sy1: int = 0
+let mut sx2: int = 0
+let mut sy2: int = 0
+let mut sx3: int = 0
+let mut sy3: int = 0
+let mut sx4: int = 0
+let mut sy4: int = 0
+let mut sx5: int = 0
+let mut sy5: int = 0
+let mut sx6: int = 0
+let mut sy6: int = 0
+let mut sx7: int = 0
+let mut sy7: int = 0
+
+let mut sz0: float = 0.0
+let mut sz1: float = 0.0
+let mut sz2: float = 0.0
+let mut sz3: float = 0.0
+let mut sz4: float = 0.0
+let mut sz5: float = 0.0
+let mut sz6: float = 0.0
+let mut sz7: float = 0.0
+
+fn transform_x(x: float, y: float, z: float, ax: float, ay: float, az: float) -> float {
+    let y1 = y * math.cos(ax) - z * math.sin(ax)
+    let z1 = y * math.sin(ax) + z * math.cos(ax)
+    let x2 = x * math.cos(ay) + z1 * math.sin(ay)
+    let z2 = -x * math.sin(ay) + z1 * math.cos(ay)
+    let x3 = x2 * math.cos(az) - y1 * math.sin(az)
+    return x3
+}
+
+fn transform_y(x: float, y: float, z: float, ax: float, ay: float, az: float) -> float {
+    let y1 = y * math.cos(ax) - z * math.sin(ax)
+    let z1 = y * math.sin(ax) + z * math.cos(ax)
+    let x2 = x * math.cos(ay) + z1 * math.sin(ay)
+    let x3 = x2 * math.cos(az) - y1 * math.sin(az)
+    let y3 = x2 * math.sin(az) + y1 * math.cos(az)
+    return y3
+}
+
+fn transform_z(x: float, y: float, z: float, ax: float, ay: float, az: float) -> float {
+    let y1 = y * math.cos(ax) - z * math.sin(ax)
+    let z1 = y * math.sin(ax) + z * math.cos(ax)
+    let z2 = -x * math.sin(ay) + z1 * math.cos(ay)
+    return z2
+}
+
+fn project_vertex(vx: float, vy: float, vz: float, ax: float, ay: float, az: float) {
+    let x = transform_x(vx, vy, vz, ax, ay, az)
+    let y = transform_y(vx, vy, vz, ax, ay, az)
+    let z = transform_z(vx, vy, vz, ax, ay, az)
+
+    let zt = z - 8.0
+
+    let near = 6.0
+    let scale = near / (-zt)
+
+    let aspect = HEIGHT / WIDTH
+    let proj_x = x * scale / 2.8
+    let proj_y = y * scale / (2.8 * aspect)
+
+    sx0 = math.floor(proj_x * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy0 = math.floor(-proj_y * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz0 = zt
+}
+
+fn update_vertices(ax: float, ay: float, az: float) {
+    let near = 6.0
+    let aspect = HEIGHT / WIDTH
+
+    let x0 = transform_x(-1.0, -1.0, 1.0, ax, ay, az)
+    let y0 = transform_y(-1.0, -1.0, 1.0, ax, ay, az)
+    let z0 = transform_z(-1.0, -1.0, 1.0, ax, ay, az) - 8.0
+    let s0 = near / (-z0)
+    sx0 = math.floor((x0 * s0 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy0 = math.floor((-y0 * s0 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz0 = z0
+
+    let x1 = transform_x(1.0, -1.0, 1.0, ax, ay, az)
+    let y1 = transform_y(1.0, -1.0, 1.0, ax, ay, az)
+    let z1 = transform_z(1.0, -1.0, 1.0, ax, ay, az) - 8.0
+    let s1 = near / (-z1)
+    sx1 = math.floor((x1 * s1 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy1 = math.floor((-y1 * s1 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz1 = z1
+
+    let x2 = transform_x(-1.0, 1.0, 1.0, ax, ay, az)
+    let y2 = transform_y(-1.0, 1.0, 1.0, ax, ay, az)
+    let z2 = transform_z(-1.0, 1.0, 1.0, ax, ay, az) - 8.0
+    let s2 = near / (-z2)
+    sx2 = math.floor((x2 * s2 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy2 = math.floor((-y2 * s2 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz2 = z2
+
+    let x3 = transform_x(1.0, 1.0, 1.0, ax, ay, az)
+    let y3 = transform_y(1.0, 1.0, 1.0, ax, ay, az)
+    let z3 = transform_z(1.0, 1.0, 1.0, ax, ay, az) - 8.0
+    let s3 = near / (-z3)
+    sx3 = math.floor((x3 * s3 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy3 = math.floor((-y3 * s3 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz3 = z3
+
+    let x4 = transform_x(1.0, -1.0, -1.0, ax, ay, az)
+    let y4 = transform_y(1.0, -1.0, -1.0, ax, ay, az)
+    let z4 = transform_z(1.0, -1.0, -1.0, ax, ay, az) - 8.0
+    let s4 = near / (-z4)
+    sx4 = math.floor((x4 * s4 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy4 = math.floor((-y4 * s4 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz4 = z4
+
+    let x5 = transform_x(-1.0, -1.0, -1.0, ax, ay, az)
+    let y5 = transform_y(-1.0, -1.0, -1.0, ax, ay, az)
+    let z5 = transform_z(-1.0, -1.0, -1.0, ax, ay, az) - 8.0
+    let s5 = near / (-z5)
+    sx5 = math.floor((x5 * s5 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy5 = math.floor((-y5 * s5 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz5 = z5
+
+    let x6 = transform_x(1.0, 1.0, -1.0, ax, ay, az)
+    let y6 = transform_y(1.0, 1.0, -1.0, ax, ay, az)
+    let z6 = transform_z(1.0, 1.0, -1.0, ax, ay, az) - 8.0
+    let s6 = near / (-z6)
+    sx6 = math.floor((x6 * s6 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy6 = math.floor((-y6 * s6 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz6 = z6
+
+    let x7 = transform_x(-1.0, 1.0, -1.0, ax, ay, az)
+    let y7 = transform_y(-1.0, 1.0, -1.0, ax, ay, az)
+    let z7 = transform_z(-1.0, 1.0, -1.0, ax, ay, az) - 8.0
+    let s7 = near / (-z7)
+    sx7 = math.floor((x7 * s7 / 2.8) * (WIDTH / 2.0) + WIDTH / 2.0)
+    sy7 = math.floor((-y7 * s7 / (2.8 * aspect)) * (HEIGHT / 2.0) + HEIGHT / 2.0)
+    sz7 = z7
+}
+
+fn is_front_face(ax: int, ay: int, bx: int, by: int, cx: int, cy: int) -> int {
+    let cross = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    if cross > 0 { return 1 }
+    return 0
+}
+
+fn avg_z4(a: float, b: float, c: float, d: float) -> float {
+    return (a + b + c + d) / 4.0
+}
+
+fn draw_front_face() {
+    if is_front_face(sx0, sy0, sx1, sy1, sx3, sy3) == 1 {
+        opengl.draw_quad_colored(sx0, sy0, 0.0, 0.0, 1.0, sx1, sy1, 1.0, 0.0, 1.0, sx3, sy3, 1.0, 1.0, 1.0, sx2, sy2, 0.0, 1.0, 1.0)
+    }
+}
+
+fn draw_back_face() {
+    if is_front_face(sx4, sy4, sx5, sy5, sx7, sy7) == 1 {
+        opengl.draw_quad_colored(sx4, sy4, 1.0, 0.0, 0.0, sx5, sy5, 0.3, 0.2, 0.4, sx7, sy7, 0.0, 1.0, 0.0, sx6, sy6, 1.0, 1.0, 0.0)
+    }
+}
+
+fn draw_right_face() {
+    if is_front_face(sx1, sy1, sx4, sy4, sx6, sy6) == 1 {
+        opengl.draw_quad_colored(sx1, sy1, 1.0, 0.0, 1.0, sx4, sy4, 1.0, 0.0, 0.0, sx6, sy6, 1.0, 1.0, 0.0, sx3, sy3, 1.0, 1.0, 1.0)
+    }
+}
+
+fn draw_left_face() {
+    if is_front_face(sx5, sy5, sx0, sy0, sx2, sy2) == 1 {
+        opengl.draw_quad_colored(sx5, sy5, 0.3, 0.2, 0.4, sx0, sy0, 0.0, 0.0, 1.0, sx2, sy2, 0.0, 1.0, 1.0, sx7, sy7, 0.0, 1.0, 0.0)
+    }
+}
+
+fn draw_top_face() {
+    if is_front_face(sx2, sy2, sx3, sy3, sx6, sy6) == 1 {
+        opengl.draw_quad_colored(sx2, sy2, 0.0, 1.0, 1.0, sx3, sy3, 1.0, 1.0, 1.0, sx6, sy6, 1.0, 1.0, 0.0, sx7, sy7, 0.0, 1.0, 0.0)
+    }
+}
+
+fn draw_bottom_face() {
+    if is_front_face(sx5, sy5, sx4, sy4, sx1, sy1) == 1 {
+        opengl.draw_quad_colored(sx5, sy5, 0.3, 0.2, 0.4, sx4, sy4, 1.0, 0.0, 0.0, sx1, sy1, 1.0, 0.0, 1.0, sx0, sy0, 0.0, 0.0, 1.0)
+    }
+}
+
+fn draw_cube() {
+    draw_front_face()
+    draw_back_face()
+    draw_right_face()
+    draw_left_face()
+    draw_top_face()
+    draw_bottom_face()
+}
+
+fn main() {
+    opengl.init_with_size(500, 500)
+    opengl.clear_color(0.2, 0.2, 0.2, 1.0)
+
+    let mut t: float = 0.0
+
+    while opengl.is_open() {
+        opengl.clear()
+
+        let ax = (45.0 + 0.25 * t) * math.PI / 180.0
+        let ay = (45.0 - 0.5 * t) * math.PI / 180.0
+        let az = (10.0 + 0.15 * t) * math.PI / 180.0
+
+        update_vertices(ax, ay, az)
+        draw_cube()
+
+        t = t + 1.0
+
+        opengl.swap_buffers()
+        time.sleep(3)
+    }
+
+    opengl.close()
+}
+
+main()
