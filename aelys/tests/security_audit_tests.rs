@@ -383,8 +383,38 @@ fs.read_bytes(f, 999999999999)
     }
 }
 
+/*
+    verifies that ForLoopI/WhileLoopLt correctly validate consecutive register ranges
+    previously, `a + 1` and `a + 2` were computed without overflow protection
+ */
 #[test]
-fn register_index_overflow_is_handled() {}
+fn register_index_overflow_is_handled() {
+    let mut vm = make_vm();
+
+    // ForLoopI uses 3 consecutive registers: a, a+1, a+2
+    // with num_registers=5 and a=3, registers 3,4,5 would be needed but only 0-4 exist
+    let mut func = Function::new(Some("forloop_oob".to_string()), 0);
+    // ForLoopI with a=3 needs r3, r4, r5, but we'll limit to 5 registers (0-4)
+    // emit_b format: (opcode, reg_a, imm16, line)
+    func.emit_b(OpCode::ForLoopI, 3, -1, 1); // jump offset doesn't matter for this test
+    func.emit_a(OpCode::Return0, 0, 0, 0, 1);
+
+    func.finalize_bytecode();
+    // override num_registers after finalize to force the oob condition
+    func.num_registers = 5; // registers 0-4 available, but ForLoopI needs 3,4,5
+    let func_ref = vm.alloc_function(func).unwrap();
+    let err = vm.execute(func_ref).unwrap_err();
+    match err.kind {
+        RuntimeErrorKind::InvalidBytecode(msg) => {
+            assert!(
+                msg.contains("register") || msg.contains("ForLoopI"),
+                "expected register bounds error, got: {}",
+                msg
+            );
+        }
+        _ => panic!("expected InvalidBytecode for ForLoopI register OOB, got {:?}", err.kind),
+    }
+}
 
 #[test]
 fn bytecode_rejects_invalid_nested_func_idx() {

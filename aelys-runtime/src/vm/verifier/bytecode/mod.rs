@@ -8,7 +8,9 @@ mod globals;
 mod memory;
 mod registers;
 
-use super::checks::{check_call_args, check_const_index, check_jump, check_reg, check_upval_index};
+use super::checks::{
+    check_call_args, check_const_index, check_jump, check_reg, check_reg_range, check_upval_index,
+};
 
 pub(super) fn verify_bytecode(func: &Function) -> Result<(), String> {
     let num_regs = func.num_registers as usize;
@@ -100,4 +102,13 @@ pub(super) fn verify_reg(reg: usize, num_regs: usize, op: &str) -> Result<(), St
 
 pub(super) fn verify_upval(idx: usize, upvalues_len: usize, op: &str) -> Result<(), String> {
     check_upval_index(idx, upvalues_len, op)
+}
+
+pub(super) fn verify_reg_range(
+    base: usize,
+    count: usize,
+    num_regs: usize,
+    op: &str,
+) -> Result<(), String> {
+    check_reg_range(base, count, num_regs, op)
 }

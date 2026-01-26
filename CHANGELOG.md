@@ -2,20 +2,18 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.18.x (Current) - Binary Data
+## 0.18.x (Current)
+
+**0.18.1-a**
+- Fixed register index overflow in loop instruction verification (ForLoopI, WhileLoopLt)
 
 **0.18.0-a**
 - New `std.bytes` module for binary data manipulation
-  - `alloc(size)` / `free(handle)` - buffer lifecycle management
-  - `read_u8/u16/u32/u64` / `write_u8/u16/u32/u64` - integer operations
-  - `read_i8/i16/i32/i64` / `write_i8/i16/i32/i64` - signed integer operations
-  - `read_f32/f64` / `write_f32/f64` - floating point operations
-  - `len(handle)` / `fill(handle, offset, len, value)` - utility functions
-  - `to_string(handle, offset, len)` / `from_string(str)` - string conversion
-  - `copy(src, src_off, dst, dst_off, len)` - buffer-to-buffer copy
-  - `slice(handle, offset, len)` - create sub-buffer view
 
-## 0.17.x - Security Hardening
+## 0.17.x - Performance & Security Hardening
+
+This was a big release because we have split the project into multiple different crates.  
+Emphasis also on performance and security.  
 
 **0.17.12-a**
 - Fixed nested function marker collision with heap pointers (now uses dedicated NaN tag)
@@ -48,6 +46,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 - Direct opcodes for `alloc`/`free`/`load`/`store` (~45% faster)
 - Fixed disassembler output for memory opcodes
 - Fixed REPL "forgetting" variables (wrong optimization level used)
+- (First public release on github here!)
 
 **0.17.5-a**
 - Syntax highlighting fixes for various editors
