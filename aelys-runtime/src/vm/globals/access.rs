@@ -8,6 +8,9 @@ impl VM {
     pub fn set_global(&mut self, name: String, value: Value) {
         self.globals.insert(name, value);
         self.globals_by_index_cache.clear();
+        // security: Invalidate call site cache to prevent use-after-free.
+        // cached function pointers become stale when globals are reassigned.
+        self.call_site_cache.clear();
     }
 
     pub fn set_global_by_index(&mut self, idx: usize, value: Value) {
@@ -16,6 +19,8 @@ impl VM {
         }
         self.globals_by_index[idx] = value;
         self.globals_by_index_cache.clear();
+        // security: same thing, read the comment i wrote on set_global()
+        self.call_site_cache.clear();
     }
 
     pub fn global_mutability(&self) -> &std::collections::HashMap<String, bool> {

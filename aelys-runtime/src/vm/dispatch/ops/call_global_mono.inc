@@ -18,16 +18,11 @@
     self.frames[current_frame_idx].ip = ip;
 
     // Fast path: use cached pointer directly (functions are immutable)
-    if cached_func_ptr != 0 {
+    // Security: Also check call_site_cache bounds - cache may have been invalidated
+    // by a global mutation (set_global/set_global_by_index clears call_site_cache)
+    let slot_tmp = slot_id as usize;
+    if cached_func_ptr != 0 && slot_tmp < self.call_site_cache.len() {
         // CACHE HIT: use Vec[slot] directly
-        let slot_tmp = slot_id as usize;
-
-        // Bounds check: slot comes from bytecode (untrusted), must validate
-        if slot_tmp >= self.call_site_cache.len() {
-            return Err(self.runtime_error(RuntimeErrorKind::InvalidBytecode(
-                format!("invalid call site cache slot: {} (max: {})", slot_tmp, self.call_site_cache.len())
-            )));
-        }
 
         // SAFETY: bounds checked above
         let cached = unsafe { *self.call_site_cache.get_unchecked(slot_tmp) };

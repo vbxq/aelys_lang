@@ -7,6 +7,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 **0.17.11-a**
 - Fixed OOB read/write vulnerability in CallGlobal opcodes (verifier now validates cache words)
 - Fixed integer truncation vulnerability in call site cache (verifier now validates function size limits)
+- Fixed use-after-free vulnerability in call site cache (cache invalidated on global mutation)
 
 **0.17.10-a**
 - Fixed use-after-move error in module compiler (`compile.rs`)

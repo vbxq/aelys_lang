@@ -62,6 +62,24 @@ pub fn assert_aelys_null(source: &str) {
     assert!(result.is_null(), "Expected null but got {:?}", result);
 }
 
+/// Run Aelys source code and check if it returns the expected string.
+pub fn assert_aelys_str(source: &str, expected: &str) {
+    use aelys::new_vm;
+    let mut vm = new_vm().expect("Failed to create VM");
+    let result = aelys::run_with_vm_and_opt(&mut vm, source, "<test>", OptimizationLevel::Standard)
+        .expect("Aelys execution should succeed");
+    if let Some(ptr) = result.as_ptr() {
+        let heap = vm.heap();
+        if let Some(obj) = heap.get(aelys_runtime::vm::GcRef::new(ptr)) {
+            if let aelys_runtime::vm::ObjectKind::String(s) = &obj.kind {
+                assert_eq!(s.as_str(), expected, "Expected string '{}' but got '{}'", expected, s.as_str());
+                return;
+            }
+        }
+    }
+    panic!("Expected string '{}' but got {:?}", expected, result);
+}
+
 /// Run Aelys source code and check if it returns an error containing the given substring.
 pub fn assert_aelys_error_contains(source: &str, expected_substring: &str) {
     let err = run_aelys_err(source);
