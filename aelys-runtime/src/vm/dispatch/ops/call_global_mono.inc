@@ -27,13 +27,18 @@
         // SAFETY: bounds checked above
         let cached = unsafe { *self.call_site_cache.get_unchecked(slot_tmp) };
 
-        // Arity check (cold path if fails)
-        if cached.arity != nargs {
-            return Err(self.runtime_error(RuntimeErrorKind::ArityMismatch {
-                expected: cached.arity,
-                got: nargs,
-            }));
-        }
+        // validate cache entry: bytecode_ptr is null for default/cleared entries
+        // This can happen when cache was cleared by set_global but bytecode is still patched
+        // Performance note: this check adds ~1 CPU cycle; branch predictor handles it well
+        // since cache entries are almost always valid in steady state.
+        if !cached.bytecode_ptr.is_null() {
+            // valid cache entry, check arity
+            if cached.arity != nargs {
+                return Err(self.runtime_error(RuntimeErrorKind::ArityMismatch {
+                    expected: cached.arity,
+                    got: nargs,
+                }));
+            }
 
         let callee_ref_tmp = GcRef::new(cached_func_ptr);
 
@@ -123,9 +128,11 @@
             global_mapping_id = cached.callee_gmap;
             continue;
         }
+        } // end of valid cache entry block (bytecode_ptr not null)
+        // Invalid cache entry (bytecode_ptr is null): fall through to cache miss
     }
 
-    // CACHE MISS: cached_func_ptr is 0 or closure upvalues failed ===
+    // CACHE MISS: cached_func_ptr is 0, cache entry invalid, or closure upvalues fetch failed
     // Get the actual function from globals
     let func_value = if idx < self.globals_by_index.len() {
         self.globals_by_index[idx]

@@ -4,6 +4,10 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.18.x (Current)
 
+**0.18.6-a**
+- Fixed call site cache using stale entries after global mutation
+- Fixed ASM mode ignoring `--allow-caps` flags
+
 **0.18.5-a**
 - Fixed mutex poison panic in GlobalLayout cache
 - Fixed IncGlobalI silently ignoring out-of-bounds index
