@@ -35,7 +35,9 @@ pub(super) fn verify_bytecode(func: &Function) -> Result<(), String> {
         ));
     }
 
-    for (ip, instr) in bytecode.iter().enumerate() {
+    let mut ip = 0;
+    while ip < bytecode.len() {
+        let instr = bytecode[ip];
         let opcode_byte = (instr >> 24) as u8;
         let opcode = OpCode::from_u8(opcode_byte)
             .ok_or_else(|| format!("invalid opcode {} at {}", opcode_byte, ip))?;
@@ -45,25 +47,38 @@ pub(super) fn verify_bytecode(func: &Function) -> Result<(), String> {
         let c = (instr & 0xFF) as usize;
         let imm = (instr & 0xFFFF) as i16;
 
+        // skip cache words after CallGlobal variants
+        let skip = matches!(
+            opcode,
+            OpCode::CallGlobal | OpCode::CallGlobalMono | OpCode::CallGlobalNative
+        );
+
         if registers::verify(opcode, a, b, c, imm, num_regs, constants_len)? {
+            ip += if skip { 3 } else { 1 };
             continue;
         }
         if arithmetic::verify(opcode, a, b, c, num_regs)? {
+            ip += 1;
             continue;
         }
         if control::verify(opcode, ip, a, b, c, imm, num_regs, bytecode.len())? {
+            ip += 1;
             continue;
         }
         if memory::verify(opcode, a, b, c, num_regs)? {
+            ip += 1;
             continue;
         }
         if globals::verify(opcode, ip, a, b, c, imm, num_regs, constants_len, bytecode.len())? {
+            ip += if skip { 3 } else { 1 };
             continue;
         }
         if calls::verify(opcode, a, b, c, num_regs, upvalues_len)? {
+            ip += 1;
             continue;
         }
         if closures::verify(func, opcode, a, b, c, num_regs, constants_len, upvalues_len)? {
+            ip += 1;
             continue;
         }
 

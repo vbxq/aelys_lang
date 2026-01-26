@@ -4,8 +4,10 @@ use crate::bytecode::decode_a;
 pub(super) fn required_registers(bytecode: &[u32]) -> usize {
     let mut max_reg: usize = 0;
     let mut used = false;
+    let mut ip = 0;
 
-    for &instr in bytecode {
+    while ip < bytecode.len() {
+        let instr = bytecode[ip];
         let (op, a, b, c) = decode_a(instr);
         let imm = (instr & 0xFFFF) as i16;
 
@@ -195,6 +197,7 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                 if nargs > 0 {
                     update_max_reg(&mut max_reg, &mut used, (a as usize) + nargs, None, None);
                 }
+                ip += 2; // skip cache words
             }
             OpCode::CallCached => {
                 let nargs = c as usize;
@@ -211,6 +214,7 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                 }
             }
         }
+        ip += 1;
     }
 
     if used { max_reg + 1 } else { 0 }
