@@ -754,18 +754,17 @@ fn test_type_error_add_incompatible() {
 }
 
 #[test]
-fn test_global_cache_cleared_after_gc() {
+fn test_globals_survive_gc() {
     let source = make_test_source();
     let mut vm = VM::new(source).unwrap();
 
-    // Set a global to populate the cache
+    // Set a global value
     vm.set_global("test_var".to_string(), Value::int(42));
 
     // Force a GC collection
     vm.collect();
 
-    // The cache should be cleared (internal state)
-    // We verify by checking the global still works after GC
+    // Globals should survive GC and remain accessible
     let value = vm.get_global("test_var");
     assert!(value.is_some());
     assert_eq!(value.unwrap().as_int(), Some(42));

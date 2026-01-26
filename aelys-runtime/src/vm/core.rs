@@ -22,7 +22,6 @@ pub struct VM {
     pub(crate) frames: Vec<CallFrame>,
     pub(crate) globals: HashMap<String, Value>,
     pub(crate) global_mutability: HashMap<String, bool>,
-    pub(crate) global_cache: Vec<Option<Value>>,
     pub(crate) globals_by_index_cache: HashMap<usize, Arc<Vec<Value>>>,
     pub(crate) globals_by_index: Vec<Value>,
     pub(crate) source: Arc<Source>,

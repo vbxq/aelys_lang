@@ -70,7 +70,6 @@ impl VM {
         }
 
         self.heap.sweep();
-        self.global_cache.clear();
         // call_site_cache is not cleared; validation happens via pointer comparison.
         self.globals_by_index_cache.clear();
     }

@@ -42,7 +42,6 @@ impl VM {
             frames: Vec::with_capacity(MAX_FRAMES),
             globals: HashMap::new(),
             global_mutability: HashMap::new(),
-            global_cache: Vec::new(),
             globals_by_index_cache: HashMap::with_capacity(32),
             globals_by_index: Vec::with_capacity(64),
             source,

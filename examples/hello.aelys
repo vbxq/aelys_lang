@@ -3,5 +3,5 @@ needs std.sys
 
 io.print("Hello, World!")
 io.print("")
-io.print("Welcome to Aelys v0.17.8-a!")
+io.print("Welcome to Aelys v0.17.9-a!")
 io.print("Platform: " + sys.platform() + " (" + sys.arch() + ")")
