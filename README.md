@@ -2,7 +2,7 @@
   <img src="docs/aelys_banner.png" alt="aelys virtual machine" width="1000">
 </p>
 
-# aelys 0.19.2-a
+# aelys 0.19.3-a
 
 Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
 

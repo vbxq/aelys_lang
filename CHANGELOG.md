@@ -4,6 +4,10 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array and Vec Implementations
 
+**0.19.3-a**
+- Added `LocalConstantPropagator` optimization pass for function-local constants
+- Fixed DCE dropping return values when eliminating `if true { expr }` branches
+
 **0.19.2-a**
 - `needs std.io` imports symbols directly, `needs mod as x` restricts to qualified access only
 - now (`print()` and `io.print()` both work
