@@ -19,6 +19,10 @@ Some sort of « python but that treats you as an adult »
 ## Usage of AI
 
 Debugging sessions, architectural discussions, and keeping me sane when the VM decides to just.. not work.  
-Without AI assistance this would've taken 10x longer, maybe more.  
+
+AI also wrote most of the tests for Aelys, and some stuff in the examples/ folder (notably the benchmarks), which saved a lot of time.  
+
+
+Without AI assistance this would've taken 10x longer, maybe more.
 
 This whole thing started as a way to actually understand how compilers work beyond just reading about them, and turns out building one is the best way to learn

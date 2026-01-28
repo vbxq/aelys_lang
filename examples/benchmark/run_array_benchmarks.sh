@@ -2,7 +2,6 @@
 cd "$(dirname "$0")/../.." || exit 1
 
 echo "Aelys vs python array benchmark"
-echo ""
 
 cargo build --release -q 2>/dev/null
 
@@ -30,5 +29,3 @@ run_benchmark "Vec Push/Pop (1M ops)" \
 run_benchmark "Bubble Sort (5K elements)" \
     "examples/benchmark/array_sort.aelys" \
     "examples/benchmark/array_sort.py"
-
-echo "Summary:"
