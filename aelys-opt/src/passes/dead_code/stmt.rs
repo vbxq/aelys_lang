@@ -57,12 +57,30 @@ impl DeadCodeEliminator {
             TypedStmtKind::If { condition, then_branch, else_branch } => {
                 // if condition is constant, replace whole if with the taken branch
                 if let Some(cond_value) = Self::is_const_bool(condition) {
-                    if cond_value {
+                    let branch = if cond_value {
                         self.eliminate_in_stmt(then_branch);
-                        *stmt = (**then_branch).clone();
-                    } else if let Some(else_b) = else_branch {
-                        self.eliminate_in_stmt(else_b);
-                        *stmt = (**else_b).clone();
+                        Some(then_branch)
+                    } else {
+                        if let Some(else_b) = else_branch {
+                            self.eliminate_in_stmt(else_b);
+                            Some(else_b)
+                        } else {
+                            None
+                        }
+                    };
+
+                    if let Some(branch) = branch {
+                        // unwrap single-statement blocks to preserve if-else return semantics
+                        // (if-else returns values, raw blocks don't in Aelys)
+                        if let TypedStmtKind::Block(inner) = &branch.kind {
+                            if inner.len() == 1 {
+                                *stmt = inner[0].clone();
+                            } else {
+                                *stmt = (**branch).clone();
+                            }
+                        } else {
+                            *stmt = (**branch).clone();
+                        }
                     } else {
                         stmt.kind = TypedStmtKind::Block(vec![]);
                     }
