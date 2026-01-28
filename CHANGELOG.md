@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array and Vec Implementations
 
+**0.19.1-a**
+- Added generic type syntax support in function parameters (`fn foo(arr: array<int>)`)
+
 **0.19.0-a**
 - Added array and vec implementations to the VM
 
