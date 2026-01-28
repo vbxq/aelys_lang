@@ -11,8 +11,7 @@
 // TODO: (Optimization) Preallocated register pools
 // TODO: (Optimization) Implement loop unrolling optimization pass
 // TODO: (Optimization) Implement function inlining optimization pass (and @inline decorator)
-// TODO: (Documentation) Add more examples and actually write the documentation!
-// TODO: the vm args parsing is kinda broken
+// TODO: Custom modules share VM's global namespace, risk of collision if two modules export the same symbol (efor example mod_a::shared overwrites mod_b::shared as both become just shared in VM)
 
 pub mod api;
 
