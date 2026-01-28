@@ -18,7 +18,7 @@ impl TypeInference {
 
         let declared_type = type_annotation
             .as_ref()
-            .map(|ann| InferType::from_annotation(&ann.name));
+            .map(|ann| InferType::from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
             self.constraints.push(Constraint::equal(

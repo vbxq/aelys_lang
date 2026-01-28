@@ -26,7 +26,7 @@ impl TypeInference {
                     .or_else(|| {
                         p.type_annotation
                             .as_ref()
-                            .map(|ann| InferType::from_annotation(&ann.name))
+                            .map(|ann| InferType::from_annotation(ann))
                     })
                     .unwrap_or_else(|| self.type_gen.fresh());
 
@@ -42,7 +42,7 @@ impl TypeInference {
             .or_else(|| {
                 func.return_type
                     .as_ref()
-                    .map(|ann| InferType::from_annotation(&ann.name))
+                    .map(|ann| InferType::from_annotation(ann))
             })
             .unwrap_or_else(|| self.type_gen.fresh());
 

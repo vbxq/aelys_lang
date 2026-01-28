@@ -128,7 +128,10 @@ impl Parser {
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
-            TokenKind::Identifier(name) if name == "Array" || name == "Vec" => {
+            TokenKind::Identifier(ref name)
+                if name.eq_ignore_ascii_case("array") || name.eq_ignore_ascii_case("vec") =>
+            {
+                let name = name.clone();
                 return self.typed_collection_literal(name, span);
             }
             TokenKind::Identifier(name) => ExprKind::Identifier(name),
@@ -228,7 +231,7 @@ impl Parser {
         self.consume(&TokenKind::RBracket, "]")?;
         let end_span = self.previous().span;
 
-        let kind = if collection_name == "Vec" {
+        let kind = if collection_name.eq_ignore_ascii_case("vec") {
             ExprKind::VecLiteral {
                 element_type,
                 elements,

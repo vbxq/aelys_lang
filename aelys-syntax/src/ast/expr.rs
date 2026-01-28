@@ -2,12 +2,19 @@ use crate::Span;
 
 #[derive(Debug, Clone)]
 pub struct TypeAnnotation {
-    pub name: String, // "int", "float64", "string", etc
+    pub name: String, // "int", "float", "string", "array", "vec", etc
+    pub type_param: Option<Box<TypeAnnotation>>, // for generics: array<int>, vec<string>
     pub span: Span,
 }
 
 impl TypeAnnotation {
-    pub fn new(name: String, span: Span) -> Self { Self { name, span } }
+    pub fn new(name: String, span: Span) -> Self {
+        Self { name, type_param: None, span }
+    }
+
+    pub fn with_param(name: String, type_param: TypeAnnotation, span: Span) -> Self {
+        Self { name, type_param: Some(Box::new(type_param)), span }
+    }
 }
 
 #[derive(Debug, Clone)]

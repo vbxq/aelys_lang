@@ -20,7 +20,7 @@ impl TypeInference {
                 let ty = p
                     .type_annotation
                     .as_ref()
-                    .map(|ann| InferType::from_annotation(&ann.name))
+                    .map(|ann| InferType::from_annotation(ann))
                     .unwrap_or_else(|| self.type_gen.fresh());
 
                 TypedParam {
@@ -32,7 +32,7 @@ impl TypeInference {
             .collect();
 
         let return_type = return_type_ann
-            .map(|ann| InferType::from_annotation(&ann.name))
+            .map(|ann| InferType::from_annotation(ann))
             .unwrap_or_else(|| self.type_gen.fresh());
 
         let saved_env = std::mem::replace(&mut self.env, closure_env);

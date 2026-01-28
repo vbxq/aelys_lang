@@ -55,8 +55,32 @@ impl InferType {
     }
 
     /// Convert from type annotation string
-    pub fn from_annotation(name: &str) -> Self {
-        match name {
+    pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
+        let name = ann.name.to_lowercase();
+        match name.as_str() {
+            "int" => InferType::Int,
+            "float" => InferType::Float,
+            "bool" => InferType::Bool,
+            "string" => InferType::String,
+            "null" => InferType::Null,
+            "array" => {
+                let inner = ann.type_param.as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                InferType::Array(Box::new(inner))
+            }
+            "vec" => {
+                let inner = ann.type_param.as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                InferType::Vec(Box::new(inner))
+            }
+            _ => InferType::Dynamic,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
             "int" => InferType::Int,
             "float" => InferType::Float,
             "bool" => InferType::Bool,

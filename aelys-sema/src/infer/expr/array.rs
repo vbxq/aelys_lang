@@ -14,7 +14,7 @@ impl TypeInference {
         let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
 
         let elem_ty = if let Some(ann) = element_type {
-            InferType::from_annotation(&ann.name)
+            InferType::from_annotation(ann)
         } else if typed_elements.is_empty() {
             self.type_gen.fresh()
         } else {
@@ -31,7 +31,7 @@ impl TypeInference {
         };
 
         let resolved_elem = element_type.as_ref().map(|ann| {
-            ResolvedType::from_infer_type(&InferType::from_annotation(&ann.name))
+            ResolvedType::from_infer_type(&InferType::from_annotation(ann))
         });
 
         (
@@ -52,7 +52,7 @@ impl TypeInference {
         let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
 
         let elem_ty = if let Some(ann) = element_type {
-            InferType::from_annotation(&ann.name)
+            InferType::from_annotation(ann)
         } else if typed_elements.is_empty() {
             self.type_gen.fresh()
         } else {
@@ -69,7 +69,7 @@ impl TypeInference {
         };
 
         let resolved_elem = element_type.as_ref().map(|ann| {
-            ResolvedType::from_infer_type(&InferType::from_annotation(&ann.name))
+            ResolvedType::from_infer_type(&InferType::from_annotation(ann))
         });
 
         (

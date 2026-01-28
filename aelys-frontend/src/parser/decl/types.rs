@@ -4,9 +4,18 @@ use aelys_syntax::{Parameter, TokenKind, TypeAnnotation};
 
 impl Parser {
     pub fn parse_type_annotation(&mut self) -> Result<TypeAnnotation> {
-        let span = self.peek().span;
+        let start_span = self.peek().span;
         let name = self.consume_identifier("type name")?;
-        Ok(TypeAnnotation::new(name, span))
+
+        // this checks for generic type parameter: array<int>, vec<string>, etc.
+        if self.match_token(&TokenKind::Lt) {
+            let type_param = self.parse_type_annotation()?;
+            self.consume(&TokenKind::Gt, ">")?;
+            let end_span = self.previous().span;
+            Ok(TypeAnnotation::with_param(name, type_param, start_span.merge(end_span)))
+        } else {
+            Ok(TypeAnnotation::new(name, start_span))
+        }
     }
 
     pub fn parse_parameter(&mut self) -> Result<Parameter> {
