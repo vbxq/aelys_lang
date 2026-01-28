@@ -28,8 +28,7 @@ impl ConstantFolder {
         }
     }
 
-    // recursively optimize, then try to fold the result
-    pub(super) fn optimize_expr(&mut self, expr: &mut TypedExpr) {
+    pub fn optimize_expr(&mut self, expr: &mut TypedExpr) {
         match &mut expr.kind {
             TypedExprKind::Binary { left, right, .. } => {
                 self.optimize_expr(left);

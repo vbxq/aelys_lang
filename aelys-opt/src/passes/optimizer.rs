@@ -1,6 +1,6 @@
 use super::{
-    ConstantFolder, DeadCodeEliminator, GlobalConstantPropagator, OptimizationLevel,
-    OptimizationPass, OptimizationStats, UnusedVarEliminator,
+    ConstantFolder, DeadCodeEliminator, GlobalConstantPropagator, LocalConstantPropagator,
+    OptimizationLevel, OptimizationPass, OptimizationStats, UnusedVarEliminator,
 };
 use aelys_sema::TypedProgram;
 
@@ -15,19 +15,20 @@ impl Optimizer {
     pub fn new(level: OptimizationLevel) -> Self {
         let mut passes: Vec<Box<dyn OptimizationPass>> = Vec::new();
 
-        // TODO: -O3 should do more - loop unrolling? inlining? need profiling data first
         match level {
             OptimizationLevel::None => {}
             OptimizationLevel::Basic => {
+                passes.push(Box::new(LocalConstantPropagator::new()));
                 passes.push(Box::new(ConstantFolder::new()));
             }
+            // TODO: separate the passes better
             OptimizationLevel::Standard | OptimizationLevel::Aggressive => {
-                // const prop first so folder has more to work with
                 passes.push(Box::new(GlobalConstantPropagator::new()));
+                passes.push(Box::new(LocalConstantPropagator::new()));
                 passes.push(Box::new(ConstantFolder::new()));
                 passes.push(Box::new(DeadCodeEliminator::new()));
                 passes.push(Box::new(UnusedVarEliminator::new()));
-                // second fold pass catches stuff exposed by DCE
+                passes.push(Box::new(LocalConstantPropagator::new()));
                 passes.push(Box::new(ConstantFolder::new()));
             }
         }
