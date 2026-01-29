@@ -25,7 +25,7 @@ impl TypeInference {
                 typed_init.ty.clone(),
                 decl.clone(),
                 span,
-                ConstraintReason::Assignment {
+                ConstraintReason::TypeAnnotation {
                     var_name: name.to_string(),
                 },
             ));

@@ -365,7 +365,7 @@ fn test_global_const_prop_mutable_not_propagated() {
 #[test]
 fn test_global_const_prop_complex_expression() {
     let code = r#"
-        let WIDTH: int = 80
+        let WIDTH: float = 80.0
         let R1: float = 1.0
         let R2: float = 2.0
         let K2: float = 5.0

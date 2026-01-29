@@ -59,7 +59,10 @@ impl TypeInference {
             .errors
             .iter()
             .cloned()
-            .partition(|err| matches!(err.reason, ConstraintReason::BitwiseOp { .. }));
+            .partition(|err| matches!(
+                err.reason,
+                ConstraintReason::BitwiseOp { .. } | ConstraintReason::TypeAnnotation { .. }
+            ));
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);
