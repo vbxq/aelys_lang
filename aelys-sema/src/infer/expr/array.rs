@@ -43,6 +43,43 @@ impl TypeInference {
         )
     }
 
+    pub(super) fn infer_array_sized(
+        &mut self,
+        element_type: &Option<TypeAnnotation>,
+        size: &Expr,
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let typed_size = self.infer_expr(size);
+
+        // Size must be an integer
+        self.constraints.push(Constraint::equal(
+            typed_size.ty.clone(),
+            InferType::Int,
+            span,
+            ConstraintReason::ArrayIndex,
+        ));
+
+        // Element type: from annotation or fresh type variable
+        let elem_ty = if let Some(ann) = element_type {
+            InferType::from_annotation(ann)
+        } else {
+            // Default to Dynamic for untyped sized arrays
+            InferType::Dynamic
+        };
+
+        let resolved_elem = element_type.as_ref().map(|ann| {
+            ResolvedType::from_infer_type(&InferType::from_annotation(ann))
+        });
+
+        (
+            TypedExprKind::ArraySized {
+                element_type: resolved_elem,
+                size: Box::new(typed_size),
+            },
+            InferType::Array(Box::new(elem_ty)),
+        )
+    }
+
     pub(super) fn infer_vec_literal(
         &mut self,
         element_type: &Option<TypeAnnotation>,

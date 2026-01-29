@@ -38,6 +38,9 @@ impl DeadCodeEliminator {
             TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
                 for elem in elements { self.eliminate_in_expr(elem); }
             }
+            TypedExprKind::ArraySized { size, .. } => {
+                self.eliminate_in_expr(size);
+            }
             TypedExprKind::Index { object, index } => {
                 self.eliminate_in_expr(object);
                 self.eliminate_in_expr(index);

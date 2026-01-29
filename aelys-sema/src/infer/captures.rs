@@ -144,6 +144,9 @@ impl TypeInference {
                     self.collect_captures_inner(elem, params, captures, seen);
                 }
             }
+            TypedExprKind::ArraySized { size, .. } => {
+                self.collect_captures_inner(size, params, captures, seen);
+            }
             TypedExprKind::Index { object, index } => {
                 self.collect_captures_inner(object, params, captures, seen);
                 self.collect_captures_inner(index, params, captures, seen);

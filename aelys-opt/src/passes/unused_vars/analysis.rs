@@ -86,6 +86,9 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
             for elem in elements { collect_uses_in_expr(elem, used); }
         }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_uses_in_expr(size, used);
+        }
         TypedExprKind::Index { object, index } => {
             collect_uses_in_expr(object, used);
             collect_uses_in_expr(index, used);

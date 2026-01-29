@@ -58,6 +58,9 @@ impl ConstantFolder {
             TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
                 for elem in elements { self.optimize_expr(elem); }
             }
+            TypedExprKind::ArraySized { size, .. } => {
+                self.optimize_expr(size);
+            }
             TypedExprKind::Index { object, index } => {
                 self.optimize_expr(object);
                 self.optimize_expr(index);

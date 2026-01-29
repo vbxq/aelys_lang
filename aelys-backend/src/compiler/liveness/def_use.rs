@@ -142,6 +142,9 @@ fn collect_uses_expr(
                 collect_uses_expr(analysis, elem, uses);
             }
         }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_uses_expr(analysis, size, uses);
+        }
         TypedExprKind::Index { object, index } => {
             collect_uses_expr(analysis, object, uses);
             collect_uses_expr(analysis, index, uses);

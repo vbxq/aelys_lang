@@ -46,6 +46,9 @@ impl Compiler {
             ExprKind::ArrayLiteral { elements, .. } => {
                 self.compile_array_literal(elements, dest, expr.span)
             }
+            ExprKind::ArraySized { element_type, size } => {
+                self.compile_array_sized(element_type, size, dest, expr.span)
+            }
             ExprKind::VecLiteral { elements, .. } => {
                 self.compile_vec_literal(elements, dest, expr.span)
             }

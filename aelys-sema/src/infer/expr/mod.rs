@@ -85,6 +85,9 @@ impl TypeInference {
             ExprKind::ArrayLiteral { element_type, elements } => {
                 self.infer_array_literal(element_type, elements, expr.span)
             }
+            ExprKind::ArraySized { element_type, size } => {
+                self.infer_array_sized(element_type, size, expr.span)
+            }
             ExprKind::VecLiteral { element_type, elements } => {
                 self.infer_vec_literal(element_type, elements, expr.span)
             }

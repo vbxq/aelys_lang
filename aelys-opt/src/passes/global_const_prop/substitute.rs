@@ -38,6 +38,9 @@ impl GlobalConstantPropagator {
             TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
                 for elem in elements { self.substitute_constants(elem); }
             }
+            TypedExprKind::ArraySized { size, .. } => {
+                self.substitute_constants(size);
+            }
             TypedExprKind::Index { object, index } => {
                 self.substitute_constants(object);
                 self.substitute_constants(index);

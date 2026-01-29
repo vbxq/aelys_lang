@@ -2,9 +2,25 @@ use crate::compiler::Compiler;
 use aelys_bytecode::OpCode;
 use aelys_common::Result;
 use aelys_syntax::Span;
-use aelys_syntax::ast::Expr;
+use aelys_syntax::ast::{Expr, TypeAnnotation};
 
 impl Compiler {
+    pub fn compile_array_sized(
+        &mut self,
+        _element_type: &Option<TypeAnnotation>,
+        size: &Expr,
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        // For now, compile as ArrayNewP with size from register
+        // TODO: Use ArrayFill opcode when added
+        let size_reg = self.alloc_register()?;
+        self.compile_expr(size, size_reg)?;
+        self.emit_a(OpCode::ArrayNewP, dest, size_reg, 0, span);
+        self.free_register(size_reg);
+        Ok(())
+    }
+
     pub fn compile_array_literal(
         &mut self,
         elements: &[Expr],

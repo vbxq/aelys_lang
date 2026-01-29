@@ -171,8 +171,22 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// Parse array literal: [1, 2, 3]
+    /// Parse array literal: [1, 2, 3] or sized array: [; 10]
     fn array_literal(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
+        // Check for sized array syntax: [; size]
+        if self.match_token(&TokenKind::Semicolon) {
+            let size = self.expression()?;
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArraySized {
+                    element_type: None,
+                    size: Box::new(size),
+                },
+                start_span.merge(end_span),
+            ));
+        }
+
         let mut elements = Vec::new();
 
         if !self.check(&TokenKind::RBracket) {
@@ -200,6 +214,7 @@ impl Parser {
     }
 
     /// Parse typed collection literal: Array<Int>[1, 2, 3] or Vec<Float>[1.0, 2.0]
+    /// Also handles sized arrays: Array(10) or Array<int>(10)
     fn typed_collection_literal(
         &mut self,
         collection_name: String,
@@ -213,7 +228,37 @@ impl Parser {
             None
         };
 
+        // Check for sized array constructor: Array(10) or Array<int>(10)
+        // Only valid for Array, not Vec (Vec will fail at "[" consumption)
+        if collection_name.eq_ignore_ascii_case("array") && self.match_token(&TokenKind::LParen) {
+            let size = self.expression()?;
+            self.consume(&TokenKind::RParen, ")")?;
+            let end_span = self.previous().span;
+
+            return Ok(Expr::new(
+                ExprKind::ArraySized {
+                    element_type,
+                    size: Box::new(size),
+                },
+                start_span.merge(end_span),
+            ));
+        }
+
         self.consume(&TokenKind::LBracket, "[")?;
+
+        // Check for sized array syntax: Array[; 10] or Array<int>[; 10]
+        if self.match_token(&TokenKind::Semicolon) {
+            let size = self.expression()?;
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArraySized {
+                    element_type,
+                    size: Box::new(size),
+                },
+                start_span.merge(end_span),
+            ));
+        }
 
         let mut elements = Vec::new();
         if !self.check(&TokenKind::RBracket) {

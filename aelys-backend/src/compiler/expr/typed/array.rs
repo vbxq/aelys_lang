@@ -1,10 +1,34 @@
 use super::super::Compiler;
 use aelys_bytecode::OpCode;
 use aelys_common::Result;
-use aelys_sema::{InferType, TypedExpr};
+use aelys_sema::{InferType, ResolvedType, TypedExpr};
 use aelys_syntax::Span;
 
 impl Compiler {
+    pub(super) fn compile_typed_array_sized(
+        &mut self,
+        element_type: &Option<ResolvedType>,
+        size: &TypedExpr,
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        // Compile size expression
+        let size_reg = self.alloc_register()?;
+        self.compile_typed_expr(size, size_reg)?;
+
+        // Select opcode based on element type
+        let opcode = match element_type {
+            Some(ResolvedType::Int) => OpCode::ArrayNewI,
+            Some(ResolvedType::Float) => OpCode::ArrayNewF,
+            Some(ResolvedType::Bool) => OpCode::ArrayNewB,
+            _ => OpCode::ArrayNewP,
+        };
+
+        self.emit_a(opcode, dest, size_reg, 0, span);
+        self.free_register(size_reg);
+        Ok(())
+    }
+
     pub(super) fn compile_typed_array_literal(
         &mut self,
         elements: &[TypedExpr],

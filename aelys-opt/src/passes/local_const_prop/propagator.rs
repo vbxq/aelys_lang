@@ -168,6 +168,10 @@ impl LocalConstantPropagator {
                 }
             }
 
+            TypedExprKind::ArraySized { size, .. } => {
+                self.propagate_expr(size);
+            }
+
             TypedExprKind::Index { object, index } => {
                 self.propagate_expr(object);
                 self.propagate_expr(index);

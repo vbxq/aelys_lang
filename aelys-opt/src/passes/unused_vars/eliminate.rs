@@ -60,6 +60,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
             elements.iter().any(has_side_effects)
         }
+        TypedExprKind::ArraySized { size, .. } => has_side_effects(size),
         TypedExprKind::Index { object, index } => {
             has_side_effects(object) || has_side_effects(index)
         }

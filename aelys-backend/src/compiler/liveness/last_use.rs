@@ -130,6 +130,9 @@ fn collect_all_uses_in_expr(expr: &TypedExpr, uses: &mut HashSet<String>) {
                 collect_all_uses_in_expr(elem, uses);
             }
         }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_all_uses_in_expr(size, uses);
+        }
         TypedExprKind::Index { object, index } => {
             collect_all_uses_in_expr(object, uses);
             collect_all_uses_in_expr(index, uses);
