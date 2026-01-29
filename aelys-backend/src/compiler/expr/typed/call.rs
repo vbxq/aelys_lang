@@ -119,8 +119,9 @@ impl Compiler {
                 if !self.globals.contains_key(name) && !self.known_globals.contains(name) {
                     return self.compile_typed_call_fallback(callee, args, dest, span);
                 }
+                let actual_name = self.resolve_global_name(name).to_string();
                 let global_idx = self.get_or_create_global_index(name);
-                self.accessed_globals.insert(name.to_string());
+                self.accessed_globals.insert(actual_name.clone());
 
                 if global_idx <= 255 {
                     let arg_start = match dest.checked_add(1) {

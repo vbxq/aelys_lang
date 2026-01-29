@@ -47,7 +47,8 @@ impl Compiler {
                     .into());
                 }
             }
-            let idx = self.get_or_create_global_index(name);
+            // For assignments to user-defined globals, use raw index without translation
+            let idx = self.get_or_create_global_index_raw(name);
             self.accessed_globals.insert(name.to_string());
             self.emit_b(OpCode::SetGlobalIdx, dest, idx as i16, span);
         }

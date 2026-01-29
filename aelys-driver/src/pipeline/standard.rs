@@ -3,7 +3,7 @@ use super::stages::{
     CompilerStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage, VMStage,
 };
 use aelys_opt::OptimizationLevel;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub fn standard_pipeline() -> Pipeline { standard_pipeline_with_opt(OptimizationLevel::Standard) }
 
@@ -37,6 +37,7 @@ pub fn compilation_pipeline_with_modules(
     module_aliases: HashSet<String>,
     known_globals: HashSet<String>,
     known_native_globals: HashSet<String>,
+    symbol_origins: HashMap<String, String>,
 ) -> Pipeline {
     let mut pipeline = Pipeline::new();
     pipeline.add_stage(Box::new(LexerStage));
@@ -50,6 +51,7 @@ pub fn compilation_pipeline_with_modules(
         module_aliases,
         known_globals,
         known_native_globals,
+        symbol_origins,
     )));
     pipeline
 }

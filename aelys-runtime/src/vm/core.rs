@@ -39,6 +39,7 @@ pub struct VM {
     pub(crate) repl_module_aliases: HashSet<String>,
     pub(crate) repl_known_globals: HashSet<String>,
     pub(crate) repl_known_native_globals: HashSet<String>,
+    pub(crate) repl_symbol_origins: HashMap<String, String>,
 }
 
 // MIC entry for CallGlobal - avoids repeat lookups

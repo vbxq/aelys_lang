@@ -135,6 +135,7 @@ impl ModuleLoader {
             module_aliases,
             known_globals,
             known_native_globals,
+            std::collections::HashMap::new(),
         );
         compiler.next_call_site_slot = self.next_call_site_slot;
         let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;

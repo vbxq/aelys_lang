@@ -20,16 +20,22 @@ impl Compiler {
             self.emit_a(OpCode::GetUpval, dest, upvalue_idx, 0, span);
             Ok(())
         } else {
-            let idx = if let Some(&idx) = self.global_indices.get(name) {
+            // For direct imports, use the qualified name in global_layout
+            // so bytecode loading can detect which module to load
+            let actual_name = if self.known_globals.contains(name) && !self.globals.contains_key(name) {
+                self.resolve_global_name(name).to_string()
+            } else {
+                name.to_string()
+            };
+
+            let idx = if let Some(&idx) = self.global_indices.get(&actual_name) {
                 idx
             } else if self.globals.contains_key(name)
                 || Self::is_builtin(name)
                 || self.known_globals.contains(name)
             {
-                // honestly i'm surprised that you're going through this code to read what it does
-                // read if cute
                 let idx = self.next_global_index;
-                self.global_indices.insert(name.to_string(), idx);
+                self.global_indices.insert(actual_name.clone(), idx);
                 self.next_global_index += 1;
                 idx
             } else {
@@ -46,7 +52,7 @@ impl Compiler {
                 )
                 .into());
             };
-            self.accessed_globals.insert(name.to_string());
+            self.accessed_globals.insert(actual_name);
             self.emit_b(OpCode::GetGlobalIdx, dest, idx as i16, span);
             Ok(())
         }

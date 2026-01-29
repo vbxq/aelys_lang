@@ -95,6 +95,7 @@ pub fn run_file_with_config_and_opt(
         imports.module_aliases,
         imports.known_globals,
         imports.known_native_globals,
+        imports.symbol_origins,
     );
     compiler.next_call_site_slot = imports.next_call_site_slot;
     let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;

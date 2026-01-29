@@ -91,6 +91,7 @@ pub fn compile_to_avbc_with_output(
         imports.module_aliases,
         imports.known_globals,
         imports.known_native_globals,
+        imports.symbol_origins,
     )
     .compile_typed(&typed_program)
     .map_err(|err| err.to_string())?;
