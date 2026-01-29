@@ -39,10 +39,15 @@ and or not pub needs as from true false null
 42
 -17
 0
-1000000
+1_000_000      // underscores for readability
+0xFF           // hexadecimal
+0b1010         // binary
+0o755          // octal
 ```
 
 Integers are 48-bit signed (roughly +-140 trillion). This is due to NaN-boxing, the VM packs type information into the unused bits of IEEE 754 NaN values. You'll probably never hit this limit in practice.
+
+Underscores are ignored, so `1_000_000` is just `1000000`. Handy for big numbers or binary patterns like `0b1111_0000`.
 
 **Floats**
 ```rust
@@ -560,6 +565,19 @@ Empty arrays need a type:
 ```rust
 let empty = Array<Int>[]
 ```
+
+**Creating arrays with a specific size:**
+
+Instead of writing `Array[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`, you can just specify the size:
+
+```rust
+let zeros = Array<Int>(10)      // 10 zeros
+let floats = Array<Float>(5)    // 5 zeros (0.0)
+let nulls = Array(8)            // 8 nulls (untyped)
+let also = [; 10]               // shorthand for Array(10)
+```
+
+Typed arrays are initialized with the type's default value (0 for int, 0.0 for float, false for bool). Untyped arrays are filled with `null`.
 
 **Basic operations:**
 

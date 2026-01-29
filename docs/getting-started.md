@@ -232,6 +232,14 @@ Empty arrays need a type:
 let empty = Array<Int>[]
 ```
 
+If you need an array of a specific size without listing each element:
+
+```rust
+let zeros = Array<Int>(10)    // 10 zeros
+let buffer = Array(100)       // 100 nulls
+let short = [; 5]             // same as Array(5)
+```
+
 ### Vectors
 
 Vectors can grow after you create them:
