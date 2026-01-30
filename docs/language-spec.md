@@ -802,6 +802,63 @@ for i in 0..arr.len() {
 
 Iterator methods like `arr.iter()`, `arr.map()`, `arr.filter()` are coming later.
 
+## Compiler Warnings
+
+The compiler can emit warnings for various situations. Warnings don't stop compilation but indicate potential issues :
+
+### Warning Categories
+
+| Code | Category | Description |
+|------|----------|-------------|
+| W01xx | inline | Issues with `@inline` or `@inline_always` |
+| W02xx | unused | Unused variables, functions, imports |
+| W03xx | deprecated | Deprecated features or functions |
+| W04xx | shadow | Variable shadowing |
+
+### Inline Warnings
+
+```rust
+// W0101: can't inline recursive functions
+@inline
+fn factorial(n: int) -> int {
+    if n <= 1 { return 1 }
+    n * factorial(n - 1)
+}
+```
+
+The compiler warns because inlining a recursive function would cause infinite expansion. Remove `@inline` or break the recursion.
+
+Here's some other inline warnings:
+
+- **W0102**: Mutual recursion (A calls B, B calls A)
+- **W0103**: Function captures variables from outer scope
+- **W0104**: Function body is too large for inlining
+- **W0105**: Public function is being inlined (original kept for external callers)
+- **W0106**: Native function can't be inlined
+
+### Warning Flags
+
+Control warnings from the command line:
+
+```bash
+# enable all warnings
+aelys compile main.aelys -Wall
+
+# treat warnings as errors
+aelys compile main.aelys -Werror
+
+# enable a specific category
+aelys compile main.aelys -Winline
+
+# disable a category
+aelys compile main.aelys -Wno-inline
+
+# combine: all warnings, but not unused, treat as errors
+aelys compile main.aelys -Wall -Wno-unused -Werror
+```
+
+The `-Werror` flag is useful in CI to catch issues early
+
 ## Error Handling
 
 Currently there's no try/catch mechanism. Functions that can fail return `null` on failure:
