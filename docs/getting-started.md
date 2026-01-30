@@ -190,7 +190,7 @@ Or use interpolation with `{expression}`:
 ```rust
 let name = "Quar"
 print("Hello, {name}!")        // Hello, Quar!
-print("2 + 2 = {2 + 2}")       // 2 + 2 = 4
+print("2500 + 2500 = {2500 + 2500}")       // 2500 + 2500 = 5000
 ```
 
 Double braces for literal braces: `"{{key}}"` gives `{key}`
