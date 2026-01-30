@@ -75,9 +75,9 @@ UTF-8 encoded. Escape sequences: `\n` (newline), `\t` (tab), `\r` (carriage retu
 Embed expressions directly in strings using `{expression}`:
 
 ```rust
-let name = "Alice"
+let name = "Reimu"
 let age = 25
-"Hello, {name}! You are {age} years old."  // "Hello, Alice! You are 25 years old."
+"Hello, {name}! You are {age} years old."  // "Hello, Reimu! You are 25 years old."
 ```
 
 Any expression works inside the braces:
@@ -106,7 +106,7 @@ print("x={}, y={}", 10, 20)      // "x=10, y=20"
 Placeholders are filled left-to-right. You can mix inline expressions and placeholders:
 
 ```rust
-let name = "Alice"
+let name = "Reimu"
 print("Hi {name}, your number is {}", 42)
 ```
 
@@ -143,7 +143,7 @@ Always optional. The inference engine handles most cases.
 Variables:
 ```rust
 let x: int = 42
-let mut name: string = "Alice"
+let mut name: string = "Reimu"
 ```
 
 Function parameters and return:
@@ -197,9 +197,9 @@ needs std.io
 let x = 1
 if true {
     let x = 2    // different x
-    io.print(x)  // 2
+    print(x)  // 2
 }
-io.print(x)      // 1
+print(x)      // 1
 ```
 
 ### Scope
@@ -836,7 +836,7 @@ For now, use index-based loops:
 let arr = Array[10, 20, 30, 40]
 
 for i in 0..arr.len() {
-    io.print(arr[i])
+    print(arr[i])
 }
 ```
 
@@ -909,7 +909,7 @@ needs std.convert
 
 let result = convert.parse_int("not a number")
 if result == null {
-    io.print("parsing failed")
+    print("parsing failed")
 }
 ```
 

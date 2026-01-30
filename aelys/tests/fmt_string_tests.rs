@@ -181,7 +181,7 @@ fn placeholder_in_call_with_extra_args() {
 fn placeholder_mixed_with_inline() {
     let result = run_ok(r#"
         fn identity(s) { s }
-        let name = "Alice"
+        let name = "Reimu"
         identity("hello {name}, your number is {}", 7)
     "#);
     assert!(result.as_ptr().is_some());

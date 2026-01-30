@@ -9,7 +9,7 @@ Create a file called `hello.aelys`:
 ```rust
 needs std.io
 
-io.print("Hello, World!")
+print("Hello, World!")
 ```
 
 Run it:
@@ -18,22 +18,14 @@ Run it:
 aelys hello.aelys
 ```
 
-That's your first program ! The `needs` statement imports the `std.io` module. You can call `print` directly, or use `io.print` if you prefer the qualified form.
-
-```rust
-needs std.io
-
-print("This also works!")
-```
-
-But throughout this guide, we'll use `io.print()` to make it clear where functions come from
+That's your first program ! The `needs` statement imports the `std.io` module. You can also use `io.print` if you prefer the qualified form.
 
 You don't need a `main` function, top-level code just runs.
 
 ## Variables
 
 ```rust
-let name = "Alice"
+let name = "Reimu"
 let age = 30
 let pi = 3.14159
 ```
@@ -44,7 +36,7 @@ Variables are immutable by default. If you need to change a value, use `mut`:
 let mut counter = 0
 counter = counter + 1
 counter = counter + 1
-io.print(counter)  // 2
+print(counter)  // 2
 ```
 
 ## Type Annotations
@@ -66,7 +58,7 @@ The type system uses Hindley-Milner inference with gradual typing. In practice, 
 
 ```rust
 fn greet(name: string) {
-    io.print("Hello, " + name + "!")
+    print("Hello, {name}!")
 }
 
 greet("World")
@@ -105,11 +97,11 @@ needs std.io
 let x = 10
 
 if (x > 5) {                           // parentheses optional
-    io.print("big")
+    print("big")
 } else if x > 0 {
-    io.print("small")
+    print("small")
 } else {
-    io.print("zero or negative")
+    print("zero or negative")
 }
 ```
 
@@ -122,7 +114,7 @@ needs std.io
 
 let mut i = 0
 while i < 5 {
-    io.print(i)
+    print(i)
     i = i + 1
 }
 ```
@@ -136,17 +128,17 @@ needs std.io
 
 // 0 to 9 (exclusive end)
 for i in 0..10 {
-    io.print(i)
+    print(i)
 }
 
 // 1 to 10 (inclusive end)
 for i in 1..=10 {
-    io.print(i)
+    print(i)
 }
 
 // with step
 for i in 0..100 step 10 {
-    io.print(i)  // 0, 10, 20, ...
+    print(i)  // 0, 10, 20, ...
 }
 ```
 
@@ -158,7 +150,7 @@ needs std.io
 for i in 0..100 {
     if i == 50 { break }
     if i % 2 == 0 { continue }
-    io.print(i)  // odd numbers only, up to 49
+    print(i)  // odd numbers only, up to 49
 }
 ```
 
@@ -170,11 +162,11 @@ It's `and`, `or`, and `not`, you can also use `&&`, `||`, and `!` if you prefer 
 needs std.io
 
 if x > 0 and y > 0 {
-    io.print("both positive")
+    print("both positive")
 }
 
 if not valid {
-    io.print("invalid")
+    print("invalid")
 }
 ```
 
@@ -183,8 +175,8 @@ if not valid {
 Strings support the usual escape sequences (`\n`, `\t`, `\\`, `\"`):
 
 ```rust
-io.print("Line 1\nLine 2")
-io.print("Tab\there")
+print("Line 1\nLine 2")
+print("Tab\there")
 ```
 
 Concatenation uses `+`:
@@ -196,9 +188,9 @@ let greeting = "Hello, " + name + "!"
 Or use interpolation with `{expression}`:
 
 ```rust
-let name = "Alice"
-io.print("Hello, {name}!")        // Hello, Alice!
-io.print("2 + 2 = {2 + 2}")       // 2 + 2 = 4
+let name = "Reimu"
+print("Hello, {name}!")        // Hello, Reimu!
+print("2 + 2 = {2 + 2}")       // 2 + 2 = 4
 ```
 
 Double braces for literal braces: `"{{key}}"` gives `{key}`
@@ -211,12 +203,11 @@ Arrays hold multiple values of the same type:
 
 ```rust
 needs std.io
-needs std.convert
 
 let numbers = Array[10, 20, 30, 40, 50]
-io.print(numbers[0])  // 10
-io.print(numbers[2])  // 30
-io.print(convert.to_string(numbers.len()))  // 5
+print(numbers[0])  // 10
+print(numbers[2])  // 30
+print("{numbers.len()}")  // 5
 ```
 
 Modify elements like this:
@@ -224,7 +215,7 @@ Modify elements like this:
 ```rust
 let scores = Array[95, 87, 92]
 scores[1] = 90
-io.print(scores[1])  // 90
+print(scores[1])  // 90
 ```
 
 You can add type annotations if you want to be explicit:
@@ -254,15 +245,14 @@ Vectors can grow after you create them:
 
 ```rust
 needs std.io
-needs std.convert
 
 let v = Vec[1, 2, 3]
 v.push(4)
 v.push(5)
-io.print(convert.to_string(v.len()))  // 5
+print("{v.len()}")  // 5
 
 let last = v.pop()
-io.print(convert.to_string(last))  // 5
+print("{last}")  // 5
 ```
 
 Good for building lists on the fly:
@@ -277,7 +267,7 @@ let mut sum = 0
 for i in 0..scores.len() {
     sum = sum + scores[i]
 }
-io.print(convert.to_string(sum / scores.len()))  // average
+print("{sum / scores.len()}")  // average
 ```
 
 ### When to use which
@@ -291,7 +281,6 @@ Here's a program that calculates factorials:
 
 ```rust
 needs std.io
-needs std.convert
 
 fn factorial(n: int) -> int {
     if n <= 1 {
@@ -300,15 +289,13 @@ fn factorial(n: int) -> int {
     return n * factorial(n - 1)
 }
 
-io.print("Factorials:")
+print("Factorials:")
 
 for i in 1..=10 {
     let result = factorial(i)
-    io.print(convert.to_string(i) + "! = " + convert.to_string(result))
+    print("{i}! = {result}")
 }
 ```
-
-(I will change the convert module to make conversions easier and the code less uglier, I promise)
 
 ## What's Next
 
