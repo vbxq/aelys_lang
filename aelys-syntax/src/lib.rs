@@ -8,4 +8,4 @@ pub mod token;
 pub use ast::*;
 pub use source::Source;
 pub use span::Span;
-pub use token::{Token, TokenKind};
+pub use token::{FmtPart, Token, TokenKind};

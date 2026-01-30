@@ -193,7 +193,15 @@ Concatenation uses `+`:
 let greeting = "Hello, " + name + "!"
 ```
 
-No string interpolation yet, it's on my list but not a priority
+Or use interpolation with `{expression}`:
+
+```rust
+let name = "Alice"
+io.print("Hello, {name}!")        // Hello, Alice!
+io.print("2 + 2 = {2 + 2}")       // 2 + 2 = 4
+```
+
+Double braces for literal braces: `"{{key}}"` gives `{key}`
 
 ## Arrays and Vectors
 

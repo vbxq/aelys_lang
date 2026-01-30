@@ -5,6 +5,8 @@ pub enum CompileErrorKind {
     InvalidCharacter(char),
     InvalidNumber(String),
     InvalidEscape(char),
+    UnterminatedFmtExpr,
+    UnmatchedCloseBrace,
 
     // Parser errors
     UnexpectedToken {

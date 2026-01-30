@@ -58,6 +58,13 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(object);
                 self.substitute_constants(range);
             }
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                        self.substitute_constants(e);
+                    }
+                }
+            }
             TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
             | TypedExprKind::String(_) | TypedExprKind::Null => {}
         }

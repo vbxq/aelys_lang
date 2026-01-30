@@ -106,6 +106,13 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             collect_uses_in_expr(object, used);
             collect_uses_in_expr(range, used);
         }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_uses_in_expr(e, used);
+                }
+            }
+        }
         TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
         | TypedExprKind::String(_) | TypedExprKind::Null => {}
     }

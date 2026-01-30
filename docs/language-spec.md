@@ -70,6 +70,30 @@ Standard IEEE 754 double precision (64-bit).
 
 UTF-8 encoded. Escape sequences: `\n` (newline), `\t` (tab), `\r` (carriage return), `\\` (backslash), `\"` (quote).
 
+**String Interpolation**
+
+Embed expressions directly in strings using `{expression}`:
+
+```rust
+let name = "Alice"
+let age = 25
+"Hello, {name}! You are {age} years old."  // "Hello, Alice! You are 25 years old."
+```
+
+Any expression works inside the braces:
+
+```rust
+let x = 10
+"x + 5 = {x + 5}"           // "x + 5 = 15"
+"doubled: {x * 2}"          // "doubled: 20"
+```
+
+Values are converted to strings automatically. To include a literal brace, double it:
+
+```rust
+"JSON: {{key}}"             // "JSON: {key}"
+```
+
 **Booleans**
 ```rust
 true
@@ -883,5 +907,4 @@ Things I'm considering but haven't implemented yet:
 - `struct` types
 - `enum` types
 - Async/await
-- String interpolation
 - Iterator methods on arrays

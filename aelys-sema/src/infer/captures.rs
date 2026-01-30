@@ -168,6 +168,13 @@ impl TypeInference {
                 self.collect_captures_inner(object, params, captures, seen);
                 self.collect_captures_inner(range, params, captures, seen);
             }
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let crate::typed_ast::TypedFmtStringPart::Expr(e) = part {
+                        self.collect_captures_inner(e, params, captures, seen);
+                    }
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

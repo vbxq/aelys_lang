@@ -97,6 +97,14 @@ pub struct TypedExpr {
     pub span: Span,
 }
 
+/// Part of a typed format string
+#[derive(Debug, Clone)]
+pub enum TypedFmtStringPart {
+    Literal(String),
+    Expr(Box<TypedExpr>),
+    Placeholder,
+}
+
 /// Typed expression kinds
 #[derive(Debug, Clone)]
 pub enum TypedExprKind {
@@ -104,6 +112,7 @@ pub enum TypedExprKind {
     Float(f64),
     Bool(bool),
     String(String),
+    FmtString(Vec<TypedFmtStringPart>),
     Null,
 
     Identifier(String),

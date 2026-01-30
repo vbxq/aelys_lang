@@ -1,8 +1,9 @@
 use super::Parser;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
-use aelys_syntax::{Expr, ExprKind, Stmt, StmtKind, TokenKind};
+use aelys_syntax::{Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, TokenKind};
 use std::sync::Arc;
+use crate::lexer::Lexer;
 
 impl Parser {
     pub(super) fn lambda_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
@@ -103,6 +104,7 @@ impl Parser {
             TokenKind::Int(_)
                 | TokenKind::Float(_)
                 | TokenKind::String(_)
+                | TokenKind::FmtString(_)
                 | TokenKind::True
                 | TokenKind::False
                 | TokenKind::Null
@@ -125,6 +127,9 @@ impl Parser {
             TokenKind::Int(n) => ExprKind::Int(n),
             TokenKind::Float(n) => ExprKind::Float(n),
             TokenKind::String(s) => ExprKind::String(s),
+            TokenKind::FmtString(parts) => {
+                return self.parse_fmt_string(parts, span);
+            }
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
@@ -289,5 +294,50 @@ impl Parser {
         };
 
         Ok(Expr::new(kind, start_span.merge(end_span)))
+    }
+
+    fn parse_fmt_string(&mut self, parts: Vec<FmtPart>, span: aelys_syntax::Span) -> Result<Expr> {
+        let mut result = Vec::new();
+
+        for part in parts {
+            match part {
+                FmtPart::Literal(s) => result.push(FmtStringPart::Literal(s)),
+                FmtPart::Placeholder => result.push(FmtStringPart::Placeholder),
+                FmtPart::Expr(expr_str) => {
+                    let expr = self.parse_inline_expr(&expr_str, span)?;
+                    result.push(FmtStringPart::Expr(Box::new(expr)));
+                }
+            }
+        }
+
+        Ok(Expr::new(ExprKind::FmtString(result), span))
+    }
+
+    fn parse_inline_expr(&self, code: &str, span: aelys_syntax::Span) -> Result<Expr> {
+        let source = Source::new("<fmt-expr>", code);
+        let lexer = Lexer::with_source(Arc::clone(&source));
+        let tokens = lexer.scan().map_err(|e| {
+            CompileError::new(
+                CompileErrorKind::UnexpectedToken {
+                    expected: "expression".to_string(),
+                    found: format!("invalid expression in format string: {}", e),
+                },
+                span,
+                Arc::clone(&self.source),
+            )
+        })?;
+
+        let mut parser = Parser::new(tokens, source);
+        parser.expression().map_err(|e| {
+            CompileError::new(
+                CompileErrorKind::UnexpectedToken {
+                    expected: "expression".to_string(),
+                    found: format!("invalid expression in format string: {}", e),
+                },
+                span,
+                Arc::clone(&self.source),
+            )
+            .into()
+        })
     }
 }

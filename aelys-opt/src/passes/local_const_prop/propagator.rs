@@ -197,6 +197,14 @@ impl LocalConstantPropagator {
                 self.propagate_expr(range);
             }
 
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                        self.propagate_expr(e);
+                    }
+                }
+            }
+
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

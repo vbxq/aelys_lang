@@ -154,6 +154,13 @@ fn collect_all_uses_in_expr(expr: &TypedExpr, uses: &mut HashSet<String>) {
             collect_all_uses_in_expr(object, uses);
             collect_all_uses_in_expr(range, uses);
         }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_all_uses_in_expr(e, uses);
+                }
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

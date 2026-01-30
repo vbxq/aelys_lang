@@ -196,8 +196,8 @@ fn test_maybe_collect_respects_no_gc() {
     // TODO: everytime we add a built-in function, this test needs updating, we should find a better way
     // Now objects should be collected, except for the built-in functions in globals
     // Built-in functions are rooted in globals, so they won't be collected
-    // We have 5 built-in functions: type, alloc, free, load, store
-    assert_eq!(vm.heap().object_count(), 5);
+    // We have 6 built-in functions: type, alloc, free, load, store, __tostring
+    assert_eq!(vm.heap().object_count(), 6);
 }
 
 #[test]

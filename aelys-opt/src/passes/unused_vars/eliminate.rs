@@ -72,6 +72,15 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Slice { object, range } => {
             has_side_effects(object) || has_side_effects(range)
         }
+        TypedExprKind::FmtString(parts) => {
+            parts.iter().any(|p| {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = p {
+                    has_side_effects(e)
+                } else {
+                    false
+                }
+            })
+        }
         TypedExprKind::Identifier(_) | TypedExprKind::Int(_) | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_) | TypedExprKind::String(_) | TypedExprKind::Null => false,
     }

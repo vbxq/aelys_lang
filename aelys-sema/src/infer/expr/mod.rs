@@ -9,7 +9,7 @@ mod primary;
 
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError};
-use crate::typed_ast::{TypedExpr, TypedExprKind};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind};
 
@@ -32,6 +32,16 @@ impl TypeInference {
             ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::Float),
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
             ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
+            ExprKind::FmtString(parts) => {
+                let typed_parts = parts.iter().map(|p| {
+                    match p {
+                        aelys_syntax::FmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
+                        aelys_syntax::FmtStringPart::Expr(e) => TypedFmtStringPart::Expr(Box::new(self.infer_expr(e))),
+                        aelys_syntax::FmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
+                    }
+                }).collect();
+                (TypedExprKind::FmtString(typed_parts), InferType::String)
+            }
             ExprKind::Null => (TypedExprKind::Null, InferType::Null),
             ExprKind::Identifier(name) => self.infer_identifier_expr(name, expr.span),
             ExprKind::Binary { left, op, right } => {

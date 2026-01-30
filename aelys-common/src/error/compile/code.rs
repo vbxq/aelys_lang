@@ -7,6 +7,8 @@ impl CompileErrorKind {
             Self::InvalidCharacter(_) => 2,
             Self::InvalidNumber(_) => 3,
             Self::InvalidEscape(_) => 5,
+            Self::UnterminatedFmtExpr => 6,
+            Self::UnmatchedCloseBrace => 7,
             Self::UnexpectedToken { .. } => 101,
             Self::ExpectedExpression => 102,
             Self::ExpectedIdentifier => 103,

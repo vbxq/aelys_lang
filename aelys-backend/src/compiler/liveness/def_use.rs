@@ -166,6 +166,13 @@ fn collect_uses_expr(
             collect_uses_expr(analysis, object, uses);
             collect_uses_expr(analysis, range, uses);
         }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_uses_expr(analysis, e, uses);
+                }
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

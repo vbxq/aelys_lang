@@ -44,6 +44,14 @@ impl Expr {
     pub fn new(kind: ExprKind, span: Span) -> Self { Self { kind, span } }
 }
 
+/// Part of a format string in the AST (after parsing expressions)
+#[derive(Debug, Clone)]
+pub enum FmtStringPart {
+    Literal(String),
+    Expr(Box<Expr>),
+    Placeholder,
+}
+
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     // literals
@@ -52,6 +60,7 @@ pub enum ExprKind {
     String(String),
     Bool(bool),
     Null,
+    FmtString(Vec<FmtStringPart>),
 
     Identifier(String),
 

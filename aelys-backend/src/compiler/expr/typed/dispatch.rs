@@ -9,6 +9,9 @@ impl Compiler {
             TypedExprKind::Int(n) => self.compile_literal_int(*n, dest, expr.span),
             TypedExprKind::Float(f) => self.compile_literal_float(*f, dest, expr.span),
             TypedExprKind::String(s) => self.compile_literal_string(s, dest, expr.span),
+            TypedExprKind::FmtString(parts) => {
+                self.compile_typed_fmt_string(parts, &[], dest, expr.span)
+            }
             TypedExprKind::Bool(b) => self.compile_literal_bool(*b, dest, expr.span),
             TypedExprKind::Null => self.compile_literal_null(dest, expr.span),
             TypedExprKind::Identifier(name) => self.compile_identifier(name, dest, expr.span),
@@ -116,6 +119,15 @@ impl Compiler {
             TypedExprKind::Slice { object, range } => {
                 Self::typed_expr_may_have_side_effects(object)
                     || Self::typed_expr_may_have_side_effects(range)
+            }
+            TypedExprKind::FmtString(parts) => {
+                parts.iter().any(|p| {
+                    if let aelys_sema::TypedFmtStringPart::Expr(e) = p {
+                        Self::typed_expr_may_have_side_effects(e)
+                    } else {
+                        false
+                    }
+                })
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

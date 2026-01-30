@@ -202,6 +202,14 @@ impl InlineExpander {
                 }
             }
 
+            TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
+                parts.iter().map(|p| match p {
+                    aelys_sema::TypedFmtStringPart::Literal(s) => aelys_sema::TypedFmtStringPart::Literal(s.clone()),
+                    aelys_sema::TypedFmtStringPart::Expr(e) => aelys_sema::TypedFmtStringPart::Expr(Box::new(self.substitute_expr(e, params, span))),
+                    aelys_sema::TypedFmtStringPart::Placeholder => aelys_sema::TypedFmtStringPart::Placeholder,
+                }).collect()
+            ),
+
             // literals pass through unchanged
             TypedExprKind::Int(n) => TypedExprKind::Int(*n),
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),

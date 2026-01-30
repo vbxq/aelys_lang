@@ -78,6 +78,13 @@ impl ConstantFolder {
                 self.optimize_expr(object);
                 self.optimize_expr(range);
             }
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                        self.optimize_expr(e);
+                    }
+                }
+            }
             TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
             | TypedExprKind::String(_) | TypedExprKind::Null | TypedExprKind::Identifier(_) => {}
         }

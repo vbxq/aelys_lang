@@ -1,5 +1,5 @@
 use super::super::TypeInference;
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedParam};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam};
 use crate::unify::Substitution;
 
 impl TypeInference {
@@ -14,6 +14,13 @@ impl TypeInference {
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
+            TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
+                parts.iter().map(|p| match p {
+                    TypedFmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
+                    TypedFmtStringPart::Expr(e) => TypedFmtStringPart::Expr(Box::new(self.apply_substitution_expr(e, subst))),
+                    TypedFmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
+                }).collect()
+            ),
             TypedExprKind::Null => TypedExprKind::Null,
             TypedExprKind::Identifier(name) => TypedExprKind::Identifier(name.clone()),
             TypedExprKind::Binary { left, op, right } => TypedExprKind::Binary {

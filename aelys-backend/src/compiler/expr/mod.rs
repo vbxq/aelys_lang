@@ -1,6 +1,7 @@
 mod array;
 mod binary;
 mod control;
+mod fmt_string;
 mod identifier;
 mod identifier_helpers;
 mod literal;
@@ -18,6 +19,7 @@ impl Compiler {
             ExprKind::Int(n) => self.compile_literal_int(*n, dest, expr.span),
             ExprKind::Float(f) => self.compile_literal_float(*f, dest, expr.span),
             ExprKind::String(s) => self.compile_literal_string(s, dest, expr.span),
+            ExprKind::FmtString(parts) => self.compile_fmt_string(parts, &[], dest, expr.span),
             ExprKind::Bool(b) => self.compile_literal_bool(*b, dest, expr.span),
             ExprKind::Null => self.compile_literal_null(dest, expr.span),
             ExprKind::Identifier(name) => self.compile_identifier(name, dest, expr.span),
