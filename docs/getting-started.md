@@ -188,8 +188,8 @@ let greeting = "Hello, " + name + "!"
 Or use interpolation with `{expression}`:
 
 ```rust
-let name = "Reimu"
-print("Hello, {name}!")        // Hello, Reimu!
+let name = "Quar"
+print("Hello, {name}!")        // Hello, Quar!
 print("2 + 2 = {2 + 2}")       // 2 + 2 = 4
 ```
 

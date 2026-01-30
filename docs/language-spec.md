@@ -75,9 +75,9 @@ UTF-8 encoded. Escape sequences: `\n` (newline), `\t` (tab), `\r` (carriage retu
 Embed expressions directly in strings using `{expression}`:
 
 ```rust
-let name = "Reimu"
-let age = 25
-"Hello, {name}! You are {age} years old."  // "Hello, Reimu! You are 25 years old."
+let name = "Kaito"
+let age = 67
+"Hello, {name}! You are {age} years old."  // "Hello, Kaito! You are 67 years old."
 ```
 
 Any expression works inside the braces:
