@@ -19,7 +19,9 @@ pub enum InferType {
 
     // Composite types (for future extension)
     Array(Box<InferType>),
+    Vec(Box<InferType>),
     Tuple(Vec<InferType>),
+    Range,
 
     // Type variable (placeholder during inference)
     Var(TypeVarId),
@@ -36,7 +38,7 @@ impl InferType {
             InferType::Function { params, ret } => {
                 params.iter().any(|p| p.has_vars()) || ret.has_vars()
             }
-            InferType::Array(inner) => inner.has_vars(),
+            InferType::Array(inner) | InferType::Vec(inner) => inner.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
             _ => false,
         }
@@ -53,8 +55,32 @@ impl InferType {
     }
 
     /// Convert from type annotation string
-    pub fn from_annotation(name: &str) -> Self {
-        match name {
+    pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
+        let name = ann.name.to_lowercase();
+        match name.as_str() {
+            "int" => InferType::Int,
+            "float" => InferType::Float,
+            "bool" => InferType::Bool,
+            "string" => InferType::String,
+            "null" => InferType::Null,
+            "array" => {
+                let inner = ann.type_param.as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                InferType::Array(Box::new(inner))
+            }
+            "vec" => {
+                let inner = ann.type_param.as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                InferType::Vec(Box::new(inner))
+            }
+            _ => InferType::Dynamic,
+        }
+    }
+
+    pub fn from_name(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
             "int" => InferType::Int,
             "float" => InferType::Float,
             "bool" => InferType::Bool,
@@ -92,6 +118,7 @@ impl fmt::Display for InferType {
                 write!(f, ") -> {}", ret)
             }
             InferType::Array(inner) => write!(f, "[{}]", inner),
+            InferType::Vec(inner) => write!(f, "vec[{}]", inner),
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {
@@ -102,6 +129,7 @@ impl fmt::Display for InferType {
                 }
                 write!(f, ")")
             }
+            InferType::Range => write!(f, "range"),
             InferType::Var(id) => write!(f, "{}", id),
             InferType::Dynamic => write!(f, "dynamic"),
         }

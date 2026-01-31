@@ -2,7 +2,7 @@
 
 mod captures;
 mod constraints;
-mod entry;
+pub mod entry;
 mod expr;
 mod finalize;
 mod functions;
@@ -15,9 +15,13 @@ mod substitute;
 use crate::constraint::{Constraint, TypeError};
 use crate::env::TypeEnv;
 use crate::types::{InferType, TypeVarGen};
+use aelys_common::Warning;
 
 /// Maximum recursion depth for type inference to prevent stack overflow
 const MAX_INFERENCE_DEPTH: usize = 200;
+
+/// Known type names
+const KNOWN_TYPES: &[&str] = &["int", "float", "bool", "string", "null", "array", "vec"];
 
 /// The type inference engine
 pub struct TypeInference {
@@ -38,4 +42,7 @@ pub struct TypeInference {
 
     /// Current recursion depth for preventing stack overflow
     depth: usize,
+
+    /// Collected warnings
+    warnings: Vec<Warning>,
 }

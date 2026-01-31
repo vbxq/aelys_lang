@@ -20,7 +20,9 @@ pub enum ResolvedType {
 
     // Composite types
     Array(Box<ResolvedType>),
+    Vec(Box<ResolvedType>),
     Tuple(Vec<ResolvedType>),
+    Range,
 
     // Dynamic - couldn't infer, use generic opcodes
     Dynamic,
@@ -83,9 +85,13 @@ impl ResolvedType {
             InferType::Array(inner) => {
                 ResolvedType::Array(Box::new(ResolvedType::from_infer_type(inner)))
             }
+            InferType::Vec(inner) => {
+                ResolvedType::Vec(Box::new(ResolvedType::from_infer_type(inner)))
+            }
             InferType::Tuple(elems) => {
                 ResolvedType::Tuple(elems.iter().map(ResolvedType::from_infer_type).collect())
             }
+            InferType::Range => ResolvedType::Range,
             InferType::Var(_) => ResolvedType::Dynamic,
             InferType::Dynamic => ResolvedType::Dynamic,
         }
@@ -111,6 +117,7 @@ impl fmt::Display for ResolvedType {
                 write!(f, ") -> {}", ret)
             }
             ResolvedType::Array(inner) => write!(f, "[{}]", inner),
+            ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
             ResolvedType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {
@@ -121,6 +128,7 @@ impl fmt::Display for ResolvedType {
                 }
                 write!(f, ")")
             }
+            ResolvedType::Range => write!(f, "range"),
             ResolvedType::Dynamic => write!(f, "dynamic"),
             ResolvedType::Uncertain(inner) => write!(f, "?{}", inner),
         }

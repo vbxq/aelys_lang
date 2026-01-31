@@ -105,7 +105,7 @@ impl ModuleLoader {
                         vm.set_global(symbol.clone(), value);
                     }
                 }
-                ImportKind::Module { .. } => {
+                ImportKind::Module { alias } => {
                     let module_alias = self.get_module_alias(needs);
                     for name in module_info.exports.keys() {
                         let value = vm.get_global(name).ok_or_else(|| {
@@ -119,7 +119,10 @@ impl ModuleLoader {
                             ))
                         })?;
                         let alias_name = format!("{}::{}", module_alias, name);
-                        vm.set_global(alias_name, value);
+                        vm.set_global(alias_name, value.clone());
+                        if alias.is_none() {
+                            vm.set_global(name.clone(), value);
+                        }
                     }
                 }
                 ImportKind::Wildcard => {

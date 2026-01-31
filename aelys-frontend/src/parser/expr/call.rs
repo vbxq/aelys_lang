@@ -41,11 +41,95 @@ impl Parser {
                     },
                     span,
                 );
+            } else if self.match_token(&TokenKind::LBracket) {
+                let index_or_range = self.parse_index_or_range()?;
+                self.consume(&TokenKind::RBracket, "]")?;
+                let span = expr.span.merge(self.previous().span);
+
+                if matches!(index_or_range.kind, ExprKind::Range { .. }) {
+                    expr = Expr::new(
+                        ExprKind::Slice {
+                            object: Box::new(expr),
+                            range: Box::new(index_or_range),
+                        },
+                        span,
+                    );
+                } else {
+                    expr = Expr::new(
+                        ExprKind::Index {
+                            object: Box::new(expr),
+                            index: Box::new(index_or_range),
+                        },
+                        span,
+                    );
+                }
             } else {
                 break;
             }
         }
 
         Ok(expr)
+    }
+
+    /// Parse index or range expression inside brackets.
+    /// Handles: arr[i], arr[1..3], arr[1..], arr[..3], arr[1..=3]
+    fn parse_index_or_range(&mut self) -> Result<Expr> {
+        let start_span = self.peek().span;
+
+        // Check if range starts with .. or ..= (no start expression)
+        if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
+            let inclusive = self.match_token(&TokenKind::DotDotEq);
+            if !inclusive {
+                self.advance(); // consume DotDot
+            }
+
+            // Check for end expression
+            let end = if !self.check(&TokenKind::RBracket) {
+                Some(Box::new(self.expression()?))
+            } else {
+                None
+            };
+
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::Range {
+                    start: None,
+                    end,
+                    inclusive,
+                },
+                start_span.merge(end_span),
+            ));
+        }
+
+        // Parse the first expression (could be index or start of range)
+        let first = self.expression()?;
+
+        // Check if this is a range
+        if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
+            let inclusive = self.match_token(&TokenKind::DotDotEq);
+            if !inclusive {
+                self.advance(); // consume DotDot
+            }
+
+            // Check for end expression
+            let end = if !self.check(&TokenKind::RBracket) {
+                Some(Box::new(self.expression()?))
+            } else {
+                None
+            };
+
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::Range {
+                    start: Some(Box::new(first)),
+                    end,
+                    inclusive,
+                },
+                start_span.merge(end_span),
+            ));
+        }
+
+        // Just a simple index expression
+        Ok(first)
     }
 }

@@ -1,4 +1,5 @@
 use aelys_cli::cli::commands::run::run_with_options;
+use aelys_common::WarningConfig;
 use aelys_opt::OptimizationLevel;
 
 #[test]
@@ -24,6 +25,7 @@ fn run_accepts_bytecode_with_magic() {
         Vec::new(),
         Vec::new(),
         OptimizationLevel::Standard,
+        WarningConfig::new(),
     );
 
     assert!(result.is_ok());
@@ -46,6 +48,7 @@ fn run_bytecode_registers_stdlib_globals() {
         Vec::new(),
         Vec::new(),
         OptimizationLevel::Standard,
+        WarningConfig::new(),
     );
 
     assert!(result.is_ok());

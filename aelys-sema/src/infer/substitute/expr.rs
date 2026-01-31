@@ -1,5 +1,5 @@
 use super::super::TypeInference;
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedParam};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam};
 use crate::unify::Substitution;
 
 impl TypeInference {
@@ -14,6 +14,13 @@ impl TypeInference {
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
+            TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
+                parts.iter().map(|p| match p {
+                    TypedFmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
+                    TypedFmtStringPart::Expr(e) => TypedFmtStringPart::Expr(Box::new(self.apply_substitution_expr(e, subst))),
+                    TypedFmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
+                }).collect()
+            ),
             TypedExprKind::Null => TypedExprKind::Null,
             TypedExprKind::Identifier(name) => TypedExprKind::Identifier(name.clone()),
             TypedExprKind::Binary { left, op, right } => TypedExprKind::Binary {
@@ -86,6 +93,42 @@ impl TypeInference {
             TypedExprKind::Member { object, member } => TypedExprKind::Member {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 member: member.clone(),
+            },
+            TypedExprKind::ArrayLiteral { element_type, elements } => TypedExprKind::ArrayLiteral {
+                element_type: element_type.clone(),
+                elements: elements
+                    .iter()
+                    .map(|e| self.apply_substitution_expr(e, subst))
+                    .collect(),
+            },
+            TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
+                element_type: element_type.clone(),
+                size: Box::new(self.apply_substitution_expr(size, subst)),
+            },
+            TypedExprKind::VecLiteral { element_type, elements } => TypedExprKind::VecLiteral {
+                element_type: element_type.clone(),
+                elements: elements
+                    .iter()
+                    .map(|e| self.apply_substitution_expr(e, subst))
+                    .collect(),
+            },
+            TypedExprKind::Index { object, index } => TypedExprKind::Index {
+                object: Box::new(self.apply_substitution_expr(object, subst)),
+                index: Box::new(self.apply_substitution_expr(index, subst)),
+            },
+            TypedExprKind::IndexAssign { object, index, value } => TypedExprKind::IndexAssign {
+                object: Box::new(self.apply_substitution_expr(object, subst)),
+                index: Box::new(self.apply_substitution_expr(index, subst)),
+                value: Box::new(self.apply_substitution_expr(value, subst)),
+            },
+            TypedExprKind::Range { start, end, inclusive } => TypedExprKind::Range {
+                start: start.as_ref().map(|s| Box::new(self.apply_substitution_expr(s, subst))),
+                end: end.as_ref().map(|e| Box::new(self.apply_substitution_expr(e, subst))),
+                inclusive: *inclusive,
+            },
+            TypedExprKind::Slice { object, range } => TypedExprKind::Slice {
+                object: Box::new(self.apply_substitution_expr(object, subst)),
+                range: Box::new(self.apply_substitution_expr(range, subst)),
             },
         };
 

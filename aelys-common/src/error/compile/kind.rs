@@ -5,6 +5,8 @@ pub enum CompileErrorKind {
     InvalidCharacter(char),
     InvalidNumber(String),
     InvalidEscape(char),
+    UnterminatedFmtExpr,
+    UnmatchedCloseBrace,
 
     // Parser errors
     UnexpectedToken {
@@ -77,6 +79,10 @@ pub enum CompileErrorKind {
         module: String,
         required: String,
         found: Option<String>,
+    },
+    SymbolConflict {
+        symbol: String,
+        modules: Vec<String>,
     },
 
     TypeInferenceError(String),

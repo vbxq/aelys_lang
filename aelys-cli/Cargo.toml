@@ -7,6 +7,7 @@ edition = "2024"
 aelys = { path = "../aelys" }
 aelys-backend = { path = "../aelys-backend" }
 aelys-bytecode = { path = "../aelys-bytecode" }
+aelys-common = { path = "../aelys-common" }
 aelys-driver = { path = "../aelys-driver" }
 aelys-frontend = { path = "../aelys-frontend" }
 aelys-opt = { path = "../aelys-opt" }

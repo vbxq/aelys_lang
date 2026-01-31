@@ -365,7 +365,7 @@ fn test_global_const_prop_mutable_not_propagated() {
 #[test]
 fn test_global_const_prop_complex_expression() {
     let code = r#"
-        let WIDTH: int = 80
+        let WIDTH: float = 80.0
         let R1: float = 1.0
         let R2: float = 2.0
         let K2: float = 5.0
@@ -455,4 +455,149 @@ fn test_fold_nested_grouping_division() {
     let code = "1200.0 / (8.0 * (1.0 + 2.0))";
     let result = run_with_opt(code, OptimizationLevel::Standard);
     assert_eq!(result.as_float(), Some(50.0));
+}
+
+#[test]
+fn test_local_const_prop_simple() {
+    let code = r#"
+        fn test() -> int {
+            let x = 5
+            let y = 10
+            x + y
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(15));
+}
+
+#[test]
+fn test_local_const_prop_chained() {
+    let code = r#"
+        fn test() -> int {
+            let a = 10
+            let b = a * 2
+            let c = b + 5
+            c
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(25));
+}
+
+#[test]
+fn test_local_const_prop_deep_chain() {
+    let code = r#"
+        fn test() -> int {
+            let x = 100
+            let y = x * 2
+            let z = y + 50
+            z / 5
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(50));
+}
+
+#[test]
+fn test_local_const_prop_mutable_not_propagated() {
+    let code = r#"
+        fn test() -> int {
+            let mut x = 5
+            x = x + 1
+            x
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(6));
+}
+
+#[test]
+fn test_local_const_prop_in_nested_if() {
+    // tests that outer constants are propagated into nested if-blocks
+    let code = r#"
+        fn test() -> int {
+            let base = 10
+            let multiplier = 3
+            if true {
+                base * multiplier
+            } else {
+                0
+            }
+        }
+        test()
+    "#;
+    // base * multiplier = 30
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(30));
+}
+
+#[test]
+fn test_local_const_prop_with_conditionals() {
+    let code = r#"
+        fn test(flag: bool) -> int {
+            let base = 10
+            if flag {
+                let factor = 5
+                base * factor
+            } else {
+                let offset = 3
+                base + offset
+            }
+        }
+        test(true) + test(false)
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(63)); // 50 + 13
+}
+
+#[test]
+fn test_local_const_prop_preserves_semantics() {
+    let code = r#"
+        fn calculate() -> int {
+            let a = 5
+            let b = 10
+            a + b * 2
+        }
+        calculate()
+    "#;
+    let result_o0 = run_with_opt(code, OptimizationLevel::None);
+    let result_o3 = run_with_opt(code, OptimizationLevel::Aggressive);
+    assert_eq!(result_o0.as_int(), result_o3.as_int());
+    assert_eq!(result_o3.as_int(), Some(25));
+}
+
+#[test]
+fn test_local_const_prop_lambda() {
+    let code = r#"
+        fn test() -> int {
+            let multiplier = 3
+            let f = fn(x: int) -> int {
+                let offset = 10
+                x * multiplier + offset
+            }
+            f(5)
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    assert_eq!(result.as_int(), Some(25)); // 5 * 3 + 10
+}
+
+#[test]
+fn test_local_const_prop_float() {
+    let code = r#"
+        fn test() -> float {
+            let pi = 3.14159
+            let r = 2.0
+            pi * r * r
+        }
+        test()
+    "#;
+    let result = run_with_opt(code, OptimizationLevel::Standard);
+    let expected = 3.14159 * 2.0 * 2.0;
+    assert!((result.as_float().unwrap() - expected).abs() < 0.0001);
 }

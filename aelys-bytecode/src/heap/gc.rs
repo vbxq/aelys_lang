@@ -30,6 +30,20 @@ impl Heap {
                             }
                         }
                         ObjectKind::String(_) | ObjectKind::Native(_) => {}
+                        ObjectKind::Array(a) => {
+                            if let Some(objs) = a.data.as_objects() {
+                                for v in objs {
+                                    if let Some(p) = v.as_ptr() { worklist.push(GcRef::new(p)); }
+                                }
+                            }
+                        }
+                        ObjectKind::Vec(vec) => {
+                            if let Some(objs) = vec.objects() {
+                                for v in objs {
+                                    if let Some(p) = v.as_ptr() { worklist.push(GcRef::new(p)); }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -69,6 +83,8 @@ impl Heap {
             ObjectKind::Native(_) => std::mem::size_of::<crate::object::NativeFunction>(),
             ObjectKind::Upvalue(_) => std::mem::size_of::<AelysUpvalue>(),
             ObjectKind::Closure(c) => std::mem::size_of::<AelysClosure>() + c.upvalues.len() * 8,
+            ObjectKind::Array(a) => a.size_bytes(),
+            ObjectKind::Vec(v) => v.size_bytes(),
         }
     }
 }

@@ -60,6 +60,7 @@ pub struct Compiler {
     pub module_aliases: Rc<HashSet<String>>,
     pub known_globals: Rc<HashSet<String>>,
     pub known_native_globals: Rc<HashSet<String>>,
+    pub symbol_origins: Rc<HashMap<String, String>>,  // bare name -> qualified name
     pub accessed_globals: HashSet<String>,
     pub next_call_site_slot: u16,
 }

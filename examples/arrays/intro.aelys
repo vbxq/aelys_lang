@@ -1,0 +1,35 @@
+needs std.io
+needs std.convert
+
+io.print("=== Arrays ===")
+
+let arr = Array[1, 2, 3, 4, 5]
+io.print("Array: [1, 2, 3, 4, 5]")
+io.print("arr[0] = " + convert.to_string(arr[0]))
+io.print("arr[4] = " + convert.to_string(arr[4]))
+io.print("Length: " + convert.to_string(arr.len()))
+
+io.print("")
+io.print("=== Vectors ===")
+
+let v = Vec[]
+io.print("Empty vec, length = " + convert.to_string(v.len()))
+
+v.push(10)
+v.push(20)
+v.push(30)
+io.print("After 3 pushes, length = " + convert.to_string(v.len()))
+
+let val = v.pop()
+io.print("Popped: " + convert.to_string(val))
+io.print("After pop, length = " + convert.to_string(v.len()))
+
+io.print("")
+io.print("=== Iteration ===")
+
+let numbers = Array[5, 10, 15, 20, 25]
+io.print("Doubling each element:")
+for i in 0..numbers.len() {
+    numbers[i] = numbers[i] * 2
+    io.print("  " + convert.to_string(numbers[i]))
+}

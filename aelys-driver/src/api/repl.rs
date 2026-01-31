@@ -35,6 +35,7 @@ pub fn run_with_vm_and_opt(
     let mut module_aliases = vm.repl_module_aliases().clone();
     let mut known_globals = vm.repl_known_globals().clone();
     let mut known_native_globals = vm.repl_known_native_globals().clone();
+    let mut symbol_origins = vm.repl_symbol_origins().clone();
 
     for builtin in BUILTIN_NAMES {
         known_globals.insert(builtin.to_string());
@@ -54,6 +55,9 @@ pub fn run_with_vm_and_opt(
 
         known_native_globals.extend(imports.known_native_globals.iter().cloned());
         vm.add_repl_known_native_globals(&imports.known_native_globals);
+
+        symbol_origins.extend(imports.symbol_origins.iter().map(|(k, v)| (k.clone(), v.clone())));
+        vm.add_repl_symbol_origins(&imports.symbol_origins);
 
         stmts
             .into_iter()
@@ -95,6 +99,7 @@ pub fn run_with_vm_and_opt(
         module_aliases,
         known_globals,
         known_native_globals,
+        symbol_origins,
         existing_globals,
     );
     let (mut function, mut compile_heap, new_globals) = compiler.compile_typed(&typed_program)?;

@@ -10,12 +10,21 @@ impl Token {
     pub fn new(kind: TokenKind, span: Span) -> Self { Self { kind, span } }
 }
 
+/// Part of a format string: either literal text, a placeholder {}, or an expression {expr}
+#[derive(Debug, Clone, PartialEq)]
+pub enum FmtPart {
+    Literal(String),
+    Placeholder,
+    Expr(String),
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     // literals
     Int(i64),
     Float(f64),
     String(String),
+    FmtString(Vec<FmtPart>),
     True, False, Null,
 
     Identifier(String),
@@ -56,13 +65,13 @@ pub enum TokenKind {
 
 impl TokenKind {
     pub fn is_literal(&self) -> bool {
-        matches!(self, Self::Int(_) | Self::Float(_) | Self::String(_) | Self::True | Self::False | Self::Null)
+        matches!(self, Self::Int(_) | Self::Float(_) | Self::String(_) | Self::FmtString(_) | Self::True | Self::False | Self::Null)
     }
 
     // semicolon insertion (Go-style, roughly)
     pub fn can_end_statement(&self) -> bool {
         matches!(self,
-            Self::Identifier(_) | Self::Int(_) | Self::Float(_) | Self::String(_)
+            Self::Identifier(_) | Self::Int(_) | Self::Float(_) | Self::String(_) | Self::FmtString(_)
             | Self::True | Self::False | Self::Null
             | Self::Break | Self::Continue | Self::Return
             | Self::RParen | Self::RBracket | Self::RBrace
@@ -77,6 +86,7 @@ impl std::fmt::Display for TokenKind {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "\"{}\"", s),
+            Self::FmtString(_) => write!(f, "<format string>"),
             Self::True => write!(f, "true"),
             Self::False => write!(f, "false"),
             Self::Null => write!(f, "null"),

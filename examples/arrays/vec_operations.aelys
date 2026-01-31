@@ -1,0 +1,24 @@
+needs std.io
+needs std.convert
+
+let v = Vec[1, 2, 3]
+io.print("Initial Vec: [1, 2, 3]")
+io.print("Length: " + convert.to_string(v.len()))
+
+v.push(4)
+v.push(5)
+io.print("After push(4), push(5): len = " + convert.to_string(v.len()))
+
+let popped = v.pop()
+io.print("Popped: " + convert.to_string(popped))
+io.print("Length after pop: " + convert.to_string(v.len()))
+
+v.reserve(100)
+io.print("Capacity after reserve(100): " + convert.to_string(v.capacity()))
+
+io.print("Elements:")
+let mut i = 0
+while i < v.len() {
+    io.print("  v[" + convert.to_string(i) + "] = " + convert.to_string(v[i]))
+    i = i + 1
+}

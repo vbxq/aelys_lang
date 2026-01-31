@@ -38,6 +38,7 @@ impl Compiler {
             self.module_aliases.clone(),
             self.known_globals.clone(),
             self.known_native_globals.clone(),
+            self.symbol_origins.clone(),
             self.next_call_site_slot,
         );
 

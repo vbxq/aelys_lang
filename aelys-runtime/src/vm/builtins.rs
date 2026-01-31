@@ -19,6 +19,9 @@ pub fn register_builtins(vm: &mut VM) -> Result<(), RuntimeError> {
     let store_fn = vm.alloc_native("store", 3, builtin_store)?;
     vm.set_global("store".to_string(), Value::ptr(store_fn.index()));
 
+    let tostring_fn = vm.alloc_native("__tostring", 1, builtin_tostring)?;
+    vm.set_global("__tostring".to_string(), Value::ptr(tostring_fn.index()));
+
     Ok(())
 }
 
@@ -134,4 +137,10 @@ pub fn builtin_store(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
         .map_err(|e| vm.manual_heap_error(e))?;
 
     Ok(Value::null())
+}
+
+pub fn builtin_tostring(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    let s = vm.value_to_string(args[0]);
+    let str_ref = vm.alloc_string(&s)?;
+    Ok(Value::ptr(str_ref.index()))
 }

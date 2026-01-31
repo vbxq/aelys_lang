@@ -497,7 +497,7 @@ fn test_bytes_from_string_content() {
 }
 
 #[test]
-fn test_bytes_to_string() {
+fn test_bytes_decode() {
     assert_aelys_str(
         r#"
         needs std.bytes
@@ -507,7 +507,7 @@ fn test_bytes_to_string() {
         bytes.write_u8(buf, 2, 108)
         bytes.write_u8(buf, 3, 108)
         bytes.write_u8(buf, 4, 111)
-        bytes.to_string(buf, 0, 5)
+        bytes.decode(buf, 0, 5)
     "#,
         "Hello",
     );
@@ -581,7 +581,7 @@ fn test_bytes_reverse() {
         needs std.bytes
         let buf = bytes.from_string("Hello")
         bytes.reverse(buf, 0, 5)
-        bytes.to_string(buf, 0, 5)
+        bytes.decode(buf, 0, 5)
     "#,
         "olleH",
     );

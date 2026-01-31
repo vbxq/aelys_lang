@@ -40,7 +40,7 @@ For most programs, pauses are imperceptible, if you're doing something that allo
 
 ### Is there a debugger?
 
-Not yet but planned very soon. You can use `io.print` statements (sorry) or inspect bytecode with `aelys asm --stdout`.
+Not yet but planned very soon. You can use `print` statements (sorry) or inspect bytecode with `aelys asm --stdout`.
 
 ### Can I embed Aelys in my Rust application?
 

@@ -43,6 +43,16 @@ impl GlobalLayout {
             .clone()
     }
 
+    // create a layout with placeholder names (for release builds that strip debug info)
+    pub fn new_anonymous(count: usize) -> Arc<Self> {
+        if count == 0 {
+            return Self::empty();
+        }
+        let names = vec![String::new(); count];
+        let id = GLOBAL_LAYOUT_ID.fetch_add(1, Ordering::Relaxed);
+        Arc::new(Self { id, names })
+    }
+
     pub fn id(&self) -> usize {
         self.id
     }

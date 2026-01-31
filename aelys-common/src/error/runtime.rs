@@ -60,6 +60,10 @@ pub enum RuntimeErrorKind {
     NativeError {
         code: i32,
     },
+    IndexOutOfBounds {
+        index: i64,
+        length: i64,
+    },
 }
 
 impl RuntimeError {
@@ -117,6 +121,9 @@ impl RuntimeErrorKind {
             Self::InvalidBytecode(message) => format!("invalid bytecode: {}", message),
             Self::CapabilityDenied { operation } => format!("capability denied: {}", operation),
             Self::NativeError { code } => format!("native error: code {}", code),
+            Self::IndexOutOfBounds { index, length } => {
+                format!("index out of bounds: index {} is out of bounds for length {}", index, length)
+            }
         }
     }
 }

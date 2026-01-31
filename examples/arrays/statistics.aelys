@@ -1,0 +1,75 @@
+needs std.io
+needs std.convert
+
+fn average(numbers) -> float {
+    if numbers.len() == 0 { return 0.0 }
+
+    let mut sum = 0.0
+    for i in 0..numbers.len() {
+        sum = sum + convert.to_float(numbers[i])
+    }
+    return sum / convert.to_float(numbers.len())
+}
+
+fn min_max(numbers) {
+    if numbers.len() == 0 { return null }
+
+    let mut min_val = numbers[0]
+    let mut max_val = numbers[0]
+
+    for i in 1..numbers.len() {
+        if numbers[i] < min_val { min_val = numbers[i] }
+        if numbers[i] > max_val { max_val = numbers[i] }
+    }
+
+    return Array[min_val, max_val]
+}
+
+fn median(numbers) -> float {
+    if numbers.len() == 0 { return 0.0 }
+
+    let sorted = Vec[]
+    for i in 0..numbers.len() {
+        sorted.push(numbers[i])
+    }
+
+    let mut i = 0
+    while i < sorted.len() - 1 {
+        let mut j = 0
+        while j < sorted.len() - i - 1 {
+            if sorted[j] > sorted[j + 1] {
+                let tmp = sorted[j]
+                sorted[j] = sorted[j + 1]
+                sorted[j + 1] = tmp
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+
+    let mid = sorted.len() / 2
+    if sorted.len() % 2 == 0 {
+        return (convert.to_float(sorted[mid - 1]) + convert.to_float(sorted[mid])) / 2.0
+    } else {
+        return convert.to_float(sorted[mid])
+    }
+}
+
+io.print("Statistical Analysis")
+io.print("===================")
+io.print("")
+
+let data = Array[15, 23, 8, 42, 16, 4, 38, 27, 19, 31]
+
+io.print("Data: [15, 23, 8, 42, 16, 4, 38, 27, 19, 31]")
+io.print("")
+
+let avg = average(data)
+io.print("Average: " + convert.to_string(avg))
+
+let mm = min_max(data)
+io.print("Min: " + convert.to_string(mm[0]))
+io.print("Max: " + convert.to_string(mm[1]))
+
+let med = median(data)
+io.print("Median: " + convert.to_string(med))

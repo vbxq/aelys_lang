@@ -1,6 +1,8 @@
 use super::super::Compiler;
 use aelys_bytecode::OpCode;
 use aelys_common::Result;
+use aelys_common::error::{CompileError, CompileErrorKind};
+use aelys_sema::{InferType, TypedFmtStringPart};
 use aelys_syntax::Span;
 
 impl Compiler {
@@ -13,7 +15,46 @@ impl Compiler {
     ) -> Result<()> {
         use aelys_sema::TypedExprKind;
 
+        // Handle format string with placeholders: func("x={}", x) -> func("x=" + __tostring(x))
+        if let Some((fmt_parts, placeholder_count)) = Self::get_typed_fmt_placeholders(args) {
+            if placeholder_count > 0 {
+                return self.compile_typed_call_with_fmt_placeholders(
+                    callee, args, fmt_parts, placeholder_count, dest, span
+                );
+            }
+        }
+
+        // Check for Array/Vec method calls first
         if let TypedExprKind::Member { object, member } = &callee.kind {
+            // Handle Array methods
+            if let InferType::Array(_) = &object.ty {
+                if member == "len" && args.is_empty() {
+                    return self.compile_array_len(object, dest, span);
+                }
+            }
+
+            // Handle Vec methods
+            if let InferType::Vec(inner) = &object.ty {
+                match member.as_str() {
+                    "len" if args.is_empty() => {
+                        return self.compile_vec_len(object, dest, span);
+                    }
+                    "push" if args.len() == 1 => {
+                        return self.compile_vec_push(object, inner, &args[0], dest, span);
+                    }
+                    "pop" if args.is_empty() => {
+                        return self.compile_vec_pop(object, inner, dest, span);
+                    }
+                    "capacity" if args.is_empty() => {
+                        return self.compile_vec_capacity(object, dest, span);
+                    }
+                    "reserve" if args.len() == 1 => {
+                        return self.compile_vec_reserve(object, &args[0], dest, span);
+                    }
+                    _ => {}
+                }
+            }
+
             if let TypedExprKind::Identifier(module_name) = &object.kind {
                 if self.module_aliases.contains(module_name) {
                     let qualified_name = format!("{}::{}", module_name, member);
@@ -85,8 +126,12 @@ impl Compiler {
             }
 
             if self.resolve_variable(name).is_none() && self.resolve_upvalue(name).is_none() {
+                if !self.globals.contains_key(name) && !self.known_globals.contains(name) {
+                    return self.compile_typed_call_fallback(callee, args, dest, span);
+                }
+                let actual_name = self.resolve_global_name(name).to_string();
                 let global_idx = self.get_or_create_global_index(name);
-                self.accessed_globals.insert(name.to_string());
+                self.accessed_globals.insert(actual_name.clone());
 
                 if global_idx <= 255 {
                     let arg_start = match dest.checked_add(1) {
@@ -176,6 +221,75 @@ impl Compiler {
 
         for i in (0..=nargs).rev() {
             let reg = callee_reg + i as u8;
+            self.register_pool[reg as usize] = false;
+        }
+
+        Ok(())
+    }
+
+    fn get_typed_fmt_placeholders(args: &[aelys_sema::TypedExpr]) -> Option<(&[TypedFmtStringPart], usize)> {
+        use aelys_sema::TypedExprKind;
+        if args.is_empty() {
+            return None;
+        }
+        if let TypedExprKind::FmtString(parts) = &args[0].kind {
+            let count = parts.iter().filter(|p| matches!(p, TypedFmtStringPart::Placeholder)).count();
+            return Some((parts, count));
+        }
+        None
+    }
+
+    fn compile_typed_call_with_fmt_placeholders(
+        &mut self,
+        callee: &aelys_sema::TypedExpr,
+        args: &[aelys_sema::TypedExpr],
+        fmt_parts: &[TypedFmtStringPart],
+        placeholder_count: usize,
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        let extra_args_needed = placeholder_count;
+        let extra_args_available = args.len() - 1;
+
+        if extra_args_available < extra_args_needed {
+            return Err(CompileError::new(
+                CompileErrorKind::TypeInferenceError(format!(
+                    "format string has {} placeholder(s) but only {} argument(s) provided",
+                    extra_args_needed, extra_args_available
+                )),
+                span,
+                self.source.clone(),
+            ).into());
+        }
+
+        let fmt_extra_args = &args[1..1 + extra_args_needed];
+        let remaining_args = &args[1 + extra_args_needed..];
+
+        let total_args = 1 + remaining_args.len();
+        let func_reg = self.alloc_consecutive_registers_for_call(total_args as u8 + 1, span)?;
+
+        for i in 0..=total_args {
+            let reg = func_reg + i as u8;
+            self.register_pool[reg as usize] = true;
+            if reg >= self.next_register {
+                self.next_register = reg + 1;
+            }
+        }
+
+        self.compile_typed_expr(callee, func_reg)?;
+
+        let fmt_reg = func_reg + 1;
+        self.compile_typed_fmt_string(fmt_parts, fmt_extra_args, fmt_reg, args[0].span)?;
+
+        for (i, arg) in remaining_args.iter().enumerate() {
+            let arg_reg = func_reg + 2 + i as u8;
+            self.compile_typed_expr(arg, arg_reg)?;
+        }
+
+        self.emit_a(OpCode::Call, dest, func_reg, total_args as u8, span);
+
+        for i in (0..=total_args).rev() {
+            let reg = func_reg + i as u8;
             self.register_pool[reg as usize] = false;
         }
 

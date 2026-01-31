@@ -14,26 +14,23 @@ impl TypeInference {
     ) -> TypedExpr {
         let closure_env = self.env.for_closure();
 
-        let typed_params: Vec<TypedParam> = params
-            .iter()
-            .map(|p| {
-                let ty = p
-                    .type_annotation
-                    .as_ref()
-                    .map(|ann| InferType::from_annotation(&ann.name))
-                    .unwrap_or_else(|| self.type_gen.fresh());
+        let mut typed_params = Vec::with_capacity(params.len());
+        for p in params {
+            let ty = match &p.type_annotation {
+                Some(ann) => self.type_from_annotation(ann),
+                None => self.type_gen.fresh(),
+            };
+            typed_params.push(TypedParam {
+                name: p.name.clone(),
+                ty,
+                span: p.span,
+            });
+        }
 
-                TypedParam {
-                    name: p.name.clone(),
-                    ty,
-                    span: p.span,
-                }
-            })
-            .collect();
-
-        let return_type = return_type_ann
-            .map(|ann| InferType::from_annotation(&ann.name))
-            .unwrap_or_else(|| self.type_gen.fresh());
+        let return_type = match return_type_ann {
+            Some(ann) => self.type_from_annotation(ann),
+            None => self.type_gen.fresh(),
+        };
 
         let saved_env = std::mem::replace(&mut self.env, closure_env);
 

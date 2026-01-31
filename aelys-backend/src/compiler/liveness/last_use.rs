@@ -124,6 +124,43 @@ fn collect_all_uses_in_expr(expr: &TypedExpr, uses: &mut HashSet<String>) {
         TypedExprKind::Member { object, .. } => {
             collect_all_uses_in_expr(object, uses);
         }
+        TypedExprKind::ArrayLiteral { elements, .. }
+        | TypedExprKind::VecLiteral { elements, .. } => {
+            for elem in elements {
+                collect_all_uses_in_expr(elem, uses);
+            }
+        }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_all_uses_in_expr(size, uses);
+        }
+        TypedExprKind::Index { object, index } => {
+            collect_all_uses_in_expr(object, uses);
+            collect_all_uses_in_expr(index, uses);
+        }
+        TypedExprKind::IndexAssign { object, index, value } => {
+            collect_all_uses_in_expr(object, uses);
+            collect_all_uses_in_expr(index, uses);
+            collect_all_uses_in_expr(value, uses);
+        }
+        TypedExprKind::Range { start, end, .. } => {
+            if let Some(s) = start {
+                collect_all_uses_in_expr(s, uses);
+            }
+            if let Some(e) = end {
+                collect_all_uses_in_expr(e, uses);
+            }
+        }
+        TypedExprKind::Slice { object, range } => {
+            collect_all_uses_in_expr(object, uses);
+            collect_all_uses_in_expr(range, uses);
+        }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_all_uses_in_expr(e, uses);
+                }
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

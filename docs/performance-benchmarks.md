@@ -74,13 +74,84 @@ Regarding the GC, I'll probably use this in the future : https://github.com/kyre
 - **Simple loops**: Superinstructions help
 - **Native stdlib calls**: Optimized with inline caching
 
+## Array and Vec Performance
+
+Arrays and vectors got some work to make them competitive with Python. Here's the results:
+
+### Benchmarks vs Python
+
+| Operation | Aelys | Python | Winner |
+|-----------|-------|--------|--------|
+| Vec Push (1M ops) | 40ms | 64ms | **Aelys (1.6x)** |
+| Vec Pop (1M ops) | 32ms | 77ms | **Aelys (2.4x)** |
+| Matrix Multiply 100x100 | 66ms | 84ms | **Aelys (1.3x)** |
+| Bubble Sort (5K elements) | 1673ms | 2260ms | **Aelys (1.35x)** |
+| Array Sum (1M elements) | 37ms | 26ms | Python (1.4x) |
+
+Aelys wins on mutations (push/pop) and compute-heavy loops. Python wins on simple iteration because CPython has decades of micro-optimizations for patterns like `for x in list`.
+
+### Why it's fast
+
+The VM uses specialized storage for each type:
+- `Array<Int>` and `Vec<Int>` → `Box<[i64]>` (8 bytes/element, no boxing overhead)
+- `Array<Float>` → `Box<[f64]>` (8 bytes/element)
+- `Array<Bool>` → `Box<[u8]>` (1 byte/element, 8x more compact than boxing each bool)
+
+The compiler emits type-specific opcodes too. `arr[i]` compiles to `ArrayLoadI` for Int, `ArrayLoadF` for Float, etc. No runtime type checking.
+
+### Vec growth
+
+Vecs double in capacity when they run out of space:
+- Start at 4
+- Growth: 4 → 8 → 16 → 32 → ...
+- Use `reserve(n)` to pre-allocate if you know the final size
+
+```rust
+let v = Vec[]
+v.reserve(1000)  // one allocation instead of multiple
+for i in 0..1000 {
+    v.push(i)
+}
+```
+
+### Tips
+
+1. **Pre-allocate when you know the size**
+   ```rust
+   let v = Vec[]
+   v.reserve(10000)
+   ```
+
+2. **Use Array for fixed-size data**
+   ```rust
+   let coords = Array[x, y, z]  // simpler than Vec
+   ```
+
+3. **Batch operations**
+   ```rust
+   // One loop
+   for i in 0..arr.len() {
+       arr[i] = arr[i] * 2 + 1
+   }
+
+   // Instead of two
+   for i in 0..arr.len() { arr[i] = arr[i] * 2 }
+   for i in 0..arr.len() { arr[i] = arr[i] + 1 }
+   ```
+
+Run the benchmarks:
+```bash
+./examples/benchmark/run_array_benchmarks.sh
+```
+
 ## Improving Performance
 
 If your Aelys code is too slow:
 
 1. **Add type annotations** - small speedup from fewer runtime checks
 2. **Use `@no_gc` for hot paths** - eliminates GC pauses
-3. **Precompile to bytecode** - skip parse/compile on each run
-4. **Profile first** - make sure you're optimizing the right thing
+3. **Pre-allocate arrays/vecs** - avoid reallocation overhead
+4. **Precompile to bytecode** - skip parse/compile on each run
+5. **Profile first** - make sure you're optimizing the right thing
 
 For truly performance-critical code, consider writing a native module in Rust and calling it from Aelys. That's what the native FFI is for.

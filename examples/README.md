@@ -32,6 +32,30 @@ Shows `@no_gc` usage with manual memory:
 - `alloc` / `free` for buffer management
 - `store` / `load` for data access
 
+## Arrays and Vectors
+
+The `arrays/` directory has examples showing how to work with collections:
+
+### Quick Start
+
+- **[arrays/intro.aelys](arrays/intro.aelys)** - Basic intro to arrays and vectors
+- **[arrays/statistics.aelys](arrays/statistics.aelys)** - Calculate average, min/max, median
+- **[arrays/histogram.aelys](arrays/histogram.aelys)** - Draw ASCII histogram from data
+- **[arrays/grade_calculator.aelys](arrays/grade_calculator.aelys)** - Weighted grade calculation
+
+### More Examples
+
+- **[arrays/basics.aelys](arrays/basics.aelys)** - Array/Vec creation and modification
+- **[arrays/typed_arrays.aelys](arrays/typed_arrays.aelys)** - Array<Int>, Array<Float>, Array<Bool>
+- **[arrays/typed_vecs.aelys](arrays/typed_vecs.aelys)** - Vec<Int>, Vec<Float>, Vec<Bool>
+- **[arrays/vec_operations.aelys](arrays/vec_operations.aelys)** - push, pop, capacity, reserve
+- **[arrays/vec_stack.aelys](arrays/vec_stack.aelys)** - Using Vec as a stack
+- **[arrays/sum_product.aelys](arrays/sum_product.aelys)** - Sum, product, max, min
+- **[arrays/bubble_sort.aelys](arrays/bubble_sort.aelys)** - Sorting algorithm
+- **[arrays/typed_algorithms.aelys](arrays/typed_algorithms.aelys)** - Generic algorithms
+
+Performance comparisons with Python are in [docs/performance-benchmarks.md](../docs/performance-benchmarks.md#array-and-vec-performance).
+
 ## Demos
 
 Visual demos that run in the terminal.

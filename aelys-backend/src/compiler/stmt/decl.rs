@@ -57,7 +57,7 @@ impl Compiler {
             self.compile_typed_expr(initializer, reg)?;
 
             self.globals.insert(name.to_string(), mutable);
-            let idx = self.get_or_create_global_index(name);
+            let idx = self.get_or_create_global_index_raw(name);
             self.accessed_globals.insert(name.to_string());
 
             self.emit_b(OpCode::SetGlobalIdx, reg, idx as i16, span);

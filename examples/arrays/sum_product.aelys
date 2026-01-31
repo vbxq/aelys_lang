@@ -1,0 +1,53 @@
+needs std.io
+needs std.convert
+
+fn array_sum(arr) -> int {
+    let mut sum = 0
+    let mut i = 0
+    while i < arr.len() {
+        sum = sum + arr[i]
+        i = i + 1
+    }
+    return sum
+}
+
+fn array_product(arr) -> int {
+    let mut prod = 1
+    let mut i = 0
+    while i < arr.len() {
+        prod = prod * arr[i]
+        i = i + 1
+    }
+    return prod
+}
+
+fn array_max(arr) -> int {
+    let mut max = arr[0]
+    let mut i = 1
+    while i < arr.len() {
+        if arr[i] > max {
+            max = arr[i]
+        }
+        i = i + 1
+    }
+    return max
+}
+
+fn array_min(arr) -> int {
+    let mut min = arr[0]
+    let mut i = 1
+    while i < arr.len() {
+        if arr[i] < min {
+            min = arr[i]
+        }
+        i = i + 1
+    }
+    return min
+}
+
+let numbers = [5, 2, 8, 1, 9, 3, 7, 4, 6]
+io.print("Array: [5, 2, 8, 1, 9, 3, 7, 4, 6]")
+io.print("Sum: " + convert.to_string(array_sum(numbers)))
+io.print("Product: " + convert.to_string(array_product(numbers)))
+io.print("Max: " + convert.to_string(array_max(numbers)))
+io.print("Min: " + convert.to_string(array_min(numbers)))

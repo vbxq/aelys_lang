@@ -58,6 +58,7 @@ impl VM {
             repl_module_aliases: HashSet::new(),
             repl_known_globals: HashSet::new(),
             repl_known_native_globals: HashSet::new(),
+            repl_symbol_origins: HashMap::new(),
         };
         super::builtins::register_builtins(&mut vm)?;
         Ok(vm)

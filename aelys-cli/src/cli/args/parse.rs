@@ -28,6 +28,7 @@ struct Parser<'a> {
     opt_level: OptimizationLevel,
     output: Option<String>,
     stdout: bool,
+    warning_flags: Vec<String>,
 }
 
 impl<'a> Parser<'a> {
@@ -43,6 +44,7 @@ impl<'a> Parser<'a> {
             opt_level: OptimizationLevel::Standard,
             output: None,
             stdout: false,
+            warning_flags: Vec::new(),
         }
     }
 
@@ -90,6 +92,15 @@ impl<'a> Parser<'a> {
             if self.is_stdout(token_str) {
                 self.stdout = true;
                 self.advance();
+                continue;
+            }
+
+            if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
+                self.warning_flags.push(wflag);
+                self.advance();
+                if consumed {
+                    self.advance();
+                }
                 continue;
             }
 
@@ -177,6 +188,7 @@ impl<'a> Parser<'a> {
             command,
             vm_args: self.vm_args,
             opt_level: self.opt_level,
+            warning_flags: self.warning_flags,
         })
     }
 
@@ -185,6 +197,7 @@ impl<'a> Parser<'a> {
             command: Command::Help,
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     }
 
@@ -193,6 +206,7 @@ impl<'a> Parser<'a> {
             command: Command::Version,
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     }
 
@@ -282,6 +296,31 @@ impl<'a> Parser<'a> {
         if token.starts_with("-ae.") || token.starts_with("--ae-") {
             return Ok(Some((token.to_string(), false)));
         }
+        Ok(None)
+    }
+
+    fn parse_warning_flag(&self, token: &str) -> Result<Option<(String, bool)>, String> {
+        // -Wall, -Wno-inline, -Werror, etc
+        if let Some(rest) = token.strip_prefix("-W") {
+            if rest.is_empty() {
+                return Err("-W requires a category (e.g. -Wall, -Werror)".into());
+            }
+            return Ok(Some((rest.to_string(), false)));
+        }
+
+        // --warn=error, --warn=all
+        if let Some(rest) = token.strip_prefix("--warn=") {
+            if rest.is_empty() {
+                return Err("--warn requires a value".into());
+            }
+            return Ok(Some((rest.to_string(), false)));
+        }
+
+        if token == "--warn" {
+            let next = self.peek_next().ok_or("--warn requires a value")?;
+            return Ok(Some((next.to_string(), true)));
+        }
+
         Ok(None)
     }
 

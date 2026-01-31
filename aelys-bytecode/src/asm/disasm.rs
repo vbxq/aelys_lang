@@ -27,7 +27,7 @@ pub fn disassemble_with_options(
     options: &DisassemblerOptions,
 ) -> String {
     let mut output = String::new();
-    let ctx = DisasmContext::new(heap, options);
+    let mut ctx = DisasmContext::new(heap, options);
 
     writeln_ignore!(output, "; Aelys Assembly (.aasm)");
     writeln_ignore!(output, "; Disassembled from bytecode");
@@ -42,6 +42,7 @@ pub fn disassemble_with_options(
         if idx > 0 {
             writeln_ignore!(output);
         }
+        ctx.set_function_context(f, &all_functions);
         ctx.disassemble_function(&mut output, f, idx);
     }
 
@@ -58,10 +59,42 @@ fn collect_functions<'a>(func: &'a Function, out: &mut Vec<&'a Function>) {
 struct DisasmContext<'a> {
     heap: Option<&'a Heap>,
     options: &'a DisassemblerOptions,
+    global_names: Vec<String>,
+    nested_fn_names: Vec<Option<String>>,
 }
 
 impl<'a> DisasmContext<'a> {
-    fn new(heap: Option<&'a Heap>, options: &'a DisassemblerOptions) -> Self { Self { heap, options } }
+    fn new(heap: Option<&'a Heap>, options: &'a DisassemblerOptions) -> Self {
+        Self {
+            heap,
+            options,
+            global_names: Vec::new(),
+            nested_fn_names: Vec::new(),
+        }
+    }
+
+    fn set_function_context(&mut self, func: &Function, all_functions: &[&Function]) {
+        self.global_names = func.global_layout.names().to_vec();
+        self.nested_fn_names = func.nested_functions
+            .iter()
+            .map(|f| f.name.clone())
+            .collect();
+        // also include names from all_functions for @N references
+        if self.nested_fn_names.is_empty() {
+            self.nested_fn_names = all_functions.iter()
+                .skip(1)
+                .map(|f| f.name.clone())
+                .collect();
+        }
+    }
+
+    fn global_name(&self, idx: usize) -> Option<&str> {
+        self.global_names.get(idx).map(|s| s.as_str())
+    }
+
+    fn nested_fn_name(&self, idx: usize) -> Option<&str> {
+        self.nested_fn_names.get(idx).and_then(|o| o.as_deref())
+    }
 
     fn disassemble_function(&self, output: &mut String, func: &Function, func_idx: usize) {
         writeln_ignore!(output, "; !== FUN {}", func_idx);
@@ -527,34 +560,44 @@ impl<'a> DisasmContext<'a> {
                 let (_, a, b, c) = decode_a(instr);
                 format!("GeIImm    r{}, r{}, {}", a, b, c)
             }
-            // Global by index
             OpCode::GetGlobalIdx => {
                 let (_, a, imm) = decode_b(instr);
-                format!("GetGlobalIdx r{}, {}", a, imm)
+                match self.global_name(imm as usize) {
+                    Some(name) => format!("GetGlobalIdx r{}, {}  ; {}", a, imm, name),
+                    None => format!("GetGlobalIdx r{}, {}", a, imm),
+                }
             }
             OpCode::SetGlobalIdx => {
                 let (_, a, imm) = decode_b(instr);
-                format!("SetGlobalIdx {}, r{}", imm, a)
+                match self.global_name(imm as usize) {
+                    Some(name) => format!("SetGlobalIdx {}, r{}  ; {}", imm, a, name),
+                    None => format!("SetGlobalIdx {}, r{}", imm, a),
+                }
             }
-            // Cached call
             OpCode::CallCached => {
                 let (_, a, b, c) = decode_a(instr);
                 format!("CallCached r{}, r{}, {}", a, b, c)
             }
-            // CallGlobal - combined GetGlobalIdx + Call with inline caching
             OpCode::CallGlobal => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
-                format!("CallGlobal r{}, {}, {}", dest, global_idx, nargs)
+                match self.global_name(global_idx as usize) {
+                    Some(name) => format!("CallGlobal r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    None => format!("CallGlobal r{}, {}, {}", dest, global_idx, nargs),
+                }
             }
-            // CallGlobalMono - fast path for cached global calls
             OpCode::CallGlobalMono => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
-                format!("CallGlobalMono r{}, {}, {}", dest, global_idx, nargs)
+                match self.global_name(global_idx as usize) {
+                    Some(name) => format!("CallGlobalMono r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    None => format!("CallGlobalMono r{}, {}, {}", dest, global_idx, nargs),
+                }
             }
-            // CallGlobalNative - fast path for native function calls
             OpCode::CallGlobalNative => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
-                format!("CallGlobalNative r{}, {}, {}", dest, global_idx, nargs)
+                match self.global_name(global_idx as usize) {
+                    Some(name) => format!("CallGlobalNative r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    None => format!("CallGlobalNative r{}, {}, {}", dest, global_idx, nargs),
+                }
             }
             // CallUpval - combined GetUpval + Call (for recursive closures)
             OpCode::CallUpval => {
@@ -736,10 +779,198 @@ impl<'a> DisasmContext<'a> {
                 let (_, a, b, c) = decode_a(instr);
                 format!("XorIImm   r{}, r{}, {}", a, b, c)
             }
+
+            // Array operations
+            OpCode::ArrayNewI => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("ArrayNewI r{}, r{}", a, b)
+            }
+            OpCode::ArrayNewF => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("ArrayNewF r{}, r{}", a, b)
+            }
+            OpCode::ArrayNewB => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("ArrayNewB r{}, r{}", a, b)
+            }
+            OpCode::ArrayNewP => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("ArrayNewP r{}, r{}", a, b)
+            }
+            OpCode::ArrayLit => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayLit  r{}, r{}, {}", a, b, c)
+            }
+            OpCode::ArrayLoadI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayLoadI r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayLoadF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayLoadF r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayLoadB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayLoadB r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayLoadP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayLoadP r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayGetI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayGetI r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayGetF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayGetF r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayGetB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayGetB r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayGetP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayGetP r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayStoreI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayStoreI r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayStoreF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayStoreF r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayStoreB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayStoreB r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayStoreP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("ArrayStoreP r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::ArrayLen => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("ArrayLen  r{}, r{}", a, b)
+            }
+
+            // Vec operations
+            OpCode::VecNewI => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecNewI   r{}, r{}", a, b)
+            }
+            OpCode::VecNewF => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecNewF   r{}, r{}", a, b)
+            }
+            OpCode::VecNewB => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecNewB   r{}, r{}", a, b)
+            }
+            OpCode::VecNewP => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecNewP   r{}, r{}", a, b)
+            }
+            OpCode::VecLit => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecLit    r{}, r{}, {}", a, b, c)
+            }
+            OpCode::VecPushI => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPushI  r{}, r{}", a, b)
+            }
+            OpCode::VecPushF => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPushF  r{}, r{}", a, b)
+            }
+            OpCode::VecPushB => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPushB  r{}, r{}", a, b)
+            }
+            OpCode::VecPushP => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPushP  r{}, r{}", a, b)
+            }
+            OpCode::VecPopI => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPopI   r{}, r{}", a, b)
+            }
+            OpCode::VecPopF => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPopF   r{}, r{}", a, b)
+            }
+            OpCode::VecPopB => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPopB   r{}, r{}", a, b)
+            }
+            OpCode::VecPopP => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecPopP   r{}, r{}", a, b)
+            }
+            OpCode::VecLen => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecLen    r{}, r{}", a, b)
+            }
+            OpCode::VecCap => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecCap    r{}, r{}", a, b)
+            }
+            OpCode::VecReserve => {
+                let (_, a, b, _) = decode_a(instr);
+                format!("VecReserve r{}, r{}", a, b)
+            }
+            OpCode::VecLoadI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecLoadI  r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecLoadF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecLoadF  r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecLoadB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecLoadB  r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecLoadP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecLoadP  r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecGetI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecGetI   r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecGetF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecGetF   r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecGetB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecGetB   r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecGetP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecGetP   r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecStoreI => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecStoreI r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecStoreF => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecStoreF r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecStoreB => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecStoreB r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::VecStoreP => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("VecStoreP r{}, r{}, r{}", a, b, c)
+            }
         }
     }
 
-    fn format_constant(&self, value: &Value, _nested_functions: &[Function]) -> String {
+    fn format_constant(&self, value: &Value, nested_functions: &[Function]) -> String {
         if value.is_null() {
             "null".to_string()
         } else if let Some(b) = value.as_bool() {
@@ -747,21 +978,22 @@ impl<'a> DisasmContext<'a> {
         } else if let Some(n) = value.as_int() {
             format!("int {}", n)
         } else if let Some(f) = value.as_float() {
-            // Handle special float values
             if f.is_nan() {
                 "float nan".to_string()
             } else if f.is_infinite() {
-                if f.is_sign_positive() {
-                    "float inf".to_string()
-                } else {
-                    "float -inf".to_string()
-                }
+                if f.is_sign_positive() { "float inf".to_string() }
+                else { "float -inf".to_string() }
             } else {
                 format!("float {}", f)
             }
         } else if let Some(func_idx) = value.as_nested_fn_marker() {
-            // Nested function marker (uses dedicated tag)
-            format!("func @{}", func_idx + 1) // +1 because main is @0
+            let name = nested_functions.get(func_idx)
+                .and_then(|f| f.name.as_deref())
+                .or_else(|| self.nested_fn_name(func_idx));
+            match name {
+                Some(n) => format!("func @{} \"{}\"", func_idx + 1, escape_string(n)),
+                None => format!("func @{}", func_idx + 1),
+            }
         } else if let Some(ptr) = value.as_ptr() {
             if let Some(heap) = self.heap {
                 if let Some(obj) = heap.get(GcRef::new(ptr)) {
@@ -781,6 +1013,8 @@ impl<'a> DisasmContext<'a> {
                         }
                         ObjectKind::Upvalue(_) => "upvalue".to_string(),
                         ObjectKind::Closure(_) => "closure".to_string(),
+                        ObjectKind::Array(a) => format!("array[{}]", a.len()),
+                        ObjectKind::Vec(v) => format!("vec[{}]", v.len()),
                     }
                 } else {
                     format!("ptr {}", ptr)

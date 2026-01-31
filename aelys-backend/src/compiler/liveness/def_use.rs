@@ -136,6 +136,43 @@ fn collect_uses_expr(
         TypedExprKind::Member { object, .. } => {
             collect_uses_expr(analysis, object, uses);
         }
+        TypedExprKind::ArrayLiteral { elements, .. }
+        | TypedExprKind::VecLiteral { elements, .. } => {
+            for elem in elements {
+                collect_uses_expr(analysis, elem, uses);
+            }
+        }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_uses_expr(analysis, size, uses);
+        }
+        TypedExprKind::Index { object, index } => {
+            collect_uses_expr(analysis, object, uses);
+            collect_uses_expr(analysis, index, uses);
+        }
+        TypedExprKind::IndexAssign { object, index, value } => {
+            collect_uses_expr(analysis, object, uses);
+            collect_uses_expr(analysis, index, uses);
+            collect_uses_expr(analysis, value, uses);
+        }
+        TypedExprKind::Range { start, end, .. } => {
+            if let Some(s) = start {
+                collect_uses_expr(analysis, s, uses);
+            }
+            if let Some(e) = end {
+                collect_uses_expr(analysis, e, uses);
+            }
+        }
+        TypedExprKind::Slice { object, range } => {
+            collect_uses_expr(analysis, object, uses);
+            collect_uses_expr(analysis, range, uses);
+        }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_uses_expr(analysis, e, uses);
+                }
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

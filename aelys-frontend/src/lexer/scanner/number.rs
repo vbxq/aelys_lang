@@ -1,3 +1,6 @@
+// Octal literal support contributed by Keggek (ported to rust)
+// https://codeberg.org/gek
+
 use super::{Lexer, Result};
 use aelys_common::error::{AelysError, CompileErrorKind};
 use aelys_syntax::TokenKind;
@@ -10,6 +13,9 @@ impl Lexer {
             }
             if self.match_char('b') || self.match_char('B') {
                 return self.binary_number();
+            }
+            if self.match_char('o') || self.match_char('O') {
+                return self.octal_number();
             }
         }
 
@@ -89,6 +95,29 @@ impl Lexer {
             .collect();
 
         match i64::from_str_radix(&text, 2) {
+            Ok(n) => self.add_token(TokenKind::Int(n)),
+            Err(_) => {
+                let full: String = self.chars[self.start..self.current].iter().collect();
+                return Err(AelysError::Compile(
+                    self.error(CompileErrorKind::InvalidNumber(full)),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn octal_number(&mut self) -> Result<()> {
+        while matches!(self.peek(), '0'..='7' | '_') {
+            self.advance();
+        }
+
+        let text: String = self.chars[self.start + 2..self.current]
+            .iter()
+            .filter(|&&c| c != '_')
+            .collect();
+
+        match i64::from_str_radix(&text, 8) {
             Ok(n) => self.add_token(TokenKind::Int(n)),
             Err(_) => {
                 let full: String = self.chars[self.start..self.current].iter().collect();

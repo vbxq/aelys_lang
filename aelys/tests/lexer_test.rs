@@ -49,7 +49,7 @@ fn test_operators() {
 
 #[test]
 fn test_integers() {
-    let tokens = Lexer::new("42 0 1_000_000 0xFF 0b1010").scan().unwrap();
+    let tokens = Lexer::new("42 0 1_000_000 0xFF 0b1010 0o755").scan().unwrap();
     let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
 
     assert_eq!(
@@ -58,8 +58,9 @@ fn test_integers() {
             &TokenKind::Int(42),
             &TokenKind::Int(0),
             &TokenKind::Int(1_000_000),
-            &TokenKind::Int(0xFF),
-            &TokenKind::Int(0b1010),
+            &TokenKind::Int(0xFF),      // 255
+            &TokenKind::Int(0b1010),    // 10
+            &TokenKind::Int(0o755),     // 493
             &TokenKind::Semicolon, // inserted at EOF after int
             &TokenKind::Eof,
         ]

@@ -1,5 +1,6 @@
 // heap object types
 
+mod array;
 mod closure;
 mod function;
 mod gc_object;
@@ -8,7 +9,9 @@ mod kinds;
 mod native;
 mod string;
 mod upvalue;
+mod vec;
 
+pub use array::{AelysArray, ArrayData, TypeTag};
 pub use closure::AelysClosure;
 pub use function::AelysFunction;
 pub use gc_object::GcObject;
@@ -17,3 +20,4 @@ pub use kinds::ObjectKind;
 pub use native::NativeFunction;
 pub use string::AelysString;
 pub use upvalue::{AelysUpvalue, UpvalueLocation};
+pub use vec::AelysVec;

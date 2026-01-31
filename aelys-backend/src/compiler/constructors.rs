@@ -29,6 +29,7 @@ impl Compiler {
             module_aliases: Rc::new(HashSet::new()),
             known_globals: Rc::new(HashSet::new()),
             known_native_globals: Rc::new(HashSet::new()),
+            symbol_origins: Rc::new(HashMap::new()),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
         }
@@ -63,6 +64,7 @@ impl Compiler {
             module_aliases: Rc::new(HashSet::new()),
             known_globals: Rc::new(HashSet::new()),
             known_native_globals: Rc::new(HashSet::new()),
+            symbol_origins: Rc::new(HashMap::new()),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
         }
@@ -81,6 +83,7 @@ impl Compiler {
         module_aliases: Rc<HashSet<String>>,
         known_globals: Rc<HashSet<String>>,
         known_native_globals: Rc<HashSet<String>>,
+        symbol_origins: Rc<HashMap<String, String>>,
         next_call_site_slot: u16,
     ) -> Self {
         let mut all_enclosing_locals = vec![enclosing_locals.clone()];
@@ -108,6 +111,7 @@ impl Compiler {
             module_aliases,
             known_globals,
             known_native_globals,
+            symbol_origins,
             accessed_globals: HashSet::new(),
             next_call_site_slot,
         }
@@ -119,6 +123,7 @@ impl Compiler {
         module_aliases: HashSet<String>,
         known_globals: HashSet<String>,
         known_native_globals: HashSet<String>,
+        symbol_origins: HashMap<String, String>,
     ) -> Self {
         Self {
             current: Function::new(name, 0),
@@ -142,6 +147,7 @@ impl Compiler {
             module_aliases: Rc::new(module_aliases),
             known_globals: Rc::new(known_globals),
             known_native_globals: Rc::new(known_native_globals),
+            symbol_origins: Rc::new(symbol_origins),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
         }
@@ -154,6 +160,7 @@ impl Compiler {
         module_aliases: HashSet<String>,
         known_globals: HashSet<String>,
         known_native_globals: HashSet<String>,
+        symbol_origins: HashMap<String, String>,
         globals: HashMap<String, bool>,
     ) -> Self {
         Self {
@@ -178,6 +185,7 @@ impl Compiler {
             module_aliases: Rc::new(module_aliases),
             known_globals: Rc::new(known_globals),
             known_native_globals: Rc::new(known_native_globals),
+            symbol_origins: Rc::new(symbol_origins),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
         }

@@ -54,6 +54,7 @@ pub(super) fn setup_typed_function(
         parent.module_aliases.clone(),
         parent.known_globals.clone(),
         parent.known_native_globals.clone(),
+        parent.symbol_origins.clone(),
         parent.next_call_site_slot,
     );
     nested_compiler.current.arity = func.params.len() as u8;

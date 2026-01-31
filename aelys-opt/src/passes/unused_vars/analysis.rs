@@ -83,6 +83,36 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             for stmt in body { collect_uses_in_stmt(stmt, used); }
         }
         TypedExprKind::Member { object, .. } => collect_uses_in_expr(object, used),
+        TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
+            for elem in elements { collect_uses_in_expr(elem, used); }
+        }
+        TypedExprKind::ArraySized { size, .. } => {
+            collect_uses_in_expr(size, used);
+        }
+        TypedExprKind::Index { object, index } => {
+            collect_uses_in_expr(object, used);
+            collect_uses_in_expr(index, used);
+        }
+        TypedExprKind::IndexAssign { object, index, value } => {
+            collect_uses_in_expr(object, used);
+            collect_uses_in_expr(index, used);
+            collect_uses_in_expr(value, used);
+        }
+        TypedExprKind::Range { start, end, .. } => {
+            if let Some(s) = start { collect_uses_in_expr(s, used); }
+            if let Some(e) = end { collect_uses_in_expr(e, used); }
+        }
+        TypedExprKind::Slice { object, range } => {
+            collect_uses_in_expr(object, used);
+            collect_uses_in_expr(range, used);
+        }
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                    collect_uses_in_expr(e, used);
+                }
+            }
+        }
         TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
         | TypedExprKind::String(_) | TypedExprKind::Null => {}
     }

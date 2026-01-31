@@ -28,6 +28,7 @@ fn parse_run_with_flags_anywhere() {
             },
             vm_args: vec!["-ae.trusted=true".to_string()],
             opt_level: OptimizationLevel::Aggressive,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -50,6 +51,7 @@ fn parse_implicit_run_path_first() {
             },
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Basic,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -69,6 +71,7 @@ fn parse_repl_with_vm_flags() {
             command: Command::Repl,
             vm_args: vec!["-ae.max-heap=1M".to_string()],
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -102,6 +105,7 @@ fn parse_compile_output_flag() {
             },
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -125,6 +129,7 @@ fn parse_asm_stdout_flag() {
             },
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -144,6 +149,7 @@ fn parse_version_command() {
             command: Command::Version,
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
+            warning_flags: Vec::new(),
         }
     );
 }
@@ -194,5 +200,29 @@ fn parse_deny_caps_with_space() {
     let parsed = parse_args(&args).unwrap();
 
     assert!(parsed.vm_args.contains(&"--deny-caps=exec".to_string()));
+}
+
+#[test]
+fn parse_warning_flags() {
+    let args = vec!["aelys", "-Wall", "-Werror", "-Wno-inline", "main.aelys"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let parsed = parse_args(&args).unwrap();
+
+    assert_eq!(parsed.warning_flags, vec!["all", "error", "no-inline"]);
+}
+
+#[test]
+fn parse_warn_equals_syntax() {
+    let args = vec!["aelys", "--warn=error", "main.aelys"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let parsed = parse_args(&args).unwrap();
+
+    assert!(parsed.warning_flags.contains(&"error".to_string()));
 }
 

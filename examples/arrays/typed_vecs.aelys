@@ -1,0 +1,27 @@
+needs std.io
+needs std.convert
+
+let v = Vec<Int>[1, 2, 3]
+io.print("Vec<Int> initial: len = " + convert.to_string(v.len()))
+
+v.push(4)
+v.push(5)
+v.push(6)
+io.print("After 3 pushes: len = " + convert.to_string(v.len()))
+
+let popped = v.pop()
+io.print("Popped: " + convert.to_string(popped))
+
+let mut i = 0
+while i < v.len() {
+    io.print("  v[" + convert.to_string(i) + "] = " + convert.to_string(v[i]))
+    i = i + 1
+}
+
+let floats = Vec<Float>[1.1, 2.2, 3.3]
+floats.push(4.4)
+io.print("Vec<Float>[3] = " + convert.to_string(floats[3]))
+
+let flags = Vec<Bool>[true, true]
+flags.push(false)
+io.print("Vec<Bool>[2] = " + convert.to_string(flags[2]))

@@ -1,5 +1,9 @@
 # Acknowledgements
 
+## Helps and Contributions
+
+**[Keggek](https://codeberg.org/gek)** - For the discussions about the project and language design <3
+
 ## Inspirations
 
 **Rust** - The syntax style, `let mut` for mutability, range expressions (`..` and `..=`).  
@@ -19,6 +23,11 @@ Some sort of « python but that treats you as an adult »
 ## Usage of AI
 
 Debugging sessions, architectural discussions, and keeping me sane when the VM decides to just.. not work.  
-Without AI assistance this would've taken 10x longer, maybe more.  
+
+AI also wrote most of the tests for Aelys, some stuff in the examples/ folder (notably the benchmarks), and also some parts of the stdlib, which saved a lot of time.  
+I prefer not to focus too much on that and instead work on the VM rather than anything else
+
+
+Without AI assistance this would've taken 10x longer, maybe more.
 
 This whole thing started as a way to actually understand how compilers work beyond just reading about them, and turns out building one is the best way to learn

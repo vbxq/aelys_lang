@@ -56,22 +56,19 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
-        let param_types: Vec<InferType> = func
-            .params
-            .iter()
-            .map(|p| {
-                p.type_annotation
-                    .as_ref()
-                    .map(|ann| InferType::from_annotation(&ann.name))
-                    .unwrap_or_else(|| self.type_gen.fresh())
-            })
-            .collect();
+        let mut param_types = Vec::with_capacity(func.params.len());
+        for p in &func.params {
+            let ty = match &p.type_annotation {
+                Some(ann) => self.type_from_annotation(ann),
+                None => self.type_gen.fresh(),
+            };
+            param_types.push(ty);
+        }
 
-        let ret_type = func
-            .return_type
-            .as_ref()
-            .map(|ann| InferType::from_annotation(&ann.name))
-            .unwrap_or_else(|| self.type_gen.fresh());
+        let ret_type = match &func.return_type {
+            Some(ann) => self.type_from_annotation(ann),
+            None => self.type_gen.fresh(),
+        };
 
         let fn_type = Rc::new(InferType::Function {
             params: param_types,

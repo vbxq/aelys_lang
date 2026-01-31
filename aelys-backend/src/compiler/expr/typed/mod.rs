@@ -1,11 +1,11 @@
-//! Typed expression compilation.
-
+mod array;
 mod assign;
 mod binary;
 mod call;
 mod call_helpers;
 mod control;
 mod dispatch;
+mod fmt_string;
 mod lambda;
 mod lambda_stmts;
 mod logic;

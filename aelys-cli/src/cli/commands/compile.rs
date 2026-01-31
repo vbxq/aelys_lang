@@ -1,8 +1,8 @@
 // source -> avbc compiler
-// TODO: incremental compilation for large projects
 
 use aelys_backend::Compiler;
 use aelys_bytecode::asm::NativeBundle;
+use aelys_common::{Warning, WarningConfig};
 use aelys_driver::modules::{LoadedNativeInfo, load_modules_with_loader};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
@@ -11,22 +11,30 @@ use aelys_opt::{OptimizationLevel, Optimizer};
 use aelys_runtime::{VM, VmConfig};
 use aelys_syntax::{Source, StmtKind};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 const BUILTIN_NAMES: &[&str] = &["alloc", "free", "load", "store", "type"];
 
 #[allow(dead_code)]
 pub fn compile_to_avbc(path: &Path, opt_level: OptimizationLevel) -> Result<PathBuf, String> {
-    compile_to_avbc_with_output(path, None, opt_level)
+    compile_to_avbc_with_output(path, None, opt_level, None).map(|r| r.output_path)
+}
+
+pub struct CompileResult {
+    pub output_path: PathBuf,
+    pub warnings: Vec<Warning>,
 }
 
 pub fn compile_to_avbc_with_output(
     path: &Path,
     output: Option<PathBuf>,
     opt_level: OptimizationLevel,
-) -> Result<PathBuf, String> {
+    source_for_warnings: Option<Arc<Source>>,
+) -> Result<CompileResult, String> {
     match detect_format(path) {
         CompileInput::Assembly => {
-            return assemble_to_avbc(path, output);
+            let out = assemble_to_avbc(path, output)?;
+            return Ok(CompileResult { output_path: out, warnings: Vec::new() });
         }
         CompileInput::Bytecode => {
             return Err("input is already bytecode".to_string());
@@ -85,15 +93,28 @@ pub fn compile_to_avbc_with_output(
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
 
-    let (function, heap, _globals) = Compiler::with_modules(
+    let warnings: Vec<Warning> = optimizer.take_warnings().into_iter().map(|mut w| {
+        if w.source.is_none() {
+            w.source = source_for_warnings.clone().or_else(|| Some(src.clone()));
+        }
+        w
+    }).collect();
+
+    let (mut function, heap, _globals) = Compiler::with_modules(
         None,
         src.clone(),
         imports.module_aliases,
         imports.known_globals,
         imports.known_native_globals,
+        imports.symbol_origins,
     )
     .compile_typed(&typed_program)
     .map_err(|err| err.to_string())?;
+
+    // strip debug info (function names, variable names, line info) for release builds
+    if opt_level != OptimizationLevel::None {
+        function.strip_debug_info();
+    }
 
     let manifest_bytes = loader.manifest().map(Manifest::to_bytes);
     let should_bundle = loader
@@ -124,17 +145,34 @@ pub fn compile_to_avbc_with_output(
     std::fs::write(&output_path, bytes)
         .map_err(|err| format!("failed to write {}: {}", output_path.display(), err))?;
 
-    Ok(output_path)
+    Ok(CompileResult { output_path, warnings })
 }
 
 pub fn run_with_options(
     path: &str,
     output: Option<String>,
     opt_level: OptimizationLevel,
+    warn_config: WarningConfig,
 ) -> Result<i32, String> {
     let output = output.map(PathBuf::from);
-    let output = compile_to_avbc_with_output(Path::new(path), output, opt_level)?;
-    eprintln!("Wrote {}", output.display());
+    let result = compile_to_avbc_with_output(Path::new(path), output, opt_level, None)?;
+
+    for w in &result.warnings {
+        if warn_config.is_enabled(&w.kind) {
+            eprintln!("{}", w);
+        }
+    }
+
+    if warn_config.treat_as_error && !result.warnings.is_empty() {
+        let count = result.warnings.len();
+        return Err(format!(
+            "aborting due to {} warning{}",
+            count,
+            if count == 1 { "" } else { "s" }
+        ));
+    }
+
+    eprintln!("Wrote {}", result.output_path.display());
     Ok(0)
 }
 

@@ -1,0 +1,38 @@
+needs std.io
+needs std.convert
+needs std.time
+
+fn fill_array(n: int) {
+    let arr = Vec[]
+    let mut i = 0
+    while i < n {
+        arr.push(i)
+        i = i + 1
+    }
+    return arr
+}
+
+fn sum_array(arr) -> int {
+    let mut sum = 0
+    let mut i = 0
+    let len = arr.len()
+    while i < len {
+        sum = sum + arr[i]
+        i = i + 1
+    }
+    return sum
+}
+
+let n = 1000000
+io.print("Array sum benchmark (n=" + convert.to_string(n) + ")")
+
+let t1 = time.timer()
+let arr = fill_array(n)
+let fill_time = time.elapsed_ms(t1)
+io.print("Fill time: " + convert.to_string(fill_time) + "ms")
+
+let t2 = time.timer()
+let sum = sum_array(arr)
+let sum_time = time.elapsed_ms(t2)
+io.print("Sum time: " + convert.to_string(sum_time) + "ms")
+io.print("Sum: " + convert.to_string(sum))

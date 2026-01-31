@@ -31,6 +31,8 @@ impl Heap {
                 ObjectKind::Native(_) => "NativeFunction",
                 ObjectKind::Upvalue(_) => "Upvalue",
                 ObjectKind::Closure(_) => "Closure",
+                ObjectKind::Array(_) => "Array",
+                ObjectKind::Vec(_) => "Vec",
             }
         } else {
             "Unknown"

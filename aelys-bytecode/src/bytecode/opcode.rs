@@ -1,7 +1,3 @@
-// Opcodes 0-121. There's a lot of them because we have specialized
-// variants for common patterns (AddII = int+int, AddFF = float+float, etc).
-// Keeps the interpreter fast by avoiding type checks in hot paths.
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum OpCode {
@@ -10,7 +6,7 @@ pub enum OpCode {
     LoadK,
     LoadNull,
     LoadBool,
-    Add,  // generic add, does type dispatch
+    Add,
     Sub,
     Mul,
     Div,
@@ -127,11 +123,59 @@ pub enum OpCode {
     AndIImm,
     OrIImm,
     XorIImm,
+
+    ArrayNewI = 130,
+    ArrayNewF,
+    ArrayNewB,
+    ArrayNewP,
+    ArrayLit,
+    ArrayLoadI,
+    ArrayLoadF,
+    ArrayLoadB,
+    ArrayLoadP,
+    ArrayGetI,
+    ArrayGetF,
+    ArrayGetB,
+    ArrayGetP,
+    ArrayStoreI,
+    ArrayStoreF,
+    ArrayStoreB,
+    ArrayStoreP,
+    ArrayLen,
+
+    VecNewI,
+    VecNewF,
+    VecNewB,
+    VecNewP,
+    VecLit,
+    VecPushI,
+    VecPushF,
+    VecPushB,
+    VecPushP,
+    VecPopI,
+    VecPopF,
+    VecPopB,
+    VecPopP,
+    VecLen,
+    VecCap,
+    VecReserve,
+    VecLoadI,
+    VecLoadF,
+    VecLoadB,
+    VecLoadP,
+    VecGetI,
+    VecGetF,
+    VecGetB,
+    VecGetP,
+    VecStoreI,
+    VecStoreF,
+    VecStoreB,
+    VecStoreP
 }
 
 impl OpCode {
     pub fn from_u8(byte: u8) -> Option<Self> {
-        if byte <= Self::XorIImm as u8 {
+        if byte <= Self::VecStoreP as u8 {
             Some(unsafe { std::mem::transmute(byte) })
         } else {
             None

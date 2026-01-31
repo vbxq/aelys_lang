@@ -1,0 +1,17 @@
+needs std.io
+needs std.convert
+
+let ints = Array<Int>[10, 20, 30, 40, 50]
+io.print("Array<Int>: len = " + convert.to_string(ints.len()))
+io.print("ints[2] = " + convert.to_string(ints[2]))
+
+let floats = Array<Float>[1.5, 2.5, 3.5, 4.5]
+io.print("Array<Float>: len = " + convert.to_string(floats.len()))
+io.print("floats[1] = " + convert.to_string(floats[1]))
+
+let bools = Array<Bool>[true, false, true, false]
+io.print("Array<Bool>: len = " + convert.to_string(bools.len()))
+io.print("bools[0] = " + convert.to_string(bools[0]))
+
+ints[0] = 999
+io.print("After ints[0] = 999: " + convert.to_string(ints[0]))

@@ -39,10 +39,15 @@ and or not pub needs as from true false null
 42
 -17
 0
-1000000
+1_000_000      // underscores for readability
+0xFF           // hexadecimal
+0b1010         // binary
+0o755          // octal
 ```
 
 Integers are 48-bit signed (roughly +-140 trillion). This is due to NaN-boxing, the VM packs type information into the unused bits of IEEE 754 NaN values. You'll probably never hit this limit in practice.
+
+Underscores are ignored, so `1_000_000` is just `1000000`. Handy for big numbers or binary patterns like `0b1111_0000`.
 
 **Floats**
 ```rust
@@ -64,6 +69,46 @@ Standard IEEE 754 double precision (64-bit).
 ```
 
 UTF-8 encoded. Escape sequences: `\n` (newline), `\t` (tab), `\r` (carriage return), `\\` (backslash), `\"` (quote).
+
+**String Interpolation**
+
+Embed expressions directly in strings using `{expression}`:
+
+```rust
+let name = "Kaito"
+let age = 67
+"Hello, {name}! You are {age} years old."  // "Hello, Kaito! You are 67 years old."
+```
+
+Any expression works inside the braces:
+
+```rust
+let x = 10
+"x + 5 = {x + 5}"           // "x + 5 = 15"
+"doubled: {x * 2}"          // "doubled: 20"
+```
+
+Values are converted to strings automatically. To include a literal brace, double it:
+
+```rust
+"JSON: {{key}}"             // "JSON: {key}"
+```
+
+**Placeholder Syntax**
+
+You can also use `{}` as placeholders filled by function call arguments:
+
+```rust
+print("Hello, {}!", "world")     // "Hello, world!"
+print("x={}, y={}", 10, 20)      // "x=10, y=20"
+```
+
+Placeholders are filled left-to-right. You can mix inline expressions and placeholders:
+
+```rust
+let name = "Reimu"
+print("Hi {name}, your number is {}", 42)
+```
 
 **Booleans**
 ```rust
@@ -88,6 +133,8 @@ Represents absence of value. Functions without explicit return give `null`.
 | `bool` | Boolean | 1 bit (packed) |
 | `null` | Null value | - |
 | `function` | Function/closure | heap allocated |
+| `Array<T>` | Fixed-size array | heap allocated |
+| `Vec<T>` | Growable vector | heap allocated |
 
 ### Type Annotations
 
@@ -96,7 +143,7 @@ Always optional. The inference engine handles most cases.
 Variables:
 ```rust
 let x: int = 42
-let mut name: string = "Alice"
+let mut name: string = "Reimu"
 ```
 
 Function parameters and return:
@@ -150,9 +197,9 @@ needs std.io
 let x = 1
 if true {
     let x = 2    // different x
-    io.print(x)  // 2
+    print(x)  // 2
 }
-io.print(x)      // 1
+print(x)      // 1
 ```
 
 ### Scope
@@ -365,7 +412,9 @@ needs print from std.io          // single function
 needs sqrt, pow from std.math    // multiple functions
 ```
 
-After `needs std.io`, you access functions as `io.print()`.
+After `needs std.io`, you can use both `print()` directly and `io.print()`.
+
+With an alias (`needs std.io as x`), only the aliased form works: `x.print()`.
 
 After `needs print from std.io`, you call `print()` directly.
 
@@ -516,6 +565,114 @@ fn parse_binary() {
 
 - Honestly, most code, stick to the GC unless you have a specific need
 
+### @inline and @inline_always (Function Inlining)
+
+These attributes tell the compiler to substitute a function's body directly at the call site, avoiding function call overhead
+
+```rust
+@inline
+fn add(a: int, b: int) -> int {
+    a + b
+}
+
+@inline_always
+fn clamp(x: int, min: int, max: int) -> int {
+    if x < min { return min }
+    if x > max { return max }
+    x
+}
+```
+
+The difference:
+
+| Attribute | Behavior |
+|-----------|----------|
+| `@inline` | Hint to the compiler. Respects code size thresholds. |
+| `@inline_always` | Forces inlining. Ignores size limits. |
+
+`@inline` can be ignored in some cases (recursive functions, mutual recursion). `@inline_always` forces substitution no matter what (except truly impossible cases like recursion)
+
+**When to use `@inline`:**
+
+- Small utility functions called frequently
+- Thin wrappers around simple operations
+- Performance-critical functions in tight loops
+
+```rust
+@inline
+fn square(x: int) -> int { x * x }
+
+@inline
+fn is_even(n: int) -> bool { n % 2 == 0 }
+```
+
+**When to use `@inline_always`:**
+
+- When you know inlining helps despite the size
+- Functions with captures you still want inlined
+- Micro-benchmarks where every cycle counts
+
+**Limitations:**
+
+Some functions simply can't be inlined:
+
+| Case | Why |
+|------|-----|
+| Recursive function | Inlining would expand forever |
+| Mutual recursion | Cycle like A → B → A detected |
+| Native function | No Aelys body to substitute |
+
+```rust
+// ✗ Won't work
+@inline
+fn factorial(n: int) -> int {
+    if n <= 1 { return 1 }
+    n * factorial(n - 1)  // recursive!
+}
+```
+
+The compiler will warn you if you try
+
+**Functions with captures:**
+
+Functions that capture variables from their enclosing scope are handled differently:
+
+- `@inline`: won't be inlined (you'll get a warning)
+- `@inline_always`: forces it anyway
+
+```rust
+fn make_adder(x: int) {
+    @inline_always
+    fn add(y: int) -> int {
+        x + y  // captures x
+    }
+    return add
+}
+```
+
+Use `@inline_always` here only if you know what you're doing
+
+**Public functions:**
+
+Functions marked `pub` with `@inline` get inlined locally, but the original code is kept for callers from other modules:
+
+```rust
+@inline
+pub fn helper() {
+    // inlined within this module
+    // still available for importers
+}
+```
+
+**Automatic inlining:**
+
+Even without any attribute, the optimizer already inlines:
+
+- Trivial functions (3 statements or less)
+- Functions called only once
+
+So you don't need to annotate everything. `@inline` and `@inline_always` are for when you want explicit control !
+
 ## Semicolons
 
 Optional. The parser automatically inserts them after certain tokens (like Go does):
@@ -535,6 +692,212 @@ Explicit semicolons let you put multiple statements on one line:
 let x = 1; let y = 2; let z = 3
 ```
 
+## Collections
+
+### Arrays
+
+Arrays hold a fixed number of elements. Once created, their size doesn't change.
+
+```rust
+let numbers = Array<Int>[1, 2, 3, 4, 5]
+let floats = Array<Float>[1.0, 2.5, 3.7]
+let flags = Array<Bool>[true, false, true]
+
+// Type inference works
+let auto = Array[10, 20, 30]  // infers Array<Int>
+let short = [1, 2, 3]          // shorthand syntax
+```
+
+Empty arrays need a type:
+
+```rust
+let empty = Array<Int>[]
+```
+
+**Creating arrays with a specific size:**
+
+Instead of writing `Array[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]`, you can just specify the size:
+
+```rust
+let zeros = Array<Int>(10)      // 10 zeros
+let floats = Array<Float>(5)    // 5 zeros (0.0)
+let nulls = Array(8)            // 8 nulls (untyped)
+let also = [; 10]               // shorthand for Array(10)
+```
+
+Typed arrays are initialized with the type's default value (0 for int, 0.0 for float, false for bool). Untyped arrays are filled with `null`.
+
+**Basic operations:**
+
+```rust
+let arr = Array[1, 2, 3, 4, 5]
+
+arr[0]         // 1
+arr[4]         // 5
+arr[2] = 99    // modify element
+arr.len()      // 5
+
+arr[100]       // panic: index out of bounds
+```
+
+Under the hood, arrays use compact storage: 8 bytes per Int/Float, 1 byte per Bool.
+
+### Vectors
+
+Vectors are like arrays but they can grow. Need to add more elements? No problem.
+
+```rust
+let v = Vec<Int>[1, 2, 3]
+v.push(4)
+v.push(5)
+v.len()  // 5
+
+let last = v.pop()  // removes and returns 5
+v.len()  // back to 4
+```
+
+Empty vectors:
+
+```rust
+let v = Vec<Int>[]  // or just Vec[]
+```
+
+**Operations:**
+
+```rust
+let v = Vec[10, 20, 30]
+
+// Array stuff works
+v[0]                // 10
+v.len()             // 3
+v[1] = 25           // modify
+
+// Vec-specific
+v.push(40)          // add element
+let x = v.pop()     // remove last and return it
+v.capacity()        // how much space is allocated
+v.reserve(100)      // pre-allocate for 100 elements
+```
+
+Vecs grow automatically when they run out of space. The capacity is usually bigger than the length to avoid reallocating every time you push.
+
+**When to use which:**
+
+- **Array**: Size is fixed, mostly reading (coordinates, RGB colors)
+- **Vec**: Size changes, lots of push/pop (lists, stacks, dynamic buffers)
+
+### Type Safety
+
+All elements must be the same type:
+
+```rust
+let good = Array[1, 2, 3]           // ✓ all int
+let bad = Array[1, "two", 3.0]      // ✗ won't compile
+```
+
+`Array<Int>` and `Array<Float>` are different types. The compiler keeps track.
+
+### Passing to Functions
+
+Arrays and Vecs are passed by reference, so changes inside a function affect the original:
+
+```rust
+fn sum(arr) -> int {
+    let mut total = 0
+    for i in 0..arr.len() {
+        total = total + arr[i]
+    }
+    return total
+}
+
+let numbers = Array[1, 2, 3, 4, 5]
+sum(numbers)  // 15
+```
+
+Mutations persist:
+
+```rust
+fn double_all(v) {
+    for i in 0..v.len() {
+        v[i] = v[i] * 2
+    }
+}
+
+let v = Vec[1, 2, 3]
+double_all(v)
+v[0]  // 2 (modified by the function)
+```
+
+### Iteration
+
+For now, use index-based loops:
+
+```rust
+let arr = Array[10, 20, 30, 40]
+
+for i in 0..arr.len() {
+    print(arr[i])
+}
+```
+
+Iterator methods like `arr.iter()`, `arr.map()`, `arr.filter()` are coming later.
+
+## Compiler Warnings
+
+The compiler can emit warnings for various situations. Warnings don't stop compilation but indicate potential issues :
+
+### Warning Categories
+
+| Code | Category | Description |
+|------|----------|-------------|
+| W01xx | inline | Issues with `@inline` or `@inline_always` |
+| W02xx | unused | Unused variables, functions, imports |
+| W03xx | deprecated | Deprecated features or functions |
+| W04xx | shadow | Variable shadowing |
+
+### Inline Warnings
+
+```rust
+// W0101: can't inline recursive functions
+@inline
+fn factorial(n: int) -> int {
+    if n <= 1 { return 1 }
+    n * factorial(n - 1)
+}
+```
+
+The compiler warns because inlining a recursive function would cause infinite expansion. Remove `@inline` or break the recursion.
+
+Here's some other inline warnings:
+
+- **W0102**: Mutual recursion (A calls B, B calls A)
+- **W0103**: Function captures variables from outer scope
+- **W0104**: Public function is being inlined (original kept for external callers)
+- **W0105**: Native function can't be inlined
+
+### Warning Flags
+
+Control warnings from the command line:
+
+```bash
+# enable all warnings
+aelys compile main.aelys -Wall
+
+# treat warnings as errors
+aelys compile main.aelys -Werror
+
+# enable a specific category
+aelys compile main.aelys -Winline
+
+# disable a category
+aelys compile main.aelys -Wno-inline
+
+# combine: all warnings, but not unused, treat as errors
+aelys compile main.aelys -Wall -Wno-unused -Werror
+```
+
+The `-Werror` flag is useful in CI to catch issues early
+
 ## Error Handling
 
 Currently there's no try/catch mechanism. Functions that can fail return `null` on failure:
@@ -545,7 +908,7 @@ needs std.convert
 
 let result = convert.parse_int("not a number")
 if result == null {
-    io.print("parsing failed")
+    print("parsing failed")
 }
 ```
 
@@ -555,10 +918,8 @@ Standard library functions follow this pattern. A proper error handling system i
 
 Things I'm considering but haven't implemented yet:
 
-- Arrays/lists as first-class types
 - `match` expressions
 - `struct` types
 - `enum` types
-- Generics
 - Async/await
-- String interpolation
+- Iterator methods on arrays

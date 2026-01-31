@@ -9,7 +9,7 @@ Create a file called `hello.aelys`:
 ```rust
 needs std.io
 
-io.print("Hello, World!")
+print("Hello, World!")
 ```
 
 Run it:
@@ -18,13 +18,14 @@ Run it:
 aelys hello.aelys
 ```
 
-That's your first program ! The `needs` statement imports the `std.io` module, and `io.print` writes to stdout.
+That's your first program ! The `needs` statement imports the `std.io` module. You can also use `io.print` if you prefer the qualified form.
 
-You don't need a `main` function - top-level code just runs.
+You don't need a `main` function, top-level code just runs.
+
 ## Variables
 
 ```rust
-let name = "Alice"
+let name = "Reimu"
 let age = 30
 let pi = 3.14159
 ```
@@ -35,7 +36,7 @@ Variables are immutable by default. If you need to change a value, use `mut`:
 let mut counter = 0
 counter = counter + 1
 counter = counter + 1
-io.print(counter)  // 2
+print(counter)  // 2
 ```
 
 ## Type Annotations
@@ -57,7 +58,7 @@ The type system uses Hindley-Milner inference with gradual typing. In practice, 
 
 ```rust
 fn greet(name: string) {
-    io.print("Hello, " + name + "!")
+    print("Hello, {name}!")
 }
 
 greet("World")
@@ -96,11 +97,11 @@ needs std.io
 let x = 10
 
 if (x > 5) {                           // parentheses optional
-    io.print("big")
+    print("big")
 } else if x > 0 {
-    io.print("small")
+    print("small")
 } else {
-    io.print("zero or negative")
+    print("zero or negative")
 }
 ```
 
@@ -113,7 +114,7 @@ needs std.io
 
 let mut i = 0
 while i < 5 {
-    io.print(i)
+    print(i)
     i = i + 1
 }
 ```
@@ -127,17 +128,17 @@ needs std.io
 
 // 0 to 9 (exclusive end)
 for i in 0..10 {
-    io.print(i)
+    print(i)
 }
 
 // 1 to 10 (inclusive end)
 for i in 1..=10 {
-    io.print(i)
+    print(i)
 }
 
 // with step
 for i in 0..100 step 10 {
-    io.print(i)  // 0, 10, 20, ...
+    print(i)  // 0, 10, 20, ...
 }
 ```
 
@@ -149,7 +150,7 @@ needs std.io
 for i in 0..100 {
     if i == 50 { break }
     if i % 2 == 0 { continue }
-    io.print(i)  // odd numbers only, up to 49
+    print(i)  // odd numbers only, up to 49
 }
 ```
 
@@ -161,11 +162,11 @@ It's `and`, `or`, and `not`, you can also use `&&`, `||`, and `!` if you prefer 
 needs std.io
 
 if x > 0 and y > 0 {
-    io.print("both positive")
+    print("both positive")
 }
 
 if not valid {
-    io.print("invalid")
+    print("invalid")
 }
 ```
 
@@ -174,8 +175,8 @@ if not valid {
 Strings support the usual escape sequences (`\n`, `\t`, `\\`, `\"`):
 
 ```rust
-io.print("Line 1\nLine 2")
-io.print("Tab\there")
+print("Line 1\nLine 2")
+print("Tab\there")
 ```
 
 Concatenation uses `+`:
@@ -184,7 +185,95 @@ Concatenation uses `+`:
 let greeting = "Hello, " + name + "!"
 ```
 
-No string interpolation yet, it's on my list but not a priority
+Or use interpolation with `{expression}`:
+
+```rust
+let name = "Quar"
+print("Hello, {name}!")        // Hello, Quar!
+print("2500 + 2500 = {2500 + 2500}")       // 2500 + 2500 = 5000
+```
+
+Double braces for literal braces: `"{{key}}"` gives `{key}`
+
+## Arrays and Vectors
+
+### Arrays
+
+Arrays hold multiple values of the same type:
+
+```rust
+needs std.io
+
+let numbers = Array[10, 20, 30, 40, 50]
+print(numbers[0])  // 10
+print(numbers[2])  // 30
+print("{numbers.len()}")  // 5
+```
+
+Modify elements like this:
+
+```rust
+let scores = Array[95, 87, 92]
+scores[1] = 90
+print(scores[1])  // 90
+```
+
+You can add type annotations if you want to be explicit:
+
+```rust
+let ints = Array<Int>[1, 2, 3]
+let floats = Array<Float>[1.5, 2.7, 3.9]
+```
+
+Empty arrays need a type:
+
+```rust
+let empty = Array<Int>[]
+```
+
+If you need an array of a specific size without listing each element:
+
+```rust
+let zeros = Array<Int>(10)    // 10 zeros
+let buffer = Array(100)       // 100 nulls
+let short = [; 5]             // same as Array(5)
+```
+
+### Vectors
+
+Vectors can grow after you create them:
+
+```rust
+needs std.io
+
+let v = Vec[1, 2, 3]
+v.push(4)
+v.push(5)
+print("{v.len()}")  // 5
+
+let last = v.pop()
+print("{last}")  // 5
+```
+
+Good for building lists on the fly:
+
+```rust
+let scores = Vec[]
+scores.push(95)
+scores.push(87)
+scores.push(92)
+
+let mut sum = 0
+for i in 0..scores.len() {
+    sum = sum + scores[i]
+}
+print("{sum / scores.len()}")  // average
+```
+
+### When to use which
+
+- **Array**: Size is fixed (coordinates, color values)
+- **Vec**: Size changes (user input, dynamic lists)
 
 ## A Complete Example
 
@@ -192,7 +281,6 @@ Here's a program that calculates factorials:
 
 ```rust
 needs std.io
-needs std.convert
 
 fn factorial(n: int) -> int {
     if n <= 1 {
@@ -201,20 +289,19 @@ fn factorial(n: int) -> int {
     return n * factorial(n - 1)
 }
 
-io.print("Factorials:")
+print("Factorials:")
 
 for i in 1..=10 {
     let result = factorial(i)
-    io.print(convert.to_string(i) + "! = " + convert.to_string(result))
+    print("{i}! = {result}")
 }
 ```
-
-(I will change the convert module to make conversions easier and the code less uglier, I promise)
 
 ## What's Next
 
 - [Language Specification](language-spec.md) - complete syntax reference
 - [Standard Library](standard-library.md) - available modules and functions
-- [Examples](../examples/examples.md) - more code to learn from
+- [Examples](../examples/README.md) - array examples, demos, and more
+- [Performance](performance-benchmarks.md) - benchmarks and optimization tips
 
-If you want to understand what makes Aelys different, check out the section on [@no_gc](language-spec.md#no_gc-manual-memory) in the language spec.
+If you want to understand what makes Aelys different, check out the [@no_gc](language-spec.md#attributes) section in the language spec.

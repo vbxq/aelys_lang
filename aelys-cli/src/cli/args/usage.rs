@@ -19,11 +19,17 @@ Flags (any position):
   --deny-caps=<list>         Deny native capabilities (comma-separated)
   --dev                      Enable dev features (hot reload)
 
+Warning flags:
+  -Wall                      Enable all warnings
+  -Werror                    Treat warnings as errors
+  -W<category>               Enable specific category (inline, unused, deprecated, shadow)
+  -Wno-<category>            Disable specific category
+
 Examples:
   aelys main.aelys -O2 -ae.trusted=true
   aelys run -O3 main.aelys arg1 arg2
   aelys repl -ae.max-heap=1G
   aelys asm main.aelys --stdout
-  aelys compile main.aelys -o main.avbc
+  aelys compile main.aelys -o main.avbc -Wall -Werror
   aelys run program.avbc"
 }

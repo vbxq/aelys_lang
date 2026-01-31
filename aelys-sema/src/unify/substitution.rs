@@ -46,6 +46,7 @@ impl Substitution {
                 ret: Box::new(self.apply(ret)),
             },
             InferType::Array(inner) => InferType::Array(Box::new(self.apply(inner))),
+            InferType::Vec(inner) => InferType::Vec(Box::new(self.apply(inner))),
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.iter().map(|e| self.apply(e)).collect())
             }
@@ -54,6 +55,7 @@ impl Substitution {
             | InferType::Bool
             | InferType::String
             | InferType::Null
+            | InferType::Range
             | InferType::Dynamic => ty.clone(),
         }
     }

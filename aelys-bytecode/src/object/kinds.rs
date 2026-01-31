@@ -1,4 +1,4 @@
-use super::{AelysClosure, AelysFunction, AelysString, AelysUpvalue, NativeFunction};
+use super::{AelysArray, AelysClosure, AelysFunction, AelysString, AelysUpvalue, AelysVec, NativeFunction};
 
 /// The different types of GC-managed objects.
 #[derive(Debug)]
@@ -8,4 +8,6 @@ pub enum ObjectKind {
     Native(NativeFunction),
     Upvalue(AelysUpvalue),
     Closure(AelysClosure),
+    Array(AelysArray),
+    Vec(AelysVec),
 }

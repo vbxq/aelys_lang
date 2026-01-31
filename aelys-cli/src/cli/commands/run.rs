@@ -1,5 +1,6 @@
 use crate::cli::vm_config::parse_vm_args_or_error;
-use aelys_driver::run_file_with_config_and_opt;
+use aelys_common::{WarningConfig, format_warnings};
+use aelys_driver::run_file_full;
 use aelys_modules::manifest::Manifest;
 use aelys_opt::OptimizationLevel;
 use aelys_runtime::VM;
@@ -14,6 +15,7 @@ pub fn run_with_options(
     program_args: Vec<String>,
     vm_args: Vec<String>,
     opt_level: OptimizationLevel,
+    warn_config: WarningConfig,
 ) -> Result<i32, String> {
     let parsed = parse_vm_args_or_error(&vm_args)?;
     let config = parsed.config;
@@ -24,8 +26,22 @@ pub fn run_with_options(
         InputFormat::Bytecode => run_avbc_file(path_ref, config, program_args)?,
         InputFormat::Source => {
             ensure_utf8_source(path_ref)?;
-            run_file_with_config_and_opt(path_ref, config, program_args, opt_level)
-                .map_err(|err| err.to_string())?
+            let result = run_file_full(path_ref, config, program_args, opt_level)
+                .map_err(|err| err.to_string())?;
+
+            let filtered: Vec<_> = result.warnings.iter()
+                .filter(|w| warn_config.is_enabled(&w.kind))
+                .collect();
+
+            for w in &filtered {
+                eprintln!("{}", format_warnings(std::slice::from_ref(*w)));
+            }
+
+            if warn_config.treat_as_error && !filtered.is_empty() {
+                return Err(format!("{} warning(s) treated as errors", filtered.len()));
+            }
+
+            result.value
         }
     };
 

@@ -62,6 +62,10 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Array(inner1), InferType::Array(inner2)) => unify(inner1, inner2, subst),
 
+        (InferType::Vec(inner1), InferType::Vec(inner2)) => unify(inner1, inner2, subst),
+
+        (InferType::Range, InferType::Range) => Ok(()),
+
         (InferType::Tuple(elems1), InferType::Tuple(elems2)) => {
             if elems1.len() != elems2.len() {
                 return Err(UnifyError::Mismatch(t1.clone(), t2.clone()));

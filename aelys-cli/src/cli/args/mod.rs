@@ -31,4 +31,5 @@ pub struct ParsedArgs {
     pub command: Command,
     pub vm_args: Vec<String>,
     pub opt_level: OptimizationLevel,
+    pub warning_flags: Vec<String>,
 }

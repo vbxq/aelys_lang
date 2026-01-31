@@ -213,6 +213,73 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                     update_max_reg(&mut max_reg, &mut used, (a as usize) + nargs, None, None);
                 }
             }
+
+            // Array operations - dest, count
+            OpCode::ArrayNewI | OpCode::ArrayNewF | OpCode::ArrayNewB | OpCode::ArrayNewP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+            // Array literal - dest, start, count (uses regs start..start+count)
+            OpCode::ArrayLit | OpCode::VecLit => {
+                let count = c as usize;
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+                if count > 0 {
+                    update_max_reg(&mut max_reg, &mut used, (b as usize) + count - 1, None, None);
+                }
+            }
+            // Array load/get/store - all use 3 registers
+            OpCode::ArrayLoadI
+            | OpCode::ArrayLoadF
+            | OpCode::ArrayLoadB
+            | OpCode::ArrayLoadP
+            | OpCode::ArrayGetI
+            | OpCode::ArrayGetF
+            | OpCode::ArrayGetB
+            | OpCode::ArrayGetP
+            | OpCode::ArrayStoreI
+            | OpCode::ArrayStoreF
+            | OpCode::ArrayStoreB
+            | OpCode::ArrayStoreP => {
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize,
+                    Some(b as usize),
+                    Some(c as usize),
+                );
+            }
+            // Array/Vec length - dest, arr
+            OpCode::ArrayLen | OpCode::VecLen | OpCode::VecCap => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+
+            // Vec operations - dest, cap
+            OpCode::VecNewI | OpCode::VecNewF | OpCode::VecNewB | OpCode::VecNewP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+            // Vec push - vec, val
+            OpCode::VecPushI | OpCode::VecPushF | OpCode::VecPushB | OpCode::VecPushP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+            // Vec pop - dest, vec
+            OpCode::VecPopI | OpCode::VecPopF | OpCode::VecPopB | OpCode::VecPopP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+            // Vec reserve - vec, cap
+            OpCode::VecReserve => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
+            }
+            // Vec load - dest, vec, idx (3 registers)
+            OpCode::VecLoadI | OpCode::VecLoadF | OpCode::VecLoadB | OpCode::VecLoadP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+            }
+            // Vec get (safe) - dest, vec, idx (3 registers)
+            OpCode::VecGetI | OpCode::VecGetF | OpCode::VecGetB | OpCode::VecGetP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+            }
+            // Vec store - vec, idx, val (3 registers)
+            OpCode::VecStoreI | OpCode::VecStoreF | OpCode::VecStoreB | OpCode::VecStoreP => {
+                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+            }
         }
         ip += 1;
     }

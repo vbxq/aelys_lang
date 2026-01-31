@@ -168,7 +168,7 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
     reg!("fill", 4, native_fill);
 
     reg!("from_string", 1, native_from_string);
-    reg!("to_string", 3, native_to_string);
+    reg!("decode", 3, native_decode);
     reg!("write_string", 3, native_write_string);
     reg!("find", 4, native_find);
     reg!("reverse", 3, native_reverse);
@@ -442,24 +442,24 @@ fn native_from_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
     Ok(Value::int(handle as i64))
 }
 
-fn native_to_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    let h = get_handle(vm, args[0], "to_string")?;
-    let off = check_offset(get_int(vm, args[1], "to_string")?, "to_string").map_err(|e| err(vm, "to_string", e))?;
-    let len = get_int(vm, args[2], "to_string")?;
+fn native_decode(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    let h = get_handle(vm, args[0], "decode")?;
+    let off = check_offset(get_int(vm, args[1], "decode")?, "decode").map_err(|e| err(vm, "decode", e))?;
+    let len = get_int(vm, args[2], "decode")?;
     if len < 0 {
-        return Err(err(vm, "to_string", format!("negative length {}", len)));
+        return Err(err(vm, "decode", format!("negative length {}", len)));
     }
     let len = len as usize;
     let s = if let Some(Resource::ByteBuffer(buf)) = vm.get_resource(h) {
         if let Some(e) = bounds_err(len, off, buf.data.len()) {
-            return Err(err(vm, "to_string", e));
+            return Err(err(vm, "decode", e));
         }
         match std::str::from_utf8(&buf.data[off..off + len]) {
             Ok(s) => s.to_string(),
-            Err(e) => return Err(err(vm, "to_string", format!("invalid UTF-8 at byte {}", e.valid_up_to()))),
+            Err(e) => return Err(err(vm, "decode", format!("invalid UTF-8 at byte {}", e.valid_up_to()))),
         }
     } else {
-        return Err(err(vm, "to_string", "invalid handle".into()));
+        return Err(err(vm, "decode", "invalid handle".into()));
     };
     make_string(vm, &s)
 }

@@ -28,8 +28,7 @@ impl ConstantFolder {
         }
     }
 
-    // recursively optimize, then try to fold the result
-    pub(super) fn optimize_expr(&mut self, expr: &mut TypedExpr) {
+    pub fn optimize_expr(&mut self, expr: &mut TypedExpr) {
         match &mut expr.kind {
             TypedExprKind::Binary { left, right, .. } => {
                 self.optimize_expr(left);
@@ -56,6 +55,36 @@ impl ConstantFolder {
                 for stmt in body { self.optimize_stmt(stmt); }
             }
             TypedExprKind::Member { object, .. } => self.optimize_expr(object),
+            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
+                for elem in elements { self.optimize_expr(elem); }
+            }
+            TypedExprKind::ArraySized { size, .. } => {
+                self.optimize_expr(size);
+            }
+            TypedExprKind::Index { object, index } => {
+                self.optimize_expr(object);
+                self.optimize_expr(index);
+            }
+            TypedExprKind::IndexAssign { object, index, value } => {
+                self.optimize_expr(object);
+                self.optimize_expr(index);
+                self.optimize_expr(value);
+            }
+            TypedExprKind::Range { start, end, .. } => {
+                if let Some(s) = start { self.optimize_expr(s); }
+                if let Some(e) = end { self.optimize_expr(e); }
+            }
+            TypedExprKind::Slice { object, range } => {
+                self.optimize_expr(object);
+                self.optimize_expr(range);
+            }
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
+                        self.optimize_expr(e);
+                    }
+                }
+            }
             TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
             | TypedExprKind::String(_) | TypedExprKind::Null | TypedExprKind::Identifier(_) => {}
         }

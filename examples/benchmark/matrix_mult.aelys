@@ -1,0 +1,47 @@
+needs std.io
+needs std.convert
+needs std.time
+
+fn create_matrix(n: int, val: int) {
+    let matrix = Vec[]
+    let size = n * n
+    let mut i = 0
+    while i < size {
+        matrix.push(val)
+        i = i + 1
+    }
+    return matrix
+}
+
+fn matrix_mult(a, b, n: int) {
+    let c = create_matrix(n, 0)
+    let mut i = 0
+    while i < n {
+        let mut j = 0
+        while j < n {
+            let mut sum = 0
+            let mut k = 0
+            while k < n {
+                sum = sum + a[i * n + k] * b[k * n + j]
+                k = k + 1
+            }
+            c[i * n + j] = sum
+            j = j + 1
+        }
+        i = i + 1
+    }
+    return c
+}
+
+let n = 100
+io.print("Matrix multiplication " + convert.to_string(n) + "x" + convert.to_string(n))
+
+let a = create_matrix(n, 2)
+let b = create_matrix(n, 3)
+
+let t = time.timer()
+let c = matrix_mult(a, b, n)
+let elapsed = time.elapsed_ms(t)
+
+io.print("Time: " + convert.to_string(elapsed) + "ms")
+io.print("c[0] = " + convert.to_string(c[0]))

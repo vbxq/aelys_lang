@@ -569,3 +569,225 @@ mod_a.get_counter() + mod_b.get_counter_too()
     let result = run_file(&main_path).expect("Diamond dependency should work");
     assert_eq!(result.as_int(), Some(2));
 }
+
+// ==Direct Import Tests==
+
+#[test]
+fn test_std_direct_import() {
+    let dir = create_module_env();
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs std.math
+sin(0) + cos(0)
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Direct import should work");
+    assert_eq!(result.as_float(), Some(1.0));
+}
+
+#[test]
+fn test_std_direct_and_qualified() {
+    let dir = create_module_env();
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs std.math
+sin(0) + math.cos(0)
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Both forms should work");
+    assert_eq!(result.as_float(), Some(1.0));
+}
+
+#[test]
+fn test_alias_disables_direct_import() {
+    let dir = create_module_env();
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs std.math as m
+sin(0)
+"#,
+    );
+
+    let result = run_file(&main_path);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(err.contains("sin"), "Should fail on direct 'sin' call: {}", err);
+}
+
+#[test]
+fn test_alias_qualified_works() {
+    let dir = create_module_env();
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs std.math as m
+m.sin(0) + m.cos(0)
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Aliased qualified access should work");
+    assert_eq!(result.as_float(), Some(1.0));
+}
+
+#[test]
+fn test_custom_module_direct_import() {
+    let dir = create_module_env();
+
+    write_file(
+        &dir,
+        "mymath.aelys",
+        r#"
+pub fn double(x) { x * 2 }
+pub fn triple(x) { x * 3 }
+"#,
+    );
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs mymath
+double(5) + triple(2)
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Direct import for custom modules should work");
+    assert_eq!(result.as_int(), Some(16));
+}
+
+#[test]
+fn test_custom_module_alias_qualified_works() {
+    let dir = create_module_env();
+
+    write_file(
+        &dir,
+        "mymath.aelys",
+        r#"
+pub fn double(x) { x * 2 }
+"#,
+    );
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs mymath as mm
+mm.double(5)
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Aliased qualified access should work");
+    assert_eq!(result.as_int(), Some(10));
+}
+
+#[test]
+fn test_custom_module_alias_no_direct() {
+    let dir = create_module_env();
+
+    write_file(
+        &dir,
+        "mymath.aelys",
+        r#"
+pub fn double(x) { x * 2 }
+"#,
+    );
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs mymath as mm
+double(5)
+"#,
+    );
+
+    let result = run_file(&main_path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_symbol_conflict_error() {
+    let dir = create_module_env();
+
+    write_file(
+        &dir,
+        "mod_a.aelys",
+        r#"
+pub fn shared() { 1 }
+"#,
+    );
+
+    write_file(
+        &dir,
+        "mod_b.aelys",
+        r#"
+pub fn shared() { 2 }
+"#,
+    );
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs mod_a
+needs mod_b
+shared()
+"#,
+    );
+
+    let result = run_file(&main_path);
+    assert!(result.is_err());
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("conflict") || err.contains("shared"),
+        "Should detect symbol conflict: {}",
+        err
+    );
+}
+
+#[test]
+fn test_no_conflict_with_both_aliased() {
+    let dir = create_module_env();
+
+    write_file(
+        &dir,
+        "mod_a.aelys",
+        r#"
+pub fn shared() { 1 }
+"#,
+    );
+
+    write_file(
+        &dir,
+        "mod_b.aelys",
+        r#"
+pub fn shared() { 2 }
+"#,
+    );
+
+    let main_path = write_file(
+        &dir,
+        "main.aelys",
+        r#"
+needs mod_a as a
+needs mod_b as b
+a.shared() + b.shared()
+"#,
+    );
+
+    let result = run_file(&main_path).expect("Both aliased should work");
+    assert_eq!(result.as_int(), Some(3));
+}

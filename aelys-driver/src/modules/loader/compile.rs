@@ -88,10 +88,14 @@ impl ModuleLoader {
                         known_native_globals.insert(native_name.clone());
                     }
 
-                    if matches!(nested_needs.kind, aelys_syntax::ImportKind::Wildcard) {
-                        for name in module_info.exports.keys() {
-                            known_globals.insert(name.clone());
+                    match &nested_needs.kind {
+                        aelys_syntax::ImportKind::Module { alias: None }
+                        | aelys_syntax::ImportKind::Wildcard => {
+                            for name in module_info.exports.keys() {
+                                known_globals.insert(name.clone());
+                            }
                         }
+                        _ => {}
                     }
                 }
             }
@@ -131,6 +135,7 @@ impl ModuleLoader {
             module_aliases,
             known_globals,
             known_native_globals,
+            std::collections::HashMap::new(),
         );
         compiler.next_call_site_slot = self.next_call_site_slot;
         let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;

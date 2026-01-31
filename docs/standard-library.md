@@ -31,10 +31,10 @@ needs std.io
 | `eflush()` | Flush stderr buffer |
 
 ```rust
-io.print("Hello")           // Hello\n
-io.print_inline("Loading")  // Loading (no newline)
-io.print_inline(".")        // .
-io.print("")                // newline
+print("Hello")           // Hello\n
+print_inline("Loading")  // Loading (no newline)
+print_inline(".")        // .
+print("")                // newline
 ```
 
 ### Input Functions
@@ -46,8 +46,8 @@ io.print("")                // newline
 | `input(prompt)` | Print prompt, read line |
 
 ```rust
-let name = io.input("What's your name? ")
-io.print("Hello, " + name)
+let name = input("What's your name? ")
+print("Hello, {name}")
 ```
 
 ### Terminal Control
@@ -63,9 +63,9 @@ ANSI escape sequence wrappers. Work on most modern terminals.
 | `move_cursor(x, y)` | Move cursor to position (1-indexed) |
 
 ```rust
-io.clear_screen()
-io.move_cursor(10, 5)
-io.print("Here!")
+clear_screen()
+move_cursor(10, 5)
+print("Here!")
 ```
 
 ---
@@ -100,12 +100,14 @@ needs std.math
 | `min(a, b)` | Minimum of two values |
 | `max(a, b)` | Maximum of two values |
 | `clamp(x, min, max)` | Clamp value to range |
+| `randint(debut, fin)` | Random integer in range [debut, fin] (inclusive) |
 
 ```rust
 math.abs(-5)        // 5
 math.sqrt(16.0)     // 4.0
 math.pow(2, 10)     // 1024
 math.clamp(15, 0, 10)  // 10
+math.randint(1, 6)  // random int from 1 to 6 (dice roll)
 ```
 
 ### Trigonometry
@@ -388,7 +390,7 @@ For measuring elapsed time accurately:
 let t = time.timer()
 // ... do work ...
 let ms = time.elapsed_ms(t)
-io.print("Took " + convert.to_string(ms) + "ms")
+print("Took {ms}ms")
 ```
 
 ### Sleep
@@ -471,7 +473,7 @@ let f = fs.open("data.txt", "r")
 while true {
     let line = fs.read_line(f)
     if line == null { break }
-    io.print(line)
+    print(line)
 }
 fs.close(f)
 ```
@@ -557,7 +559,7 @@ needs std.net
 let sock = net.connect("example.com", 80)
 net.send(sock, "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n")
 let response = net.recv(sock)
-io.print(response)
+print(response)
 net.close(sock)
 ```
 
@@ -570,7 +572,7 @@ net.close(sock)
 
 ```rust
 let server = net.listen("0.0.0.0", 8080)
-io.print("Listening on port 8080")
+print("Listening on port 8080")
 
 while true {
     let client = net.accept(server)
@@ -606,7 +608,7 @@ needs std.sys
 | `arch()` | CPU architecture ("x86_64", "aarch64", etc.) |
 
 ```rust
-io.print("Running on " + sys.platform() + " " + sys.arch())
+print("Running on {sys.platform()} {sys.arch()}")
 // "Running on linux x86_64"
 ```
 
@@ -696,7 +698,7 @@ All `_be` variants for network byte order:
 | Function | Description |
 |----------|-------------|
 | `from_string(str)` | Create buffer from UTF-8 string. |
-| `to_string(buf, offset, len)` | Read UTF-8 string from buffer. |
+| `decode(buf, offset, len)` | Decode UTF-8 bytes to string. |
 | `write_string(buf, offset, str)` | Write string to buffer. Returns bytes written. |
 
 ### Example
@@ -718,7 +720,7 @@ fn parse_network_packet() {
 
     // Read back
     let magic = bytes.read_u32_be(buf, 0)
-    let msg = bytes.to_string(buf, 8, 6)
+    let msg = bytes.decode(buf, 8, 4)
 
     bytes.free(buf)
 }

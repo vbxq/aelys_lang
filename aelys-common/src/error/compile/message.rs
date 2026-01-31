@@ -7,6 +7,8 @@ impl CompileErrorKind {
             Self::InvalidCharacter(c) => format!("invalid character '{}'", c),
             Self::InvalidNumber(s) => format!("invalid number '{}'", s),
             Self::InvalidEscape(c) => format!("invalid escape sequence '\\{}'", c),
+            Self::UnterminatedFmtExpr => "unterminated expression in format string (missing '}')".to_string(),
+            Self::UnmatchedCloseBrace => "unmatched '}' in string (use '}}' to escape)".to_string(),
             Self::UnexpectedToken { expected, found } => {
                 format!("expected {}, found {}", expected, found)
             }
@@ -104,6 +106,13 @@ impl CompileErrorKind {
                 )
             }
             Self::TypeInferenceError(msg) => format!("type error: {}", msg),
+            Self::SymbolConflict { symbol, modules } => {
+                format!(
+                    "symbol '{}' is exported by multiple modules: {}\n   = hint: use 'as' alias to disambiguate",
+                    symbol,
+                    modules.join(", ")
+                )
+            }
         }
     }
 }

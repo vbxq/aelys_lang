@@ -1,5 +1,7 @@
+mod array;
 mod binary;
 mod control;
+mod fmt_string;
 mod identifier;
 mod identifier_helpers;
 mod literal;
@@ -17,6 +19,7 @@ impl Compiler {
             ExprKind::Int(n) => self.compile_literal_int(*n, dest, expr.span),
             ExprKind::Float(f) => self.compile_literal_float(*f, dest, expr.span),
             ExprKind::String(s) => self.compile_literal_string(s, dest, expr.span),
+            ExprKind::FmtString(parts) => self.compile_fmt_string(parts, &[], dest, expr.span),
             ExprKind::Bool(b) => self.compile_literal_bool(*b, dest, expr.span),
             ExprKind::Null => self.compile_literal_null(dest, expr.span),
             ExprKind::Identifier(name) => self.compile_identifier(name, dest, expr.span),
@@ -41,6 +44,27 @@ impl Compiler {
             } => self.compile_lambda(params, body, dest, expr.span),
             ExprKind::Member { object, member } => {
                 self.compile_member_access(object, member, dest, expr.span)
+            }
+            ExprKind::ArrayLiteral { elements, .. } => {
+                self.compile_array_literal(elements, dest, expr.span)
+            }
+            ExprKind::ArraySized { element_type, size } => {
+                self.compile_array_sized(element_type, size, dest, expr.span)
+            }
+            ExprKind::VecLiteral { elements, .. } => {
+                self.compile_vec_literal(elements, dest, expr.span)
+            }
+            ExprKind::Index { object, index } => {
+                self.compile_index_access(object, index, dest, expr.span)
+            }
+            ExprKind::IndexAssign { object, index, value } => {
+                self.compile_index_assign(object, index, value, dest, expr.span)
+            }
+            ExprKind::Range { start, end, inclusive } => {
+                self.compile_range(start, end, *inclusive, dest, expr.span)
+            }
+            ExprKind::Slice { object, range } => {
+                self.compile_slice(object, range, dest, expr.span)
             }
         }
     }

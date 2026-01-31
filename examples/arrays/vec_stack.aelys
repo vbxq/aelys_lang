@@ -1,0 +1,21 @@
+needs std.io
+needs std.convert
+
+fn stack_demo() {
+    let stack = Vec[]
+
+    io.print("Push 10, 20, 30:")
+    stack.push(10)
+    stack.push(20)
+    stack.push(30)
+    io.print("Stack size: " + convert.to_string(stack.len()))
+
+    io.print("Pop all:")
+    while stack.len() > 0 {
+        let val = stack.pop()
+        io.print("  Popped: " + convert.to_string(val))
+    }
+    io.print("Stack size: " + convert.to_string(stack.len()))
+}
+
+stack_demo()

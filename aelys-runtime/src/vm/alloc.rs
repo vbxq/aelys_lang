@@ -3,6 +3,7 @@ use super::{
     AelysFunction, GcObject, GcRef, Heap, NativeFn, NativeFunction, NativeFunctionImpl, ObjectKind,
     VM, Value,
 };
+use aelys_bytecode::object::{AelysArray, AelysVec};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 use aelys_native::AelysNativeFn;
 
@@ -78,6 +79,20 @@ impl VM {
         self.native_registry
             .insert(name.to_string(), NativeFunctionImpl::Foreign(func));
         let obj = GcObject::new(ObjectKind::Native(NativeFunction::new(name, arity)));
+        self.alloc_object(obj)
+    }
+
+    pub fn alloc_array(&mut self, array: AelysArray) -> Result<GcRef, RuntimeError> {
+        let size = array.size_bytes() as u64;
+        self.ensure_heap_capacity(size)?;
+        let obj = GcObject::new(ObjectKind::Array(array));
+        self.alloc_object(obj)
+    }
+
+    pub fn alloc_vec(&mut self, vec: AelysVec) -> Result<GcRef, RuntimeError> {
+        let size = vec.size_bytes() as u64;
+        self.ensure_heap_capacity(size)?;
+        let obj = GcObject::new(ObjectKind::Vec(vec));
         self.alloc_object(obj)
     }
 

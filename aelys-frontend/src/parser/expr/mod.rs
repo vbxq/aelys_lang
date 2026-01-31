@@ -36,6 +36,19 @@ impl Parser {
                 ));
             }
 
+            // Index assignment: arr[i] = value
+            if let ExprKind::Index { object, index } = expr.kind {
+                let span = object.span.merge(value.span);
+                return Ok(Expr::new(
+                    ExprKind::IndexAssign {
+                        object,
+                        index,
+                        value: Box::new(value),
+                    },
+                    span,
+                ));
+            }
+
             return Err(CompileError::new(
                 CompileErrorKind::InvalidAssignmentTarget,
                 expr.span,

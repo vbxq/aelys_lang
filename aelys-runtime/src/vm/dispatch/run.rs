@@ -4,6 +4,7 @@
 use super::cache::{decode_cache_words, encode_cache_words};
 use super::decode::{decode_abc, decode_aimm};
 use crate::vm::{AelysClosure, CallFrame, GcObject, GcRef, ObjectKind, VM, Value};
+use aelys_bytecode::object::{AelysArray, AelysVec};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 
 impl VM {
@@ -176,6 +177,11 @@ impl VM {
                 // BitNot(110), ShlII(111)-XorII(115), NotI(116), ShlIImm(117)-XorIImm(121)
                 105..=121 => {
                     include!("ops/bitwise.inc");
+                }
+
+                // Array and Vec operations: 130-175
+                130..=175 => {
+                    include!("ops/arrays.inc");
                 }
 
                 _ => {

@@ -1,0 +1,82 @@
+needs std.io
+needs std.convert
+needs std.string
+
+fn average(scores) -> float {
+    let mut sum = 0.0
+    for i in 0..scores.len() {
+        sum = sum + convert.to_float(scores[i])
+    }
+    return sum / convert.to_float(scores.len())
+}
+
+fn letter_grade(score: int) -> string {
+    if score >= 90 { return "A" }
+    if score >= 80 { return "B" }
+    if score >= 70 { return "C" }
+    if score >= 60 { return "D" }
+    return "F"
+}
+
+fn drop_lowest(scores) {
+    let result = Vec[]
+
+    if scores.len() <= 1 {
+        for i in 0..scores.len() {
+            result.push(scores[i])
+        }
+        return result
+    }
+
+    let mut min_idx = 0
+    for i in 1..scores.len() {
+        if scores[i] < scores[min_idx] {
+            min_idx = i
+        }
+    }
+
+    for i in 0..scores.len() {
+        if i != min_idx {
+            result.push(scores[i])
+        }
+    }
+    return result
+}
+
+fn to_vec(arr) {
+    let v = Vec[]
+    for i in 0..arr.len() {
+        v.push(arr[i])
+    }
+    return v
+}
+
+io.print("Grade Calculator")
+io.print("================")
+io.print("")
+
+let homework = to_vec(Array[85, 92, 78, 95, 88, 72])
+let quizzes = to_vec(Array[90, 85, 88, 92])
+let exams = to_vec(Array[82, 88])
+
+io.print("Homework scores: [85, 92, 78, 95, 88, 72]")
+let hw_adjusted = drop_lowest(homework)
+let hw_avg = average(hw_adjusted)
+io.print("  After dropping lowest: avg = " + convert.to_string(hw_avg))
+
+io.print("")
+io.print("Quiz scores: [90, 85, 88, 92]")
+let quiz_avg = average(quizzes)
+io.print("  Average: " + convert.to_string(quiz_avg))
+
+io.print("")
+io.print("Exam scores: [82, 88]")
+let exam_avg = average(exams)
+io.print("  Average: " + convert.to_string(exam_avg))
+
+let final_grade = hw_avg * 0.4 + quiz_avg * 0.3 + exam_avg * 0.3
+let grade_int = convert.to_int(final_grade)
+
+io.print("")
+io.print("Final Grade: " + convert.to_string(final_grade))
+io.print("Letter Grade: " + letter_grade(grade_int))

@@ -78,4 +78,27 @@ impl Function {
         self.bytecode_builder.push(instr);
         self.add_line(line);
     }
+
+    /// Strip debug information for release builds. 
+        pub fn strip_debug_info(&mut self) {
+        self.name = None;
+        self.lines.clear();
+        let names = self.global_layout.names();
+        if !names.is_empty() {
+            let stripped: Vec<String> = names
+                .iter()
+                .map(|name| {
+                    if name.contains("::") {
+                        name.clone()
+                    } else {
+                        String::new()
+                    }
+                })
+                .collect();
+            self.global_layout = GlobalLayout::new(stripped);
+        }
+        for nested in &mut self.nested_functions {
+            nested.strip_debug_info();
+        }
+    }
 }

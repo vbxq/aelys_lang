@@ -1,9 +1,10 @@
 use super::pipeline::Pipeline;
 use super::stages::{
-    CompilerStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage, VMStage,
+    CompilerStage, DebugStripStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage,
+    VMStage,
 };
 use aelys_opt::OptimizationLevel;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub fn standard_pipeline() -> Pipeline { standard_pipeline_with_opt(OptimizationLevel::Standard) }
 
@@ -14,6 +15,7 @@ pub fn standard_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline.add_stage(Box::new(TypeInferenceStage::new()));
     pipeline.add_stage(Box::new(OptimizationStage::new(opt_level)));
     pipeline.add_stage(Box::new(CompilerStage::new()));
+    pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
     pipeline.add_stage(Box::new(VMStage::new()));
     pipeline
 }
@@ -28,6 +30,7 @@ pub fn compilation_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline.add_stage(Box::new(TypeInferenceStage::new()));
     pipeline.add_stage(Box::new(OptimizationStage::new(opt_level)));
     pipeline.add_stage(Box::new(CompilerStage::new()));
+    pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
     pipeline
 }
 
@@ -37,6 +40,7 @@ pub fn compilation_pipeline_with_modules(
     module_aliases: HashSet<String>,
     known_globals: HashSet<String>,
     known_native_globals: HashSet<String>,
+    symbol_origins: HashMap<String, String>,
 ) -> Pipeline {
     let mut pipeline = Pipeline::new();
     pipeline.add_stage(Box::new(LexerStage));
@@ -50,6 +54,8 @@ pub fn compilation_pipeline_with_modules(
         module_aliases,
         known_globals,
         known_native_globals,
+        symbol_origins,
     )));
+    pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
     pipeline
 }

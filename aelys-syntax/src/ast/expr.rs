@@ -2,12 +2,19 @@ use crate::Span;
 
 #[derive(Debug, Clone)]
 pub struct TypeAnnotation {
-    pub name: String, // "int", "float64", "string", etc
+    pub name: String, // "int", "float", "string", "array", "vec", etc
+    pub type_param: Option<Box<TypeAnnotation>>, // for generics: array<int>, vec<string>
     pub span: Span,
 }
 
 impl TypeAnnotation {
-    pub fn new(name: String, span: Span) -> Self { Self { name, span } }
+    pub fn new(name: String, span: Span) -> Self {
+        Self { name, type_param: None, span }
+    }
+
+    pub fn with_param(name: String, type_param: TypeAnnotation, span: Span) -> Self {
+        Self { name, type_param: Some(Box::new(type_param)), span }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -37,6 +44,14 @@ impl Expr {
     pub fn new(kind: ExprKind, span: Span) -> Self { Self { kind, span } }
 }
 
+/// Part of a format string in the AST (after parsing expressions)
+#[derive(Debug, Clone)]
+pub enum FmtStringPart {
+    Literal(String),
+    Expr(Box<Expr>),
+    Placeholder,
+}
+
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     // literals
@@ -45,6 +60,7 @@ pub enum ExprKind {
     String(String),
     Bool(bool),
     Null,
+    FmtString(Vec<FmtStringPart>),
 
     Identifier(String),
 
@@ -69,6 +85,38 @@ pub enum ExprKind {
     },
 
     Member { object: Box<Expr>, member: String }, // module.symbol
+
+    // Arrays and Vecs
+    ArrayLiteral {
+        element_type: Option<TypeAnnotation>,  // Array<Int>[...] or Array[...]
+        elements: Vec<Expr>,
+    },
+    ArraySized {
+        element_type: Option<TypeAnnotation>,  // Array<int>(10) or Array(10) or [; 10]
+        size: Box<Expr>,
+    },
+    VecLiteral {
+        element_type: Option<TypeAnnotation>,
+        elements: Vec<Expr>,
+    },
+    Index {
+        object: Box<Expr>,
+        index: Box<Expr>,
+    },
+    IndexAssign {
+        object: Box<Expr>,
+        index: Box<Expr>,
+        value: Box<Expr>,
+    },
+    Range {
+        start: Option<Box<Expr>>,
+        end: Option<Box<Expr>>,
+        inclusive: bool,  // .. vs ..=
+    },
+    Slice {
+        object: Box<Expr>,
+        range: Box<Expr>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

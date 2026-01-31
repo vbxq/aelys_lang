@@ -15,36 +15,24 @@ impl TypeInference {
             _ => (None, None),
         };
 
-        let typed_params: Vec<TypedParam> = func
-            .params
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                let ty = sig_params
-                    .as_ref()
-                    .and_then(|ps| ps.get(i).cloned())
-                    .or_else(|| {
-                        p.type_annotation
-                            .as_ref()
-                            .map(|ann| InferType::from_annotation(&ann.name))
-                    })
-                    .unwrap_or_else(|| self.type_gen.fresh());
+        let mut typed_params = Vec::with_capacity(func.params.len());
+        for (i, p) in func.params.iter().enumerate() {
+            let ty = sig_params
+                .as_ref()
+                .and_then(|ps| ps.get(i).cloned())
+                .or_else(|| p.type_annotation.as_ref().map(|ann| self.type_from_annotation(ann)))
+                .unwrap_or_else(|| self.type_gen.fresh());
 
-                TypedParam {
-                    name: p.name.clone(),
-                    ty,
-                    span: p.span,
-                }
-            })
-            .collect();
+            typed_params.push(TypedParam {
+                name: p.name.clone(),
+                ty,
+                span: p.span,
+            });
+        }
 
-        let return_type = sig_ret
-            .or_else(|| {
-                func.return_type
-                    .as_ref()
-                    .map(|ann| InferType::from_annotation(&ann.name))
-            })
-            .unwrap_or_else(|| self.type_gen.fresh());
+        let return_type = sig_ret.or_else(|| {
+            func.return_type.as_ref().map(|ann| self.type_from_annotation(ann))
+        }).unwrap_or_else(|| self.type_gen.fresh());
 
         let mut func_env = self.env.for_closure();
         func_env.set_current_function(Some(func.name.clone()));

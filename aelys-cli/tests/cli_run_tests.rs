@@ -1,4 +1,5 @@
 use aelys_cli::cli::commands::run::run_with_options;
+use aelys_common::WarningConfig;
 use aelys_opt::OptimizationLevel;
 
 #[test]
@@ -8,6 +9,7 @@ fn run_rejects_invalid_vm_args() {
         Vec::new(),
         vec!["-ae.max-heap=1".to_string()],
         OptimizationLevel::None,
+        WarningConfig::new(),
     )
     .unwrap_err();
 
@@ -31,6 +33,7 @@ fn run_accepts_aasm_file() {
         Vec::new(),
         Vec::new(),
         OptimizationLevel::Standard,
+        WarningConfig::new(),
     );
 
     assert!(result.is_ok());

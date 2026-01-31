@@ -8,6 +8,8 @@ pub mod commands {
     pub mod run;
 }
 
+use aelys_common::WarningConfig;
+
 pub fn run() -> i32 {
     let args: Vec<String> = std::env::args().collect();
     let parsed = match args::parse_args(&args) {
@@ -40,31 +42,51 @@ pub fn run_with_args(args: &[String]) -> Result<i32, String> {
     dispatch(parsed)
 }
 
+fn parse_warning_config(flags: &[String]) -> Result<WarningConfig, String> {
+    let mut config = WarningConfig::new();
+    for flag in flags {
+        config.parse_flag(flag)?;
+    }
+    Ok(config)
+}
+
 fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
+    let warn_config = parse_warning_config(&parsed.warning_flags)?;
+
     match parsed.command {
         args::Command::Help => Ok(0),
+        args::Command::Version => Ok(0),
+
         args::Command::Run { path, program_args } => {
-            commands::run::run_with_options(&path, program_args, parsed.vm_args, parsed.opt_level)
+            commands::run::run_with_options(
+                &path,
+                program_args,
+                parsed.vm_args,
+                parsed.opt_level,
+                warn_config,
+            )
         }
+
         args::Command::Compile { path, output } => {
             if !parsed.vm_args.is_empty() {
                 return Err("vm flags are only supported for run or repl".to_string());
             }
-            commands::compile::run_with_options(&path, output, parsed.opt_level)
+            commands::compile::run_with_options(&path, output, parsed.opt_level, warn_config)
         }
-        args::Command::Asm {
-            path,
-            output,
-            stdout,
-        } => {
-            commands::asm::run_with_options(&path, output, stdout, parsed.opt_level, parsed.vm_args)
+
+        args::Command::Asm { path, output, stdout } => {
+            commands::asm::run_with_options(
+                &path,
+                output,
+                stdout,
+                parsed.opt_level,
+                parsed.vm_args,
+            )
         }
+
         args::Command::Repl => {
-            // REPL uses Basic optimization to preserve top-level variables across inputs
-            // (UnusedVarEliminator in Standard/Aggressive would remove unused let bindings)
             let repl_opt = aelys_opt::OptimizationLevel::Basic;
             commands::repl::run_with_options(repl_opt, parsed.vm_args)
         }
-        args::Command::Version => Ok(0),
     }
 }

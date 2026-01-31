@@ -1,4 +1,5 @@
 mod compiler;
+mod debug_strip;
 mod lexer;
 mod optimization;
 mod parser;
@@ -6,6 +7,7 @@ mod type_inference;
 mod vm;
 
 pub use compiler::CompilerStage;
+pub use debug_strip::DebugStripStage;
 pub use lexer::LexerStage;
 pub use optimization::OptimizationStage;
 pub use parser::ParserStage;

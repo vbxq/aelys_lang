@@ -12,7 +12,7 @@ let HEIGHT: int = 40
 let R1: float = 1.0      // Radius of the tube
 let R2: float = 2.0      // Distance from center to tube center
 let K2: float = 5.0      // Distance from viewer to donut
-let K1: float = WIDTH * K2 * 3.0 / (8.0 * (R1 + R2))  // Scaling factor
+let K1 = WIDTH * K2 * 3.0 / (8.0 * (R1 + R2))  // Scaling factor
 
 // Luminance characters (from dark to bright)
 let CHARS: string = ".,-~:;=!*#$@"

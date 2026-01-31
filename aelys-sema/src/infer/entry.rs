@@ -1,11 +1,16 @@
-use super::TypeInference;
+use super::{TypeInference, KNOWN_TYPES};
 use crate::constraint::ConstraintReason;
 use crate::typed_ast::TypedProgram;
 use crate::types::InferType;
-use aelys_syntax::Source;
-use aelys_syntax::Stmt;
+use aelys_common::{Warning, WarningKind};
+use aelys_syntax::{Source, Stmt, TypeAnnotation};
 use std::collections::HashSet;
 use std::sync::Arc;
+
+pub struct InferenceResult {
+    pub program: TypedProgram,
+    pub warnings: Vec<Warning>,
+}
 
 impl TypeInference {
     /// Create a new inference engine
@@ -17,6 +22,41 @@ impl TypeInference {
             errors: Vec::new(),
             return_type_stack: Vec::new(),
             depth: 0,
+            warnings: Vec::new(),
+        }
+    }
+
+    /// Convert type annotation to InferType with warning emission
+    pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
+        self.check_type_annotation(ann);
+        InferType::from_annotation(ann)
+    }
+
+    fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+        let name_lower = ann.name.to_lowercase();
+
+        if !KNOWN_TYPES.contains(&name_lower.as_str()) {
+            self.warnings.push(Warning::new(
+                WarningKind::UnknownType { name: ann.name.clone() },
+                ann.span,
+            ));
+            return;
+        }
+
+        if let Some(ref param) = ann.type_param {
+            let param_lower = param.name.to_lowercase();
+            if !KNOWN_TYPES.contains(&param_lower.as_str()) {
+                self.warnings.push(Warning::new(
+                    WarningKind::UnknownTypeParameter {
+                        param: param.name.clone(),
+                        in_type: ann.name.clone(),
+                    },
+                    param.span,
+                ));
+            }
+            if let Some(ref nested) = param.type_param {
+                self.check_type_annotation(nested);
+            }
         }
     }
 
@@ -25,7 +65,8 @@ impl TypeInference {
         stmts: Vec<Stmt>,
         source: Arc<Source>,
     ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
-        Self::infer_program_with_imports(stmts, source, Default::default(), Default::default())
+        let result = Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
+        Ok(result.program)
     }
 
     /// Infer types for a program with module imports pre-registered
@@ -35,6 +76,17 @@ impl TypeInference {
         module_aliases: HashSet<String>,
         known_globals: HashSet<String>,
     ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
+        let result = Self::infer_program_full(stmts, source, module_aliases, known_globals)?;
+        Ok(result.program)
+    }
+
+    /// Full inference with warnings returned
+    pub fn infer_program_full(
+        stmts: Vec<Stmt>,
+        source: Arc<Source>,
+        module_aliases: HashSet<String>,
+        known_globals: HashSet<String>,
+    ) -> Result<InferenceResult, Vec<crate::constraint::TypeError>> {
         let mut inf = TypeInference::new();
 
         for alias in &module_aliases {
@@ -55,25 +107,31 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        let (fatal_errors, warnings): (Vec<_>, Vec<_>) = inf
+        let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) = inf
             .errors
             .iter()
             .cloned()
-            .partition(|err| matches!(err.reason, ConstraintReason::BitwiseOp { .. }));
+            .partition(|err| matches!(
+                err.reason,
+                ConstraintReason::BitwiseOp { .. } | ConstraintReason::TypeAnnotation { .. }
+            ));
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);
         }
 
-        if !warnings.is_empty() && std::env::var("AELYS_TYPE_WARNINGS").is_ok() {
-            for err in &warnings {
+        if !type_warnings.is_empty() && std::env::var("AELYS_TYPE_WARNINGS").is_ok() {
+            for err in &type_warnings {
                 eprintln!("Type warning: {}", err);
             }
         }
 
-        Ok(TypedProgram {
-            stmts: final_stmts,
-            source,
+        Ok(InferenceResult {
+            program: TypedProgram {
+                stmts: final_stmts,
+                source,
+            },
+            warnings: inf.warnings,
         })
     }
 }

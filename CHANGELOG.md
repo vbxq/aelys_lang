@@ -2,7 +2,34 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.18.x (Current)
+## 0.19.x - Array, Vec, and @inline decorator implementations
+**0.19.5-a**
+- New centralized warning system with `-W` flags (`-Wall`, `-Werror`, `-Wno-<category>`)
+- String interpolation with `{expression}` syntax
+
+**0.19.4-a**
+- Added `@inline` and `@inline_always` decorators
+- Strip debug info (function names, local variables, line info) in release builds (`-O1`+)
+
+**0.19.3-a**
+- Added `LocalConstantPropagator` optimization pass for function-local constants
+- Fixed DCE dropping return values when eliminating `if true { expr }` branches
+- Octal support by Keggek, see [Acknowledgements](docs/acknowledgements.md)
+- Enforce explicit type annotations as fatal errors
+
+**0.19.2-a**
+- `needs std.io` imports symbols directly, `needs mod as x` restricts to qualified access only
+- now (`print()` and `io.print()` both work
+
+**0.19.1-a**
+- Added generic type syntax support in function parameters (`fn foo(arr: array<int>)`)
+
+**0.19.0-a**
+- Added array and vec implementations to the VM
+
+## 0.18.x - Native Binary Data Manipulation 
+
+This update adds real memory manipulation for @no_gc mode
 
 **0.18.6-a**
 - Fixed call site cache using stale entries after global mutation

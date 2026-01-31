@@ -4,6 +4,7 @@ use crate::stdlib::helpers::get_number;
 use crate::stdlib::{StdModuleExports, register_native};
 use crate::vm::{VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
+use rand::Rng;
 
 pub const PI: f64 = std::f64::consts::PI;
 pub const E: f64 = std::f64::consts::E;
@@ -85,6 +86,9 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
     reg_fn!("is_nan", 1, native_is_nan);
     reg_fn!("is_inf", 1, native_is_inf);
     reg_fn!("is_finite", 1, native_is_finite);
+
+    // Random number generation
+    reg_fn!("randint", 2, native_randint);
 
     Ok(StdModuleExports {
         all_exports,
@@ -330,4 +334,34 @@ fn native_is_finite(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
             got: vm.value_type_name(args[0]).to_string(),
         }))
     }
+}
+
+/// randint(debut, fin) - Random integer in range [debut, fin] (both inclusive)
+// TODO: this deserves its own std module
+fn native_randint(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    let debut = args[0].as_int().ok_or_else(|| {
+        vm.runtime_error(RuntimeErrorKind::TypeError {
+            operation: "randint",
+            expected: "int",
+            got: vm.value_type_name(args[0]).to_string(),
+        })
+    })?;
+
+    let fin = args[1].as_int().ok_or_else(|| {
+        vm.runtime_error(RuntimeErrorKind::TypeError {
+            operation: "randint",
+            expected: "int",
+            got: vm.value_type_name(args[1]).to_string(),
+        })
+    })?;
+
+    if debut > fin {
+        return Err(vm.runtime_error(RuntimeErrorKind::InvalidBytecode(
+            format!("randint: debut ({}) must be <= fin ({})", debut, fin)
+        )));
+    }
+
+    let mut rng = rand::thread_rng();
+    let result = rng.gen_range(debut..=fin);
+    Ok(Value::int(result))
 }

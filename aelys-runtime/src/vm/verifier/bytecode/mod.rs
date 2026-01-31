@@ -1,6 +1,7 @@
 use crate::vm::{Function, OpCode};
 
 mod arithmetic;
+mod arrays;
 mod calls;
 mod closures;
 mod control;
@@ -78,6 +79,10 @@ pub(super) fn verify_bytecode(func: &Function) -> Result<(), String> {
             continue;
         }
         if closures::verify(func, opcode, a, b, c, num_regs, constants_len, upvalues_len)? {
+            ip += 1;
+            continue;
+        }
+        if arrays::verify(opcode, a, b, c, num_regs)? {
             ip += 1;
             continue;
         }

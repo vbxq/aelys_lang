@@ -533,3 +533,42 @@ if r > 0.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
+
+#[test]
+fn randint_in_range() {
+    let code = r#"
+needs std.math
+let val = math.randint(1, 10)
+if val >= 1 and val <= 10 { 1 } else { 0 }
+"#;
+    assert_aelys_int(code, 1);
+}
+
+#[test]
+fn randint_single_value() {
+    let code = r#"
+needs std.math
+math.randint(42, 42)
+"#;
+    assert_aelys_int(code, 42);
+}
+
+#[test]
+fn randint_negative_range() {
+    let code = r#"
+needs std.math
+let val = math.randint(-10, -5)
+if val >= -10 and val <= -5 { 1 } else { 0 }
+"#;
+    assert_aelys_int(code, 1);
+}
+
+#[test]
+fn randint_large_range() {
+    let code = r#"
+needs std.math
+let val = math.randint(0, 1000)
+if val >= 0 and val <= 1000 { 1 } else { 0 }
+"#;
+    assert_aelys_int(code, 1);
+}

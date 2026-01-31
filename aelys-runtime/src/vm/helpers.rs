@@ -158,6 +158,8 @@ fn object_type_name(kind: &ObjectKind) -> &'static str {
         ObjectKind::Native(_) => "native function",
         ObjectKind::Upvalue(_) => "upvalue",
         ObjectKind::Closure(_) => "closure",
+        ObjectKind::Array(_) => "array",
+        ObjectKind::Vec(_) => "vec",
     }
 }
 
@@ -184,6 +186,18 @@ fn object_to_string(vm: &VM, kind: &ObjectKind, _fallback: Value) -> String {
                 }
             }
             "<closure>".to_string()
+        }
+        ObjectKind::Array(arr) => {
+            let elements: Vec<String> = (0..arr.len())
+                .filter_map(|i| arr.get(i).map(|v| vm.value_to_string(v)))
+                .collect();
+            format!("[{}]", elements.join(", "))
+        }
+        ObjectKind::Vec(vec) => {
+            let elements: Vec<String> = (0..vec.len())
+                .filter_map(|i| vec.get(i).map(|v| vm.value_to_string(v)))
+                .collect();
+            format!("Vec[{}]", elements.join(", "))
         }
     }
 }

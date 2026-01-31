@@ -97,6 +97,14 @@ pub struct TypedExpr {
     pub span: Span,
 }
 
+/// Part of a typed format string
+#[derive(Debug, Clone)]
+pub enum TypedFmtStringPart {
+    Literal(String),
+    Expr(Box<TypedExpr>),
+    Placeholder,
+}
+
 /// Typed expression kinds
 #[derive(Debug, Clone)]
 pub enum TypedExprKind {
@@ -104,6 +112,7 @@ pub enum TypedExprKind {
     Float(f64),
     Bool(bool),
     String(String),
+    FmtString(Vec<TypedFmtStringPart>),
     Null,
 
     Identifier(String),
@@ -160,6 +169,43 @@ pub enum TypedExprKind {
     Member {
         object: Box<TypedExpr>,
         member: String,
+    },
+
+    ArrayLiteral {
+        element_type: Option<crate::types::ResolvedType>,
+        elements: Vec<TypedExpr>,
+    },
+
+    ArraySized {
+        element_type: Option<crate::types::ResolvedType>,
+        size: Box<TypedExpr>,
+    },
+
+    VecLiteral {
+        element_type: Option<crate::types::ResolvedType>,
+        elements: Vec<TypedExpr>,
+    },
+
+    Index {
+        object: Box<TypedExpr>,
+        index: Box<TypedExpr>,
+    },
+
+    IndexAssign {
+        object: Box<TypedExpr>,
+        index: Box<TypedExpr>,
+        value: Box<TypedExpr>,
+    },
+
+    Range {
+        start: Option<Box<TypedExpr>>,
+        end: Option<Box<TypedExpr>>,
+        inclusive: bool,
+    },
+
+    Slice {
+        object: Box<TypedExpr>,
+        range: Box<TypedExpr>,
     },
 }
 

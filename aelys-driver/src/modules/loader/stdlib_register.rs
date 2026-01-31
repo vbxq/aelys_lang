@@ -52,7 +52,7 @@ impl ModuleLoader {
         let module_alias = self.get_module_alias(needs);
 
         match &needs.kind {
-            ImportKind::Module { .. } => {
+            ImportKind::Module { alias } => {
                 for name in &std_exports.all_exports {
                     let qualified_name = format!("{}::{}", module_name, name);
                     let value = vm.get_global(&qualified_name).ok_or_else(|| {
@@ -66,7 +66,11 @@ impl ModuleLoader {
                         ))
                     })?;
                     let alias_name = format!("{}::{}", module_alias, name);
-                    vm.set_global(alias_name, value);
+                    vm.set_global(alias_name, value.clone());
+
+                    if alias.is_none() {
+                        vm.set_global(name.clone(), value);
+                    }
                 }
                 Ok(LoadResult::Module(module_alias))
             }

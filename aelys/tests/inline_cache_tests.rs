@@ -1,7 +1,8 @@
 mod common;
 
 use aelys_bytecode::asm::disassemble;
-use aelys_driver::pipeline::compilation_pipeline;
+use aelys_driver::pipeline::{compilation_pipeline, compilation_pipeline_with_opt};
+use aelys_opt::OptimizationLevel;
 use aelys_runtime::{VM, stdlib};
 use aelys_syntax::Source;
 use common::assert_aelys_int;
@@ -119,7 +120,8 @@ fn test_cache_with_different_arities() {
 
 #[test]
 fn test_disassembler_skips_cache_words() {
-    let mut pipeline = compilation_pipeline();
+    // use O0 to prevent inlining so we can test call opcodes
+    let mut pipeline = compilation_pipeline_with_opt(OptimizationLevel::None);
 
     let source = r#"
         fn foo() -> int { return 42 }
@@ -292,7 +294,8 @@ fn test_memory_opcodes_in_bytecode() {
 
 #[test]
 fn test_call_global_opcode_for_aelys_functions() {
-    let mut pipeline = compilation_pipeline();
+    // use O0 to prevent inlining so we can verify CallGlobal opcodes
+    let mut pipeline = compilation_pipeline_with_opt(OptimizationLevel::None);
 
     let source = r#"
         fn double(x: int) -> int { return x * 2 }
@@ -320,7 +323,8 @@ fn test_call_global_opcode_for_aelys_functions() {
 
 #[test]
 fn test_cache_words_present_after_call_opcodes() {
-    let mut pipeline = compilation_pipeline();
+    // use O0 to prevent inlining
+    let mut pipeline = compilation_pipeline_with_opt(OptimizationLevel::None);
 
     let source = r#"
         fn foo() -> int { return 42 }
