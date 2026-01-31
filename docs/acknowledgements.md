@@ -24,7 +24,8 @@ Some sort of « python but that treats you as an adult »
 
 Debugging sessions, architectural discussions, and keeping me sane when the VM decides to just.. not work.  
 
-AI also wrote most of the tests for Aelys, and some stuff in the examples/ folder (notably the benchmarks), which saved a lot of time.  
+AI also wrote most of the tests for Aelys, some stuff in the examples/ folder (notably the benchmarks), and also some parts of the stdlib, which saved a lot of time.  
+I prefer not to focus too much on that and instead work on the VM rather than anything else
 
 
 Without AI assistance this would've taken 10x longer, maybe more.
