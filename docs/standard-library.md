@@ -548,7 +548,8 @@ needs std.net
 
 | Function | Description |
 |----------|-------------|
-| `connect(host, port)` | Connect to server, returns handle |
+| `connect(host, port)` | Connect to server (30s timeout), returns handle |
+| `connect_timeout(host, port, ms)` | Connect with custom timeout in milliseconds, returns handle |
 | `send(handle, data)` | Send data |
 | `recv(handle)` | Receive available data |
 | `recv_bytes(handle, max)` | Receive up to max bytes |
