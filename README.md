@@ -2,6 +2,15 @@
   <img src="docs/aelys_banner.png" alt="aelys virtual machine" width="1000">
 </p>
 
+# Developer note :
+
+Aelys isn't going in the direction I initially wanted it to go. My internal layout choices are fundamentally flawed.
+
+I'm thinking of potentially rewriting parts of it to make it a real system programming language with interesting features.  
+I don't want it to be a video game scripting language.
+
+Not just another VM, but something interesting.
+
 # aelys 0.19.5-a
 
 Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
