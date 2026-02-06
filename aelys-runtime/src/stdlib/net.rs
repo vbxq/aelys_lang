@@ -67,34 +67,21 @@ fn native_connect(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
     let addr = format!("{}:{}", host, port);
 
-    // Resolve address and connect
-    let addrs: Vec<_> = addr
-        .to_socket_addrs()
-        .map_err(|e| {
-            net_error(
-                vm,
-                "net.connect",
-                format!("cannot resolve '{}': {}", addr, e),
-            )
-        })?
-        .collect();
+    // Resolve address
+    let addrs: Vec<_> = match addr.to_socket_addrs() {
+        Ok(iter) => iter.collect(),
+        Err(_) => return Ok(Value::null()),
+    };
 
     if addrs.is_empty() {
-        return Err(net_error(
-            vm,
-            "net.connect",
-            format!("cannot resolve '{}'", addr),
-        ));
+        return Ok(Value::null());
     }
 
     // Try to connect with timeout
-    let stream = TcpStream::connect_timeout(&addrs[0], Duration::from_secs(30)).map_err(|e| {
-        net_error(
-            vm,
-            "net.connect",
-            format!("connection to '{}' failed: {}", addr, e),
-        )
-    })?;
+    let stream = match TcpStream::connect_timeout(&addrs[0], Duration::from_secs(30)) {
+        Ok(s) => s,
+        Err(_) => return Ok(Value::null()),
+    };
 
     let resource = TcpStreamResource {
         stream,
@@ -117,14 +104,10 @@ fn native_send(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
                 let _ = res.stream.flush();
                 Ok(Value::int(data.len() as i64))
             }
-            Err(e) => Err(net_error(vm, "net.send", format!("send failed: {}", e))),
+            Err(_) => Ok(Value::null()),
         }
     } else {
-        Err(net_error(
-            vm,
-            "net.send",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -134,10 +117,8 @@ fn native_recv(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let handle = get_handle(vm, args[0], "net.recv")?;
 
     if let Some(Resource::TcpStream(res)) = vm.get_resource_mut(handle) {
-        // Set to non-blocking temporarily to read available data
         let mut buffer = vec![0u8; 65536];
 
-        // Set a short timeout if none is set
         if res.timeout_ms.is_none() {
             let _ = res
                 .stream
@@ -147,17 +128,10 @@ fn native_recv(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         let mut all_data = Vec::new();
         loop {
             match res.stream.read(&mut buffer) {
-                Ok(0) => break, // EOF
+                Ok(0) => break,
                 Ok(n) => {
                     if all_data.len() + n > MAX_RECV_SIZE {
-                        return Err(net_error(
-                            vm,
-                            "net.recv",
-                            format!(
-                                "received data exceeds maximum size of {} bytes",
-                                MAX_RECV_SIZE
-                            ),
-                        ));
+                        break;
                     }
                     all_data.extend_from_slice(&buffer[..n]);
                     if n < buffer.len() {
@@ -166,16 +140,10 @@ fn native_recv(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
                 Err(ref e) if e.kind() == std::io::ErrorKind::TimedOut => break,
-                Err(e) => {
-                    if all_data.is_empty() {
-                        return Err(net_error(vm, "net.recv", format!("recv failed: {}", e)));
-                    }
-                    break;
-                }
+                Err(_) => break,
             }
         }
 
-        // Reset timeout
         if res.timeout_ms.is_none() {
             let _ = res.stream.set_read_timeout(None);
         }
@@ -183,11 +151,7 @@ fn native_recv(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         let s = String::from_utf8_lossy(&all_data);
         Ok(make_string(vm, &s)?)
     } else {
-        Err(net_error(
-            vm,
-            "net.recv",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -223,18 +187,10 @@ fn native_recv_bytes(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
                 let s = String::from_utf8_lossy(&buffer);
                 Ok(make_string(vm, &s)?)
             }
-            Err(e) => Err(net_error(
-                vm,
-                "net.recv_bytes",
-                format!("recv failed: {}", e),
-            )),
+            Err(_) => Ok(Value::null()),
         }
     } else {
-        Err(net_error(
-            vm,
-            "net.recv_bytes",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -248,27 +204,17 @@ fn native_recv_line(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
 
         loop {
             match res.stream.read(&mut byte) {
-                Ok(0) => break, // EOF
+                Ok(0) => break,
                 Ok(_) => {
                     if byte[0] == b'\n' {
                         break;
                     }
                     line.push(byte[0]);
                 }
-                Err(e) => {
-                    if line.is_empty() {
-                        return Err(net_error(
-                            vm,
-                            "net.recv_line",
-                            format!("recv failed: {}", e),
-                        ));
-                    }
-                    break;
-                }
+                Err(_) => break,
             }
         }
 
-        // Remove trailing \r if present
         if line.last() == Some(&b'\r') {
             line.pop();
         }
@@ -276,11 +222,7 @@ fn native_recv_line(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
         let s = String::from_utf8_lossy(&line);
         Ok(make_string(vm, &s)?)
     } else {
-        Err(net_error(
-            vm,
-            "net.recv_line",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -297,11 +239,7 @@ fn native_close(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
             // Listener is closed when dropped
             Ok(Value::null())
         }
-        _ => Err(net_error(
-            vm,
-            "net.close",
-            "invalid socket handle".to_string(),
-        )),
+        _ => Ok(Value::null()),
     }
 }
 
@@ -320,13 +258,10 @@ fn native_listen(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     }
 
     let addr = format!("{}:{}", host, port);
-    let listener = TcpListener::bind(&addr).map_err(|e| {
-        net_error(
-            vm,
-            "net.listen",
-            format!("cannot bind to '{}': {}", addr, e),
-        )
-    })?;
+    let listener = match TcpListener::bind(&addr) {
+        Ok(l) => l,
+        Err(_) => return Ok(Value::null()),
+    };
 
     let handle = vm.store_resource(Resource::TcpListener(listener));
     Ok(Value::int(handle as i64))
@@ -341,14 +276,10 @@ fn native_accept(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let stream = if let Some(Resource::TcpListener(listener)) = vm.get_resource(handle) {
         match listener.accept() {
             Ok(s) => s,
-            Err(e) => return Err(net_error(vm, "net.accept", format!("accept failed: {}", e))),
+            Err(_) => return Ok(Value::null()),
         }
     } else {
-        return Err(net_error(
-            vm,
-            "net.accept",
-            "invalid listener handle".to_string(),
-        ));
+        return Ok(Value::null());
     };
 
     let resource = TcpStreamResource {
@@ -381,21 +312,17 @@ fn native_set_timeout(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
             Some(Duration::from_millis(ms as u64))
         };
 
-        if let Err(e) = res.stream.set_read_timeout(timeout) {
-            return Err(net_error(vm, "net.set_timeout", format!("failed: {}", e)));
+        if res.stream.set_read_timeout(timeout).is_err() {
+            return Ok(Value::null());
         }
-        if let Err(e) = res.stream.set_write_timeout(timeout) {
-            return Err(net_error(vm, "net.set_timeout", format!("failed: {}", e)));
+        if res.stream.set_write_timeout(timeout).is_err() {
+            return Ok(Value::null());
         }
         res.timeout_ms = if ms == 0 { None } else { Some(ms as u64) };
 
         Ok(Value::null())
     } else {
-        Err(net_error(
-            vm,
-            "net.set_timeout",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -405,16 +332,10 @@ fn native_set_nodelay(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
     let enabled = args[1].is_truthy();
 
     if let Some(Resource::TcpStream(res)) = vm.get_resource_mut(handle) {
-        res.stream
-            .set_nodelay(enabled)
-            .map_err(|e| net_error(vm, "net.set_nodelay", format!("failed: {}", e)))?;
+        let _ = res.stream.set_nodelay(enabled);
         Ok(Value::null())
     } else {
-        Err(net_error(
-            vm,
-            "net.set_nodelay",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -425,18 +346,12 @@ fn native_local_addr(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
     let addr = match vm.get_resource(handle) {
         Some(Resource::TcpStream(res)) => res.stream.local_addr(),
         Some(Resource::TcpListener(listener)) => listener.local_addr(),
-        _ => {
-            return Err(net_error(
-                vm,
-                "net.local_addr",
-                "invalid socket handle".to_string(),
-            ));
-        }
+        _ => return Ok(Value::null()),
     };
 
     match addr {
         Ok(a) => Ok(make_string(vm, &a.to_string())?),
-        Err(e) => Err(net_error(vm, "net.local_addr", format!("failed: {}", e))),
+        Err(_) => Ok(Value::null()),
     }
 }
 
@@ -447,14 +362,10 @@ fn native_peer_addr(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
     if let Some(Resource::TcpStream(res)) = vm.get_resource(handle) {
         match res.stream.peer_addr() {
             Ok(a) => Ok(make_string(vm, &a.to_string())?),
-            Err(e) => Err(net_error(vm, "net.peer_addr", format!("failed: {}", e))),
+            Err(_) => Ok(Value::null()),
         }
     } else {
-        Err(net_error(
-            vm,
-            "net.peer_addr",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
 
@@ -481,15 +392,9 @@ fn native_shutdown(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     };
 
     if let Some(Resource::TcpStream(res)) = vm.get_resource(handle) {
-        res.stream
-            .shutdown(how)
-            .map_err(|e| net_error(vm, "net.shutdown", format!("failed: {}", e)))?;
+        let _ = res.stream.shutdown(how);
         Ok(Value::null())
     } else {
-        Err(net_error(
-            vm,
-            "net.shutdown",
-            "invalid socket handle".to_string(),
-        ))
+        Ok(Value::null())
     }
 }
