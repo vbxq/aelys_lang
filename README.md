@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/aelys_banner.png" alt="aelys virtual machine" width="1000">
+  <img src="docs/aelys_banner.png?v=2" alt="aelys virtual machine" width="1000">
 </p>
 
 <a href="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml"><img src="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
