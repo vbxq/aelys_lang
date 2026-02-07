@@ -583,6 +583,35 @@ while true {
 }
 ```
 
+### UDP
+
+| Function | Description |
+|----------|-------------|
+| `udp_bind(host, port)` | Bind a UDP socket, returns handle |
+| `udp_send_to(handle, data, addr)` | Send datagram to `"host:port"` |
+| `udp_recv_from(handle, max)` | Receive datagram (up to max bytes) |
+| `udp_connect(handle, host, port)` | Connect UDP socket to fixed remote |
+| `udp_send(handle, data)` | Send on connected UDP socket |
+| `udp_recv(handle, max)` | Receive on connected UDP socket |
+| `udp_set_broadcast(handle, enabled)` | Enable/disable broadcast |
+
+```rust
+// Connectionless (send_to / recv_from)
+let sock = net.udp_bind("0.0.0.0", 0)
+net.udp_send_to(sock, "hello", "127.0.0.1:9000")
+let data = net.udp_recv_from(sock, 1024)
+net.close(sock)
+
+// Connected mode
+let sock = net.udp_bind("0.0.0.0", 0)
+net.udp_connect(sock, "127.0.0.1", 9000)
+net.udp_send(sock, "hello")
+let data = net.udp_recv(sock, 1024)
+net.close(sock)
+```
+
+`close`, `set_timeout`, and `local_addr` also work with UDP handles.
+
 ### Socket Options
 
 | Function | Description |
