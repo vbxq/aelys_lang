@@ -2,14 +2,9 @@
   <img src="docs/aelys_banner.png" alt="aelys virtual machine" width="1000">
 </p>
 
-# Developer note :
-
-Aelys isn't going in the direction I initially wanted it to go. My internal layout choices are fundamentally flawed.
-
-I'm thinking of potentially rewriting parts of it to make it a real system programming language with interesting features.  
-I don't want it to be a video game scripting language.
-
-Not just another VM, but something interesting.
+<a href="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml"><img src="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
+<a href="https://github.com/vbxq/aelys_lang/releases/latest"><img src="https://img.shields.io/github/v/release/vbxq/aelys_lang?color=8A2BE2" alt="Release"></a>
 
 # aelys 0.19.6-a
 
