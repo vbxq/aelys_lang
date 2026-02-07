@@ -1,7 +1,9 @@
 mod common;
 
 use aelys_bytecode::{AelysArray, AelysVec, ArrayData, TypeTag, Value};
-use common::{assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys, run_aelys_ok};
+use common::{
+    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys, run_aelys_ok,
+};
 
 #[test]
 fn test_array_new_ints() {

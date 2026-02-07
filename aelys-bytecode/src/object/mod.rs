@@ -12,7 +12,7 @@ mod upvalue;
 mod vec;
 
 pub use array::{AelysArray, ArrayData, TypeTag};
-pub use closure::AelysClosure;
+pub use closure::{AelysClosure, ClosureCache};
 pub use function::AelysFunction;
 pub use gc_object::GcObject;
 pub use gc_ref::GcRef;

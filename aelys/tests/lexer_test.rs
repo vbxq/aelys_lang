@@ -49,7 +49,9 @@ fn test_operators() {
 
 #[test]
 fn test_integers() {
-    let tokens = Lexer::new("42 0 1_000_000 0xFF 0b1010 0o755").scan().unwrap();
+    let tokens = Lexer::new("42 0 1_000_000 0xFF 0b1010 0o755")
+        .scan()
+        .unwrap();
     let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
 
     assert_eq!(
@@ -58,10 +60,10 @@ fn test_integers() {
             &TokenKind::Int(42),
             &TokenKind::Int(0),
             &TokenKind::Int(1_000_000),
-            &TokenKind::Int(0xFF),      // 255
-            &TokenKind::Int(0b1010),    // 10
-            &TokenKind::Int(0o755),     // 493
-            &TokenKind::Semicolon, // inserted at EOF after int
+            &TokenKind::Int(0xFF),   // 255
+            &TokenKind::Int(0b1010), // 10
+            &TokenKind::Int(0o755),  // 493
+            &TokenKind::Semicolon,   // inserted at EOF after int
             &TokenKind::Eof,
         ]
     );
@@ -69,13 +71,13 @@ fn test_integers() {
 
 #[test]
 fn test_floats() {
-    let tokens = Lexer::new("3.14 0.5 10.0").scan().unwrap();
+    let tokens = Lexer::new("3.25 0.5 10.0").scan().unwrap();
     let kinds: Vec<_> = tokens.iter().map(|t| &t.kind).collect();
 
     assert_eq!(
         kinds,
         vec![
-            &TokenKind::Float(3.14),
+            &TokenKind::Float(3.25),
             &TokenKind::Float(0.5),
             &TokenKind::Float(10.0),
             &TokenKind::Semicolon, // inserted at EOF after float
@@ -272,11 +274,7 @@ fn test_logical_operators_double_symbol() {
 
     assert_eq!(
         kinds,
-        vec![
-            &TokenKind::And,
-            &TokenKind::Or,
-            &TokenKind::Eof,
-        ]
+        vec![&TokenKind::And, &TokenKind::Or, &TokenKind::Eof,]
     );
 }
 
@@ -288,10 +286,10 @@ fn test_bitwise_vs_logical() {
     assert_eq!(
         kinds,
         vec![
-            &TokenKind::Ampersand,  // single &
-            &TokenKind::And,         // &&
-            &TokenKind::Pipe,        // single |
-            &TokenKind::Or,          // ||
+            &TokenKind::Ampersand, // single &
+            &TokenKind::And,       // &&
+            &TokenKind::Pipe,      // single |
+            &TokenKind::Or,        // ||
             &TokenKind::Eof,
         ]
     );

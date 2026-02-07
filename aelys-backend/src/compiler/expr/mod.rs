@@ -57,15 +57,17 @@ impl Compiler {
             ExprKind::Index { object, index } => {
                 self.compile_index_access(object, index, dest, expr.span)
             }
-            ExprKind::IndexAssign { object, index, value } => {
-                self.compile_index_assign(object, index, value, dest, expr.span)
-            }
-            ExprKind::Range { start, end, inclusive } => {
-                self.compile_range(start, end, *inclusive, dest, expr.span)
-            }
-            ExprKind::Slice { object, range } => {
-                self.compile_slice(object, range, dest, expr.span)
-            }
+            ExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => self.compile_index_assign(object, index, value, dest, expr.span),
+            ExprKind::Range {
+                start,
+                end,
+                inclusive,
+            } => self.compile_range(start, end, *inclusive, dest, expr.span),
+            ExprKind::Slice { object, range } => self.compile_slice(object, range, dest, expr.span),
         }
     }
 }

@@ -21,22 +21,33 @@ impl GlobalConstantPropagator {
             }
             TypedExprKind::Call { callee, args } => {
                 self.substitute_constants(callee);
-                for arg in args { self.substitute_constants(arg); }
+                for arg in args {
+                    self.substitute_constants(arg);
+                }
             }
             TypedExprKind::Assign { value, .. } => self.substitute_constants(value),
             TypedExprKind::Grouping(inner) => self.substitute_constants(inner),
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.substitute_constants(condition);
                 self.substitute_constants(then_branch);
                 self.substitute_constants(else_branch);
             }
             TypedExprKind::Lambda(inner) => self.substitute_constants(inner),
             TypedExprKind::LambdaInner { body, .. } => {
-                for stmt in body { self.substitute_in_stmt(stmt); }
+                for stmt in body {
+                    self.substitute_in_stmt(stmt);
+                }
             }
             TypedExprKind::Member { object, .. } => self.substitute_constants(object),
-            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
-                for elem in elements { self.substitute_constants(elem); }
+            TypedExprKind::ArrayLiteral { elements, .. }
+            | TypedExprKind::VecLiteral { elements, .. } => {
+                for elem in elements {
+                    self.substitute_constants(elem);
+                }
             }
             TypedExprKind::ArraySized { size, .. } => {
                 self.substitute_constants(size);
@@ -45,14 +56,22 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(object);
                 self.substitute_constants(index);
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.substitute_constants(object);
                 self.substitute_constants(index);
                 self.substitute_constants(value);
             }
             TypedExprKind::Range { start, end, .. } => {
-                if let Some(s) = start { self.substitute_constants(s); }
-                if let Some(e) = end { self.substitute_constants(e); }
+                if let Some(s) = start {
+                    self.substitute_constants(s);
+                }
+                if let Some(e) = end {
+                    self.substitute_constants(e);
+                }
             }
             TypedExprKind::Slice { object, range } => {
                 self.substitute_constants(object);
@@ -65,8 +84,11 @@ impl GlobalConstantPropagator {
                     }
                 }
             }
-            TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
-            | TypedExprKind::String(_) | TypedExprKind::Null => {}
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null => {}
         }
     }
 
@@ -75,31 +97,51 @@ impl GlobalConstantPropagator {
             TypedStmtKind::Expression(expr) => self.substitute_constants(expr),
             TypedStmtKind::Let { initializer, .. } => self.substitute_constants(initializer),
             TypedStmtKind::Block(stmts) => {
-                for s in stmts { self.substitute_in_stmt(s); }
+                for s in stmts {
+                    self.substitute_in_stmt(s);
+                }
             }
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.substitute_constants(condition);
                 self.substitute_in_stmt(then_branch);
-                if let Some(else_b) = else_branch { self.substitute_in_stmt(else_b); }
+                if let Some(else_b) = else_branch {
+                    self.substitute_in_stmt(else_b);
+                }
             }
             TypedStmtKind::While { condition, body } => {
                 self.substitute_constants(condition);
                 self.substitute_in_stmt(body);
             }
-            TypedStmtKind::For { start, end, step, body, .. } => {
+            TypedStmtKind::For {
+                start,
+                end,
+                step,
+                body,
+                ..
+            } => {
                 self.substitute_constants(start);
                 self.substitute_constants(end);
-                if let Some(s) = step { self.substitute_constants(s); }
+                if let Some(s) = &mut **step {
+                    self.substitute_constants(s);
+                }
                 self.substitute_in_stmt(body);
             }
             TypedStmtKind::Return(Some(expr)) => self.substitute_constants(expr),
             TypedStmtKind::Function(func) => self.substitute_in_function(func),
-            TypedStmtKind::Return(None) | TypedStmtKind::Break
-            | TypedStmtKind::Continue | TypedStmtKind::Needs(_) => {}
+            TypedStmtKind::Return(None)
+            | TypedStmtKind::Break
+            | TypedStmtKind::Continue
+            | TypedStmtKind::Needs(_) => {}
         }
     }
 
     fn substitute_in_function(&mut self, func: &mut TypedFunction) {
-        for stmt in &mut func.body { self.substitute_in_stmt(stmt); }
+        for stmt in &mut func.body {
+            self.substitute_in_stmt(stmt);
+        }
     }
 }

@@ -12,14 +12,14 @@ impl Compiler {
     ) -> Result<()> {
         use aelys_sema::TypedExprKind;
 
-        if let TypedExprKind::Identifier(module_name) = &object.kind {
-            if self.module_aliases.contains(module_name) {
-                let global_name = format!("{}::{}", module_name, member);
-                let idx = self.get_or_create_global_index(&global_name);
-                self.accessed_globals.insert(global_name.clone());
-                self.emit_b(aelys_bytecode::OpCode::GetGlobalIdx, dest, idx as i16, span);
-                return Ok(());
-            }
+        if let TypedExprKind::Identifier(module_name) = &object.kind
+            && self.module_aliases.contains(module_name)
+        {
+            let global_name = format!("{}::{}", module_name, member);
+            let idx = self.get_or_create_global_index(&global_name);
+            self.accessed_globals.insert(global_name.clone());
+            self.emit_b(aelys_bytecode::OpCode::GetGlobalIdx, dest, idx as i16, span);
+            return Ok(());
         }
 
         self.compile_identifier(member, dest, span)

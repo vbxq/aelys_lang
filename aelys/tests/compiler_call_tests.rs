@@ -10,8 +10,8 @@ fn arg_range_available_checks_bounds_and_usage() {
             return false;
         }
 
-        for i in start..start + count {
-            if pool[i] {
+        for slot in pool.iter().skip(start).take(count) {
+            if *slot {
                 return false;
             }
         }

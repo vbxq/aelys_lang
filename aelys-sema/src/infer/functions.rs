@@ -20,7 +20,11 @@ impl TypeInference {
             let ty = sig_params
                 .as_ref()
                 .and_then(|ps| ps.get(i).cloned())
-                .or_else(|| p.type_annotation.as_ref().map(|ann| self.type_from_annotation(ann)))
+                .or_else(|| {
+                    p.type_annotation
+                        .as_ref()
+                        .map(|ann| self.type_from_annotation(ann))
+                })
                 .unwrap_or_else(|| self.type_gen.fresh());
 
             typed_params.push(TypedParam {
@@ -30,9 +34,13 @@ impl TypeInference {
             });
         }
 
-        let return_type = sig_ret.or_else(|| {
-            func.return_type.as_ref().map(|ann| self.type_from_annotation(ann))
-        }).unwrap_or_else(|| self.type_gen.fresh());
+        let return_type = sig_ret
+            .or_else(|| {
+                func.return_type
+                    .as_ref()
+                    .map(|ann| self.type_from_annotation(ann))
+            })
+            .unwrap_or_else(|| self.type_gen.fresh());
 
         let mut func_env = self.env.for_closure();
         func_env.set_current_function(Some(func.name.clone()));

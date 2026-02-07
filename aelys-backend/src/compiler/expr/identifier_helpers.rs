@@ -6,22 +6,19 @@ impl Compiler {
         let mut found_modules = Vec::new();
 
         for global_name in self.globals.keys() {
-            if let Some((module, func)) = global_name.split_once("::") {
-                if func == var_name && !found_modules.contains(&module) {
-                    found_modules.push(module);
-                }
+            if let Some((module, func)) = global_name.split_once("::")
+                && func == var_name
+                && !found_modules.contains(&module)
+            {
+                found_modules.push(module);
             }
         }
 
         if !found_modules.is_empty() {
-            let best_module = match found_modules
+            let best_module = found_modules
                 .iter()
                 .find(|m| m.starts_with("std."))
-                .or_else(|| found_modules.first())
-            {
-                Some(module) => module,
-                None => return None,
-            };
+                .or_else(|| found_modules.first())?;
 
             let display_module = if !best_module.contains('.') && !best_module.contains('/') {
                 format!("std.{}", best_module)
@@ -104,11 +101,11 @@ impl Compiler {
 
         let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
-        for i in 0..=a_len {
-            matrix[i][0] = i;
+        for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
+            row[0] = i;
         }
-        for j in 0..=b_len {
-            matrix[0][j] = j;
+        for (j, val) in matrix[0].iter_mut().enumerate().take(b_len + 1) {
+            *val = j;
         }
 
         for i in 1..=a_len {

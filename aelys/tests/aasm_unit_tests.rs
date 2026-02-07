@@ -85,7 +85,7 @@ fn test_binary_with_constants() {
     let mut func = Function::new(None, 0);
     func.constants = vec![
         Value::int(42),
-        Value::float(3.14),
+        Value::float(2.72),
         Value::bool(true),
         Value::null(),
     ];
@@ -96,7 +96,7 @@ fn test_binary_with_constants() {
 
     assert_eq!(loaded.constants.len(), 4);
     assert_eq!(loaded.constants[0].as_int(), Some(42));
-    assert!((loaded.constants[1].as_float().unwrap() - 3.14).abs() < 0.001);
+    assert!((loaded.constants[1].as_float().unwrap() - 2.72).abs() < 0.001);
     assert_eq!(loaded.constants[2].as_bool(), Some(true));
     assert!(loaded.constants[3].is_null());
 }

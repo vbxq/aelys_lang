@@ -7,9 +7,17 @@ use std::sync::Arc;
 
 #[derive(Debug)]
 pub enum PipelineError {
-    StageError { stage: String, message: String },
-    TypeMismatch { expected: &'static str, got: &'static str },
-    MissingInput { stage: String },
+    StageError {
+        stage: String,
+        message: String,
+    },
+    TypeMismatch {
+        expected: &'static str,
+        got: &'static str,
+    },
+    MissingInput {
+        stage: String,
+    },
 }
 
 impl fmt::Display for PipelineError {
@@ -33,7 +41,9 @@ impl std::error::Error for PipelineError {}
 // not Send - VM has raw pointers, keep pipelines single-threaded
 pub trait Stage {
     fn name(&self) -> &str;
-    fn cacheable(&self) -> bool { true }
+    fn cacheable(&self) -> bool {
+        true
+    }
     fn execute(&mut self, input: StageInput) -> Result<StageOutput, PipelineError>;
 }
 
@@ -43,7 +53,7 @@ pub enum StageInput {
     Tokens(Vec<Token>, Arc<Source>),
     Ast(Vec<Stmt>, Arc<Source>),
     TypedAst(TypedProgram, Arc<Source>),
-    Compiled(Function, Heap, Arc<Source>),
+    Compiled(Box<Function>, Heap, Arc<Source>),
 }
 
 impl StageInput {
@@ -63,7 +73,7 @@ pub enum StageOutput {
     Tokens(Vec<Token>, Arc<Source>),
     Ast(Vec<Stmt>, Arc<Source>),
     TypedAst(TypedProgram, Arc<Source>),
-    Compiled(Function, Heap, Arc<Source>),
+    Compiled(Box<Function>, Heap, Arc<Source>),
     Value(Value),
 }
 
@@ -74,6 +84,7 @@ impl StageOutput {
             StageOutput::Ast(a, s) => Ok(StageInput::Ast(a, s)),
             StageOutput::TypedAst(t, s) => Ok(StageInput::TypedAst(t, s)),
             StageOutput::Compiled(f, h, s) => Ok(StageInput::Compiled(f, h, s)),
+
             StageOutput::Value(_) => Err(PipelineError::TypeMismatch {
                 expected: "non-final output",
                 got: "Value",

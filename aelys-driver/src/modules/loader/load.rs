@@ -119,7 +119,7 @@ impl ModuleLoader {
                             ))
                         })?;
                         let alias_name = format!("{}::{}", module_alias, name);
-                        vm.set_global(alias_name, value.clone());
+                        vm.set_global(alias_name, value);
                         if alias.is_none() {
                             vm.set_global(name.clone(), value);
                         }
@@ -148,8 +148,10 @@ impl ModuleLoader {
             self.resolve_path_with_fallback(&needs.path, needs)?;
         let actual_path_str = actual_path.join(".");
 
-        if symbol.is_some() && self.loaded_modules.contains_key(&actual_path_str) {
-            return Ok(LoadResult::Symbol(symbol.expect("symbol verified as Some")));
+        if let Some(sym) = symbol.as_ref()
+            && self.loaded_modules.contains_key(&actual_path_str)
+        {
+            return Ok(LoadResult::Symbol(sym.clone()));
         }
 
         self.loading_stack.push(actual_path_str.clone());

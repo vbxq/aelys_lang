@@ -51,14 +51,11 @@ match opcode_byte {
         let (a, _, _) = decode_abc(instr);
         let ptr_val = reg_get!(base + a as usize);
 
-        if let Some(handle) = ptr_val.as_int() {
-            if handle >= 0 {
+        if let Some(handle) = ptr_val.as_int()
+            && handle >= 0 {
                 self.frames[current_frame_idx].ip = ip;
-                if let Err(e) = self.manual_free(handle as usize, ip as u32) {
-                    return Err(e);
-                }
+                self.manual_free(handle as usize, ip as u32)?;
             }
-        }
     }
 
     // LoadMem (30)

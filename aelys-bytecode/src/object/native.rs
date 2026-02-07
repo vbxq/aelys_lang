@@ -6,5 +6,10 @@ pub struct NativeFunction {
 }
 
 impl NativeFunction {
-    pub fn new(name: impl Into<String>, arity: u8) -> Self { Self { name: name.into(), arity } }
+    pub fn new(name: impl Into<String>, arity: u8) -> Self {
+        Self {
+            name: name.into(),
+            arity,
+        }
+    }
 }

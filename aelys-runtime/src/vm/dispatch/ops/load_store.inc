@@ -38,10 +38,7 @@ match opcode_byte {
                 Ok(nested_func) => {
                     self.verify_function_value(&nested_func)?;
                     self.maybe_collect();
-                    let func_obj_ref = match self.alloc_function(nested_func) {
-                        Ok(func_obj_ref) => func_obj_ref,
-                        Err(e) => return Err(e),
-                    };
+                    let func_obj_ref = self.alloc_function(nested_func)?;
                     reg_set!(base + a as usize, Value::ptr(func_obj_ref.index()));
                     continue;
                 }

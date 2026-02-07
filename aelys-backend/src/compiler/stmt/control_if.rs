@@ -123,7 +123,7 @@ impl Compiler {
         &mut self,
         condition: &aelys_syntax::ast::Expr,
         then_branch: &Stmt,
-        else_branch: Option<&Box<Stmt>>,
+        else_branch: Option<&Stmt>,
     ) -> Result<()> {
         let cond_reg = self.alloc_register()?;
         self.compile_expr(condition, cond_reg)?;

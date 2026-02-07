@@ -6,6 +6,11 @@ use core::ffi::CStr;
 const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
 const FNV_PRIME: u64 = 0x100000001b3;
 
+/// Computes a hash of the export table for module validation.
+///
+/// # Safety
+/// - `exports` must be a valid pointer to an array of `export_count` AelysExport entries, or null if `export_count` is 0.
+/// - Each export's `name` pointer must be a valid null-terminated C string or null.
 pub unsafe fn compute_exports_hash(exports: *const AelysExport, export_count: u32) -> u64 {
     let mut hash = FNV_OFFSET_BASIS;
     hash_u64(&mut hash, export_count as u64);
@@ -29,6 +34,11 @@ pub unsafe fn compute_exports_hash(exports: *const AelysExport, export_count: u3
     hash
 }
 
+/// Initializes the exports_hash field of a module descriptor.
+///
+/// # Safety
+/// - `descriptor` must be a valid pointer to an AelysModuleDescriptor, or null (in which case this is a no-op).
+/// - The descriptor's `exports` and `export_count` fields must be valid as per `compute_exports_hash` requirements.
 pub unsafe fn init_descriptor_exports_hash(descriptor: *mut AelysModuleDescriptor) {
     if descriptor.is_null() {
         return;

@@ -6,7 +6,6 @@ use aelys_native::{
 };
 use libloading::Library;
 use std::collections::HashMap;
-use std::ffi::CString;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -124,6 +123,12 @@ pub struct RequiredModule {
 
 pub struct NativeLoader;
 
+impl Default for NativeLoader {
+    fn default() -> Self {
+        Self
+    }
+}
+
 impl NativeLoader {
     pub fn new() -> Self {
         Self
@@ -228,7 +233,7 @@ fn validate_function_pointer(name: &str, ptr: *const std::ffi::c_void) -> Result
     // Function pointers should be at least aligned to the size of a pointer
     let ptr_addr = ptr as usize;
     let fn_ptr_align = std::mem::align_of::<aelys_native::AelysNativeFn>();
-    if ptr_addr % fn_ptr_align != 0 {
+    if !ptr_addr.is_multiple_of(fn_ptr_align) {
         return Err(NativeError::InvalidFunctionPointer {
             export_name: name.to_string(),
             reason: "function pointer is not properly aligned",

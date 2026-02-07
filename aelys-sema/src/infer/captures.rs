@@ -65,7 +65,7 @@ impl TypeInference {
             } => {
                 self.collect_captures_inner(start, param_names, captures, seen);
                 self.collect_captures_inner(end, param_names, captures, seen);
-                if let Some(step_expr) = step {
+                if let Some(step_expr) = step.as_ref().as_ref() {
                     self.collect_captures_inner(step_expr, param_names, captures, seen);
                 }
                 self.collect_captures_from_stmt(body, param_names, captures, seen);
@@ -88,11 +88,12 @@ impl TypeInference {
     ) {
         match &expr.kind {
             TypedExprKind::Identifier(name) => {
-                if !params.contains(name) && !seen.contains(name) {
-                    if let Some(ty) = self.env.captures().get(name) {
-                        captures.push((name.clone(), ty.clone()));
-                        seen.insert(name.clone());
-                    }
+                if !params.contains(name)
+                    && !seen.contains(name)
+                    && let Some(ty) = self.env.captures().get(name)
+                {
+                    captures.push((name.clone(), ty.clone()));
+                    seen.insert(name.clone());
                 }
             }
             TypedExprKind::Binary { left, right, .. } => {
@@ -151,7 +152,11 @@ impl TypeInference {
                 self.collect_captures_inner(object, params, captures, seen);
                 self.collect_captures_inner(index, params, captures, seen);
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.collect_captures_inner(object, params, captures, seen);
                 self.collect_captures_inner(index, params, captures, seen);
                 self.collect_captures_inner(value, params, captures, seen);

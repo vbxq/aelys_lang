@@ -7,7 +7,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
     pub name: String,
-    pub path: String,           // e.g., "utils.helpers"
+    pub path: String, // e.g., "utils.helpers"
     pub file_path: PathBuf,
     pub version: Option<String>, // native only
     pub exports: HashMap<String, ExportInfo>,
@@ -43,8 +43,8 @@ pub struct LoadedNativeInfo {
 }
 
 pub struct ModuleImports {
-    pub module_aliases: HashSet<String>,      // "utils" from `needs utils`
-    pub known_globals: HashSet<String>,       // wildcard/specific imports
+    pub module_aliases: HashSet<String>, // "utils" from `needs utils`
+    pub known_globals: HashSet<String>,  // wildcard/specific imports
     pub known_native_globals: HashSet<String>, // for CallGlobalNative
     pub symbol_origins: HashMap<String, String>,
 }
@@ -57,7 +57,7 @@ pub enum LoadResult {
 #[allow(dead_code)]
 pub struct ModuleLoader {
     pub(crate) base_dir: PathBuf,
-    pub(crate) base_root: PathBuf,       // canonical, prevents symlink escapes
+    pub(crate) base_root: PathBuf, // canonical, prevents symlink escapes
     pub(crate) loaded_modules: HashMap<String, ModuleInfo>,
     pub(crate) loading_stack: Vec<String>, // circular dep detection
     pub(crate) source: Arc<Source>,

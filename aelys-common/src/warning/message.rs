@@ -18,7 +18,10 @@ impl WarningKind {
             }
 
             Self::InlineHasCaptures => {
-                format!("function '{}' captures variables, inlining may change semantics", name)
+                format!(
+                    "function '{}' captures variables, inlining may change semantics",
+                    name
+                )
             }
 
             Self::InlinePublicFunction => {
@@ -44,7 +47,10 @@ impl WarningKind {
                 format!("unused import '{}'", module)
             }
 
-            Self::DeprecatedFunction { name: func, replacement } => match replacement {
+            Self::DeprecatedFunction {
+                name: func,
+                replacement,
+            } => match replacement {
                 Some(r) => format!("'{}' is deprecated, use '{}' instead", func, r),
                 None => format!("'{}' is deprecated", func),
             },
@@ -58,7 +64,10 @@ impl WarningKind {
             }
 
             Self::UnknownTypeParameter { param, in_type } => {
-                format!("unknown type parameter '{}' in {}<...>, treating as dynamic", param, in_type)
+                format!(
+                    "unknown type parameter '{}' in {}<...>, treating as dynamic",
+                    param, in_type
+                )
             }
         }
     }

@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct VMCapabilities {
     pub allow_fs: bool,
     pub allow_net: bool,
@@ -21,16 +21,6 @@ impl VMCapabilities {
         self.allow_fs = enabled;
         self.allow_net = enabled;
         self.allow_exec = enabled;
-    }
-}
-
-impl Default for VMCapabilities {
-    fn default() -> Self {
-        Self {
-            allow_fs: false,
-            allow_net: false,
-            allow_exec: false,
-        }
     }
 }
 

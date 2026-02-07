@@ -27,7 +27,7 @@ fn test_builtin_type() {
     let result = builtin_type(&mut vm, &[Value::int(42)]).unwrap();
     assert!(result.is_ptr()); // Returns a string
 
-    let result = builtin_type(&mut vm, &[Value::float(3.14)]).unwrap();
+    let result = builtin_type(&mut vm, &[Value::float(2.72)]).unwrap();
     assert!(result.is_ptr());
 
     let result = builtin_type(&mut vm, &[Value::bool(true)]).unwrap();

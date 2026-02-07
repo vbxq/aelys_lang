@@ -22,11 +22,12 @@ impl Compiler {
         } else {
             // For direct imports, use the qualified name in global_layout
             // so bytecode loading can detect which module to load
-            let actual_name = if self.known_globals.contains(name) && !self.globals.contains_key(name) {
-                self.resolve_global_name(name).to_string()
-            } else {
-                name.to_string()
-            };
+            let actual_name =
+                if self.known_globals.contains(name) && !self.globals.contains_key(name) {
+                    self.resolve_global_name(name).to_string()
+                } else {
+                    name.to_string()
+                };
 
             let idx = if let Some(&idx) = self.global_indices.get(&actual_name) {
                 idx
@@ -59,10 +60,10 @@ impl Compiler {
     }
 
     pub fn get_local_register(&self, expr: &Expr) -> Option<u8> {
-        if let ExprKind::Identifier(name) = &expr.kind {
-            if let Some((reg, _)) = self.resolve_variable(name) {
-                return Some(reg);
-            }
+        if let ExprKind::Identifier(name) = &expr.kind
+            && let Some((reg, _)) = self.resolve_variable(name)
+        {
+            return Some(reg);
         }
         None
     }

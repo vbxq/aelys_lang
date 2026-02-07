@@ -4,7 +4,9 @@ use aelys_frontend::parser::Parser;
 pub struct ParserStage; // Tokens -> AST
 
 impl Stage for ParserStage {
-    fn name(&self) -> &str { "parser" }
+    fn name(&self) -> &str {
+        "parser"
+    }
 
     fn execute(&mut self, input: StageInput) -> Result<StageOutput, PipelineError> {
         let (tokens, source) = match input {

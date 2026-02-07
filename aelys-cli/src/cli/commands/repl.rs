@@ -61,11 +61,11 @@ fn run_repl_core<R: BufRead, W: Write>(
         match run_with_vm_and_opt(&mut vm, trimmed, "<repl>", opt_level) {
             Ok(value) => {
                 if !value.is_null() {
-                    writeln!(output, "{}", value.to_string()).map_err(|err| err.to_string())?;
+                    writeln!(output, "{}", value).map_err(|err| err.to_string())?;
                 }
             }
             Err(err) => {
-                writeln!(output, "{}", err.to_string()).map_err(|err| err.to_string())?;
+                writeln!(output, "{}", err).map_err(|err| err.to_string())?;
             }
         }
     }

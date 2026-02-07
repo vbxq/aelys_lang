@@ -56,7 +56,12 @@ pub fn run_with_vm_and_opt(
         known_native_globals.extend(imports.known_native_globals.iter().cloned());
         vm.add_repl_known_native_globals(&imports.known_native_globals);
 
-        symbol_origins.extend(imports.symbol_origins.iter().map(|(k, v)| (k.clone(), v.clone())));
+        symbol_origins.extend(
+            imports
+                .symbol_origins
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
         vm.add_repl_symbol_origins(&imports.symbol_origins);
 
         stmts
@@ -117,8 +122,10 @@ pub fn run_with_vm_and_opt(
     vm.sync_globals_to_hashmap(&global_names);
 
     // track new globals for subsequent REPL inputs
-    let new_globals_set: std::collections::HashSet<String> =
-        global_names.into_iter().filter(|name| !name.is_empty()).collect();
+    let new_globals_set: std::collections::HashSet<String> = global_names
+        .into_iter()
+        .filter(|name| !name.is_empty())
+        .collect();
     vm.add_repl_known_globals(&new_globals_set);
 
     Ok(result)

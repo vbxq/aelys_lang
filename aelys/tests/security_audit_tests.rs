@@ -374,7 +374,10 @@ fs.read_bytes(f, 999999999999)
         Err(AelysError::Runtime(runtime)) => {
             let msg = format!("{:?}", runtime.kind);
             assert!(
-                msg.contains("buffer") || msg.contains("maximum") || msg.contains("size") || msg.contains("max"),
+                msg.contains("buffer")
+                    || msg.contains("maximum")
+                    || msg.contains("size")
+                    || msg.contains("max"),
                 "expected buffer size error, got: {}",
                 msg
             );
@@ -385,9 +388,9 @@ fs.read_bytes(f, 999999999999)
 }
 
 /*
-    verifies that ForLoopI/WhileLoopLt correctly validate consecutive register ranges
-    previously, `a + 1` and `a + 2` were computed without overflow protection
- */
+   verifies that ForLoopI/WhileLoopLt correctly validate consecutive register ranges
+   previously, `a + 1` and `a + 2` were computed without overflow protection
+*/
 #[test]
 fn register_index_overflow_is_handled() {
     let mut vm = make_vm();
@@ -413,7 +416,10 @@ fn register_index_overflow_is_handled() {
                 msg
             );
         }
-        _ => panic!("expected InvalidBytecode for ForLoopI register OOB, got {:?}", err.kind),
+        _ => panic!(
+            "expected InvalidBytecode for ForLoopI register OOB, got {:?}",
+            err.kind
+        ),
     }
 }
 
@@ -477,8 +483,8 @@ chain()
 #[test]
 fn call_site_cache_slot_limit_enforced() {
     use aelys_runtime::MAX_CALL_SITE_SLOTS;
-    assert!(MAX_CALL_SITE_SLOTS > 0);
-    assert!(MAX_CALL_SITE_SLOTS <= 65535);
+    const { assert!(MAX_CALL_SITE_SLOTS > 0) };
+    const { assert!(MAX_CALL_SITE_SLOTS <= 65535) };
 }
 
 #[test]
@@ -655,7 +661,7 @@ fn value_nan_boxing_preserves_types() {
     assert!(!int_val.is_float());
     assert!(!int_val.is_bool());
     assert!(!int_val.is_null());
-    let float_val = Value::float(3.14);
+    let float_val = Value::float(2.72);
     assert!(float_val.is_float());
     assert!(!float_val.is_int());
     let bool_val = Value::bool(true);
@@ -842,11 +848,13 @@ fn variable_shadowing() {
 #[test]
 fn globals_sync_includes_null_values() {
     /* verifies that setting a global to null via one module is visible in another
-       previously, null values were skipped during sync causing inconsistencies. */
+    previously, null values were skipped during sync causing inconsistencies. */
     let dir = tempfile::tempdir().unwrap();
 
     let helper = dir.path().join("helper.aelys");
-    std::fs::write(&helper, r#"
+    std::fs::write(
+        &helper,
+        r#"
 pub let mut shared = 42
 
 pub fn set_to_null() {
@@ -856,10 +864,14 @@ pub fn set_to_null() {
 pub fn get_shared() {
     return shared
 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let main = dir.path().join("main.aelys");
-    std::fs::write(&main, r#"
+    std::fs::write(
+        &main,
+        r#"
 needs shared, set_to_null, get_shared from helper
 
 let before = get_shared()
@@ -867,7 +879,9 @@ set_to_null()
 let after = get_shared()
 
 if before == 42 and after == null { 1 } else { 0 }
-"#).unwrap();
+"#,
+    )
+    .unwrap();
 
     let result = run_file(&main).unwrap();
     assert_eq!(result.as_int(), Some(1));

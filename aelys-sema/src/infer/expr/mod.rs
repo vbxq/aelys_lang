@@ -33,13 +33,18 @@ impl TypeInference {
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
             ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
             ExprKind::FmtString(parts) => {
-                let typed_parts = parts.iter().map(|p| {
-                    match p {
-                        aelys_syntax::FmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
-                        aelys_syntax::FmtStringPart::Expr(e) => TypedFmtStringPart::Expr(Box::new(self.infer_expr(e))),
+                let typed_parts = parts
+                    .iter()
+                    .map(|p| match p {
+                        aelys_syntax::FmtStringPart::Literal(s) => {
+                            TypedFmtStringPart::Literal(s.clone())
+                        }
+                        aelys_syntax::FmtStringPart::Expr(e) => {
+                            TypedFmtStringPart::Expr(Box::new(self.infer_expr(e)))
+                        }
                         aelys_syntax::FmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
-                    }
-                }).collect();
+                    })
+                    .collect();
                 (TypedExprKind::FmtString(typed_parts), InferType::String)
             }
             ExprKind::Null => (TypedExprKind::Null, InferType::Null),
@@ -92,27 +97,29 @@ impl TypeInference {
             ExprKind::Member { object, member } => {
                 self.infer_member_expr(object, member, expr.span)
             }
-            ExprKind::ArrayLiteral { element_type, elements } => {
-                self.infer_array_literal(element_type, elements, expr.span)
-            }
+            ExprKind::ArrayLiteral {
+                element_type,
+                elements,
+            } => self.infer_array_literal(element_type, elements, expr.span),
             ExprKind::ArraySized { element_type, size } => {
                 self.infer_array_sized(element_type, size, expr.span)
             }
-            ExprKind::VecLiteral { element_type, elements } => {
-                self.infer_vec_literal(element_type, elements, expr.span)
-            }
-            ExprKind::Index { object, index } => {
-                self.infer_index_expr(object, index, expr.span)
-            }
-            ExprKind::IndexAssign { object, index, value } => {
-                self.infer_index_assign_expr(object, index, value, expr.span)
-            }
-            ExprKind::Range { start, end, inclusive } => {
-                self.infer_range_expr(start, end, *inclusive, expr.span)
-            }
-            ExprKind::Slice { object, range } => {
-                self.infer_slice_expr(object, range, expr.span)
-            }
+            ExprKind::VecLiteral {
+                element_type,
+                elements,
+            } => self.infer_vec_literal(element_type, elements, expr.span),
+            ExprKind::Index { object, index } => self.infer_index_expr(object, index, expr.span),
+            ExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => self.infer_index_assign_expr(object, index, value, expr.span),
+            ExprKind::Range {
+                start,
+                end,
+                inclusive,
+            } => self.infer_range_expr(start, end, *inclusive, expr.span),
+            ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
         };
 
         self.depth -= 1;

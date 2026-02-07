@@ -56,9 +56,11 @@ impl TypeInference {
                 start: self.apply_substitution_expr(start, subst),
                 end: self.apply_substitution_expr(end, subst),
                 inclusive: *inclusive,
-                step: step
-                    .as_ref()
-                    .map(|s| self.apply_substitution_expr(s, subst)),
+                step: Box::new(
+                    step.as_ref()
+                        .as_ref()
+                        .map(|s| self.apply_substitution_expr(s, subst)),
+                ),
                 body: Box::new(self.apply_substitution_stmt(body, subst)),
             },
             TypedStmtKind::Return(expr) => TypedStmtKind::Return(

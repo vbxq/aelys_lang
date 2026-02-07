@@ -28,6 +28,10 @@ impl ManualHeap {
     }
 
     /// Load a value without any bounds or validity checking.
+    ///
+    /// # Safety
+    /// The caller must ensure that `handle` is a valid allocation index and
+    /// `offset` is within the allocation's bounds.
     #[inline(always)]
     pub unsafe fn load_unchecked(&self, handle: usize, offset: usize) -> Value {
         unsafe {
@@ -69,6 +73,11 @@ impl ManualHeap {
         Ok(())
     }
 
+    /// Store a value without any bounds or validity checking.
+    ///
+    /// # Safety
+    /// The caller must ensure that `handle` is a valid allocation index and
+    /// `offset` is within the allocation's bounds.
     #[inline(always)]
     pub unsafe fn store_unchecked(&mut self, handle: usize, offset: usize, value: Value) {
         unsafe {

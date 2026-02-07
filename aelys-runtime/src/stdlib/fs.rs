@@ -65,11 +65,18 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
     reg!("join", 2, native_join);
     reg!("absolute", 1, native_absolute);
 
-    Ok(StdModuleExports { all_exports: exports, native_functions: natives })
+    Ok(StdModuleExports {
+        all_exports: exports,
+        native_functions: natives,
+    })
 }
 
 fn fs_error(vm: &VM, op: &'static str, msg: String) -> RuntimeError {
-    vm.runtime_error(RuntimeErrorKind::TypeError { operation: op, expected: "valid file operation", got: msg })
+    vm.runtime_error(RuntimeErrorKind::TypeError {
+        operation: op,
+        expected: "valid file operation",
+        got: msg,
+    })
 }
 
 // mode: "r", "w", "a", "rw" (or "r+")
@@ -113,15 +120,12 @@ fn native_open(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
             .create(true)
             .truncate(true)
             .open(path),
-        FileMode::Append => OpenOptions::new()
-            .write(true)
-            .create(true)
-            .append(true)
-            .open(path),
+        FileMode::Append => OpenOptions::new().create(true).append(true).open(path),
         FileMode::ReadWrite => OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(path),
     };
 
@@ -169,7 +173,9 @@ fn native_close(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "fs.close")?;
     match vm.take_resource(h) {
         Some(Resource::File(mut f)) => {
-            if let Some(w) = f.writer.as_mut() { let _ = w.flush(); }
+            if let Some(w) = f.writer.as_mut() {
+                let _ = w.flush();
+            }
             Ok(Value::null()) // drop closes the file
         }
         _ => Err(fs_error(vm, "fs.close", "invalid file handle".to_string())),
@@ -206,14 +212,22 @@ fn native_read_line(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
             return match reader.read_line(&mut line) {
                 Ok(0) => Ok(Value::null()),
                 Ok(_) => {
-                    if line.ends_with('\n') { line.pop(); }
-                    if line.ends_with('\r') { line.pop(); }
+                    if line.ends_with('\n') {
+                        line.pop();
+                    }
+                    if line.ends_with('\r') {
+                        line.pop();
+                    }
                     make_string(vm, &line)
                 }
                 Err(e) => Err(fs_error(vm, "fs.read_line", format!("read: {}", e))),
             };
         }
-        return Err(fs_error(vm, "fs.read_line", "not opened for reading".into()));
+        return Err(fs_error(
+            vm,
+            "fs.read_line",
+            "not opened for reading".into(),
+        ));
     }
     Err(fs_error(vm, "fs.read_line", "invalid handle".into()))
 }
@@ -222,23 +236,44 @@ fn native_read_bytes(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
     let h = get_handle(vm, args[0], "fs.read_bytes")?;
     let n = get_int(vm, args[1], "fs.read_bytes")?;
 
-    if n < 0 { return Err(fs_error(vm, "fs.read_bytes", "count must be non-negative".into())); }
-    if n as usize > MAX_BUF { return Err(fs_error(vm, "fs.read_bytes", format!("count > {} max", MAX_BUF))); }
+    if n < 0 {
+        return Err(fs_error(
+            vm,
+            "fs.read_bytes",
+            "count must be non-negative".into(),
+        ));
+    }
+    if n as usize > MAX_BUF {
+        return Err(fs_error(
+            vm,
+            "fs.read_bytes",
+            format!("count > {} max", MAX_BUF),
+        ));
+    }
 
     if let Some(Resource::File(f)) = vm.get_resource_mut(h) {
         if let Some(reader) = f.reader.as_mut() {
             let mut buf = vec![0u8; n as usize];
             return match reader.get_mut().read(&mut buf) {
-                Ok(got) => { buf.truncate(got); make_string(vm, &String::from_utf8_lossy(&buf)) }
+                Ok(got) => {
+                    buf.truncate(got);
+                    make_string(vm, &String::from_utf8_lossy(&buf))
+                }
                 Err(e) => Err(fs_error(vm, "fs.read_bytes", format!("read: {}", e))),
             };
         }
-        return Err(fs_error(vm, "fs.read_bytes", "not opened for reading".into()));
+        return Err(fs_error(
+            vm,
+            "fs.read_bytes",
+            "not opened for reading".into(),
+        ));
     }
     Err(fs_error(vm, "fs.read_bytes", "invalid handle".into()))
 }
 
-fn native_read_all(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> { native_read(vm, args) }
+fn native_read_all(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    native_read(vm, args)
+}
 
 fn native_write(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "fs.write")?;
@@ -247,7 +282,10 @@ fn native_write(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     if let Some(Resource::File(f)) = vm.get_resource_mut(h) {
         if let Some(w) = f.writer.as_mut() {
             return match w.write_all(data.as_bytes()) {
-                Ok(_) => { let _ = w.flush(); Ok(Value::int(data.len() as i64)) }
+                Ok(_) => {
+                    let _ = w.flush();
+                    Ok(Value::int(data.len() as i64))
+                }
                 Err(e) => Err(fs_error(vm, "fs.write", format!("write: {}", e))),
             };
         }
@@ -267,11 +305,18 @@ fn native_write_line(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
     if let Some(Resource::File(f)) = vm.get_resource_mut(h) {
         if let Some(w) = f.writer.as_mut() {
             return match writeln!(w, "{}", txt) {
-                Ok(_) => { let _ = w.flush(); Ok(Value::int((txt.len() + 1) as i64)) }
+                Ok(_) => {
+                    let _ = w.flush();
+                    Ok(Value::int((txt.len() + 1) as i64))
+                }
                 Err(e) => Err(fs_error(vm, "fs.write_line", format!("write: {}", e))),
             };
         }
-        return Err(fs_error(vm, "fs.write_line", "not opened for writing".into()));
+        return Err(fs_error(
+            vm,
+            "fs.write_line",
+            "not opened for writing".into(),
+        ));
     }
     Err(fs_error(vm, "fs.write_line", "invalid handle".into()))
 }
@@ -279,15 +324,21 @@ fn native_write_line(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
 // --- stat-like queries ---
 
 fn native_exists(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::bool(Path::new(get_string(vm, args[0], "fs.exists")?).exists()))
+    Ok(Value::bool(
+        Path::new(get_string(vm, args[0], "fs.exists")?).exists(),
+    ))
 }
 
 fn native_is_file(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::bool(Path::new(get_string(vm, args[0], "fs.is_file")?).is_file()))
+    Ok(Value::bool(
+        Path::new(get_string(vm, args[0], "fs.is_file")?).is_file(),
+    ))
 }
 
 fn native_is_dir(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::bool(Path::new(get_string(vm, args[0], "fs.is_dir")?).is_dir()))
+    Ok(Value::bool(
+        Path::new(get_string(vm, args[0], "fs.is_dir")?).is_dir(),
+    ))
 }
 
 fn native_size(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
@@ -301,19 +352,22 @@ fn native_size(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_mkdir(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.mkdir")?;
-    fs::create_dir(p).map(|_| Value::bool(true))
+    fs::create_dir(p)
+        .map(|_| Value::bool(true))
         .map_err(|e| fs_error(vm, "fs.mkdir", format!("'{}': {}", p, e)))
 }
 
 fn native_mkdir_all(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.mkdir_all")?;
-    fs::create_dir_all(p).map(|_| Value::bool(true))
+    fs::create_dir_all(p)
+        .map(|_| Value::bool(true))
         .map_err(|e| fs_error(vm, "fs.mkdir_all", format!("'{}': {}", p, e)))
 }
 
 fn native_rmdir(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.rmdir")?;
-    fs::remove_dir(p).map(|_| Value::bool(true))
+    fs::remove_dir(p)
+        .map(|_| Value::bool(true))
         .map_err(|e| fs_error(vm, "fs.rmdir", format!("'{}': {}", p, e)))
 }
 
@@ -322,7 +376,8 @@ fn native_readdir(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.readdir")?;
     match fs::read_dir(p) {
         Ok(entries) => {
-            let mut names: Vec<_> = entries.flatten()
+            let mut names: Vec<_> = entries
+                .flatten()
                 .filter_map(|e| e.file_name().to_str().map(String::from))
                 .collect();
             names.sort();
@@ -336,21 +391,24 @@ fn native_readdir(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_delete(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.delete")?;
-    fs::remove_file(p).map(|_| Value::bool(true))
+    fs::remove_file(p)
+        .map(|_| Value::bool(true))
         .map_err(|e| fs_error(vm, "fs.delete", format!("'{}': {}", p, e)))
 }
 
 fn native_rename(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let src = get_string(vm, args[0], "fs.rename")?;
     let dst = get_string(vm, args[1], "fs.rename")?;
-    fs::rename(src, dst).map(|_| Value::bool(true))
+    fs::rename(src, dst)
+        .map(|_| Value::bool(true))
         .map_err(|e| fs_error(vm, "fs.rename", format!("'{}' -> '{}': {}", src, dst, e)))
 }
 
 fn native_copy(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let src = get_string(vm, args[0], "fs.copy")?;
     let dst = get_string(vm, args[1], "fs.copy")?;
-    fs::copy(src, dst).map(|n| Value::int(n as i64))
+    fs::copy(src, dst)
+        .map(|n| Value::int(n as i64))
         .map_err(|e| fs_error(vm, "fs.copy", format!("'{}' -> '{}': {}", src, dst, e)))
 }
 
@@ -366,7 +424,8 @@ fn native_read_text(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
 fn native_write_text(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.write_text")?;
     let txt = get_string(vm, args[1], "fs.write_text")?;
-    fs::write(p, txt).map(|_| Value::int(txt.len() as i64))
+    fs::write(p, txt)
+        .map(|_| Value::int(txt.len() as i64))
         .map_err(|e| fs_error(vm, "fs.write_text", format!("'{}': {}", p, e)))
 }
 
@@ -374,7 +433,10 @@ fn native_append_text(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
     let p = get_string(vm, args[0], "fs.append_text")?;
     let txt = get_string(vm, args[1], "fs.append_text")?;
 
-    OpenOptions::new().append(true).create(true).open(p)
+    OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(p)
         .and_then(|mut f| f.write_all(txt.as_bytes()))
         .map(|_| Value::int(txt.len() as i64))
         .map_err(|e| fs_error(vm, "fs.append_text", format!("'{}': {}", p, e)))
@@ -384,19 +446,31 @@ fn native_append_text(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
 
 fn native_basename(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.basename")?.to_string();
-    let name = Path::new(&p).file_name().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let name = Path::new(&p)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
     make_string(vm, &name)
 }
 
 fn native_dirname(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.dirname")?.to_string();
-    let dir = Path::new(&p).parent().and_then(|p| p.to_str()).unwrap_or("").to_string();
+    let dir = Path::new(&p)
+        .parent()
+        .and_then(|p| p.to_str())
+        .unwrap_or("")
+        .to_string();
     make_string(vm, &dir)
 }
 
 fn native_extension(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let p = get_string(vm, args[0], "fs.extension")?.to_string();
-    let ext = Path::new(&p).extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let ext = Path::new(&p)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
     make_string(vm, &ext)
 }
 
@@ -430,7 +504,9 @@ fn native_join(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     }
 
     let mut result = std::path::PathBuf::new();
-    for c in &parts { result.push(c); }
+    for c in &parts {
+        result.push(c);
+    }
 
     // verify still under base
     let base_parts: Vec<_> = Path::new(&base).components().collect();

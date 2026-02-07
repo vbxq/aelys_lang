@@ -49,41 +49,39 @@ impl ModuleLoader {
         let module_name_str = module_path.join(".");
 
         // Check manifest for explicit path hint first
-        if let Some(manifest) = &self.manifest {
-            if let Some(policy) = manifest.module(&module_name_str) {
-                if let Some(explicit_path) = &policy.path {
-                    let resolved_path = self.base_dir.join(explicit_path);
-                    if let Some(canonical) =
-                        self.canonicalize_if_exists(&resolved_path, module_path)?
-                    {
-                        // Determine kind from manifest or file extension
-                        let kind = if policy.is_native() {
+        if let Some(manifest) = &self.manifest
+            && let Some(policy) = manifest.module(&module_name_str)
+        {
+            if let Some(explicit_path) = &policy.path {
+                let resolved_path = self.base_dir.join(explicit_path);
+                if let Some(canonical) = self.canonicalize_if_exists(&resolved_path, module_path)? {
+                    // Determine kind from manifest or file extension
+                    let kind = if policy.is_native() {
+                        ModuleKind::Native
+                    } else if policy.is_script() {
+                        ModuleKind::Script
+                    } else {
+                        // Infer from extension
+                        let ext = resolved_path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("");
+                        if ext == "so" || ext == "dll" || ext == "dylib" || ext == "aelys-lib" {
                             ModuleKind::Native
-                        } else if policy.is_script() {
-                            ModuleKind::Script
                         } else {
-                            // Infer from extension
-                            let ext = resolved_path
-                                .extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or("");
-                            if ext == "so" || ext == "dll" || ext == "dylib" || ext == "aelys-lib" {
-                                ModuleKind::Native
-                            } else {
-                                ModuleKind::Script
-                            }
-                        };
-                        return Ok(ModuleResolution {
-                            path: canonical,
-                            kind,
-                        });
-                    }
+                            ModuleKind::Script
+                        }
+                    };
+                    return Ok(ModuleResolution {
+                        path: canonical,
+                        kind,
+                    });
                 }
+            }
 
-                // If manifest specifies kind=native, only search for native modules
-                if policy.is_native() {
-                    return self.resolve_native_only(module_path);
-                }
+            // If manifest specifies kind=native, only search for native modules
+            if policy.is_native() {
+                return self.resolve_native_only(module_path);
             }
         }
 

@@ -25,7 +25,7 @@ impl ModuleLoader {
         })?;
 
         let std_exports =
-            stdlib::register_std_module(vm, module_name).map_err(|e| AelysError::Runtime(e))?;
+            stdlib::register_std_module(vm, module_name).map_err(AelysError::Runtime)?;
 
         let mut exports_map = std::collections::HashMap::new();
         for name in &std_exports.all_exports {
@@ -66,7 +66,7 @@ impl ModuleLoader {
                         ))
                     })?;
                     let alias_name = format!("{}::{}", module_alias, name);
-                    vm.set_global(alias_name, value.clone());
+                    vm.set_global(alias_name, value);
 
                     if alias.is_none() {
                         vm.set_global(name.clone(), value);

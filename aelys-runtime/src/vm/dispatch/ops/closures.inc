@@ -112,12 +112,14 @@ match opcode_byte {
         let closure = AelysClosure::with_cache(
             nested_func_ref,
             upvalue_refs,
-            bc_ptr,
-            bc_len,
-            const_ptr,
-            const_len,
-            arity,
-            num_regs,
+            aelys_bytecode::object::ClosureCache {
+                bytecode_ptr: bc_ptr,
+                bytecode_len: bc_len,
+                constants_ptr: const_ptr,
+                constants_len: const_len,
+                arity,
+                num_registers: num_regs,
+            },
         );
         match self.alloc_object(GcObject::new(ObjectKind::Closure(closure))) {
             Ok(closure_ref) => {

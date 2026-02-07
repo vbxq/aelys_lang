@@ -5,10 +5,10 @@ use aelys_syntax::ast::BinaryOp;
 
 impl Compiler {
     fn get_typed_local_register(&self, expr: &aelys_sema::TypedExpr) -> Option<u8> {
-        if let aelys_sema::TypedExprKind::Identifier(name) = &expr.kind {
-            if let Some((reg, _)) = self.resolve_variable(name) {
-                return Some(reg);
-            }
+        if let aelys_sema::TypedExprKind::Identifier(name) = &expr.kind
+            && let Some((reg, _)) = self.resolve_variable(name)
+        {
+            return Some(reg);
         }
         None
     }

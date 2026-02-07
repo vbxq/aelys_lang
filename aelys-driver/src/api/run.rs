@@ -12,8 +12,19 @@ pub fn run(source: &str, name: &str) -> Result<Value> {
     run_with_config(source, name, VmConfig::default(), Vec::new())
 }
 
-pub fn run_with_config(source: &str, name: &str, config: VmConfig, program_args: Vec<String>) -> Result<Value> {
-    run_with_config_and_opt(source, name, config, program_args, OptimizationLevel::Standard)
+pub fn run_with_config(
+    source: &str,
+    name: &str,
+    config: VmConfig,
+    program_args: Vec<String>,
+) -> Result<Value> {
+    run_with_config_and_opt(
+        source,
+        name,
+        config,
+        program_args,
+        OptimizationLevel::Standard,
+    )
 }
 
 pub fn run_with_config_and_opt(
@@ -62,5 +73,11 @@ pub fn run_with_config_and_opt(
 
 // convenience for tests/embedding
 pub fn run_source(source: &str, name: &str, opt_level: Option<OptimizationLevel>) -> Result<Value> {
-    run_with_config_and_opt(source, name, VmConfig::default(), Vec::new(), opt_level.unwrap_or(OptimizationLevel::Standard))
+    run_with_config_and_opt(
+        source,
+        name,
+        VmConfig::default(),
+        Vec::new(),
+        opt_level.unwrap_or(OptimizationLevel::Standard),
+    )
 }

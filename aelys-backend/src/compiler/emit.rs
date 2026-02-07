@@ -1,14 +1,15 @@
 use super::Compiler;
 use aelys_bytecode::{OpCode, Value};
 use aelys_common::Result;
-use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::Span;
 
 // bytecode emission wrappers - add line info for debug
 
 impl Compiler {
     #[inline]
-    pub fn current_line(&self, span: Span) -> u32 { span.line }
+    pub fn current_line(&self, span: Span) -> u32 {
+        span.line
+    }
 
     // format A: op | a | b | c (3 regs)
     pub fn emit_a(&mut self, op: OpCode, a: u8, b: u8, c: u8, span: Span) {
@@ -21,7 +22,8 @@ impl Compiler {
     }
 
     pub fn emit_c(&mut self, op: OpCode, dest: u8, func: u8, nargs: u8, span: Span) {
-        self.current.emit_c(op, dest, func, nargs, self.current_line(span));
+        self.current
+            .emit_c(op, dest, func, nargs, self.current_line(span));
     }
 
     pub fn emit_jump(&mut self, op: OpCode, span: Span) -> usize {
@@ -32,24 +34,21 @@ impl Compiler {
         self.current.emit_jump_if(op, reg, self.current_line(span))
     }
 
-    pub fn patch_jump(&mut self, offset: usize) { self.current.patch_jump(offset); }
-
-    pub fn emit_return0(&mut self, span: Span) {
-        self.current.emit_a(OpCode::Return0, 0, 0, 0, self.current_line(span));
+    pub fn patch_jump(&mut self, offset: usize) {
+        self.current.patch_jump(offset);
     }
 
-    pub fn current_offset(&self) -> usize { self.current.current_offset() }
+    pub fn emit_return0(&mut self, span: Span) {
+        self.current
+            .emit_a(OpCode::Return0, 0, 0, 0, self.current_line(span));
+    }
 
-    pub fn add_constant(&mut self, value: Value, span: Span) -> Result<u16> {
+    pub fn current_offset(&self) -> usize {
+        self.current.current_offset()
+    }
+
+    pub fn add_constant(&mut self, value: Value, _span: Span) -> Result<u16> {
         let idx = self.current.add_constant(value);
-        if idx > u16::MAX {
-            return Err(CompileError::new(
-                CompileErrorKind::TooManyConstants,
-                span,
-                self.source.clone(),
-            )
-            .into());
-        }
         Ok(idx)
     }
 

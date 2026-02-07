@@ -38,7 +38,9 @@ impl WarningKind {
     pub fn note(&self) -> Option<&'static str> {
         match self {
             Self::InlineRecursive => Some("inlining would cause infinite expansion"),
-            Self::InlineHasCaptures => Some("captured variables may behave differently when inlined"),
+            Self::InlineHasCaptures => {
+                Some("captured variables may behave differently when inlined")
+            }
             Self::InlineNativeFunction => Some("native functions have no Aelys body"),
             Self::InlinePublicFunction => {
                 Some("callers from other modules will still use the non-inlined version")

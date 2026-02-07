@@ -13,15 +13,15 @@ impl Compiler {
 
     pub fn fix_transitive_captures(&self, nested_upvalues: &mut [Upvalue]) {
         for upvalue in nested_upvalues.iter_mut() {
-            if !upvalue.is_local && upvalue.index & 0x80 != 0 {
-                if let Some((idx, _)) = self
+            if !upvalue.is_local
+                && upvalue.index & 0x80 != 0
+                && let Some((idx, _)) = self
                     .upvalues
                     .iter()
                     .enumerate()
                     .find(|(_, u)| u.name == upvalue.name)
-                {
-                    upvalue.index = idx as u8;
-                }
+            {
+                upvalue.index = idx as u8;
             }
         }
     }

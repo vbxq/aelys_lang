@@ -24,12 +24,11 @@ impl VM {
     }
 
     pub fn current_line(&self) -> u32 {
-        if let Some(frame) = self.frames.last() {
-            if let Some(obj) = self.heap.get(frame.function()) {
-                if let ObjectKind::Function(func) = &obj.kind {
-                    return func.function.get_line(frame.ip().saturating_sub(1));
-                }
-            }
+        if let Some(frame) = self.frames.last()
+            && let Some(obj) = self.heap.get(frame.function())
+            && let ObjectKind::Function(func) = &obj.kind
+        {
+            return func.function.get_line(frame.ip().saturating_sub(1));
         }
         0
     }
@@ -37,23 +36,20 @@ impl VM {
     fn generate_undefined_variable_hint(&self, var_name: &str) -> Option<String> {
         let mut found_modules = Vec::new();
 
-        for (global_name, _) in &self.globals {
-            if let Some((module, func)) = global_name.split_once("::") {
-                if func == var_name && !found_modules.contains(&module) {
-                    found_modules.push(module);
-                }
+        for global_name in self.globals.keys() {
+            if let Some((module, func)) = global_name.split_once("::")
+                && func == var_name
+                && !found_modules.contains(&module)
+            {
+                found_modules.push(module);
             }
         }
 
         if !found_modules.is_empty() {
-            let best_module = match found_modules
+            let best_module = found_modules
                 .iter()
                 .find(|m| m.starts_with("std."))
-                .or_else(|| found_modules.first())
-            {
-                Some(module) => module,
-                None => return None,
-            };
+                .or_else(|| found_modules.first())?;
 
             let display_module = if !best_module.contains('.') && !best_module.contains('/') {
                 format!("std.{}", best_module)
@@ -78,7 +74,7 @@ impl VM {
     fn find_similar_variables(&self, var_name: &str) -> Vec<String> {
         let mut similar = Vec::new();
 
-        for (name, _) in &self.globals {
+        for name in self.globals.keys() {
             if self.is_similar(var_name, name) {
                 similar.push(name.clone());
             }
@@ -115,11 +111,11 @@ impl VM {
 
         let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
-        for i in 0..=a_len {
-            matrix[i][0] = i;
+        for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
+            row[0] = i;
         }
-        for j in 0..=b_len {
-            matrix[0][j] = j;
+        for (j, val) in matrix[0].iter_mut().enumerate().take(b_len + 1) {
+            *val = j;
         }
 
         for i in 1..=a_len {
@@ -142,20 +138,20 @@ impl VM {
     fn build_stack_trace(&self) -> Vec<StackFrame> {
         let mut stack_trace = Vec::new();
         for frame in self.frames.iter().rev() {
-            if let Some(obj) = self.heap.get(frame.function()) {
-                if let ObjectKind::Function(func) = &obj.kind {
-                    let function_name = func.name().map(String::from);
-                    let line = if frame.ip() > 0 {
-                        func.function.get_line(frame.ip() - 1)
-                    } else {
-                        func.function.get_line(0)
-                    };
-                    stack_trace.push(StackFrame {
-                        function_name,
-                        line,
-                        column: 1,
-                    });
-                }
+            if let Some(obj) = self.heap.get(frame.function())
+                && let ObjectKind::Function(func) = &obj.kind
+            {
+                let function_name = func.name().map(String::from);
+                let line = if frame.ip() > 0 {
+                    func.function.get_line(frame.ip() - 1)
+                } else {
+                    func.function.get_line(0)
+                };
+                stack_trace.push(StackFrame {
+                    function_name,
+                    line,
+                    column: 1,
+                });
             }
         }
         stack_trace

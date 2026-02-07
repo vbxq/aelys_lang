@@ -46,10 +46,10 @@ impl Function {
     /// Remap GcRef pointers in constants using the provided mapping.
     pub fn remap_constants(&mut self, remap: &HashMap<usize, usize>) {
         for constant in &mut self.constants {
-            if let Some(old_idx) = constant.as_ptr() {
-                if let Some(&new_idx) = remap.get(&old_idx) {
-                    *constant = Value::ptr(new_idx);
-                }
+            if let Some(old_idx) = constant.as_ptr()
+                && let Some(&new_idx) = remap.get(&old_idx)
+            {
+                *constant = Value::ptr(new_idx);
             }
         }
 

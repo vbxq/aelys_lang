@@ -7,7 +7,9 @@ impl CompileErrorKind {
             Self::InvalidCharacter(c) => format!("invalid character '{}'", c),
             Self::InvalidNumber(s) => format!("invalid number '{}'", s),
             Self::InvalidEscape(c) => format!("invalid escape sequence '\\{}'", c),
-            Self::UnterminatedFmtExpr => "unterminated expression in format string (missing '}')".to_string(),
+            Self::UnterminatedFmtExpr => {
+                "unterminated expression in format string (missing '}')".to_string()
+            }
             Self::UnmatchedCloseBrace => "unmatched '}' in string (use '}}' to escape)".to_string(),
             Self::UnexpectedToken { expected, found } => {
                 format!("expected {}, found {}", expected, found)

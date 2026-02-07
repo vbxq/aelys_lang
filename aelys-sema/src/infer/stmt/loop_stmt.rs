@@ -93,7 +93,7 @@ impl TypeInference {
             start: typed_start,
             end: typed_end,
             inclusive,
-            step: typed_step,
+            step: Box::new(typed_step),
             body: Box::new(typed_body),
         }
     }

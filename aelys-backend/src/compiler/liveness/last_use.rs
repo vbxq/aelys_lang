@@ -52,7 +52,7 @@ fn collect_all_uses_in_stmt(stmt: &TypedStmt, uses: &mut HashSet<String>) {
         } => {
             collect_all_uses_in_expr(start, uses);
             collect_all_uses_in_expr(end, uses);
-            if let Some(s) = step {
+            if let Some(s) = &**step {
                 collect_all_uses_in_expr(s, uses);
             }
             collect_all_uses_in_stmt(body, uses);
@@ -137,7 +137,11 @@ fn collect_all_uses_in_expr(expr: &TypedExpr, uses: &mut HashSet<String>) {
             collect_all_uses_in_expr(object, uses);
             collect_all_uses_in_expr(index, uses);
         }
-        TypedExprKind::IndexAssign { object, index, value } => {
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
             collect_all_uses_in_expr(object, uses);
             collect_all_uses_in_expr(index, uses);
             collect_all_uses_in_expr(value, uses);

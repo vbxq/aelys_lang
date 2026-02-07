@@ -26,14 +26,25 @@ impl CompilerStage {
         known_native_globals: HashSet<String>,
         symbol_origins: HashMap<String, String>,
     ) -> Self {
-        Self { module_aliases, known_globals, known_native_globals, symbol_origins }
+        Self {
+            module_aliases,
+            known_globals,
+            known_native_globals,
+            symbol_origins,
+        }
     }
 }
 
-impl Default for CompilerStage { fn default() -> Self { Self::new() } }
+impl Default for CompilerStage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Stage for CompilerStage {
-    fn name(&self) -> &str { "compiler" }
+    fn name(&self) -> &str {
+        "compiler"
+    }
 
     fn execute(&mut self, input: StageInput) -> Result<StageOutput, PipelineError> {
         let (typed_program, source) = match input {
@@ -65,6 +76,6 @@ impl Stage for CompilerStage {
                 message: e.to_string(),
             })?;
 
-        Ok(StageOutput::Compiled(function, heap, source))
+        Ok(StageOutput::Compiled(Box::new(function), heap, source))
     }
 }

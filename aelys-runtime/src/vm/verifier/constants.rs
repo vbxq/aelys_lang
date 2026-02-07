@@ -15,13 +15,13 @@ pub(super) fn verify_constants(func: &Function, heap: &Heap) -> Result<(), Strin
         }
 
         // Check heap pointers
-        if let Some(ptr) = value.as_ptr() {
-            if heap.get(GcRef::new(ptr)).is_none() {
-                return Err(format!(
-                    "constant {} has invalid heap reference {}",
-                    idx, ptr
-                ));
-            }
+        if let Some(ptr) = value.as_ptr()
+            && heap.get(GcRef::new(ptr)).is_none()
+        {
+            return Err(format!(
+                "constant {} has invalid heap reference {}",
+                idx, ptr
+            ));
         }
     }
     Ok(())

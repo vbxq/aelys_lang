@@ -59,7 +59,11 @@ impl FunctionInliner {
                 }
             }
 
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.inline_in_expr(condition, analysis);
                 self.inline_in_stmt(then_branch, analysis);
                 if let Some(eb) = else_branch {
@@ -72,10 +76,16 @@ impl FunctionInliner {
                 self.inline_in_stmt(body, analysis);
             }
 
-            TypedStmtKind::For { start, end, step, body, .. } => {
+            TypedStmtKind::For {
+                start,
+                end,
+                step,
+                body,
+                ..
+            } => {
                 self.inline_in_expr(start, analysis);
                 self.inline_in_expr(end, analysis);
-                if let Some(s) = step {
+                if let Some(s) = &mut **step {
                     self.inline_in_expr(s, analysis);
                 }
                 self.inline_in_stmt(body, analysis);
@@ -114,64 +124,80 @@ impl FunctionInliner {
             TypedExprKind::Grouping(inner) | TypedExprKind::Lambda(inner) => {
                 self.inline_in_expr(inner, analysis);
             }
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.inline_in_expr(condition, analysis);
                 self.inline_in_expr(then_branch, analysis);
                 self.inline_in_expr(else_branch, analysis);
             }
             TypedExprKind::Assign { value, .. } => self.inline_in_expr(value, analysis),
             TypedExprKind::Member { object, .. } => self.inline_in_expr(object, analysis),
-            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
-                for e in elements.iter_mut() { self.inline_in_expr(e, analysis); }
+            TypedExprKind::ArrayLiteral { elements, .. }
+            | TypedExprKind::VecLiteral { elements, .. } => {
+                for e in elements.iter_mut() {
+                    self.inline_in_expr(e, analysis);
+                }
             }
             TypedExprKind::ArraySized { size, .. } => self.inline_in_expr(size, analysis),
             TypedExprKind::Index { object, index } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
                 self.inline_in_expr(value, analysis);
             }
             TypedExprKind::Range { start, end, .. } => {
-                if let Some(s) = start { self.inline_in_expr(s, analysis); }
-                if let Some(e) = end { self.inline_in_expr(e, analysis); }
+                if let Some(s) = start {
+                    self.inline_in_expr(s, analysis);
+                }
+                if let Some(e) = end {
+                    self.inline_in_expr(e, analysis);
+                }
             }
             TypedExprKind::Slice { object, range } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(range, analysis);
             }
             TypedExprKind::LambdaInner { body, .. } => {
-                for s in body.iter_mut() { self.inline_in_stmt(s, analysis); }
+                for s in body.iter_mut() {
+                    self.inline_in_stmt(s, analysis);
+                }
             }
             _ => {}
         }
 
         // now check if this is a call we should inline
-        if let TypedExprKind::Call { callee, args } = &expr.kind {
-            if let TypedExprKind::Identifier(name) = &callee.kind {
-                if let Some(func) = self.functions.get(name).cloned() {
-                    let aggressive = self.level == OptimizationLevel::Aggressive;
-                    let decision = analysis.should_inline(name, aggressive, BLOAT_BUDGET);
+        if let TypedExprKind::Call { callee, args } = &expr.kind
+            && let TypedExprKind::Identifier(name) = &callee.kind
+            && let Some(func) = self.functions.get(name).cloned()
+        {
+            let aggressive = self.level == OptimizationLevel::Aggressive;
+            let decision = analysis.should_inline(name, aggressive, BLOAT_BUDGET);
 
-                    match decision {
-                        InlineDecision::Inline => {
-                            if let Some(inlined) = self.expander.expand_call(&func, args, expr.span) {
-                                *expr = inlined;
-                                self.stats.functions_inlined += 1;
-                            }
-                        }
-                        InlineDecision::Blocked(reason) => {
-                            if let Some(info) = analysis.functions.get(name) {
-                                if info.has_inline || info.has_inline_always {
-                                    self.emit_warning(name, &func, reason);
-                                }
-                            }
-                        }
-                        InlineDecision::Skip => {}
+            match decision {
+                InlineDecision::Inline => {
+                    if let Some(inlined) = self.expander.expand_call(&func, args, expr.span) {
+                        *expr = inlined;
+                        self.stats.functions_inlined += 1;
                     }
                 }
+                InlineDecision::Blocked(reason) => {
+                    if let Some(info) = analysis.functions.get(name)
+                        && (info.has_inline || info.has_inline_always)
+                    {
+                        self.emit_warning(name, &func, reason);
+                    }
+                }
+                InlineDecision::Skip => {}
             }
         }
     }
@@ -207,7 +233,9 @@ impl FunctionInliner {
 }
 
 impl OptimizationPass for FunctionInliner {
-    fn name(&self) -> &'static str { "function_inline" }
+    fn name(&self) -> &'static str {
+        "function_inline"
+    }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
         if self.level == OptimizationLevel::None {

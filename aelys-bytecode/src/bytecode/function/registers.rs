@@ -223,7 +223,13 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                 let count = c as usize;
                 update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), None);
                 if count > 0 {
-                    update_max_reg(&mut max_reg, &mut used, (b as usize) + count - 1, None, None);
+                    update_max_reg(
+                        &mut max_reg,
+                        &mut used,
+                        (b as usize) + count - 1,
+                        None,
+                        None,
+                    );
                 }
             }
             // Array load/get/store - all use 3 registers
@@ -270,15 +276,33 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
             }
             // Vec load - dest, vec, idx (3 registers)
             OpCode::VecLoadI | OpCode::VecLoadF | OpCode::VecLoadB | OpCode::VecLoadP => {
-                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize,
+                    Some(b as usize),
+                    Some(c as usize),
+                );
             }
             // Vec get (safe) - dest, vec, idx (3 registers)
             OpCode::VecGetI | OpCode::VecGetF | OpCode::VecGetB | OpCode::VecGetP => {
-                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize,
+                    Some(b as usize),
+                    Some(c as usize),
+                );
             }
             // Vec store - vec, idx, val (3 registers)
             OpCode::VecStoreI | OpCode::VecStoreF | OpCode::VecStoreB | OpCode::VecStoreP => {
-                update_max_reg(&mut max_reg, &mut used, a as usize, Some(b as usize), Some(c as usize));
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize,
+                    Some(b as usize),
+                    Some(c as usize),
+                );
             }
         }
         ip += 1;

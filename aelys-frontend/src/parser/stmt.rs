@@ -118,7 +118,7 @@ impl Parser {
                 start,
                 end,
                 inclusive,
-                step,
+                step: Box::new(step),
                 body: Box::new(body),
             },
             start_span.merge(end_span),
@@ -175,9 +175,7 @@ impl Parser {
     }
 
     pub(crate) fn consume_semicolon(&mut self) -> Result<()> {
-        if self.match_token(&TokenKind::Semicolon) {
-            Ok(())
-        } else if self.check(&TokenKind::RBrace) {
+        if self.match_token(&TokenKind::Semicolon) || self.check(&TokenKind::RBrace) {
             Ok(())
         } else {
             Err(self.error(CompileErrorKind::UnexpectedToken {

@@ -25,7 +25,7 @@ fn test_float_roundtrip() {
         0.0f64,
         1.0,
         -1.0,
-        3.14159,
+        std::f64::consts::PI,
         f64::MAX,
         f64::MIN,
         f64::INFINITY,
@@ -59,7 +59,7 @@ fn test_null() {
 #[test]
 fn test_type_discrimination() {
     let int = Value::int(42);
-    let float = Value::float(3.14);
+    let float = Value::float(2.72);
     let boolean = Value::bool(true);
     let null = Value::null();
 

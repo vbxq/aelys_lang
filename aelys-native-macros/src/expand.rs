@@ -22,19 +22,19 @@ pub fn expand_module(args: ModuleArgs, mut input: ItemMod) -> syn::Result<TokenS
     let mut wrapper_functions = Vec::new();
 
     for item in content {
-        if let Item::Fn(func) = &item {
-            if has_aelys_export_attr(func) {
-                let (wrapper, export_info) = generate_export_wrapper(func)?;
-                wrapper_functions.push(wrapper);
-                exports.push(export_info);
+        if let Item::Fn(func) = &item
+            && has_aelys_export_attr(func)
+        {
+            let (wrapper, export_info) = generate_export_wrapper(func)?;
+            wrapper_functions.push(wrapper);
+            exports.push(export_info);
 
-                let mut clean_func = func.clone();
-                clean_func
-                    .attrs
-                    .retain(|attr| !attr.path().is_ident("aelys_export"));
-                new_content.push(Item::Fn(clean_func));
-                continue;
-            }
+            let mut clean_func = func.clone();
+            clean_func
+                .attrs
+                .retain(|attr| !attr.path().is_ident("aelys_export"));
+            new_content.push(Item::Fn(clean_func));
+            continue;
         }
         new_content.push(item);
     }

@@ -213,7 +213,13 @@ impl Compiler {
         todo!("range")
     }
 
-    fn select_typed_opcode(inner: &InferType, i: OpCode, f: OpCode, b: OpCode, p: OpCode) -> OpCode {
+    fn select_typed_opcode(
+        inner: &InferType,
+        i: OpCode,
+        f: OpCode,
+        b: OpCode,
+        p: OpCode,
+    ) -> OpCode {
         match inner {
             InferType::Int => i,
             InferType::Float => f,

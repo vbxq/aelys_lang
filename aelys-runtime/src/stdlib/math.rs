@@ -214,10 +214,11 @@ fn native_log2(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_pow(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     // try int pow for small exponents - better precision
-    if let (Some(b), Some(e)) = (args[0].as_int(), args[1].as_int()) {
-        if e >= 0 && e <= 62 {
-            if let Some(r) = b.checked_pow(e as u32) { return Ok(Value::int(r)); }
-        }
+    if let (Some(b), Some(e)) = (args[0].as_int(), args[1].as_int())
+        && (0..=62).contains(&e)
+        && let Some(r) = b.checked_pow(e as u32)
+    {
+        return Ok(Value::int(r));
     }
     let base = get_number(vm, args[0], "pow")?;
     let exp = get_number(vm, args[1], "pow")?;
@@ -258,7 +259,9 @@ fn native_max(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     if let (Some(a), Some(b)) = (args[0].as_int(), args[1].as_int()) {
         return Ok(Value::int(a.max(b)));
     }
-    Ok(Value::float(get_number(vm, args[0], "max")?.max(get_number(vm, args[1], "max")?)))
+    Ok(Value::float(
+        get_number(vm, args[0], "max")?.max(get_number(vm, args[1], "max")?),
+    ))
 }
 
 fn native_clamp(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
@@ -272,11 +275,15 @@ fn native_clamp(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 }
 
 fn native_deg_to_rad(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::float(get_number(vm, args[0], "deg_to_rad")?.to_radians()))
+    Ok(Value::float(
+        get_number(vm, args[0], "deg_to_rad")?.to_radians(),
+    ))
 }
 
 fn native_rad_to_deg(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(Value::float(get_number(vm, args[0], "rad_to_deg")?.to_degrees()))
+    Ok(Value::float(
+        get_number(vm, args[0], "rad_to_deg")?.to_degrees(),
+    ))
 }
 fn native_hypot(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let x = get_number(vm, args[0], "hypot")?;
@@ -356,9 +363,10 @@ fn native_randint(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     })?;
 
     if debut > fin {
-        return Err(vm.runtime_error(RuntimeErrorKind::InvalidBytecode(
-            format!("randint: debut ({}) must be <= fin ({})", debut, fin)
-        )));
+        return Err(vm.runtime_error(RuntimeErrorKind::InvalidBytecode(format!(
+            "randint: debut ({}) must be <= fin ({})",
+            debut, fin
+        ))));
     }
 
     let mut rng = rand::thread_rng();

@@ -16,8 +16,10 @@ impl VM {
         source: Arc<Source>,
         capabilities: VMCapabilities,
     ) -> Result<Self, RuntimeError> {
-        let mut config = VmConfig::default();
-        config.capabilities = capabilities;
+        let config = VmConfig {
+            capabilities,
+            ..VmConfig::default()
+        };
         Self::with_config_and_args(source, config, Vec::new())
     }
 

@@ -11,9 +11,9 @@ use super::{GcRef, Value};
 pub struct CallFrame {
     pub function: GcRef,
     pub ip: usize,
-    pub base: usize,           // offset into shared register stack
+    pub base: usize, // offset into shared register stack
     pub return_dest: u8,
-    pub bytecode_ptr: *const u32,   // cached for speed
+    pub bytecode_ptr: *const u32, // cached for speed
     pub bytecode_len: usize,
     pub constants_ptr: *const Value,
     pub constants_len: usize,
@@ -49,6 +49,7 @@ impl CallFrame {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     pub fn with_return_dest(
         function: GcRef,
@@ -76,6 +77,7 @@ impl CallFrame {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[inline(always)]
     pub fn with_upvalues(
         function: GcRef,
@@ -105,12 +107,24 @@ impl CallFrame {
         }
     }
 
-    pub fn return_dest(&self) -> u8 { self.return_dest }
-    pub fn function(&self) -> GcRef { self.function }
-    pub fn ip(&self) -> usize { self.ip }
-    pub fn base(&self) -> usize { self.base }
-    pub fn advance_ip(&mut self) { self.ip += 1; }
-    pub fn set_ip(&mut self, ip: usize) { self.ip = ip; }
+    pub fn return_dest(&self) -> u8 {
+        self.return_dest
+    }
+    pub fn function(&self) -> GcRef {
+        self.function
+    }
+    pub fn ip(&self) -> usize {
+        self.ip
+    }
+    pub fn base(&self) -> usize {
+        self.base
+    }
+    pub fn advance_ip(&mut self) {
+        self.ip += 1;
+    }
+    pub fn set_ip(&mut self, ip: usize) {
+        self.ip = ip;
+    }
 
     pub fn jump(&mut self, offset: i16) {
         if offset >= 0 {

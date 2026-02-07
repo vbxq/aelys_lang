@@ -15,11 +15,11 @@ pub struct Manifest {
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ModulePolicy {
     #[serde(default)]
-    pub capabilities: Vec<String>,   // e.g., ["gpu", "window"]
+    pub capabilities: Vec<String>, // e.g., ["gpu", "window"]
     pub required_version: Option<String>, // semver constraint
     pub checksum: Option<String>,
-    pub kind: Option<String>,        // "script", "native", or "std"
-    pub path: Option<String>,        // explicit path override
+    pub kind: Option<String>, // "script", "native", or "std"
+    pub path: Option<String>, // explicit path override
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -57,7 +57,9 @@ impl From<toml::de::Error> for ManifestError {
 }
 
 impl Manifest {
-    pub fn from_str(raw: &str) -> Result<Self, toml::de::Error> { toml::from_str(raw) }
+    pub fn parse(raw: &str) -> Result<Self, toml::de::Error> {
+        toml::from_str(raw)
+    }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, ManifestError> {
         let raw = std::str::from_utf8(bytes).map_err(|e| {
@@ -67,7 +69,9 @@ impl Manifest {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        toml::to_string_pretty(self).unwrap_or_default().into_bytes()
+        toml::to_string_pretty(self)
+            .unwrap_or_default()
+            .into_bytes()
     }
 
     pub fn from_file(path: &Path) -> Result<Self, ManifestError> {
@@ -82,31 +86,41 @@ impl Manifest {
         let filename = source_path.file_name()?.to_string_lossy();
         manifest_path.set_file_name(format!("{}.toml", filename));
 
-        if manifest_path.exists() {
-            if let Ok(manifest) = Self::from_file(&manifest_path) {
-                return Some(manifest);
-            }
+        if manifest_path.exists()
+            && let Ok(manifest) = Self::from_file(&manifest_path)
+        {
+            return Some(manifest);
         }
 
         // Try aelys.toml in the same directory (project manifest)
         if let Some(parent) = source_path.parent() {
             let project_manifest = parent.join("aelys.toml");
-            if project_manifest.exists() {
-                if let Ok(manifest) = Self::from_file(&project_manifest) {
-                    return Some(manifest);
-                }
+            if project_manifest.exists()
+                && let Ok(manifest) = Self::from_file(&project_manifest)
+            {
+                return Some(manifest);
             }
         }
 
         None
     }
 
-    pub fn module(&self, name: &str) -> Option<&ModulePolicy> { self.module.get(name) }
-    pub fn should_bundle_natives(&self) -> bool { self.build.bundle_native_modules.unwrap_or(false) }
-    pub fn module_names(&self) -> impl Iterator<Item = &String> { self.module.keys() }
+    pub fn module(&self, name: &str) -> Option<&ModulePolicy> {
+        self.module.get(name)
+    }
+    pub fn should_bundle_natives(&self) -> bool {
+        self.build.bundle_native_modules.unwrap_or(false)
+    }
+    pub fn module_names(&self) -> impl Iterator<Item = &String> {
+        self.module.keys()
+    }
 }
 
 impl ModulePolicy {
-    pub fn is_native(&self) -> bool { self.kind.as_deref() == Some("native") }
-    pub fn is_script(&self) -> bool { self.kind.as_deref() == Some("script") }
+    pub fn is_native(&self) -> bool {
+        self.kind.as_deref() == Some("native")
+    }
+    pub fn is_script(&self) -> bool {
+        self.kind.as_deref() == Some("script")
+    }
 }

@@ -9,7 +9,11 @@ impl fmt::Display for Warning {
         writeln!(f, "warning[W{:04}]: {}", code, msg)?;
 
         if let Some(ref src) = self.source {
-            writeln!(f, "  --> {}:{}:{}", src.name, self.span.line, self.span.column)?;
+            writeln!(
+                f,
+                "  --> {}:{}:{}",
+                src.name, self.span.line, self.span.column
+            )?;
 
             let line_content = src.get_line(self.span.line);
             let width = self.span.line.to_string().len().max(2);

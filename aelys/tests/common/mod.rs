@@ -70,11 +70,17 @@ pub fn assert_aelys_str(source: &str, expected: &str) {
         .expect("Aelys execution should succeed");
     if let Some(ptr) = result.as_ptr() {
         let heap = vm.heap();
-        if let Some(obj) = heap.get(aelys_runtime::vm::GcRef::new(ptr)) {
-            if let aelys_runtime::vm::ObjectKind::String(s) = &obj.kind {
-                assert_eq!(s.as_str(), expected, "Expected string '{}' but got '{}'", expected, s.as_str());
-                return;
-            }
+        if let Some(obj) = heap.get(aelys_runtime::vm::GcRef::new(ptr))
+            && let aelys_runtime::vm::ObjectKind::String(s) = &obj.kind
+        {
+            assert_eq!(
+                s.as_str(),
+                expected,
+                "Expected string '{}' but got '{}'",
+                expected,
+                s.as_str()
+            );
+            return;
         }
     }
     panic!("Expected string '{}' but got {:?}", expected, result);

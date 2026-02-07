@@ -73,11 +73,11 @@ impl Compiler {
             }
         }
 
-        if let Some(acc) = result_reg {
-            if acc != dest {
-                self.emit_a(OpCode::Move, dest, acc, 0, span);
-                self.free_register(acc);
-            }
+        if let Some(acc) = result_reg
+            && acc != dest
+        {
+            self.emit_a(OpCode::Move, dest, acc, 0, span);
+            self.free_register(acc);
         }
 
         Ok(())
@@ -105,9 +105,7 @@ impl Compiler {
         // CallGlobalNative reads args from dest+1, so compile the expression there.
         let arg_reg = dest + 1;
 
-        if (arg_reg as usize) < self.register_pool.len()
-            && !self.register_pool[arg_reg as usize]
-        {
+        if (arg_reg as usize) < self.register_pool.len() && !self.register_pool[arg_reg as usize] {
             // fast path: dest+1 is free
             self.register_pool[arg_reg as usize] = true;
             self.next_register = self.next_register.max(arg_reg + 1);

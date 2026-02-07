@@ -41,10 +41,10 @@ impl VM {
             let count = frame.num_registers as usize;
             for i in 0..count {
                 let idx = base + i;
-                if idx < self.registers.len() {
-                    if let Some(gc_ref) = self.registers[idx].as_ptr() {
-                        self.heap.mark(GcRef::new(gc_ref));
-                    }
+                if idx < self.registers.len()
+                    && let Some(gc_ref) = self.registers[idx].as_ptr()
+                {
+                    self.heap.mark(GcRef::new(gc_ref));
                 }
             }
             self.heap.mark(frame.function());

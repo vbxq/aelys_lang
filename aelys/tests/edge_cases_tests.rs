@@ -38,11 +38,7 @@ string.len(s)
 
 #[test]
 fn unicode_zero_width_characters() {
-    let code = r#"
-needs std.string
-let s = "a​b"
-string.len(s)
-"#;
+    let code = "needs std.string\nlet s = \"a\u{200B}b\"\nstring.len(s)\n";
     let result = run_aelys(code);
     assert!(result.as_int().unwrap() > 2);
 }
@@ -64,11 +60,14 @@ if byte_len > char_len { 1 } else { 0 }
 #[test]
 fn very_long_string_literal() {
     let long_str = "x".repeat(10000);
-    let code = format!(r#"
+    let code = format!(
+        r#"
 needs std.string
 let s = "{}"
 string.len(s)
-"#, long_str);
+"#,
+        long_str
+    );
     assert_aelys_int(&code, 10000);
 }
 

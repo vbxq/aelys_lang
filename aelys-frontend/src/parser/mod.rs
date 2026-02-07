@@ -21,7 +21,12 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, source: Arc<Source>) -> Self {
-        Self { tokens, current: 0, source, recursion_depth: 0 }
+        Self {
+            tokens,
+            current: 0,
+            source,
+            recursion_depth: 0,
+        }
     }
 
     pub fn parse(mut self) -> Result<Vec<Stmt>> {

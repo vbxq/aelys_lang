@@ -31,6 +31,7 @@ impl Compiler {
         );
         nested_compiler.current.arity = params.len() as u8;
 
+        #[allow(clippy::collapsible_if)]
         for (capture_name, _capture_ty) in captures {
             if let Some((local_reg, mutable, _resolved_ty)) =
                 self.resolve_variable_typed(capture_name)
@@ -58,19 +59,17 @@ impl Compiler {
                 .iter()
                 .enumerate()
                 .find(|(_, uv)| uv.name == *capture_name)
-            {
-                if !nested_compiler
+                && !nested_compiler
                     .upvalues
                     .iter()
                     .any(|uv| uv.name == *capture_name)
-                {
-                    nested_compiler.upvalues.push(Upvalue {
-                        is_local: false,
-                        index: upvalue_idx as u8,
-                        name: capture_name.clone(),
-                        mutable: self.upvalues[upvalue_idx].mutable,
-                    });
-                }
+            {
+                nested_compiler.upvalues.push(Upvalue {
+                    is_local: false,
+                    index: upvalue_idx as u8,
+                    name: capture_name.clone(),
+                    mutable: self.upvalues[upvalue_idx].mutable,
+                });
             }
         }
 

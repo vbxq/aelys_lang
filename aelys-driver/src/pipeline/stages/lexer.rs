@@ -4,7 +4,9 @@ use aelys_frontend::lexer::Lexer;
 pub struct LexerStage; // Source -> Tokens
 
 impl Stage for LexerStage {
-    fn name(&self) -> &str { "lexer" }
+    fn name(&self) -> &str {
+        "lexer"
+    }
 
     fn execute(&mut self, input: StageInput) -> Result<StageOutput, PipelineError> {
         let source = match input {

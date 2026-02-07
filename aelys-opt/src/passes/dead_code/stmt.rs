@@ -7,9 +7,16 @@ impl DeadCodeEliminator {
         match &stmt.kind {
             TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue => true,
             TypedStmtKind::Block(stmts) => stmts.last().map(Self::is_terminator).unwrap_or(false),
-            TypedStmtKind::If { then_branch, else_branch, .. } => {
-                Self::is_terminator(then_branch) &&
-                else_branch.as_ref().map(|e| Self::is_terminator(e)).unwrap_or(false)
+            TypedStmtKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                Self::is_terminator(then_branch)
+                    && else_branch
+                        .as_ref()
+                        .map(|e| Self::is_terminator(e))
+                        .unwrap_or(false)
             }
             _ => false,
         }
@@ -24,7 +31,9 @@ impl DeadCodeEliminator {
     }
 
     pub(super) fn eliminate_in_block(&mut self, stmts: &mut Vec<TypedStmt>) -> bool {
-        for stmt in stmts.iter_mut() { self.eliminate_in_stmt(stmt); }
+        for stmt in stmts.iter_mut() {
+            self.eliminate_in_stmt(stmt);
+        }
 
         // cut off everything after a terminator
         let mut found_terminator = false;
@@ -33,17 +42,19 @@ impl DeadCodeEliminator {
                 self.stats.dead_code_eliminated += 1;
                 return false;
             }
-            if Self::is_terminator(stmt) { found_terminator = true; }
+            if Self::is_terminator(stmt) {
+                found_terminator = true;
+            }
             true
         });
 
         // also remove empty blocks
         stmts.retain(|stmt| {
-            if let TypedStmtKind::Block(inner) = &stmt.kind {
-                if inner.is_empty() {
-                    self.stats.dead_code_eliminated += 1;
-                    return false;
-                }
+            if let TypedStmtKind::Block(inner) = &stmt.kind
+                && inner.is_empty()
+            {
+                self.stats.dead_code_eliminated += 1;
+                return false;
             }
             true
         });
@@ -53,20 +64,24 @@ impl DeadCodeEliminator {
 
     pub(super) fn eliminate_in_stmt(&mut self, stmt: &mut TypedStmt) {
         match &mut stmt.kind {
-            TypedStmtKind::Block(stmts) => { self.eliminate_in_block(stmts); }
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::Block(stmts) => {
+                self.eliminate_in_block(stmts);
+            }
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 // if condition is constant, replace whole if with the taken branch
                 if let Some(cond_value) = Self::is_const_bool(condition) {
                     let branch = if cond_value {
                         self.eliminate_in_stmt(then_branch);
                         Some(then_branch)
+                    } else if let Some(else_b) = else_branch {
+                        self.eliminate_in_stmt(else_b);
+                        Some(else_b)
                     } else {
-                        if let Some(else_b) = else_branch {
-                            self.eliminate_in_stmt(else_b);
-                            Some(else_b)
-                        } else {
-                            None
-                        }
+                        None
                     };
 
                     if let Some(branch) = branch {
@@ -88,7 +103,9 @@ impl DeadCodeEliminator {
                     return;
                 }
                 self.eliminate_in_stmt(then_branch);
-                if let Some(else_b) = else_branch { self.eliminate_in_stmt(else_b); }
+                if let Some(else_b) = else_branch {
+                    self.eliminate_in_stmt(else_b);
+                }
             }
             TypedStmtKind::While { condition, body } => {
                 // while false { } -> nothing
@@ -103,8 +120,10 @@ impl DeadCodeEliminator {
             TypedStmtKind::Function(func) => self.eliminate_in_function(func),
             TypedStmtKind::Expression(expr) => self.eliminate_in_expr(expr),
             TypedStmtKind::Let { initializer, .. } => self.eliminate_in_expr(initializer),
-            TypedStmtKind::Return(_) | TypedStmtKind::Break
-            | TypedStmtKind::Continue | TypedStmtKind::Needs(_) => {}
+            TypedStmtKind::Return(_)
+            | TypedStmtKind::Break
+            | TypedStmtKind::Continue
+            | TypedStmtKind::Needs(_) => {}
         }
     }
 

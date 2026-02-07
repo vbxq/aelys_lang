@@ -2,6 +2,7 @@ use crate::vm::OpCode;
 
 use super::{verify_jump, verify_reg, verify_reg_range};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn verify(
     opcode: OpCode,
     ip: usize,

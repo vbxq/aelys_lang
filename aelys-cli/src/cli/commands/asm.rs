@@ -13,7 +13,13 @@ use std::path::{Path, PathBuf};
 
 #[allow(dead_code)]
 pub fn asm_transform(path: &Path) -> Result<PathBuf, String> {
-    match asm_transform_with_options(path, None, false, OptimizationLevel::Standard, VmConfig::default())? {
+    match asm_transform_with_options(
+        path,
+        None,
+        false,
+        OptimizationLevel::Standard,
+        VmConfig::default(),
+    )? {
         Some(path) => Ok(path),
         None => Err("no output produced".to_string()),
     }
@@ -30,7 +36,8 @@ pub fn run_with_options(
     let config = parsed.config;
 
     let output_path = output.map(PathBuf::from);
-    let output = asm_transform_with_options(Path::new(path), output_path, stdout, opt_level, config)?;
+    let output =
+        asm_transform_with_options(Path::new(path), output_path, stdout, opt_level, config)?;
     if let Some(path) = output {
         eprintln!("Wrote {}", path.display());
     }
@@ -120,8 +127,8 @@ fn compile_source(
         .parse()
         .map_err(|err| err.to_string())?;
 
-    let mut vm = VM::with_config_and_args(src.clone(), config, Vec::new())
-        .map_err(|err| err.to_string())?;
+    let mut vm =
+        VM::with_config_and_args(src.clone(), config, Vec::new()).map_err(|err| err.to_string())?;
 
     let (imports, _loader) = load_modules_with_loader(&stmts, path, src.clone(), &mut vm)
         .map_err(|err| err.to_string())?;

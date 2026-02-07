@@ -6,7 +6,7 @@ use aelys_syntax::Span;
 
 // fits in 16-bit immediate?
 pub(super) fn small_int_immediate(n: i64) -> Option<i16> {
-    (n >= i16::MIN as i64 && n <= i16::MAX as i64).then(|| n as i16)
+    (n >= i16::MIN as i64 && n <= i16::MAX as i64).then_some(n as i16)
 }
 
 impl Compiler {

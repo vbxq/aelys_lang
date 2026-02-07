@@ -113,7 +113,7 @@ fn test_no_fold_overflow() {
     // Test that overflow protection works (uses checked arithmetic)
     // Use smaller numbers that are within VM's int range
     let code = "let x = 100000\nx + 200000";
-    let result = run_with_opt(&code, OptimizationLevel::Basic);
+    let result = run_with_opt(code, OptimizationLevel::Basic);
     assert_eq!(result.as_int(), Some(300000));
 }
 
@@ -389,7 +389,7 @@ fn test_global_const_prop_float_globals() {
         AREA
     "#;
     let result = run_with_opt(code, OptimizationLevel::Standard);
-    let expected = 3.14159 * 2.0 * 2.0;
+    let expected = std::f64::consts::PI * 2.0 * 2.0;
     assert!((result.as_float().unwrap() - expected).abs() < 0.0001);
 }
 
@@ -598,6 +598,6 @@ fn test_local_const_prop_float() {
         test()
     "#;
     let result = run_with_opt(code, OptimizationLevel::Standard);
-    let expected = 3.14159 * 2.0 * 2.0;
+    let expected = std::f64::consts::PI * 2.0 * 2.0;
     assert!((result.as_float().unwrap() - expected).abs() < 0.0001);
 }

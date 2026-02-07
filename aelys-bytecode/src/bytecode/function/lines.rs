@@ -2,11 +2,12 @@ use super::Function;
 
 impl Function {
     pub(super) fn add_line(&mut self, line: u32) {
-        if let Some((count, last_line)) = self.lines.last_mut() {
-            if *last_line == line && *count < u16::MAX {
-                *count += 1;
-                return;
-            }
+        if let Some((count, last_line)) = self.lines.last_mut()
+            && *last_line == line
+            && *count < u16::MAX
+        {
+            *count += 1;
+            return;
         }
         self.lines.push((1, line));
     }

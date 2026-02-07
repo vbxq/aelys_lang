@@ -26,12 +26,17 @@ impl Compiler {
         }
 
         // Handle format string with placeholders: func("x={}", x) -> func("x=" + __tostring(x))
-        if let Some((fmt_parts, placeholder_count)) = Self::get_fmt_string_placeholders(args) {
-            if placeholder_count > 0 {
-                return self.compile_call_with_fmt_placeholders(
-                    callee, args, fmt_parts, placeholder_count, dest, span
-                );
-            }
+        if let Some((fmt_parts, placeholder_count)) = Self::get_fmt_string_placeholders(args)
+            && placeholder_count > 0
+        {
+            return self.compile_call_with_fmt_placeholders(
+                callee,
+                args,
+                fmt_parts,
+                placeholder_count,
+                dest,
+                span,
+            );
         }
 
         // each of these returns true if it handled the call
@@ -61,7 +66,10 @@ impl Compiler {
             return None;
         }
         if let ExprKind::FmtString(parts) = &args[0].kind {
-            let count = parts.iter().filter(|p| matches!(p, FmtStringPart::Placeholder)).count();
+            let count = parts
+                .iter()
+                .filter(|p| matches!(p, FmtStringPart::Placeholder))
+                .count();
             return Some((parts, count));
         }
         None
@@ -87,7 +95,8 @@ impl Compiler {
                 )),
                 span,
                 self.source.clone(),
-            ).into());
+            )
+            .into());
         }
 
         let fmt_extra_args = &args[1..1 + extra_args_needed];
@@ -117,7 +126,13 @@ impl Compiler {
             self.compile_expr(arg, arg_reg)?;
         }
 
-        self.emit_c(aelys_bytecode::OpCode::Call, dest, func_reg, total_args as u8, span);
+        self.emit_c(
+            aelys_bytecode::OpCode::Call,
+            dest,
+            func_reg,
+            total_args as u8,
+            span,
+        );
 
         for i in (0..=total_args).rev() {
             let reg = func_reg + i as u8;
@@ -153,10 +168,10 @@ impl Compiler {
     }
 
     pub(super) fn is_member_call(callee: &Expr) -> Option<(&str, &str)> {
-        if let ExprKind::Member { object, member } = &callee.kind {
-            if let ExprKind::Identifier(module_name) = &object.kind {
-                return Some((module_name, member));
-            }
+        if let ExprKind::Member { object, member } = &callee.kind
+            && let ExprKind::Identifier(module_name) = &object.kind
+        {
+            return Some((module_name, member));
         }
         None
     }

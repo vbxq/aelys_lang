@@ -70,6 +70,7 @@ impl Compiler {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn for_nested_function(
         name: Option<String>,
         source: Arc<Source>,

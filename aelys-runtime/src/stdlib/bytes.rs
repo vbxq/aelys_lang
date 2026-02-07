@@ -28,8 +28,11 @@ fn check_offset(off: i64, op: &'static str) -> Result<usize, String> {
 }
 
 fn bounds_err(size: usize, off: usize, buf_len: usize) -> Option<String> {
-    if off.checked_add(size).map_or(true, |end| end > buf_len) {
-        Some(format!("{}B at offset {} exceeds buffer size {}", size, off, buf_len))
+    if off.checked_add(size).is_none_or(|end| end > buf_len) {
+        Some(format!(
+            "{}B at offset {} exceeds buffer size {}",
+            size, off, buf_len
+        ))
     } else {
         None
     }
@@ -61,8 +64,12 @@ macro_rules! impl_write_int {
             let h = get_handle(vm, args[0], $op)?;
             let off = check_offset(get_int(vm, args[1], $op)?, $op).map_err(|e| err(vm, $op, e))?;
             let val = get_int(vm, args[2], $op)?;
-            if val < $min || val > $max {
-                return Err(err(vm, $op, format!("value {} out of range [{}, {}]", val, $min, $max)));
+            if !($min..=$max).contains(&val) {
+                return Err(err(
+                    vm,
+                    $op,
+                    format!("value {} out of range [{}, {}]", val, $min, $max),
+                ));
             }
             let buf_len = get_buf_len(vm, h, $op)?;
             if let Some(e) = bounds_err($size, off, buf_len) {
@@ -88,7 +95,11 @@ macro_rules! impl_write_float {
             } else if let Some(i) = args[2].as_int() {
                 i as $ty
             } else {
-                return Err(err(vm, $op, format!("expected number, got {}", vm.value_type_name(args[2]))));
+                return Err(err(
+                    vm,
+                    $op,
+                    format!("expected number, got {}", vm.value_type_name(args[2])),
+                ));
             };
             let buf_len = get_buf_len(vm, h, $op)?;
             if let Some(e) = bounds_err($size, off, buf_len) {
@@ -174,18 +185,31 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
     reg!("reverse", 3, native_reverse);
     reg!("swap", 3, native_swap);
 
-    Ok(StdModuleExports { all_exports: exports, native_functions: natives })
+    Ok(StdModuleExports {
+        all_exports: exports,
+        native_functions: natives,
+    })
 }
 
 fn native_alloc(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let size = get_int(vm, args[0], "alloc")?;
     if size <= 0 {
-        return Err(err(vm, "alloc", format!("size must be positive, got {}", size)));
+        return Err(err(
+            vm,
+            "alloc",
+            format!("size must be positive, got {}", size),
+        ));
     }
     if size as usize > MAX_ALLOC {
-        return Err(err(vm, "alloc", format!("size {} exceeds max {}", size, MAX_ALLOC)));
+        return Err(err(
+            vm,
+            "alloc",
+            format!("size {} exceeds max {}", size, MAX_ALLOC),
+        ));
     }
-    let handle = vm.store_resource(Resource::ByteBuffer(ByteBuffer { data: vec![0u8; size as usize] }));
+    let handle = vm.store_resource(Resource::ByteBuffer(ByteBuffer {
+        data: vec![0u8; size as usize],
+    }));
     Ok(Value::int(handle as i64))
 }
 
@@ -210,10 +234,18 @@ fn native_resize(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "resize")?;
     let new_size = get_int(vm, args[1], "resize")?;
     if new_size <= 0 {
-        return Err(err(vm, "resize", format!("size must be positive, got {}", new_size)));
+        return Err(err(
+            vm,
+            "resize",
+            format!("size must be positive, got {}", new_size),
+        ));
     }
     if new_size as usize > MAX_ALLOC {
-        return Err(err(vm, "resize", format!("size {} exceeds max {}", new_size, MAX_ALLOC)));
+        return Err(err(
+            vm,
+            "resize",
+            format!("size {} exceeds max {}", new_size, MAX_ALLOC),
+        ));
     }
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource_mut(h) {
         buf.data.resize(new_size as usize, 0);
@@ -252,10 +284,15 @@ fn native_equals(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_read_u8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "read_u8")?;
-    let off = check_offset(get_int(vm, args[1], "read_u8")?, "read_u8").map_err(|e| err(vm, "read_u8", e))?;
+    let off = check_offset(get_int(vm, args[1], "read_u8")?, "read_u8")
+        .map_err(|e| err(vm, "read_u8", e))?;
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource(h) {
         if off >= buf.data.len() {
-            return Err(err(vm, "read_u8", format!("offset {} >= size {}", off, buf.data.len())));
+            return Err(err(
+                vm,
+                "read_u8",
+                format!("offset {} >= size {}", off, buf.data.len()),
+            ));
         }
         Ok(Value::int(buf.data[off] as i64))
     } else {
@@ -265,14 +302,23 @@ fn native_read_u8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_write_u8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "write_u8")?;
-    let off = check_offset(get_int(vm, args[1], "write_u8")?, "write_u8").map_err(|e| err(vm, "write_u8", e))?;
+    let off = check_offset(get_int(vm, args[1], "write_u8")?, "write_u8")
+        .map_err(|e| err(vm, "write_u8", e))?;
     let val = get_int(vm, args[2], "write_u8")?;
-    if val < 0 || val > 255 {
-        return Err(err(vm, "write_u8", format!("value {} out of range [0, 255]", val)));
+    if !(0..=255).contains(&val) {
+        return Err(err(
+            vm,
+            "write_u8",
+            format!("value {} out of range [0, 255]", val),
+        ));
     }
     let buf_len = get_buf_len(vm, h, "write_u8")?;
     if off >= buf_len {
-        return Err(err(vm, "write_u8", format!("offset {} >= size {}", off, buf_len)));
+        return Err(err(
+            vm,
+            "write_u8",
+            format!("offset {} >= size {}", off, buf_len),
+        ));
     }
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource_mut(h) {
         buf.data[off] = val as u8;
@@ -284,10 +330,15 @@ fn native_write_u8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_read_i8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "read_i8")?;
-    let off = check_offset(get_int(vm, args[1], "read_i8")?, "read_i8").map_err(|e| err(vm, "read_i8", e))?;
+    let off = check_offset(get_int(vm, args[1], "read_i8")?, "read_i8")
+        .map_err(|e| err(vm, "read_i8", e))?;
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource(h) {
         if off >= buf.data.len() {
-            return Err(err(vm, "read_i8", format!("offset {} >= size {}", off, buf.data.len())));
+            return Err(err(
+                vm,
+                "read_i8",
+                format!("offset {} >= size {}", off, buf.data.len()),
+            ));
         }
         Ok(Value::int(buf.data[off] as i8 as i64))
     } else {
@@ -297,14 +348,23 @@ fn native_read_i8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_write_i8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "write_i8")?;
-    let off = check_offset(get_int(vm, args[1], "write_i8")?, "write_i8").map_err(|e| err(vm, "write_i8", e))?;
+    let off = check_offset(get_int(vm, args[1], "write_i8")?, "write_i8")
+        .map_err(|e| err(vm, "write_i8", e))?;
     let val = get_int(vm, args[2], "write_i8")?;
     if val < i8::MIN as i64 || val > i8::MAX as i64 {
-        return Err(err(vm, "write_i8", format!("value {} out of range [{}, {}]", val, i8::MIN, i8::MAX)));
+        return Err(err(
+            vm,
+            "write_i8",
+            format!("value {} out of range [{}, {}]", val, i8::MIN, i8::MAX),
+        ));
     }
     let buf_len = get_buf_len(vm, h, "write_i8")?;
     if off >= buf_len {
-        return Err(err(vm, "write_i8", format!("offset {} >= size {}", off, buf_len)));
+        return Err(err(
+            vm,
+            "write_i8",
+            format!("offset {} >= size {}", off, buf_len),
+        ));
     }
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource_mut(h) {
         buf.data[off] = val as i8 as u8;
@@ -314,40 +374,248 @@ fn native_write_i8(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     }
 }
 
-impl_read!(native_read_u16, "read_u16", 2, u16, from_le_bytes, |v: u16| Value::int(v as i64));
-impl_read!(native_read_i16, "read_i16", 2, i16, from_le_bytes, |v: i16| Value::int(v as i64));
-impl_read!(native_read_u16_be, "read_u16_be", 2, u16, from_be_bytes, |v: u16| Value::int(v as i64));
-impl_read!(native_read_i16_be, "read_i16_be", 2, i16, from_be_bytes, |v: i16| Value::int(v as i64));
+impl_read!(
+    native_read_u16,
+    "read_u16",
+    2,
+    u16,
+    from_le_bytes,
+    |v: u16| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i16,
+    "read_i16",
+    2,
+    i16,
+    from_le_bytes,
+    |v: i16| Value::int(v as i64)
+);
+impl_read!(
+    native_read_u16_be,
+    "read_u16_be",
+    2,
+    u16,
+    from_be_bytes,
+    |v: u16| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i16_be,
+    "read_i16_be",
+    2,
+    i16,
+    from_be_bytes,
+    |v: i16| Value::int(v as i64)
+);
 
-impl_write_int!(native_write_u16, "write_u16", 2, u16, to_le_bytes, 0, u16::MAX as i64);
-impl_write_int!(native_write_i16, "write_i16", 2, i16, to_le_bytes, i16::MIN as i64, i16::MAX as i64);
-impl_write_int!(native_write_u16_be, "write_u16_be", 2, u16, to_be_bytes, 0, u16::MAX as i64);
-impl_write_int!(native_write_i16_be, "write_i16_be", 2, i16, to_be_bytes, i16::MIN as i64, i16::MAX as i64);
+impl_write_int!(
+    native_write_u16,
+    "write_u16",
+    2,
+    u16,
+    to_le_bytes,
+    0,
+    u16::MAX as i64
+);
+impl_write_int!(
+    native_write_i16,
+    "write_i16",
+    2,
+    i16,
+    to_le_bytes,
+    i16::MIN as i64,
+    i16::MAX as i64
+);
+impl_write_int!(
+    native_write_u16_be,
+    "write_u16_be",
+    2,
+    u16,
+    to_be_bytes,
+    0,
+    u16::MAX as i64
+);
+impl_write_int!(
+    native_write_i16_be,
+    "write_i16_be",
+    2,
+    i16,
+    to_be_bytes,
+    i16::MIN as i64,
+    i16::MAX as i64
+);
 
-impl_read!(native_read_u32, "read_u32", 4, u32, from_le_bytes, |v: u32| Value::int(v as i64));
-impl_read!(native_read_i32, "read_i32", 4, i32, from_le_bytes, |v: i32| Value::int(v as i64));
-impl_read!(native_read_u32_be, "read_u32_be", 4, u32, from_be_bytes, |v: u32| Value::int(v as i64));
-impl_read!(native_read_i32_be, "read_i32_be", 4, i32, from_be_bytes, |v: i32| Value::int(v as i64));
+impl_read!(
+    native_read_u32,
+    "read_u32",
+    4,
+    u32,
+    from_le_bytes,
+    |v: u32| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i32,
+    "read_i32",
+    4,
+    i32,
+    from_le_bytes,
+    |v: i32| Value::int(v as i64)
+);
+impl_read!(
+    native_read_u32_be,
+    "read_u32_be",
+    4,
+    u32,
+    from_be_bytes,
+    |v: u32| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i32_be,
+    "read_i32_be",
+    4,
+    i32,
+    from_be_bytes,
+    |v: i32| Value::int(v as i64)
+);
 
-impl_write_int!(native_write_u32, "write_u32", 4, u32, to_le_bytes, 0, u32::MAX as i64);
-impl_write_int!(native_write_i32, "write_i32", 4, i32, to_le_bytes, i32::MIN as i64, i32::MAX as i64);
-impl_write_int!(native_write_u32_be, "write_u32_be", 4, u32, to_be_bytes, 0, u32::MAX as i64);
-impl_write_int!(native_write_i32_be, "write_i32_be", 4, i32, to_be_bytes, i32::MIN as i64, i32::MAX as i64);
+impl_write_int!(
+    native_write_u32,
+    "write_u32",
+    4,
+    u32,
+    to_le_bytes,
+    0,
+    u32::MAX as i64
+);
+impl_write_int!(
+    native_write_i32,
+    "write_i32",
+    4,
+    i32,
+    to_le_bytes,
+    i32::MIN as i64,
+    i32::MAX as i64
+);
+impl_write_int!(
+    native_write_u32_be,
+    "write_u32_be",
+    4,
+    u32,
+    to_be_bytes,
+    0,
+    u32::MAX as i64
+);
+impl_write_int!(
+    native_write_i32_be,
+    "write_i32_be",
+    4,
+    i32,
+    to_be_bytes,
+    i32::MIN as i64,
+    i32::MAX as i64
+);
 
-impl_read!(native_read_u64, "read_u64", 8, u64, from_le_bytes, |v: u64| Value::int(v as i64));
-impl_read!(native_read_i64, "read_i64", 8, i64, from_le_bytes, |v: i64| Value::int(v));
-impl_read!(native_read_u64_be, "read_u64_be", 8, u64, from_be_bytes, |v: u64| Value::int(v as i64));
-impl_read!(native_read_i64_be, "read_i64_be", 8, i64, from_be_bytes, |v: i64| Value::int(v));
+impl_read!(
+    native_read_u64,
+    "read_u64",
+    8,
+    u64,
+    from_le_bytes,
+    |v: u64| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i64,
+    "read_i64",
+    8,
+    i64,
+    from_le_bytes,
+    |v: i64| Value::int(v)
+);
+impl_read!(
+    native_read_u64_be,
+    "read_u64_be",
+    8,
+    u64,
+    from_be_bytes,
+    |v: u64| Value::int(v as i64)
+);
+impl_read!(
+    native_read_i64_be,
+    "read_i64_be",
+    8,
+    i64,
+    from_be_bytes,
+    |v: i64| Value::int(v)
+);
 
-impl_write_int!(native_write_u64, "write_u64", 8, u64, to_le_bytes, i64::MIN, i64::MAX);
-impl_write_int!(native_write_i64, "write_i64", 8, i64, to_le_bytes, i64::MIN, i64::MAX);
-impl_write_int!(native_write_u64_be, "write_u64_be", 8, u64, to_be_bytes, i64::MIN, i64::MAX);
-impl_write_int!(native_write_i64_be, "write_i64_be", 8, i64, to_be_bytes, i64::MIN, i64::MAX);
+impl_write_int!(
+    native_write_u64,
+    "write_u64",
+    8,
+    u64,
+    to_le_bytes,
+    i64::MIN,
+    i64::MAX
+);
+impl_write_int!(
+    native_write_i64,
+    "write_i64",
+    8,
+    i64,
+    to_le_bytes,
+    i64::MIN,
+    i64::MAX
+);
+impl_write_int!(
+    native_write_u64_be,
+    "write_u64_be",
+    8,
+    u64,
+    to_be_bytes,
+    i64::MIN,
+    i64::MAX
+);
+impl_write_int!(
+    native_write_i64_be,
+    "write_i64_be",
+    8,
+    i64,
+    to_be_bytes,
+    i64::MIN,
+    i64::MAX
+);
 
-impl_read!(native_read_f32, "read_f32", 4, f32, from_le_bytes, |v: f32| Value::float(v as f64));
-impl_read!(native_read_f64, "read_f64", 8, f64, from_le_bytes, |v: f64| Value::float(v));
-impl_read!(native_read_f32_be, "read_f32_be", 4, f32, from_be_bytes, |v: f32| Value::float(v as f64));
-impl_read!(native_read_f64_be, "read_f64_be", 8, f64, from_be_bytes, |v: f64| Value::float(v));
+impl_read!(
+    native_read_f32,
+    "read_f32",
+    4,
+    f32,
+    from_le_bytes,
+    |v: f32| Value::float(v as f64)
+);
+impl_read!(
+    native_read_f64,
+    "read_f64",
+    8,
+    f64,
+    from_le_bytes,
+    |v: f64| Value::float(v)
+);
+impl_read!(
+    native_read_f32_be,
+    "read_f32_be",
+    4,
+    f32,
+    from_be_bytes,
+    |v: f32| Value::float(v as f64)
+);
+impl_read!(
+    native_read_f64_be,
+    "read_f64_be",
+    8,
+    f64,
+    from_be_bytes,
+    |v: f64| Value::float(v)
+);
 
 impl_write_float!(native_write_f32, "write_f32", 4, f32, to_le_bytes);
 impl_write_float!(native_write_f64, "write_f64", 8, f64, to_le_bytes);
@@ -356,9 +624,11 @@ impl_write_float!(native_write_f64_be, "write_f64_be", 8, f64, to_be_bytes);
 
 fn native_copy(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let src_h = get_handle(vm, args[0], "copy")?;
-    let src_off = check_offset(get_int(vm, args[1], "copy")?, "copy").map_err(|e| err(vm, "copy", e))?;
+    let src_off =
+        check_offset(get_int(vm, args[1], "copy")?, "copy").map_err(|e| err(vm, "copy", e))?;
     let dst_h = get_handle(vm, args[2], "copy")?;
-    let dst_off = check_offset(get_int(vm, args[3], "copy")?, "copy").map_err(|e| err(vm, "copy", e))?;
+    let dst_off =
+        check_offset(get_int(vm, args[3], "copy")?, "copy").map_err(|e| err(vm, "copy", e))?;
     let len = get_int(vm, args[4], "copy")?;
     if len < 0 {
         return Err(err(vm, "copy", format!("negative length {}", len)));
@@ -407,14 +677,19 @@ fn native_copy(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_fill(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "fill")?;
-    let off = check_offset(get_int(vm, args[1], "fill")?, "fill").map_err(|e| err(vm, "fill", e))?;
+    let off =
+        check_offset(get_int(vm, args[1], "fill")?, "fill").map_err(|e| err(vm, "fill", e))?;
     let len = get_int(vm, args[2], "fill")?;
     let val = get_int(vm, args[3], "fill")?;
     if len < 0 {
         return Err(err(vm, "fill", format!("negative length {}", len)));
     }
-    if val < 0 || val > 255 {
-        return Err(err(vm, "fill", format!("value {} out of range [0, 255]", val)));
+    if !(0..=255).contains(&val) {
+        return Err(err(
+            vm,
+            "fill",
+            format!("value {} out of range [0, 255]", val),
+        ));
     }
     let len = len as usize;
     if len == 0 {
@@ -436,7 +711,11 @@ fn native_from_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
     let s = get_string(vm, args[0], "from_string")?;
     let data = s.as_bytes().to_vec();
     if data.len() > MAX_ALLOC {
-        return Err(err(vm, "from_string", format!("string length {} exceeds max {}", data.len(), MAX_ALLOC)));
+        return Err(err(
+            vm,
+            "from_string",
+            format!("string length {} exceeds max {}", data.len(), MAX_ALLOC),
+        ));
     }
     let handle = vm.store_resource(Resource::ByteBuffer(ByteBuffer { data }));
     Ok(Value::int(handle as i64))
@@ -444,7 +723,8 @@ fn native_from_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
 
 fn native_decode(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "decode")?;
-    let off = check_offset(get_int(vm, args[1], "decode")?, "decode").map_err(|e| err(vm, "decode", e))?;
+    let off = check_offset(get_int(vm, args[1], "decode")?, "decode")
+        .map_err(|e| err(vm, "decode", e))?;
     let len = get_int(vm, args[2], "decode")?;
     if len < 0 {
         return Err(err(vm, "decode", format!("negative length {}", len)));
@@ -456,7 +736,13 @@ fn native_decode(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         }
         match std::str::from_utf8(&buf.data[off..off + len]) {
             Ok(s) => s.to_string(),
-            Err(e) => return Err(err(vm, "decode", format!("invalid UTF-8 at byte {}", e.valid_up_to()))),
+            Err(e) => {
+                return Err(err(
+                    vm,
+                    "decode",
+                    format!("invalid UTF-8 at byte {}", e.valid_up_to()),
+                ));
+            }
         }
     } else {
         return Err(err(vm, "decode", "invalid handle".into()));
@@ -466,7 +752,8 @@ fn native_decode(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_write_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "write_string")?;
-    let off = check_offset(get_int(vm, args[1], "write_string")?, "write_string").map_err(|e| err(vm, "write_string", e))?;
+    let off = check_offset(get_int(vm, args[1], "write_string")?, "write_string")
+        .map_err(|e| err(vm, "write_string", e))?;
     let s = get_string(vm, args[2], "write_string")?.to_string();
     let bytes = s.as_bytes();
     let buf_len = get_buf_len(vm, h, "write_string")?;
@@ -483,16 +770,25 @@ fn native_write_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeErro
 
 fn native_find(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "find")?;
-    let start = check_offset(get_int(vm, args[1], "find")?, "find").map_err(|e| err(vm, "find", e))?;
+    let start =
+        check_offset(get_int(vm, args[1], "find")?, "find").map_err(|e| err(vm, "find", e))?;
     let end = get_int(vm, args[2], "find")?;
     let needle = get_int(vm, args[3], "find")?;
-    if needle < 0 || needle > 255 {
-        return Err(err(vm, "find", format!("needle {} out of range [0, 255]", needle)));
+    if !(0..=255).contains(&needle) {
+        return Err(err(
+            vm,
+            "find",
+            format!("needle {} out of range [0, 255]", needle),
+        ));
     }
     let needle = needle as u8;
     if let Some(Resource::ByteBuffer(buf)) = vm.get_resource(h) {
         let buf_len = buf.data.len();
-        let end = if end < 0 { buf_len } else { (end as usize).min(buf_len) };
+        let end = if end < 0 {
+            buf_len
+        } else {
+            (end as usize).min(buf_len)
+        };
         if start >= end {
             return Ok(Value::int(-1));
         }
@@ -507,7 +803,8 @@ fn native_find(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_reverse(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let h = get_handle(vm, args[0], "reverse")?;
-    let off = check_offset(get_int(vm, args[1], "reverse")?, "reverse").map_err(|e| err(vm, "reverse", e))?;
+    let off = check_offset(get_int(vm, args[1], "reverse")?, "reverse")
+        .map_err(|e| err(vm, "reverse", e))?;
     let len = get_int(vm, args[2], "reverse")?;
     if len < 0 {
         return Err(err(vm, "reverse", format!("negative length {}", len)));

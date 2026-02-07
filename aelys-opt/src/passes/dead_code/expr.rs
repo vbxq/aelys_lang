@@ -4,7 +4,11 @@ use aelys_sema::{TypedExpr, TypedExprKind};
 impl DeadCodeEliminator {
     pub(super) fn eliminate_in_expr(&mut self, expr: &mut TypedExpr) {
         match &mut expr.kind {
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 // ternary with constant condition -> just the result
                 if let Some(cond_value) = Self::is_const_bool(condition) {
                     let taken = if cond_value { then_branch } else { else_branch };
@@ -28,15 +32,22 @@ impl DeadCodeEliminator {
             }
             TypedExprKind::Call { callee, args } => {
                 self.eliminate_in_expr(callee);
-                for arg in args { self.eliminate_in_expr(arg); }
+                for arg in args {
+                    self.eliminate_in_expr(arg);
+                }
             }
             TypedExprKind::Assign { value, .. } => self.eliminate_in_expr(value),
             TypedExprKind::Grouping(inner) => self.eliminate_in_expr(inner),
             TypedExprKind::Lambda(inner) => self.eliminate_in_expr(inner),
-            TypedExprKind::LambdaInner { body, .. } => { self.eliminate_in_block(body); }
+            TypedExprKind::LambdaInner { body, .. } => {
+                self.eliminate_in_block(body);
+            }
             TypedExprKind::Member { object, .. } => self.eliminate_in_expr(object),
-            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
-                for elem in elements { self.eliminate_in_expr(elem); }
+            TypedExprKind::ArrayLiteral { elements, .. }
+            | TypedExprKind::VecLiteral { elements, .. } => {
+                for elem in elements {
+                    self.eliminate_in_expr(elem);
+                }
             }
             TypedExprKind::ArraySized { size, .. } => {
                 self.eliminate_in_expr(size);
@@ -45,14 +56,22 @@ impl DeadCodeEliminator {
                 self.eliminate_in_expr(object);
                 self.eliminate_in_expr(index);
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.eliminate_in_expr(object);
                 self.eliminate_in_expr(index);
                 self.eliminate_in_expr(value);
             }
             TypedExprKind::Range { start, end, .. } => {
-                if let Some(s) = start { self.eliminate_in_expr(s); }
-                if let Some(e) = end { self.eliminate_in_expr(e); }
+                if let Some(s) = start {
+                    self.eliminate_in_expr(s);
+                }
+                if let Some(e) = end {
+                    self.eliminate_in_expr(e);
+                }
             }
             TypedExprKind::Slice { object, range } => {
                 self.eliminate_in_expr(object);
@@ -65,8 +84,12 @@ impl DeadCodeEliminator {
                     }
                 }
             }
-            TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
-            | TypedExprKind::String(_) | TypedExprKind::Null | TypedExprKind::Identifier(_) => {}
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null
+            | TypedExprKind::Identifier(_) => {}
         }
     }
 }

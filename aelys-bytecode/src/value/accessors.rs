@@ -2,7 +2,9 @@ use super::{PAYLOAD_MASK, QNAN, TAG_MASK, TAG_NESTED_FN, Value};
 
 impl Value {
     pub fn as_int(&self) -> Option<i64> {
-        if !self.is_int() { return None; }
+        if !self.is_int() {
+            return None;
+        }
         let payload = self.0 & PAYLOAD_MASK;
         Some(((payload << 16) as i64) >> 16) // sign-extend from 48 bits
     }
@@ -12,11 +14,11 @@ impl Value {
     }
 
     pub fn as_bool(&self) -> Option<bool> {
-        self.is_bool().then(|| (self.0 & 1) != 0)
+        self.is_bool().then_some((self.0 & 1) != 0)
     }
 
     pub fn as_ptr(&self) -> Option<usize> {
-        self.is_ptr().then(|| (self.0 & PAYLOAD_MASK) as usize)
+        self.is_ptr().then_some((self.0 & PAYLOAD_MASK) as usize)
     }
 
     /// Check if this is a nested function marker and return the index if so.
@@ -29,10 +31,14 @@ impl Value {
     }
 
     #[inline(always)]
-    pub fn raw_bits(&self) -> u64 { self.0 }
+    pub fn raw_bits(&self) -> u64 {
+        self.0
+    }
 
     #[inline(always)]
-    pub fn from_raw(bits: u64) -> Self { Self(bits) }
+    pub fn from_raw(bits: u64) -> Self {
+        Self(bits)
+    }
 
     // unchecked variants for type-specialized opcodes (hot paths)
     #[inline(always)]

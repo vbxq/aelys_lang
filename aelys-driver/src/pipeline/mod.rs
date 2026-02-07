@@ -2,6 +2,7 @@
 
 mod cache;
 mod compile;
+#[allow(clippy::module_inception)]
 mod pipeline;
 mod run;
 mod standard;

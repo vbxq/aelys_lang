@@ -32,23 +32,27 @@ impl Compiler {
                 right,
             } = &value.kind
             {
-                if let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind) {
-                    if id == name && *n >= 0 && *n <= 255 {
-                        self.emit_a(OpCode::AddI, reg, reg, *n as u8, span);
-                        if reg != dest {
-                            self.emit_a(OpCode::Move, dest, reg, 0, span);
-                        }
-                        return Ok(());
+                if let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind)
+                    && id == name
+                    && *n >= 0
+                    && *n <= 255
+                {
+                    self.emit_a(OpCode::AddI, reg, reg, *n as u8, span);
+                    if reg != dest {
+                        self.emit_a(OpCode::Move, dest, reg, 0, span);
                     }
+                    return Ok(());
                 }
-                if let (ExprKind::Int(n), ExprKind::Identifier(id)) = (&left.kind, &right.kind) {
-                    if id == name && *n >= 0 && *n <= 255 {
-                        self.emit_a(OpCode::AddI, reg, reg, *n as u8, span);
-                        if reg != dest {
-                            self.emit_a(OpCode::Move, dest, reg, 0, span);
-                        }
-                        return Ok(());
+                if let (ExprKind::Int(n), ExprKind::Identifier(id)) = (&left.kind, &right.kind)
+                    && id == name
+                    && *n >= 0
+                    && *n <= 255
+                {
+                    self.emit_a(OpCode::AddI, reg, reg, *n as u8, span);
+                    if reg != dest {
+                        self.emit_a(OpCode::Move, dest, reg, 0, span);
                     }
+                    return Ok(());
                 }
             }
 
@@ -57,16 +61,16 @@ impl Compiler {
                 op: BinaryOp::Sub,
                 right,
             } = &value.kind
+                && let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind)
+                && id == name
+                && *n >= 0
+                && *n <= 255
             {
-                if let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind) {
-                    if id == name && *n >= 0 && *n <= 255 {
-                        self.emit_a(OpCode::SubI, reg, reg, *n as u8, span);
-                        if reg != dest {
-                            self.emit_a(OpCode::Move, dest, reg, 0, span);
-                        }
-                        return Ok(());
-                    }
+                self.emit_a(OpCode::SubI, reg, reg, *n as u8, span);
+                if reg != dest {
+                    self.emit_a(OpCode::Move, dest, reg, 0, span);
                 }
+                return Ok(());
             }
 
             self.compile_expr(value, reg)?;
@@ -99,33 +103,32 @@ impl Compiler {
                 .into());
             }
 
-            if !self.global_indices.contains_key(name) {
-                if let ExprKind::Binary {
+            if !self.global_indices.contains_key(name)
+                && let ExprKind::Binary {
                     left,
                     op: BinaryOp::Add,
                     right,
                 } = &value.kind
+            {
+                if let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind)
+                    && id == name
+                    && *n >= 0
+                    && *n <= 255
                 {
-                    if let (ExprKind::Identifier(id), ExprKind::Int(n)) = (&left.kind, &right.kind)
-                    {
-                        if id == name && *n >= 0 && *n <= 255 {
-                            let name_ref = self.heap.intern_string(name);
-                            let const_idx =
-                                self.add_constant(Value::ptr(name_ref.index()), span)?;
-                            self.emit_c(OpCode::IncGlobalI, dest, const_idx as u8, *n as u8, span);
-                            return Ok(());
-                        }
-                    }
-                    if let (ExprKind::Int(n), ExprKind::Identifier(id)) = (&left.kind, &right.kind)
-                    {
-                        if id == name && *n >= 0 && *n <= 255 {
-                            let name_ref = self.heap.intern_string(name);
-                            let const_idx =
-                                self.add_constant(Value::ptr(name_ref.index()), span)?;
-                            self.emit_c(OpCode::IncGlobalI, dest, const_idx as u8, *n as u8, span);
-                            return Ok(());
-                        }
-                    }
+                    let name_ref = self.heap.intern_string(name);
+                    let const_idx = self.add_constant(Value::ptr(name_ref.index()), span)?;
+                    self.emit_c(OpCode::IncGlobalI, dest, const_idx as u8, *n as u8, span);
+                    return Ok(());
+                }
+                if let (ExprKind::Int(n), ExprKind::Identifier(id)) = (&left.kind, &right.kind)
+                    && id == name
+                    && *n >= 0
+                    && *n <= 255
+                {
+                    let name_ref = self.heap.intern_string(name);
+                    let const_idx = self.add_constant(Value::ptr(name_ref.index()), span)?;
+                    self.emit_c(OpCode::IncGlobalI, dest, const_idx as u8, *n as u8, span);
+                    return Ok(());
                 }
             }
 

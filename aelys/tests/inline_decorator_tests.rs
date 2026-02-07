@@ -62,7 +62,10 @@ fn inline_trivial_function_auto_inlines() {
         fn tiny(x: int) -> int { x + 1 }
         tiny(99)
     "#;
-    assert_eq!(run_opt(src, OptimizationLevel::Standard).as_int(), Some(100));
+    assert_eq!(
+        run_opt(src, OptimizationLevel::Standard).as_int(),
+        Some(100)
+    );
 }
 
 #[test]
@@ -89,7 +92,11 @@ fn warn_on_recursive_inline() {
         factorial(5)
     "#;
     let warnings = optimize_and_get_warnings(src, OptimizationLevel::Standard);
-    assert!(warnings.iter().any(|k| matches!(k, WarningKind::InlineRecursive)));
+    assert!(
+        warnings
+            .iter()
+            .any(|k| matches!(k, WarningKind::InlineRecursive))
+    );
 }
 
 #[test]
@@ -108,7 +115,11 @@ fn warn_on_mutual_recursion() {
         ping(5)
     "#;
     let warnings = optimize_and_get_warnings(src, OptimizationLevel::Standard);
-    assert!(warnings.iter().any(|k| matches!(k, WarningKind::InlineMutualRecursion { .. })));
+    assert!(
+        warnings
+            .iter()
+            .any(|k| matches!(k, WarningKind::InlineMutualRecursion { .. }))
+    );
 }
 
 // nested function @inline is currently a no-op (optimizer only considers top-level functions)
@@ -144,7 +155,10 @@ fn top_level_closure_with_capture() {
         uses_global()
     "#;
     // executes correctly even though top-level globals are involved
-    assert_eq!(run_opt(src, OptimizationLevel::Standard).as_int(), Some(100));
+    assert_eq!(
+        run_opt(src, OptimizationLevel::Standard).as_int(),
+        Some(100)
+    );
 }
 
 #[test]
@@ -157,7 +171,11 @@ fn recursive_inline_always_still_warns() {
         0
     "#;
     let warnings = optimize_and_get_warnings(src, OptimizationLevel::Standard);
-    assert!(warnings.iter().any(|k| matches!(k, WarningKind::InlineRecursive)));
+    assert!(
+        warnings
+            .iter()
+            .any(|k| matches!(k, WarningKind::InlineRecursive))
+    );
 }
 
 // multiple functions
@@ -207,7 +225,10 @@ fn inline_returning_float() {
         fn half(x: float) -> float { x / 2.0 }
         half(10.0)
     "#;
-    assert_eq!(run_opt(src, OptimizationLevel::Standard).as_float(), Some(5.0));
+    assert_eq!(
+        run_opt(src, OptimizationLevel::Standard).as_float(),
+        Some(5.0)
+    );
 }
 
 #[test]
@@ -217,7 +238,10 @@ fn inline_with_bool() {
         fn negate(b: bool) -> bool { not b }
         negate(true)
     "#;
-    assert_eq!(run_opt(src, OptimizationLevel::Standard).as_bool(), Some(false));
+    assert_eq!(
+        run_opt(src, OptimizationLevel::Standard).as_bool(),
+        Some(false)
+    );
 }
 
 // O0 should NOT inline
@@ -271,7 +295,10 @@ fn inline_in_if_condition() {
 
         if is_positive(5) { 100 } else { 0 }
     "#;
-    assert_eq!(run_opt(src, OptimizationLevel::Standard).as_int(), Some(100));
+    assert_eq!(
+        run_opt(src, OptimizationLevel::Standard).as_int(),
+        Some(100)
+    );
 }
 
 #[test]
@@ -348,7 +375,11 @@ fn warn_on_triple_mutual_recursion() {
         a(3)
     "#;
     let warnings = optimize_and_get_warnings(src, OptimizationLevel::Standard);
-    assert!(warnings.iter().any(|k| matches!(k, WarningKind::InlineMutualRecursion { .. })));
+    assert!(
+        warnings
+            .iter()
+            .any(|k| matches!(k, WarningKind::InlineMutualRecursion { .. }))
+    );
 }
 
 // function with side effects (still inlines, just not pure)

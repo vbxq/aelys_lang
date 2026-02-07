@@ -14,26 +14,38 @@ const MAX_FOLDED_STRING_LEN: usize = 4096; // don't bloat constant pool with hug
 const INT_MIN: i64 = -(1i64 << 47);
 const INT_MAX: i64 = (1i64 << 47) - 1;
 
-fn is_in_vm_range(value: i64) -> bool { value >= INT_MIN && value <= INT_MAX }
+fn is_in_vm_range(value: i64) -> bool {
+    (INT_MIN..=INT_MAX).contains(&value)
+}
 
 pub struct ConstantFolder {
     stats: OptimizationStats,
 }
 
 impl ConstantFolder {
-    pub fn new() -> Self { Self { stats: OptimizationStats::new() } }
+    pub fn new() -> Self {
+        Self {
+            stats: OptimizationStats::new(),
+        }
+    }
 }
 
 impl Default for ConstantFolder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OptimizationPass for ConstantFolder {
-    fn name(&self) -> &'static str { "constant_fold" }
+    fn name(&self) -> &'static str {
+        "constant_fold"
+    }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
         self.stats = OptimizationStats::new();
-        for stmt in &mut program.stmts { self.optimize_stmt(stmt); }
+        for stmt in &mut program.stmts {
+            self.optimize_stmt(stmt);
+        }
         self.stats.clone()
     }
 }

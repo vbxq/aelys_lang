@@ -25,19 +25,18 @@ impl ModuleLoader {
             .cloned()
             .expect("needs.path validated as non-empty");
         if let Some(policy) = self.manifest.as_ref().and_then(|m| m.module(&module_name)) {
-            if !policy.capabilities.is_empty() {
-                if let Err(denied_cap) = vm.config().check_native_capabilities(&policy.capabilities)
-                {
-                    return Err(AelysError::Compile(CompileError::new(
-                        CompileErrorKind::NativeCapabilityDenied {
-                            module: module_path_str.to_string(),
-                            capability: denied_cap,
-                            required: policy.capabilities.clone(),
-                        },
-                        needs.span,
-                        self.source.clone(),
-                    )));
-                }
+            if !policy.capabilities.is_empty()
+                && let Err(denied_cap) = vm.config().check_native_capabilities(&policy.capabilities)
+            {
+                return Err(AelysError::Compile(CompileError::new(
+                    CompileErrorKind::NativeCapabilityDenied {
+                        module: module_path_str.to_string(),
+                        capability: denied_cap,
+                        required: policy.capabilities.clone(),
+                    },
+                    needs.span,
+                    self.source.clone(),
+                )));
             }
 
             if let Some(expected_checksum) = &policy.checksum {
@@ -67,28 +66,27 @@ impl ModuleLoader {
             .load_dynamic(module_path_str, file_path)
             .map_err(|err| self.native_error(module_path_str, err, needs.span))?;
 
-        if let Some(policy) = self.manifest.as_ref().and_then(|m| m.module(&module_name)) {
-            if let Some(required_version) = &policy.required_version {
-                let version_ok = match (&native_module.version, VersionReq::parse(required_version))
-                {
-                    (Some(module_ver), Ok(req)) => match Version::parse(module_ver) {
-                        Ok(ver) => req.matches(&ver),
-                        Err(_) => false,
+        if let Some(policy) = self.manifest.as_ref().and_then(|m| m.module(&module_name))
+            && let Some(required_version) = &policy.required_version
+        {
+            let version_ok = match (&native_module.version, VersionReq::parse(required_version)) {
+                (Some(module_ver), Ok(req)) => match Version::parse(module_ver) {
+                    Ok(ver) => req.matches(&ver),
+                    Err(_) => false,
+                },
+                (None, _) => false,
+                (_, Err(_)) => false,
+            };
+            if !version_ok {
+                return Err(AelysError::Compile(CompileError::new(
+                    CompileErrorKind::NativeVersionMismatch {
+                        module: module_path_str.to_string(),
+                        required: required_version.clone(),
+                        found: native_module.version.clone(),
                     },
-                    (None, _) => false,
-                    (_, Err(_)) => false,
-                };
-                if !version_ok {
-                    return Err(AelysError::Compile(CompileError::new(
-                        CompileErrorKind::NativeVersionMismatch {
-                            module: module_path_str.to_string(),
-                            required: required_version.clone(),
-                            found: native_module.version.clone(),
-                        },
-                        needs.span,
-                        self.source.clone(),
-                    )));
-                }
+                    needs.span,
+                    self.source.clone(),
+                )));
             }
         }
 

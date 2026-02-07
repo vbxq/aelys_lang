@@ -64,13 +64,17 @@ impl InferType {
             "string" => InferType::String,
             "null" => InferType::Null,
             "array" => {
-                let inner = ann.type_param.as_ref()
+                let inner = ann
+                    .type_param
+                    .as_ref()
                     .map(|p| Self::from_annotation(p))
                     .unwrap_or(InferType::Dynamic);
                 InferType::Array(Box::new(inner))
             }
             "vec" => {
-                let inner = ann.type_param.as_ref()
+                let inner = ann
+                    .type_param
+                    .as_ref()
                     .map(|p| Self::from_annotation(p))
                     .unwrap_or(InferType::Dynamic);
                 InferType::Vec(Box::new(inner))

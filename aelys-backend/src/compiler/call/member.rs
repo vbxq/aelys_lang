@@ -13,23 +13,23 @@ impl Compiler {
         dest: u8,
         span: Span,
     ) -> Result<()> {
-        if let ExprKind::Identifier(module_name) = &object.kind {
-            if self.module_aliases.contains(module_name) {
-                let qualified_name = format!("{}::{}", module_name, member);
+        if let ExprKind::Identifier(module_name) = &object.kind
+            && self.module_aliases.contains(module_name)
+        {
+            let qualified_name = format!("{}::{}", module_name, member);
 
-                let idx = if let Some(&idx) = self.global_indices.get(&qualified_name) {
-                    idx
-                } else {
-                    let idx = self.next_global_index;
-                    self.global_indices.insert(qualified_name.clone(), idx);
-                    self.next_global_index += 1;
-                    idx
-                };
+            let idx = if let Some(&idx) = self.global_indices.get(&qualified_name) {
+                idx
+            } else {
+                let idx = self.next_global_index;
+                self.global_indices.insert(qualified_name.clone(), idx);
+                self.next_global_index += 1;
+                idx
+            };
 
-                self.accessed_globals.insert(qualified_name);
-                self.emit_b(OpCode::GetGlobalIdx, dest, idx as i16, span);
-                return Ok(());
-            }
+            self.accessed_globals.insert(qualified_name);
+            self.emit_b(OpCode::GetGlobalIdx, dest, idx as i16, span);
+            return Ok(());
         }
 
         if Self::is_builtin(member) {

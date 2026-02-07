@@ -62,7 +62,7 @@ impl Compiler {
                 start,
                 end,
                 *inclusive,
-                step.as_ref(),
+                step.as_ref().as_ref(),
                 body,
                 stmt.span,
             ),

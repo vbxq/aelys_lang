@@ -3,10 +3,20 @@ use aelys_sema::{InferType, TypedExpr, TypedExprKind};
 use aelys_syntax::BinaryOp;
 
 impl ConstantFolder {
-    pub(super) fn fold_float_binary(&mut self, a: f64, op: BinaryOp, b: f64, original: &TypedExpr) -> Option<TypedExpr> {
+    pub(super) fn fold_float_binary(
+        &mut self,
+        a: f64,
+        op: BinaryOp,
+        b: f64,
+        original: &TypedExpr,
+    ) -> Option<TypedExpr> {
         let bool_result = |this: &mut Self, v: bool| {
             this.stats.constants_folded += 1;
-            Some(TypedExpr::new(TypedExprKind::Bool(v), InferType::Bool, original.span))
+            Some(TypedExpr::new(
+                TypedExprKind::Bool(v),
+                InferType::Bool,
+                original.span,
+            ))
         };
 
         // comparisons first
@@ -31,9 +41,15 @@ impl ConstantFolder {
         };
 
         // don't fold to inf/nan - let runtime handle it
-        if result.is_nan() || result.is_infinite() { return None; }
+        if result.is_nan() || result.is_infinite() {
+            return None;
+        }
 
         self.stats.constants_folded += 1;
-        Some(TypedExpr::new(TypedExprKind::Float(result), InferType::Float, original.span))
+        Some(TypedExpr::new(
+            TypedExprKind::Float(result),
+            InferType::Float,
+            original.span,
+        ))
     }
 }

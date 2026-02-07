@@ -8,7 +8,9 @@ pub fn compute_file_checksum(path: &Path) -> std::io::Result<String> {
     let mut hash = 0xcbf29ce484222325u64;
     loop {
         let n = file.read(&mut buffer)?;
-        if n == 0 { break; }
+        if n == 0 {
+            break;
+        }
         for &byte in &buffer[..n] {
             hash ^= u64::from(byte);
             hash = hash.wrapping_mul(0x100000001b3);

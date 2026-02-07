@@ -67,7 +67,14 @@ pub fn load_modules_for_program(
                         }
                         // Store module path for conflict detection
                         // For stdlib: also store qualified name for bytecode translation
-                        symbol_origins.insert(name.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            name.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(name.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(name.clone());
@@ -77,7 +84,14 @@ pub fn load_modules_for_program(
                 ImportKind::Symbols(symbols) => {
                     for sym in symbols {
                         let qualified = format!("{}::{}", module_alias, sym);
-                        symbol_origins.insert(sym.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            sym.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(sym.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(sym.clone());
@@ -87,7 +101,14 @@ pub fn load_modules_for_program(
                 ImportKind::Wildcard => {
                     for name in module_info.exports.keys() {
                         let qualified = format!("{}::{}", module_alias, name);
-                        symbol_origins.insert(name.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            name.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(name.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(name.clone());
@@ -167,7 +188,14 @@ pub fn load_modules_with_loader(
                         }
                         // Store module path for conflict detection
                         // For stdlib: also store qualified name for bytecode translation
-                        symbol_origins.insert(name.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            name.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(name.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(name.clone());
@@ -177,7 +205,14 @@ pub fn load_modules_with_loader(
                 ImportKind::Symbols(symbols) => {
                     for sym in symbols {
                         let qualified = format!("{}::{}", module_alias, sym);
-                        symbol_origins.insert(sym.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            sym.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(sym.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(sym.clone());
@@ -187,7 +222,14 @@ pub fn load_modules_with_loader(
                 ImportKind::Wildcard => {
                     for name in module_info.exports.keys() {
                         let qualified = format!("{}::{}", module_alias, name);
-                        symbol_origins.insert(name.clone(), if is_stdlib { qualified.clone() } else { module_path.clone() });
+                        symbol_origins.insert(
+                            name.clone(),
+                            if is_stdlib {
+                                qualified.clone()
+                            } else {
+                                module_path.clone()
+                            },
+                        );
                         known_globals.insert(name.clone());
                         if module_info.native_functions.contains(&qualified) {
                             known_native_globals.insert(name.clone());

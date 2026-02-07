@@ -6,10 +6,14 @@ use std::sync::Arc;
 
 impl ModuleLoader {
     pub fn new(entry_file: &Path, source: Arc<Source>) -> Self {
-        let base_dir = entry_file.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| ".".into());
+        let base_dir = entry_file
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| ".".into());
         let base_root = base_dir.canonicalize().unwrap_or_else(|_| base_dir.clone());
         Self {
-            base_dir, base_root,
+            base_dir,
+            base_root,
             loaded_modules: std::collections::HashMap::new(),
             loading_stack: Vec::new(),
             source,
@@ -20,11 +24,19 @@ impl ModuleLoader {
         }
     }
 
-    pub fn with_manifest(entry_file: &Path, source: Arc<Source>, manifest: Option<Manifest>) -> Self {
-        let base_dir = entry_file.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| ".".into());
+    pub fn with_manifest(
+        entry_file: &Path,
+        source: Arc<Source>,
+        manifest: Option<Manifest>,
+    ) -> Self {
+        let base_dir = entry_file
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| ".".into());
         let base_root = base_dir.canonicalize().unwrap_or_else(|_| base_dir.clone());
         Self {
-            base_dir, base_root,
+            base_dir,
+            base_root,
             loaded_modules: std::collections::HashMap::new(),
             loading_stack: Vec::new(),
             source,
@@ -35,6 +47,10 @@ impl ModuleLoader {
         }
     }
 
-    pub fn manifest(&self) -> Option<&Manifest> { self.manifest.as_ref() }
-    pub fn loaded_native_modules(&self) -> &std::collections::HashMap<String, LoadedNativeInfo> { &self.loaded_native_modules }
+    pub fn manifest(&self) -> Option<&Manifest> {
+        self.manifest.as_ref()
+    }
+    pub fn loaded_native_modules(&self) -> &std::collections::HashMap<String, LoadedNativeInfo> {
+        &self.loaded_native_modules
+    }
 }

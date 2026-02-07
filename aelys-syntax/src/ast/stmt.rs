@@ -8,7 +8,9 @@ pub struct Stmt {
 }
 
 impl Stmt {
-    pub fn new(kind: StmtKind, span: Span) -> Self { Self { kind, span } }
+    pub fn new(kind: StmtKind, span: Span) -> Self {
+        Self { kind, span }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -30,7 +32,10 @@ pub enum StmtKind {
         then_branch: Box<Stmt>,
         else_branch: Option<Box<Stmt>>,
     },
-    While { condition: Expr, body: Box<Stmt> },
+    While {
+        condition: Expr,
+        body: Box<Stmt>,
+    },
 
     // for i in start..end { } or start..=end (inclusive)
     For {
@@ -38,7 +43,7 @@ pub enum StmtKind {
         start: Expr,
         end: Expr,
         inclusive: bool,
-        step: Option<Expr>, // default: inferred from direction
+        step: Box<Option<Expr>>, // default: inferred from direction
         body: Box<Stmt>,
     },
 
@@ -61,7 +66,7 @@ pub struct NeedsStmt {
 pub enum ImportKind {
     Module { alias: Option<String> }, // needs foo.bar (as alias)?
     Symbols(Vec<String>),             // needs x, y from foo.bar
-    Wildcard,                          // needs foo.bar.*
+    Wildcard,                         // needs foo.bar.*
 }
 
 #[derive(Debug, Clone)]

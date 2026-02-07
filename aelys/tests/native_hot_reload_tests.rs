@@ -75,7 +75,7 @@ fn hot_reload_requires_dev_flag() {
     fs::copy(&lib_a, &module_path).expect("copy hot module A");
 
     let entry_path = write_file(&dir, "main.aelys", "needs hot_mod\n");
-    let source = Source::new(&entry_path.display().to_string(), "needs hot_mod\n");
+    let source = Source::new(entry_path.display().to_string(), "needs hot_mod\n");
 
     let config = VmConfig::default();
     let mut vm =

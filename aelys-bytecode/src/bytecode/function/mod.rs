@@ -56,17 +56,25 @@ impl Function {
         if needed > self.num_registers as usize {
             self.num_registers = needed.min(255) as u8;
         }
-        for f in &mut self.nested_functions { f.finalize_bytecode(); }
+        for f in &mut self.nested_functions {
+            f.finalize_bytecode();
+        }
     }
 
     // format A: op|a|b|c (3 regs)
     pub fn emit_a(&mut self, op: OpCode, a: u8, b: u8, c: u8, line: u32) {
-        self.emit_raw(((op as u32) << 24) | ((a as u32) << 16) | ((b as u32) << 8) | c as u32, line);
+        self.emit_raw(
+            ((op as u32) << 24) | ((a as u32) << 16) | ((b as u32) << 8) | c as u32,
+            line,
+        );
     }
 
     // format B: op|a|imm16
     pub fn emit_b(&mut self, op: OpCode, a: u8, imm: i16, line: u32) {
-        self.emit_raw(((op as u32) << 24) | ((a as u32) << 16) | (imm as u16) as u32, line);
+        self.emit_raw(
+            ((op as u32) << 24) | ((a as u32) << 16) | (imm as u16) as u32,
+            line,
+        );
     }
 
     // format C: same layout as A but semantics are dest|func|nargs
@@ -79,8 +87,8 @@ impl Function {
         self.add_line(line);
     }
 
-    /// Strip debug information for release builds. 
-        pub fn strip_debug_info(&mut self) {
+    /// Strip debug information for release builds.
+    pub fn strip_debug_info(&mut self) {
         self.name = None;
         self.lines.clear();
         let names = self.global_layout.names();

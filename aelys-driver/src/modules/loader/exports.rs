@@ -60,7 +60,7 @@ impl ModuleLoader {
 
         match &needs.kind {
             ImportKind::Module { alias } => {
-                for (name, _info) in exports {
+                for name in exports.keys() {
                     let qualified_name = format!("{}::{}", module_alias, name);
                     let value = vm.get_global(name).ok_or_else(|| {
                         AelysError::Compile(CompileError::new(
@@ -72,7 +72,7 @@ impl ModuleLoader {
                             self.source.clone(),
                         ))
                     })?;
-                    vm.set_global(qualified_name, value.clone());
+                    vm.set_global(qualified_name, value);
                     if alias.is_none() {
                         vm.set_global(name.clone(), value);
                     }
@@ -104,7 +104,7 @@ impl ModuleLoader {
                 }
             }
             ImportKind::Wildcard => {
-                for (name, _info) in exports {
+                for name in exports.keys() {
                     let value = vm.get_global(name).ok_or_else(|| {
                         AelysError::Compile(CompileError::new(
                             CompileErrorKind::SymbolNotFound {

@@ -7,7 +7,9 @@ pub struct ScopeStack {
 
 impl ScopeStack {
     pub fn new() -> Self {
-        Self { scopes: vec![HashMap::new()] }
+        Self {
+            scopes: vec![HashMap::new()],
+        }
     }
 
     pub fn push(&mut self) {

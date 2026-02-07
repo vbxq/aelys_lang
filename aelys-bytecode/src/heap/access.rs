@@ -6,7 +6,11 @@ impl Heap {
         self.objects.get(gc_ref.index())?.as_ref()
     }
 
-    // SAFETY: caller guarantees valid index and non-empty slot.
+    /// Get a GC object without bounds checking.
+    ///
+    /// # Safety
+    /// - The caller must guarantee that `gc_ref.index()` is within bounds of `self.objects`.
+    /// - The slot at `gc_ref.index()` must contain a valid object (not None).
     // TODO: Future optimization for faster heap access in hot paths.
     #[allow(dead_code)]
     #[inline(always)]

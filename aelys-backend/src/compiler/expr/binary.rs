@@ -16,74 +16,75 @@ impl Compiler {
         span: Span,
     ) -> Result<()> {
         // Right operand is small constant: use immediate instructions
-        if let ExprKind::Int(n) = &right.kind {
-            if *n >= 0 && *n <= 255 {
-                if let Some(left_reg) = self.get_local_register(left) {
-                    match op {
-                        BinaryOp::Add => {
-                            self.emit_a(OpCode::AddI, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::Sub => {
-                            self.emit_a(OpCode::SubI, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::Shl => {
-                            self.emit_a(OpCode::ShlIImm, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::Shr => {
-                            self.emit_a(OpCode::ShrIImm, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::BitAnd => {
-                            self.emit_a(OpCode::AndIImm, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::BitOr => {
-                            self.emit_a(OpCode::OrIImm, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::BitXor => {
-                            self.emit_a(OpCode::XorIImm, dest, left_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
+        if let ExprKind::Int(n) = &right.kind
+            && *n >= 0
+            && *n <= 255
+            && let Some(left_reg) = self.get_local_register(left)
+        {
+            match op {
+                BinaryOp::Add => {
+                    self.emit_a(OpCode::AddI, dest, left_reg, *n as u8, span);
+                    return Ok(());
                 }
+                BinaryOp::Sub => {
+                    self.emit_a(OpCode::SubI, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::Shl => {
+                    self.emit_a(OpCode::ShlIImm, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::Shr => {
+                    self.emit_a(OpCode::ShrIImm, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::BitAnd => {
+                    self.emit_a(OpCode::AndIImm, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::BitOr => {
+                    self.emit_a(OpCode::OrIImm, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::BitXor => {
+                    self.emit_a(OpCode::XorIImm, dest, left_reg, *n as u8, span);
+                    return Ok(());
+                }
+                _ => {}
             }
         }
 
         // Commutative ops: `5 + x` can also use AddI (swap operands)
-        if let ExprKind::Int(n) = &left.kind {
-            if *n >= 0 && *n <= 255 && op == BinaryOp::Add {
-                if let Some(right_reg) = self.get_local_register(right) {
-                    self.emit_a(OpCode::AddI, dest, right_reg, *n as u8, span);
-                    return Ok(());
-                }
-            }
+        if let ExprKind::Int(n) = &left.kind
+            && *n >= 0
+            && *n <= 255
+            && op == BinaryOp::Add
+            && let Some(right_reg) = self.get_local_register(right)
+        {
+            self.emit_a(OpCode::AddI, dest, right_reg, *n as u8, span);
+            return Ok(());
         }
 
         // Same for bitwise ops - they're all commutative
-        if let ExprKind::Int(n) = &left.kind {
-            if *n >= 0 && *n <= 255 {
-                if let Some(right_reg) = self.get_local_register(right) {
-                    match op {
-                        BinaryOp::BitAnd => {
-                            self.emit_a(OpCode::AndIImm, dest, right_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::BitOr => {
-                            self.emit_a(OpCode::OrIImm, dest, right_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        BinaryOp::BitXor => {
-                            self.emit_a(OpCode::XorIImm, dest, right_reg, *n as u8, span);
-                            return Ok(());
-                        }
-                        _ => {}
-                    }
+        if let ExprKind::Int(n) = &left.kind
+            && *n >= 0
+            && *n <= 255
+            && let Some(right_reg) = self.get_local_register(right)
+        {
+            match op {
+                BinaryOp::BitAnd => {
+                    self.emit_a(OpCode::AndIImm, dest, right_reg, *n as u8, span);
+                    return Ok(());
                 }
+                BinaryOp::BitOr => {
+                    self.emit_a(OpCode::OrIImm, dest, right_reg, *n as u8, span);
+                    return Ok(());
+                }
+                BinaryOp::BitXor => {
+                    self.emit_a(OpCode::XorIImm, dest, right_reg, *n as u8, span);
+                    return Ok(());
+                }
+                _ => {}
             }
         }
 

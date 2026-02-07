@@ -4,25 +4,43 @@ use std::fmt;
 pub enum WarningKind {
     // Inline-related (W01xx)
     InlineRecursive,
-    InlineMutualRecursion { cycle: Vec<String> },
+    InlineMutualRecursion {
+        cycle: Vec<String>,
+    },
     InlineHasCaptures,
     InlinePublicFunction,
     InlineNativeFunction,
 
     // Unused code (W02xx) - for later
-    UnusedVariable { name: String },
-    UnusedFunction { name: String },
-    UnusedImport { module: String },
+    UnusedVariable {
+        name: String,
+    },
+    UnusedFunction {
+        name: String,
+    },
+    UnusedImport {
+        module: String,
+    },
 
     // Deprecation (W03xx)
-    DeprecatedFunction { name: String, replacement: Option<String> },
+    DeprecatedFunction {
+        name: String,
+        replacement: Option<String>,
+    },
 
     // Style (W04xx)
-    ShadowedVariable { name: String },
+    ShadowedVariable {
+        name: String,
+    },
 
     // Type-related (W05xx)
-    UnknownType { name: String },
-    UnknownTypeParameter { param: String, in_type: String },
+    UnknownType {
+        name: String,
+    },
+    UnknownTypeParameter {
+        param: String,
+        in_type: String,
+    },
 }
 
 impl WarningKind {
@@ -53,8 +71,7 @@ impl WarningKind {
 
             WarningKind::ShadowedVariable { .. } => "shadow",
 
-            WarningKind::UnknownType { .. }
-            | WarningKind::UnknownTypeParameter { .. } => "type",
+            WarningKind::UnknownType { .. } | WarningKind::UnknownTypeParameter { .. } => "type",
         }
     }
 }

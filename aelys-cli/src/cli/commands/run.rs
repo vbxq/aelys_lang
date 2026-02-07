@@ -29,7 +29,9 @@ pub fn run_with_options(
             let result = run_file_full(path_ref, config, program_args, opt_level)
                 .map_err(|err| err.to_string())?;
 
-            let filtered: Vec<_> = result.warnings.iter()
+            let filtered: Vec<_> = result
+                .warnings
+                .iter()
                 .filter(|w| warn_config.is_enabled(&w.kind))
                 .collect();
 
@@ -46,7 +48,7 @@ pub fn run_with_options(
     };
 
     if !value.is_null() {
-        println!("{}", value.to_string());
+        println!("{}", value);
     }
     Ok(0)
 }
@@ -182,10 +184,10 @@ fn collect_required_modules_rec(
     modules: &mut HashSet<String>,
 ) {
     for name in function.global_layout.names() {
-        if let Some(module_name) = name.split("::").next() {
-            if name.contains("::") {
-                modules.insert(module_name.to_string());
-            }
+        if let Some(module_name) = name.split("::").next()
+            && name.contains("::")
+        {
+            modules.insert(module_name.to_string());
         }
     }
     for nested in &function.nested_functions {
@@ -253,13 +255,13 @@ fn load_bundled_module(
     manifest: Option<&Manifest>,
 ) -> Result<(), String> {
     if let Some(policy) = manifest.and_then(|m| m.module(module_name)) {
-        if !policy.capabilities.is_empty() {
-            if let Err(denied) = vm.config().check_native_capabilities(&policy.capabilities) {
-                return Err(format!(
-                    "native capability denied for {}: {}",
-                    module_name, denied
-                ));
-            }
+        if !policy.capabilities.is_empty()
+            && let Err(denied) = vm.config().check_native_capabilities(&policy.capabilities)
+        {
+            return Err(format!(
+                "native capability denied for {}: {}",
+                module_name, denied
+            ));
         }
 
         if let Some(expected) = &policy.checksum {
@@ -278,20 +280,20 @@ fn load_bundled_module(
         .load_embedded(&bundle.name, &bundle.bytes)
         .map_err(|err| err.to_string())?;
 
-    if let Some(policy) = manifest.and_then(|m| m.module(module_name)) {
-        if let Some(required) = &policy.required_version {
-            let ok = match (&native_module.version, VersionReq::parse(required)) {
-                (Some(found), Ok(req)) => Version::parse(found)
-                    .map(|v| req.matches(&v))
-                    .unwrap_or(false),
-                _ => false,
-            };
-            if !ok {
-                return Err(format!(
-                    "native version mismatch for {} (required {}, found {:?})",
-                    module_name, required, native_module.version
-                ));
-            }
+    if let Some(policy) = manifest.and_then(|m| m.module(module_name))
+        && let Some(required) = &policy.required_version
+    {
+        let ok = match (&native_module.version, VersionReq::parse(required)) {
+            (Some(found), Ok(req)) => Version::parse(found)
+                .map(|v| req.matches(&v))
+                .unwrap_or(false),
+            _ => false,
+        };
+        if !ok {
+            return Err(format!(
+                "native version mismatch for {} (required {}, found {:?})",
+                module_name, required, native_module.version
+            ));
         }
     }
 

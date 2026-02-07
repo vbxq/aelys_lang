@@ -16,21 +16,27 @@ impl Compiler {
         use aelys_sema::TypedExprKind;
 
         // Handle format string with placeholders: func("x={}", x) -> func("x=" + __tostring(x))
-        if let Some((fmt_parts, placeholder_count)) = Self::get_typed_fmt_placeholders(args) {
-            if placeholder_count > 0 {
-                return self.compile_typed_call_with_fmt_placeholders(
-                    callee, args, fmt_parts, placeholder_count, dest, span
-                );
-            }
+        if let Some((fmt_parts, placeholder_count)) = Self::get_typed_fmt_placeholders(args)
+            && placeholder_count > 0
+        {
+            return self.compile_typed_call_with_fmt_placeholders(
+                callee,
+                args,
+                fmt_parts,
+                placeholder_count,
+                dest,
+                span,
+            );
         }
 
         // Check for Array/Vec method calls first
         if let TypedExprKind::Member { object, member } = &callee.kind {
             // Handle Array methods
-            if let InferType::Array(_) = &object.ty {
-                if member == "len" && args.is_empty() {
-                    return self.compile_array_len(object, dest, span);
-                }
+            if let InferType::Array(_) = &object.ty
+                && member == "len"
+                && args.is_empty()
+            {
+                return self.compile_array_len(object, dest, span);
             }
 
             // Handle Vec methods
@@ -55,66 +61,66 @@ impl Compiler {
                 }
             }
 
-            if let TypedExprKind::Identifier(module_name) = &object.kind {
-                if self.module_aliases.contains(module_name) {
-                    let qualified_name = format!("{}::{}", module_name, member);
-                    let global_idx = self.get_or_create_global_index(&qualified_name);
-                    self.accessed_globals.insert(qualified_name.clone());
+            if let TypedExprKind::Identifier(module_name) = &object.kind
+                && self.module_aliases.contains(module_name)
+            {
+                let qualified_name = format!("{}::{}", module_name, member);
+                let global_idx = self.get_or_create_global_index(&qualified_name);
+                self.accessed_globals.insert(qualified_name.clone());
 
-                    if global_idx <= 255 {
-                        let arg_start = match dest.checked_add(1) {
-                            Some(s) => s,
+                if global_idx <= 255 {
+                    let arg_start = match dest.checked_add(1) {
+                        Some(s) => s,
+                        None => {
+                            return self.compile_typed_call_fallback(callee, args, dest, span);
+                        }
+                    };
+
+                    let mut can_use_callglobal = true;
+                    for i in 0..args.len() {
+                        let arg_reg = match arg_start.checked_add(i as u8) {
+                            Some(r) => r,
                             None => {
-                                return self.compile_typed_call_fallback(callee, args, dest, span);
-                            }
-                        };
-
-                        let mut can_use_callglobal = true;
-                        for i in 0..args.len() {
-                            let arg_reg = match arg_start.checked_add(i as u8) {
-                                Some(r) => r,
-                                None => {
-                                    can_use_callglobal = false;
-                                    break;
-                                }
-                            };
-                            if (arg_reg as usize) >= self.register_pool.len()
-                                || self.register_pool[arg_reg as usize]
-                            {
                                 can_use_callglobal = false;
                                 break;
                             }
+                        };
+                        if (arg_reg as usize) >= self.register_pool.len()
+                            || self.register_pool[arg_reg as usize]
+                        {
+                            can_use_callglobal = false;
+                            break;
+                        }
+                    }
+
+                    if can_use_callglobal {
+                        for i in 0..args.len() {
+                            let arg_reg = arg_start + i as u8;
+                            self.register_pool[arg_reg as usize] = true;
+                            if arg_reg >= self.next_register {
+                                self.next_register = arg_reg + 1;
+                            }
                         }
 
-                        if can_use_callglobal {
-                            for i in 0..args.len() {
-                                let arg_reg = arg_start + i as u8;
-                                self.register_pool[arg_reg as usize] = true;
-                                if arg_reg >= self.next_register {
-                                    self.next_register = arg_reg + 1;
-                                }
-                            }
-
-                            for (i, arg) in args.iter().enumerate() {
-                                let arg_reg = arg_start + i as u8;
-                                self.compile_typed_expr(arg, arg_reg)?;
-                            }
-
-                            self.emit_call_global_cached(
-                                dest,
-                                global_idx as u8,
-                                args.len() as u8,
-                                &qualified_name,
-                                span,
-                            );
-
-                            for i in (0..args.len()).rev() {
-                                let arg_reg = arg_start + i as u8;
-                                self.register_pool[arg_reg as usize] = false;
-                            }
-
-                            return Ok(());
+                        for (i, arg) in args.iter().enumerate() {
+                            let arg_reg = arg_start + i as u8;
+                            self.compile_typed_expr(arg, arg_reg)?;
                         }
+
+                        self.emit_call_global_cached(
+                            dest,
+                            global_idx as u8,
+                            args.len() as u8,
+                            &qualified_name,
+                            span,
+                        );
+
+                        for i in (0..args.len()).rev() {
+                            let arg_reg = arg_start + i as u8;
+                            self.register_pool[arg_reg as usize] = false;
+                        }
+
+                        return Ok(());
                     }
                 }
             }
@@ -227,13 +233,18 @@ impl Compiler {
         Ok(())
     }
 
-    fn get_typed_fmt_placeholders(args: &[aelys_sema::TypedExpr]) -> Option<(&[TypedFmtStringPart], usize)> {
+    fn get_typed_fmt_placeholders(
+        args: &[aelys_sema::TypedExpr],
+    ) -> Option<(&[TypedFmtStringPart], usize)> {
         use aelys_sema::TypedExprKind;
         if args.is_empty() {
             return None;
         }
         if let TypedExprKind::FmtString(parts) = &args[0].kind {
-            let count = parts.iter().filter(|p| matches!(p, TypedFmtStringPart::Placeholder)).count();
+            let count = parts
+                .iter()
+                .filter(|p| matches!(p, TypedFmtStringPart::Placeholder))
+                .count();
             return Some((parts, count));
         }
         None
@@ -259,7 +270,8 @@ impl Compiler {
                 )),
                 span,
                 self.source.clone(),
-            ).into());
+            )
+            .into());
         }
 
         let fmt_extra_args = &args[1..1 + extra_args_needed];

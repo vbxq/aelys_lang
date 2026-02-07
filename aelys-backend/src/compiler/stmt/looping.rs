@@ -47,6 +47,7 @@ impl Compiler {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn compile_typed_for(
         &mut self,
         iterator: &str,

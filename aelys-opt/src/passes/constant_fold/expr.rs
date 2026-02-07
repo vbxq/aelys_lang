@@ -16,14 +16,19 @@ impl ConstantFolder {
 
     pub(super) fn try_fold(&mut self, expr: &TypedExpr) -> Option<TypedExpr> {
         match &expr.kind {
-            TypedExprKind::Binary { left, op, right } => self.try_fold_binary(left, *op, right, expr),
+            TypedExprKind::Binary { left, op, right } => {
+                self.try_fold_binary(left, *op, right, expr)
+            }
             TypedExprKind::Unary { op, operand } => self.try_fold_unary(*op, operand, expr),
             TypedExprKind::Grouping(inner) => self.try_fold(inner),
             TypedExprKind::And { left, right } => self.try_fold_and(left, right, expr),
             TypedExprKind::Or { left, right } => self.try_fold_or(left, right, expr),
             // already a literal, nothing to fold
-            TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
-            | TypedExprKind::String(_) | TypedExprKind::Null => None,
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null => None,
             _ => None,
         }
     }
@@ -41,22 +46,33 @@ impl ConstantFolder {
             }
             TypedExprKind::Call { callee, args } => {
                 self.optimize_expr(callee);
-                for arg in args { self.optimize_expr(arg); }
+                for arg in args {
+                    self.optimize_expr(arg);
+                }
             }
             TypedExprKind::Assign { value, .. } => self.optimize_expr(value),
             TypedExprKind::Grouping(inner) => self.optimize_expr(inner),
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.optimize_expr(condition);
                 self.optimize_expr(then_branch);
                 self.optimize_expr(else_branch);
             }
             TypedExprKind::Lambda(inner) => self.optimize_expr(inner),
             TypedExprKind::LambdaInner { body, .. } => {
-                for stmt in body { self.optimize_stmt(stmt); }
+                for stmt in body {
+                    self.optimize_stmt(stmt);
+                }
             }
             TypedExprKind::Member { object, .. } => self.optimize_expr(object),
-            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
-                for elem in elements { self.optimize_expr(elem); }
+            TypedExprKind::ArrayLiteral { elements, .. }
+            | TypedExprKind::VecLiteral { elements, .. } => {
+                for elem in elements {
+                    self.optimize_expr(elem);
+                }
             }
             TypedExprKind::ArraySized { size, .. } => {
                 self.optimize_expr(size);
@@ -65,14 +81,22 @@ impl ConstantFolder {
                 self.optimize_expr(object);
                 self.optimize_expr(index);
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.optimize_expr(object);
                 self.optimize_expr(index);
                 self.optimize_expr(value);
             }
             TypedExprKind::Range { start, end, .. } => {
-                if let Some(s) = start { self.optimize_expr(s); }
-                if let Some(e) = end { self.optimize_expr(e); }
+                if let Some(s) = start {
+                    self.optimize_expr(s);
+                }
+                if let Some(e) = end {
+                    self.optimize_expr(e);
+                }
             }
             TypedExprKind::Slice { object, range } => {
                 self.optimize_expr(object);
@@ -85,10 +109,16 @@ impl ConstantFolder {
                     }
                 }
             }
-            TypedExprKind::Int(_) | TypedExprKind::Float(_) | TypedExprKind::Bool(_)
-            | TypedExprKind::String(_) | TypedExprKind::Null | TypedExprKind::Identifier(_) => {}
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null
+            | TypedExprKind::Identifier(_) => {}
         }
 
-        if let Some(folded) = self.try_fold(expr) { *expr = folded; }
+        if let Some(folded) = self.try_fold(expr) {
+            *expr = folded;
+        }
     }
 }

@@ -2,6 +2,7 @@ use crate::vm::{Function, OpCode};
 
 use super::{verify_const, verify_reg, verify_upval};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn verify(
     func: &Function,
     opcode: OpCode,

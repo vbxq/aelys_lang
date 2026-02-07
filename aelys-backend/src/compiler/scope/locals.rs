@@ -42,10 +42,10 @@ impl Compiler {
             }
         }
 
-        if let Some(scope) = self.scopes.last_mut() {
-            if !scope.captured_registers.contains(&register) {
-                scope.captured_registers.push(register);
-            }
+        if let Some(scope) = self.scopes.last_mut()
+            && !scope.captured_registers.contains(&register)
+        {
+            scope.captured_registers.push(register);
         }
     }
 }

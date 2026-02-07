@@ -76,14 +76,14 @@ fn native_char_len(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 fn native_chars(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.chars")?;
     let chars: Vec<String> = s.chars().map(|c| c.to_string()).collect();
-    Ok(make_string(vm, &chars.join("\n"))?)
+    make_string(vm, &chars.join("\n"))
 }
 
 /// bytes(s) - Get bytes as space-separated integers.
 fn native_bytes(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.bytes")?;
     let bytes: Vec<String> = s.bytes().map(|b| b.to_string()).collect();
-    Ok(make_string(vm, &bytes.join(" "))?)
+    make_string(vm, &bytes.join(" "))
 }
 
 /// char_at(s, index) - Get character at index (0-based).
@@ -93,12 +93,12 @@ fn native_char_at(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let index = get_int(vm, args[1], "string.char_at")?;
 
     if index < 0 {
-        return Ok(make_string(vm, "")?);
+        return make_string(vm, "");
     }
 
     match s.chars().nth(index as usize) {
-        Some(c) => Ok(make_string(vm, &c.to_string())?),
-        None => Ok(make_string(vm, "")?),
+        Some(c) => make_string(vm, &c.to_string()),
+        None => make_string(vm, ""),
     }
 }
 
@@ -123,12 +123,12 @@ fn native_substr(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let len = get_int(vm, args[2], "string.substr")?;
 
     if start < 0 || len < 0 {
-        return Ok(make_string(vm, "")?);
+        return make_string(vm, "");
     }
 
     let result: String = s.chars().skip(start as usize).take(len as usize).collect();
 
-    Ok(make_string(vm, &result)?)
+    make_string(vm, &result)
 }
 
 fn native_to_upper(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
@@ -137,7 +137,10 @@ fn native_to_upper(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 }
 
 fn native_to_lower(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    make_string(vm, &get_string(vm, args[0], "string.to_lower")?.to_lowercase())
+    make_string(
+        vm,
+        &get_string(vm, args[0], "string.to_lower")?.to_lowercase(),
+    )
 }
 
 fn native_capitalize(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
@@ -158,8 +161,11 @@ fn native_contains(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 
 fn native_starts_with(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     Ok(Value::bool(
-        get_string(vm, args[0], "string.starts_with")?
-            .starts_with(get_string(vm, args[1], "string.starts_with")?),
+        get_string(vm, args[0], "string.starts_with")?.starts_with(get_string(
+            vm,
+            args[1],
+            "string.starts_with",
+        )?),
     ))
 }
 
@@ -198,7 +204,7 @@ fn native_replace(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.replace")?;
     let old = get_string(vm, args[1], "string.replace")?;
     let new = get_string(vm, args[2], "string.replace")?;
-    Ok(make_string(vm, &s.replace(old, new))?)
+    make_string(vm, &s.replace(old, new))
 }
 
 /// replace_first(s, old, new) - Replace first occurrence.
@@ -206,7 +212,7 @@ fn native_replace_first(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeErr
     let s = get_string(vm, args[0], "string.replace_first")?;
     let old = get_string(vm, args[1], "string.replace_first")?;
     let new = get_string(vm, args[2], "string.replace_first")?;
-    Ok(make_string(vm, &s.replacen(old, new, 1))?)
+    make_string(vm, &s.replacen(old, new, 1))
 }
 
 /// split(s, sep) - Split string by separator.
@@ -218,10 +224,10 @@ fn native_split(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     if sep.is_empty() {
         // Split into characters
         let parts: Vec<&str> = s.split("").filter(|x| !x.is_empty()).collect();
-        Ok(make_string(vm, &parts.join("\n"))?)
+        make_string(vm, &parts.join("\n"))
     } else {
         let parts: Vec<&str> = s.split(sep).collect();
-        Ok(make_string(vm, &parts.join("\n"))?)
+        make_string(vm, &parts.join("\n"))
     }
 }
 
@@ -231,7 +237,7 @@ fn native_join(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let parts = get_string(vm, args[0], "string.join")?;
     let sep = get_string(vm, args[1], "string.join")?;
     let result = parts.lines().collect::<Vec<&str>>().join(sep);
-    Ok(make_string(vm, &result)?)
+    make_string(vm, &result)
 }
 
 /// repeat(s, n) - Repeat string n times.
@@ -240,45 +246,45 @@ fn native_repeat(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let n = get_int(vm, args[1], "string.repeat")?;
 
     if n <= 0 {
-        return Ok(make_string(vm, "")?);
+        return make_string(vm, "");
     }
 
-    Ok(make_string(vm, &s.repeat(n as usize))?)
+    make_string(vm, &s.repeat(n as usize))
 }
 
 /// reverse(s) - Reverse string (by characters).
 fn native_reverse(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.reverse")?;
     let reversed: String = s.chars().rev().collect();
-    Ok(make_string(vm, &reversed)?)
+    make_string(vm, &reversed)
 }
 
 /// concat(a, b) - Concatenate two strings.
 fn native_concat(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let a = get_string(vm, args[0], "string.concat")?;
     let b = get_string(vm, args[1], "string.concat")?;
-    Ok(make_string(vm, &format!("{}{}", a, b))?)
+    make_string(vm, &format!("{}{}", a, b))
 }
 
 /// trim(s) - Trim whitespace from both ends.
 fn native_trim(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.trim")?.to_string();
     let trimmed = s.trim().to_string();
-    Ok(make_string(vm, &trimmed)?)
+    make_string(vm, &trimmed)
 }
 
 /// trim_start(s) - Trim whitespace from start.
 fn native_trim_start(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.trim_start")?.to_string();
     let trimmed = s.trim_start().to_string();
-    Ok(make_string(vm, &trimmed)?)
+    make_string(vm, &trimmed)
 }
 
 /// trim_end(s) - Trim whitespace from end.
 fn native_trim_end(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.trim_end")?.to_string();
     let trimmed = s.trim_end().to_string();
-    Ok(make_string(vm, &trimmed)?)
+    make_string(vm, &trimmed)
 }
 
 /// pad_left(s, width, char) - Pad start to width with char.
@@ -291,11 +297,11 @@ fn native_pad_left(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let char_count = s.chars().count();
 
     if char_count >= width {
-        return Ok(make_string(vm, &s)?);
+        return make_string(vm, &s);
     }
 
-    let padding: String = std::iter::repeat(pad_c).take(width - char_count).collect();
-    Ok(make_string(vm, &format!("{}{}", padding, s))?)
+    let padding: String = std::iter::repeat_n(pad_c, width - char_count).collect();
+    make_string(vm, &format!("{}{}", padding, s))
 }
 
 /// pad_right(s, width, char) - Pad end to width with char.
@@ -308,11 +314,11 @@ fn native_pad_right(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
     let char_count = s.chars().count();
 
     if char_count >= width {
-        return Ok(make_string(vm, &s)?);
+        return make_string(vm, &s);
     }
 
-    let padding: String = std::iter::repeat(pad_c).take(width - char_count).collect();
-    Ok(make_string(vm, &format!("{}{}", s, padding))?)
+    let padding: String = std::iter::repeat_n(pad_c, width - char_count).collect();
+    make_string(vm, &format!("{}{}", s, padding))
 }
 
 /// is_empty(s) - Check if string is empty.
@@ -358,7 +364,7 @@ fn native_lines(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "string.lines")?;
     // This normalizes line endings
     let result: Vec<&str> = s.lines().collect();
-    Ok(make_string(vm, &result.join("\n"))?)
+    make_string(vm, &result.join("\n"))
 }
 
 /// line_count(s) - Count number of lines.

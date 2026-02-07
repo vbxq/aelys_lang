@@ -52,7 +52,8 @@ pub fn builtin_alloc(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
 }
 
 pub fn builtin_free(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    if args[0].is_null() { // free(null) is noop like C
+    if args[0].is_null() {
+        // free(null) is noop like C
         return Ok(Value::null());
     }
 

@@ -82,12 +82,12 @@ impl VM {
 
     pub fn shrink_registers(&mut self) {
         if let Some(frame) = self.frames.last() {
-            if let Some(obj) = self.heap.get(frame.function()) {
-                if let ObjectKind::Function(func) = &obj.kind {
-                    let needed = frame.base() + func.num_registers() as usize;
-                    if needed < self.registers.len() {
-                        self.registers.truncate(needed);
-                    }
+            if let Some(obj) = self.heap.get(frame.function())
+                && let ObjectKind::Function(func) = &obj.kind
+            {
+                let needed = frame.base() + func.num_registers() as usize;
+                if needed < self.registers.len() {
+                    self.registers.truncate(needed);
                 }
             }
         } else {

@@ -55,14 +55,6 @@ pub(super) fn finalize_untyped_function(
     }
 
     let const_idx = parent.current.add_constant_function(compiled_func);
-    if const_idx > u16::MAX {
-        return Err(CompileError::new(
-            CompileErrorKind::TooManyConstants,
-            func_span,
-            parent.source.clone(),
-        )
-        .into());
-    }
 
     if upvalue_count > 0 {
         parent.emit_a(

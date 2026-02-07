@@ -21,12 +21,7 @@ impl Compiler {
         Ok(())
     }
 
-    pub fn compile_array_literal(
-        &mut self,
-        elements: &[Expr],
-        dest: u8,
-        span: Span,
-    ) -> Result<()> {
+    pub fn compile_array_literal(&mut self, elements: &[Expr], dest: u8, span: Span) -> Result<()> {
         let count = elements.len();
 
         if count == 0 {
@@ -59,12 +54,7 @@ impl Compiler {
         Ok(())
     }
 
-    pub fn compile_vec_literal(
-        &mut self,
-        elements: &[Expr],
-        dest: u8,
-        span: Span,
-    ) -> Result<()> {
+    pub fn compile_vec_literal(&mut self, elements: &[Expr], dest: u8, span: Span) -> Result<()> {
         let count = elements.len();
 
         if count == 0 {

@@ -14,6 +14,7 @@ impl Compiler {
     //   2. Jump forward to ForLoopI
     //   3. <body>
     //   4. ForLoopI: iter += step, check condition, jump back to body if true
+    #[allow(clippy::too_many_arguments)]
     pub fn compile_for(
         &mut self,
         iterator: &str,

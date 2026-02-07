@@ -7,7 +7,9 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(kind: TokenKind, span: Span) -> Self { Self { kind, span } }
+    pub fn new(kind: TokenKind, span: Span) -> Self {
+        Self { kind, span }
+    }
 }
 
 /// Part of a format string: either literal text, a placeholder {}, or an expression {expr}
@@ -25,34 +27,66 @@ pub enum TokenKind {
     Float(f64),
     String(String),
     FmtString(Vec<FmtPart>),
-    True, False, Null,
+    True,
+    False,
+    Null,
 
     Identifier(String),
 
     // keywords
-    Let, Mut, Fn, If, Else, While, Return, Break, Continue,
-    And, Or, Not,
-    Pub, Needs, As, From, // module system
-    For, In, Step,
+    Let,
+    Mut,
+    Fn,
+    If,
+    Else,
+    While,
+    Return,
+    Break,
+    Continue,
+    And,
+    Or,
+    Not,
+    Pub,
+    Needs,
+    As,
+    From, // module system
+    For,
+    In,
+    Step,
 
     // operators
-    Plus, Minus, Star, Slash, Percent,
-    Eq, EqEq, BangEq,
-    Lt, LtEq, Gt, GtEq,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    Eq,
+    EqEq,
+    BangEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
     Arrow, // ->
     Colon, // :
 
     // bitwise
-    Shl, Shr,      // << >>
-    Ampersand,     // &
-    Pipe, Caret,   // | ^
-    Tilde,         // ~
+    Shl,
+    Shr,       // << >>
+    Ampersand, // &
+    Pipe,
+    Caret, // | ^
+    Tilde, // ~
 
     // delimiters
-    LParen, RParen,
-    LBrace, RBrace,
-    LBracket, RBracket,
-    Comma, Semicolon,
+    LParen,
+    RParen,
+    LBrace,
+    RBrace,
+    LBracket,
+    RBracket,
+    Comma,
+    Semicolon,
     Dot,      // .
     DotDot,   // ..
     DotDotEq, // ..=
@@ -65,17 +99,37 @@ pub enum TokenKind {
 
 impl TokenKind {
     pub fn is_literal(&self) -> bool {
-        matches!(self, Self::Int(_) | Self::Float(_) | Self::String(_) | Self::FmtString(_) | Self::True | Self::False | Self::Null)
+        matches!(
+            self,
+            Self::Int(_)
+                | Self::Float(_)
+                | Self::String(_)
+                | Self::FmtString(_)
+                | Self::True
+                | Self::False
+                | Self::Null
+        )
     }
 
     // semicolon insertion (Go-style, roughly)
     pub fn can_end_statement(&self) -> bool {
-        matches!(self,
-            Self::Identifier(_) | Self::Int(_) | Self::Float(_) | Self::String(_) | Self::FmtString(_)
-            | Self::True | Self::False | Self::Null
-            | Self::Break | Self::Continue | Self::Return
-            | Self::RParen | Self::RBracket | Self::RBrace
-            | Self::Star // for `needs module.*`
+        matches!(
+            self,
+            Self::Identifier(_)
+                | Self::Int(_)
+                | Self::Float(_)
+                | Self::String(_)
+                | Self::FmtString(_)
+                | Self::True
+                | Self::False
+                | Self::Null
+                | Self::Break
+                | Self::Continue
+                | Self::Return
+                | Self::RParen
+                | Self::RBracket
+                | Self::RBrace
+                | Self::Star // for `needs module.*`
         )
     }
 }

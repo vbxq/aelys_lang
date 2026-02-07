@@ -30,7 +30,12 @@ impl LocalConstantPropagator {
 
     fn propagate_stmt(&mut self, stmt: &mut TypedStmt) {
         match &mut stmt.kind {
-            TypedStmtKind::Let { name, mutable, initializer, .. } => {
+            TypedStmtKind::Let {
+                name,
+                mutable,
+                initializer,
+                ..
+            } => {
                 self.propagate_expr(initializer);
                 self.folder.optimize_expr(initializer);
 
@@ -51,7 +56,11 @@ impl LocalConstantPropagator {
                 self.scopes.pop();
             }
 
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.propagate_expr(condition);
                 self.scopes.push();
                 self.propagate_stmt(then_branch);
@@ -70,10 +79,16 @@ impl LocalConstantPropagator {
                 self.scopes.pop();
             }
 
-            TypedStmtKind::For { start, end, step, body, .. } => {
+            TypedStmtKind::For {
+                start,
+                end,
+                step,
+                body,
+                ..
+            } => {
                 self.propagate_expr(start);
                 self.propagate_expr(end);
-                if let Some(s) = step {
+                if let Some(s) = &mut **step {
                     self.propagate_expr(s);
                 }
                 self.scopes.push();
@@ -89,7 +104,10 @@ impl LocalConstantPropagator {
                 self.propagate_function(func);
             }
 
-            TypedStmtKind::Return(None) | TypedStmtKind::Break | TypedStmtKind::Continue | TypedStmtKind::Needs(_) => {}
+            TypedStmtKind::Return(None)
+            | TypedStmtKind::Break
+            | TypedStmtKind::Continue
+            | TypedStmtKind::Needs(_) => {}
         }
     }
 
@@ -140,7 +158,11 @@ impl LocalConstantPropagator {
                 self.propagate_expr(inner);
             }
 
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.propagate_expr(condition);
                 self.propagate_expr(then_branch);
                 self.propagate_expr(else_branch);
@@ -162,7 +184,8 @@ impl LocalConstantPropagator {
                 self.propagate_expr(object);
             }
 
-            TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
+            TypedExprKind::ArrayLiteral { elements, .. }
+            | TypedExprKind::VecLiteral { elements, .. } => {
                 for elem in elements.iter_mut() {
                     self.propagate_expr(elem);
                 }
@@ -177,7 +200,11 @@ impl LocalConstantPropagator {
                 self.propagate_expr(index);
             }
 
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.propagate_expr(object);
                 self.propagate_expr(index);
                 self.propagate_expr(value);

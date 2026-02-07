@@ -1,5 +1,16 @@
 use super::GcRef;
 
+/// Cached metadata for faster closure execution
+#[derive(Debug, Clone)]
+pub struct ClosureCache {
+    pub bytecode_ptr: *const u32,
+    pub bytecode_len: usize,
+    pub constants_ptr: *const crate::value::Value,
+    pub constants_len: usize,
+    pub arity: u8,
+    pub num_registers: u8,
+}
+
 /// A closure wraps a function with its captured upvalues.
 #[derive(Debug, Clone)]
 pub struct AelysClosure {
@@ -27,25 +38,16 @@ impl AelysClosure {
         }
     }
 
-    pub fn with_cache(
-        function: GcRef,
-        upvalues: Vec<GcRef>,
-        bytecode_ptr: *const u32,
-        bytecode_len: usize,
-        constants_ptr: *const crate::value::Value,
-        constants_len: usize,
-        arity: u8,
-        num_registers: u8,
-    ) -> Self {
+    pub fn with_cache(function: GcRef, upvalues: Vec<GcRef>, cache: ClosureCache) -> Self {
         Self {
             function,
             upvalues,
-            bytecode_ptr,
-            bytecode_len,
-            constants_ptr,
-            constants_len,
-            arity,
-            num_registers,
+            bytecode_ptr: cache.bytecode_ptr,
+            bytecode_len: cache.bytecode_len,
+            constants_ptr: cache.constants_ptr,
+            constants_len: cache.constants_len,
+            arity: cache.arity,
+            num_registers: cache.num_registers,
         }
     }
 }

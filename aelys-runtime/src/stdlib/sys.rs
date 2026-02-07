@@ -64,7 +64,7 @@ fn native_args(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
         let args = vm.program_args();
         args.join("\n")
     };
-    Ok(make_string(vm, &joined)?)
+    make_string(vm, &joined)
 }
 
 /// arg(index) - Get specific argument by index (0-based).
@@ -79,7 +79,7 @@ fn native_arg(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let arg = vm.program_args().get(index as usize).cloned();
 
     match arg {
-        Some(arg) => Ok(make_string(vm, &arg)?),
+        Some(arg) => make_string(vm, &arg),
         None => Ok(Value::null()),
     }
 }
@@ -93,7 +93,7 @@ fn native_arg_count(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError>
 /// Returns null if not available.
 fn native_script_path(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     match vm.script_path().map(|s| s.to_string()) {
-        Some(path) => Ok(make_string(vm, &path)?),
+        Some(path) => make_string(vm, &path),
         None => Ok(Value::null()),
     }
 }
@@ -106,7 +106,7 @@ fn native_script_dir(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError
         Some(path) => {
             let path = Path::new(&path);
             match path.parent() {
-                Some(dir) => Ok(make_string(vm, &dir.to_string_lossy())?),
+                Some(dir) => make_string(vm, &dir.to_string_lossy()),
                 None => Ok(Value::null()),
             }
         }
@@ -119,7 +119,7 @@ fn native_script_dir(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError
 fn native_env(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let name = get_string(vm, args[0], "sys.env")?;
     match env::var(name) {
-        Ok(value) => Ok(make_string(vm, &value)?),
+        Ok(value) => make_string(vm, &value),
         Err(_) => Ok(Value::null()),
     }
 }
@@ -146,7 +146,7 @@ fn native_unset_env(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
 /// env_vars() - Get all environment variables as NAME=VALUE lines.
 fn native_env_vars(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     let vars: Vec<String> = env::vars().map(|(k, v)| format!("{}={}", k, v)).collect();
-    Ok(make_string(vm, &vars.join("\n"))?)
+    make_string(vm, &vars.join("\n"))
 }
 
 /// exit(code) - Exit with status code.
@@ -163,7 +163,7 @@ fn native_pid(_vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
 /// cwd() - Get current working directory.
 fn native_cwd(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     match env::current_dir() {
-        Ok(path) => Ok(make_string(vm, &path.to_string_lossy())?),
+        Ok(path) => make_string(vm, &path.to_string_lossy()),
         Err(e) => Err(sys_error(vm, "sys.cwd", format!("cannot get cwd: {}", e))),
     }
 }
@@ -184,7 +184,7 @@ fn native_set_cwd(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 /// home() - Get home directory.
 fn native_home(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     match home_dir() {
-        Some(path) => Ok(make_string(vm, &path)?),
+        Some(path) => make_string(vm, &path),
         None => Ok(Value::null()),
     }
 }
@@ -230,7 +230,7 @@ fn native_platform(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> 
     } else {
         "unknown"
     };
-    Ok(make_string(vm, platform)?)
+    make_string(vm, platform)
 }
 
 /// arch() - Get architecture.
@@ -258,40 +258,40 @@ fn native_arch(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     } else {
         "unknown"
     };
-    Ok(make_string(vm, arch)?)
+    make_string(vm, arch)
 }
 
 /// os() - Get OS name (more detailed than platform).
 fn native_os(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
-    Ok(make_string(vm, std::env::consts::OS)?)
+    make_string(vm, std::env::consts::OS)
 }
 
 /// hostname() - Get hostname.
 fn native_hostname(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     // Try to get hostname from environment
     if let Ok(hostname) = env::var("HOSTNAME") {
-        return Ok(make_string(vm, &hostname)?);
+        return make_string(vm, &hostname);
     }
 
     // Fall back to reading /etc/hostname on Unix
     #[cfg(unix)]
     {
         if let Ok(hostname) = std::fs::read_to_string("/etc/hostname") {
-            return Ok(make_string(vm, hostname.trim())?);
+            return make_string(vm, hostname.trim());
         }
 
         // Try reading from /proc/sys/kernel/hostname
         if let Ok(hostname) = std::fs::read_to_string("/proc/sys/kernel/hostname") {
-            return Ok(make_string(vm, hostname.trim())?);
+            return make_string(vm, hostname.trim());
         }
     }
 
     // Windows: use COMPUTERNAME
     if let Ok(hostname) = env::var("COMPUTERNAME") {
-        return Ok(make_string(vm, &hostname)?);
+        return make_string(vm, &hostname);
     }
 
-    Ok(make_string(vm, "unknown")?)
+    make_string(vm, "unknown")
 }
 
 /// cpu_count() - Get number of CPUs.
@@ -302,10 +302,10 @@ fn native_cpu_count(_vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError
 /// Get number of CPUs (portable implementation).
 fn num_cpus() -> usize {
     // Try to get from environment (for containers/cgroups)
-    if let Ok(cpus) = env::var("AELYS_CPU_COUNT") {
-        if let Ok(n) = cpus.parse::<usize>() {
-            return n;
-        }
+    if let Ok(cpus) = env::var("AELYS_CPU_COUNT")
+        && let Ok(n) = cpus.parse::<usize>()
+    {
+        return n;
     }
 
     // Use std::thread::available_parallelism if available
@@ -358,7 +358,7 @@ fn native_exec_output(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
     match output {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            Ok(make_string(vm, &stdout)?)
+            make_string(vm, &stdout)
         }
         Err(e) => Err(sys_error(
             vm,
@@ -417,7 +417,7 @@ fn native_exec_args_output(vm: &mut VM, args: &[Value]) -> Result<Value, Runtime
     match output {
         Ok(output) => {
             let stdout = String::from_utf8_lossy(&output.stdout);
-            Ok(make_string(vm, &stdout)?)
+            make_string(vm, &stdout)
         }
         Err(e) => Err(sys_error(
             vm,

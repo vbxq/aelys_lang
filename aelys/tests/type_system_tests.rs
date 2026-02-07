@@ -26,6 +26,7 @@ fn test_let_with_int_type() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_let_with_float_type() {
     let result = run_ok(
         r#"

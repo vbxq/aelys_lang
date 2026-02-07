@@ -45,7 +45,12 @@ needs std.net
 net.connect("10.255.255.1", 9999)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.contains("failed") || err.contains("connection") || err.contains("timeout") || err.contains("capability"));
+    assert!(
+        err.contains("failed")
+            || err.contains("connection")
+            || err.contains("timeout")
+            || err.contains("capability")
+    );
 }
 
 #[test]
@@ -65,7 +70,11 @@ needs std.net
 net.recv(123)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.to_lowercase().contains("invalid") || err.to_lowercase().contains("handle") || err.contains("capability"));
+    assert!(
+        err.to_lowercase().contains("invalid")
+            || err.to_lowercase().contains("handle")
+            || err.contains("capability")
+    );
 }
 
 #[test]
@@ -87,7 +96,12 @@ let s = net.connect("www.google.com", 80)
 net.recv_bytes(s, 17000000)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.contains("max") || err.contains("buffer") || err.contains("exceeds") || err.contains("capability"));
+    assert!(
+        err.contains("max")
+            || err.contains("buffer")
+            || err.contains("exceeds")
+            || err.contains("capability")
+    );
 }
 
 #[test]
@@ -255,7 +269,12 @@ needs std.net
 net.connect("this.domain.does.not.exist.anywhere.invalid", 80)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.contains("resolve") || err.contains("failed") || err.contains("connection") || err.contains("capability"));
+    assert!(
+        err.contains("resolve")
+            || err.contains("failed")
+            || err.contains("connection")
+            || err.contains("capability")
+    );
 }
 
 #[test]
@@ -461,7 +480,12 @@ let sock = net.udp_bind("127.0.0.1", 0)
 net.udp_recv_from(sock, 17000000)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.contains("max") || err.contains("buffer") || err.contains("exceeds") || err.contains("capability"));
+    assert!(
+        err.contains("max")
+            || err.contains("buffer")
+            || err.contains("exceeds")
+            || err.contains("capability")
+    );
 }
 
 #[test]

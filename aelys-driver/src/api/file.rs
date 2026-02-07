@@ -1,7 +1,7 @@
 use crate::modules::load_modules_for_program;
 use aelys_backend::Compiler;
-use aelys_common::{Result, Warning};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
+use aelys_common::{Result, Warning};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
@@ -20,7 +20,11 @@ pub fn run_file(file_path: &std::path::Path) -> Result<Value> {
     run_file_with_config(file_path, VmConfig::default(), Vec::new())
 }
 
-pub fn run_file_with_config(file_path: &std::path::Path, config: VmConfig, program_args: Vec<String>) -> Result<Value> {
+pub fn run_file_with_config(
+    file_path: &std::path::Path,
+    config: VmConfig,
+    program_args: Vec<String>,
+) -> Result<Value> {
     run_file_with_config_and_opt(file_path, config, program_args, OptimizationLevel::Standard)
 }
 
@@ -47,7 +51,7 @@ pub fn run_file_full(
                 searched_paths: vec![file_path.display().to_string()],
             },
             Span::dummy(),
-            Source::new(&file_path.display().to_string(), ""),
+            Source::new(file_path.display().to_string(), ""),
         ))
     })?;
 
@@ -100,22 +104,30 @@ pub fn run_file_full(
         }
     })?;
 
-    let mut warnings: Vec<Warning> = inference_result.warnings.into_iter().map(|mut w| {
-        if w.source.is_none() {
-            w.source = Some(src.clone());
-        }
-        w
-    }).collect();
+    let mut warnings: Vec<Warning> = inference_result
+        .warnings
+        .into_iter()
+        .map(|mut w| {
+            if w.source.is_none() {
+                w.source = Some(src.clone());
+            }
+            w
+        })
+        .collect();
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(inference_result.program);
 
-    let opt_warnings: Vec<Warning> = optimizer.take_warnings().into_iter().map(|mut w| {
-        if w.source.is_none() {
-            w.source = Some(src.clone());
-        }
-        w
-    }).collect();
+    let opt_warnings: Vec<Warning> = optimizer
+        .take_warnings()
+        .into_iter()
+        .map(|mut w| {
+            if w.source.is_none() {
+                w.source = Some(src.clone());
+            }
+            w
+        })
+        .collect();
     warnings.extend(opt_warnings);
 
     let mut compiler = Compiler::with_modules(

@@ -36,7 +36,15 @@ impl Heap {
     }
 }
 
-impl Default for Heap { fn default() -> Self { Self::new() } }
+impl Default for Heap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 // clone gives you a fresh heap, not a copy (objects aren't clonable)
-impl Clone for Heap { fn clone(&self) -> Self { Self::new() } }
+impl Clone for Heap {
+    fn clone(&self) -> Self {
+        Self::new()
+    }
+}

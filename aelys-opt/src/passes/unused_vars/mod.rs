@@ -13,15 +13,23 @@ pub struct UnusedVarEliminator {
 }
 
 impl UnusedVarEliminator {
-    pub fn new() -> Self { Self { stats: OptimizationStats::new() } }
+    pub fn new() -> Self {
+        Self {
+            stats: OptimizationStats::new(),
+        }
+    }
 }
 
 impl Default for UnusedVarEliminator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OptimizationPass for UnusedVarEliminator {
-    fn name(&self) -> &'static str { "unused_var_elimination" }
+    fn name(&self) -> &'static str {
+        "unused_var_elimination"
+    }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
         self.stats = OptimizationStats::new();
@@ -32,7 +40,11 @@ impl OptimizationPass for UnusedVarEliminator {
 }
 
 impl UnusedVarEliminator {
-    fn eliminate_unused(&mut self, stmts: &mut Vec<aelys_sema::TypedStmt>, used_vars: &HashSet<String>) {
+    fn eliminate_unused(
+        &mut self,
+        stmts: &mut Vec<aelys_sema::TypedStmt>,
+        used_vars: &HashSet<String>,
+    ) {
         eliminate::eliminate_unused_in_block(stmts, used_vars, &mut self.stats);
     }
 }

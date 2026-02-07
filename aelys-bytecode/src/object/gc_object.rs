@@ -7,5 +7,10 @@ pub struct GcObject {
 }
 
 impl GcObject {
-    pub fn new(kind: ObjectKind) -> Self { Self { marked: false, kind } }
+    pub fn new(kind: ObjectKind) -> Self {
+        Self {
+            marked: false,
+            kind,
+        }
+    }
 }

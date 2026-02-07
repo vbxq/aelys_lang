@@ -4,11 +4,11 @@ use super::ModuleKind;
 use std::path::{Path, PathBuf};
 
 pub enum ExtensionPattern {
-    Direct { ext: &'static str, kind: ModuleKind },      // foo.aelys
-    ModFile { ext: &'static str, kind: ModuleKind },     // foo/mod.aelys
-    DylibDirect { kind: ModuleKind },                    // foo.so
-    DylibModFile { kind: ModuleKind },                   // foo/mod.so
-    LibPrefixDylib { kind: ModuleKind },                 // libfoo.so
+    Direct { ext: &'static str, kind: ModuleKind }, // foo.aelys
+    ModFile { ext: &'static str, kind: ModuleKind }, // foo/mod.aelys
+    DylibDirect { kind: ModuleKind },               // foo.so
+    DylibModFile { kind: ModuleKind },              // foo/mod.so
+    LibPrefixDylib { kind: ModuleKind },            // libfoo.so
 }
 
 impl ExtensionPattern {

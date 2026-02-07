@@ -53,7 +53,7 @@ pub enum TypedStmtKind {
         start: TypedExpr,
         end: TypedExpr,
         inclusive: bool,
-        step: Option<TypedExpr>,
+        step: Box<Option<TypedExpr>>,
         body: Box<TypedStmt>,
     },
 

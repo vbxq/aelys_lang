@@ -6,7 +6,9 @@ use super::stages::{
 use aelys_opt::OptimizationLevel;
 use std::collections::{HashMap, HashSet};
 
-pub fn standard_pipeline() -> Pipeline { standard_pipeline_with_opt(OptimizationLevel::Standard) }
+pub fn standard_pipeline() -> Pipeline {
+    standard_pipeline_with_opt(OptimizationLevel::Standard)
+}
 
 pub fn standard_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     let mut pipeline = Pipeline::new();
@@ -21,7 +23,9 @@ pub fn standard_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
 }
 
 // no VM - use pipeline.compile() to get (Function, Heap)
-pub fn compilation_pipeline() -> Pipeline { compilation_pipeline_with_opt(OptimizationLevel::Standard) }
+pub fn compilation_pipeline() -> Pipeline {
+    compilation_pipeline_with_opt(OptimizationLevel::Standard)
+}
 
 pub fn compilation_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     let mut pipeline = Pipeline::new();

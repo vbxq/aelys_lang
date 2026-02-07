@@ -22,13 +22,19 @@ impl Heap {
     }
 
     pub fn alloc_function(&mut self, func: Function) -> GcRef {
-        self.alloc(GcObject::new(ObjectKind::Function(AelysFunction::new(func))))
+        self.alloc(GcObject::new(ObjectKind::Function(AelysFunction::new(
+            func,
+        ))))
     }
 
     pub fn alloc_native(&mut self, name: &str, arity: u8) -> GcRef {
-        self.alloc(GcObject::new(ObjectKind::Native(NativeFunction::new(name, arity))))
+        self.alloc(GcObject::new(ObjectKind::Native(NativeFunction::new(
+            name, arity,
+        ))))
     }
 
     // same as alloc_native, just different name for clarity in calling code
-    pub fn alloc_foreign(&mut self, name: &str, arity: u8) -> GcRef { self.alloc_native(name, arity) }
+    pub fn alloc_foreign(&mut self, name: &str, arity: u8) -> GcRef {
+        self.alloc_native(name, arity)
+    }
 }

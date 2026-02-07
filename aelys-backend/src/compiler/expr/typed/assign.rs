@@ -37,15 +37,15 @@ impl Compiler {
             }
             self.emit_a(OpCode::SetUpval, upval_idx, dest, 0, span);
         } else {
-            if let Some(&mutable) = self.globals.get(name) {
-                if !mutable {
-                    return Err(CompileError::new(
-                        CompileErrorKind::AssignToImmutable(name.to_string()),
-                        span,
-                        self.source.clone(),
-                    )
-                    .into());
-                }
+            if let Some(&mutable) = self.globals.get(name)
+                && !mutable
+            {
+                return Err(CompileError::new(
+                    CompileErrorKind::AssignToImmutable(name.to_string()),
+                    span,
+                    self.source.clone(),
+                )
+                .into());
             }
             // For assignments to user-defined globals, use raw index without translation
             let idx = self.get_or_create_global_index_raw(name);

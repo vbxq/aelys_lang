@@ -16,12 +16,12 @@ impl Heap {
         let hash = Self::fnv1a_hash(s.as_bytes());
 
         // check if already interned
-        if let Some(&r) = self.intern_table.get(&hash) {
-            if let Some(obj) = self.get(r) {
-                if let ObjectKind::String(ref existing) = obj.kind {
-                    if existing.as_str() == s { return r; }
-                }
-            }
+        if let Some(&r) = self.intern_table.get(&hash)
+            && let Some(obj) = self.get(r)
+            && let ObjectKind::String(ref existing) = obj.kind
+            && existing.as_str() == s
+        {
+            return r;
         }
 
         let r = self.alloc(GcObject::new(ObjectKind::String(AelysString::new(s))));
@@ -32,7 +32,9 @@ impl Heap {
     // FNV-1a - simple and fast enough for string interning
     pub fn fnv1a_hash(bytes: &[u8]) -> u64 {
         let mut h = 0xcbf29ce484222325u64;
-        for &b in bytes { h = (h ^ b as u64).wrapping_mul(0x100000001b3); }
+        for &b in bytes {
+            h = (h ^ b as u64).wrapping_mul(0x100000001b3);
+        }
         h
     }
 }

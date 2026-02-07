@@ -49,11 +49,15 @@ pub fn disassemble_with_options(
     output
 }
 
-pub fn disassemble_to_string(func: &Function, heap: Option<&Heap>) -> String { disassemble(func, heap) }
+pub fn disassemble_to_string(func: &Function, heap: Option<&Heap>) -> String {
+    disassemble(func, heap)
+}
 
 fn collect_functions<'a>(func: &'a Function, out: &mut Vec<&'a Function>) {
     out.push(func);
-    for f in &func.nested_functions { collect_functions(f, out); }
+    for f in &func.nested_functions {
+        collect_functions(f, out);
+    }
 }
 
 struct DisasmContext<'a> {
@@ -75,13 +79,15 @@ impl<'a> DisasmContext<'a> {
 
     fn set_function_context(&mut self, func: &Function, all_functions: &[&Function]) {
         self.global_names = func.global_layout.names().to_vec();
-        self.nested_fn_names = func.nested_functions
+        self.nested_fn_names = func
+            .nested_functions
             .iter()
             .map(|f| f.name.clone())
             .collect();
         // also include names from all_functions for @N references
         if self.nested_fn_names.is_empty() {
-            self.nested_fn_names = all_functions.iter()
+            self.nested_fn_names = all_functions
+                .iter()
                 .skip(1)
                 .map(|f| f.name.clone())
                 .collect();
@@ -162,13 +168,10 @@ impl<'a> DisasmContext<'a> {
 
             // Check if this instruction has cache words following it
             let opcode = OpCode::from_u8((instr >> 24) as u8);
-            if let Some(op) = opcode {
-                match op {
-                    OpCode::CallGlobal | OpCode::CallGlobalMono | OpCode::CallGlobalNative => {
-                        skip_cache_words = 2; // Skip the 2 cache words
-                    }
-                    _ => {}
-                }
+            if let Some(OpCode::CallGlobal | OpCode::CallGlobalMono | OpCode::CallGlobalNative) =
+                opcode
+            {
+                skip_cache_words = 2; // Skip the 2 cache words
             }
 
             if self.options.include_line_info {
@@ -190,19 +193,14 @@ impl<'a> DisasmContext<'a> {
         for (offset, &instr) in bytecode.iter().enumerate() {
             let opcode = OpCode::from_u8((instr >> 24) as u8);
 
-            if let Some(op) = opcode {
-                match op {
-                    OpCode::Jump | OpCode::JumpIf | OpCode::JumpIfNot => {
-                        let (_, _, imm) = decode_b(instr);
-                        let target = if imm >= 0 {
-                            offset.wrapping_add(1).wrapping_add(imm as usize)
-                        } else {
-                            offset.wrapping_add(1).wrapping_sub((-imm) as usize)
-                        };
-                        targets.insert(target);
-                    }
-                    _ => {}
-                }
+            if let Some(OpCode::Jump | OpCode::JumpIf | OpCode::JumpIfNot) = opcode {
+                let (_, _, imm) = decode_b(instr);
+                let target = if imm >= 0 {
+                    offset.wrapping_add(1).wrapping_add(imm as usize)
+                } else {
+                    offset.wrapping_add(1).wrapping_sub((-imm) as usize)
+                };
+                targets.insert(target);
             }
         }
 
@@ -581,21 +579,30 @@ impl<'a> DisasmContext<'a> {
             OpCode::CallGlobal => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
                 match self.global_name(global_idx as usize) {
-                    Some(name) => format!("CallGlobal r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    Some(name) => format!(
+                        "CallGlobal r{}, {}, {}  ; {}()",
+                        dest, global_idx, nargs, name
+                    ),
                     None => format!("CallGlobal r{}, {}, {}", dest, global_idx, nargs),
                 }
             }
             OpCode::CallGlobalMono => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
                 match self.global_name(global_idx as usize) {
-                    Some(name) => format!("CallGlobalMono r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    Some(name) => format!(
+                        "CallGlobalMono r{}, {}, {}  ; {}()",
+                        dest, global_idx, nargs, name
+                    ),
                     None => format!("CallGlobalMono r{}, {}, {}", dest, global_idx, nargs),
                 }
             }
             OpCode::CallGlobalNative => {
                 let (_, dest, global_idx, nargs) = decode_a(instr);
                 match self.global_name(global_idx as usize) {
-                    Some(name) => format!("CallGlobalNative r{}, {}, {}  ; {}()", dest, global_idx, nargs, name),
+                    Some(name) => format!(
+                        "CallGlobalNative r{}, {}, {}  ; {}()",
+                        dest, global_idx, nargs, name
+                    ),
                     None => format!("CallGlobalNative r{}, {}, {}", dest, global_idx, nargs),
                 }
             }
@@ -981,13 +988,17 @@ impl<'a> DisasmContext<'a> {
             if f.is_nan() {
                 "float nan".to_string()
             } else if f.is_infinite() {
-                if f.is_sign_positive() { "float inf".to_string() }
-                else { "float -inf".to_string() }
+                if f.is_sign_positive() {
+                    "float inf".to_string()
+                } else {
+                    "float -inf".to_string()
+                }
             } else {
                 format!("float {}", f)
             }
         } else if let Some(func_idx) = value.as_nested_fn_marker() {
-            let name = nested_functions.get(func_idx)
+            let name = nested_functions
+                .get(func_idx)
                 .and_then(|f| f.name.as_deref())
                 .or_else(|| self.nested_fn_name(func_idx));
             match name {

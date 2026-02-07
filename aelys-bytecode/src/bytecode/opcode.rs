@@ -170,13 +170,13 @@ pub enum OpCode {
     VecStoreI,
     VecStoreF,
     VecStoreB,
-    VecStoreP
+    VecStoreP,
 }
 
 impl OpCode {
     pub fn from_u8(byte: u8) -> Option<Self> {
         if byte <= Self::VecStoreP as u8 {
-            Some(unsafe { std::mem::transmute(byte) })
+            Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) })
         } else {
             None
         }

@@ -1,9 +1,9 @@
 use super::Parser;
+use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, TokenKind};
 use std::sync::Arc;
-use crate::lexer::Lexer;
 
 impl Parser {
     pub(super) fn lambda_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {

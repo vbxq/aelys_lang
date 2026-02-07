@@ -15,23 +15,32 @@ pub struct GlobalConstantPropagator {
 
 impl GlobalConstantPropagator {
     pub fn new() -> Self {
-        Self { constants: HashMap::new(), stats: OptimizationStats::new() }
+        Self {
+            constants: HashMap::new(),
+            stats: OptimizationStats::new(),
+        }
     }
 }
 
 impl Default for GlobalConstantPropagator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OptimizationPass for GlobalConstantPropagator {
-    fn name(&self) -> &'static str { "global_const_prop" }
+    fn name(&self) -> &'static str {
+        "global_const_prop"
+    }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
         self.constants.clear();
         self.stats = OptimizationStats::new();
 
         self.collect_global_constants(&program.stmts);
-        for stmt in &mut program.stmts { self.substitute_in_stmt(stmt); }
+        for stmt in &mut program.stmts {
+            self.substitute_in_stmt(stmt);
+        }
 
         self.stats.clone()
     }

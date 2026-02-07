@@ -622,7 +622,11 @@ sin(0)
     let result = run_file(&main_path);
     assert!(result.is_err());
     let err = result.unwrap_err().to_string();
-    assert!(err.contains("sin"), "Should fail on direct 'sin' call: {}", err);
+    assert!(
+        err.contains("sin"),
+        "Should fail on direct 'sin' call: {}",
+        err
+    );
 }
 
 #[test]

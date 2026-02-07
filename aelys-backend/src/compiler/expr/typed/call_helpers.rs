@@ -113,14 +113,15 @@ impl Compiler {
         span: Span,
     ) -> Result<()> {
         // Optimize: use LoadMemI for constant offsets 0-255
-        if let TypedExprKind::Int(offset) = &offset_expr.kind {
-            if *offset >= 0 && *offset <= 255 {
-                let ptr_reg = self.alloc_register()?;
-                self.compile_typed_expr(ptr_expr, ptr_reg)?;
-                self.emit_a(OpCode::LoadMemI, dest, ptr_reg, *offset as u8, span);
-                self.free_register(ptr_reg);
-                return Ok(());
-            }
+        if let TypedExprKind::Int(offset) = &offset_expr.kind
+            && *offset >= 0
+            && *offset <= 255
+        {
+            let ptr_reg = self.alloc_register()?;
+            self.compile_typed_expr(ptr_expr, ptr_reg)?;
+            self.emit_a(OpCode::LoadMemI, dest, ptr_reg, *offset as u8, span);
+            self.free_register(ptr_reg);
+            return Ok(());
         }
 
         let ptr_reg = self.alloc_register()?;
@@ -142,18 +143,19 @@ impl Compiler {
         span: Span,
     ) -> Result<()> {
         // Optimize: use StoreMemI for constant offsets 0-255
-        if let TypedExprKind::Int(offset) = &offset_expr.kind {
-            if *offset >= 0 && *offset <= 255 {
-                let ptr_reg = self.alloc_register()?;
-                let val_reg = self.alloc_register()?;
-                self.compile_typed_expr(ptr_expr, ptr_reg)?;
-                self.compile_typed_expr(value_expr, val_reg)?;
-                self.emit_a(OpCode::StoreMemI, ptr_reg, *offset as u8, val_reg, span);
-                self.free_register(val_reg);
-                self.free_register(ptr_reg);
-                self.emit_a(OpCode::LoadNull, dest, 0, 0, span);
-                return Ok(());
-            }
+        if let TypedExprKind::Int(offset) = &offset_expr.kind
+            && *offset >= 0
+            && *offset <= 255
+        {
+            let ptr_reg = self.alloc_register()?;
+            let val_reg = self.alloc_register()?;
+            self.compile_typed_expr(ptr_expr, ptr_reg)?;
+            self.compile_typed_expr(value_expr, val_reg)?;
+            self.emit_a(OpCode::StoreMemI, ptr_reg, *offset as u8, val_reg, span);
+            self.free_register(val_reg);
+            self.free_register(ptr_reg);
+            self.emit_a(OpCode::LoadNull, dest, 0, 0, span);
+            return Ok(());
         }
 
         let ptr_reg = self.alloc_register()?;

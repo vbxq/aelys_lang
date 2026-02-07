@@ -62,7 +62,15 @@ pub fn value_as_bool(v: AelysValue) -> bool {
     }
 }
 
-pub fn value_is_null(v: AelysValue) -> bool { (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_NULL) }
-pub fn value_is_int(v: AelysValue) -> bool { (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_INT) }
-pub fn value_is_float(v: AelysValue) -> bool { (v & QNAN) != QNAN || (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_NAN) }
-pub fn value_is_bool(v: AelysValue) -> bool { (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_BOOL) }
+pub fn value_is_null(v: AelysValue) -> bool {
+    (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_NULL)
+}
+pub fn value_is_int(v: AelysValue) -> bool {
+    (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_INT)
+}
+pub fn value_is_float(v: AelysValue) -> bool {
+    (v & QNAN) != QNAN || (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_NAN)
+}
+pub fn value_is_bool(v: AelysValue) -> bool {
+    (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_BOOL)
+}

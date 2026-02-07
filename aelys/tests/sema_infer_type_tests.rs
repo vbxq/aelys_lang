@@ -29,10 +29,22 @@ fn test_infer_type_has_vars() {
 #[test]
 fn test_from_annotation() {
     assert_eq!(InferType::from_annotation(&make_ann("int")), InferType::Int);
-    assert_eq!(InferType::from_annotation(&make_ann("float")), InferType::Float);
-    assert_eq!(InferType::from_annotation(&make_ann("bool")), InferType::Bool);
-    assert_eq!(InferType::from_annotation(&make_ann("string")), InferType::String);
-    assert_eq!(InferType::from_annotation(&make_ann("unknown")), InferType::Dynamic);
+    assert_eq!(
+        InferType::from_annotation(&make_ann("float")),
+        InferType::Float
+    );
+    assert_eq!(
+        InferType::from_annotation(&make_ann("bool")),
+        InferType::Bool
+    );
+    assert_eq!(
+        InferType::from_annotation(&make_ann("string")),
+        InferType::String
+    );
+    assert_eq!(
+        InferType::from_annotation(&make_ann("unknown")),
+        InferType::Dynamic
+    );
 }
 
 #[test]

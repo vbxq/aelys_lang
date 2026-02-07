@@ -215,8 +215,7 @@ impl<'a> AasmParser<'a> {
                 self.skip_comma()?;
                 // Handle 'kN' format (e.g., k0, k1) where N is the constant index
                 let k = if let Token::Ident(s) = &self.current {
-                    if s.starts_with('k') {
-                        let num_str = &s[1..];
+                    if let Some(num_str) = s.strip_prefix('k') {
                         let k = num_str.parse::<u8>().map_err(|_| {
                             AssemblerError::InvalidNumber(format!("Invalid constant index: {}", s))
                         })?;
@@ -680,7 +679,7 @@ impl<'a> AasmParser<'a> {
 
         bytecode.push(instr);
         if extra_cache_words > 0 {
-            bytecode.extend(std::iter::repeat(0).take(extra_cache_words));
+            bytecode.extend(std::iter::repeat_n(0, extra_cache_words));
         }
         Ok(())
     }

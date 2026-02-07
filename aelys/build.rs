@@ -8,8 +8,16 @@ fn main() {
     let workspace_root = Path::new("..").canonicalize().unwrap();
 
     let updates = vec![
-        ("README.md", r"# aelys \d+\.\d+\.\d+-[a-z]", format!("# aelys {}", version)),
-        ("examples/hello.aelys", r"Aelys v\d+\.\d+\.\d+-[a-z]", format!("Aelys v{}", version)),
+        (
+            "README.md",
+            r"# aelys \d+\.\d+\.\d+-[a-z]",
+            format!("# aelys {}", version),
+        ),
+        (
+            "examples/hello.aelys",
+            r"Aelys v\d+\.\d+\.\d+-[a-z]",
+            format!("Aelys v{}", version),
+        ),
     ];
 
     for (file_path, pattern, replacement) in updates {

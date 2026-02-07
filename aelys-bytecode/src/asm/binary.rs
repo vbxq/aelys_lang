@@ -26,6 +26,9 @@ const MAX_SECTION_LEN: usize = 256 * 1024 * 1024;
 const SECTION_MANIFEST: u32 = u32::from_le_bytes(*b"MANF");
 const SECTION_BUNDLES: u32 = u32::from_le_bytes(*b"NBND");
 
+/// Result type for deserialization with manifest and bundles
+pub type DeserializeResult = Result<(Function, Heap, Option<Vec<u8>>, Vec<NativeBundle>)>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeBundle {
     pub name: String,
@@ -97,9 +100,7 @@ pub fn deserialize(data: &[u8]) -> Result<(Function, Heap)> {
 }
 
 /// Deserialize .avbc binary format to a function, heap, optional manifest, and bundles.
-pub fn deserialize_with_manifest(
-    data: &[u8],
-) -> Result<(Function, Heap, Option<Vec<u8>>, Vec<NativeBundle>)> {
+pub fn deserialize_with_manifest(data: &[u8]) -> DeserializeResult {
     let reader = BinaryReader::new(data);
     reader.read_program_with_sections()
 }
@@ -356,9 +357,7 @@ impl<'a> BinaryReader<'a> {
         Ok((func, self.heap))
     }
 
-    fn read_program_with_sections(
-        mut self,
-    ) -> Result<(Function, Heap, Option<Vec<u8>>, Vec<NativeBundle>)> {
+    fn read_program_with_sections(mut self) -> DeserializeResult {
         // Header
         let mut magic = [0u8; 4];
         self.cursor.read_exact(&mut magic)?;
@@ -529,13 +528,13 @@ impl<'a> BinaryReader<'a> {
 
     fn validate_func_markers(constants: &[Value], nested_count: usize) -> Result<()> {
         for constant in constants {
-            if let Some(func_idx) = constant.as_nested_fn_marker() {
-                if func_idx >= nested_count {
-                    return Err(BinaryError::InvalidNestedFunctionIndex {
-                        index: func_idx,
-                        max: nested_count.saturating_sub(1),
-                    });
-                }
+            if let Some(func_idx) = constant.as_nested_fn_marker()
+                && func_idx >= nested_count
+            {
+                return Err(BinaryError::InvalidNestedFunctionIndex {
+                    index: func_idx,
+                    max: nested_count.saturating_sub(1),
+                });
             }
         }
         Ok(())

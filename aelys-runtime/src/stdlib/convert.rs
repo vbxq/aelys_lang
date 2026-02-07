@@ -117,7 +117,10 @@ fn native_parse_int_radix(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeE
 
 fn native_parse_float(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let s = get_string(vm, args[0], "convert.parse_float")?;
-    Ok(s.trim().parse::<f64>().map(Value::float).unwrap_or(Value::null()))
+    Ok(s.trim()
+        .parse::<f64>()
+        .map(Value::float)
+        .unwrap_or(Value::null()))
 }
 
 // Lenient boolean parsing: true/false, 1/0, yes/no, on/off all work
@@ -136,19 +139,33 @@ fn native_to_string(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> 
 
 fn native_to_hex(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let n = get_int(vm, args[0], "convert.to_hex")?;
-    let s = if n < 0 { format!("-{:x}", -n) } else { format!("{:x}", n) };
+    let s = if n < 0 {
+        format!("-{:x}", -n)
+    } else {
+        format!("{:x}", n)
+    };
     make_string(vm, &s)
 }
 
 fn native_to_binary(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let n = get_int(vm, args[0], "convert.to_binary")?;
-    make_string(vm, &if n >= 0 { format!("{:b}", n) } else { format!("-{:b}", -n) })
+    make_string(
+        vm,
+        &if n >= 0 {
+            format!("{:b}", n)
+        } else {
+            format!("-{:b}", -n)
+        },
+    )
 }
 
 fn native_to_octal(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let n = get_int(vm, args[0], "convert.to_octal")?;
-    if n >= 0 { make_string(vm, &format!("{:o}", n)) }
-    else { make_string(vm, &format!("-{:o}", -n)) }
+    if n >= 0 {
+        make_string(vm, &format!("{:o}", n))
+    } else {
+        make_string(vm, &format!("-{:o}", -n))
+    }
 }
 
 /// to_radix(n, radix) - Convert integer to string in given radix (2-36).
@@ -170,7 +187,7 @@ fn native_to_radix(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let radix = radix as i128;
 
     if num == 0 {
-        return Ok(make_string(vm, "0")?);
+        return make_string(vm, "0");
     }
 
     while num > 0 {
@@ -190,7 +207,7 @@ fn native_to_radix(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         result.insert(0, '-');
     }
 
-    Ok(make_string(vm, &result)?)
+    make_string(vm, &result)
 }
 
 /// to_int(value) - Convert to integer.
@@ -247,10 +264,10 @@ fn native_to_float(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     }
 
     // Try string conversion
-    if let Ok(s) = get_string(vm, value, "convert.to_float") {
-        if let Ok(f) = s.trim().parse::<f64>() {
-            return Ok(Value::float(f));
-        }
+    if let Ok(s) = get_string(vm, value, "convert.to_float")
+        && let Ok(f) = s.trim().parse::<f64>()
+    {
+        return Ok(Value::float(f));
     }
 
     Err(convert_error(
@@ -278,7 +295,7 @@ fn native_ord(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 fn native_chr(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let code = get_int(vm, args[0], "convert.chr")?;
 
-    if code < 0 || code > 0x10FFFF {
+    if !(0..=0x10FFFF).contains(&code) {
         return Err(convert_error(
             vm,
             "convert.chr",
@@ -299,7 +316,7 @@ fn native_chr(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
 /// type_of(value) - Get type name as string.
 fn native_type_of(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let type_name = vm.value_type_name(args[0]);
-    Ok(make_string(vm, type_name)?)
+    make_string(vm, type_name)
 }
 
 /// is_int(value) - Check if value is an integer.

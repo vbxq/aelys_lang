@@ -39,7 +39,9 @@ impl InlineExpander {
         span: Span,
     ) -> Option<TypedExpr> {
         // only inline truly trivial bodies: single return or expression with no let bindings
-        if body.len() != 1 { return None; }
+        if body.len() != 1 {
+            return None;
+        }
 
         match &body[0].kind {
             TypedStmtKind::Return(Some(expr)) => {
@@ -60,31 +62,40 @@ impl InlineExpander {
         }
     }
 
-    fn expr_has_only_params_and_literals(&self, expr: &TypedExpr, params: &HashMap<String, TypedExpr>) -> bool {
+    fn expr_has_only_params_and_literals(
+        &self,
+        expr: &TypedExpr,
+        params: &HashMap<String, TypedExpr>,
+    ) -> bool {
         match &expr.kind {
-            TypedExprKind::Int(_) | TypedExprKind::Float(_) |
-            TypedExprKind::Bool(_) | TypedExprKind::String(_) | TypedExprKind::Null => true,
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null => true,
 
             TypedExprKind::Identifier(name) => params.contains_key(name),
 
             TypedExprKind::Binary { left, right, .. } => {
-                self.expr_has_only_params_and_literals(left, params) &&
-                self.expr_has_only_params_and_literals(right, params)
+                self.expr_has_only_params_and_literals(left, params)
+                    && self.expr_has_only_params_and_literals(right, params)
             }
             TypedExprKind::Unary { operand, .. } => {
                 self.expr_has_only_params_and_literals(operand, params)
             }
-            TypedExprKind::Grouping(inner) => {
-                self.expr_has_only_params_and_literals(inner, params)
-            }
+            TypedExprKind::Grouping(inner) => self.expr_has_only_params_and_literals(inner, params),
             TypedExprKind::And { left, right } | TypedExprKind::Or { left, right } => {
-                self.expr_has_only_params_and_literals(left, params) &&
-                self.expr_has_only_params_and_literals(right, params)
+                self.expr_has_only_params_and_literals(left, params)
+                    && self.expr_has_only_params_and_literals(right, params)
             }
-            TypedExprKind::If { condition, then_branch, else_branch } => {
-                self.expr_has_only_params_and_literals(condition, params) &&
-                self.expr_has_only_params_and_literals(then_branch, params) &&
-                self.expr_has_only_params_and_literals(else_branch, params)
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                self.expr_has_only_params_and_literals(condition, params)
+                    && self.expr_has_only_params_and_literals(then_branch, params)
+                    && self.expr_has_only_params_and_literals(else_branch, params)
             }
             // anything else (calls, arrays, etc.) - don't inline
             _ => false,
@@ -128,14 +139,21 @@ impl InlineExpander {
 
             TypedExprKind::Call { callee, args } => TypedExprKind::Call {
                 callee: Box::new(self.substitute_expr(callee, params, span)),
-                args: args.iter().map(|a| self.substitute_expr(a, params, span)).collect(),
+                args: args
+                    .iter()
+                    .map(|a| self.substitute_expr(a, params, span))
+                    .collect(),
             },
 
             TypedExprKind::Grouping(inner) => {
                 TypedExprKind::Grouping(Box::new(self.substitute_expr(inner, params, span)))
             }
 
-            TypedExprKind::If { condition, then_branch, else_branch } => TypedExprKind::If {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => TypedExprKind::If {
                 condition: Box::new(self.substitute_expr(condition, params, span)),
                 then_branch: Box::new(self.substitute_expr(then_branch, params, span)),
                 else_branch: Box::new(self.substitute_expr(else_branch, params, span)),
@@ -151,14 +169,26 @@ impl InlineExpander {
                 member: member.clone(),
             },
 
-            TypedExprKind::ArrayLiteral { element_type, elements } => TypedExprKind::ArrayLiteral {
+            TypedExprKind::ArrayLiteral {
+                element_type,
+                elements,
+            } => TypedExprKind::ArrayLiteral {
                 element_type: element_type.clone(),
-                elements: elements.iter().map(|e| self.substitute_expr(e, params, span)).collect(),
+                elements: elements
+                    .iter()
+                    .map(|e| self.substitute_expr(e, params, span))
+                    .collect(),
             },
 
-            TypedExprKind::VecLiteral { element_type, elements } => TypedExprKind::VecLiteral {
+            TypedExprKind::VecLiteral {
+                element_type,
+                elements,
+            } => TypedExprKind::VecLiteral {
                 element_type: element_type.clone(),
-                elements: elements.iter().map(|e| self.substitute_expr(e, params, span)).collect(),
+                elements: elements
+                    .iter()
+                    .map(|e| self.substitute_expr(e, params, span))
+                    .collect(),
             },
 
             TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
@@ -171,15 +201,27 @@ impl InlineExpander {
                 index: Box::new(self.substitute_expr(index, params, span)),
             },
 
-            TypedExprKind::IndexAssign { object, index, value } => TypedExprKind::IndexAssign {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => TypedExprKind::IndexAssign {
                 object: Box::new(self.substitute_expr(object, params, span)),
                 index: Box::new(self.substitute_expr(index, params, span)),
                 value: Box::new(self.substitute_expr(value, params, span)),
             },
 
-            TypedExprKind::Range { start, end, inclusive } => TypedExprKind::Range {
-                start: start.as_ref().map(|s| Box::new(self.substitute_expr(s, params, span))),
-                end: end.as_ref().map(|e| Box::new(self.substitute_expr(e, params, span))),
+            TypedExprKind::Range {
+                start,
+                end,
+                inclusive,
+            } => TypedExprKind::Range {
+                start: start
+                    .as_ref()
+                    .map(|s| Box::new(self.substitute_expr(s, params, span))),
+                end: end
+                    .as_ref()
+                    .map(|e| Box::new(self.substitute_expr(e, params, span))),
                 inclusive: *inclusive,
             },
 
@@ -193,7 +235,12 @@ impl InlineExpander {
                 TypedExprKind::Lambda(Box::new(self.substitute_expr(inner, params, span)))
             }
 
-            TypedExprKind::LambdaInner { params: lparams, return_type, body, captures } => {
+            TypedExprKind::LambdaInner {
+                params: lparams,
+                return_type,
+                body,
+                captures,
+            } => {
                 // don't substitute params that shadow the outer ones
                 let mut filtered = params.clone();
                 for p in lparams {
@@ -202,17 +249,31 @@ impl InlineExpander {
                 TypedExprKind::LambdaInner {
                     params: lparams.clone(),
                     return_type: return_type.clone(),
-                    body: body.iter().map(|s| self.substitute_stmt(s, &filtered, span)).collect(),
+                    body: body
+                        .iter()
+                        .map(|s| self.substitute_stmt(s, &filtered, span))
+                        .collect(),
                     captures: captures.clone(),
                 }
             }
 
             TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
-                parts.iter().map(|p| match p {
-                    aelys_sema::TypedFmtStringPart::Literal(s) => aelys_sema::TypedFmtStringPart::Literal(s.clone()),
-                    aelys_sema::TypedFmtStringPart::Expr(e) => aelys_sema::TypedFmtStringPart::Expr(Box::new(self.substitute_expr(e, params, span))),
-                    aelys_sema::TypedFmtStringPart::Placeholder => aelys_sema::TypedFmtStringPart::Placeholder,
-                }).collect()
+                parts
+                    .iter()
+                    .map(|p| match p {
+                        aelys_sema::TypedFmtStringPart::Literal(s) => {
+                            aelys_sema::TypedFmtStringPart::Literal(s.clone())
+                        }
+                        aelys_sema::TypedFmtStringPart::Expr(e) => {
+                            aelys_sema::TypedFmtStringPart::Expr(Box::new(
+                                self.substitute_expr(e, params, span),
+                            ))
+                        }
+                        aelys_sema::TypedFmtStringPart::Placeholder => {
+                            aelys_sema::TypedFmtStringPart::Placeholder
+                        }
+                    })
+                    .collect(),
             ),
 
             // literals pass through unchanged
@@ -236,35 +297,57 @@ impl InlineExpander {
             TypedStmtKind::Expression(e) => {
                 TypedStmtKind::Expression(self.substitute_expr(e, params, span))
             }
-            TypedStmtKind::Let { name, mutable, initializer, var_type, is_pub } => {
-                TypedStmtKind::Let {
-                    name: name.clone(),
-                    mutable: *mutable,
-                    initializer: self.substitute_expr(initializer, params, span),
-                    var_type: var_type.clone(),
-                    is_pub: *is_pub,
-                }
-            }
-            TypedStmtKind::Block(stmts) => {
-                TypedStmtKind::Block(
-                    stmts.iter().map(|s| self.substitute_stmt(s, params, span)).collect()
-                )
-            }
-            TypedStmtKind::If { condition, then_branch, else_branch } => TypedStmtKind::If {
+            TypedStmtKind::Let {
+                name,
+                mutable,
+                initializer,
+                var_type,
+                is_pub,
+            } => TypedStmtKind::Let {
+                name: name.clone(),
+                mutable: *mutable,
+                initializer: self.substitute_expr(initializer, params, span),
+                var_type: var_type.clone(),
+                is_pub: *is_pub,
+            },
+            TypedStmtKind::Block(stmts) => TypedStmtKind::Block(
+                stmts
+                    .iter()
+                    .map(|s| self.substitute_stmt(s, params, span))
+                    .collect(),
+            ),
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => TypedStmtKind::If {
                 condition: self.substitute_expr(condition, params, span),
                 then_branch: Box::new(self.substitute_stmt(then_branch, params, span)),
-                else_branch: else_branch.as_ref().map(|e| Box::new(self.substitute_stmt(e, params, span))),
+                else_branch: else_branch
+                    .as_ref()
+                    .map(|e| Box::new(self.substitute_stmt(e, params, span))),
             },
             TypedStmtKind::While { condition, body } => TypedStmtKind::While {
                 condition: self.substitute_expr(condition, params, span),
                 body: Box::new(self.substitute_stmt(body, params, span)),
             },
-            TypedStmtKind::For { iterator, start, end, inclusive, step, body } => TypedStmtKind::For {
+            TypedStmtKind::For {
+                iterator,
+                start,
+                end,
+                inclusive,
+                step,
+                body,
+            } => TypedStmtKind::For {
                 iterator: iterator.clone(),
                 start: self.substitute_expr(start, params, span),
                 end: self.substitute_expr(end, params, span),
                 inclusive: *inclusive,
-                step: step.as_ref().map(|s| self.substitute_expr(s, params, span)),
+                step: Box::new(
+                    step.as_ref()
+                        .as_ref()
+                        .map(|s| self.substitute_expr(s, params, span)),
+                ),
                 body: Box::new(self.substitute_stmt(body, params, span)),
             },
             TypedStmtKind::Return(e) => {
@@ -278,5 +361,7 @@ impl InlineExpander {
 }
 
 impl Default for InlineExpander {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

@@ -3,6 +3,7 @@ use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 
 impl VM {
     /// Ultra-fast function call using pre-cached metadata.
+    #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn call_cached_function(
         &mut self,
@@ -49,6 +50,7 @@ impl VM {
     }
 
     /// Ultra-fast closure call using pre-cached metadata.
+    #[allow(clippy::too_many_arguments)]
     #[inline]
     pub fn call_cached_closure(
         &mut self,

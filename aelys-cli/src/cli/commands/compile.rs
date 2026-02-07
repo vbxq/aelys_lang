@@ -34,7 +34,10 @@ pub fn compile_to_avbc_with_output(
     match detect_format(path) {
         CompileInput::Assembly => {
             let out = assemble_to_avbc(path, output)?;
-            return Ok(CompileResult { output_path: out, warnings: Vec::new() });
+            return Ok(CompileResult {
+                output_path: out,
+                warnings: Vec::new(),
+            });
         }
         CompileInput::Bytecode => {
             return Err("input is already bytecode".to_string());
@@ -93,12 +96,16 @@ pub fn compile_to_avbc_with_output(
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
 
-    let warnings: Vec<Warning> = optimizer.take_warnings().into_iter().map(|mut w| {
-        if w.source.is_none() {
-            w.source = source_for_warnings.clone().or_else(|| Some(src.clone()));
-        }
-        w
-    }).collect();
+    let warnings: Vec<Warning> = optimizer
+        .take_warnings()
+        .into_iter()
+        .map(|mut w| {
+            if w.source.is_none() {
+                w.source = source_for_warnings.clone().or_else(|| Some(src.clone()));
+            }
+            w
+        })
+        .collect();
 
     let (mut function, heap, _globals) = Compiler::with_modules(
         None,
@@ -145,7 +152,10 @@ pub fn compile_to_avbc_with_output(
     std::fs::write(&output_path, bytes)
         .map_err(|err| format!("failed to write {}: {}", output_path.display(), err))?;
 
-    Ok(CompileResult { output_path, warnings })
+    Ok(CompileResult {
+        output_path,
+        warnings,
+    })
 }
 
 pub fn run_with_options(

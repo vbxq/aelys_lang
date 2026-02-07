@@ -70,7 +70,17 @@ pub(super) fn verify_bytecode(func: &Function) -> Result<(), String> {
             ip += 1;
             continue;
         }
-        if globals::verify(opcode, ip, a, b, c, imm, num_regs, constants_len, bytecode.len())? {
+        if globals::verify(
+            opcode,
+            ip,
+            a,
+            b,
+            c,
+            imm,
+            num_regs,
+            constants_len,
+            bytecode.len(),
+        )? {
             ip += if skip { 3 } else { 1 };
             continue;
         }

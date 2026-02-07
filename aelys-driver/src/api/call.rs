@@ -3,7 +3,8 @@ use aelys_common::error::{AelysError, RuntimeErrorKind};
 use aelys_runtime::{self as runtime, VM, Value};
 
 pub fn call_function(vm: &mut VM, name: &str, args: &[Value]) -> Result<Value> {
-    vm.call_function_by_name(name, args).map_err(AelysError::Runtime)
+    vm.call_function_by_name(name, args)
+        .map_err(AelysError::Runtime)
 }
 
 // get a cached callable for repeated calls (avoids name lookup overhead)
@@ -107,13 +108,19 @@ pub struct CallableFunction {
 impl CallableFunction {
     pub fn arity(&self) -> u8 {
         match &self.kind {
-            CachedFuncKind::Function { arity, .. } | CachedFuncKind::Closure { arity, .. } => *arity,
+            CachedFuncKind::Function { arity, .. } | CachedFuncKind::Closure { arity, .. } => {
+                *arity
+            }
             CachedFuncKind::Native { native } => native.arity,
         }
     }
 
-    pub fn is_native(&self) -> bool { matches!(self.kind, CachedFuncKind::Native { .. }) }
-    pub fn is_closure(&self) -> bool { matches!(self.kind, CachedFuncKind::Closure { .. }) }
+    pub fn is_native(&self) -> bool {
+        matches!(self.kind, CachedFuncKind::Native { .. })
+    }
+    pub fn is_closure(&self) -> bool {
+        matches!(self.kind, CachedFuncKind::Closure { .. })
+    }
 
     pub fn call(&self, vm: &mut VM, args: &[Value]) -> Result<Value> {
         match &self.kind {

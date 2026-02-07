@@ -60,7 +60,7 @@ fn collect_def_use_stmt(
         } => {
             collect_uses_expr(analysis, start, uses);
             collect_uses_expr(analysis, end, uses);
-            if let Some(s) = step {
+            if let Some(s) = &**step {
                 collect_uses_expr(analysis, s, uses);
             }
             defs.insert(iterator.clone());
@@ -149,7 +149,11 @@ fn collect_uses_expr(
             collect_uses_expr(analysis, object, uses);
             collect_uses_expr(analysis, index, uses);
         }
-        TypedExprKind::IndexAssign { object, index, value } => {
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
             collect_uses_expr(analysis, object, uses);
             collect_uses_expr(analysis, index, uses);
             collect_uses_expr(analysis, value, uses);

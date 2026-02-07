@@ -1,4 +1,6 @@
-use super::{AelysArray, AelysClosure, AelysFunction, AelysString, AelysUpvalue, AelysVec, NativeFunction};
+use super::{
+    AelysArray, AelysClosure, AelysFunction, AelysString, AelysUpvalue, AelysVec, NativeFunction,
+};
 
 /// The different types of GC-managed objects.
 #[derive(Debug)]

@@ -29,6 +29,7 @@ pub(super) enum FuncKind {
 }
 
 impl VM {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn call_function_kind(
         &mut self,
         func_ref: GcRef,
@@ -78,6 +79,7 @@ impl VM {
         self.run_fast()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn call_closure_kind(
         &mut self,
         inner_func_ref: GcRef,

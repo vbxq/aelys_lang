@@ -12,7 +12,11 @@ impl Parser {
             let type_param = self.parse_type_annotation()?;
             self.consume(&TokenKind::Gt, ">")?;
             let end_span = self.previous().span;
-            Ok(TypeAnnotation::with_param(name, type_param, start_span.merge(end_span)))
+            Ok(TypeAnnotation::with_param(
+                name,
+                type_param,
+                start_span.merge(end_span),
+            ))
         } else {
             Ok(TypeAnnotation::new(name, start_span))
         }

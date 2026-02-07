@@ -12,15 +12,23 @@ pub struct DeadCodeEliminator {
 }
 
 impl DeadCodeEliminator {
-    pub fn new() -> Self { Self { stats: OptimizationStats::new() } }
+    pub fn new() -> Self {
+        Self {
+            stats: OptimizationStats::new(),
+        }
+    }
 }
 
 impl Default for DeadCodeEliminator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl OptimizationPass for DeadCodeEliminator {
-    fn name(&self) -> &'static str { "dead_code_elimination" }
+    fn name(&self) -> &'static str {
+        "dead_code_elimination"
+    }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
         self.stats = OptimizationStats::new();

@@ -8,7 +8,7 @@ use std::sync::Arc;
 #[derive(Debug, Clone)]
 pub struct ModuleInfo {
     pub name: String,
-    pub path: String,          // e.g. "utils.helpers"
+    pub path: String, // e.g. "utils.helpers"
     pub file_path: PathBuf,
     pub version: Option<String>, // native modules only
     pub exports: HashMap<String, ExportInfo>,
@@ -28,16 +28,16 @@ pub struct LoadedNativeInfo {
 }
 
 pub struct ModuleImports {
-    pub module_aliases: HashSet<String>,         // "utils" from `needs utils`
-    pub known_globals: HashSet<String>,          // direct imports
-    pub known_native_globals: HashSet<String>,   // native funcs for codegen opt
+    pub module_aliases: HashSet<String>, // "utils" from `needs utils`
+    pub known_globals: HashSet<String>,  // direct imports
+    pub known_native_globals: HashSet<String>, // native funcs for codegen opt
     pub symbol_origins: HashMap<String, String>, // symbol -> module_path
-    pub next_call_site_slot: u16,                // next available call site slot after loading all modules
+    pub next_call_site_slot: u16,        // next available call site slot after loading all modules
 }
 
 pub enum LoadResult {
-    Module(String),  // qualified access: mod.func
-    Symbol(String),  // direct access
+    Module(String), // qualified access: mod.func
+    Symbol(String), // direct access
 }
 
 pub struct ModuleLoader {

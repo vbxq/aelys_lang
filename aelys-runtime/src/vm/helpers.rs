@@ -3,13 +3,15 @@ use super::{Function, GcRef, ObjectKind, UpvalueLocation, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 
 impl VM {
-    pub fn print_value(&self, value: Value) { println!("{}", self.value_to_string(value)); }
+    pub fn print_value(&self, value: Value) {
+        println!("{}", self.value_to_string(value));
+    }
 
     pub fn value_to_string(&self, value: Value) -> String {
-        if let Some(ptr) = value.as_ptr() {
-            if let Some(obj) = self.heap.get(GcRef::new(ptr)) {
-                return object_to_string(self, &obj.kind, value);
-            }
+        if let Some(ptr) = value.as_ptr()
+            && let Some(obj) = self.heap.get(GcRef::new(ptr))
+        {
+            return object_to_string(self, &obj.kind, value);
         }
         value.to_string()
     }
@@ -180,10 +182,10 @@ fn object_to_string(vm: &VM, kind: &ObjectKind, _fallback: Value) -> String {
             }
         },
         ObjectKind::Closure(c) => {
-            if let Some(func_obj) = vm.heap.get(c.function) {
-                if let ObjectKind::Function(f) = &func_obj.kind {
-                    return format!("<closure {}>", f.name().unwrap_or("<anonymous>"));
-                }
+            if let Some(func_obj) = vm.heap.get(c.function)
+                && let ObjectKind::Function(f) = &func_obj.kind
+            {
+                return format!("<closure {}>", f.name().unwrap_or("<anonymous>"));
             }
             "<closure>".to_string()
         }

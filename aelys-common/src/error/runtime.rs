@@ -68,7 +68,11 @@ pub enum RuntimeErrorKind {
 
 impl RuntimeError {
     pub fn new(kind: RuntimeErrorKind, stack_trace: Vec<StackFrame>, source: Arc<Source>) -> Self {
-        Self { kind, stack_trace, source }
+        Self {
+            kind,
+            stack_trace,
+            source,
+        }
     }
 }
 
@@ -122,7 +126,10 @@ impl RuntimeErrorKind {
             Self::CapabilityDenied { operation } => format!("capability denied: {}", operation),
             Self::NativeError { code } => format!("native error: code {}", code),
             Self::IndexOutOfBounds { index, length } => {
-                format!("index out of bounds: index {} is out of bounds for length {}", index, length)
+                format!(
+                    "index out of bounds: index {} is out of bounds for length {}",
+                    index, length
+                )
             }
         }
     }

@@ -15,10 +15,21 @@ pub struct Pipeline {
 }
 
 impl Pipeline {
-    pub fn new() -> Self { Self { stages: Vec::new(), cache: HashMap::new() } }
-    pub fn add_stage(&mut self, stage: Box<dyn Stage>) { self.stages.push(stage); }
-    pub fn clear_cache(&mut self) { self.cache.clear(); }
-    pub fn cache_size(&self) -> usize { self.cache.len() }
+    pub fn new() -> Self {
+        Self {
+            stages: Vec::new(),
+            cache: HashMap::new(),
+        }
+    }
+    pub fn add_stage(&mut self, stage: Box<dyn Stage>) {
+        self.stages.push(stage);
+    }
+    pub fn clear_cache(&mut self) {
+        self.cache.clear();
+    }
+    pub fn cache_size(&self) -> usize {
+        self.cache.len()
+    }
 
     pub(crate) fn exec(&mut self, source: Arc<Source>) -> Result<Value, PipelineError> {
         let hash = source_hash(&source);
@@ -28,17 +39,16 @@ impl Pipeline {
             let stage_name = stage.name().to_string();
             let cache_key = (stage_name.clone(), hash);
 
-            if stage.cacheable() {
-                if let Some(cached) = self.cache.get(&cache_key) {
-                    if cached.source_hash == hash {
-                        let output = cached.output.clone();
-                        if let StageOutput::Value(v) = output {
-                            return Ok(v);
-                        }
-                        current = output.into_input()?;
-                        continue;
-                    }
+            if stage.cacheable()
+                && let Some(cached) = self.cache.get(&cache_key)
+                && cached.source_hash == hash
+            {
+                let output = cached.output.clone();
+                if let StageOutput::Value(v) = output {
+                    return Ok(v);
                 }
+                current = output.into_input()?;
+                continue;
             }
 
             let output = stage.execute(current)?;
@@ -88,13 +98,12 @@ impl Pipeline {
 
             let cache_key = (stage_name.clone(), hash);
 
-            if stage.cacheable() {
-                if let Some(cached) = self.cache.get(&cache_key) {
-                    if cached.source_hash == hash {
-                        current = cached.output.clone().into_input()?;
-                        continue;
-                    }
-                }
+            if stage.cacheable()
+                && let Some(cached) = self.cache.get(&cache_key)
+                && cached.source_hash == hash
+            {
+                current = cached.output.clone().into_input()?;
+                continue;
             }
 
             let output = stage.execute(current)?;
@@ -113,7 +122,7 @@ impl Pipeline {
         }
 
         match current {
-            StageInput::Compiled(func, heap, _) => Ok((func, heap)),
+            StageInput::Compiled(func, heap, _) => Ok((*func, heap)),
             other => Err(PipelineError::TypeMismatch {
                 expected: "Compiled",
                 got: other.type_name(),

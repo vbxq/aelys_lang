@@ -99,14 +99,14 @@ impl<'a> AasmParser<'a> {
 
         self.skip_newlines()?;
 
-        if let Token::Directive(ref d) = self.current {
-            if d == "version" {
+        if let Token::Directive(ref d) = self.current
+            && d == "version"
+        {
+            self.advance()?;
+            if let Token::Int(_) = self.current {
                 self.advance()?;
-                if let Token::Int(_) = self.current {
-                    self.advance()?;
-                }
-                self.skip_newlines()?;
             }
+            self.skip_newlines()?;
         }
 
         while self.current != Token::Eof {
@@ -140,7 +140,7 @@ impl<'a> AasmParser<'a> {
             }
         }
 
-        let heap = std::mem::replace(&mut self.heap, Heap::new());
+        let heap = std::mem::take(&mut self.heap);
         Ok((functions, heap))
     }
 
@@ -539,7 +539,7 @@ impl<'a> AasmParser<'a> {
 
     pub(super) fn parse_u8(&mut self) -> Result<u8> {
         match self.advance()? {
-            Token::Int(n) if n >= 0 && n <= 255 => Ok(n as u8),
+            Token::Int(n) if (0..=255).contains(&n) => Ok(n as u8),
             Token::Int(n) => Err(AssemblerError::InvalidNumber(format!(
                 "{} (must be 0-255)",
                 n

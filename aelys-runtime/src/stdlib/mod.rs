@@ -1,10 +1,10 @@
+pub mod bytes;
 pub mod convert;
 pub mod fs;
 pub mod io;
 pub mod math;
 pub mod net;
 pub mod string;
-pub mod bytes;
 pub mod sys;
 pub mod time;
 
@@ -173,12 +173,11 @@ pub mod helpers {
         value: Value,
         op: &'static str,
     ) -> Result<&'a str, RuntimeError> {
-        if let Some(ptr) = value.as_ptr() {
-            if let Some(obj) = vm.heap().get(GcRef::new(ptr)) {
-                if let ObjectKind::String(s) = &obj.kind {
-                    return Ok(s.as_str());
-                }
-            }
+        if let Some(ptr) = value.as_ptr()
+            && let Some(obj) = vm.heap().get(GcRef::new(ptr))
+            && let ObjectKind::String(s) = &obj.kind
+        {
+            return Ok(s.as_str());
         }
         Err(vm.runtime_error(RuntimeErrorKind::TypeError {
             operation: op,

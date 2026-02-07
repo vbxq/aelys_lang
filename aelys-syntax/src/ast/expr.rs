@@ -9,11 +9,19 @@ pub struct TypeAnnotation {
 
 impl TypeAnnotation {
     pub fn new(name: String, span: Span) -> Self {
-        Self { name, type_param: None, span }
+        Self {
+            name,
+            type_param: None,
+            span,
+        }
     }
 
     pub fn with_param(name: String, type_param: TypeAnnotation, span: Span) -> Self {
-        Self { name, type_param: Some(Box::new(type_param)), span }
+        Self {
+            name,
+            type_param: Some(Box::new(type_param)),
+            span,
+        }
     }
 }
 
@@ -26,11 +34,19 @@ pub struct Parameter {
 
 impl Parameter {
     pub fn new(name: String, type_annotation: Option<TypeAnnotation>, span: Span) -> Self {
-        Self { name, type_annotation, span }
+        Self {
+            name,
+            type_annotation,
+            span,
+        }
     }
 
     pub fn untyped(name: String, span: Span) -> Self {
-        Self { name, type_annotation: None, span }
+        Self {
+            name,
+            type_annotation: None,
+            span,
+        }
     }
 }
 
@@ -41,7 +57,9 @@ pub struct Expr {
 }
 
 impl Expr {
-    pub fn new(kind: ExprKind, span: Span) -> Self { Self { kind, span } }
+    pub fn new(kind: ExprKind, span: Span) -> Self {
+        Self { kind, span }
+    }
 }
 
 /// Part of a format string in the AST (after parsing expressions)
@@ -64,19 +82,42 @@ pub enum ExprKind {
 
     Identifier(String),
 
-    Binary { left: Box<Expr>, op: BinaryOp, right: Box<Expr> },
-    Unary { op: UnaryOp, operand: Box<Expr> },
+    Binary {
+        left: Box<Expr>,
+        op: BinaryOp,
+        right: Box<Expr>,
+    },
+    Unary {
+        op: UnaryOp,
+        operand: Box<Expr>,
+    },
 
     // short-circuit (separate from Binary because different codegen)
-    And { left: Box<Expr>, right: Box<Expr> },
-    Or { left: Box<Expr>, right: Box<Expr> },
+    And {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Or {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
 
-    Call { callee: Box<Expr>, args: Vec<Expr> },
-    Assign { name: String, value: Box<Expr> },
+    Call {
+        callee: Box<Expr>,
+        args: Vec<Expr>,
+    },
+    Assign {
+        name: String,
+        value: Box<Expr>,
+    },
     Grouping(Box<Expr>), // for precedence
 
     // ternary: cond ? then : else
-    If { condition: Box<Expr>, then_branch: Box<Expr>, else_branch: Box<Expr> },
+    If {
+        condition: Box<Expr>,
+        then_branch: Box<Expr>,
+        else_branch: Box<Expr>,
+    },
 
     Lambda {
         params: Vec<Parameter>,
@@ -84,15 +125,18 @@ pub enum ExprKind {
         body: Vec<crate::ast::Stmt>,
     },
 
-    Member { object: Box<Expr>, member: String }, // module.symbol
+    Member {
+        object: Box<Expr>,
+        member: String,
+    }, // module.symbol
 
     // Arrays and Vecs
     ArrayLiteral {
-        element_type: Option<TypeAnnotation>,  // Array<Int>[...] or Array[...]
+        element_type: Option<TypeAnnotation>, // Array<Int>[...] or Array[...]
         elements: Vec<Expr>,
     },
     ArraySized {
-        element_type: Option<TypeAnnotation>,  // Array<int>(10) or Array(10) or [; 10]
+        element_type: Option<TypeAnnotation>, // Array<int>(10) or Array(10) or [; 10]
         size: Box<Expr>,
     },
     VecLiteral {
@@ -111,7 +155,7 @@ pub enum ExprKind {
     Range {
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,
-        inclusive: bool,  // .. vs ..=
+        inclusive: bool, // .. vs ..=
     },
     Slice {
         object: Box<Expr>,
@@ -121,25 +165,51 @@ pub enum ExprKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    Add, Sub, Mul, Div, Mod,
-    Eq, Ne, Lt, Le, Gt, Ge,
-    Shl, Shr, BitAnd, BitOr, BitXor,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Mod,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    Shl,
+    Shr,
+    BitAnd,
+    BitOr,
+    BitXor,
 }
 
 impl BinaryOp {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Add => "+", Self::Sub => "-", Self::Mul => "*", Self::Div => "/", Self::Mod => "%",
-            Self::Eq => "==", Self::Ne => "!=",
-            Self::Lt => "<", Self::Le => "<=", Self::Gt => ">", Self::Ge => ">=",
-            Self::Shl => "<<", Self::Shr => ">>",
-            Self::BitAnd => "&", Self::BitOr => "|", Self::BitXor => "^",
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Mod => "%",
+            Self::Eq => "==",
+            Self::Ne => "!=",
+            Self::Lt => "<",
+            Self::Le => "<=",
+            Self::Gt => ">",
+            Self::Ge => ">=",
+            Self::Shl => "<<",
+            Self::Shr => ">>",
+            Self::BitAnd => "&",
+            Self::BitOr => "|",
+            Self::BitXor => "^",
         }
     }
 }
 
 impl std::fmt::Display for BinaryOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{}", self.as_str()) }
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -151,6 +221,10 @@ pub enum UnaryOp {
 
 impl UnaryOp {
     pub fn as_str(&self) -> &'static str {
-        match self { Self::Neg => "-", Self::Not => "not", Self::BitNot => "~" }
+        match self {
+            Self::Neg => "-",
+            Self::Not => "not",
+            Self::BitNot => "~",
+        }
     }
 }

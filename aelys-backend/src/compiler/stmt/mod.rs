@@ -32,7 +32,7 @@ impl Compiler {
                 condition,
                 then_branch,
                 else_branch,
-            } => self.compile_if(condition, then_branch, else_branch.as_ref()),
+            } => self.compile_if(condition, then_branch, else_branch.as_deref()),
             StmtKind::While { condition, body } => self.compile_while(condition, body),
             StmtKind::For {
                 iterator,
@@ -46,7 +46,7 @@ impl Compiler {
                 start,
                 end,
                 *inclusive,
-                step.as_ref(),
+                step.as_ref().as_ref(),
                 body,
                 stmt.span,
             ),
@@ -60,7 +60,9 @@ impl Compiler {
 
     pub fn compile_block(&mut self, stmts: &[Stmt]) -> Result<()> {
         self.begin_scope();
-        for s in stmts { self.compile_stmt(s)?; }
+        for s in stmts {
+            self.compile_stmt(s)?;
+        }
         self.end_scope();
         Ok(())
     }

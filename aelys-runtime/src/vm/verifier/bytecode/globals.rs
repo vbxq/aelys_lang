@@ -2,6 +2,7 @@ use crate::vm::OpCode;
 
 use super::{verify_call_args, verify_const, verify_reg};
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn verify(
     opcode: OpCode,
     ip: usize,
@@ -33,7 +34,9 @@ pub(super) fn verify(
             if ip + 3 > bytecode_len {
                 return Err(format!(
                     "CallGlobal at ip {} requires 2 cache words but bytecode length is {} (need at least {})",
-                    ip, bytecode_len, ip + 3
+                    ip,
+                    bytecode_len,
+                    ip + 3
                 ));
             }
         }

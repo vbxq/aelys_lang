@@ -353,14 +353,12 @@ match opcode_byte {
 
         match arr_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(arr_ref) {
-                    if let ObjectKind::Array(arr) = &mut obj.kind {
-                        if !arr.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(arr_ref)
+                    && let ObjectKind::Array(arr) = &mut obj.kind
+                    && !arr.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(arr_ref).is_some() {
@@ -396,14 +394,12 @@ match opcode_byte {
 
         match arr_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(arr_ref) {
-                    if let ObjectKind::Array(arr) = &mut obj.kind {
-                        if !arr.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(arr_ref)
+                    && let ObjectKind::Array(arr) = &mut obj.kind
+                    && !arr.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(arr_ref).is_some() {
@@ -439,14 +435,12 @@ match opcode_byte {
 
         match arr_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(arr_ref) {
-                    if let ObjectKind::Array(arr) = &mut obj.kind {
-                        if !arr.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(arr_ref)
+                    && let ObjectKind::Array(arr) = &mut obj.kind
+                    && !arr.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(arr_ref).is_some() {
@@ -482,14 +476,12 @@ match opcode_byte {
 
         match arr_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(arr_ref) {
-                    if let ObjectKind::Array(arr) = &mut obj.kind {
-                        if !arr.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(arr_ref)
+                    && let ObjectKind::Array(arr) = &mut obj.kind
+                    && !arr.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(arr_ref).is_some() {
@@ -1169,14 +1161,12 @@ match opcode_byte {
 
         match vec_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(vec_ref) {
-                    if let ObjectKind::Vec(vec) = &mut obj.kind {
-                        if !vec.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(vec_ref)
+                    && let ObjectKind::Vec(vec) = &mut obj.kind
+                    && !vec.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(vec_ref).is_some() {
@@ -1212,14 +1202,12 @@ match opcode_byte {
 
         match vec_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(vec_ref) {
-                    if let ObjectKind::Vec(vec) = &mut obj.kind {
-                        if !vec.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(vec_ref)
+                    && let ObjectKind::Vec(vec) = &mut obj.kind
+                    && !vec.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(vec_ref).is_some() {
@@ -1255,14 +1243,12 @@ match opcode_byte {
 
         match vec_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(vec_ref) {
-                    if let ObjectKind::Vec(vec) = &mut obj.kind {
-                        if !vec.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(vec_ref)
+                    && let ObjectKind::Vec(vec) = &mut obj.kind
+                    && !vec.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(vec_ref).is_some() {
@@ -1298,14 +1284,12 @@ match opcode_byte {
 
         match vec_len {
             Some(len) => {
-                if let Some(obj) = self.heap.get_mut(vec_ref) {
-                    if let ObjectKind::Vec(vec) = &mut obj.kind {
-                        if !vec.set(idx as usize, value) {
-                            self.frames[current_frame_idx].ip = ip;
-                            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
-                        }
+                if let Some(obj) = self.heap.get_mut(vec_ref)
+                    && let ObjectKind::Vec(vec) = &mut obj.kind
+                    && !vec.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
-                }
             }
             None => {
                 if self.heap.get(vec_ref).is_some() {

@@ -1,7 +1,7 @@
 mod common;
-use common::*;
 use aelys_runtime::{Function, OpCode, VM, Value};
 use aelys_syntax::Source;
+use common::*;
 
 // Bytecode verifier bypass attempts
 
@@ -83,7 +83,14 @@ let s = 1
 net.recv_bytes(s, 20000000)
 "#;
     let err = run_aelys_err(code);
-    assert!(err.contains("max") || err.contains("buffer") || err.contains("invalid") || err.contains("capability"), "got error: {}", err);
+    assert!(
+        err.contains("max")
+            || err.contains("buffer")
+            || err.contains("invalid")
+            || err.contains("capability"),
+        "got error: {}",
+        err
+    );
 }
 
 // Path traversal attacks
@@ -182,7 +189,12 @@ recurse(0)
 "#;
     let err = run_aelys_err(code);
     // Should hit MAX_FRAMES limit
-    assert!(err.contains("stack") || err.contains("frame") || err.contains("recursion") || err.contains("Stack"));
+    assert!(
+        err.contains("stack")
+            || err.contains("frame")
+            || err.contains("recursion")
+            || err.contains("Stack")
+    );
 }
 
 #[test]

@@ -11,7 +11,7 @@ fn parse_manifest_modules_and_build_flags() {
         bundle_native_modules = true
     "#;
 
-    let manifest = Manifest::from_str(raw).expect("parse");
+    let manifest = Manifest::parse(raw).expect("parse");
     let opengl = manifest.module("opengl").expect("module");
     assert!(opengl.capabilities.contains(&"gpu".to_string()));
     assert_eq!(manifest.build.bundle_native_modules, Some(true));

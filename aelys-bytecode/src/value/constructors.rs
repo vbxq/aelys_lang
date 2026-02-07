@@ -13,17 +13,28 @@ impl Value {
     #[inline(always)]
     pub fn int_checked(n: i64) -> Result<Self, IntegerOverflowError> {
         // sign-extend from 48 bits and check if it matches
-        if n == (n << 16) >> 16 { Ok(Self::int(n)) }
-        else { Err(IntegerOverflowError { value: n }) }
+        if n == (n << 16) >> 16 {
+            Ok(Self::int(n))
+        } else {
+            Err(IntegerOverflowError { value: n })
+        }
     }
 
     pub fn float(n: f64) -> Self {
-        if n.is_nan() { Self(CANONICAL_NAN) } else { Self(n.to_bits()) }
+        if n.is_nan() {
+            Self(CANONICAL_NAN)
+        } else {
+            Self(n.to_bits())
+        }
     }
 
-    pub fn bool(b: bool) -> Self { Self(QNAN | TAG_BOOL | (b as u64)) }
+    pub fn bool(b: bool) -> Self {
+        Self(QNAN | TAG_BOOL | (b as u64))
+    }
 
-    pub fn null() -> Self { Self(QNAN | TAG_NULL) }
+    pub fn null() -> Self {
+        Self(QNAN | TAG_NULL)
+    }
 
     pub fn ptr(p: usize) -> Self {
         debug_assert!(p <= PAYLOAD_MASK as usize, "ptr too big for NaN boxing");

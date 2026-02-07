@@ -21,7 +21,12 @@ pub struct Warning {
 
 impl Warning {
     pub fn new(kind: WarningKind, span: Span) -> Self {
-        Self { kind, span, source: None, context: None }
+        Self {
+            kind,
+            span,
+            source: None,
+            context: None,
+        }
     }
 
     pub fn with_source(mut self, source: Arc<Source>) -> Self {
@@ -76,8 +81,8 @@ impl WarningConfig {
     }
 
     pub fn parse_flag(&mut self, flag: &str) -> Result<(), String> {
-        if flag.starts_with("no-") {
-            self.disable(&flag[3..]);
+        if let Some(category) = flag.strip_prefix("no-") {
+            self.disable(category);
             Ok(())
         } else if flag == "all" {
             self.enable_all();
@@ -109,7 +114,10 @@ impl WarningCollector {
     }
 
     pub fn with_config(config: WarningConfig) -> Self {
-        Self { warnings: Vec::new(), config }
+        Self {
+            warnings: Vec::new(),
+            config,
+        }
     }
 
     pub fn push(&mut self, warning: Warning) {

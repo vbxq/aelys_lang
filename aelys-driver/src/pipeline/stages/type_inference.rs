@@ -9,16 +9,30 @@ pub struct TypeInferenceStage {
 }
 
 impl TypeInferenceStage {
-    pub fn new() -> Self { Self { module_aliases: HashSet::new(), known_globals: HashSet::new() } }
+    pub fn new() -> Self {
+        Self {
+            module_aliases: HashSet::new(),
+            known_globals: HashSet::new(),
+        }
+    }
     pub fn with_imports(module_aliases: HashSet<String>, known_globals: HashSet<String>) -> Self {
-        Self { module_aliases, known_globals }
+        Self {
+            module_aliases,
+            known_globals,
+        }
     }
 }
 
-impl Default for TypeInferenceStage { fn default() -> Self { Self::new() } }
+impl Default for TypeInferenceStage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl Stage for TypeInferenceStage {
-    fn name(&self) -> &str { "type_inference" }
+    fn name(&self) -> &str {
+        "type_inference"
+    }
 
     fn execute(&mut self, input: StageInput) -> Result<StageOutput, PipelineError> {
         let (stmts, source) = match input {

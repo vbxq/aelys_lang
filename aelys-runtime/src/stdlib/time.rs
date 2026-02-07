@@ -299,7 +299,7 @@ fn native_format(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         .replace("%b", month_names[(month - 1) as usize])
         .replace("%%", "%");
 
-    Ok(make_string(vm, &result)?)
+    make_string(vm, &result)
 }
 
 /// iso() - Get current time in ISO 8601 format.
@@ -309,19 +309,19 @@ fn native_iso(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
         "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
         year, month, day, hour, minute, second
     );
-    Ok(make_string(vm, &s)?)
+    make_string(vm, &s)
 }
 
 /// date() - Get current date as "YYYY-MM-DD".
 fn native_date(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     let (year, month, day, _, _, _, _, _) = get_local_time();
     let s = format!("{:04}-{:02}-{:02}", year, month, day);
-    Ok(make_string(vm, &s)?)
+    make_string(vm, &s)
 }
 
 /// time_str() - Get current time as "HH:MM:SS".
 fn native_time_str(vm: &mut VM, _args: &[Value]) -> Result<Value, RuntimeError> {
     let (_, _, _, hour, minute, second, _, _) = get_local_time();
     let s = format!("{:02}:{:02}:{:02}", hour, minute, second);
-    Ok(make_string(vm, &s)?)
+    make_string(vm, &s)
 }

@@ -51,15 +51,14 @@ impl ProgramAnalysis {
 
         let recursion_cycles = find_mutual_recursion(&functions);
 
-        Self { functions, recursion_cycles, total_size }
+        Self {
+            functions,
+            recursion_cycles,
+            total_size,
+        }
     }
 
-    pub fn should_inline(
-        &self,
-        name: &str,
-        aggressive: bool,
-        bloat_budget: f64,
-    ) -> InlineDecision {
+    pub fn should_inline(&self, name: &str, aggressive: bool, bloat_budget: f64) -> InlineDecision {
         let Some(info) = self.functions.get(name) else {
             return InlineDecision::Skip;
         };
@@ -153,7 +152,11 @@ fn collect_calls_in_stmt(stmt: &TypedStmt, calls: &mut HashSet<String>) {
                 collect_calls_in_stmt(s, calls);
             }
         }
-        TypedStmtKind::If { condition, then_branch, else_branch } => {
+        TypedStmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             collect_calls_in_expr(condition, calls);
             collect_calls_in_stmt(then_branch, calls);
             if let Some(eb) = else_branch {
@@ -164,10 +167,16 @@ fn collect_calls_in_stmt(stmt: &TypedStmt, calls: &mut HashSet<String>) {
             collect_calls_in_expr(condition, calls);
             collect_calls_in_stmt(body, calls);
         }
-        TypedStmtKind::For { start, end, step, body, .. } => {
+        TypedStmtKind::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
             collect_calls_in_expr(start, calls);
             collect_calls_in_expr(end, calls);
-            if let Some(s) = step {
+            if let Some(s) = &**step {
                 collect_calls_in_expr(s, calls);
             }
             collect_calls_in_stmt(body, calls);
@@ -202,7 +211,11 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(left, calls);
             collect_calls_in_expr(right, calls);
         }
-        TypedExprKind::If { condition, then_branch, else_branch } => {
+        TypedExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             collect_calls_in_expr(condition, calls);
             collect_calls_in_expr(then_branch, calls);
             collect_calls_in_expr(else_branch, calls);
@@ -217,7 +230,8 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
         }
         TypedExprKind::Assign { value, .. } => collect_calls_in_expr(value, calls),
         TypedExprKind::Member { object, .. } => collect_calls_in_expr(object, calls),
-        TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
+        TypedExprKind::ArrayLiteral { elements, .. }
+        | TypedExprKind::VecLiteral { elements, .. } => {
             for e in elements {
                 collect_calls_in_expr(e, calls);
             }
@@ -227,14 +241,22 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(index, calls);
         }
-        TypedExprKind::IndexAssign { object, index, value } => {
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(index, calls);
             collect_calls_in_expr(value, calls);
         }
         TypedExprKind::Range { start, end, .. } => {
-            if let Some(s) = start { collect_calls_in_expr(s, calls); }
-            if let Some(e) = end { collect_calls_in_expr(e, calls); }
+            if let Some(s) = start {
+                collect_calls_in_expr(s, calls);
+            }
+            if let Some(e) = end {
+                collect_calls_in_expr(e, calls);
+            }
         }
         TypedExprKind::Slice { object, range } => {
             collect_calls_in_expr(object, calls);
@@ -249,26 +271,44 @@ fn count_calls_in_stmt(stmt: &TypedStmt, counts: &mut HashMap<String, usize>) {
         TypedStmtKind::Expression(e) => count_calls_in_expr(e, counts),
         TypedStmtKind::Let { initializer, .. } => count_calls_in_expr(initializer, counts),
         TypedStmtKind::Block(stmts) => {
-            for s in stmts { count_calls_in_stmt(s, counts); }
+            for s in stmts {
+                count_calls_in_stmt(s, counts);
+            }
         }
-        TypedStmtKind::If { condition, then_branch, else_branch } => {
+        TypedStmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             count_calls_in_expr(condition, counts);
             count_calls_in_stmt(then_branch, counts);
-            if let Some(eb) = else_branch { count_calls_in_stmt(eb, counts); }
+            if let Some(eb) = else_branch {
+                count_calls_in_stmt(eb, counts);
+            }
         }
         TypedStmtKind::While { condition, body } => {
             count_calls_in_expr(condition, counts);
             count_calls_in_stmt(body, counts);
         }
-        TypedStmtKind::For { start, end, step, body, .. } => {
+        TypedStmtKind::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
             count_calls_in_expr(start, counts);
             count_calls_in_expr(end, counts);
-            if let Some(s) = step { count_calls_in_expr(s, counts); }
+            if let Some(s) = &**step {
+                count_calls_in_expr(s, counts);
+            }
             count_calls_in_stmt(body, counts);
         }
         TypedStmtKind::Return(Some(e)) => count_calls_in_expr(e, counts),
         TypedStmtKind::Function(f) => {
-            for s in &f.body { count_calls_in_stmt(s, counts); }
+            for s in &f.body {
+                count_calls_in_stmt(s, counts);
+            }
         }
         _ => {}
     }
@@ -281,7 +321,9 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
                 *counts.entry(name.clone()).or_insert(0) += 1;
             }
             count_calls_in_expr(callee, counts);
-            for arg in args { count_calls_in_expr(arg, counts); }
+            for arg in args {
+                count_calls_in_expr(arg, counts);
+            }
         }
         TypedExprKind::Binary { left, right, .. } => {
             count_calls_in_expr(left, counts);
@@ -292,7 +334,11 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(left, counts);
             count_calls_in_expr(right, counts);
         }
-        TypedExprKind::If { condition, then_branch, else_branch } => {
+        TypedExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             count_calls_in_expr(condition, counts);
             count_calls_in_expr(then_branch, counts);
             count_calls_in_expr(else_branch, counts);
@@ -301,26 +347,39 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(inner, counts);
         }
         TypedExprKind::LambdaInner { body, .. } => {
-            for s in body { count_calls_in_stmt(s, counts); }
+            for s in body {
+                count_calls_in_stmt(s, counts);
+            }
         }
         TypedExprKind::Assign { value, .. } => count_calls_in_expr(value, counts),
         TypedExprKind::Member { object, .. } => count_calls_in_expr(object, counts),
-        TypedExprKind::ArrayLiteral { elements, .. } | TypedExprKind::VecLiteral { elements, .. } => {
-            for e in elements { count_calls_in_expr(e, counts); }
+        TypedExprKind::ArrayLiteral { elements, .. }
+        | TypedExprKind::VecLiteral { elements, .. } => {
+            for e in elements {
+                count_calls_in_expr(e, counts);
+            }
         }
         TypedExprKind::ArraySized { size, .. } => count_calls_in_expr(size, counts),
         TypedExprKind::Index { object, index } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(index, counts);
         }
-        TypedExprKind::IndexAssign { object, index, value } => {
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(index, counts);
             count_calls_in_expr(value, counts);
         }
         TypedExprKind::Range { start, end, .. } => {
-            if let Some(s) = start { count_calls_in_expr(s, counts); }
-            if let Some(e) = end { count_calls_in_expr(e, counts); }
+            if let Some(s) = start {
+                count_calls_in_expr(s, counts);
+            }
+            if let Some(e) = end {
+                count_calls_in_expr(e, counts);
+            }
         }
         TypedExprKind::Slice { object, range } => {
             count_calls_in_expr(object, counts);
@@ -333,8 +392,13 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
 fn count_stmt_size(stmt: &TypedStmt) -> usize {
     match &stmt.kind {
         TypedStmtKind::Block(stmts) => stmts.iter().map(count_stmt_size).sum(),
-        TypedStmtKind::If { then_branch, else_branch, .. } => {
-            1 + count_stmt_size(then_branch) + else_branch.as_ref().map_or(0, |e| count_stmt_size(e))
+        TypedStmtKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            1 + count_stmt_size(then_branch)
+                + else_branch.as_ref().map_or(0, |e| count_stmt_size(e))
         }
         TypedStmtKind::While { body, .. } => 1 + count_stmt_size(body),
         TypedStmtKind::For { body, .. } => 1 + count_stmt_size(body),
@@ -348,11 +412,20 @@ fn find_mutual_recursion(functions: &HashMap<String, FunctionInfo>) -> Vec<Vec<S
     let mut visited = HashSet::new();
 
     for name in functions.keys() {
-        if visited.contains(name) { continue; }
+        if visited.contains(name) {
+            continue;
+        }
 
         let mut path = Vec::new();
         let mut path_set = HashSet::new();
-        find_cycles_dfs(name, functions, &mut path, &mut path_set, &mut visited, &mut cycles);
+        find_cycles_dfs(
+            name,
+            functions,
+            &mut path,
+            &mut path_set,
+            &mut visited,
+            &mut cycles,
+        );
     }
 
     cycles
@@ -376,7 +449,9 @@ fn find_cycles_dfs(
         return;
     }
 
-    if visited.contains(current) { return; }
+    if visited.contains(current) {
+        return;
+    }
 
     path.push(current.to_string());
     path_set.insert(current.to_string());

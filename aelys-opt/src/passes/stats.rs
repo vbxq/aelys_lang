@@ -11,7 +11,9 @@ pub struct OptimizationStats {
 }
 
 impl OptimizationStats {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn merge(&mut self, other: &OptimizationStats) {
         self.globals_propagated += other.globals_propagated;
@@ -23,15 +25,27 @@ impl OptimizationStats {
     }
 
     pub fn has_changes(&self) -> bool {
-        self.globals_propagated + self.locals_propagated + self.constants_folded +
-        self.dead_code_eliminated + self.branches_eliminated + self.functions_inlined > 0
+        self.globals_propagated
+            + self.locals_propagated
+            + self.constants_folded
+            + self.dead_code_eliminated
+            + self.branches_eliminated
+            + self.functions_inlined
+            > 0
     }
 }
 
 impl fmt::Display for OptimizationStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "inlined: {}, globals: {}, locals: {}, folded: {}, dce: {}, branches: {}",
-            self.functions_inlined, self.globals_propagated, self.locals_propagated,
-            self.constants_folded, self.dead_code_eliminated, self.branches_eliminated)
+        write!(
+            f,
+            "inlined: {}, globals: {}, locals: {}, folded: {}, dce: {}, branches: {}",
+            self.functions_inlined,
+            self.globals_propagated,
+            self.locals_propagated,
+            self.constants_folded,
+            self.dead_code_eliminated,
+            self.branches_eliminated
+        )
     }
 }

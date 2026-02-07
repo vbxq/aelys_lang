@@ -104,12 +104,12 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            if let Some(cmd) = self.parse_command(token_str) {
-                if self.command.is_none() {
-                    self.command = Some(cmd);
-                    self.advance();
-                    continue;
-                }
+            if let Some(cmd) = self.parse_command(token_str)
+                && self.command.is_none()
+            {
+                self.command = Some(cmd);
+                self.advance();
+                continue;
             }
 
             if token_str.starts_with('-') {
@@ -265,7 +265,7 @@ impl<'a> Parser<'a> {
             let next = self
                 .peek_next()
                 .ok_or_else(|| "missing value for -O".to_string())?;
-            let level = OptimizationLevel::from_str(next)
+            let level = OptimizationLevel::parse(next)
                 .ok_or_else(|| format!("invalid optimization level: {}", next))?;
             return Ok(Some((level, true)));
         }
@@ -273,7 +273,7 @@ impl<'a> Parser<'a> {
             if rest.is_empty() {
                 return Err("missing value for -O".to_string());
             }
-            let level = OptimizationLevel::from_str(rest)
+            let level = OptimizationLevel::parse(rest)
                 .ok_or_else(|| format!("invalid optimization level: {}", rest))?;
             return Ok(Some((level, false)));
         }

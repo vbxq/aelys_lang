@@ -32,7 +32,7 @@ impl ModuleLoader {
             ))
         })?;
 
-        let module_source = Source::new(&file_path.display().to_string(), &content);
+        let module_source = Source::new(file_path.display().to_string(), &content);
         let tokens = Lexer::with_source(module_source.clone()).scan()?;
         let stmts = Parser::new(tokens, module_source.clone()).parse()?;
 

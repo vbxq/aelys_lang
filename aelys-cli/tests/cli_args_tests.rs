@@ -225,4 +225,3 @@ fn parse_warn_equals_syntax() {
 
     assert!(parsed.warning_flags.contains(&"error".to_string()));
 }
-

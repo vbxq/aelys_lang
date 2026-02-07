@@ -6,6 +6,7 @@ mod analysis;
 mod cfg;
 mod def_use;
 mod last_use;
+#[allow(clippy::module_inception)]
 mod liveness;
 
 #[derive(Debug, Clone, Default)]
@@ -24,7 +25,7 @@ pub struct ControlFlowGraph {
     pub exits: Vec<usize>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct LivenessAnalysis {
     pub live_in: HashMap<usize, HashSet<String>>,
     pub live_out: HashMap<usize, HashSet<String>>,
@@ -57,18 +58,5 @@ impl LivenessAnalysis {
             .filter(|var| self.is_dead_after(var, stmt_idx))
             .cloned()
             .collect()
-    }
-}
-
-impl Default for LivenessAnalysis {
-    fn default() -> Self {
-        Self {
-            live_in: HashMap::new(),
-            live_out: HashMap::new(),
-            def: HashMap::new(),
-            use_set: HashMap::new(),
-            last_use_point: HashMap::new(),
-            captured_vars: HashSet::new(),
-        }
     }
 }

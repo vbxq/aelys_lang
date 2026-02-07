@@ -109,10 +109,10 @@ impl VM {
             super::verifier::verify_function(func, &self.heap, 0)
                 .map_err(|msg| self.runtime_error(RuntimeErrorKind::InvalidBytecode(msg)))?;
 
-            if let Some(obj) = self.heap.get_mut(func_ref) {
-                if let ObjectKind::Function(f) = &mut obj.kind {
-                    f.verified = true;
-                }
+            if let Some(obj) = self.heap.get_mut(func_ref)
+                && let ObjectKind::Function(f) = &mut obj.kind
+            {
+                f.verified = true;
             }
         }
 

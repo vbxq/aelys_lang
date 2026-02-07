@@ -109,7 +109,7 @@ impl<'a> Lexer<'a> {
                 self.chars.next();
                 let num = self.read_number()?;
                 if let Token::Int(n) = num {
-                    if n >= 0 && n <= 255 {
+                    if (0..=255).contains(&n) {
                         Ok(Token::Register(n as u8))
                     } else {
                         Err(AssemblerError::InvalidRegister(format!("r{}", n)))
@@ -216,11 +216,11 @@ impl<'a> Lexer<'a> {
                 is_float = true;
                 num_str.push(c);
                 self.chars.next();
-                if let Some(&(_, sign)) = self.chars.peek() {
-                    if sign == '+' || sign == '-' {
-                        num_str.push(sign);
-                        self.chars.next();
-                    }
+                if let Some(&(_, sign)) = self.chars.peek()
+                    && (sign == '+' || sign == '-')
+                {
+                    num_str.push(sign);
+                    self.chars.next();
                 }
             } else {
                 break;

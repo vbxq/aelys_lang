@@ -9,10 +9,22 @@ pub struct Span {
 
 impl Span {
     pub fn new(start: usize, end: usize, line: u32, column: u32) -> Self {
-        Self { start, end, line, column }
+        Self {
+            start,
+            end,
+            line,
+            column,
+        }
     }
 
-    pub fn dummy() -> Self { Self { start: 0, end: 0, line: 0, column: 0 } }
+    pub fn dummy() -> Self {
+        Self {
+            start: 0,
+            end: 0,
+            line: 0,
+            column: 0,
+        }
+    }
 
     // combine two spans (useful for AST nodes that span multiple tokens)
     pub fn merge(self, other: Span) -> Span {
@@ -20,7 +32,11 @@ impl Span {
             start: self.start.min(other.start),
             end: self.end.max(other.end),
             line: self.line.min(other.line),
-            column: if self.line <= other.line { self.column } else { other.column },
+            column: if self.line <= other.line {
+                self.column
+            } else {
+                other.column
+            },
         }
     }
 }

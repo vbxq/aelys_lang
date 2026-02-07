@@ -109,7 +109,7 @@ fn test_valid_module_paths() {
 fn test_debug_assertion_int_unchecked_on_float() {
     use aelys_runtime::Value;
 
-    let float_val = Value::float(3.14);
+    let float_val = Value::float(2.72);
     let _ = float_val.as_int_unchecked();
 }
 
@@ -128,11 +128,11 @@ fn test_correct_type_conversions() {
     use aelys_runtime::Value;
 
     let int_val = Value::int(42);
-    let float_val = Value::float(3.14);
+    let float_val = Value::float(2.72);
 
     // These should work without panic
     assert_eq!(int_val.as_int_unchecked(), 42);
-    assert!((float_val.as_float_unchecked() - 3.14).abs() < 0.001);
+    assert!((float_val.as_float_unchecked() - 2.72).abs() < 0.001);
 }
 
 #[test]

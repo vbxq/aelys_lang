@@ -138,17 +138,17 @@ fn test_disassembler_skips_cache_words() {
 
     for line in &lines {
         let trimmed = line.trim();
-        if trimmed.starts_with(|c: char| c.is_ascii_digit()) {
-            if let Some(offset_str) = trimmed.split(':').next() {
-                if let Ok(offset) = offset_str.parse::<usize>() {
-                    if let Some(prev) = prev_offset {
-                        if offset > prev && offset - prev == 3 {
-                            found_gap = true;
-                        }
-                    }
-                    prev_offset = Some(offset);
-                }
+        if trimmed.starts_with(|c: char| c.is_ascii_digit())
+            && let Some(offset_str) = trimmed.split(':').next()
+            && let Ok(offset) = offset_str.parse::<usize>()
+        {
+            if let Some(prev) = prev_offset
+                && offset > prev
+                && offset - prev == 3
+            {
+                found_gap = true;
             }
+            prev_offset = Some(offset);
         }
     }
 
@@ -280,16 +280,22 @@ fn test_memory_opcodes_in_bytecode() {
     for &instr in func.bytecode.as_slice() {
         let opcode = (instr >> 24) as u8;
         match opcode {
-            28 => found_alloc = true,        // Alloc
-            32 | 33 => found_store = true,   // StoreMem / StoreMemI
-            30 | 31 => found_load = true,    // LoadMem / LoadMemI
+            28 => found_alloc = true,      // Alloc
+            32 | 33 => found_store = true, // StoreMem / StoreMemI
+            30 | 31 => found_load = true,  // LoadMem / LoadMemI
             _ => {}
         }
     }
 
     assert!(found_alloc, "Expected Alloc opcode (28) in bytecode");
-    assert!(found_store, "Expected StoreMem/StoreMemI opcode (32/33) in bytecode");
-    assert!(found_load, "Expected LoadMem/LoadMemI opcode (30/31) in bytecode");
+    assert!(
+        found_store,
+        "Expected StoreMem/StoreMemI opcode (32/33) in bytecode"
+    );
+    assert!(
+        found_load,
+        "Expected LoadMem/LoadMemI opcode (30/31) in bytecode"
+    );
 }
 
 #[test]

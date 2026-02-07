@@ -1,5 +1,8 @@
 mod common;
-use common::{assert_aelys_bool, assert_aelys_int, assert_aelys_null, assert_aelys_str, run_aelys_err, run_aelys_ok};
+use common::{
+    assert_aelys_bool, assert_aelys_int, assert_aelys_null, assert_aelys_str, run_aelys_err,
+    run_aelys_ok,
+};
 
 #[test]
 fn test_bytes_alloc_and_size() {
@@ -192,6 +195,7 @@ fn test_bytes_read_write_u64() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_bytes_read_write_f32() {
     let result = run_aelys_ok(
         r#"
@@ -603,6 +607,7 @@ fn test_bytes_swap() {
 }
 
 #[test]
+#[allow(clippy::approx_constant)]
 fn test_bytes_f32_big_endian() {
     let result = run_aelys_ok(
         r#"

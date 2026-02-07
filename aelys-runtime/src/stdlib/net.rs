@@ -1,5 +1,7 @@
 use crate::stdlib::helpers::{get_handle, get_int, get_string, make_string};
-use crate::stdlib::{Resource, StdModuleExports, TcpStreamResource, UdpSocketResource, register_native};
+use crate::stdlib::{
+    Resource, StdModuleExports, TcpStreamResource, UdpSocketResource, register_native,
+};
 use crate::vm::{VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 use std::io::{Read, Write};
@@ -35,13 +37,13 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
     reg_fn!("local_addr", 1, native_local_addr);
     reg_fn!("peer_addr", 1, native_peer_addr);
     reg_fn!("shutdown", 2, native_shutdown);
-    reg_fn!("udp_bind",2, native_udp_bind);
-    reg_fn!("udp_send_to",3, native_udp_send_to);
-    reg_fn!("udp_recv_from",3, native_udp_recv_from);
-    reg_fn!("udp_connect",3, native_udp_connect);
-    reg_fn!("udp_send",2, native_udp_send);
-    reg_fn!("udp_recv",2, native_udp_recv);
-    reg_fn!("udp_set_broadcast",2, native_udp_set_broadcast);
+    reg_fn!("udp_bind", 2, native_udp_bind);
+    reg_fn!("udp_send_to", 3, native_udp_send_to);
+    reg_fn!("udp_recv_from", 3, native_udp_recv_from);
+    reg_fn!("udp_connect", 3, native_udp_connect);
+    reg_fn!("udp_send", 2, native_udp_send);
+    reg_fn!("udp_recv", 2, native_udp_recv);
+    reg_fn!("udp_set_broadcast", 2, native_udp_set_broadcast);
 
     Ok(StdModuleExports {
         all_exports,
@@ -64,7 +66,7 @@ fn native_connect(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let host = get_string(vm, args[0], "net.connect")?;
     let port = get_int(vm, args[1], "net.connect")?;
 
-    if port < 0 || port > 65535 {
+    if !(0..=65535).contains(&port) {
         return Err(net_error(
             vm,
             "net.connect",
@@ -99,12 +101,12 @@ fn native_connect(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     Ok(Value::int(handle as i64))
 }
 
-/// udp_bind(host,port) Bind an UDP socket 
-fn native_udp_bind(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> { 
+/// udp_bind(host,port) Bind an UDP socket
+fn native_udp_bind(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let host = get_string(vm, args[0], "net.udp_bind")?.to_string();
     let port = get_int(vm, args[1], "net.udp_bind")?;
 
-    if port < 0 || port > 65535 {
+    if !(0..=65535).contains(&port) {
         return Err(net_error(
             vm,
             "net.udp_bind",
@@ -124,12 +126,12 @@ fn native_udp_bind(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         timeout_ms: None,
     }));
     Ok(Value::int(handle as i64))
-    
 }
 
 /// udp_send_to(handle, data, addr) - send a data to host:port
 /// Returns number of bytes sent
-fn native_udp_send_to(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> { //this function is for sending some data to udp sockett 
+fn native_udp_send_to(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    //this function is for sending some data to udp sockett
     let handle = get_handle(vm, args[0], "net.udp_send_to")?;
     let data = get_string(vm, args[1], "net.udp_send_to")?.to_string();
     let addr = get_string(vm, args[2], "net.udp_send_to")?.to_string();
@@ -143,7 +145,6 @@ fn native_udp_send_to(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
         Ok(Value::null())
     }
 }
-
 
 /// udp_recv_from(handle, max), receive some data
 /// returns received data as string
@@ -187,11 +188,11 @@ fn native_udp_recv_from(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeErr
 
 /// udp_connect is a function that connects to an UDP server
 fn native_udp_connect(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    let handle = get_handle(vm, args[0],"net.udp_connect")?;
+    let handle = get_handle(vm, args[0], "net.udp_connect")?;
     let host = get_string(vm, args[1], "net.udp_connect")?.to_string();
     let port = get_int(vm, args[2], "net.udp_connect")?;
 
-    if port < 0 || port > 65535 {
+    if !(0..=65535).contains(&port) {
         return Err(net_error(
             vm,
             "net.udp_connect",
@@ -201,21 +202,20 @@ fn native_udp_connect(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError
 
     let addr = format!("{}:{}", host, port);
 
-    if let Some(Resource::UdpSocket(res)) = vm.get_resource(handle){
+    if let Some(Resource::UdpSocket(res)) = vm.get_resource(handle) {
         match res.socket.connect(&addr) {
             Ok(_) => Ok(Value::null()),
-            Err(_) => Ok(Value::null())
+            Err(_) => Ok(Value::null()),
         }
     } else {
         Ok(Value::null())
     }
-    
 }
-
 
 /// udp_send(handle, data) - send a data on a udp socket
 /// Returns number of bytes sent.
-fn native_udp_send(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> { //this function is for sending some data to udp sockett 
+fn native_udp_send(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
+    //this function is for sending some data to udp sockett
     let handle = get_handle(vm, args[0], "net.udp_send")?;
     let data = get_string(vm, args[1], "net.udp_send")?.to_string();
 
@@ -228,7 +228,6 @@ fn native_udp_send(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         Ok(Value::null())
     }
 }
-
 
 /// udp_recv_from(handle, max), receive some data on a connected socket
 /// returns received data as string
@@ -289,7 +288,7 @@ fn native_connect_timeout(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeE
     let port = get_int(vm, args[1], "net.connect_timeout")?;
     let timeout_ms = get_int(vm, args[2], "net.connect_timeout")?;
 
-    if port < 0 || port > 65535 {
+    if !(0..=65535).contains(&port) {
         return Err(net_error(
             vm,
             "net.connect_timeout",
@@ -316,10 +315,11 @@ fn native_connect_timeout(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeE
         return Ok(Value::null());
     }
 
-    let stream = match TcpStream::connect_timeout(&addrs[0], Duration::from_millis(timeout_ms as u64)) {
-        Ok(s) => s,
-        Err(_) => return Ok(Value::null()),
-    };
+    let stream =
+        match TcpStream::connect_timeout(&addrs[0], Duration::from_millis(timeout_ms as u64)) {
+            Ok(s) => s,
+            Err(_) => return Ok(Value::null()),
+        };
 
     let resource = TcpStreamResource {
         stream,
@@ -333,8 +333,8 @@ fn native_connect_timeout(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeE
 /// send(handle, data) - Send data over connection.
 /// Returns number of bytes sent.
 fn native_send(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-      let handle = get_handle(vm, args[0], "net.send")?;
-  let data = get_string(vm, args[1], "net.send")?.to_string();
+    let handle = get_handle(vm, args[0], "net.send")?;
+    let data = get_string(vm, args[1], "net.send")?.to_string();
 
     if let Some(Resource::TcpStream(res)) = vm.get_resource_mut(handle) {
         match res.stream.write_all(data.as_bytes()) {
@@ -487,7 +487,7 @@ fn native_listen(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let host = get_string(vm, args[0], "net.listen")?;
     let port = get_int(vm, args[1], "net.listen")?;
 
-    if port < 0 || port > 65535 {
+    if !(0..=65535).contains(&port) {
         return Err(net_error(
             vm,
             "net.listen",

@@ -1,4 +1,4 @@
-use super::{TypeInference, KNOWN_TYPES};
+use super::{KNOWN_TYPES, TypeInference};
 use crate::constraint::ConstraintReason;
 use crate::typed_ast::TypedProgram;
 use crate::types::InferType;
@@ -12,9 +12,8 @@ pub struct InferenceResult {
     pub warnings: Vec<Warning>,
 }
 
-impl TypeInference {
-    /// Create a new inference engine
-    pub fn new() -> Self {
+impl Default for TypeInference {
+    fn default() -> Self {
         Self {
             type_gen: crate::types::TypeVarGen::new(),
             constraints: Vec::new(),
@@ -24,6 +23,13 @@ impl TypeInference {
             depth: 0,
             warnings: Vec::new(),
         }
+    }
+}
+
+impl TypeInference {
+    /// Create a new inference engine
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Convert type annotation to InferType with warning emission
@@ -37,7 +43,9 @@ impl TypeInference {
 
         if !KNOWN_TYPES.contains(&name_lower.as_str()) {
             self.warnings.push(Warning::new(
-                WarningKind::UnknownType { name: ann.name.clone() },
+                WarningKind::UnknownType {
+                    name: ann.name.clone(),
+                },
                 ann.span,
             ));
             return;
@@ -65,7 +73,8 @@ impl TypeInference {
         stmts: Vec<Stmt>,
         source: Arc<Source>,
     ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
-        let result = Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
+        let result =
+            Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
         Ok(result.program)
     }
 
@@ -107,14 +116,13 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) = inf
-            .errors
-            .iter()
-            .cloned()
-            .partition(|err| matches!(
-                err.reason,
-                ConstraintReason::BitwiseOp { .. } | ConstraintReason::TypeAnnotation { .. }
-            ));
+        let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) =
+            inf.errors.iter().cloned().partition(|err| {
+                matches!(
+                    err.reason,
+                    ConstraintReason::BitwiseOp { .. } | ConstraintReason::TypeAnnotation { .. }
+                )
+            });
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);

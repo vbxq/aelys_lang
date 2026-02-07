@@ -57,15 +57,13 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
         args::Command::Help => Ok(0),
         args::Command::Version => Ok(0),
 
-        args::Command::Run { path, program_args } => {
-            commands::run::run_with_options(
-                &path,
-                program_args,
-                parsed.vm_args,
-                parsed.opt_level,
-                warn_config,
-            )
-        }
+        args::Command::Run { path, program_args } => commands::run::run_with_options(
+            &path,
+            program_args,
+            parsed.vm_args,
+            parsed.opt_level,
+            warn_config,
+        ),
 
         args::Command::Compile { path, output } => {
             if !parsed.vm_args.is_empty() {
@@ -74,14 +72,12 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
             commands::compile::run_with_options(&path, output, parsed.opt_level, warn_config)
         }
 
-        args::Command::Asm { path, output, stdout } => {
-            commands::asm::run_with_options(
-                &path,
-                output,
-                stdout,
-                parsed.opt_level,
-                parsed.vm_args,
-            )
+        args::Command::Asm {
+            path,
+            output,
+            stdout,
+        } => {
+            commands::asm::run_with_options(&path, output, stdout, parsed.opt_level, parsed.vm_args)
         }
 
         args::Command::Repl => {
