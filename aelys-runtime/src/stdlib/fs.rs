@@ -107,7 +107,7 @@ fn native_open(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
         match mode {
             FileMode::Read => opts.read(true).open(path),
             FileMode::Write => opts.write(true).create(true).truncate(true).open(path),
-            FileMode::Append => opts.write(true).create(true).append(true).open(path),
+            FileMode::Append => opts.create(true).append(true).open(path),
             FileMode::ReadWrite => opts.read(true).write(true).create(true).open(path),
         }
     };
