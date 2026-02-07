@@ -12,7 +12,7 @@ run_benchmark() {
 
     echo "--- $name ---"
     echo "Aelys:"
-    ./target/release/aelys-cli "$aelys_file" 2>&1 | grep -E "(time|Time)"
+    ./target/release/aelys "$aelys_file" 2>&1 | grep -E "(time|Time)"
     echo "Python:"
     python3 "$py_file" 2>&1 | grep -E "(time|Time)"
     echo ""

@@ -1,0 +1,13 @@
+[package]
+name = "aelys-backend"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../common" }
+aelys-syntax = { path = "../syntax" }
+aelys-sema = { path = "../sema" }
+aelys-bytecode = { path = "../bytecode" }
+
+[lib]
+doctest = false

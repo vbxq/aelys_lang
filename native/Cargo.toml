@@ -5,7 +5,7 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
-aelys-native-macros = { path = "../aelys-native-macros" }
+aelys-native-macros = { path = "../native-macros" }
 
 [lib]
 doctest = false
