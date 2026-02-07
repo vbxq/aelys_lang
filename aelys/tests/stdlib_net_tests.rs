@@ -314,3 +314,186 @@ net.close(s)
         Err(e) => assert!(e.contains("capability")),
     }
 }
+
+#[test]
+fn udp_bind_and_close() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.close(sock)
+42
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(v) => assert_eq!(v.as_int(), Some(42)),
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_bind_invalid_port() {
+    let code = r#"
+needs std.net
+net.udp_bind("127.0.0.1", -1)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("port") || err.contains("invalid") || err.contains("capability"));
+}
+
+#[test]
+fn udp_bind_port_too_large() {
+    let code = r#"
+needs std.net
+net.udp_bind("127.0.0.1", 99999)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("port") || err.contains("capability"));
+}
+
+#[test]
+fn udp_local_addr() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+let addr = net.local_addr(sock)
+net.close(sock)
+42
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(v) => assert_eq!(v.as_int(), Some(42)),
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_set_timeout() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.set_timeout(sock, 1000)
+net.close(sock)
+1
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(v) => assert_eq!(v.as_int(), Some(1)),
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_set_broadcast() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("0.0.0.0", 0)
+net.udp_set_broadcast(sock, true)
+net.close(sock)
+1
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(v) => assert_eq!(v.as_int(), Some(1)),
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_send_to_and_recv_from() {
+    let code = r#"
+needs std.net
+let s1 = net.udp_bind("127.0.0.1", 0)
+let s2 = net.udp_bind("127.0.0.1", 0)
+let addr2 = net.local_addr(s2)
+net.set_timeout(s2, 2000)
+net.udp_send_to(s1, "hello udp", addr2)
+let data = net.udp_recv_from(s2, 1024)
+net.close(s1)
+net.close(s2)
+data
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(_) => {} // data received successfully
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_connected_send_recv() {
+    let code = r#"
+needs std.net
+let s1 = net.udp_bind("127.0.0.1", 0)
+let s2 = net.udp_bind("127.0.0.1", 0)
+let addr1 = net.local_addr(s1)
+let addr2 = net.local_addr(s2)
+net.set_timeout(s1, 2000)
+net.set_timeout(s2, 2000)
+net.udp_send_to(s1, "ping", addr2)
+let data = net.udp_recv_from(s2, 1024)
+net.close(s1)
+net.close(s2)
+42
+"#;
+    let result = run_aelys_result(code);
+    match result {
+        Ok(v) => assert_eq!(v.as_int(), Some(42)),
+        Err(e) => assert!(e.contains("capability")),
+    }
+}
+
+#[test]
+fn udp_recv_from_negative_max() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.udp_recv_from(sock, -5)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("negative") || err.contains("non-negative") || err.contains("capability"));
+}
+
+#[test]
+fn udp_recv_from_exceeds_max_buffer() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.udp_recv_from(sock, 17000000)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("max") || err.contains("buffer") || err.contains("exceeds") || err.contains("capability"));
+}
+
+#[test]
+fn udp_recv_negative_max() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.udp_recv(sock, -1)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("negative") || err.contains("non-negative") || err.contains("capability"));
+}
+
+#[test]
+fn udp_connect_invalid_port() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.udp_connect(sock, "127.0.0.1", -1)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("port") || err.contains("invalid") || err.contains("capability"));
+}
+
+#[test]
+fn udp_close_invalid_handle() {
+    let code = r#"
+needs std.net
+let sock = net.udp_bind("127.0.0.1", 0)
+net.close(sock)
+net.close(sock)
+"#;
+    let err = run_aelys_err(code);
+    assert!(err.contains("invalid") || err.contains("capability"));
+}

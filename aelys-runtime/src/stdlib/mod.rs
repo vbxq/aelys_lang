@@ -12,7 +12,7 @@ use crate::vm::{GcRef, ObjectKind, VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, UdpSocket};
 use std::time::Instant;
 
 #[derive(Debug)]
@@ -20,6 +20,7 @@ pub enum Resource {
     File(FileResource),
     TcpStream(TcpStreamResource),
     TcpListener(TcpListener),
+    UdpSocket(UdpSocketResource),
     Timer(Instant),
     ByteBuffer(ByteBuffer),
 }
@@ -43,6 +44,12 @@ pub enum FileMode {
 #[derive(Debug)]
 pub struct TcpStreamResource {
     pub stream: TcpStream,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct UdpSocketResource {
+    pub socket: UdpSocket,
     pub timeout_ms: Option<u64>,
 }
 
