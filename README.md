@@ -27,7 +27,7 @@ You choose between comfort and performance on a per-function basis.
 ## Additional Information
 
 - [Performance Benchmarks](docs/performance-benchmarks.md)
-- [Acknowledgements](docs/acknowledgements.md)
+- [Acknowledgements](ACKNOWLEDGEMENTS.md)
 - [Changelog](CHANGELOG.md)
 - [Examples](examples/README.md)
 - [License](LICENSE)

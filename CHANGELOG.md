@@ -5,7 +5,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 ## 0.19.x - Array, Vec, and @inline decorator implementations
 
 **0.19.6-a**
-- UDP support by @LeKebabiste, see [Acknowledgements](docs/acknowledgements.md)
+- UDP support by @LeKebabiste, see [Acknowledgements](ACKNOWLEDGEMENTS.md)
 
 **0.19.5-a**
 - New centralized warning system with `-W` flags (`-Wall`, `-Werror`, `-Wno-<category>`)
@@ -19,7 +19,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 **0.19.3-a**
 - Added `LocalConstantPropagator` optimization pass for function-local constants
 - Fixed DCE dropping return values when eliminating `if true { expr }` branches
-- Octal support by Keggek, see [Acknowledgements](docs/acknowledgements.md)
+- Octal support by Keggek, see [Acknowledgements](ACKNOWLEDGEMENTS.md)
 - Enforce explicit type annotations as fatal errors
 
 **0.19.2-a**
