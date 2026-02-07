@@ -15,6 +15,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::os::unix::fs::OpenOptionsExt;
 
 #[cfg(target_os = "linux")]
+use std::ffi::CString;
+#[cfg(target_os = "linux")]
 use std::os::unix::io::FromRawFd;
 
 static TEMP_COUNTER: AtomicUsize = AtomicUsize::new(0);
