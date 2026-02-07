@@ -11,7 +11,7 @@ I don't want it to be a video game scripting language.
 
 Not just another VM, but something interesting.
 
-# aelys 0.19.5-a
+# aelys 0.19.6-a
 
 Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
 
