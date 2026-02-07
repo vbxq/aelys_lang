@@ -206,7 +206,7 @@ fn module_loader_rejects_symlink_escape() {
     let source = Source::new(entry.to_str().unwrap(), "");
     let loader = ModuleLoader::new(&entry, source);
     let err = loader
-        .resolve_path(&vec!["evil".to_string(), "secret".to_string()])
+        .resolve_path(&["evil".to_string(), "secret".to_string()])
         .unwrap_err();
 
     match err {
