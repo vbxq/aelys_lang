@@ -2,19 +2,19 @@
 resolver = "3"
 members = [
     "aelys",
-    "aelys-common",
-    "aelys-syntax",
-    "aelys-frontend",
-    "aelys-sema",
-    "aelys-opt",
-    "aelys-bytecode",
-    "aelys-backend",
-    "aelys-runtime",
-    "aelys-modules",
-    "aelys-driver",
-    "aelys-cli",
-    "aelys-native",
-    "aelys-native-macros",
+    "common",
+    "syntax",
+    "frontend",
+    "sema",
+    "opt",
+    "bytecode",
+    "backend",
+    "runtime",
+    "modules",
+    "driver",
+    "cli",
+    "native",
+    "native-macros",
 ]
 
 [workspace.package]

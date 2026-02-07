@@ -4,7 +4,7 @@ use std::path::Path;
 /// Ensure no runtime modules bypass VM allocation guards by calling Heap::alloc* directly.
 #[test]
 fn vm_modules_do_not_bypass_allocation_guards() {
-    let vm_dir = Path::new("../aelys-runtime/src/vm");
+    let vm_dir = Path::new("../runtime/src/vm");
     let allowed = [
         "vm.rs",
         "heap.rs",

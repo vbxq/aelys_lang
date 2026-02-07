@@ -4,9 +4,9 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
-aelys-common = { path = "../aelys-common" }
-aelys-syntax = { path = "../aelys-syntax" }
-aelys-native = { path = "../aelys-native" }
+aelys-common = { path = "../common" }
+aelys-syntax = { path = "../syntax" }
+aelys-native = { path = "../native" }
 toml = "0.8"
 libloading = "0.8"
 libc = "0.2"

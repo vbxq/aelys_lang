@@ -1,5 +1,5 @@
 [package]
-name = "aelys"
+name = "aelys-driver"
 version.workspace = true
 edition = "2024"
 
@@ -9,19 +9,12 @@ aelys-syntax = { path = "../syntax" }
 aelys-frontend = { path = "../frontend" }
 aelys-sema = { path = "../sema" }
 aelys-opt = { path = "../opt" }
-aelys-bytecode = { path = "../bytecode" }
 aelys-backend = { path = "../backend" }
+aelys-bytecode = { path = "../bytecode" }
 aelys-runtime = { path = "../runtime" }
 aelys-modules = { path = "../modules" }
-aelys-driver = { path = "../driver" }
-
-[dev-dependencies]
-tempfile = "3"
-aelys-opt = { path = "../opt" }
-aelys-bytecode = { path = "../bytecode" }
-
-[build-dependencies]
-regex = "1"
+aelys-native = { path = "../native" }
+semver = "1"
 
 [lib]
 doctest = false

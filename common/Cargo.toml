@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
-aelys-syntax = { path = "../aelys-syntax" }
+aelys-syntax = { path = "../syntax" }
 
 [lib]
 doctest = false

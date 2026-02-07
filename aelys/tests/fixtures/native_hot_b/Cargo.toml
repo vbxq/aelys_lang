@@ -7,6 +7,6 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-aelys-native = { path = "../../../../aelys-native" }
+aelys-native = { path = "../../../../native" }
 
 [workspace]

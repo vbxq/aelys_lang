@@ -1,0 +1,12 @@
+[package]
+name = "aelys-opt"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../common" }
+aelys-syntax = { path = "../syntax" }
+aelys-sema = { path = "../sema" }
+
+[lib]
+doctest = false
