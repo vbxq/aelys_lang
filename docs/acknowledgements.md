@@ -2,7 +2,7 @@
 
 ## Helps and Contributions
 
-**[Keggek](https://codeberg.org/gek)** - For the discussions about the project and language design <3
+**[Keggek](https://codeberg.org/gek)** - For the discussions about the project and language design <3  
 **[Lekebabiste](https://github.com/Lekebabiste)** - For helping with the UDP implementation <3
 
 ## Inspirations
