@@ -1,0 +1,149 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Aelys",
+  "scopeName": "source.aelys",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#keywords" },
+    { "include": "#attributes" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#functions" },
+    { "include": "#types" },
+    { "include": "#constants" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.aelys",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.aelys",
+          "match": "\\b(if|else|while|for|in|step|return|break|continue)\\b"
+        },
+        {
+          "name": "keyword.declaration.aelys",
+          "match": "\\b(let|mut|fn|pub)\\b"
+        },
+        {
+          "name": "keyword.other.aelys",
+          "match": "\\b(needs|as|from)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.aelys",
+          "match": "\\b(and|or|not)\\b"
+        }
+      ]
+    },
+    "attributes": {
+      "patterns": [
+        {
+          "name": "entity.name.tag.aelys",
+          "match": "@(no_gc|inline|inline_always)\\b"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.aelys",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.aelys",
+              "match": "\\\\(n|t|r|\\\\|\")"
+            },
+            {
+              "name": "constant.other.placeholder.aelys",
+              "match": "\\{[^}]*\\}"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.hex.aelys",
+          "match": "\\b0[xX][0-9a-fA-F_]+\\b"
+        },
+        {
+          "name": "constant.numeric.binary.aelys",
+          "match": "\\b0[bB][01_]+\\b"
+        },
+        {
+          "name": "constant.numeric.octal.aelys",
+          "match": "\\b0[oO][0-7_]+\\b"
+        },
+        {
+          "name": "constant.numeric.float.aelys",
+          "match": "\\b[0-9][0-9_]*\\.[0-9][0-9_]*(e[+-]?[0-9]+)?\\b"
+        },
+        {
+          "name": "constant.numeric.integer.aelys",
+          "match": "\\b[0-9][0-9_]*\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.arithmetic.aelys",
+          "match": "[+\\-*/%]"
+        },
+        {
+          "name": "keyword.operator.comparison.aelys",
+          "match": "(==|!=|<=|>=|<|>)"
+        },
+        {
+          "name": "keyword.operator.bitwise.aelys",
+          "match": "(&|\\||\\^|~|<<|>>)"
+        },
+        {
+          "name": "keyword.operator.assignment.aelys",
+          "match": "="
+        },
+        {
+          "name": "keyword.operator.range.aelys",
+          "match": "\\.\\.(=)?"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "entity.name.function.aelys",
+          "match": "\\b([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.aelys",
+          "match": "\\b(int|float|string|bool|null|Array|Vec)\\b"
+        },
+        {
+          "name": "storage.type.generic.aelys",
+          "match": "<(Int|Float|Bool|String)>"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.aelys",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    }
+  }
+}

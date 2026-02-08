@@ -297,6 +297,27 @@ for i in 1..=10 {
 }
 ```
 
+## Editor Support
+
+Writing Aelys code is way more pleasant with syntax highlighting.  
+Many other editor coming, don't worry !
+
+### VSCode Extension
+
+Download [aelys-0.1.0.vsix](syntax-support/vscode/aelys-0.1.0.vsix) from the repository, then install it:
+
+**Drag & drop method:** Just drag the `.vsix` file into VSCode and you're done
+
+**Extensions menu:**
+Open Extensions, then click the `...` menu => "Install from VSIX" and select the file
+
+**Command line:**
+```bash
+code --install-extension aelys-0.1.0.vsix
+```
+
+Once installed, all `.aelys` and `.ae` files will have proper highlighting.
+
 ## What's Next
 
 - [Language Specification](language-spec.md) - complete syntax reference
