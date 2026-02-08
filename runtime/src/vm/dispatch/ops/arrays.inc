@@ -1037,11 +1037,18 @@ match opcode_byte {
                     self.frames[current_frame_idx].ip = ip;
                     return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: vec.len() as i64 }));
                 }
+            } else if let ObjectKind::Array(arr) = &obj.kind {
+                if let Some(val) = arr.get(idx as usize) {
+                    reg_set!(dest, val);
+                } else {
+                    self.frames[current_frame_idx].ip = ip;
+                    return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: arr.len() as i64 }));
+                }
             } else {
                 self.frames[current_frame_idx].ip = ip;
                 return Err(self.runtime_error(RuntimeErrorKind::TypeError {
                     operation: "vec load",
-                    expected: "vec",
+                    expected: "vec or array",
                     got: "non-vec object".to_string(),
                 }));
             }
@@ -1278,15 +1285,28 @@ match opcode_byte {
         }
 
         let vec_ref = GcRef::new(vec_val.as_ptr().unwrap_or(0));
-        let vec_len = self.heap.get(vec_ref).and_then(|obj| {
-            if let ObjectKind::Vec(vec) = &obj.kind { Some(vec.len() as i64) } else { None }
+        // Check if it's a Vec or Array and get the length
+        let container_len = self.heap.get(vec_ref).and_then(|obj| {
+            match &obj.kind {
+                ObjectKind::Vec(vec) => Some((true, vec.len() as i64)),
+                ObjectKind::Array(arr) => Some((false, arr.len() as i64)),
+                _ => None,
+            }
         });
 
-        match vec_len {
-            Some(len) => {
+        match container_len {
+            Some((true, len)) => {
                 if let Some(obj) = self.heap.get_mut(vec_ref)
                     && let ObjectKind::Vec(vec) = &mut obj.kind
                     && !vec.set(idx as usize, value) {
+                        self.frames[current_frame_idx].ip = ip;
+                        return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
+                    }
+            }
+            Some((false, len)) => {
+                if let Some(obj) = self.heap.get_mut(vec_ref)
+                    && let ObjectKind::Array(arr) = &mut obj.kind
+                    && !arr.set(idx as usize, value) {
                         self.frames[current_frame_idx].ip = ip;
                         return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: len }));
                     }
@@ -1296,7 +1316,7 @@ match opcode_byte {
                     self.frames[current_frame_idx].ip = ip;
                     return Err(self.runtime_error(RuntimeErrorKind::TypeError {
                         operation: "vec store",
-                        expected: "vec",
+                        expected: "vec or array",
                         got: "non-vec object".to_string(),
                     }));
                 } else {
