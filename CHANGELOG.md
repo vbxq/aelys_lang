@@ -5,6 +5,8 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 ## 0.19.x - Array, Vec, and @inline decorator implementations
 
 **0.19.6-a**
+- Fixed string equality across modules and Vec methods on Dynamic-typed parameters
+- Added [VSCode](docs/syntax-support/vscode/README.md) syntax highlighting
 - UDP support by @LeKebabiste, see [Acknowledgements](ACKNOWLEDGEMENTS.md)
 - Remove aelys- prefix from crate directory names
 
