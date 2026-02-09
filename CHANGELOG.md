@@ -2,7 +2,11 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.19.x - Array, Vec, and @inline decorator implementations
+## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
+
+**0.19.7-a**
+- Fixed vec methods on dynamic-typed parameters
+- FFI string support
 
 **0.19.6-a**
 - Fixed string equality across modules and Vec methods on Dynamic-typed parameters
