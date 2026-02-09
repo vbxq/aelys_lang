@@ -294,6 +294,17 @@ mod exports {
     }
 
     #[aelys_export]
+    pub fn set_title(title: String) -> i64 {
+        WINDOW.with(|w| {
+            if let Some(state) = w.borrow_mut().as_mut() {
+                state.window.set_title(&title);
+                return 1;
+            }
+            0
+        })
+    }
+
+    #[aelys_export]
     pub fn fill_rect(x: i64, y: i64, w: i64, h: i64, r: f64, g: f64, b: f64) -> i64 {
         let r_val = ((r.clamp(0.0, 1.0) * 255.0) as u32) << 16;
         let g_val = ((g.clamp(0.0, 1.0) * 255.0) as u32) << 8;

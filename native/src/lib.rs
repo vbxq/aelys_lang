@@ -19,6 +19,33 @@ pub use abi::{
 };
 pub use hash::{compute_exports_hash, init_descriptor_exports_hash};
 pub use value::{
-    value_as_bool, value_as_float, value_as_int, value_bool, value_float, value_int, value_is_bool,
-    value_is_float, value_is_int, value_is_null, value_null,
+    value_as_bool, value_as_float, value_as_int, value_as_ptr, value_bool, value_float, value_int,
+    value_is_bool, value_is_float, value_is_int, value_is_null, value_is_ptr, value_null,
 };
+
+use std::sync::OnceLock;
+
+static VM_API: OnceLock<AelysVmApi> = OnceLock::new();
+
+/// Store the VM API provided by the runtime during module init
+/// This is called from the generated init function in #[aelys_module]
+pub fn store_vm_api(api: &AelysVmApi) {
+    let _ = VM_API.set(*api);
+}
+
+/// Read a string value from the VM using the stored API.
+pub unsafe fn read_string_from_value(
+    vm: *mut core::ffi::c_void,
+    value: AelysValue,
+) -> Option<String> {
+    let api = VM_API.get()?;
+    let read_fn = api.read_string?;
+    let mut ptr: *const u8 = core::ptr::null();
+    let mut len: usize = 0;
+    let status = read_fn(vm, value, &mut ptr, &mut len);
+    if status != 0 || ptr.is_null() {
+        return None;
+    }
+    let bytes = unsafe { core::slice::from_raw_parts(ptr, len) };
+    String::from_utf8(bytes.to_vec()).ok()
+}

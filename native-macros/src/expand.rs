@@ -106,8 +106,17 @@ pub fn expand_module(args: ModuleArgs, mut input: ItemMod) -> syn::Result<TokenS
             exports: __AELYS_EXPORTS.as_ptr(),
             required_module_count: 0,
             required_modules: ::core::ptr::null(),
-            init: None,
+            init: Some(__aelys_module_init),
         };
+
+        extern "C" fn __aelys_module_init(api: *const ::aelys_native::AelysVmApi) -> i32 {
+            if api.is_null() {
+                return 1;
+            }
+            let api = unsafe { &*api };
+            ::aelys_native::store_vm_api(api);
+            0
+        }
 
         ::aelys_native::aelys_init_exports_hash!(aelys_module_descriptor);
     })

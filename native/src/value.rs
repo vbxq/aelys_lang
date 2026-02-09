@@ -74,3 +74,9 @@ pub fn value_is_float(v: AelysValue) -> bool {
 pub fn value_is_bool(v: AelysValue) -> bool {
     (v & (QNAN | 0x0007_0000_0000_0000)) == (QNAN | TAG_BOOL)
 }
+pub fn value_is_ptr(v: AelysValue) -> bool {
+    (v & (QNAN | 0x0007_0000_0000_0000)) == QNAN
+}
+pub fn value_as_ptr(v: AelysValue) -> usize {
+    (v & PAYLOAD_MASK) as usize
+}

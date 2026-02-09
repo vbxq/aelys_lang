@@ -47,4 +47,4 @@ pub use core::{
 };
 pub use frame::CallFrame;
 pub use manual_heap::{ManualHeap, ManualHeapGuard};
-pub use native::{NativeFn, NativeFunctionImpl};
+pub use native::{NativeFn, NativeFunctionImpl, build_native_vm_api};

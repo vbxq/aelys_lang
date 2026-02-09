@@ -4,6 +4,7 @@
 // TODO: (VM) Implement JIT compilation for hot functions
 // TODO: (VM) Add support for coroutines or async functions
 // TODO: (VM) Implement better garbage collection (e.g., Arena GC)
+// TODO: (VM) Way better FFI/we should be able to directly import .h files
 // TODO: (Lexer/Parser) Revise token definitions and syntax for better clarity
 // TODO: (Code Quality) consider Rc<RefCell<_>> for globals/global_indices in compiler
 // TODO: (Code Quality) clean up those unsufferable functions in the compiler

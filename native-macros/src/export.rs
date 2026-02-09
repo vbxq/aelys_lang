@@ -108,11 +108,16 @@ fn generate_extraction(name: &Ident, ty: &Type, index: usize) -> syn::Result<Tok
         "bool" => quote! {
             let #name: bool = unsafe { ::aelys_native::value_as_bool(*args.add(#idx)) };
         },
+        "String" => quote! {
+            let #name: String = unsafe {
+                ::aelys_native::read_string_from_value(_vm, *args.add(#idx))
+            }.unwrap_or_default();
+        },
         _ => {
             return Err(syn::Error::new(
                 ty.span(),
                 format!(
-                    "unsupported parameter type: {}. Supported: i64, f64, bool",
+                    "unsupported parameter type: {}. Supported: i64, f64, bool, String",
                     ty_str
                 ),
             ));
