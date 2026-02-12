@@ -3,7 +3,8 @@
 ## Helps and Contributions
 
 **[Keggek](https://codeberg.org/gek)** - For the discussions about the project and language design <3  
-**[Lekebabiste](https://github.com/Lekebabiste)** - For helping with the UDP implementation <3
+**[Lekebabiste](https://github.com/Lekebabiste)** - For helping with the UDP implementation <3  
+**[SpaceGame](https://github.com/SpaceGame-wq)** - For making an Aelys syntax highlighting [VSCode extension](https://marketplace.visualstudio.com/items?itemName=SpaceGame.aelys-lang) <3
 
 ## Inspirations
 
