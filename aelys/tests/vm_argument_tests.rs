@@ -109,6 +109,31 @@ fn invalid_capability_value_errors() {
 }
 
 #[test]
+fn trusted_clears_allowed_caps() {
+    // Regression test: trusted should clear allowed_caps, not just denied_caps
+    let parsed = parse_vm_args(&[
+        "--allow-caps=net".to_string(),
+        "-ae.trusted=true".to_string(),
+    ])
+    .expect("should parse");
+
+    // With trusted=true, allowed_caps should be empty (allowing everything)
+    assert!(parsed.config.allowed_caps.is_empty());
+    assert!(parsed.config.denied_caps.is_empty());
+
+    // All capabilities should be enabled
+    assert!(parsed.config.capabilities.allow_fs);
+    assert!(parsed.config.capabilities.allow_net);
+    assert!(parsed.config.capabilities.allow_exec);
+
+    // Native caps check should allow any capability
+    assert!(parsed.config.check_native_capability("fs").is_ok());
+    assert!(parsed.config.check_native_capability("net").is_ok());
+    assert!(parsed.config.check_native_capability("gpu").is_ok());
+    assert!(parsed.config.check_native_capability("anything").is_ok());
+}
+
+#[test]
 fn heap_limit_triggers_out_of_memory() {
     let config = VmConfig::new(1024 * 1024).expect("valid config");
     let src = Source::new("<test>", "");

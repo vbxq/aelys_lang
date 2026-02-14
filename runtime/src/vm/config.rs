@@ -84,6 +84,7 @@ impl VmConfig {
     }
 
     pub fn allow_all_native_caps(&mut self) {
+        self.allowed_caps.clear();
         self.denied_caps.clear();
     }
 }

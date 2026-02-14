@@ -60,13 +60,13 @@ fn handle_status(client: int) -> int {
     let uptime = time.now() - server_start_time
     let uptime_minutes = uptime / 60.0
 
-    let mut json = "{\n"
+    let mut json = "{{\n"
     json = json + "  \"status\": \"running\",\n"
     json = json + "  \"uptime_seconds\": " + convert.to_string(uptime) + ",\n"
     json = json + "  \"uptime_minutes\": " + convert.to_string(uptime_minutes) + ",\n"
     json = json + "  \"total_requests\": " + convert.to_string(total_requests) + ",\n"
     json = json + "  \"server\": \"Aelys-HTTP/0.1.0\"\n"
-    json = json + "}"
+    json = json + "}}"
 
     http.send_json(client, 200, json)
     return 200
@@ -75,10 +75,10 @@ fn handle_status(client: int) -> int {
 fn handle_time(client: int) -> int {
     let current_time = time.now()
 
-    let mut json = "{\n"
+    let mut json = "{{\n"
     json = json + "  \"timestamp\": " + convert.to_string(current_time) + ",\n"
     json = json + "  \"server\": \"Aelys-HTTP/0.1.0\"\n"
-    json = json + "}"
+    json = json + "}}"
 
     http.send_json(client, 200, json)
     return 200
@@ -88,29 +88,29 @@ fn handle_echo(client: int, headers) -> int {
     let body = http.read_body(client, headers)
 
     if str.len(body) == 0 {
-        let mut json = "{\n"
+        let mut json = "{{\n"
         json = json + "  \"error\": \"No body provided\",\n"
         json = json + "  \"message\": \"Send a POST request with body content to echo\"\n"
-        json = json + "}"
+        json = json + "}}"
         http.send_json(client, 400, json)
         return 400
     }
 
-    let mut json = "{\n"
+    let mut json = "{{\n"
     json = json + "  \"echo\": \"" + body + "\",\n"
     json = json + "  \"length\": " + convert.to_string(str.len(body)) + "\n"
-    json = json + "}"
+    json = json + "}}"
 
     http.send_json(client, 200, json)
     return 200
 }
 
 fn handle_hello(client: int) -> int {
-    let mut json = "{\n"
+    let mut json = "{{\n"
     json = json + "  \"message\": \"Hello from Aelys HTTP Server!\",\n"
     json = json + "  \"version\": \"0.1.0\",\n"
     json = json + "  \"language\": \"Aelys\"\n"
-    json = json + "}"
+    json = json + "}}"
 
     http.send_json(client, 200, json)
     return 200
