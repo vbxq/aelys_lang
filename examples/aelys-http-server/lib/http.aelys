@@ -139,7 +139,7 @@ pub fn send_error(client: int, status: int, message: string) {
     let mut html = "<!DOCTYPE html>\n"
     html = html + "<html>\n<head>\n"
     html = html + "<title>" + convert.to_string(status) + " " + utils.status_text(status) + "</title>\n"
-    html = html + "<style>body{font-family:sans-serif;max-width:600px;margin:100px auto;text-align:center}</style>\n"
+    html = html + "<style>body{{font-family:sans-serif;max-width:600px;margin:100px auto;text-align:center}}</style>\n"
     html = html + "</head>\n<body>\n"
     html = html + "<h1>" + convert.to_string(status) + " " + utils.status_text(status) + "</h1>\n"
     html = html + "<p>" + message + "</p>\n"
