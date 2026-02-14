@@ -118,12 +118,9 @@ pub fn load_modules_for_program(
                 ImportKind::Module { alias: Some(_) } => {
                     for name in module_info.exports.keys() {
                         let alias_qualified = format!("{}::{}", module_alias, name);
-                        let internal_qualified =
-                            format!("{}::{}", module_info.name, name);
+                        let internal_qualified = format!("{}::{}", module_info.name, name);
                         if module_info.native_functions.contains(&alias_qualified)
-                            || module_info
-                                .native_functions
-                                .contains(&internal_qualified)
+                            || module_info.native_functions.contains(&internal_qualified)
                         {
                             known_native_globals.insert(alias_qualified);
                         }
@@ -252,12 +249,9 @@ pub fn load_modules_with_loader(
                 ImportKind::Module { alias: Some(_) } => {
                     for name in module_info.exports.keys() {
                         let alias_qualified = format!("{}::{}", module_alias, name);
-                        let internal_qualified =
-                            format!("{}::{}", module_info.name, name);
+                        let internal_qualified = format!("{}::{}", module_info.name, name);
                         if module_info.native_functions.contains(&alias_qualified)
-                            || module_info
-                                .native_functions
-                                .contains(&internal_qualified)
+                            || module_info.native_functions.contains(&internal_qualified)
                         {
                             known_native_globals.insert(alias_qualified);
                         }

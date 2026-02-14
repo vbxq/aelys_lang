@@ -461,7 +461,11 @@ fn remap_stmt_spans(stmt: &mut Stmt, span: aelys_syntax::Span) {
             remap_stmt_spans(body, span);
         }
         StmtKind::For {
-            start, end, step, body, ..
+            start,
+            end,
+            step,
+            body,
+            ..
         } => {
             remap_expr_spans(start, span);
             remap_expr_spans(end, span);

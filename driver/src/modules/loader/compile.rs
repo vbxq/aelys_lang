@@ -98,16 +98,10 @@ impl ModuleLoader {
                         aelys_syntax::ImportKind::Module { alias: Some(_) } => {
                             let module_alias = self.get_module_alias(nested_needs);
                             for name in module_info.exports.keys() {
-                                let alias_qualified =
-                                    format!("{}::{}", module_alias, name);
-                                let internal_qualified =
-                                    format!("{}::{}", module_info.name, name);
-                                if module_info
-                                    .native_functions
-                                    .contains(&alias_qualified)
-                                    || module_info
-                                        .native_functions
-                                        .contains(&internal_qualified)
+                                let alias_qualified = format!("{}::{}", module_alias, name);
+                                let internal_qualified = format!("{}::{}", module_info.name, name);
+                                if module_info.native_functions.contains(&alias_qualified)
+                                    || module_info.native_functions.contains(&internal_qualified)
                                 {
                                     known_native_globals.insert(alias_qualified);
                                 }
