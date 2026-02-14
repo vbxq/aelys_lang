@@ -225,3 +225,41 @@ fn parse_warn_equals_syntax() {
 
     assert!(parsed.warning_flags.contains(&"error".to_string()));
 }
+
+#[test]
+fn parse_powershell_split_ae_dot() {
+    // PowerShell splits "-ae.trusted=true" into ["-ae", ".trusted=true"]
+    let args = vec!["aelys", "main.aelys", "-ae", ".trusted=true"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let parsed = parse_args(&args).unwrap();
+
+    assert_eq!(
+        parsed.vm_args,
+        vec!["-ae.trusted=true".to_string()]
+    );
+}
+
+#[test]
+fn parse_powershell_split_ae_dot_before_path() {
+    let args = vec!["aelys", "-ae", ".trusted=true", "main.aelys"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let parsed = parse_args(&args).unwrap();
+
+    assert_eq!(
+        parsed.vm_args,
+        vec!["-ae.trusted=true".to_string()]
+    );
+    assert_eq!(
+        parsed.command,
+        Command::Run {
+            path: "main.aelys".to_string(),
+            program_args: Vec::new(),
+        }
+    );
+}

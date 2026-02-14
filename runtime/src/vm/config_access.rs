@@ -21,6 +21,14 @@ impl VM {
     }
 
     pub fn set_script_path(&mut self, path: String) {
+        // On Windows, canonicalize() returns \\?\ prefixed paths which disable
+        // path normalization (forward slashes won't be converted to backslashes).
+        // Strip the prefix so that mixed-separator paths work correctly.
+        #[cfg(windows)]
+        let path = path
+            .strip_prefix(r"\\?\")
+            .map(|s| s.to_string())
+            .unwrap_or(path);
         self.script_path = Some(path);
     }
 

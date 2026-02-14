@@ -12,13 +12,13 @@ pub fn serve_static(client: int, path: string, public_dir: string, index_file: s
 
     let mut file_path = path
 
-    if str.len(file_path) == 0 {
-        file_path = "/" + index_file
-    } else if str.len(file_path) == 1 and str.starts_with(file_path, "/") {
-        file_path = "/" + index_file
+    if str.len(file_path) == 0 or file_path == "/" {
+        file_path = index_file
+    } else if str.starts_with(file_path, "/") {
+        file_path = str.substr(file_path, 1, str.len(file_path) - 1)
     }
 
-    let mut full_path = public_dir + file_path
+    let mut full_path = fs.join(public_dir, file_path)
 
     if fs.is_dir(full_path) {
         full_path = fs.join(full_path, index_file)

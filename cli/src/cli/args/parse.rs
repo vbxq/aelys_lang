@@ -296,6 +296,17 @@ impl<'a> Parser<'a> {
         if token.starts_with("-ae.") || token.starts_with("--ae-") {
             return Ok(Some((token.to_string(), false)));
         }
+
+        // TODO: proper fix because this is a workaround
+        // powershell splits "-ae.foo=bar" into ["-ae", ".foo=bar"] because '.'
+        // is a property-access operator.  Recombine the two tokens transparently.
+        if token == "-ae" {
+            if let Some(next) = self.peek_next() {
+                if next.starts_with('.') {
+                    return Ok(Some((format!("-ae{}", next), true)));
+                }
+            }
+        }
         Ok(None)
     }
 
