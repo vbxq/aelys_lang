@@ -22,6 +22,7 @@ impl TypeInference {
             };
             typed_params.push(TypedParam {
                 name: p.name.clone(),
+                mutable: p.mutable,
                 ty,
                 span: p.span,
             });

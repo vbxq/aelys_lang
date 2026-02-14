@@ -16,6 +16,7 @@ impl TypeInference {
                 .iter()
                 .map(|p| TypedParam {
                     name: p.name.clone(),
+                    mutable: p.mutable,
                     ty: subst.apply(&p.ty),
                     span: p.span,
                 })

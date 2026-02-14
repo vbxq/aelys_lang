@@ -24,6 +24,7 @@ impl Parser {
 
     pub fn parse_parameter(&mut self) -> Result<Parameter> {
         let span = self.peek().span;
+        let mutable = self.match_token(&TokenKind::Mut);
         let name = self.consume_identifier("parameter name")?;
 
         let type_annotation = if self.match_token(&TokenKind::Colon) {
@@ -33,6 +34,11 @@ impl Parser {
         };
 
         let end_span = self.previous().span;
-        Ok(Parameter::new(name, type_annotation, span.merge(end_span)))
+        Ok(Parameter::new(
+            name,
+            mutable,
+            type_annotation,
+            span.merge(end_span),
+        ))
     }
 }

@@ -85,6 +85,7 @@ pub struct TypedFunction {
 #[derive(Debug, Clone)]
 pub struct TypedParam {
     pub name: String,
+    pub mutable: bool,
     pub ty: InferType,
     pub span: Span,
 }

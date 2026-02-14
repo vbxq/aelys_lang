@@ -15,7 +15,7 @@ pub(super) fn compile_typed_body(
     for param in &func.params {
         let reg = nested_compiler.alloc_register()?;
         let resolved_type = aelys_sema::ResolvedType::from_infer_type(&param.ty);
-        nested_compiler.add_local(param.name.clone(), false, reg, resolved_type);
+        nested_compiler.add_local(param.name.clone(), param.mutable, reg, resolved_type);
     }
 
     if has_no_gc {

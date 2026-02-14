@@ -28,14 +28,21 @@ impl TypeAnnotation {
 #[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: String,
+    pub mutable: bool,
     pub type_annotation: Option<TypeAnnotation>, // None = inferred
     pub span: Span,
 }
 
 impl Parameter {
-    pub fn new(name: String, type_annotation: Option<TypeAnnotation>, span: Span) -> Self {
+    pub fn new(
+        name: String,
+        mutable: bool,
+        type_annotation: Option<TypeAnnotation>,
+        span: Span,
+    ) -> Self {
         Self {
             name,
+            mutable,
             type_annotation,
             span,
         }
@@ -44,6 +51,7 @@ impl Parameter {
     pub fn untyped(name: String, span: Span) -> Self {
         Self {
             name,
+            mutable: false,
             type_annotation: None,
             span,
         }
