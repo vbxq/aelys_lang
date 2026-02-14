@@ -236,10 +236,7 @@ fn parse_powershell_split_ae_dot() {
 
     let parsed = parse_args(&args).unwrap();
 
-    assert_eq!(
-        parsed.vm_args,
-        vec!["-ae.trusted=true".to_string()]
-    );
+    assert_eq!(parsed.vm_args, vec!["-ae.trusted=true".to_string()]);
 }
 
 #[test]
@@ -251,10 +248,7 @@ fn parse_powershell_split_ae_dot_before_path() {
 
     let parsed = parse_args(&args).unwrap();
 
-    assert_eq!(
-        parsed.vm_args,
-        vec!["-ae.trusted=true".to_string()]
-    );
+    assert_eq!(parsed.vm_args, vec!["-ae.trusted=true".to_string()]);
     assert_eq!(
         parsed.command,
         Command::Run {
