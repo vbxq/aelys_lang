@@ -1,6 +1,6 @@
-use super::{VM, Value};
+use super::{GcRef, ObjectKind, VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
-use aelys_native::AelysNativeFn;
+use aelys_native::{AelysNativeFn, AelysValue, AelysVmApi};
 
 pub type NativeFn = fn(&mut VM, &[Value]) -> Result<Value, RuntimeError>;
 
@@ -32,5 +32,42 @@ impl NativeFunctionImpl {
                 Ok(Value::from_raw(out))
             }
         }
+    }
+}
+
+/// C callback for native modules to read string values from the VM.
+extern "C" fn native_read_string_callback(
+    vm: *mut std::ffi::c_void,
+    value: AelysValue,
+    out_ptr: *mut *const u8,
+    out_len: *mut usize,
+) -> i32 {
+    let vm = unsafe { &*(vm as *const VM) };
+    let val = Value::from_raw(value);
+    if let Some(ptr_idx) = val.as_ptr()
+        && let Some(obj) = vm.heap.get(GcRef::new(ptr_idx))
+        && let ObjectKind::String(s) = &obj.kind
+    {
+        let str_ref = s.as_str();
+        unsafe {
+            *out_ptr = str_ref.as_ptr();
+            *out_len = str_ref.len();
+        }
+        return 0;
+    }
+    1
+}
+
+// VM API struct to pass to native modules during init
+pub fn build_native_vm_api() -> AelysVmApi {
+    AelysVmApi {
+        api_version: aelys_native::AELYS_API_VERSION,
+        size: std::mem::size_of::<AelysVmApi>() as u32,
+        register_function: None,
+        register_constant: None,
+        register_type: None,
+        alloc_string: None,
+        read_string: Some(native_read_string_callback),
+        _reserved: [0; 3],
     }
 }

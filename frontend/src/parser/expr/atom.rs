@@ -328,16 +328,158 @@ impl Parser {
         })?;
 
         let mut parser = Parser::new(tokens, source);
-        parser.expression().map_err(|e| {
-            CompileError::new(
+        let mut expr = parser.expression().map_err(|e| {
+            aelys_common::error::AelysError::Compile(CompileError::new(
                 CompileErrorKind::UnexpectedToken {
                     expected: "expression".to_string(),
                     found: format!("invalid expression in format string: {}", e),
                 },
                 span,
                 Arc::clone(&self.source),
-            )
-            .into()
-        })
+            ))
+        })?;
+
+        remap_expr_spans(&mut expr, span);
+        Ok(expr)
+    }
+}
+
+// recursively remap all spans in an expression tree to a single span.
+// used to fix format string interpolation spans so errors point to the
+// string literal rather than a synthetic `<fmt-expr>` source
+fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
+    expr.span = span;
+    match &mut expr.kind {
+        ExprKind::Binary { left, right, .. } => {
+            remap_expr_spans(left, span);
+            remap_expr_spans(right, span);
+        }
+        ExprKind::Unary { operand, .. } => {
+            remap_expr_spans(operand, span);
+        }
+        ExprKind::And { left, right } | ExprKind::Or { left, right } => {
+            remap_expr_spans(left, span);
+            remap_expr_spans(right, span);
+        }
+        ExprKind::Call { callee, args } => {
+            remap_expr_spans(callee, span);
+            for arg in args {
+                remap_expr_spans(arg, span);
+            }
+        }
+        ExprKind::Assign { value, .. } => {
+            remap_expr_spans(value, span);
+        }
+        ExprKind::Grouping(inner) => {
+            remap_expr_spans(inner, span);
+        }
+        ExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            remap_expr_spans(condition, span);
+            remap_expr_spans(then_branch, span);
+            remap_expr_spans(else_branch, span);
+        }
+        ExprKind::Lambda { body, .. } => {
+            for stmt in body {
+                remap_stmt_spans(stmt, span);
+            }
+        }
+        ExprKind::Member { object, .. } => {
+            remap_expr_spans(object, span);
+        }
+        ExprKind::ArrayLiteral { elements, .. } | ExprKind::VecLiteral { elements, .. } => {
+            for el in elements {
+                remap_expr_spans(el, span);
+            }
+        }
+        ExprKind::ArraySized { size, .. } => {
+            remap_expr_spans(size, span);
+        }
+        ExprKind::Index { object, index } => {
+            remap_expr_spans(object, span);
+            remap_expr_spans(index, span);
+        }
+        ExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
+            remap_expr_spans(object, span);
+            remap_expr_spans(index, span);
+            remap_expr_spans(value, span);
+        }
+        ExprKind::Range { start, end, .. } => {
+            if let Some(s) = start {
+                remap_expr_spans(s, span);
+            }
+            if let Some(e) = end {
+                remap_expr_spans(e, span);
+            }
+        }
+        ExprKind::Slice { object, range } => {
+            remap_expr_spans(object, span);
+            remap_expr_spans(range, span);
+        }
+        ExprKind::FmtString(parts) => {
+            for part in parts {
+                if let FmtStringPart::Expr(e) = part {
+                    remap_expr_spans(e, span);
+                }
+            }
+        }
+        // Leaf nodes: Int, Float, String, Bool, Null, Identifier
+        _ => {}
+    }
+}
+
+fn remap_stmt_spans(stmt: &mut Stmt, span: aelys_syntax::Span) {
+    stmt.span = span;
+    match &mut stmt.kind {
+        StmtKind::Expression(expr) => remap_expr_spans(expr, span),
+        StmtKind::Let { initializer, .. } => remap_expr_spans(initializer, span),
+        StmtKind::Block(stmts) => {
+            for s in stmts {
+                remap_stmt_spans(s, span);
+            }
+        }
+        StmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            remap_expr_spans(condition, span);
+            remap_stmt_spans(then_branch, span);
+            if let Some(e) = else_branch {
+                remap_stmt_spans(e, span);
+            }
+        }
+        StmtKind::While { condition, body } => {
+            remap_expr_spans(condition, span);
+            remap_stmt_spans(body, span);
+        }
+        StmtKind::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
+            remap_expr_spans(start, span);
+            remap_expr_spans(end, span);
+            if let Some(s) = step.as_mut() {
+                remap_expr_spans(s, span);
+            }
+            remap_stmt_spans(body, span);
+        }
+        StmtKind::Return(Some(expr)) => remap_expr_spans(expr, span),
+        StmtKind::Function(func) => {
+            for s in &mut func.body {
+                remap_stmt_spans(s, span);
+            }
+        }
+        _ => {}
     }
 }

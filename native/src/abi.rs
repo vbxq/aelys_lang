@@ -24,7 +24,15 @@ pub struct AelysVmApi {
         Option<extern "C" fn(name: *const c_char, type_desc: *const AelysTypeDescriptor) -> i32>,
     pub alloc_string:
         Option<extern "C" fn(bytes: *const u8, len: usize, out: *mut AelysValue) -> i32>,
-    pub _reserved: [usize; 4],
+    pub read_string: Option<
+        extern "C" fn(
+            vm: *mut c_void,
+            value: AelysValue,
+            out_ptr: *mut *const u8,
+            out_len: *mut usize,
+        ) -> i32,
+    >,
+    pub _reserved: [usize; 3],
 }
 
 #[repr(C)]

@@ -61,6 +61,34 @@ impl Compiler {
                 }
             }
 
+            // Handle Vec/Array methods on Dynamic-typed objects (runtime dispatch)
+            if matches!(&object.ty, InferType::Dynamic | InferType::Var(_)) {
+                match member.as_str() {
+                    "len" if args.is_empty() => {
+                        return self.compile_vec_len(object, dest, span);
+                    }
+                    "push" if args.len() == 1 => {
+                        return self.compile_vec_push(
+                            object,
+                            &InferType::Dynamic,
+                            &args[0],
+                            dest,
+                            span,
+                        );
+                    }
+                    "pop" if args.is_empty() => {
+                        return self.compile_vec_pop(object, &InferType::Dynamic, dest, span);
+                    }
+                    "capacity" if args.is_empty() => {
+                        return self.compile_vec_capacity(object, dest, span);
+                    }
+                    "reserve" if args.len() == 1 => {
+                        return self.compile_vec_reserve(object, &args[0], dest, span);
+                    }
+                    _ => {}
+                }
+            }
+
             if let TypedExprKind::Identifier(module_name) = &object.kind
                 && self.module_aliases.contains(module_name)
             {

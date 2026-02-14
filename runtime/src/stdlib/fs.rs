@@ -1,7 +1,9 @@
 // fs module - file system operations (handles, paths, directories)
 
 use crate::stdlib::helpers::{get_handle, get_int, get_string, make_string};
-use crate::stdlib::{FileMode, FileResource, Resource, StdModuleExports, register_native};
+use crate::stdlib::{
+    ByteBuffer, FileMode, FileResource, Resource, StdModuleExports, register_native,
+};
 use crate::vm::{VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 use std::fs::{self, OpenOptions};
@@ -257,7 +259,8 @@ fn native_read_bytes(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError>
             return match reader.get_mut().read(&mut buf) {
                 Ok(got) => {
                     buf.truncate(got);
-                    make_string(vm, &String::from_utf8_lossy(&buf))
+                    let handle = vm.store_resource(Resource::ByteBuffer(ByteBuffer { data: buf }));
+                    Ok(Value::int(handle as i64))
                 }
                 Err(e) => Err(fs_error(vm, "fs.read_bytes", format!("read: {}", e))),
             };

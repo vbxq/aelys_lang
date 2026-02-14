@@ -1,18 +1,48 @@
 // comparisons (11-16) + specialized variants
 
 match opcode_byte {
-    // Eq/Ne don't need fast paths - Value derives PartialEq
+    // Eq/Ne - with string content comparison for heap objects
     11 => {
         let (a, b, c) = decode_abc(instr);
         let lhs = reg_get!(base + b as usize);
         let rhs = reg_get!(base + c as usize);
-        reg_set!(base + a as usize, Value::bool(lhs == rhs));
+        let result = if lhs == rhs {
+            true
+        } else if let (Some(lp), Some(rp)) = (lhs.as_ptr(), rhs.as_ptr()) {
+            let l_ref = GcRef::new(lp);
+            let r_ref = GcRef::new(rp);
+            match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                    (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                    _ => false,
+                },
+                _ => false,
+            }
+        } else {
+            false
+        };
+        reg_set!(base + a as usize, Value::bool(result));
     }
     12 => {
         let (a, b, c) = decode_abc(instr);
-        reg_set!(base + a as usize, Value::bool(
-            reg_get!(base + b as usize) != reg_get!(base + c as usize)
-        ));
+        let lhs = reg_get!(base + b as usize);
+        let rhs = reg_get!(base + c as usize);
+        let result = if lhs == rhs {
+            true
+        } else if let (Some(lp), Some(rp)) = (lhs.as_ptr(), rhs.as_ptr()) {
+            let l_ref = GcRef::new(lp);
+            let r_ref = GcRef::new(rp);
+            match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                    (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                    _ => false,
+                },
+                _ => false,
+            }
+        } else {
+            false
+        };
+        reg_set!(base + a as usize, Value::bool(!result));
     }
 
     // Lt - int fastpath
@@ -298,7 +328,22 @@ match opcode_byte {
             if let (Some(l), Some(r)) = (l_float, r_float) {
                 reg_set!(base + a as usize, Value::bool(l == r));
             } else {
-                reg_set!(base + a as usize, Value::bool(left == right));
+                let eq = if left == right {
+                    true
+                } else if let (Some(lp), Some(rp)) = (left.as_ptr(), right.as_ptr()) {
+                    let l_ref = GcRef::new(lp);
+                    let r_ref = GcRef::new(rp);
+                    match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                        (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                            (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                            _ => false,
+                        },
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
+                reg_set!(base + a as usize, Value::bool(eq));
             }
         }
     }
@@ -318,7 +363,22 @@ match opcode_byte {
             if let (Some(l), Some(r)) = (l_float, r_float) {
                 reg_set!(base + a as usize, Value::bool(l != r));
             } else {
-                reg_set!(base + a as usize, Value::bool(left != right));
+                let eq = if left == right {
+                    true
+                } else if let (Some(lp), Some(rp)) = (left.as_ptr(), right.as_ptr()) {
+                    let l_ref = GcRef::new(lp);
+                    let r_ref = GcRef::new(rp);
+                    match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                        (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                            (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                            _ => false,
+                        },
+                        _ => false,
+                    }
+                } else {
+                    false
+                };
+                reg_set!(base + a as usize, Value::bool(!eq));
             }
         }
     }
@@ -399,7 +459,22 @@ match opcode_byte {
         if let (Some(l), Some(r)) = (l_float, r_float) {
             reg_set!(base + a as usize, Value::bool(l == r));
         } else {
-            reg_set!(base + a as usize, Value::bool(left == right));
+            let eq = if left == right {
+                true
+            } else if let (Some(lp), Some(rp)) = (left.as_ptr(), right.as_ptr()) {
+                let l_ref = GcRef::new(lp);
+                let r_ref = GcRef::new(rp);
+                match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                    (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                        (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                        _ => false,
+                    },
+                    _ => false,
+                }
+            } else {
+                false
+            };
+            reg_set!(base + a as usize, Value::bool(eq));
         }
     }
 
@@ -415,7 +490,22 @@ match opcode_byte {
         if let (Some(l), Some(r)) = (l_float, r_float) {
             reg_set!(base + a as usize, Value::bool(l != r));
         } else {
-            reg_set!(base + a as usize, Value::bool(left != right));
+            let eq = if left == right {
+                true
+            } else if let (Some(lp), Some(rp)) = (left.as_ptr(), right.as_ptr()) {
+                let l_ref = GcRef::new(lp);
+                let r_ref = GcRef::new(rp);
+                match (self.heap.get(l_ref), self.heap.get(r_ref)) {
+                    (Some(lo), Some(ro)) => match (&lo.kind, &ro.kind) {
+                        (ObjectKind::String(ls), ObjectKind::String(rs)) => ls == rs,
+                        _ => false,
+                    },
+                    _ => false,
+                }
+            } else {
+                false
+            };
+            reg_set!(base + a as usize, Value::bool(!eq));
         }
     }
 

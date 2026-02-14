@@ -133,7 +133,7 @@ impl Compiler {
                 OpCode::ArrayLoadB,
                 OpCode::ArrayLoadP,
             ),
-            _ => OpCode::ArrayLoadP,
+            _ => OpCode::VecLoadP,
         };
 
         self.emit_a(opcode, dest, obj_reg, idx_reg, span);
@@ -176,7 +176,7 @@ impl Compiler {
                 OpCode::ArrayStoreB,
                 OpCode::ArrayStoreP,
             ),
-            _ => OpCode::ArrayStoreP,
+            _ => OpCode::VecStoreP,
         };
 
         self.emit_a(opcode, obj_reg, idx_reg, val_reg, span);

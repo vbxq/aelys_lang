@@ -276,6 +276,80 @@ mod exports {
         });
         1
     }
+
+    #[aelys_export]
+    pub fn is_key_down(chip8_key: i64) -> i64 {
+        let key = match chip8_key_to_minifb(chip8_key) {
+            Some(k) => k,
+            None => return 0,
+        };
+        WINDOW.with(|w| {
+            if let Some(state) = w.borrow().as_ref() {
+                if state.window.is_key_down(key) {
+                    return 1;
+                }
+            }
+            0
+        })
+    }
+
+    #[aelys_export]
+    pub fn set_title(title: String) -> i64 {
+        WINDOW.with(|w| {
+            if let Some(state) = w.borrow_mut().as_mut() {
+                state.window.set_title(&title);
+                return 1;
+            }
+            0
+        })
+    }
+
+    #[aelys_export]
+    pub fn fill_rect(x: i64, y: i64, w: i64, h: i64, r: f64, g: f64, b: f64) -> i64 {
+        let r_val = ((r.clamp(0.0, 1.0) * 255.0) as u32) << 16;
+        let g_val = ((g.clamp(0.0, 1.0) * 255.0) as u32) << 8;
+        let b_val = (b.clamp(0.0, 1.0) * 255.0) as u32;
+        let color = r_val | g_val | b_val;
+
+        WINDOW.with(|win| {
+            if let Some(state) = win.borrow_mut().as_mut() {
+                let x_start = (x.max(0) as usize).min(state.width);
+                let y_start = (y.max(0) as usize).min(state.height);
+                let x_end = ((x + w).max(0) as usize).min(state.width);
+                let y_end = ((y + h).max(0) as usize).min(state.height);
+                for py in y_start..y_end {
+                    for px in x_start..x_end {
+                        state.buffer[py * state.width + px] = color;
+                    }
+                }
+                return 1;
+            }
+            0
+        })
+    }
+}
+
+// i know well this isn't supposed to be in an "opengl" lib
+fn chip8_key_to_minifb(key: i64) -> Option<Key> {
+    match key {
+        0x0 => Some(Key::X),
+        0x1 => Some(Key::Key1),
+        0x2 => Some(Key::Key2),
+        0x3 => Some(Key::Key3),
+        0x4 => Some(Key::Q),
+        0x5 => Some(Key::W),
+        0x6 => Some(Key::E),
+        0x7 => Some(Key::A),
+        0x8 => Some(Key::S),
+        0x9 => Some(Key::D),
+        0xA => Some(Key::Z),
+        0xB => Some(Key::C),
+        0xC => Some(Key::Key4),
+        0xD => Some(Key::R),
+        0xE => Some(Key::F),
+        0xF => Some(Key::V),
+        _ => None,
+    }
 }
 
 fn fill_triangle(
