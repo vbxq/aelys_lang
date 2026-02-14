@@ -300,12 +300,11 @@ impl<'a> Parser<'a> {
         // TODO: proper fix because this is a workaround
         // powershell splits "-ae.foo=bar" into ["-ae", ".foo=bar"] because '.'
         // is a property-access operator.  Recombine the two tokens transparently.
-        if token == "-ae" {
-            if let Some(next) = self.peek_next() {
-                if next.starts_with('.') {
-                    return Ok(Some((format!("-ae{}", next), true)));
-                }
-            }
+        if token == "-ae"
+            && let Some(next) = self.peek_next()
+            && next.starts_with('.')
+        {
+            return Ok(Some((format!("-ae{}", next), true)));
         }
         Ok(None)
     }
