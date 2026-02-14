@@ -44,17 +44,16 @@ extern "C" fn native_read_string_callback(
 ) -> i32 {
     let vm = unsafe { &*(vm as *const VM) };
     let val = Value::from_raw(value);
-    if let Some(ptr_idx) = val.as_ptr() {
-        if let Some(obj) = vm.heap.get(GcRef::new(ptr_idx)) {
-            if let ObjectKind::String(s) = &obj.kind {
-                let str_ref = s.as_str();
-                unsafe {
-                    *out_ptr = str_ref.as_ptr();
-                    *out_len = str_ref.len();
-                }
-                return 0;
-            }
+    if let Some(ptr_idx) = val.as_ptr()
+        && let Some(obj) = vm.heap.get(GcRef::new(ptr_idx))
+        && let ObjectKind::String(s) = &obj.kind
+    {
+        let str_ref = s.as_str();
+        unsafe {
+            *out_ptr = str_ref.as_ptr();
+            *out_len = str_ref.len();
         }
+        return 0;
     }
     1
 }

@@ -34,6 +34,9 @@ pub fn store_vm_api(api: &AelysVmApi) {
 }
 
 /// Read a string value from the VM using the stored API.
+///
+/// # Safety
+/// `vm` must be a valid pointer to a live VM instance (clippy moment)
 pub unsafe fn read_string_from_value(
     vm: *mut core::ffi::c_void,
     value: AelysValue,
