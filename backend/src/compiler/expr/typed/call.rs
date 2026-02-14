@@ -68,7 +68,13 @@ impl Compiler {
                         return self.compile_vec_len(object, dest, span);
                     }
                     "push" if args.len() == 1 => {
-                        return self.compile_vec_push(object, &InferType::Dynamic, &args[0], dest, span);
+                        return self.compile_vec_push(
+                            object,
+                            &InferType::Dynamic,
+                            &args[0],
+                            dest,
+                            span,
+                        );
                     }
                     "pop" if args.is_empty() => {
                         return self.compile_vec_pop(object, &InferType::Dynamic, dest, span);

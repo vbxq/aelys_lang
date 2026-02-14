@@ -1,7 +1,9 @@
 // fs module - file system operations (handles, paths, directories)
 
 use crate::stdlib::helpers::{get_handle, get_int, get_string, make_string};
-use crate::stdlib::{ByteBuffer, FileMode, FileResource, Resource, StdModuleExports, register_native};
+use crate::stdlib::{
+    ByteBuffer, FileMode, FileResource, Resource, StdModuleExports, register_native,
+};
 use crate::vm::{VM, Value};
 use aelys_common::error::{RuntimeError, RuntimeErrorKind};
 use std::fs::{self, OpenOptions};
