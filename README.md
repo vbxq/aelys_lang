@@ -6,7 +6,7 @@
 <a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
 <a href="https://github.com/vbxq/aelys_lang/releases/latest"><img src="https://img.shields.io/github/v/release/vbxq/aelys_lang?color=8A2BE2" alt="Release"></a>
 
-# aelys 0.19.7-a
+# aelys 0.19.8-a
 
 Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
 

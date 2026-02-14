@@ -1,7 +1,6 @@
 needs std.io
 needs std.sys
 
-io.print("Hello, World!")
-io.print("")
-io.print("Welcome to Aelys v0.19.7-a!")
-io.print("Platform: " + sys.platform() + " (" + sys.arch() + ")")
+print("Hello, World!")
+print("Welcome to Aelys v0.19.8-a!")
+print("Platform: {sys.platform()} {sys.arch()}")

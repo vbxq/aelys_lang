@@ -4,6 +4,12 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
 
+**0.19.8-a** (not a "real" update, I just had to make a new git tag for something to work, this contains some bug fixes)
+- `-ae.trusted=true` flag wasn't working
+- FFI string support
+- vec methods on dynamic-typed parameters
+- Some std fixes
+
 **0.19.7-a**
 - Fixed vec methods on dynamic-typed parameters
 - FFI string support

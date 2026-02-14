@@ -31,14 +31,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: clippy-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: clippy-
+          prefix-key: clippy
       - run: cargo clippy --workspace --all-targets
 
   test:
@@ -52,13 +47,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v4
+      - uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: test-${{ matrix.os }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: test-${{ matrix.os }}-
+          prefix-key: test
       - run: cargo build --workspace
       - run: cargo test --workspace
