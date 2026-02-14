@@ -220,6 +220,61 @@ fn typed(a: int, b: int) -> int {
 }
 ```
 
+### Mutable Parameters
+
+By default, function parameters are immutable. If you try to reassign one, the compiler will complain:
+
+```rust
+fn process(buffer: string) -> string {
+    buffer = buffer + "-"  // ✗ error: buffer is immutable
+    return buffer
+}
+```
+
+Add `mut` before the parameter name to allow reassignment:
+
+```rust
+fn process(mut buffer: string) -> string {
+    buffer = buffer + "-"  // ✓ works
+    return buffer
+}
+```
+
+This is especially useful in loops where you accumulate a result:
+
+```rust
+fn build_line(mut acc: int, n: int) -> int {
+    for i in 0..n {
+        acc = acc + 1
+    }
+    return acc
+}
+
+build_line(10, 5)  // 15
+```
+
+Mutable parameters are value copies. Modifying them inside the function doesn't affect the caller:
+
+```rust
+fn try_modify(mut x: int) -> int {
+    x = x + 100
+    return x
+}
+
+let a = 1
+let b = try_modify(a)  // b = 101
+a                       // still 1
+```
+
+Works with lambdas too:
+
+```rust
+let add = fn(mut x: int, y: int) -> int {
+    x = x + y
+    x
+}
+```
+
 ### Return
 
 Explicit:

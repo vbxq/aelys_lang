@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
 
+**0.19.20-a** (i'll squash all of these updates)
+- fn foo(mut param: type) now working
+
 **0.19.9-a** (not a "real" update again sorry, needed a new tag
 - new flag `--ae-trusted=true`
 

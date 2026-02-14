@@ -346,6 +346,38 @@ fn test_error_assign_to_immutable() {
 }
 
 #[test]
+fn test_error_assign_to_immutable_param() {
+    let error = run_err("fn f(x: int) -> int { x = x + 1; x } f(1);");
+    assert!(error.contains("immutable") || error.contains("not mutable"));
+}
+
+#[test]
+fn test_mut_param_reassign() {
+    let result = run_ok("fn f(mut x: int) -> int { x = x + 1; x } f(10);");
+    assert_eq!(result.as_int(), Some(11));
+}
+
+#[test]
+fn test_mut_param_in_loop() {
+    let result = run_ok(
+        "fn accumulate(mut acc: int, n: int) -> int { \
+         for i in 0..n { acc = acc + 1 } \
+         return acc } \
+         accumulate(10, 5);",
+    );
+    assert_eq!(result.as_int(), Some(15));
+}
+
+#[test]
+fn test_mut_param_does_not_affect_caller() {
+    let result = run_ok(
+        "fn inc(mut x: int) -> int { x = x + 100; x } \
+         let a = 1; let b = inc(a); a;",
+    );
+    assert_eq!(result.as_int(), Some(1));
+}
+
+#[test]
 fn test_error_break_outside_loop() {
     let error = run_err("break;");
     assert!(error.contains("break") && error.contains("loop"));
