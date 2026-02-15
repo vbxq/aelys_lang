@@ -117,6 +117,7 @@ impl DeadCodeEliminator {
                 self.eliminate_in_stmt(body);
             }
             TypedStmtKind::For { body, .. } => self.eliminate_in_stmt(body),
+            TypedStmtKind::ForEach { body, .. } => self.eliminate_in_stmt(body),
             TypedStmtKind::Function(func) => self.eliminate_in_function(func),
             TypedStmtKind::Expression(expr) => self.eliminate_in_expr(expr),
             TypedStmtKind::Let { initializer, .. } => self.eliminate_in_expr(initializer),

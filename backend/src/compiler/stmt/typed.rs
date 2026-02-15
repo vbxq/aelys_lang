@@ -66,6 +66,12 @@ impl Compiler {
                 body,
                 stmt.span,
             ),
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                elem_type,
+                body,
+            } => self.compile_typed_for_each(iterator, iterable, elem_type, body, stmt.span),
             TypedStmtKind::Return(expr) => self.compile_typed_return(expr.as_ref(), stmt.span),
             TypedStmtKind::Break => self.compile_break(stmt.span),
             TypedStmtKind::Continue => self.compile_continue(stmt.span),

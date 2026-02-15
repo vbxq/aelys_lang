@@ -63,6 +63,17 @@ impl TypeInference {
                 ),
                 body: Box::new(self.apply_substitution_stmt(body, subst)),
             },
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                elem_type,
+                body,
+            } => TypedStmtKind::ForEach {
+                iterator: iterator.clone(),
+                iterable: self.apply_substitution_expr(iterable, subst),
+                elem_type: subst.apply(elem_type),
+                body: Box::new(self.apply_substitution_stmt(body, subst)),
+            },
             TypedStmtKind::Return(expr) => TypedStmtKind::Return(
                 expr.as_ref()
                     .map(|e| self.apply_substitution_expr(e, subst)),

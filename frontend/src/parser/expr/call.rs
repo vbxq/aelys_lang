@@ -1,6 +1,6 @@
 use super::Parser;
 use aelys_common::Result;
-use aelys_syntax::{Expr, ExprKind, TokenKind};
+use aelys_syntax::{BinaryOp, Expr, ExprKind, TokenKind};
 
 impl Parser {
     // calls and member access (highest precedence after atoms)
@@ -62,6 +62,36 @@ impl Parser {
                         },
                         span,
                     );
+                }
+            } else if self.check(&TokenKind::PlusPlus) || self.check(&TokenKind::MinusMinus) {
+                // on désucre x++ → x = x + 1, x-- → x = x - 1
+                let op = if self.match_token(&TokenKind::PlusPlus) {
+                    BinaryOp::Add
+                } else {
+                    self.advance(); // consume MinusMinus
+                    BinaryOp::Sub
+                };
+                let span = expr.span.merge(self.previous().span);
+
+                if let ExprKind::Identifier(ref name) = expr.kind {
+                    let one = Expr::new(ExprKind::Int(1), self.previous().span);
+                    let binary = Expr::new(
+                        ExprKind::Binary {
+                            left: Box::new(expr.clone()),
+                            op,
+                            right: Box::new(one),
+                        },
+                        span,
+                    );
+                    expr = Expr::new(
+                        ExprKind::Assign {
+                            name: name.clone(),
+                            value: Box::new(binary),
+                        },
+                        span,
+                    );
+                } else {
+                    break;
                 }
             } else {
                 break;

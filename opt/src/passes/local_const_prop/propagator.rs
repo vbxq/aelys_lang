@@ -96,6 +96,13 @@ impl LocalConstantPropagator {
                 self.scopes.pop();
             }
 
+            TypedStmtKind::ForEach { iterable, body, .. } => {
+                self.propagate_expr(iterable);
+                self.scopes.push();
+                self.propagate_stmt(body);
+                self.scopes.pop();
+            }
+
             TypedStmtKind::Return(Some(expr)) => {
                 self.propagate_expr(expr);
             }

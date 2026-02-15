@@ -75,6 +75,11 @@ pub(super) fn verify(
             verify_reg(b, num_regs, "VecStore")?;
             verify_reg(c, num_regs, "VecStore")?;
         }
+        OpCode::StringLoadChar => {
+            verify_reg(a, num_regs, "StringLoadChar")?;
+            verify_reg(b, num_regs, "StringLoadChar")?;
+            verify_reg(c, num_regs, "StringLoadChar")?;
+        }
 
         _ => return Ok(false),
     }

@@ -171,11 +171,14 @@ pub enum OpCode {
     VecStoreF,
     VecStoreB,
     VecStoreP,
+
+    StringLoadChar = 176,
+    StringForLoop,
 }
 
 impl OpCode {
     pub fn from_u8(byte: u8) -> Option<Self> {
-        if byte <= Self::VecStoreP as u8 {
+        if byte <= Self::StringForLoop as u8 {
             Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) })
         } else {
             None

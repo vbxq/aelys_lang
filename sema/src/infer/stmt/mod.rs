@@ -60,6 +60,11 @@ impl TypeInference {
                 step.as_ref().as_ref(),
                 body,
             ),
+            StmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+            } => self.infer_for_each_stmt(iterator, iterable, body, stmt.span),
             StmtKind::Return(expr) => self.infer_return_stmt(stmt.span, expr.as_ref()),
             StmtKind::Break => TypedStmtKind::Break,
             StmtKind::Continue => TypedStmtKind::Continue,

@@ -226,7 +226,7 @@ By default, function parameters are immutable. If you try to reassign one, the c
 
 ```rust
 fn process(buffer: string) -> string {
-    buffer = buffer + "-"  // ✗ error: buffer is immutable
+    buffer += "-"  // ✗ error: buffer is immutable
     return buffer
 }
 ```
@@ -235,7 +235,7 @@ Add `mut` before the parameter name to allow reassignment:
 
 ```rust
 fn process(mut buffer: string) -> string {
-    buffer = buffer + "-"  // ✓ works
+    buffer += "-"  // ✓ works
     return buffer
 }
 ```
@@ -245,7 +245,7 @@ This is especially useful in loops where you accumulate a result:
 ```rust
 fn build_line(mut acc: int, n: int) -> int {
     for i in 0..n {
-        acc = acc + 1
+        acc++
     }
     return acc
 }
@@ -257,7 +257,7 @@ Mutable parameters are value copies. Modifying them inside the function doesn't 
 
 ```rust
 fn try_modify(mut x: int) -> int {
-    x = x + 100
+    x += 100
     return x
 }
 
@@ -270,7 +270,7 @@ Works with lambdas too:
 
 ```rust
 let add = fn(mut x: int, y: int) -> int {
-    x = x + y
+    x += y
     x
 }
 ```
@@ -308,7 +308,7 @@ Functions capture variables from their enclosing scope:
 fn make_counter() {
     let mut count = 0
     return fn() -> int {
-        count = count + 1
+        count++
         return count
     }
 }
@@ -348,6 +348,49 @@ apply_twice(double, 5)  // 20
 | `%` | Modulo |
 
 Integer division truncates: `7 / 2` gives `3`. Use floats if you need decimal results.
+
+### Compound Assignment
+
+Instead of writing `x = x + 1`, you can use compound assignment operators:
+
+| Operator | Equivalent |
+|----------|------------|
+| `x += y` | `x = x + y` |
+| `x -= y` | `x = x - y` |
+| `x *= y` | `x = x * y` |
+| `x /= y` | `x = x / y` |
+| `x %= y` | `x = x % y` |
+
+These work on mutable variables, mutable parameters, and array/vec indices:
+
+```rust
+let mut total = 0
+total += 10         // 10
+
+let scores = Array[10, 20, 30]
+scores[1] += 5      // scores[1] is now 25
+
+let mut s = "hello"
+s += " world"       // "hello world"
+```
+
+### Increment and Decrement
+
+For the common case of adding or subtracting 1:
+
+| Operator | Equivalent |
+|----------|------------|
+| `x++` | `x = x + 1` |
+| `x--` | `x = x - 1` |
+
+```rust
+let mut count = 0
+count++     // 1
+count++     // 2
+count--     // 1
+```
+
+These are postfix operators and work on identifiers only.
 
 ### Comparison
 
@@ -441,6 +484,44 @@ for i in start..end step n {  // with step
 ```
 
 The loop variable is immutable within the body.
+
+### for-each
+
+Iterates over the elements of a collection:
+
+```rust
+for letter in "Keine" {
+    print(letter)
+}
+```
+
+Works with string variables too:
+
+```rust
+let name = "Mokou"
+for c in name {
+    print(c)
+}
+```
+
+String iteration is Unicode-aware, so each `c` is a single-character string, not a byte; so it means that multi-byte characters like `é` or `😀` are handled well !
+
+```rust
+let mut count = 0
+for c in "café" {
+    count++
+}
+// count == 4 (not 5, because é is considered as one character)
+```
+
+You can use `break` and `continue` inside for-each loops:
+
+```rust
+for c in "abcdefgh" {
+    if c == "d" { break }
+    print(c)    // prints a, b, c
+}
+```
 
 ### break and continue
 
@@ -860,7 +941,7 @@ Arrays and Vecs are passed by reference, so changes inside a function affect the
 fn sum(arr) -> int {
     let mut total = 0
     for i in 0..arr.len() {
-        total = total + arr[i]
+        total += arr[i]
     }
     return total
 }
@@ -885,13 +966,45 @@ v[0]  // 2 (modified by the function)
 
 ### Iteration
 
-For now, use index-based loops:
+Index-based loops work on arrays and vectors:
 
 ```rust
 let arr = Array[10, 20, 30, 40]
 
 for i in 0..arr.len() {
     print(arr[i])
+}
+```
+
+### String Indexing
+
+Strings support character-based indexing with `[]`:
+
+```rust
+let s = "hello"
+s[0]    // "h"
+s[1]    // "e"
+s[4]    // "o"
+```
+
+Each index returns a single-character string. Indexing is Unicode-aware — it accesses the Nth character, not the Nth byte.
+
+You can combine string indexing with a range-based for loop:
+
+```rust
+needs std.string
+
+let s = "hello"
+for i in 0..string.char_len(s) {
+    print(s[i])
+}
+```
+
+Or use for-each iteration for simpler code (see [for-each](#for-each)):
+
+```rust
+for c in "hello" {
+    print(c)
 }
 ```
 

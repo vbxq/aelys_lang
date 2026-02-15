@@ -39,16 +39,40 @@ impl Lexer {
             }
             '@' => self.add_token(TokenKind::At),
 
-            '+' => self.add_token(TokenKind::Plus),
+            '+' => {
+                if self.match_char('=') {
+                    self.add_token(TokenKind::PlusEq);
+                } else if self.pending_semicolon && self.match_char('+') {
+                    self.add_token(TokenKind::PlusPlus);
+                } else {
+                    self.add_token(TokenKind::Plus);
+                }
+            }
             '-' => {
                 if self.match_char('>') {
                     self.add_token(TokenKind::Arrow);
+                } else if self.match_char('=') {
+                    self.add_token(TokenKind::MinusEq);
+                } else if self.pending_semicolon && self.match_char('-') {
+                    self.add_token(TokenKind::MinusMinus);
                 } else {
                     self.add_token(TokenKind::Minus);
                 }
             }
-            '*' => self.add_token(TokenKind::Star),
-            '%' => self.add_token(TokenKind::Percent),
+            '*' => {
+                if self.match_char('=') {
+                    self.add_token(TokenKind::StarEq);
+                } else {
+                    self.add_token(TokenKind::Star);
+                }
+            }
+            '%' => {
+                if self.match_char('=') {
+                    self.add_token(TokenKind::PercentEq);
+                } else {
+                    self.add_token(TokenKind::Percent);
+                }
+            }
             ':' => self.add_token(TokenKind::Colon),
 
             '/' => {
@@ -58,6 +82,8 @@ impl Lexer {
                     }
                 } else if self.match_char('*') {
                     self.block_comment()?;
+                } else if self.match_char('=') {
+                    self.add_token(TokenKind::SlashEq);
                 } else {
                     self.add_token(TokenKind::Slash);
                 }

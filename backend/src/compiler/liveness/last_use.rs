@@ -65,6 +65,10 @@ fn collect_all_uses_in_stmt(stmt: &TypedStmt, uses: &mut HashSet<String>) {
                 uses.insert(name.clone());
             }
         }
+        TypedStmtKind::ForEach { iterable, body, .. } => {
+            collect_all_uses_in_expr(iterable, uses);
+            collect_all_uses_in_stmt(body, uses);
+        }
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue

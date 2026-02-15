@@ -350,6 +350,17 @@ impl InlineExpander {
                 ),
                 body: Box::new(self.substitute_stmt(body, params, span)),
             },
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                elem_type,
+                body,
+            } => TypedStmtKind::ForEach {
+                iterator: iterator.clone(),
+                iterable: self.substitute_expr(iterable, params, span),
+                elem_type: elem_type.clone(),
+                body: Box::new(self.substitute_stmt(body, params, span)),
+            },
             TypedStmtKind::Return(e) => {
                 TypedStmtKind::Return(e.as_ref().map(|ex| self.substitute_expr(ex, params, span)))
             }

@@ -38,6 +38,7 @@ pub(super) fn build_cfg(stmts: &[TypedStmt]) -> ControlFlowGraph {
                 | TypedStmtKind::If { .. }
                 | TypedStmtKind::While { .. }
                 | TypedStmtKind::For { .. }
+                | TypedStmtKind::ForEach { .. }
         );
 
         if is_terminator || idx == stmts.len() - 1 {

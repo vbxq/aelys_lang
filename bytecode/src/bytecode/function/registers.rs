@@ -304,6 +304,26 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                     Some(c as usize),
                 );
             }
+            // String load char - dest, string, index (3 registers)
+            OpCode::StringLoadChar => {
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize,
+                    Some(b as usize),
+                    Some(c as usize),
+                );
+            }
+            // String for loop - uses consecutive regs [char_result(a), byte_offset(a+1), string_ptr(a+2)]
+            OpCode::StringForLoop => {
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize + 2,
+                    Some(a as usize + 1),
+                    Some(a as usize),
+                );
+            }
         }
         ip += 1;
     }

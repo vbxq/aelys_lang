@@ -40,6 +40,10 @@ impl ConstantFolder {
                 }
                 self.optimize_stmt(body);
             }
+            TypedStmtKind::ForEach { iterable, body, .. } => {
+                self.optimize_expr(iterable);
+                self.optimize_stmt(body);
+            }
             TypedStmtKind::Return(Some(expr)) => self.optimize_expr(expr),
             TypedStmtKind::Function(func) => self.optimize_function(func),
             TypedStmtKind::Return(None)

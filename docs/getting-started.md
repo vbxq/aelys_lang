@@ -34,8 +34,8 @@ Variables are immutable by default. If you need to change a value, use `mut`:
 
 ```rust
 let mut counter = 0
-counter = counter + 1
-counter = counter + 1
+counter++
+counter++
 print(counter)  // 2
 ```
 
@@ -115,7 +115,7 @@ needs std.io
 let mut i = 0
 while i < 5 {
     print(i)
-    i = i + 1
+    i++
 }
 ```
 
@@ -154,6 +154,27 @@ for i in 0..100 {
 }
 ```
 
+You can also iterate directly over a string's characters:
+
+```rust
+needs std.io
+
+for letter in "hello" {
+    print(letter)
+}
+```
+
+This works with variables too:
+
+```rust
+needs std.io
+
+let name = "Marisa"
+for c in name {
+    print(c)
+}
+```
+
 ## Logical Operators
 
 It's `and`, `or`, and `not`, you can also use `&&`, `||`, and `!` if you prefer :
@@ -178,6 +199,16 @@ Strings support the usual escape sequences (`\n`, `\t`, `\\`, `\"`):
 print("Line 1\nLine 2")
 print("Tab\there")
 ```
+
+You can access individual characters with `[]`:
+
+```rust
+let s = "hello"
+print(s[0])  // h
+print(s[4])  // o
+```
+
+Each index returns a single-character string. Indexing is Unicode-aware (it counts characters, not bytes).
 
 Concatenation uses `+`:
 
@@ -265,7 +296,7 @@ scores.push(92)
 
 let mut sum = 0
 for i in 0..scores.len() {
-    sum = sum + scores[i]
+    sum += scores[i]
 }
 print("{sum / scores.len()}")  // average
 ```

@@ -120,5 +120,42 @@ match opcode_byte {
         }
     }
 
+    // StringForLoop (177)
+    177 => {
+        let (a, imm) = decode_aimm(instr);
+        let char_idx = base + a as usize;
+        let offset_idx = char_idx + 1;
+        let str_idx = char_idx + 2;
+
+        let str_val = reg_get!(str_idx);
+        let byte_offset = reg_get!(offset_idx).as_int().unwrap_or(0) as usize;
+
+        let str_ref = GcRef::new(str_val.as_ptr().unwrap_or(0));
+        if let Some(obj) = self.heap.get(str_ref)
+            && let ObjectKind::String(s) = &obj.kind
+        {
+            let s_str = s.as_str();
+            if byte_offset < s_str.len() {
+                let remaining = &s_str[byte_offset..];
+                if let Some(ch) = remaining.chars().next() {
+                    let char_len = ch.len_utf8();
+                    let mut buf = [0u8; 4];
+                    let char_str = ch.encode_utf8(&mut buf);
+                    self.frames[current_frame_idx].ip = ip;
+                    match self.intern_string(char_str) {
+                        Ok(new_ref) => {
+                            reg_set!(char_idx, Value::ptr(new_ref.index()));
+                            reg_set!(offset_idx, Value::int((byte_offset + char_len) as i64));
+                            ip = (ip as isize + imm as isize) as usize;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                // else: invalid UTF-8, just exit loop
+            }
+            // else: byte_offset >= len, loop ends (don't jump)
+        }
+    }
+
     _ => unreachable!(),
 }

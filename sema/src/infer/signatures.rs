@@ -30,6 +30,9 @@ impl TypeInference {
                 StmtKind::For { body, .. } => {
                     self.collect_signatures_from_stmt(body, prefix);
                 }
+                StmtKind::ForEach { body, .. } => {
+                    self.collect_signatures_from_stmt(body, prefix);
+                }
                 _ => {}
             }
         }
