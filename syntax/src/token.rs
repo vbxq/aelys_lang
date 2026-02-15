@@ -67,8 +67,15 @@ pub enum TokenKind {
     LtEq,
     Gt,
     GtEq,
-    Arrow, // ->
-    Colon, // :
+    Arrow,      // ->
+    Colon,      // :
+    PlusEq,     // +=
+    MinusEq,    // -=
+    StarEq,     // *=
+    SlashEq,    // /=
+    PercentEq,  // %=
+    PlusPlus,   // ++
+    MinusMinus, // --
 
     // bitwise
     Shl,
@@ -130,6 +137,8 @@ impl TokenKind {
                 | Self::RBracket
                 | Self::RBrace
                 | Self::Star // for `needs module.*`
+                | Self::PlusPlus
+                | Self::MinusMinus
         )
     }
 }
@@ -178,6 +187,13 @@ impl std::fmt::Display for TokenKind {
             Self::GtEq => write!(f, ">="),
             Self::Arrow => write!(f, "->"),
             Self::Colon => write!(f, ":"),
+            Self::PlusEq => write!(f, "+="),
+            Self::MinusEq => write!(f, "-="),
+            Self::StarEq => write!(f, "*="),
+            Self::SlashEq => write!(f, "/="),
+            Self::PercentEq => write!(f, "%="),
+            Self::PlusPlus => write!(f, "++"),
+            Self::MinusMinus => write!(f, "--"),
             Self::Shl => write!(f, "<<"),
             Self::Shr => write!(f, ">>"),
             Self::Ampersand => write!(f, "&"),

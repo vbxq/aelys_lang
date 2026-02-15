@@ -57,7 +57,76 @@ impl Parser {
             .into());
         }
 
+        // compound assignment: x += y → x = x + y
+        if let Some(op) = self.match_compound_assign() {
+            let rhs = self.assignment()?;
+
+            if let ExprKind::Identifier(ref name) = expr.kind {
+                let binary = Expr::new(
+                    ExprKind::Binary {
+                        left: Box::new(expr.clone()),
+                        op,
+                        right: Box::new(rhs),
+                    },
+                    expr.span.merge(self.previous().span),
+                );
+                let span = expr.span.merge(binary.span);
+                return Ok(Expr::new(
+                    ExprKind::Assign {
+                        name: name.clone(),
+                        value: Box::new(binary),
+                    },
+                    span,
+                ));
+            }
+
+            // index compound assignment: arr[i] += y → arr[i] = arr[i] + y
+            if let ExprKind::Index {
+                ref object,
+                ref index,
+            } = expr.kind
+            {
+                let binary = Expr::new(
+                    ExprKind::Binary {
+                        left: Box::new(expr.clone()),
+                        op,
+                        right: Box::new(rhs),
+                    },
+                    expr.span.merge(self.previous().span),
+                );
+                let span = object.span.merge(binary.span);
+                return Ok(Expr::new(
+                    ExprKind::IndexAssign {
+                        object: object.clone(),
+                        index: index.clone(),
+                        value: Box::new(binary),
+                    },
+                    span,
+                ));
+            }
+
+            return Err(CompileError::new(
+                CompileErrorKind::InvalidAssignmentTarget,
+                expr.span,
+                Arc::clone(&self.source),
+            )
+            .into());
+        }
+
         Ok(expr)
+    }
+
+    fn match_compound_assign(&mut self) -> Option<BinaryOp> {
+        let op = match self.peek().kind {
+            TokenKind::PlusEq => BinaryOp::Add,
+            TokenKind::MinusEq => BinaryOp::Sub,
+            TokenKind::StarEq => BinaryOp::Mul,
+            TokenKind::SlashEq => BinaryOp::Div,
+            TokenKind::PercentEq => BinaryOp::Mod,
+            _ => return None,
+        };
+        self.advance();
+        Some(op)
     }
 
     fn or_expr(&mut self) -> Result<Expr> {

@@ -34,8 +34,8 @@ Variables are immutable by default. If you need to change a value, use `mut`:
 
 ```rust
 let mut counter = 0
-counter = counter + 1
-counter = counter + 1
+counter++
+counter++
 print(counter)  // 2
 ```
 
@@ -115,7 +115,7 @@ needs std.io
 let mut i = 0
 while i < 5 {
     print(i)
-    i = i + 1
+    i++
 }
 ```
 
@@ -296,7 +296,7 @@ scores.push(92)
 
 let mut sum = 0
 for i in 0..scores.len() {
-    sum = sum + scores[i]
+    sum += scores[i]
 }
 print("{sum / scores.len()}")  // average
 ```
