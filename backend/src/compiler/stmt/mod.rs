@@ -50,6 +50,10 @@ impl Compiler {
                 body,
                 stmt.span,
             ),
+            StmtKind::ForEach { .. } => {
+                // ForEach is handled through typed compilation path only
+                Ok(())
+            }
             StmtKind::Break => self.compile_break(stmt.span),
             StmtKind::Continue => self.compile_continue(stmt.span),
             StmtKind::Return(expr) => self.compile_return(expr.as_ref(), stmt.span),

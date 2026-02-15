@@ -154,6 +154,27 @@ for i in 0..100 {
 }
 ```
 
+You can also iterate directly over a string's characters:
+
+```rust
+needs std.io
+
+for letter in "hello" {
+    print(letter)
+}
+```
+
+This works with variables too:
+
+```rust
+needs std.io
+
+let name = "Marisa"
+for c in name {
+    print(c)
+}
+```
+
 ## Logical Operators
 
 It's `and`, `or`, and `not`, you can also use `&&`, `||`, and `!` if you prefer :
@@ -178,6 +199,16 @@ Strings support the usual escape sequences (`\n`, `\t`, `\\`, `\"`):
 print("Line 1\nLine 2")
 print("Tab\there")
 ```
+
+You can access individual characters with `[]`:
+
+```rust
+let s = "hello"
+print(s[0])  // h
+print(s[4])  // o
+```
+
+Each index returns a single-character string. Indexing is Unicode-aware (it counts characters, not bytes).
 
 Concatenation uses `+`:
 

@@ -974,6 +974,14 @@ impl<'a> DisasmContext<'a> {
                 let (_, a, b, c) = decode_a(instr);
                 format!("VecStoreP r{}, r{}, r{}", a, b, c)
             }
+            OpCode::StringLoadChar => {
+                let (_, a, b, c) = decode_a(instr);
+                format!("StringLoadChar r{}, r{}, r{}", a, b, c)
+            }
+            OpCode::StringForLoop => {
+                let (_, a, imm) = decode_b(instr);
+                format!("StringForLoop r{}, {}", a, imm)
+            }
         }
     }
 

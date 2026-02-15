@@ -130,6 +130,10 @@ impl GlobalConstantPropagator {
                 }
                 self.substitute_in_stmt(body);
             }
+            TypedStmtKind::ForEach { iterable, body, .. } => {
+                self.substitute_constants(iterable);
+                self.substitute_in_stmt(body);
+            }
             TypedStmtKind::Return(Some(expr)) => self.substitute_constants(expr),
             TypedStmtKind::Function(func) => self.substitute_in_function(func),
             TypedStmtKind::Return(None)

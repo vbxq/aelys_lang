@@ -47,6 +47,13 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
+    // for item in collection { }
+    ForEach {
+        iterator: String,
+        iterable: Expr,
+        body: Box<Stmt>,
+    },
+
     Break,
     Continue,
     Return(Option<Expr>),

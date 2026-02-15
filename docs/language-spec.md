@@ -442,6 +442,44 @@ for i in start..end step n {  // with step
 
 The loop variable is immutable within the body.
 
+### for-each
+
+Iterates over the elements of a collection:
+
+```rust
+for letter in "Keine" {
+    print(letter)
+}
+```
+
+Works with string variables too:
+
+```rust
+let name = "Mokou"
+for c in name {
+    print(c)
+}
+```
+
+String iteration is Unicode-aware, so each `c` is a single-character string, not a byte; so it means that multi-byte characters like `é` or `😀` are handled well !
+
+```rust
+let mut count = 0
+for c in "café" {
+    count = count + 1
+}
+// count == 4 (not 5, because é is considered as one character)
+```
+
+You can use `break` and `continue` inside for-each loops:
+
+```rust
+for c in "abcdefgh" {
+    if c == "d" { break }
+    print(c)    // prints a, b, c
+}
+```
+
 ### break and continue
 
 ```rust
@@ -885,13 +923,45 @@ v[0]  // 2 (modified by the function)
 
 ### Iteration
 
-For now, use index-based loops:
+Index-based loops work on arrays and vectors:
 
 ```rust
 let arr = Array[10, 20, 30, 40]
 
 for i in 0..arr.len() {
     print(arr[i])
+}
+```
+
+### String Indexing
+
+Strings support character-based indexing with `[]`:
+
+```rust
+let s = "hello"
+s[0]    // "h"
+s[1]    // "e"
+s[4]    // "o"
+```
+
+Each index returns a single-character string. Indexing is Unicode-aware — it accesses the Nth character, not the Nth byte.
+
+You can combine string indexing with a range-based for loop:
+
+```rust
+needs std.string
+
+let s = "hello"
+for i in 0..string.char_len(s) {
+    print(s[i])
+}
+```
+
+Or use for-each iteration for simpler code (see [for-each](#for-each)):
+
+```rust
+for c in "hello" {
+    print(c)
 }
 ```
 

@@ -57,6 +57,13 @@ pub enum TypedStmtKind {
         body: Box<TypedStmt>,
     },
 
+    ForEach {
+        iterator: String,
+        iterable: TypedExpr,
+        elem_type: InferType,
+        body: Box<TypedStmt>,
+    },
+
     Return(Option<TypedExpr>),
 
     Break,

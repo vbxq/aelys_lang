@@ -1044,11 +1044,27 @@ match opcode_byte {
                     self.frames[current_frame_idx].ip = ip;
                     return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: arr.len() as i64 }));
                 }
+            } else if let ObjectKind::String(s) = &obj.kind {
+                let s_clone = s.as_str().to_string();
+                if let Some(ch) = s_clone.chars().nth(idx as usize) {
+                    let mut buf = [0u8; 4];
+                    let char_str = ch.encode_utf8(&mut buf);
+                    self.frames[current_frame_idx].ip = ip;
+                    match self.intern_string(char_str) {
+                        Ok(str_ref) => {
+                            reg_set!(dest, Value::ptr(str_ref.index()));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                } else {
+                    self.frames[current_frame_idx].ip = ip;
+                    return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: s_clone.chars().count() as i64 }));
+                }
             } else {
                 self.frames[current_frame_idx].ip = ip;
                 return Err(self.runtime_error(RuntimeErrorKind::TypeError {
                     operation: "vec load",
-                    expected: "vec or array",
+                    expected: "vec, array, or string",
                     got: "non-vec object".to_string(),
                 }));
             }
@@ -1324,6 +1340,50 @@ match opcode_byte {
                     return Err(self.runtime_error(RuntimeErrorKind::InvalidMemoryHandle));
                 }
             }
+        }
+    }
+
+    // StringLoadChar (176)
+    176 => {
+        let (a, b, c) = decode_abc(instr);
+        let dest = base + a as usize;
+        let str_val = reg_get!(base + b as usize);
+        let idx = reg_get!(base + c as usize).as_int().unwrap_or(-1);
+
+        if idx < 0 {
+            self.frames[current_frame_idx].ip = ip;
+            return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: 0 }));
+        }
+
+        let str_ref = GcRef::new(str_val.as_ptr().unwrap_or(0));
+        if let Some(obj) = self.heap.get(str_ref) {
+            if let ObjectKind::String(s) = &obj.kind {
+                let s_clone = s.as_str().to_string();
+                if let Some(ch) = s_clone.chars().nth(idx as usize) {
+                    let mut buf = [0u8; 4];
+                    let char_str = ch.encode_utf8(&mut buf);
+                    self.frames[current_frame_idx].ip = ip;
+                    match self.intern_string(char_str) {
+                        Ok(new_ref) => {
+                            reg_set!(dest, Value::ptr(new_ref.index()));
+                        }
+                        Err(e) => return Err(e),
+                    }
+                } else {
+                    self.frames[current_frame_idx].ip = ip;
+                    return Err(self.runtime_error(RuntimeErrorKind::IndexOutOfBounds { index: idx, length: s_clone.chars().count() as i64 }));
+                }
+            } else {
+                self.frames[current_frame_idx].ip = ip;
+                return Err(self.runtime_error(RuntimeErrorKind::TypeError {
+                    operation: "string load char",
+                    expected: "string",
+                    got: "non-string object".to_string(),
+                }));
+            }
+        } else {
+            self.frames[current_frame_idx].ip = ip;
+            return Err(self.runtime_error(RuntimeErrorKind::InvalidMemoryHandle));
         }
     }
 

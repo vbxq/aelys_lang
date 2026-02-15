@@ -58,6 +58,16 @@ fn collect_uses_in_stmt(stmt: &TypedStmt, used: &mut HashSet<String>) {
             collect_uses_in_stmt(body, used);
             used.insert(iterator.clone()); // always mark iterator as used (conservative)
         }
+        TypedStmtKind::ForEach {
+            iterator,
+            iterable,
+            body,
+            ..
+        } => {
+            collect_uses_in_expr(iterable, used);
+            collect_uses_in_stmt(body, used);
+            used.insert(iterator.clone());
+        }
         TypedStmtKind::Return(Some(expr)) => collect_uses_in_expr(expr, used),
         TypedStmtKind::Function(func) => collect_uses_in_function(func, used),
         TypedStmtKind::Return(None)

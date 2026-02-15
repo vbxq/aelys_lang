@@ -5,6 +5,7 @@ use aelys_common::{Warning, WarningKind};
 use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind};
 use std::collections::{HashMap, HashSet};
 
+// TODO: we should make this somewhat configurable
 const BLOAT_BUDGET: f64 = 0.20;
 
 pub struct FunctionInliner {
@@ -88,6 +89,11 @@ impl FunctionInliner {
                 if let Some(s) = &mut **step {
                     self.inline_in_expr(s, analysis);
                 }
+                self.inline_in_stmt(body, analysis);
+            }
+
+            TypedStmtKind::ForEach { iterable, body, .. } => {
+                self.inline_in_expr(iterable, analysis);
                 self.inline_in_stmt(body, analysis);
             }
 

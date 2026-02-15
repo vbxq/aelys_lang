@@ -93,36 +93,54 @@ impl Parser {
         let iterator = self.consume_identifier("loop variable")?;
         self.consume(&TokenKind::In, "in")?;
 
-        let start = self.expression()?;
-        let inclusive = if self.match_token(&TokenKind::DotDotEq) {
-            true
+        let first_expr = self.expression()?;
+
+        if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
+            // Range-based for: for i in start..end { }
+            let inclusive = if self.match_token(&TokenKind::DotDotEq) {
+                true
+            } else {
+                self.consume(&TokenKind::DotDot, "..")?;
+                false
+            };
+            let end = self.expression()?;
+
+            let step = if self.match_token(&TokenKind::Step) {
+                Some(self.expression()?)
+            } else {
+                None
+            };
+
+            self.consume(&TokenKind::LBrace, "{")?;
+            let body = self.block_statement()?;
+            let end_span = self.previous().span;
+
+            Ok(Stmt::new(
+                StmtKind::For {
+                    iterator,
+                    start: first_expr,
+                    end,
+                    inclusive,
+                    step: Box::new(step),
+                    body: Box::new(body),
+                },
+                start_span.merge(end_span),
+            ))
         } else {
-            self.consume(&TokenKind::DotDot, "..")?;
-            false
-        };
-        let end = self.expression()?;
+            // ForEach: for item in collection { }
+            self.consume(&TokenKind::LBrace, "{")?;
+            let body = self.block_statement()?;
+            let end_span = self.previous().span;
 
-        let step = if self.match_token(&TokenKind::Step) {
-            Some(self.expression()?)
-        } else {
-            None
-        };
-
-        self.consume(&TokenKind::LBrace, "{")?;
-        let body = self.block_statement()?;
-        let end_span = self.previous().span;
-
-        Ok(Stmt::new(
-            StmtKind::For {
-                iterator,
-                start,
-                end,
-                inclusive,
-                step: Box::new(step),
-                body: Box::new(body),
-            },
-            start_span.merge(end_span),
-        ))
+            Ok(Stmt::new(
+                StmtKind::ForEach {
+                    iterator,
+                    iterable: first_expr,
+                    body: Box::new(body),
+                },
+                start_span.merge(end_span),
+            ))
+        }
     }
 
     fn return_statement(&mut self) -> Result<Stmt> {

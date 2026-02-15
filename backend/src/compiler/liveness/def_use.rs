@@ -75,6 +75,16 @@ fn collect_def_use_stmt(
                 analysis.captured_vars.insert(name.clone());
             }
         }
+        TypedStmtKind::ForEach {
+            iterator,
+            iterable,
+            body,
+            ..
+        } => {
+            collect_uses_expr(analysis, iterable, uses);
+            defs.insert(iterator.clone());
+            collect_def_use_stmt(analysis, body, defs, uses);
+        }
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue

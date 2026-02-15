@@ -36,6 +36,11 @@ pub(super) fn verify(
             verify_reg_range(a, 2, num_regs, "WhileLoopLt")?;
             verify_jump(ip, imm, bytecode_len, "WhileLoopLt")?;
         }
+        OpCode::StringForLoop => {
+            // StringForLoop uses 3 consecutive registers: a (char), a+1 (byte_offset), a+2 (string_ptr)
+            verify_reg_range(a, 3, num_regs, "StringForLoop")?;
+            verify_jump(ip, imm, bytecode_len, "StringForLoop")?;
+        }
         _ => return Ok(false),
     }
 

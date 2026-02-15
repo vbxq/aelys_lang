@@ -2,7 +2,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::TypedStmtKind;
 use crate::types::InferType;
-use aelys_syntax::{Expr, Stmt};
+use aelys_syntax::{Expr, Span, Stmt};
 
 impl TypeInference {
     pub(super) fn infer_if_stmt(
@@ -94,6 +94,37 @@ impl TypeInference {
             end: typed_end,
             inclusive,
             step: Box::new(typed_step),
+            body: Box::new(typed_body),
+        }
+    }
+
+    pub(super) fn infer_for_each_stmt(
+        &mut self,
+        iterator: &str,
+        iterable: &Expr,
+        body: &Stmt,
+        _span: Span,
+    ) -> TypedStmtKind {
+        let typed_iterable = self.infer_expr(iterable);
+
+        let elem_type = match &typed_iterable.ty {
+            InferType::String => InferType::String,
+            InferType::Vec(inner) => (**inner).clone(),
+            InferType::Array(inner) => (**inner).clone(),
+            InferType::Dynamic => InferType::Dynamic,
+            _ => InferType::Dynamic,
+        };
+
+        self.env.push_scope();
+        self.env
+            .define_local(iterator.to_string(), elem_type.clone());
+        let typed_body = self.infer_stmt(body);
+        self.env.pop_scope();
+
+        TypedStmtKind::ForEach {
+            iterator: iterator.to_string(),
+            iterable: typed_iterable,
+            elem_type,
             body: Box::new(typed_body),
         }
     }

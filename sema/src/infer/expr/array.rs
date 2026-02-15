@@ -128,6 +128,7 @@ impl TypeInference {
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
+            InferType::String => InferType::String,
             InferType::Dynamic => InferType::Dynamic,
             InferType::Var(_) => self.type_gen.fresh(),
             _ => InferType::Dynamic,

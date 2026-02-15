@@ -70,6 +70,10 @@ impl TypeInference {
                 }
                 self.collect_captures_from_stmt(body, param_names, captures, seen);
             }
+            TypedStmtKind::ForEach { iterable, body, .. } => {
+                self.collect_captures_inner(iterable, param_names, captures, seen);
+                self.collect_captures_from_stmt(body, param_names, captures, seen);
+            }
             TypedStmtKind::Return(Some(expr)) => {
                 self.collect_captures_inner(expr, param_names, captures, seen);
             }

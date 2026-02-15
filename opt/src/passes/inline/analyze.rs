@@ -181,6 +181,10 @@ fn collect_calls_in_stmt(stmt: &TypedStmt, calls: &mut HashSet<String>) {
             }
             collect_calls_in_stmt(body, calls);
         }
+        TypedStmtKind::ForEach { iterable, body, .. } => {
+            collect_calls_in_expr(iterable, calls);
+            collect_calls_in_stmt(body, calls);
+        }
         TypedStmtKind::Return(Some(e)) => collect_calls_in_expr(e, calls),
         TypedStmtKind::Function(f) => {
             for s in &f.body {
@@ -304,6 +308,10 @@ fn count_calls_in_stmt(stmt: &TypedStmt, counts: &mut HashMap<String, usize>) {
             }
             count_calls_in_stmt(body, counts);
         }
+        TypedStmtKind::ForEach { iterable, body, .. } => {
+            count_calls_in_expr(iterable, counts);
+            count_calls_in_stmt(body, counts);
+        }
         TypedStmtKind::Return(Some(e)) => count_calls_in_expr(e, counts),
         TypedStmtKind::Function(f) => {
             for s in &f.body {
@@ -402,6 +410,7 @@ fn count_stmt_size(stmt: &TypedStmt) -> usize {
         }
         TypedStmtKind::While { body, .. } => 1 + count_stmt_size(body),
         TypedStmtKind::For { body, .. } => 1 + count_stmt_size(body),
+        TypedStmtKind::ForEach { body, .. } => 1 + count_stmt_size(body),
         TypedStmtKind::Function(f) => f.body.iter().map(count_stmt_size).sum(),
         _ => 1,
     }

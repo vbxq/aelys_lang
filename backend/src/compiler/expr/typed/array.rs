@@ -133,6 +133,7 @@ impl Compiler {
                 OpCode::ArrayLoadB,
                 OpCode::ArrayLoadP,
             ),
+            InferType::String => OpCode::StringLoadChar,
             _ => OpCode::VecLoadP,
         };
 

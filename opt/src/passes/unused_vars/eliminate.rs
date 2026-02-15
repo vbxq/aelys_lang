@@ -50,7 +50,9 @@ fn eliminate_unused_in_stmt(
                 eliminate_unused_in_stmt(else_b, used_vars, stats);
             }
         }
-        TypedStmtKind::While { body, .. } | TypedStmtKind::For { body, .. } => {
+        TypedStmtKind::While { body, .. }
+        | TypedStmtKind::For { body, .. }
+        | TypedStmtKind::ForEach { body, .. } => {
             eliminate_unused_in_stmt(body, used_vars, stats);
         }
         TypedStmtKind::Function(func) => eliminate_unused_in_function(func, used_vars, stats),
