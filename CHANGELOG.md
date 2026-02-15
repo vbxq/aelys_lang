@@ -4,11 +4,11 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
 
-**0.19.21-a**
+**0.19.11-a**
 - String indexing with `s[i]` (unicode-aware, returns single-character string)
 - `for c in "hello" { }` iteration syntax
 
-**0.19.20-a** (i'll squash all of these updates)
+**0.19.10-a** (i'll squash all of these updates)
 - fn foo(mut param: type) now working
 
 **0.19.9-a** (not a "real" update again sorry, needed a new tag
