@@ -145,8 +145,8 @@ impl VM {
 
                 // Control flow operations: Not(17), Jump(18), JumpIf(19), JumpIfNot(20),
                 // ForLoopI(40), ForLoopIInc(41), LtImm(44)-GeImm(47), WhileLoopLt(48),
-                // StringForLoop(177)
-                17..=20 | 40..=41 | 44..=48 | 177 => {
+                // StringForLoop(177), VecForLoop(178), ArrayForLoop(179)
+                17..=20 | 40..=41 | 44..=48 | 177..=179 => {
                     include!("ops/control_flow.inc");
                 }
 
