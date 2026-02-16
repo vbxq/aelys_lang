@@ -1,7 +1,8 @@
 mod common;
 
 use aelys_bytecode::{AelysArray, AelysVec, ArrayData, TypeTag, Value};
-use common::{assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, assert_aelys_str, run_aelys,
+use common::{
+    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, assert_aelys_str, run_aelys,
     run_aelys_ok,
 };
 

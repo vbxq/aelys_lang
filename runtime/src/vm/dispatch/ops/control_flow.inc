@@ -170,15 +170,12 @@ match opcode_byte {
         let vec_ref = GcRef::new(vec_val.as_ptr().unwrap_or(0));
         if let Some(obj) = self.heap.get(vec_ref)
             && let ObjectKind::Vec(v) = &obj.kind
+            && (index as usize) < v.len()
+            && let Some(elem) = v.get(index as usize)
         {
-            if (index as usize) < v.len() {
-                if let Some(elem) = v.get(index as usize) {
-                    reg_set!(elem_idx, elem);
-                    reg_set!(index_idx, Value::int(index + 1));
-                    ip = (ip as isize + imm as isize) as usize;
-                }
-            }
-            // else: index >= len, loop ends (don't jump)
+            reg_set!(elem_idx, elem);
+            reg_set!(index_idx, Value::int(index + 1));
+            ip = (ip as isize + imm as isize) as usize;
         }
     }
 
@@ -195,15 +192,12 @@ match opcode_byte {
         let arr_ref = GcRef::new(arr_val.as_ptr().unwrap_or(0));
         if let Some(obj) = self.heap.get(arr_ref)
             && let ObjectKind::Array(a) = &obj.kind
+            && (index as usize) < a.len()
+            && let Some(elem) = a.get(index as usize)
         {
-            if (index as usize) < a.len() {
-                if let Some(elem) = a.get(index as usize) {
-                    reg_set!(elem_idx, elem);
-                    reg_set!(index_idx, Value::int(index + 1));
-                    ip = (ip as isize + imm as isize) as usize;
-                }
-            }
-            // else: index >= len, loop ends (don't jump)
+            reg_set!(elem_idx, elem);
+            reg_set!(index_idx, Value::int(index + 1));
+            ip = (ip as isize + imm as isize) as usize;
         }
     }
 

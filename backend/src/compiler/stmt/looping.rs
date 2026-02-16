@@ -154,15 +154,32 @@ impl Compiler {
     ) -> Result<()> {
         match &iterable.ty {
             InferType::String => self.compile_string_for_each(iterator, iterable, body, span),
-            InferType::Vec(inner) => {
-                self.compile_collection_for_each(iterator, iterable, inner, body, OpCode::VecForLoop, span)
-            }
-            InferType::Array(inner) => {
-                self.compile_collection_for_each(iterator, iterable, inner, body, OpCode::ArrayForLoop, span)
-            }
+            InferType::Vec(inner) => self.compile_collection_for_each(
+                iterator,
+                iterable,
+                inner,
+                body,
+                OpCode::VecForLoop,
+                span,
+            ),
+            InferType::Array(inner) => self.compile_collection_for_each(
+                iterator,
+                iterable,
+                inner,
+                body,
+                OpCode::ArrayForLoop,
+                span,
+            ),
             InferType::Dynamic | InferType::Var(_) => {
                 // dynamic: default to VecForLoop (works for both at runtime via object kind)
-                self.compile_collection_for_each(iterator, iterable, &InferType::Dynamic, body, OpCode::VecForLoop, span)
+                self.compile_collection_for_each(
+                    iterator,
+                    iterable,
+                    &InferType::Dynamic,
+                    body,
+                    OpCode::VecForLoop,
+                    span,
+                )
             }
             _ => Err(aelys_common::AelysError::Compile(CompileError::new(
                 CompileErrorKind::TypeInferenceError(format!(

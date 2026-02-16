@@ -143,7 +143,9 @@ pub fn run_file_full(
     compiler_native_globals.extend(vm.repl_known_native_globals().iter().cloned());
     let mut compiler_symbol_origins = imports.symbol_origins;
     for (k, v) in vm.repl_symbol_origins() {
-        compiler_symbol_origins.entry(k.clone()).or_insert_with(|| v.clone());
+        compiler_symbol_origins
+            .entry(k.clone())
+            .or_insert_with(|| v.clone());
     }
 
     let mut compiler = Compiler::with_modules(

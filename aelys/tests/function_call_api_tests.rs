@@ -92,12 +92,7 @@ fn test_get_function_not_found() {
 fn test_call_function_with_globals() {
     let mut vm = new_vm().unwrap();
     run_with_vm(&mut vm, "let mut counter = 0", "init").unwrap();
-    run_with_vm(
-        &mut vm,
-        "fn increment(n) { counter += n; counter }",
-        "def",
-    )
-    .unwrap();
+    run_with_vm(&mut vm, "fn increment(n) { counter += n; counter }", "def").unwrap();
 
     let result1 = call_function(&mut vm, "increment", &[Value::int(5)]).unwrap();
     assert_eq!(result1.as_int(), Some(5));

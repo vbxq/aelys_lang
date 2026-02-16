@@ -623,7 +623,10 @@ sin(0)
     );
 
     let result = run_file(&main_path);
-    assert!(result.is_ok(), "sin() should be available from auto-registration");
+    assert!(
+        result.is_ok(),
+        "sin() should be available from auto-registration"
+    );
 }
 
 #[test]

@@ -77,7 +77,8 @@ impl VM {
         }
 
         // IO, math, convert, time: qualified + unqualified aliases
-        let auto_modules: &[(&str, fn(&mut VM) -> Result<_, _>)] = &[
+        type RegFn = fn(&mut VM) -> Result<crate::stdlib::StdModuleExports, RuntimeError>;
+        let auto_modules: &[(&str, RegFn)] = &[
             ("io", crate::stdlib::io::register),
             ("math", crate::stdlib::math::register),
             ("convert", crate::stdlib::convert::register),
@@ -94,8 +95,7 @@ impl VM {
                 vm.repl_known_globals.insert(name.clone());
                 vm.repl_known_native_globals.insert(name.clone());
                 vm.repl_known_native_globals.insert(qualified.clone());
-                vm.repl_symbol_origins
-                    .insert(name.clone(), qualified);
+                vm.repl_symbol_origins.insert(name.clone(), qualified);
             }
         }
 

@@ -62,14 +62,11 @@ impl Compiler {
             }
 
             // Handle String methods: s.method(args) → string::method(s, args...)
-            if matches!(&object.ty, InferType::String) {
-                if let Some(expected_args) = Self::string_method_arity(member) {
-                    if args.len() == expected_args {
-                        return self.compile_string_method_call(
-                            object, member, args, dest, span,
-                        );
-                    }
-                }
+            if matches!(&object.ty, InferType::String)
+                && let Some(expected_args) = Self::string_method_arity(member)
+                && args.len() == expected_args
+            {
+                return self.compile_string_method_call(object, member, args, dest, span);
             }
 
             // Handle to_string() on any type
@@ -172,12 +169,10 @@ impl Compiler {
                 }
 
                 // String methods on dynamic types (excludes len, handled above)
-                if let Some(expected_args) = Self::string_method_arity(member) {
-                    if args.len() == expected_args {
-                        return self.compile_string_method_call(
-                            object, member, args, dest, span,
-                        );
-                    }
+                if let Some(expected_args) = Self::string_method_arity(member)
+                    && args.len() == expected_args
+                {
+                    return self.compile_string_method_call(object, member, args, dest, span);
                 }
             }
         }
@@ -293,13 +288,12 @@ impl Compiler {
     fn string_method_arity(method: &str) -> Option<usize> {
         match method {
             // 0-arg methods (only self)
-            "len" | "char_len" | "chars" | "bytes" | "to_upper" | "to_lower"
-            | "capitalize" | "trim" | "trim_start" | "trim_end" | "is_empty"
-            | "is_whitespace" | "is_numeric" | "is_alphabetic"
-            | "is_alphanumeric" | "reverse" | "lines" | "line_count" => Some(0),
+            "len" | "char_len" | "chars" | "bytes" | "to_upper" | "to_lower" | "capitalize"
+            | "trim" | "trim_start" | "trim_end" | "is_empty" | "is_whitespace" | "is_numeric"
+            | "is_alphabetic" | "is_alphanumeric" | "reverse" | "lines" | "line_count" => Some(0),
             // 1-arg methods (self + 1 arg)
-            "char_at" | "byte_at" | "contains" | "starts_with" | "ends_with"
-            | "find" | "rfind" | "count" | "split" | "repeat" | "concat" => Some(1),
+            "char_at" | "byte_at" | "contains" | "starts_with" | "ends_with" | "find" | "rfind"
+            | "count" | "split" | "repeat" | "concat" => Some(1),
             // 2-arg methods (self + 2 args)
             "substr" | "replace" | "replace_first" | "pad_left" | "pad_right" => Some(2),
             // join takes self + 1 arg (separator)
@@ -329,7 +323,11 @@ impl Compiler {
                 Some(s) => s,
                 None => {
                     return self.compile_string_method_call_fallback(
-                        object, &qualified_name, args, dest, span,
+                        object,
+                        &qualified_name,
+                        args,
+                        dest,
+                        span,
                     );
                 }
             };
@@ -447,8 +445,9 @@ impl Compiler {
 
         if global_idx <= 255 {
             let arg_start = match dest.checked_add(1) {
-                Some(s) if (s as usize) < self.register_pool.len()
-                    && !self.register_pool[s as usize] =>
+                Some(s)
+                    if (s as usize) < self.register_pool.len()
+                        && !self.register_pool[s as usize] =>
                 {
                     s
                 }
@@ -464,13 +463,7 @@ impl Compiler {
 
             self.compile_typed_expr(object, arg_start)?;
 
-            self.emit_call_global_cached(
-                dest,
-                global_idx as u8,
-                1,
-                qualified_name,
-                span,
-            );
+            self.emit_call_global_cached(dest, global_idx as u8, 1, qualified_name, span);
 
             self.register_pool[arg_start as usize] = false;
             return Ok(());
