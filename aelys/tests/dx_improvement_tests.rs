@@ -4,13 +4,13 @@ use common::{assert_aelys_bool, assert_aelys_int, assert_aelys_str, run_aelys};
 
 #[test]
 fn test_print_no_newline() {
-    let result = run_aelys(r#"needs std.io; print("hello"); 42"#);
+    let result = run_aelys(r#"print("hello"); 42"#);
     assert_eq!(result.as_int(), Some(42));
 }
 
 #[test]
 fn test_println_works() {
-    let result = run_aelys(r#"needs std.io; println("hello"); 42"#);
+    let result = run_aelys(r#"println("hello"); 42"#);
     assert_eq!(result.as_int(), Some(42));
 }
 
@@ -21,7 +21,7 @@ fn test_for_each_vec_int() {
         let v = Vec[1, 2, 3]
         let mut sum = 0
         for item in v {
-            sum = sum + item
+            sum += item
         }
         sum
         "#,
@@ -39,7 +39,7 @@ fn test_for_each_vec_string() {
         v.push("c")
         let mut count = 0
         for item in v {
-            count = count + 1
+            count++
         }
         count
         "#,
@@ -54,7 +54,7 @@ fn test_for_each_vec_float() {
         let v = Vec[1.0, 2.0, 3.0]
         let mut sum = 0.0
         for x in v {
-            sum = sum + x
+            sum += x
         }
         sum
         "#,
@@ -69,7 +69,7 @@ fn test_for_each_vec_in_function() {
         fn sum_vec(v) {
             let mut total = 0
             for item in v {
-                total = total + item
+                total += item
             }
             return total
         }
@@ -88,7 +88,7 @@ fn test_for_each_vec_empty() {
         let v = Vec[]
         let mut count = 0
         for item in v {
-            count = count + 1
+            count++
         }
         count
         "#,
@@ -104,7 +104,7 @@ fn test_for_each_vec_break() {
         let mut sum = 0
         for item in v {
             if item == 3 { break }
-            sum = sum + item
+            sum += item
         }
         sum
         "#,
@@ -120,7 +120,7 @@ fn test_for_each_vec_continue() {
         let mut sum = 0
         for item in v {
             if item == 3 { continue }
-            sum = sum + item
+            sum += item
         }
         sum
         "#,
@@ -135,7 +135,7 @@ fn test_for_each_array_int() {
         let arr = [10, 20, 30]
         let mut sum = 0
         for item in arr {
-            sum = sum + item
+            sum += item
         }
         sum
         "#,
@@ -150,7 +150,7 @@ fn test_for_each_array_empty() {
         let arr = []
         let mut count = 0
         for item in arr {
-            count = count + 1
+            count++
         }
         count
         "#,
@@ -166,7 +166,7 @@ fn test_for_each_array_bool() {
         let arr = [true, false, true, true, false]
         let mut count = 0
         for item in arr {
-            if item { count = count + 1 }
+            if item { count++ }
         }
         count
         "#,
@@ -182,7 +182,7 @@ fn test_for_each_array_break() {
         let mut sum = 0
         for item in arr {
             if item > 3 { break }
-            sum = sum + item
+            sum += item
         }
         sum
         "#,
@@ -197,7 +197,7 @@ fn test_for_each_array_float() {
         let arr = [1.5, 2.5, 3.0]
         let mut sum = 0.0
         for x in arr {
-            sum = sum + x
+            sum += x
         }
         sum
         "#,
@@ -213,7 +213,7 @@ fn test_for_each_nested_vec() {
         let mut sum = 0
         for row in rows {
             for item in row {
-                sum = sum + item
+                sum += item
             }
         }
         sum

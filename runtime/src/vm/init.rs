@@ -63,9 +63,42 @@ impl VM {
             repl_symbol_origins: HashMap::new(),
         };
         super::builtins::register_builtins(&mut vm)?;
-        // auto-register string module so s.method() works without `needs std.string`
-        // TODO: no but.. this feels wrong..
-        crate::stdlib::string::register(&mut vm)?;
+
+        // Auto-register safe stdlib modules so they work without `needs std.X`.
+        // String: qualified only (dot-syntax compiles s.trim() → string::trim(s))
+        let string_exports = crate::stdlib::string::register(&mut vm)?;
+        vm.repl_module_aliases.insert("string".to_string());
+        for name in &string_exports.all_exports {
+            let qualified = format!("string::{}", name);
+            vm.repl_known_globals.insert(qualified.clone());
+            vm.repl_known_native_globals.insert(qualified.clone());
+            vm.repl_symbol_origins
+                .insert(name.clone(), format!("string::{}", name));
+        }
+
+        // IO, math, convert, time: qualified + unqualified aliases
+        let auto_modules: &[(&str, fn(&mut VM) -> Result<_, _>)] = &[
+            ("io", crate::stdlib::io::register),
+            ("math", crate::stdlib::math::register),
+            ("convert", crate::stdlib::convert::register),
+            ("time", crate::stdlib::time::register),
+        ];
+        for &(module_name, register_fn) in auto_modules {
+            let exports = register_fn(&mut vm)?;
+            vm.repl_module_aliases.insert(module_name.to_string());
+            for name in &exports.all_exports {
+                let qualified = format!("{}::{}", module_name, name);
+                if let Some(value) = vm.get_global(&qualified) {
+                    vm.set_global(name.clone(), value);
+                }
+                vm.repl_known_globals.insert(name.clone());
+                vm.repl_known_native_globals.insert(name.clone());
+                vm.repl_known_native_globals.insert(qualified.clone());
+                vm.repl_symbol_origins
+                    .insert(name.clone(), qualified);
+            }
+        }
+
         Ok(vm)
     }
 }

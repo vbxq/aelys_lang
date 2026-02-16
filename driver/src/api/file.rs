@@ -81,11 +81,16 @@ pub fn run_file_full(
     for builtin in BUILTIN_NAMES {
         all_known_globals.insert(builtin.to_string());
     }
+    // Include auto-registered stdlib globals (available without `needs`)
+    all_known_globals.extend(vm.repl_known_globals().iter().cloned());
+
+    let mut all_module_aliases = imports.module_aliases.clone();
+    all_module_aliases.extend(vm.repl_module_aliases().iter().cloned());
 
     let inference_result = TypeInference::infer_program_full(
         main_stmts,
         src.clone(),
-        imports.module_aliases.clone(),
+        all_module_aliases,
         all_known_globals,
     )
     .map_err(|errors| {
@@ -130,13 +135,24 @@ pub fn run_file_full(
         .collect();
     warnings.extend(opt_warnings);
 
+    let mut compiler_known_globals = imports.known_globals;
+    compiler_known_globals.extend(vm.repl_known_globals().iter().cloned());
+    let mut compiler_module_aliases = imports.module_aliases;
+    compiler_module_aliases.extend(vm.repl_module_aliases().iter().cloned());
+    let mut compiler_native_globals = imports.known_native_globals;
+    compiler_native_globals.extend(vm.repl_known_native_globals().iter().cloned());
+    let mut compiler_symbol_origins = imports.symbol_origins;
+    for (k, v) in vm.repl_symbol_origins() {
+        compiler_symbol_origins.entry(k.clone()).or_insert_with(|| v.clone());
+    }
+
     let mut compiler = Compiler::with_modules(
         None,
         src.clone(),
-        imports.module_aliases,
-        imports.known_globals,
-        imports.known_native_globals,
-        imports.symbol_origins,
+        compiler_module_aliases,
+        compiler_known_globals,
+        compiler_native_globals,
+        compiler_symbol_origins,
     );
     compiler.next_call_site_slot = imports.next_call_site_slot;
     let (mut function, mut compile_heap, _globals) = compiler.compile_typed(&typed_program)?;

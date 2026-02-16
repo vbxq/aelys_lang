@@ -484,7 +484,10 @@ fn native_join(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
     let base = get_string(vm, args[0], "fs.join")?.to_string();
     let rel = get_string(vm, args[1], "fs.join")?.to_string();
 
-    if Path::new(&rel).is_absolute() {
+    // Use has_root() instead of is_absolute() — on Windows, is_absolute()
+    // requires a drive letter (C:\), missing paths like /etc/passwd.
+    // has_root() catches both /foo and C:\foo on all platforms.
+    if Path::new(&rel).has_root() {
         return Err(fs_error(vm, "fs.join", "path must not be absolute".into()));
     }
 

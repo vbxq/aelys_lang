@@ -4,8 +4,7 @@ use common::*;
 #[test]
 fn time_now_returns_reasonable_value() {
     let code = r#"
-needs std.time
-let t = time.now()
+let t = now()
 if t > 1600000000.0 and t < 2000000000.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -14,8 +13,7 @@ if t > 1600000000.0 and t < 2000000000.0 { 1 } else { 0 }
 #[test]
 fn time_now_ms_positive() {
     let code = r#"
-needs std.time
-let t = time.now_ms()
+let t = now_ms()
 if t > 0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -24,9 +22,8 @@ if t > 0 { 1 } else { 0 }
 #[test]
 fn time_now_us_greater_than_ms() {
     let code = r#"
-needs std.time
-let ms = time.now_ms()
-let us = time.now_us()
+let ms = now_ms()
+let us = now_us()
 if us >= ms { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -35,9 +32,8 @@ if us >= ms { 1 } else { 0 }
 #[test]
 fn timer_and_elapsed() {
     let code = r#"
-needs std.time
-let t = time.timer()
-let e = time.elapsed(t)
+let t = timer()
+let e = elapsed(t)
 if e >= 0.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -46,10 +42,9 @@ if e >= 0.0 { 1 } else { 0 }
 #[test]
 fn timer_elapsed_ms() {
     let code = r#"
-needs std.time
-let t = time.timer()
-time.sleep(10)
-let e = time.elapsed_ms(t)
+let t = timer()
+sleep(10)
+let e = elapsed_ms(t)
 if e >= 5 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -58,9 +53,8 @@ if e >= 5 { 1 } else { 0 }
 #[test]
 fn timer_elapsed_us() {
     let code = r#"
-needs std.time
-let t = time.timer()
-let e = time.elapsed_us(t)
+let t = timer()
+let e = elapsed_us(t)
 if e >= 0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -69,11 +63,10 @@ if e >= 0 { 1 } else { 0 }
 #[test]
 fn timer_reset() {
     let code = r#"
-needs std.time
-let t = time.timer()
-time.sleep(20)
-time.reset(t)
-let e = time.elapsed_ms(t)
+let t = timer()
+sleep(20)
+reset(t)
+let e = elapsed_ms(t)
 if e < 15 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -82,8 +75,7 @@ if e < 15 { 1 } else { 0 }
 #[test]
 fn timer_invalid_handle() {
     let code = r#"
-needs std.time
-time.elapsed(999)
+elapsed(999)
 "#;
     assert_aelys_error_contains(code, "invalid");
 }
@@ -91,8 +83,7 @@ time.elapsed(999)
 #[test]
 fn reset_invalid_handle() {
     let code = r#"
-needs std.time
-time.reset(777)
+reset(777)
 "#;
     assert_aelys_error_contains(code, "invalid");
 }
@@ -100,8 +91,7 @@ time.reset(777)
 #[test]
 fn sleep_zero_ms() {
     let code = r#"
-needs std.time
-time.sleep(0)
+sleep(0)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -110,8 +100,7 @@ time.sleep(0)
 #[test]
 fn sleep_negative_ignored() {
     let code = r#"
-needs std.time
-time.sleep(-100)
+sleep(-100)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -120,8 +109,7 @@ time.sleep(-100)
 #[test]
 fn sleep_us_works() {
     let code = r#"
-needs std.time
-time.sleep_us(1000)
+sleep_us(1000)
 1
 "#;
     assert_aelys_int(code, 1);
@@ -130,8 +118,7 @@ time.sleep_us(1000)
 #[test]
 fn year_is_current() {
     let code = r#"
-needs std.time
-let y = time.year()
+let y = year()
 if y >= 2024 and y <= 2030 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -140,8 +127,7 @@ if y >= 2024 and y <= 2030 { 1 } else { 0 }
 #[test]
 fn month_in_range() {
     let code = r#"
-needs std.time
-let m = time.month()
+let m = month()
 if m >= 1 and m <= 12 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -150,8 +136,7 @@ if m >= 1 and m <= 12 { 1 } else { 0 }
 #[test]
 fn day_in_range() {
     let code = r#"
-needs std.time
-let d = time.day()
+let d = day()
 if d >= 1 and d <= 31 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -160,8 +145,7 @@ if d >= 1 and d <= 31 { 1 } else { 0 }
 #[test]
 fn hour_in_range() {
     let code = r#"
-needs std.time
-let h = time.hour()
+let h = hour()
 if h >= 0 and h < 24 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -170,8 +154,7 @@ if h >= 0 and h < 24 { 1 } else { 0 }
 #[test]
 fn minute_in_range() {
     let code = r#"
-needs std.time
-let m = time.minute()
+let m = minute()
 if m >= 0 and m < 60 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -180,8 +163,7 @@ if m >= 0 and m < 60 { 1 } else { 0 }
 #[test]
 fn second_in_range() {
     let code = r#"
-needs std.time
-let s = time.second()
+let s = second()
 if s >= 0 and s < 60 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -190,8 +172,7 @@ if s >= 0 and s < 60 { 1 } else { 0 }
 #[test]
 fn weekday_in_range() {
     let code = r#"
-needs std.time
-let w = time.weekday()
+let w = weekday()
 if w >= 0 and w < 7 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -200,8 +181,7 @@ if w >= 0 and w < 7 { 1 } else { 0 }
 #[test]
 fn yearday_in_range() {
     let code = r#"
-needs std.time
-let yd = time.yearday()
+let yd = yearday()
 if yd >= 1 and yd <= 366 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -210,8 +190,7 @@ if yd >= 1 and yd <= 366 { 1 } else { 0 }
 #[test]
 fn format_year() {
     let code = r#"
-needs std.time
-let s = time.format("%Y")
+let s = format("%Y")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -220,8 +199,7 @@ let s = time.format("%Y")
 #[test]
 fn format_complex() {
     let code = r#"
-needs std.time
-let s = time.format("%Y-%m-%d %H:%M:%S")
+let s = format("%Y-%m-%d %H:%M:%S")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -230,8 +208,7 @@ let s = time.format("%Y-%m-%d %H:%M:%S")
 #[test]
 fn iso_format() {
     let code = r#"
-needs std.time
-let s = time.iso()
+let s = iso()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -240,8 +217,7 @@ let s = time.iso()
 #[test]
 fn date_format() {
     let code = r#"
-needs std.time
-let s = time.date()
+let s = date()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -250,8 +226,7 @@ let s = time.date()
 #[test]
 fn time_str_format() {
     let code = r#"
-needs std.time
-let s = time.time_str()
+let s = time_str()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -260,8 +235,7 @@ let s = time.time_str()
 #[test]
 fn elapsed_ms_invalid_handle() {
     let code = r#"
-needs std.time
-time.elapsed_ms(12345)
+elapsed_ms(12345)
 "#;
     assert_aelys_error_contains(code, "invalid");
 }
@@ -269,8 +243,7 @@ time.elapsed_ms(12345)
 #[test]
 fn elapsed_us_invalid_handle() {
     let code = r#"
-needs std.time
-time.elapsed_us(54321)
+elapsed_us(54321)
 "#;
     let err = run_aelys_err(code);
     assert!(err.contains("invalid") || err.contains("handle"));
@@ -279,10 +252,9 @@ time.elapsed_us(54321)
 #[test]
 fn sleep_precise() {
     let code = r#"
-needs std.time
-let t = time.timer()
-time.sleep(50)
-let e = time.elapsed_ms(t)
+let t = timer()
+sleep(50)
+let e = elapsed_ms(t)
 if e >= 45 and e < 200 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -291,12 +263,11 @@ if e >= 45 and e < 200 { 1 } else { 0 }
 #[test]
 fn multiple_timers() {
     let code = r#"
-needs std.time
-let t1 = time.timer()
-time.sleep(10)
-let t2 = time.timer()
-let e1 = time.elapsed_ms(t1)
-let e2 = time.elapsed_ms(t2)
+let t1 = timer()
+sleep(10)
+let t2 = timer()
+let e1 = elapsed_ms(t1)
+let e2 = elapsed_ms(t2)
 if e1 > e2 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -305,8 +276,7 @@ if e1 > e2 { 1 } else { 0 }
 #[test]
 fn format_percent_escape() {
     let code = r#"
-needs std.time
-let s = time.format("100%%")
+let s = format("100%%")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -315,8 +285,7 @@ let s = time.format("100%%")
 #[test]
 fn format_weekday_name() {
     let code = r#"
-needs std.time
-let s = time.format("%a")
+let s = format("%a")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -325,8 +294,7 @@ let s = time.format("%a")
 #[test]
 fn format_month_name() {
     let code = r#"
-needs std.time
-let s = time.format("%b")
+let s = format("%b")
 42
 "#;
     assert_aelys_int(code, 42);

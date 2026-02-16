@@ -160,7 +160,7 @@ fn test_dce_while_false() {
     let code = r#"
         let mut x = 10
         while false {
-            x = x + 1  // Never executed
+            x++  // Never executed
         }
         x
     "#;
@@ -238,7 +238,7 @@ fn test_optimization_preserves_semantics_loops() {
     let code = r#"
         let mut sum = 0
         for i in 1..5 {
-            sum = sum + i
+            sum += i
         }
         sum
     "#;
@@ -355,7 +355,7 @@ fn test_global_const_prop_chained_dependency() {
 fn test_global_const_prop_mutable_not_propagated() {
     let code = r#"
         let mut X: int = 42
-        X = X + 1
+        X++
         X
     "#;
     let result = run_with_opt(code, OptimizationLevel::Standard);
@@ -506,7 +506,7 @@ fn test_local_const_prop_mutable_not_propagated() {
     let code = r#"
         fn test() -> int {
             let mut x = 5
-            x = x + 1
+            x++
             x
         }
         test()

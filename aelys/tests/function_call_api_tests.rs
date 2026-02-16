@@ -94,7 +94,7 @@ fn test_call_function_with_globals() {
     run_with_vm(&mut vm, "let mut counter = 0", "init").unwrap();
     run_with_vm(
         &mut vm,
-        "fn increment(n) { counter = counter + n; counter }",
+        "fn increment(n) { counter += n; counter }",
         "def",
     )
     .unwrap();

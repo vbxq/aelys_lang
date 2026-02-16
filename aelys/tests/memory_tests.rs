@@ -223,13 +223,13 @@ let p = alloc(10)
 let mut i = 0
 while i < 10 {
     store(p, i, i * 2)
-    i = i + 1
+    i++
 }
 let sum = 0
 let mut j = 0
 while j < 10 {
     let val = load(p, j)
-    j = j + 1
+    j++
 }
 free(p)
 load(p, 0)

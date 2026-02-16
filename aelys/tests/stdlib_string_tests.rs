@@ -4,8 +4,7 @@ use common::*;
 #[test]
 fn string_len_basic() {
     let code = r#"
-needs std.string
-string.len("hello")
+"hello".len()
 "#;
     assert_aelys_int(code, 5);
 }
@@ -13,8 +12,7 @@ string.len("hello")
 #[test]
 fn string_len_empty() {
     let code = r#"
-needs std.string
-string.len("")
+"".len()
 "#;
     assert_aelys_int(code, 0);
 }
@@ -22,8 +20,7 @@ string.len("")
 #[test]
 fn string_char_len_ascii() {
     let code = r#"
-needs std.string
-string.char_len("hello")
+"hello".char_len()
 "#;
     assert_aelys_int(code, 5);
 }
@@ -31,8 +28,7 @@ string.char_len("hello")
 #[test]
 fn string_char_len_unicode() {
     let code = r#"
-needs std.string
-string.char_len("héllo")
+"héllo".char_len()
 "#;
     assert_aelys_int(code, 5);
 }
@@ -40,8 +36,7 @@ string.char_len("héllo")
 #[test]
 fn string_char_at_valid() {
     let code = r#"
-needs std.string
-let c = string.char_at("hello", 1)
+let c = "hello".char_at(1)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -50,8 +45,7 @@ let c = string.char_at("hello", 1)
 #[test]
 fn string_char_at_negative() {
     let code = r#"
-needs std.string
-let c = string.char_at("hello", -1)
+let c = "hello".char_at(-1)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -60,8 +54,7 @@ let c = string.char_at("hello", -1)
 #[test]
 fn string_char_at_out_of_bounds() {
     let code = r#"
-needs std.string
-let c = string.char_at("hello", 100)
+let c = "hello".char_at(100)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -70,8 +63,7 @@ let c = string.char_at("hello", 100)
 #[test]
 fn string_byte_at_valid() {
     let code = r#"
-needs std.string
-string.byte_at("ABC", 0)
+"ABC".byte_at(0)
 "#;
     assert_aelys_int(code, 65); // 'A'
 }
@@ -79,8 +71,7 @@ string.byte_at("ABC", 0)
 #[test]
 fn string_byte_at_out_of_bounds() {
     let code = r#"
-needs std.string
-string.byte_at("hi", 10)
+"hi".byte_at(10)
 "#;
     assert_aelys_int(code, -1);
 }
@@ -88,8 +79,7 @@ string.byte_at("hi", 10)
 #[test]
 fn string_byte_at_negative() {
     let code = r#"
-needs std.string
-string.byte_at("test", -1)
+"test".byte_at(-1)
 "#;
     assert_aelys_int(code, -1);
 }
@@ -97,8 +87,7 @@ string.byte_at("test", -1)
 #[test]
 fn string_substr_basic() {
     let code = r#"
-needs std.string
-let s = string.substr("hello world", 0, 5)
+let s = "hello world".substr(0, 5)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -107,8 +96,7 @@ let s = string.substr("hello world", 0, 5)
 #[test]
 fn string_substr_negative_start() {
     let code = r#"
-needs std.string
-let s = string.substr("hello", -1, 3)
+let s = "hello".substr(-1, 3)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -117,8 +105,7 @@ let s = string.substr("hello", -1, 3)
 #[test]
 fn string_substr_negative_len() {
     let code = r#"
-needs std.string
-let s = string.substr("hello", 0, -5)
+let s = "hello".substr(0, -5)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -127,8 +114,7 @@ let s = string.substr("hello", 0, -5)
 #[test]
 fn string_to_upper() {
     let code = r#"
-needs std.string
-let s = string.to_upper("hello")
+let s = "hello".to_upper()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -137,8 +123,7 @@ let s = string.to_upper("hello")
 #[test]
 fn string_to_lower() {
     let code = r#"
-needs std.string
-let s = string.to_lower("HELLO")
+let s = "HELLO".to_lower()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -147,8 +132,7 @@ let s = string.to_lower("HELLO")
 #[test]
 fn string_capitalize() {
     let code = r#"
-needs std.string
-let s = string.capitalize("hello")
+let s = "hello".capitalize()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -157,8 +141,7 @@ let s = string.capitalize("hello")
 #[test]
 fn string_capitalize_empty() {
     let code = r#"
-needs std.string
-let s = string.capitalize("")
+let s = "".capitalize()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -167,8 +150,7 @@ let s = string.capitalize("")
 #[test]
 fn string_contains_true() {
     let code = r#"
-needs std.string
-if string.contains("hello world", "wor") { 1 } else { 0 }
+if "hello world".contains("wor") { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -176,8 +158,7 @@ if string.contains("hello world", "wor") { 1 } else { 0 }
 #[test]
 fn string_contains_false() {
     let code = r#"
-needs std.string
-if string.contains("hello", "xyz") { 0 } else { 1 }
+if "hello".contains("xyz") { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -185,8 +166,7 @@ if string.contains("hello", "xyz") { 0 } else { 1 }
 #[test]
 fn string_starts_with_true() {
     let code = r#"
-needs std.string
-if string.starts_with("hello", "he") { 1 } else { 0 }
+if "hello".starts_with("he") { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -194,8 +174,7 @@ if string.starts_with("hello", "he") { 1 } else { 0 }
 #[test]
 fn string_starts_with_false() {
     let code = r#"
-needs std.string
-if string.starts_with("hello", "lo") { 0 } else { 1 }
+if "hello".starts_with("lo") { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -203,8 +182,7 @@ if string.starts_with("hello", "lo") { 0 } else { 1 }
 #[test]
 fn string_ends_with_true() {
     let code = r#"
-needs std.string
-if string.ends_with("hello", "lo") { 1 } else { 0 }
+if "hello".ends_with("lo") { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -212,8 +190,7 @@ if string.ends_with("hello", "lo") { 1 } else { 0 }
 #[test]
 fn string_ends_with_false() {
     let code = r#"
-needs std.string
-if string.ends_with("hello", "he") { 0 } else { 1 }
+if "hello".ends_with("he") { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -221,8 +198,7 @@ if string.ends_with("hello", "he") { 0 } else { 1 }
 #[test]
 fn string_find_exists() {
     let code = r#"
-needs std.string
-let pos = string.find("hello world", "wor")
+let pos = "hello world".find("wor")
 if pos >= 0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -231,8 +207,7 @@ if pos >= 0 { 1 } else { 0 }
 #[test]
 fn string_find_not_found() {
     let code = r#"
-needs std.string
-string.find("hello", "xyz")
+"hello".find("xyz")
 "#;
     assert_aelys_int(code, -1);
 }
@@ -240,8 +215,7 @@ string.find("hello", "xyz")
 #[test]
 fn string_rfind_exists() {
     let code = r#"
-needs std.string
-let pos = string.rfind("hello hello", "hello")
+let pos = "hello hello".rfind("hello")
 if pos > 0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -250,8 +224,7 @@ if pos > 0 { 1 } else { 0 }
 #[test]
 fn string_rfind_not_found() {
     let code = r#"
-needs std.string
-string.rfind("hello", "xyz")
+"hello".rfind("xyz")
 "#;
     assert_aelys_int(code, -1);
 }
@@ -259,8 +232,7 @@ string.rfind("hello", "xyz")
 #[test]
 fn string_count_occurrences() {
     let code = r#"
-needs std.string
-string.count("hello hello hello", "hello")
+"hello hello hello".count("hello")
 "#;
     assert_aelys_int(code, 3);
 }
@@ -268,8 +240,7 @@ string.count("hello hello hello", "hello")
 #[test]
 fn string_count_zero() {
     let code = r#"
-needs std.string
-string.count("hello", "xyz")
+"hello".count("xyz")
 "#;
     assert_aelys_int(code, 0);
 }
@@ -277,8 +248,7 @@ string.count("hello", "xyz")
 #[test]
 fn string_replace_all() {
     let code = r#"
-needs std.string
-let s = string.replace("hello hello", "hello", "hi")
+let s = "hello hello".replace("hello", "hi")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -287,8 +257,7 @@ let s = string.replace("hello hello", "hello", "hi")
 #[test]
 fn string_replace_first() {
     let code = r#"
-needs std.string
-let s = string.replace_first("hello hello", "hello", "hi")
+let s = "hello hello".replace_first("hello", "hi")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -297,8 +266,7 @@ let s = string.replace_first("hello hello", "hello", "hi")
 #[test]
 fn string_split_basic() {
     let code = r#"
-needs std.string
-let parts = string.split("a,b,c", ",")
+let parts = "a,b,c".split(",")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -307,8 +275,7 @@ let parts = string.split("a,b,c", ",")
 #[test]
 fn string_split_empty_separator() {
     let code = r#"
-needs std.string
-let parts = string.split("abc", "")
+let parts = "abc".split("")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -317,9 +284,8 @@ let parts = string.split("abc", "")
 #[test]
 fn string_join_basic() {
     let code = r#"
-needs std.string
 let parts = "a\nb\nc"
-let s = string.join(parts, ",")
+let s = parts.join(",")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -328,8 +294,7 @@ let s = string.join(parts, ",")
 #[test]
 fn string_repeat_positive() {
     let code = r#"
-needs std.string
-let s = string.repeat("ab", 3)
+let s = "ab".repeat(3)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -338,8 +303,7 @@ let s = string.repeat("ab", 3)
 #[test]
 fn string_repeat_zero() {
     let code = r#"
-needs std.string
-let s = string.repeat("abc", 0)
+let s = "abc".repeat(0)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -348,8 +312,7 @@ let s = string.repeat("abc", 0)
 #[test]
 fn string_repeat_negative() {
     let code = r#"
-needs std.string
-let s = string.repeat("abc", -5)
+let s = "abc".repeat(-5)
 42
 "#;
     assert_aelys_int(code, 42);
@@ -358,8 +321,7 @@ let s = string.repeat("abc", -5)
 #[test]
 fn string_reverse_basic() {
     let code = r#"
-needs std.string
-let s = string.reverse("abc")
+let s = "abc".reverse()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -368,8 +330,7 @@ let s = string.reverse("abc")
 #[test]
 fn string_reverse_unicode() {
     let code = r#"
-needs std.string
-let s = string.reverse("héllo")
+let s = "héllo".reverse()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -378,8 +339,7 @@ let s = string.reverse("héllo")
 #[test]
 fn string_concat_basic() {
     let code = r#"
-needs std.string
-let s = string.concat("hello", " world")
+let s = "hello".concat(" world")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -388,8 +348,7 @@ let s = string.concat("hello", " world")
 #[test]
 fn string_trim_whitespace() {
     let code = r#"
-needs std.string
-let s = string.trim("  hello  ")
+let s = "  hello  ".trim()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -398,8 +357,7 @@ let s = string.trim("  hello  ")
 #[test]
 fn string_trim_start() {
     let code = r#"
-needs std.string
-let s = string.trim_start("  hello")
+let s = "  hello".trim_start()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -408,8 +366,7 @@ let s = string.trim_start("  hello")
 #[test]
 fn string_trim_end() {
     let code = r#"
-needs std.string
-let s = string.trim_end("hello  ")
+let s = "hello  ".trim_end()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -418,8 +375,7 @@ let s = string.trim_end("hello  ")
 #[test]
 fn string_pad_left_basic() {
     let code = r#"
-needs std.string
-let s = string.pad_left("5", 3, "0")
+let s = "5".pad_left(3, "0")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -428,8 +384,7 @@ let s = string.pad_left("5", 3, "0")
 #[test]
 fn string_pad_left_already_wide() {
     let code = r#"
-needs std.string
-let s = string.pad_left("hello", 2, "x")
+let s = "hello".pad_left(2, "x")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -438,8 +393,7 @@ let s = string.pad_left("hello", 2, "x")
 #[test]
 fn string_pad_right_basic() {
     let code = r#"
-needs std.string
-let s = string.pad_right("hi", 5, ".")
+let s = "hi".pad_right(5, ".")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -448,8 +402,7 @@ let s = string.pad_right("hi", 5, ".")
 #[test]
 fn string_is_empty_true() {
     let code = r#"
-needs std.string
-if string.is_empty("") { 1 } else { 0 }
+if "".is_empty() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -457,8 +410,7 @@ if string.is_empty("") { 1 } else { 0 }
 #[test]
 fn string_is_empty_false() {
     let code = r#"
-needs std.string
-if string.is_empty("x") { 0 } else { 1 }
+if "x".is_empty() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -466,8 +418,7 @@ if string.is_empty("x") { 0 } else { 1 }
 #[test]
 fn string_is_whitespace_true() {
     let code = r#"
-needs std.string
-if string.is_whitespace("   ") { 1 } else { 0 }
+if "   ".is_whitespace() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -475,8 +426,7 @@ if string.is_whitespace("   ") { 1 } else { 0 }
 #[test]
 fn string_is_whitespace_false() {
     let code = r#"
-needs std.string
-if string.is_whitespace(" a ") { 0 } else { 1 }
+if " a ".is_whitespace() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -484,8 +434,7 @@ if string.is_whitespace(" a ") { 0 } else { 1 }
 #[test]
 fn string_is_whitespace_empty() {
     let code = r#"
-needs std.string
-if string.is_whitespace("") { 0 } else { 1 }
+if "".is_whitespace() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -493,8 +442,7 @@ if string.is_whitespace("") { 0 } else { 1 }
 #[test]
 fn string_is_numeric_true() {
     let code = r#"
-needs std.string
-if string.is_numeric("12345") { 1 } else { 0 }
+if "12345".is_numeric() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -502,8 +450,7 @@ if string.is_numeric("12345") { 1 } else { 0 }
 #[test]
 fn string_is_numeric_false() {
     let code = r#"
-needs std.string
-if string.is_numeric("12a34") { 0 } else { 1 }
+if "12a34".is_numeric() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -511,8 +458,7 @@ if string.is_numeric("12a34") { 0 } else { 1 }
 #[test]
 fn string_is_alphabetic_true() {
     let code = r#"
-needs std.string
-if string.is_alphabetic("hello") { 1 } else { 0 }
+if "hello".is_alphabetic() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -520,8 +466,7 @@ if string.is_alphabetic("hello") { 1 } else { 0 }
 #[test]
 fn string_is_alphabetic_false() {
     let code = r#"
-needs std.string
-if string.is_alphabetic("hello123") { 0 } else { 1 }
+if "hello123".is_alphabetic() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -529,8 +474,7 @@ if string.is_alphabetic("hello123") { 0 } else { 1 }
 #[test]
 fn string_is_alphanumeric_true() {
     let code = r#"
-needs std.string
-if string.is_alphanumeric("hello123") { 1 } else { 0 }
+if "hello123".is_alphanumeric() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -538,8 +482,7 @@ if string.is_alphanumeric("hello123") { 1 } else { 0 }
 #[test]
 fn string_is_alphanumeric_false() {
     let code = r#"
-needs std.string
-if string.is_alphanumeric("hello-123") { 0 } else { 1 }
+if "hello-123".is_alphanumeric() { 0 } else { 1 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -547,8 +490,7 @@ if string.is_alphanumeric("hello-123") { 0 } else { 1 }
 #[test]
 fn string_lines_basic() {
     let code = r#"
-needs std.string
-let s = string.lines("a\nb\nc")
+let s = "a\nb\nc".lines()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -557,8 +499,7 @@ let s = string.lines("a\nb\nc")
 #[test]
 fn string_line_count() {
     let code = r#"
-needs std.string
-string.line_count("a\nb\nc")
+"a\nb\nc".line_count()
 "#;
     assert_aelys_int(code, 3);
 }
@@ -566,8 +507,7 @@ string.line_count("a\nb\nc")
 #[test]
 fn string_line_count_empty() {
     let code = r#"
-needs std.string
-string.line_count("")
+"".line_count()
 "#;
     assert_aelys_int(code, 0);
 }
@@ -575,8 +515,7 @@ string.line_count("")
 #[test]
 fn string_bytes_basic() {
     let code = r#"
-needs std.string
-let b = string.bytes("AB")
+let b = "AB".bytes()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -585,8 +524,7 @@ let b = string.bytes("AB")
 #[test]
 fn string_chars_basic() {
     let code = r#"
-needs std.string
-let c = string.chars("abc")
+let c = "abc".chars()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -595,9 +533,8 @@ let c = string.chars("abc")
 #[test]
 fn string_unicode_length_mismatch() {
     let code = r#"
-needs std.string
-let byte_len = string.len("😀")
-let char_len = string.char_len("😀")
+let byte_len = "😀".len()
+let char_len = "😀".char_len()
 if byte_len > char_len { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -606,8 +543,7 @@ if byte_len > char_len { 1 } else { 0 }
 #[test]
 fn string_emoji_reverse() {
     let code = r#"
-needs std.string
-let s = string.reverse("😀😁")
+let s = "😀😁".reverse()
 42
 "#;
     assert_aelys_int(code, 42);
@@ -616,8 +552,7 @@ let s = string.reverse("😀😁")
 #[test]
 fn string_rtl_text() {
     let code = r#"
-needs std.string
-let s = string.reverse("مرحبا")
+let s = "مرحبا".reverse()
 42
 "#;
     assert_aelys_int(code, 42);

@@ -77,43 +77,8 @@ impl Compiler {
                 return self.compile_tostring_method(object, dest, span);
             }
 
-            // Handle Vec/Array methods on Dynamic-typed objects (runtime dispatch)
-            if matches!(&object.ty, InferType::Dynamic | InferType::Var(_)) {
-                // Try string methods on dynamic types too
-                if let Some(expected_args) = Self::string_method_arity(member) {
-                    if args.len() == expected_args {
-                        return self.compile_string_method_call(
-                            object, member, args, dest, span,
-                        );
-                    }
-                }
-
-                match member.as_str() {
-                    "len" if args.is_empty() => {
-                        return self.compile_vec_len(object, dest, span);
-                    }
-                    "push" if args.len() == 1 => {
-                        return self.compile_vec_push(
-                            object,
-                            &InferType::Dynamic,
-                            &args[0],
-                            dest,
-                            span,
-                        );
-                    }
-                    "pop" if args.is_empty() => {
-                        return self.compile_vec_pop(object, &InferType::Dynamic, dest, span);
-                    }
-                    "capacity" if args.is_empty() => {
-                        return self.compile_vec_capacity(object, dest, span);
-                    }
-                    "reserve" if args.len() == 1 => {
-                        return self.compile_vec_reserve(object, &args[0], dest, span);
-                    }
-                    _ => {}
-                }
-            }
-
+            // Module alias calls must be checked before Dynamic dispatch,
+            // otherwise methods like "join" get intercepted as string methods
             if let TypedExprKind::Identifier(module_name) = &object.kind
                 && self.module_aliases.contains(module_name)
             {
@@ -175,6 +140,43 @@ impl Compiler {
 
                         return Ok(());
                     }
+                }
+            }
+
+            // Handle Vec/Array methods on Dynamic-typed objects (runtime dispatch)
+            if matches!(&object.ty, InferType::Dynamic | InferType::Var(_)) {
+                // Try string methods on dynamic types too
+                if let Some(expected_args) = Self::string_method_arity(member) {
+                    if args.len() == expected_args {
+                        return self.compile_string_method_call(
+                            object, member, args, dest, span,
+                        );
+                    }
+                }
+
+                match member.as_str() {
+                    "len" if args.is_empty() => {
+                        return self.compile_vec_len(object, dest, span);
+                    }
+                    "push" if args.len() == 1 => {
+                        return self.compile_vec_push(
+                            object,
+                            &InferType::Dynamic,
+                            &args[0],
+                            dest,
+                            span,
+                        );
+                    }
+                    "pop" if args.is_empty() => {
+                        return self.compile_vec_pop(object, &InferType::Dynamic, dest, span);
+                    }
+                    "capacity" if args.is_empty() => {
+                        return self.compile_vec_capacity(object, dest, span);
+                    }
+                    "reserve" if args.len() == 1 => {
+                        return self.compile_vec_reserve(object, &args[0], dest, span);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -298,7 +300,9 @@ impl Compiler {
             "char_at" | "byte_at" | "contains" | "starts_with" | "ends_with"
             | "find" | "rfind" | "count" | "split" | "repeat" | "concat" => Some(1),
             // 2-arg methods (self + 2 args)
-            "substr" | "replace" | "replace_first" | "join" | "pad_left" | "pad_right" => Some(2),
+            "substr" | "replace" | "replace_first" | "pad_left" | "pad_right" => Some(2),
+            // join takes self + 1 arg (separator)
+            "join" => Some(1),
             _ => None,
         }
     }

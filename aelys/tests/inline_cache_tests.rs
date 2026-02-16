@@ -110,7 +110,7 @@ fn test_cache_with_different_arities() {
 
         let mut sum = 0
         for i in 0..100 {
-            sum = sum + zero() + one(1) + two(1, 2) + three(1, 2, 3)
+            sum += zero() + one(1) + two(1, 2) + three(1, 2, 3)
         }
         sum
     "#,
@@ -410,9 +410,9 @@ fn test_call_in_conditional() {
         let mut sum = 0
         for i in 0..10 {
             if is_even(i) {
-                sum = sum + double(i)
+                sum += double(i)
             } else {
-                sum = sum + triple(i)
+                sum += triple(i)
             }
         }
         sum

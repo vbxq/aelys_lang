@@ -6,9 +6,8 @@ use common::*;
 #[test]
 fn unicode_surrogate_pairs() {
     let code = r#"
-needs std.string
 let s = "𝕳𝖊𝖑𝖑𝖔"
-string.char_len(s)
+s.char_len()
 "#;
     assert_aelys_int(code, 5);
 }
@@ -16,9 +15,8 @@ string.char_len(s)
 #[test]
 fn unicode_rtl_text_handling() {
     let code = r#"
-needs std.string
 let arabic = "مرحبا بك"
-let len = string.char_len(arabic)
+let len = arabic.char_len()
 if len > 0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -27,9 +25,8 @@ if len > 0 { 1 } else { 0 }
 #[test]
 fn unicode_combining_characters() {
     let code = r#"
-needs std.string
 let s = "é"
-string.len(s)
+s.len()
 "#;
     // Should be 2 bytes for composed form
     let result = run_aelys(code);
@@ -38,7 +35,7 @@ string.len(s)
 
 #[test]
 fn unicode_zero_width_characters() {
-    let code = "needs std.string\nlet s = \"a\u{200B}b\"\nstring.len(s)\n";
+    let code = "let s = \"a\u{200B}b\"\ns.len()\n";
     let result = run_aelys(code);
     assert!(result.as_int().unwrap() > 2);
 }
@@ -46,10 +43,9 @@ fn unicode_zero_width_characters() {
 #[test]
 fn unicode_emoji_sequences() {
     let code = r#"
-needs std.string
 let emoji = "👨‍👩‍👧‍👦"
-let byte_len = string.len(emoji)
-let char_len = string.char_len(emoji)
+let byte_len = emoji.len()
+let char_len = emoji.char_len()
 if byte_len > char_len { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -62,9 +58,8 @@ fn very_long_string_literal() {
     let long_str = "x".repeat(10000);
     let code = format!(
         r#"
-needs std.string
 let s = "{}"
-string.len(s)
+s.len()
 "#,
         long_str
     );
@@ -74,14 +69,13 @@ string.len(s)
 #[test]
 fn extremely_long_string_concat() {
     let code = r#"
-needs std.string
 let mut s = ""
 let mut i = 0
 while i < 1000 {
-    s = s + "x"
-    i = i + 1
+    s += "x"
+    i++
 }
-string.len(s)
+s.len()
 "#;
     assert_aelys_int(code, 1000);
 }
@@ -128,7 +122,7 @@ fn gc_stress_many_allocations() {
 let mut i = 0
 while i < 10000 {
     let s = "test string number " + "more text"
-    i = i + 1
+    i++
 }
 42
 "#;
@@ -196,9 +190,8 @@ if max > 0 { 1 } else { 0 }
 #[test]
 fn int_overflow_handling() {
     let code = r#"
-needs std.math
 let large = 140737488355327
-let result = math.pow(large, 2)
+let result = pow(large, 2)
 if result > 0.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -209,10 +202,9 @@ if result > 0.0 { 1 } else { 0 }
 #[test]
 fn float_infinity_operations() {
     let code = r#"
-needs std.math
-let inf = math.INF
+let inf = INF
 let result = inf + 1.0
-if math.is_inf(result) { 1 } else { 0 }
+if is_inf(result) { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -220,10 +212,9 @@ if math.is_inf(result) { 1 } else { 0 }
 #[test]
 fn float_nan_propagation() {
     let code = r#"
-needs std.math
-let nan = math.sqrt(-1.0)
+let nan = sqrt(-1.0)
 let result = nan + 5.0
-if math.is_nan(result) { 1 } else { 0 }
+if is_nan(result) { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -242,11 +233,10 @@ if result > 1000000000.0 { 1 } else { 0 }
 #[test]
 fn empty_string_operations() {
     let code = r#"
-needs std.string
 let s = ""
-let rev = string.reverse(s)
-let upper = string.to_upper(s)
-if string.is_empty(s) { 1 } else { 0 }
+let rev = s.reverse()
+let upper = s.to_upper()
+if s.is_empty() { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
 }
@@ -254,8 +244,7 @@ if string.is_empty(s) { 1 } else { 0 }
 #[test]
 fn string_split_on_empty() {
     let code = r#"
-needs std.string
-let parts = string.split("", ",")
+let parts = "".split(",")
 42
 "#;
     assert_aelys_int(code, 42);
@@ -269,8 +258,8 @@ fn loop_zero_iterations() {
 let mut sum = 0
 let mut i = 0
 while i < 0 {
-    sum = sum + i
-    i = i + 1
+    sum += i
+    i++
 }
 sum
 "#;
@@ -283,8 +272,8 @@ fn loop_one_iteration() {
 let mut sum = 0
 let mut i = 0
 while i < 1 {
-    sum = sum + i
-    i = i + 1
+    sum += i
+    i++
 }
 sum
 "#;
@@ -301,12 +290,12 @@ while i < 10 {
     while j < 10 {
         let mut k = 0
         while k < 10 {
-            count = count + 1
-            k = k + 1
+            count++
+            k++
         }
-        j = j + 1
+        j++
     }
-    i = i + 1
+    i++
 }
 count
 "#;
@@ -382,8 +371,7 @@ fn code_with_tabs() {
 #[test]
 fn sqrt_zero() {
     let code = r#"
-needs std.math
-let r = math.sqrt(0.0)
+let r = sqrt(0.0)
 if r == 0.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -392,8 +380,7 @@ if r == 0.0 { 1 } else { 0 }
 #[test]
 fn log_one() {
     let code = r#"
-needs std.math
-let r = math.log(1.0)
+let r = log(1.0)
 if r > -0.01 and r < 0.01 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -402,8 +389,7 @@ if r > -0.01 and r < 0.01 { 1 } else { 0 }
 #[test]
 fn pow_zero_exponent() {
     let code = r#"
-needs std.math
-let r = math.pow(123.456, 0.0)
+let r = pow(123.456, 0.0)
 if r > 0.99 and r < 1.01 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -412,8 +398,7 @@ if r > 0.99 and r < 1.01 { 1 } else { 0 }
 #[test]
 fn trig_large_angles() {
     let code = r#"
-needs std.math
-let r = math.sin(1000000.0)
+let r = sin(1000000.0)
 if r >= -1.0 and r <= 1.0 { 1 } else { 0 }
 "#;
     assert_aelys_int(code, 1);
@@ -426,7 +411,7 @@ fn foo() {
     let x = 42
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + x
+        sum += x
     }
     return sum
 }
@@ -444,7 +429,7 @@ fn foo() {
     let c = 30
     let mut sum = 0
     for i in 0..3 {
-        sum = sum + a + b + c
+        sum += a + b + c
     }
     return sum
 }
@@ -461,8 +446,8 @@ fn foo() {
     let mut sum = 0
     let mut i = 0
     while i < 5 {
-        sum = sum + x
-        i = i + 1
+        sum += x
+        i++
     }
     return sum
 }
@@ -479,7 +464,7 @@ fn foo() {
     let mut count = 0
     for i in 0..5 {
         for j in 0..5 {
-            count = count + x
+            count += x
         }
     }
     return count
@@ -492,14 +477,13 @@ foo()
 #[test]
 fn string_variable_in_function_for_loop() {
     let code = r#"
-needs std.string
 fn foo() {
     let prefix = "hello"
     let mut count = 0
     for i in 0..3 {
-        let len = string.len(prefix)
+        let len = prefix.len()
         if len > 0 {
-            count = count + 1
+            count++
         }
     }
     return count
@@ -518,7 +502,7 @@ fn make_adder(x) {
 let adder = make_adder(10)
 let mut sum = 0
 for i in 0..5 {
-    sum = sum + adder(i)
+    sum += adder(i)
 }
 sum
 "#;
@@ -536,7 +520,7 @@ fn test() {
     let e = 5
     let mut total = 0
     for i in 0..10 {
-        total = total + a + b + c + d + e
+        total += a + b + c + d + e
     }
     return total
 }
@@ -552,7 +536,7 @@ fn parameter_accessed_in_for_loop() {
 fn foo(x) {
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + x
+        sum += x
     }
     return sum
 }
@@ -572,7 +556,7 @@ fn make_value() {
     }
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + inner()
+        sum += inner()
     }
     return sum
 }
@@ -589,7 +573,7 @@ let x = 42
 fn foo() {
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + x
+        sum += x
     }
     return sum
 }
@@ -609,7 +593,7 @@ fn foo() {
     }
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + x
+        sum += x
     }
     return sum
 }
@@ -631,7 +615,7 @@ fn foo() {
     }
     let mut sum = 0
     for i in 0..3 {
-        sum = sum + x + y
+        sum += x + y
     }
     return sum
 }
@@ -650,7 +634,7 @@ fn double(n) {
 fn test() {
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + double(i)
+        sum += double(i)
     }
     return sum
 }
@@ -667,10 +651,10 @@ fn test() {
     let x = 10
     let mut sum = 0
     for i in 0..5 {
-        sum = sum + x
+        sum += x
     }
     for j in 0..3 {
-        sum = sum + x
+        sum += x
     }
     return sum
 }
@@ -687,7 +671,7 @@ fn test() {
     let mut x = 0
     x = 5
     for i in 0..3 {
-        x = x + 1
+        x++
     }
     return x
 }
@@ -700,13 +684,12 @@ test()
 #[test]
 fn string_concat_in_for_loop_function() {
     let code = r#"
-needs std.string
 fn test() {
     let mut s = ""
     for i in 0..5 {
-        s = s + "x"
+        s += "x"
     }
-    return string.len(s)
+    return s.len()
 }
 test()
 "#;
@@ -723,7 +706,7 @@ fn test() {
     let x = 10
     let mut sum = 0
     for i in start..end_val {
-        sum = sum + x + i
+        sum += x + i
     }
     return sum
 }
@@ -741,7 +724,7 @@ fn outer() {
     fn inner() {
         let mut sum = 0
         for i in 0..5 {
-            sum = sum + x
+            sum += x
         }
         return sum
     }
@@ -802,7 +785,7 @@ fn test() {
     let mut sum = 0
     for i in 0..5 {
         let f = fn() { return i }
-        sum = sum + f()
+        sum += f()
     }
     return sum
 }

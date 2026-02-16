@@ -338,8 +338,8 @@ fn test_e2e_array_in_loop() {
         let mut sum = 0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -463,8 +463,8 @@ fn test_e2e_array_sum_loop() {
         let mut sum = 0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -479,8 +479,8 @@ fn test_e2e_array_modify_in_loop() {
         let arr = [1, 2, 3, 4, 5];
         let mut i = 0;
         while i < arr.len() {
-            arr[i] = arr[i] * 2;
-            i = i + 1;
+            arr[i] *= 2;
+            i++;
         }
         arr[0] + arr[1] + arr[2] + arr[3] + arr[4]
         "#,
@@ -499,7 +499,7 @@ fn test_e2e_array_find_max() {
             if arr[i] > max {
                 max = arr[i];
             }
-            i = i + 1;
+            i++;
         }
         max
         "#,
@@ -529,8 +529,8 @@ fn test_e2e_array_passed_to_function() {
             let mut s = 0;
             let mut i = 0;
             while i < a.len() {
-                s = s + a[i];
-                i = i + 1;
+                s += a[i];
+                i++;
             }
             return s
         }
@@ -580,8 +580,8 @@ fn test_e2e_vec_build_and_sum() {
         let mut sum = 0;
         let mut i = 0;
         while i < v.len() {
-            sum = sum + v[i];
-            i = i + 1;
+            sum += v[i];
+            i++;
         }
         sum
         "#,
@@ -637,7 +637,7 @@ fn test_e2e_vec_grow_dynamically() {
         let mut i = 0;
         while i < 100 {
             v.push(i);
-            i = i + 1;
+            i++;
         }
         v.len()
         "#,
@@ -652,8 +652,8 @@ fn test_e2e_vec_passed_to_function() {
         fn double_all(v) {
             let mut i = 0;
             while i < v.len() {
-                v[i] = v[i] * 2;
-                i = i + 1;
+                v[i] *= 2;
+                i++;
             }
         }
         let v = Vec[1, 2, 3];
@@ -690,8 +690,8 @@ fn test_e2e_float_array_sum() {
         let mut sum = 0.0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -720,7 +720,7 @@ fn test_e2e_bool_array_all_true() {
         let mut i = 0;
         while i < arr.len() {
             if arr[i] == false { all = false }
-            i = i + 1;
+            i++;
         }
         all
         "#,
@@ -737,7 +737,7 @@ fn test_e2e_bool_array_any_true() {
         let mut i = 0;
         while i < arr.len() {
             if arr[i] { any = true }
-            i = i + 1;
+            i++;
         }
         any
         "#,
@@ -955,10 +955,10 @@ fn test_e2e_2d_array_sum() {
         while i < 2 {
             let mut j = 0;
             while j < 3 {
-                sum = sum + m[i][j];
-                j = j + 1;
+                sum += m[i][j];
+                j++;
             }
-            i = i + 1;
+            i++;
         }
         sum
         "#,
@@ -1056,9 +1056,9 @@ fn test_e2e_2d_array_transpose() {
             let mut j = 0;
             while j < 2 {
                 t[j][i] = m[i][j];
-                j = j + 1;
+                j++;
             }
-            i = i + 1;
+            i++;
         }
         t[0][1] + t[1][0]
         "#,
@@ -1171,9 +1171,9 @@ fn test_e2e_2d_array_find_max() {
                 if m[i][j] > max {
                     max = m[i][j];
                 }
-                j = j + 1;
+                j++;
             }
-            i = i + 1;
+            i++;
         }
         max
         "#,

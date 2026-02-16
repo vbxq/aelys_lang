@@ -73,47 +73,10 @@ fn bytecode_negative_jump() {
     assert!(result.is_err());
 }
 
-// Network buffer overflow tests
-
-#[test]
-fn network_recv_buffer_overflow_attempt() {
-    let code = r#"
-needs std.net
-let s = 1
-net.recv_bytes(s, 20000000)
-"#;
-    let err = run_aelys_err(code);
-    assert!(
-        err.contains("max")
-            || err.contains("buffer")
-            || err.contains("invalid")
-            || err.contains("capability"),
-        "got error: {}",
-        err
-    );
-}
-
 // Path traversal attacks
-
-#[test]
-fn path_traversal_dotdot_attack() {
-    let code = r#"
-needs std.fs
-fs.join("/app/data", "../../../etc/passwd")
-"#;
-    let err = run_aelys_err(code);
-    assert!(err.contains("escapes") || err.contains("capability"));
-}
-
-#[test]
-fn path_traversal_absolute_override() {
-    let code = r#"
-needs std.fs
-fs.join("/safe/path", "/etc/passwd")
-"#;
-    let err = run_aelys_err(code);
-    assert!(err.contains("absolute") || err.contains("capability"));
-}
+// (network_recv_buffer_overflow → stdlib_net_tests::recv_bytes_exceeds_max_buffer)
+// (path_traversal_dotdot → security_audit_tests::fs_join_rejects_parent_escape)
+// (path_traversal_absolute → security_audit_tests::fs_join_rejects_absolute_path)
 
 #[test]
 fn path_traversal_url_encoded() {
@@ -168,7 +131,7 @@ let mut s = "x"
 let mut i = 0
 while i < 100000 {
     s = s + s
-    i = i + 1
+    i++
 }
 42
 "#;
@@ -204,7 +167,7 @@ fn allocation_bomb() {
 let mut i = 0
 while i < 100000 {
     let p = alloc(1000)
-    i = i + 1
+    i++
 }
 42
 "#;
@@ -261,8 +224,7 @@ big * big
 #[test]
 fn time_format_string_attack() {
     let code = r#"
-needs std.time
-time.format("%n%n%n%n%n")
+format("%n%n%n%n%n")
 "#;
     // Should not crash
     let _ = run_aelys(code);
@@ -409,7 +371,7 @@ while i < 5000 {
     let s1 = "string" + " concatenation"
     let s2 = "more " + "strings"
     let s3 = s1 + s2
-    i = i + 1
+    i++
 }
 42
 "#;
@@ -439,14 +401,7 @@ net.connect("www.google.com", 80)
     assert!(err.contains("capability") || err.contains("Capability"));
 }
 
-#[test]
-fn exec_without_capability() {
-    let code = r#"
-needs std.sys
-sys.exec("whoami")
-"#;
-    assert_aelys_error_contains(code, "capability");
-}
+// (exec_without_capability → stdlib_sys_tests::sys_exec_denied_without_capability)
 
 // Prototype pollution attempts (not applicable, but test object safety)
 
