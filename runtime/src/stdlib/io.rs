@@ -42,12 +42,14 @@ pub fn register(vm: &mut VM) -> Result<StdModuleExports, RuntimeError> {
 }
 
 fn native_print(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    println!("{}", vm.value_to_string(args[0]));
+    print!("{}", vm.value_to_string(args[0]));
+    let _ = io::stdout().flush();
     Ok(Value::null())
 }
 
 fn native_println(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
-    native_print(vm, args) // just an alias
+    println!("{}", vm.value_to_string(args[0]));
+    Ok(Value::null())
 }
 
 fn native_eprint(vm: &mut VM, args: &[Value]) -> Result<Value, RuntimeError> {
