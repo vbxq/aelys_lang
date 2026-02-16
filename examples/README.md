@@ -26,7 +26,7 @@ Several fibonacci implementations comparing different approaches.
 
 Demonstrates the type system: annotations, inference, closures, and higher-order functions.
 
-### [lang/gc.aelys](lang/simple_no_gc_demo.aelys)
+### [lang/simple_no_gc_demo.aelys](lang/simple_no_gc_demo.aelys)
 
 Shows `@no_gc` usage with manual memory:
 - `alloc` / `free` for buffer management

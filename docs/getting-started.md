@@ -7,9 +7,7 @@ This guide walks you through writing your first Aelys programs. I'll assume you'
 Create a file called `hello.aelys`:
 
 ```rust
-needs std.io
-
-print("Hello, World!")
+println("Hello, World!")
 ```
 
 Run it:
@@ -18,7 +16,7 @@ Run it:
 aelys hello.aelys
 ```
 
-That's your first program ! The `needs` statement imports the `std.io` module. You can also use `io.print` if you prefer the qualified form.
+That's your first program ! The safe standard modules (`std.io`, `std.math`, `std.string`, `std.convert`, `std.time`) are auto-registered at startup, so you don't need to import them. The `needs` statement is still required for privileged modules like `std.fs`, `std.net`, `std.sys`, and `std.bytes`.
 
 You don't need a `main` function, top-level code just runs.
 
@@ -36,7 +34,7 @@ Variables are immutable by default. If you need to change a value, use `mut`:
 let mut counter = 0
 counter++
 counter++
-print(counter)  // 2
+println(counter)  // 2
 ```
 
 ## Type Annotations
@@ -58,7 +56,7 @@ The type system uses Hindley-Milner inference with gradual typing. In practice, 
 
 ```rust
 fn greet(name: string) {
-    print("Hello, {name}!")
+    println("Hello, {name}!")
 }
 
 greet("World")
@@ -92,16 +90,14 @@ This works, but you lose some type safety. I recommend adding types at the funct
 ### if/else
 
 ```rust
-needs std.io
-
 let x = 10
 
 if (x > 5) {                           // parentheses optional
-    print("big")
+    println("big")
 } else if x > 0 {
-    print("small")
+    println("small")
 } else {
-    print("zero or negative")
+    println("zero or negative")
 }
 ```
 
@@ -110,11 +106,9 @@ No need to put parentheses around the condition, braces are mandatory though
 ### while
 
 ```rust
-needs std.io
-
 let mut i = 0
 while i < 5 {
-    print(i)
+    println(i)
     i++
 }
 ```
@@ -124,54 +118,60 @@ while i < 5 {
 For loops use ranges:
 
 ```rust
-needs std.io
-
 // 0 to 9 (exclusive end)
 for i in 0..10 {
-    print(i)
+    println(i)
 }
 
 // 1 to 10 (inclusive end)
 for i in 1..=10 {
-    print(i)
+    println(i)
 }
 
 // with step
 for i in 0..100 step 10 {
-    print(i)  // 0, 10, 20, ...
+    println(i)  // 0, 10, 20, ...
 }
 ```
 
 `break` and `continue` work as expected:
 
 ```rust
-needs std.io
-
 for i in 0..100 {
     if i == 50 { break }
     if i % 2 == 0 { continue }
-    print(i)  // odd numbers only, up to 49
+    println(i)  // odd numbers only, up to 49
 }
 ```
 
-You can also iterate directly over a string's characters:
+You can iterate directly over arrays and vectors:
 
 ```rust
-needs std.io
+let numbers = Array[10, 20, 30]
+for item in numbers {
+    println(item)
+}
 
+let names = Vec["Alice", "Bob", "Charlie"]
+for name in names {
+    println(name)
+}
+```
+
+You can also iterate over a string's characters:
+
+```rust
 for letter in "hello" {
-    print(letter)
+    println(letter)
 }
 ```
 
 This works with variables too:
 
 ```rust
-needs std.io
-
 let name = "Marisa"
 for c in name {
-    print(c)
+    println(c)
 }
 ```
 
@@ -180,14 +180,12 @@ for c in name {
 It's `and`, `or`, and `not`, you can also use `&&`, `||`, and `!` if you prefer :
 
 ```rust
-needs std.io
-
 if x > 0 and y > 0 {
-    print("both positive")
+    println("both positive")
 }
 
 if not valid {
-    print("invalid")
+    println("invalid")
 }
 ```
 
@@ -196,16 +194,16 @@ if not valid {
 Strings support the usual escape sequences (`\n`, `\t`, `\\`, `\"`):
 
 ```rust
-print("Line 1\nLine 2")
-print("Tab\there")
+println("Line 1\nLine 2")
+println("Tab\there")
 ```
 
 You can access individual characters with `[]`:
 
 ```rust
 let s = "hello"
-print(s[0])  // h
-print(s[4])  // o
+println(s[0])  // h
+println(s[4])  // o
 ```
 
 Each index returns a single-character string. Indexing is Unicode-aware (it counts characters, not bytes).
@@ -220,8 +218,8 @@ Or use interpolation with `{expression}`:
 
 ```rust
 let name = "Quar"
-print("Hello, {name}!")        // Hello, Quar!
-print("2500 + 2500 = {2500 + 2500}")       // 2500 + 2500 = 5000
+println("Hello, {name}!")        // Hello, Quar!
+println("2500 + 2500 = {2500 + 2500}")       // 2500 + 2500 = 5000
 ```
 
 Double braces for literal braces: `"{{key}}"` gives `{key}`
@@ -233,12 +231,10 @@ Double braces for literal braces: `"{{key}}"` gives `{key}`
 Arrays hold multiple values of the same type:
 
 ```rust
-needs std.io
-
 let numbers = Array[10, 20, 30, 40, 50]
-print(numbers[0])  // 10
-print(numbers[2])  // 30
-print("{numbers.len()}")  // 5
+println(numbers[0])  // 10
+println(numbers[2])  // 30
+println("{numbers.len()}")  // 5
 ```
 
 Modify elements like this:
@@ -246,7 +242,7 @@ Modify elements like this:
 ```rust
 let scores = Array[95, 87, 92]
 scores[1] = 90
-print(scores[1])  // 90
+println(scores[1])  // 90
 ```
 
 You can add type annotations if you want to be explicit:
@@ -275,15 +271,13 @@ let short = [; 5]             // same as Array(5)
 Vectors can grow after you create them:
 
 ```rust
-needs std.io
-
 let v = Vec[1, 2, 3]
 v.push(4)
 v.push(5)
-print("{v.len()}")  // 5
+println("{v.len()}")  // 5
 
 let last = v.pop()
-print("{last}")  // 5
+println("{last}")  // 5
 ```
 
 Good for building lists on the fly:
@@ -298,7 +292,7 @@ let mut sum = 0
 for i in 0..scores.len() {
     sum += scores[i]
 }
-print("{sum / scores.len()}")  // average
+println("{sum / scores.len()}")  // average
 ```
 
 ### When to use which
@@ -311,8 +305,6 @@ print("{sum / scores.len()}")  // average
 Here's a program that calculates factorials:
 
 ```rust
-needs std.io
-
 fn factorial(n: int) -> int {
     if n <= 1 {
         return 1
@@ -320,11 +312,11 @@ fn factorial(n: int) -> int {
     return n * factorial(n - 1)
 }
 
-print("Factorials:")
+println("Factorials:")
 
 for i in 1..=10 {
     let result = factorial(i)
-    print("{i}! = {result}")
+    println("{i}! = {result}")
 }
 ```
 
@@ -335,8 +327,7 @@ Many other editor coming, don't worry !
 
 ### VSCode Extension
 
-Someone made a VSCode Extension for Aelys, see [Acknowledgements](../ACKNOWLEDGEMENTS.md)
-
+Someone made a VSCode Extension for Aelys, see [Acknowledgements](../ACKNOWLEDGEMENTS.md)  
 Download [Aelys Language Support](https://marketplace.visualstudio.com/items?itemName=SpaceGame.aelys-lang) from the VSCode marketplace, or directly to the [repository link](https://github.com/SpaceGame-wq/aelys-vscode)
 
 ## What's Next
