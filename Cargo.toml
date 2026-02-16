@@ -18,7 +18,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.19.13-a"
+version = "0.19.14-a"
 
 [profile.release]
 lto = "fat"
