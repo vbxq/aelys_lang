@@ -157,5 +157,55 @@ match opcode_byte {
         }
     }
 
+    // VecForLoop (178)
+    178 => {
+        let (a, imm) = decode_aimm(instr);
+        let elem_idx = base + a as usize;
+        let index_idx = elem_idx + 1;
+        let vec_idx = elem_idx + 2;
+
+        let vec_val = reg_get!(vec_idx);
+        let index = reg_get!(index_idx).as_int().unwrap_or(0);
+
+        let vec_ref = GcRef::new(vec_val.as_ptr().unwrap_or(0));
+        if let Some(obj) = self.heap.get(vec_ref)
+            && let ObjectKind::Vec(v) = &obj.kind
+        {
+            if (index as usize) < v.len() {
+                if let Some(elem) = v.get(index as usize) {
+                    reg_set!(elem_idx, elem);
+                    reg_set!(index_idx, Value::int(index + 1));
+                    ip = (ip as isize + imm as isize) as usize;
+                }
+            }
+            // else: index >= len, loop ends (don't jump)
+        }
+    }
+
+    // ArrayForLoop (179)
+    179 => {
+        let (a, imm) = decode_aimm(instr);
+        let elem_idx = base + a as usize;
+        let index_idx = elem_idx + 1;
+        let arr_idx = elem_idx + 2;
+
+        let arr_val = reg_get!(arr_idx);
+        let index = reg_get!(index_idx).as_int().unwrap_or(0);
+
+        let arr_ref = GcRef::new(arr_val.as_ptr().unwrap_or(0));
+        if let Some(obj) = self.heap.get(arr_ref)
+            && let ObjectKind::Array(a) = &obj.kind
+        {
+            if (index as usize) < a.len() {
+                if let Some(elem) = a.get(index as usize) {
+                    reg_set!(elem_idx, elem);
+                    reg_set!(index_idx, Value::int(index + 1));
+                    ip = (ip as isize + imm as isize) as usize;
+                }
+            }
+            // else: index >= len, loop ends (don't jump)
+        }
+    }
+
     _ => unreachable!(),
 }
