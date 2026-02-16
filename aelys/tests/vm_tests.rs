@@ -174,13 +174,17 @@ fn test_maybe_collect_respects_no_gc() {
     let source = make_test_source();
     let mut vm = VM::new(source).unwrap();
 
+    // Capture baseline: builtins + auto-registered stdlib functions are rooted
+    vm.collect();
+    let baseline = vm.heap().object_count();
+
     // Allocate strings to fill heap past threshold
     for i in 0..10000 {
         vm.alloc_string(&format!("string_number_{}", i)).unwrap();
     }
 
     let objects_before = vm.heap().object_count();
-    assert!(objects_before > 0);
+    assert!(objects_before > baseline);
 
     // Enter no_gc - collection should be suppressed even if threshold is reached
     vm.enter_no_gc();
@@ -191,13 +195,10 @@ fn test_maybe_collect_respects_no_gc() {
 
     // Exit no_gc and force collection
     vm.exit_no_gc();
-    vm.collect(); // Force collection instead of maybe_collect
+    vm.collect();
 
-    // TODO: everytime we add a built-in function, this test needs updating, we should find a better way
-    // Now objects should be collected, except for the built-in functions in globals
-    // Built-in functions are rooted in globals, so they won't be collected
-    // We have 6 built-in functions: type, alloc, free, load, store, __tostring
-    assert_eq!(vm.heap().object_count(), 6);
+    // After GC, only rooted globals survive (builtins + auto-registered stdlib)
+    assert_eq!(vm.heap().object_count(), baseline);
 }
 
 #[test]
