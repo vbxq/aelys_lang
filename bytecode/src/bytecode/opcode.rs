@@ -174,11 +174,13 @@ pub enum OpCode {
 
     StringLoadChar = 176,
     StringForLoop,
+    VecForLoop,
+    ArrayForLoop,
 }
 
 impl OpCode {
     pub fn from_u8(byte: u8) -> Option<Self> {
-        if byte <= Self::StringForLoop as u8 {
+        if byte <= Self::ArrayForLoop as u8 {
             Some(unsafe { std::mem::transmute::<u8, OpCode>(byte) })
         } else {
             None
