@@ -851,17 +851,24 @@ match opcode_byte {
 
         let vec_ref = GcRef::new(vec_val.as_ptr().unwrap_or(0));
         if let Some(obj) = self.heap.get(vec_ref) {
-            if let ObjectKind::Vec(vec) = &obj.kind {
-                reg_set!(dest, Value::int(vec.len() as i64));
-            } else if let ObjectKind::Array(arr) = &obj.kind {
-                reg_set!(dest, Value::int(arr.len() as i64));
-            } else {
-                self.frames[current_frame_idx].ip = ip;
-                return Err(self.runtime_error(RuntimeErrorKind::TypeError {
-                    operation: "vec len",
-                    expected: "vec or array",
-                    got: "non-vec object".to_string(),
-                }));
+            match &obj.kind {
+                ObjectKind::Vec(vec) => {
+                    reg_set!(dest, Value::int(vec.len() as i64));
+                }
+                ObjectKind::Array(arr) => {
+                    reg_set!(dest, Value::int(arr.len() as i64));
+                }
+                ObjectKind::String(s) => {
+                    reg_set!(dest, Value::int(s.len() as i64));
+                }
+                _ => {
+                    self.frames[current_frame_idx].ip = ip;
+                    return Err(self.runtime_error(RuntimeErrorKind::TypeError {
+                        operation: "len",
+                        expected: "vec, array, or string",
+                        got: "non-collection object".to_string(),
+                    }));
+                }
             }
         } else {
             self.frames[current_frame_idx].ip = ip;

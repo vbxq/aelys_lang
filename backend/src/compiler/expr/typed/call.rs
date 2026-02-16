@@ -143,17 +143,9 @@ impl Compiler {
                 }
             }
 
-            // Handle Vec/Array methods on Dynamic-typed objects (runtime dispatch)
+            // Handle Vec/Array/String methods on Dynamic-typed objects (runtime dispatch)
+            // Vec/collection methods first — len uses polymorphic VecLen opcode
             if matches!(&object.ty, InferType::Dynamic | InferType::Var(_)) {
-                // Try string methods on dynamic types too
-                if let Some(expected_args) = Self::string_method_arity(member) {
-                    if args.len() == expected_args {
-                        return self.compile_string_method_call(
-                            object, member, args, dest, span,
-                        );
-                    }
-                }
-
                 match member.as_str() {
                     "len" if args.is_empty() => {
                         return self.compile_vec_len(object, dest, span);
@@ -177,6 +169,15 @@ impl Compiler {
                         return self.compile_vec_reserve(object, &args[0], dest, span);
                     }
                     _ => {}
+                }
+
+                // String methods on dynamic types (excludes len, handled above)
+                if let Some(expected_args) = Self::string_method_arity(member) {
+                    if args.len() == expected_args {
+                        return self.compile_string_method_call(
+                            object, member, args, dest, span,
+                        );
+                    }
                 }
             }
         }
