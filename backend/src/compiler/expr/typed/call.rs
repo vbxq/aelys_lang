@@ -61,8 +61,33 @@ impl Compiler {
                 }
             }
 
+            // Handle String methods: s.method(args) → string::method(s, args...)
+            if matches!(&object.ty, InferType::String) {
+                if let Some(expected_args) = Self::string_method_arity(member) {
+                    if args.len() == expected_args {
+                        return self.compile_string_method_call(
+                            object, member, args, dest, span,
+                        );
+                    }
+                }
+            }
+
+            // Handle to_string() on any type
+            if member == "to_string" && args.is_empty() {
+                return self.compile_tostring_method(object, dest, span);
+            }
+
             // Handle Vec/Array methods on Dynamic-typed objects (runtime dispatch)
             if matches!(&object.ty, InferType::Dynamic | InferType::Var(_)) {
+                // Try string methods on dynamic types too
+                if let Some(expected_args) = Self::string_method_arity(member) {
+                    if args.len() == expected_args {
+                        return self.compile_string_method_call(
+                            object, member, args, dest, span,
+                        );
+                    }
+                }
+
                 match member.as_str() {
                     "len" if args.is_empty() => {
                         return self.compile_vec_len(object, dest, span);
@@ -257,6 +282,221 @@ impl Compiler {
             let reg = callee_reg + i as u8;
             self.register_pool[reg as usize] = false;
         }
+
+        Ok(())
+    }
+
+    /// returns the number of extra args (excluding self) expected by a string method, or None if not a valid method.
+    fn string_method_arity(method: &str) -> Option<usize> {
+        match method {
+            // 0-arg methods (only self)
+            "len" | "char_len" | "chars" | "bytes" | "to_upper" | "to_lower"
+            | "capitalize" | "trim" | "trim_start" | "trim_end" | "is_empty"
+            | "is_whitespace" | "is_numeric" | "is_alphabetic"
+            | "is_alphanumeric" | "reverse" | "lines" | "line_count" => Some(0),
+            // 1-arg methods (self + 1 arg)
+            "char_at" | "byte_at" | "contains" | "starts_with" | "ends_with"
+            | "find" | "rfind" | "count" | "split" | "repeat" | "concat" => Some(1),
+            // 2-arg methods (self + 2 args)
+            "substr" | "replace" | "replace_first" | "join" | "pad_left" | "pad_right" => Some(2),
+            _ => None,
+        }
+    }
+
+    /// compile s.method(args) as string::method(s, args...)
+    fn compile_string_method_call(
+        &mut self,
+        object: &aelys_sema::TypedExpr,
+        method: &str,
+        args: &[aelys_sema::TypedExpr],
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        let qualified_name = format!("string::{}", method);
+        let total_args = 1 + args.len(); // self + extra args
+
+        let global_idx = self.get_or_create_global_index(&qualified_name);
+        self.accessed_globals.insert(qualified_name.clone());
+
+        if global_idx <= 255 {
+            // Try to use CallGlobalCached: args go in dest+1, dest+2, ...
+            let arg_start = match dest.checked_add(1) {
+                Some(s) => s,
+                None => {
+                    return self.compile_string_method_call_fallback(
+                        object, &qualified_name, args, dest, span,
+                    );
+                }
+            };
+
+            let mut can_use_callglobal = true;
+            for i in 0..total_args {
+                let arg_reg = match arg_start.checked_add(i as u8) {
+                    Some(r) => r,
+                    None => {
+                        can_use_callglobal = false;
+                        break;
+                    }
+                };
+                if (arg_reg as usize) >= self.register_pool.len()
+                    || self.register_pool[arg_reg as usize]
+                {
+                    can_use_callglobal = false;
+                    break;
+                }
+            }
+
+            if can_use_callglobal {
+                // Reserve registers
+                for i in 0..total_args {
+                    let arg_reg = arg_start + i as u8;
+                    self.register_pool[arg_reg as usize] = true;
+                    if arg_reg >= self.next_register {
+                        self.next_register = arg_reg + 1;
+                    }
+                }
+
+                // First arg: the string object itself
+                self.compile_typed_expr(object, arg_start)?;
+
+                // Remaining args
+                for (i, arg) in args.iter().enumerate() {
+                    let arg_reg = arg_start + 1 + i as u8;
+                    self.compile_typed_expr(arg, arg_reg)?;
+                }
+
+                self.emit_call_global_cached(
+                    dest,
+                    global_idx as u8,
+                    total_args as u8,
+                    &qualified_name,
+                    span,
+                );
+
+                // Free registers
+                for i in (0..total_args).rev() {
+                    let arg_reg = arg_start + i as u8;
+                    self.register_pool[arg_reg as usize] = false;
+                }
+
+                return Ok(());
+            }
+        }
+
+        self.compile_string_method_call_fallback(object, &qualified_name, args, dest, span)
+    }
+
+    fn compile_string_method_call_fallback(
+        &mut self,
+        object: &aelys_sema::TypedExpr,
+        qualified_name: &str,
+        args: &[aelys_sema::TypedExpr],
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        let total_args = 1 + args.len();
+        let callee_reg = self.alloc_consecutive_registers_for_call(total_args as u8 + 1, span)?;
+
+        for i in 0..=total_args {
+            let reg = callee_reg + i as u8;
+            self.register_pool[reg as usize] = true;
+            if reg >= self.next_register {
+                self.next_register = reg + 1;
+            }
+        }
+
+        // load the function by global index (avoids known_globals check)
+        let global_idx = self.get_or_create_global_index(qualified_name);
+        self.accessed_globals.insert(qualified_name.to_string());
+        self.emit_b(OpCode::GetGlobalIdx, callee_reg, global_idx as i16, span);
+
+        // first arg: the string object
+        self.compile_typed_expr(object, callee_reg + 1)?;
+
+        // remaining stuff
+        for (i, arg) in args.iter().enumerate() {
+            let arg_reg = callee_reg + 2 + i as u8;
+            self.compile_typed_expr(arg, arg_reg)?;
+        }
+
+        self.emit_a(OpCode::Call, dest, callee_reg, total_args as u8, span);
+
+        for i in (0..=total_args).rev() {
+            let reg = callee_reg + i as u8;
+            self.register_pool[reg as usize] = false;
+        }
+
+        Ok(())
+    }
+
+    /// compiled obj.to_string() as __tostring(obj)
+    fn compile_tostring_method(
+        &mut self,
+        object: &aelys_sema::TypedExpr,
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        let qualified_name = "__tostring";
+        let global_idx = self.get_or_create_global_index(qualified_name);
+        self.accessed_globals.insert(qualified_name.to_string());
+
+        if global_idx <= 255 {
+            let arg_start = match dest.checked_add(1) {
+                Some(s) if (s as usize) < self.register_pool.len()
+                    && !self.register_pool[s as usize] =>
+                {
+                    s
+                }
+                _ => {
+                    return self.compile_tostring_method_fallback(object, dest, span);
+                }
+            };
+
+            self.register_pool[arg_start as usize] = true;
+            if arg_start >= self.next_register {
+                self.next_register = arg_start + 1;
+            }
+
+            self.compile_typed_expr(object, arg_start)?;
+
+            self.emit_call_global_cached(
+                dest,
+                global_idx as u8,
+                1,
+                qualified_name,
+                span,
+            );
+
+            self.register_pool[arg_start as usize] = false;
+            return Ok(());
+        }
+
+        self.compile_tostring_method_fallback(object, dest, span)
+    }
+
+    fn compile_tostring_method_fallback(
+        &mut self,
+        object: &aelys_sema::TypedExpr,
+        dest: u8,
+        span: Span,
+    ) -> Result<()> {
+        let callee_reg = self.alloc_consecutive_registers_for_call(2, span)?;
+
+        self.register_pool[callee_reg as usize] = true;
+        self.register_pool[(callee_reg + 1) as usize] = true;
+        if callee_reg + 1 >= self.next_register {
+            self.next_register = callee_reg + 2;
+        }
+
+        let global_idx = self.get_or_create_global_index("__tostring");
+        self.accessed_globals.insert("__tostring".to_string());
+        self.emit_b(OpCode::GetGlobalIdx, callee_reg, global_idx as i16, span);
+        self.compile_typed_expr(object, callee_reg + 1)?;
+
+        self.emit_a(OpCode::Call, dest, callee_reg, 1, span);
+
+        self.register_pool[(callee_reg + 1) as usize] = false;
+        self.register_pool[callee_reg as usize] = false;
 
         Ok(())
     }

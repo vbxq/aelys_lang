@@ -41,6 +41,16 @@ pub(super) fn verify(
             verify_reg_range(a, 3, num_regs, "StringForLoop")?;
             verify_jump(ip, imm, bytecode_len, "StringForLoop")?;
         }
+        OpCode::VecForLoop => {
+            // VecForLoop uses 3 consecutive registers: a (element), a+1 (index), a+2 (vec_ptr)
+            verify_reg_range(a, 3, num_regs, "VecForLoop")?;
+            verify_jump(ip, imm, bytecode_len, "VecForLoop")?;
+        }
+        OpCode::ArrayForLoop => {
+            // ArrayForLoop uses 3 consecutive registers: a (element), a+1 (index), a+2 (array_ptr)
+            verify_reg_range(a, 3, num_regs, "ArrayForLoop")?;
+            verify_jump(ip, imm, bytecode_len, "ArrayForLoop")?;
+        }
         _ => return Ok(false),
     }
 
