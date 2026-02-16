@@ -1,8 +1,8 @@
 mod common;
 
 use aelys_bytecode::{AelysArray, AelysVec, ArrayData, TypeTag, Value};
-use common::{
-    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys, run_aelys_ok,
+use common::{assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, assert_aelys_str, run_aelys,
+    run_aelys_ok,
 };
 
 #[test]
@@ -338,8 +338,8 @@ fn test_e2e_array_in_loop() {
         let mut sum = 0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -463,8 +463,8 @@ fn test_e2e_array_sum_loop() {
         let mut sum = 0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -479,8 +479,8 @@ fn test_e2e_array_modify_in_loop() {
         let arr = [1, 2, 3, 4, 5];
         let mut i = 0;
         while i < arr.len() {
-            arr[i] = arr[i] * 2;
-            i = i + 1;
+            arr[i] *= 2;
+            i++;
         }
         arr[0] + arr[1] + arr[2] + arr[3] + arr[4]
         "#,
@@ -499,7 +499,7 @@ fn test_e2e_array_find_max() {
             if arr[i] > max {
                 max = arr[i];
             }
-            i = i + 1;
+            i++;
         }
         max
         "#,
@@ -529,8 +529,8 @@ fn test_e2e_array_passed_to_function() {
             let mut s = 0;
             let mut i = 0;
             while i < a.len() {
-                s = s + a[i];
-                i = i + 1;
+                s += a[i];
+                i++;
             }
             return s
         }
@@ -580,8 +580,8 @@ fn test_e2e_vec_build_and_sum() {
         let mut sum = 0;
         let mut i = 0;
         while i < v.len() {
-            sum = sum + v[i];
-            i = i + 1;
+            sum += v[i];
+            i++;
         }
         sum
         "#,
@@ -637,7 +637,7 @@ fn test_e2e_vec_grow_dynamically() {
         let mut i = 0;
         while i < 100 {
             v.push(i);
-            i = i + 1;
+            i++;
         }
         v.len()
         "#,
@@ -652,8 +652,8 @@ fn test_e2e_vec_passed_to_function() {
         fn double_all(v) {
             let mut i = 0;
             while i < v.len() {
-                v[i] = v[i] * 2;
-                i = i + 1;
+                v[i] *= 2;
+                i++;
             }
         }
         let v = Vec[1, 2, 3];
@@ -690,8 +690,8 @@ fn test_e2e_float_array_sum() {
         let mut sum = 0.0;
         let mut i = 0;
         while i < arr.len() {
-            sum = sum + arr[i];
-            i = i + 1;
+            sum += arr[i];
+            i++;
         }
         sum
         "#,
@@ -720,7 +720,7 @@ fn test_e2e_bool_array_all_true() {
         let mut i = 0;
         while i < arr.len() {
             if arr[i] == false { all = false }
-            i = i + 1;
+            i++;
         }
         all
         "#,
@@ -737,7 +737,7 @@ fn test_e2e_bool_array_any_true() {
         let mut i = 0;
         while i < arr.len() {
             if arr[i] { any = true }
-            i = i + 1;
+            i++;
         }
         any
         "#,
@@ -804,5 +804,379 @@ fn test_e2e_vec_len_in_condition() {
         if v.len() > 2 { 100 } else { 0 }
         "#,
         100,
+    );
+}
+
+// Regression tests: empty Vec[] / Array[] must work with non-int types
+
+#[test]
+fn test_e2e_vec_push_string() {
+    assert_aelys_str(
+        r#"
+        let v = Vec[]
+        v.push("hello")
+        v.push("world")
+        v[0]
+        "#,
+        "hello",
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_string_in_typed_fn() {
+    assert_aelys_int(
+        r#"
+        fn build(n: int) -> int {
+            let buffer = Vec[]
+            for i in 0..n {
+                buffer.push("-")
+            }
+            return buffer.len()
+        }
+        build(5)
+        "#,
+        5,
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_float() {
+    let result = run_aelys(
+        r#"
+        let v = Vec[]
+        v.push(1.5)
+        v.push(2.5)
+        v[0]
+        "#,
+    );
+    assert_eq!(result.as_float(), Some(1.5));
+}
+
+#[test]
+fn test_e2e_vec_push_bool() {
+    assert_aelys_bool(
+        r#"
+        let v = Vec[]
+        v.push(true)
+        v.push(false)
+        v[0]
+        "#,
+        true,
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_then_modify() {
+    assert_aelys_str(
+        r#"
+        let v = Vec[]
+        v.push("a")
+        v.push("b")
+        v[1] = "z"
+        v[1]
+        "#,
+        "z",
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_in_untyped_fn() {
+    assert_aelys_int(
+        r#"
+        fn build_vec() {
+            let v = Vec[]
+            v.push(10)
+            v.push(20)
+            v.push(30)
+            return v.len()
+        }
+        build_vec()
+        "#,
+        3,
+    );
+}
+
+// Multidimensional array tests
+
+#[test]
+fn test_e2e_2d_array_basic() {
+    // Create a 2D array (array of arrays)
+    assert_aelys_int(
+        r#"
+        let matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        matrix[0][0]
+        "#,
+        1,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_access() {
+    // Access different elements
+    assert_aelys_int("let m = [[1, 2], [3, 4]]; m[0][1]", 2);
+    assert_aelys_int("let m = [[1, 2], [3, 4]]; m[1][0]", 3);
+    assert_aelys_int("let m = [[1, 2], [3, 4]]; m[1][1]", 4);
+}
+
+#[test]
+fn test_e2e_2d_array_write() {
+    // Modify elements in 2D array
+    assert_aelys_int(
+        r#"
+        let m = [[1, 2], [3, 4]];
+        m[0][1] = 99;
+        m[0][1]
+        "#,
+        99,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_row_access() {
+    // Access a row (which is itself an array)
+    assert_aelys_int(
+        r#"
+        let matrix = [[10, 20, 30], [40, 50, 60]];
+        let row = matrix[1];
+        row[2]
+        "#,
+        60,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_sum() {
+    // Sum all elements in a 2x3 matrix
+    assert_aelys_int(
+        r#"
+        let m = [[1, 2, 3], [4, 5, 6]];
+        let mut sum = 0;
+        let mut i = 0;
+        while i < 2 {
+            let mut j = 0;
+            while j < 3 {
+                sum += m[i][j];
+                j++;
+            }
+            i++;
+        }
+        sum
+        "#,
+        21, // 1+2+3+4+5+6
+    );
+}
+
+#[test]
+fn test_e2e_2d_vec_basic() {
+    // Vec of vecs
+    assert_aelys_int(
+        r#"
+        let grid = Vec[Vec[1, 2], Vec[3, 4]];
+        grid[0][1]
+        "#,
+        2,
+    );
+}
+
+#[test]
+fn test_e2e_2d_vec_push() {
+    // Push to inner vec
+    assert_aelys_int(
+        r#"
+        let grid = Vec[Vec[1, 2], Vec[3, 4]];
+        grid[0].push(99);
+        grid[0][2]
+        "#,
+        99,
+    );
+}
+
+#[test]
+fn test_e2e_2d_vec_modify() {
+    // Modify elements in vec of vecs
+    assert_aelys_int(
+        r#"
+        let grid = Vec[Vec[1, 2], Vec[3, 4]];
+        grid[1][0] = 100;
+        grid[1][0]
+        "#,
+        100,
+    );
+}
+
+#[test]
+fn test_e2e_3d_array() {
+    // 3D array access
+    assert_aelys_int(
+        r#"
+        let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+        cube[1][0][1]
+        "#,
+        6, // cube[1][0][1] = 6
+    );
+}
+
+#[test]
+fn test_e2e_3d_array_write() {
+    // Modify 3D array element
+    assert_aelys_int(
+        r#"
+        let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+        cube[0][1][0] = 999;
+        cube[0][1][0]
+        "#,
+        999,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_in_function() {
+    // Pass 2D array to function
+    assert_aelys_int(
+        r#"
+        fn get_element(matrix, row, col) {
+            return matrix[row][col]
+        }
+        let m = [[10, 20, 30], [40, 50, 60]];
+        get_element(m, 1, 2)
+        "#,
+        60,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_transpose() {
+    // Simple 2x2 matrix transpose
+    assert_aelys_int(
+        r#"
+        let m = [[1, 2], [3, 4]];
+        let t = [[0, 0], [0, 0]];
+        let mut i = 0;
+        while i < 2 {
+            let mut j = 0;
+            while j < 2 {
+                t[j][i] = m[i][j];
+                j++;
+            }
+            i++;
+        }
+        t[0][1] + t[1][0]
+        "#,
+        5, // t[0][1]=3, t[1][0]=2, sum=5
+    );
+}
+
+#[test]
+fn test_e2e_mixed_array_vec() {
+    // Array of vecs
+    assert_aelys_int(
+        r#"
+        let data = [Vec[1, 2], Vec[3, 4, 5]];
+        data[1][2]
+        "#,
+        5,
+    );
+}
+
+#[test]
+fn test_e2e_vec_of_arrays() {
+    // Vec containing arrays
+    assert_aelys_int(
+        r#"
+        let data = Vec[[1, 2], [3, 4]];
+        data[0][1]
+        "#,
+        2,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_float() {
+    // 2D float array
+    let result = run_aelys(
+        r#"
+        let m = [[1.0, 2.0], [3.0, 4.0]];
+        m[0][1] + m[1][1]
+        "#,
+    );
+    assert_eq!(result.as_float(), Some(6.0));
+}
+
+#[test]
+fn test_e2e_2d_array_bool() {
+    // 2D boolean array
+    assert_aelys_bool(
+        r#"
+        let grid = [[true, false], [false, true]];
+        grid[0][0]
+        "#,
+        true,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_len() {
+    // Get dimensions of 2D array
+    assert_aelys_int(
+        r#"
+        let m = [[1, 2, 3], [4, 5, 6]];
+        let rows = m.len();
+        let cols = m[0].len();
+        rows * 10 + cols
+        "#,
+        23, // 2 rows, 3 cols -> 23
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_computed_index() {
+    // Use computed indices
+    assert_aelys_int(
+        r#"
+        let m = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+        let i = 1;
+        let j = 2;
+        m[i][j]
+        "#,
+        6,
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_nested_computed() {
+    // Use array value as index for another array
+    assert_aelys_int(
+        r#"
+        let indices = [[0, 1], [1, 0]];
+        let data = [[10, 20], [30, 40]];
+        let row = indices[0][1];
+        let col = indices[1][0];
+        data[row][col]
+        "#,
+        40, // indices[0][1]=1, indices[1][0]=1, so data[1][1]=40
+    );
+}
+
+#[test]
+fn test_e2e_2d_array_find_max() {
+    // Find max element in 2D array
+    assert_aelys_int(
+        r#"
+        let m = [[5, 2, 8], [1, 9, 3], [4, 6, 7]];
+        let mut max = m[0][0];
+        let mut i = 0;
+        while i < 3 {
+            let mut j = 0;
+            while j < 3 {
+                if m[i][j] > max {
+                    max = m[i][j];
+                }
+                j++;
+            }
+            i++;
+        }
+        max
+        "#,
+        9,
     );
 }

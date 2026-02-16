@@ -1,0 +1,98 @@
+// Multidimensional Arrays Example
+
+println("2D Array Example")
+
+// Create a 3x3 matrix
+let matrix = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+
+// Access elements
+println("matrix[0][0] = {matrix[0][0]}")
+println("matrix[1][2] = {matrix[1][2]}")
+println("matrix[2][1] = {matrix[2][1]}")
+
+// Modify elements
+matrix[1][1] = 99
+println("After modification: matrix[1][1] = {matrix[1][1]}")
+
+// Sum all elements
+fn sum_matrix(m) -> int {
+    let mut total = 0
+    let mut i = 0
+    while i < m.len() {
+        let mut j = 0
+        while j < m[i].len() {
+            total += m[i][j]
+            j++
+        }
+        i++
+    }
+    return total
+}
+
+println("Sum of all elements: {sum_matrix(matrix)}")
+
+println("2D Vec Example")
+
+// Create a grid using vecs (dynamic)
+let grid = Vec[Vec[1, 2], Vec[3, 4]]
+println("grid[0][1] = {grid[0][1]}")
+
+// Push to inner vec (vecs are dynamic!)
+grid[0].push(5)
+println("After push: grid[0][2] = {grid[0][2]}")
+
+println("3D Array Example")
+
+// Create a 3D cube (2x2x2)
+let cube = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+println("cube[0][0][0] = {cube[0][0][0]}")
+println("cube[1][1][1] = {cube[1][1][1]}")
+
+cube[0][1][0] = 100
+println("After modification: cube[0][1][0] = {cube[0][1][0]}")
+
+println("Practical Example: Matrix Operations")
+
+// Transpose a 2x3 matrix
+fn transpose(m) {
+    let rows = m.len()
+    let cols = m[0].len()
+
+    // Create result matrix (cols x rows)
+    let result = Vec[]
+    let mut i = 0
+    while i < cols {
+        let row = Vec[]
+        let mut j = 0
+        while j < rows {
+            row.push(m[j][i])
+            j++
+        }
+        result.push(row)
+        i++
+    }
+    return result
+}
+
+let original = [[1, 2, 3], [4, 5, 6]]
+println("Original matrix:")
+println("  [{original[0][0]}, {original[0][1]}, {original[0][2]}]")
+println("  [{original[1][0]}, {original[1][1]}, {original[1][2]}]")
+
+let transposed = transpose(original)
+println("Transposed matrix:")
+println("  [{transposed[0][0]}, {transposed[0][1]}]")
+println("  [{transposed[1][0]}, {transposed[1][1]}]")
+println("  [{transposed[2][0]}, {transposed[2][1]}]")
+
+println("Mixed Types Example")
+
+// Array of vecs
+let mixed1 = [Vec[1, 2], Vec[3, 4, 5]]
+println("mixed1[1][2] = {mixed1[1][2]}")
+
+// Vec of arrays
+let mixed2 = Vec[[10, 20], [30, 40]]
+println("mixed2[0][1] = {mixed2[0][1]}")
+
+println("Demo end ")

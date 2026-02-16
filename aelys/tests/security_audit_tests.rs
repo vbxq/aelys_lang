@@ -608,8 +608,8 @@ fn double(x) {
 let mut sum = 0
 let mut i = 0
 while i < 1000 {
-    sum = sum + double(i)
-    i = i + 1
+    sum += double(i)
+    i++
 }
 sum
 "#;
@@ -751,7 +751,7 @@ fn while_loop_with_break() {
     let src = r#"
 let mut i = 0
 while true {
-    i = i + 1
+    i++
     if i >= 50 {
         break
     }
@@ -771,11 +771,11 @@ fn while_loop_with_continue() {
 let mut i = 0
 let mut sum = 0
 while i < 20 {
-    i = i + 1
+    i++
     if i % 2 == 0 {
         continue
     }
-    sum = sum + i
+    sum += i
 }
 sum
 "#;
@@ -790,9 +790,8 @@ sum
 #[test]
 fn string_concatenation() {
     let src = r#"
-needs std.string
 let s = "hello" + " " + "world"
-string.len(s)
+s.len()
 "#;
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("strings.aelys");

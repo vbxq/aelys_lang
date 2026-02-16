@@ -154,6 +154,16 @@ impl Compiler {
     ) -> Result<()> {
         match &iterable.ty {
             InferType::String => self.compile_string_for_each(iterator, iterable, body, span),
+            InferType::Vec(inner) => {
+                self.compile_collection_for_each(iterator, iterable, inner, body, OpCode::VecForLoop, span)
+            }
+            InferType::Array(inner) => {
+                self.compile_collection_for_each(iterator, iterable, inner, body, OpCode::ArrayForLoop, span)
+            }
+            InferType::Dynamic | InferType::Var(_) => {
+                // dynamic: default to VecForLoop (works for both at runtime via object kind)
+                self.compile_collection_for_each(iterator, iterable, &InferType::Dynamic, body, OpCode::VecForLoop, span)
+            }
             _ => Err(aelys_common::AelysError::Compile(CompileError::new(
                 CompileErrorKind::TypeInferenceError(format!(
                     "for-each over {:?} not yet supported",
@@ -163,6 +173,94 @@ impl Compiler {
                 self.source.clone(),
             ))),
         }
+    }
+
+    fn infer_to_resolved(ty: &InferType) -> aelys_sema::ResolvedType {
+        match ty {
+            InferType::Int => aelys_sema::ResolvedType::Int,
+            InferType::Float => aelys_sema::ResolvedType::Float,
+            InferType::Bool => aelys_sema::ResolvedType::Bool,
+            InferType::String => aelys_sema::ResolvedType::String,
+            _ => aelys_sema::ResolvedType::Dynamic,
+        }
+    }
+
+    fn compile_collection_for_each(
+        &mut self,
+        iterator: &str,
+        iterable: &aelys_sema::TypedExpr,
+        inner_type: &InferType,
+        body: &aelys_sema::TypedStmt,
+        opcode: OpCode,
+        span: Span,
+    ) -> Result<()> {
+        self.begin_scope();
+
+        // Allocate 3 consecutive registers: [element, index, collection_ptr]
+        let elem_reg = self.alloc_consecutive_registers_for_call(3, span)?;
+        let index_reg = elem_reg + 1;
+        let coll_reg = elem_reg + 2;
+
+        self.register_pool[elem_reg as usize] = true;
+        self.register_pool[index_reg as usize] = true;
+        self.register_pool[coll_reg as usize] = true;
+        self.next_register = self.next_register.max(coll_reg + 1);
+
+        // Compile iterable into collection_ptr register
+        self.compile_typed_expr(iterable, coll_reg)?;
+
+        // Initialize index to 0
+        self.emit_b(OpCode::LoadI, index_reg, 0, span);
+
+        // Jump to ForLoop check before executing body
+        let jump_to_forloop = self.emit_jump(OpCode::Jump, span);
+
+        let loop_start = self.current_offset();
+
+        self.loop_stack.push(super::super::LoopContext {
+            start: loop_start,
+            break_jumps: Vec::new(),
+            continue_jumps: Vec::new(),
+            is_for_loop: true,
+        });
+
+        // Register the iterator variable pointing to element register
+        let resolved = Self::infer_to_resolved(inner_type);
+        self.add_local(iterator.to_string(), false, elem_reg, resolved);
+
+        // Compile loop body
+        self.compile_typed_stmt(body)?;
+
+        let continue_target = self.current_offset();
+
+        // Patch the initial jump to point here (to VecForLoop/ArrayForLoop)
+        self.patch_jump(jump_to_forloop);
+
+        // Emit VecForLoop/ArrayForLoop: operates on elem_reg (consecutive regs)
+        let offset = (self.current_offset() - loop_start + 1) as i16;
+        self.emit_b(opcode, elem_reg, -offset, span);
+
+        let ctx = self.loop_stack.pop().ok_or_else(|| {
+            CompileError::new(
+                CompileErrorKind::ContinueOutsideLoop,
+                span,
+                self.source.clone(),
+            )
+        })?;
+        for jump in ctx.continue_jumps {
+            let offset_to_target = (continue_target as isize - jump as isize - 1) as i16;
+            *self.current.bytecode_mut(jump) =
+                (OpCode::Jump as u32) << 24 | ((offset_to_target as u32) & 0xFFFFFF);
+        }
+        for jump in ctx.break_jumps {
+            self.patch_jump(jump);
+        }
+
+        self.free_register(coll_reg);
+        self.free_register(index_reg);
+        self.end_scope();
+
+        Ok(())
     }
 
     fn compile_string_for_each(

@@ -1,40 +1,55 @@
 # Standard Library Reference
 
-All standard library modules live under `std.*`. Import them with `needs`:
+All standard library modules live under `std.*`.
+
+### Auto-registered modules
+
+The safe modules : `std.io`, `std.math`, `std.string`, `std.convert`, and `std.time`, are auto-registered at VM startup. You can use their functions immediately without `needs`. For example, `println("hello")` and `math.sqrt(16.0)` work out of the box.
+
+You can still use `needs` with an alias if you want a shorter name:
 
 ```rust
-needs std.io
 needs std.math as m
-needs print from std.io
+```
+
+### Capability-gated modules
+
+The following modules require an explicit `needs` import and the corresponding `--allow-caps` flag:
+
+- `std.fs` -- file system access (`--allow-caps=fs`)
+- `std.net` -- network access (`--allow-caps=net`)
+- `std.sys` -- system information
+- `std.bytes` -- raw byte buffers
+
+**Important** : you can also use `--ae-trusted=true` to enable all caps.
+
+```rust
+needs std.fs
+needs std.net
 ```
 
 ---
 
 ## std.io
 
-Console input/output.
-
-```rust
-needs std.io
-```
+Console input/output. Auto-registered -- no `needs` required.
 
 ### Output Functions
 
 | Function | Description |
 |----------|-------------|
-| `print(value)` | Print value with newline |
-| `println(value)` | Same as print |
-| `print_inline(value)` | Print without newline |
+| `print(value)` | Print value without newline |
+| `println(value)` | Print value with newline |
 | `eprint(value)` | Print to stderr, no newline |
 | `eprintln(value)` | Print to stderr with newline |
 | `flush()` | Flush stdout buffer |
 | `eflush()` | Flush stderr buffer |
 
 ```rust
-print("Hello")           // Hello\n
-print_inline("Loading")  // Loading (no newline)
-print_inline(".")        // .
-print("")                // newline
+println("Hello")         // Hello\n
+print("Loading")         // Loading (no newline)
+print(".")               // .
+println("")              // newline
 ```
 
 ### Input Functions
@@ -47,7 +62,7 @@ print("")                // newline
 
 ```rust
 let name = input("What's your name? ")
-print("Hello, {name}")
+println("Hello, {name}")
 ```
 
 ### Terminal Control
@@ -65,18 +80,14 @@ ANSI escape sequence wrappers. Work on most modern terminals.
 ```rust
 clear_screen()
 move_cursor(10, 5)
-print("Here!")
+println("Here!")
 ```
 
 ---
 
 ## std.math
 
-Math functions and constants.
-
-```rust
-needs std.math
-```
+Math functions and constants. Auto-registered -- no `needs` required.
 
 ### Constants
 
@@ -166,121 +177,125 @@ All functions work in radians.
 
 ## std.string
 
-String manipulation. Strings are UTF-8.
+String manipulation. Strings are UTF-8. Auto-registered -- no `needs` required.
+
+String functions can be called as methods on string values. The qualified `string.func(s, ...)` syntax also still works.
 
 ```rust
-needs std.string as str
+// Method syntax (preferred)
+let n = "hello".len()
+let up = "hello".to_upper()
+
+// Qualified syntax (also valid)
+let n = string.len("hello")
+let up = string.to_upper("hello")
 ```
 
 ### Length
 
-| Function | Description |
-|----------|-------------|
-| `len(s)` | Length in bytes |
-| `char_len(s)` | Length in Unicode characters |
+| Method | Description |
+|--------|-------------|
+| `s.len()` | Length in bytes |
+| `s.char_len()` | Length in Unicode characters |
 
 ```rust
-str.len("café")       // 5 (bytes)
-str.char_len("café")  // 4 (characters)
+"café".len()       // 5 (bytes)
+"café".char_len()  // 4 (characters)
 ```
 
 This distinction matters for non-ASCII text.
 
 ### Character Access
 
-| Function | Description |
-|----------|-------------|
-| `char_at(s, i)` | Character at index (empty if out of bounds) |
-| `byte_at(s, i)` | Byte at index (-1 if out of bounds) |
-| `substr(s, start, len)` | Extract substring by character position |
+| Method | Description |
+|--------|-------------|
+| `s.char_at(i)` | Character at index (empty if out of bounds) |
+| `s.byte_at(i)` | Byte at index (-1 if out of bounds) |
+| `s.substr(start, len)` | Extract substring by character position |
 
 ```rust
-str.char_at("hello", 0)    // "h"
-str.char_at("hello", 10)   // "" (out of bounds)
-str.substr("hello", 1, 3)  // "ell"
+"hello".char_at(0)    // "h"
+"hello".char_at(10)   // "" (out of bounds)
+"hello".substr(1, 3)  // "ell"
 ```
 
 ### Case Conversion
 
-| Function | Description |
-|----------|-------------|
-| `to_upper(s)` | Convert to uppercase |
-| `to_lower(s)` | Convert to lowercase |
-| `capitalize(s)` | Capitalize first character |
+| Method | Description |
+|--------|-------------|
+| `s.to_upper()` | Convert to uppercase |
+| `s.to_lower()` | Convert to lowercase |
+| `s.capitalize()` | Capitalize first character |
 
 ### Search
 
-| Function | Description |
-|----------|-------------|
-| `contains(s, needle)` | Check if string contains substring |
-| `starts_with(s, prefix)` | Check prefix |
-| `ends_with(s, suffix)` | Check suffix |
-| `find(s, needle)` | First occurrence index (-1 if not found) |
-| `rfind(s, needle)` | Last occurrence index |
-| `count(s, needle)` | Count occurrences |
+| Method | Description |
+|--------|-------------|
+| `s.contains(needle)` | Check if string contains substring |
+| `s.starts_with(prefix)` | Check prefix |
+| `s.ends_with(suffix)` | Check suffix |
+| `s.find(needle)` | First occurrence index (-1 if not found) |
+| `s.rfind(needle)` | Last occurrence index |
+| `s.count(needle)` | Count occurrences |
 
 Note: `find` and `rfind` return byte positions, not character positions. This can be surprising with Unicode - I might change this in a future version.
 
 ### Transformation
 
-| Function | Description |
-|----------|-------------|
-| `replace(s, old, new)` | Replace all occurrences |
-| `replace_first(s, old, new)` | Replace first occurrence |
-| `reverse(s)` | Reverse string |
-| `repeat(s, n)` | Repeat n times |
-| `concat(a, b)` | Concatenate (same as `+`) |
+| Method | Description |
+|--------|-------------|
+| `s.replace(old, new)` | Replace all occurrences |
+| `s.replace_first(old, new)` | Replace first occurrence |
+| `s.reverse()` | Reverse string |
+| `s.repeat(n)` | Repeat n times |
+| `s.concat(other)` | Concatenate (same as `+`) |
 
 ### Whitespace
 
-| Function | Description |
-|----------|-------------|
-| `trim(s)` | Remove whitespace from both ends |
-| `trim_start(s)` | Remove from start |
-| `trim_end(s)` | Remove from end |
-| `pad_left(s, width, char)` | Pad start to width |
-| `pad_right(s, width, char)` | Pad end to width |
+| Method | Description |
+|--------|-------------|
+| `s.trim()` | Remove whitespace from both ends |
+| `s.trim_start()` | Remove from start |
+| `s.trim_end()` | Remove from end |
+| `s.pad_left(width, char)` | Pad start to width |
+| `s.pad_right(width, char)` | Pad end to width |
 
 ```rust
-str.trim("  hello  ")        // "hello"
-str.pad_left("42", 5, "0")   // "00042"
+"  hello  ".trim()        // "hello"
+"42".pad_left(5, "0")     // "00042"
 ```
 
 ### Splitting
 
-| Function | Description |
-|----------|-------------|
-| `split(s, sep)` | Split by separator |
-| `join(parts, sep)` | Join parts with separator |
-| `lines(s)` | Split into lines |
-| `line_count(s)` | Count lines |
+| Method | Description |
+|--------|-------------|
+| `s.split(sep)` | Split by separator |
+| `string.join(parts, sep)` | Join parts with separator |
+| `s.lines()` | Split into lines |
+| `s.line_count()` | Count lines |
 
 `split` and `join` use newline-separated strings as the "list" representation. This is awkward (I know), but arrays aren't first-class yet.
 
 ```rust
-let parts = str.split("a,b,c", ",")  // "a\nb\nc"
-str.join(parts, "-")                  // "a-b-c"
+let parts = "a,b,c".split(",")       // "a\nb\nc"
+string.join(parts, "-")              // "a-b-c"
 ```
 
 ### Predicates
 
-| Function | Description |
-|----------|-------------|
-| `is_empty(s)` | Check if empty |
-| `is_whitespace(s)` | Only whitespace? |
-| `is_numeric(s)` | Only digits? |
-| `is_alphabetic(s)` | Only letters? |
-| `is_alphanumeric(s)` | Letters and digits only? |
+| Method | Description |
+|--------|-------------|
+| `s.is_empty()` | Check if empty |
+| `s.is_whitespace()` | Only whitespace? |
+| `s.is_numeric()` | Only digits? |
+| `s.is_alphabetic()` | Only letters? |
+| `s.is_alphanumeric()` | Letters and digits only? |
 
 ---
 
 ## std.convert
 
-Type conversions and introspection.
-
-```rust
-needs std.convert
-```
+Type conversions and introspection. Auto-registered -- no `needs` required.
 
 ### Parsing Strings
 
@@ -308,6 +323,14 @@ convert.parse_int("nope")    // null
 | `to_int(x)` | Convert to int |
 | `to_float(x)` | Convert to float |
 | `to_bool(x)` | Convert to bool (truthiness) |
+
+`.to_string()` can be called as a method on any value:
+
+```rust
+(42).to_string()      // "42"
+true.to_string()      // "true"
+(3.14).to_string()    // "3.14"
+```
 
 ### Numeric Formatting
 
@@ -359,11 +382,7 @@ convert.is_int(42)         // true
 
 ## std.time
 
-Time operations and measurement.
-
-```rust
-needs std.time
-```
+Time operations and measurement. Auto-registered -- no `needs` required.
 
 ### Current Time
 
@@ -390,7 +409,7 @@ For measuring elapsed time accurately:
 let t = time.timer()
 // ... do work ...
 let ms = time.elapsed_ms(t)
-print("Took {ms}ms")
+println("Took {ms}ms")
 ```
 
 ### Sleep
@@ -473,7 +492,7 @@ let f = fs.open("data.txt", "r")
 while true {
     let line = fs.read_line(f)
     if line == null { break }
-    print(line)
+    println(line)
 }
 fs.close(f)
 ```
@@ -560,7 +579,7 @@ needs std.net
 let sock = net.connect("example.com", 80)
 net.send(sock, "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n")
 let response = net.recv(sock)
-print(response)
+println(response)
 net.close(sock)
 ```
 
@@ -573,7 +592,7 @@ net.close(sock)
 
 ```rust
 let server = net.listen("0.0.0.0", 8080)
-print("Listening on port 8080")
+println("Listening on port 8080")
 
 while true {
     let client = net.accept(server)
@@ -638,7 +657,7 @@ needs std.sys
 | `arch()` | CPU architecture ("x86_64", "aarch64", etc.) |
 
 ```rust
-print("Running on {sys.platform()} {sys.arch()}")
+println("Running on {sys.platform()} {sys.arch()}")
 // "Running on linux x86_64"
 ```
 

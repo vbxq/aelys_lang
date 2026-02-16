@@ -359,7 +359,7 @@ fn test_while_loop() {
         r#"
 let mut i = 0
 while i < 10 {
-    i = i + 1
+    i++
 }
 i
 "#,
@@ -373,7 +373,7 @@ fn test_while_with_break() {
         r#"
 let mut i = 0
 while true {
-    i = i + 1
+    i++
     if i >= 5 {
         break
     }
@@ -391,11 +391,11 @@ fn test_while_with_continue() {
 let mut i = 0
 let mut sum = 0
 while i < 10 {
-    i = i + 1
+    i++
     if i % 2 == 0 {
         continue
     }
-    sum = sum + i
+    sum += i
 }
 sum
 "#,
@@ -478,7 +478,7 @@ fn gc_stress() {
     let mut i = 0
     while i < 10000 {
         let temp = "garbage string that should be collected"
-        i = i + 1
+        i++
     }
     i
 }
@@ -499,7 +499,7 @@ fn gc_stress2() {
         let a = "string a"
         let b = "string b"
         let c = a + b
-        i = i + 1
+        i++
     }
     i
 }
@@ -554,8 +554,8 @@ fn critical_section(n) {
     let mut sum = 0
     let mut i = 0
     while i < n {
-        sum = sum + i
-        i = i + 1
+        sum += i
+        i++
     }
     return sum
 }

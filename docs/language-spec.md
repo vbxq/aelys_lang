@@ -192,14 +192,12 @@ let x = "now a string"  // shadows previous x
 Inner scopes can also shadow:
 
 ```rust
-needs std.io 
-
 let x = 1
 if true {
     let x = 2    // different x
-    print(x)  // 2
+    println(x)  // 2
 }
-print(x)      // 1
+println(x)      // 1
 ```
 
 ### Scope
@@ -491,7 +489,7 @@ Iterates over the elements of a collection:
 
 ```rust
 for letter in "Keine" {
-    print(letter)
+    println(letter)
 }
 ```
 
@@ -500,7 +498,23 @@ Works with string variables too:
 ```rust
 let name = "Mokou"
 for c in name {
-    print(c)
+    println(c)
+}
+```
+
+Arrays and vectors support for-each iteration as well:
+
+```rust
+let arr = Array[10, 20, 30]
+for item in arr {
+    println(item)
+}
+```
+
+```rust
+let v = Vec["alice", "bob", "charlie"]
+for item in v {
+    println(item)
 }
 ```
 
@@ -519,7 +533,7 @@ You can use `break` and `continue` inside for-each loops:
 ```rust
 for c in "abcdefgh" {
     if c == "d" { break }
-    print(c)    // prints a, b, c
+    println(c)    // prints a, b, c
 }
 ```
 
@@ -542,28 +556,40 @@ Work in `while` loops too.
 The `needs` keyword imports modules:
 
 ```rust
-needs std.io                     // whole module
+needs std.fs                     // whole module (required for capability-gated modules)
 needs std.math as m              // aliased
-needs print from std.io          // single function
 needs sqrt, pow from std.math    // multiple functions
 ```
 
-After `needs std.io`, you can use both `print()` directly and `io.print()`.
+Safe stdlib modules (io, math, string, convert, time) are auto-registered, so you can call their functions directly without `needs`. You can still use `needs` with them for aliasing or selective imports if you want:
 
-With an alias (`needs std.io as x`), only the aliased form works: `x.print()`.
+```rust
+needs std.math as m              // now use m.sqrt() instead of math.sqrt()
+needs sqrt, pow from std.math    // import specific functions
+```
 
-After `needs print from std.io`, you call `print()` directly.
+With an alias (`needs std.math as m`), only the aliased form works: `m.sqrt()`.
+
+After `needs sqrt from std.math`, you call `sqrt()` directly without the module prefix.
 
 ### Standard Library Modules
+
+The safe standard library modules are **auto-registered**, their functions are available without any `needs` statement:
 
 - `std.io` - console I/O
 - `std.math` - math functions and constants
 - `std.string` - string manipulation
 - `std.convert` - type conversions
 - `std.time` - time and timers
+
+Capability-gated modules still require an explicit `needs` import:
+
 - `std.fs` - file system (requires capability)
 - `std.net` - networking (requires capability)
 - `std.sys` - system info
+- `std.bytes` - byte-level memory (requires capability)
+
+You can also use `--ae-trusted=true` to enable all caps
 
 See [Standard Library](standard-library.md) for full documentation.
 
@@ -955,7 +981,7 @@ Mutations persist:
 ```rust
 fn double_all(v) {
     for i in 0..v.len() {
-        v[i] = v[i] * 2
+        v[i] *= 2
     }
 }
 
@@ -972,7 +998,15 @@ Index-based loops work on arrays and vectors:
 let arr = Array[10, 20, 30, 40]
 
 for i in 0..arr.len() {
-    print(arr[i])
+    println(arr[i])
+}
+```
+
+Or use for-each for simpler iteration (see [for-each](#for-each)):
+
+```rust
+for item in arr {
+    println(item)
 }
 ```
 
@@ -992,11 +1026,9 @@ Each index returns a single-character string. Indexing is Unicode-aware — it a
 You can combine string indexing with a range-based for loop:
 
 ```rust
-needs std.string
-
 let s = "hello"
-for i in 0..string.char_len(s) {
-    print(s[i])
+for i in 0..s.len() {
+    println(s[i])
 }
 ```
 
@@ -1004,7 +1036,7 @@ Or use for-each iteration for simpler code (see [for-each](#for-each)):
 
 ```rust
 for c in "hello" {
-    print(c)
+    println(c)
 }
 ```
 
@@ -1071,12 +1103,9 @@ The `-Werror` flag is useful in CI to catch issues early
 Currently there's no try/catch mechanism. Functions that can fail return `null` on failure:
 
 ```rust
-needs std.io
-needs std.convert
-
 let result = convert.parse_int("not a number")
 if result == null {
-    print("parsing failed")
+    println("parsing failed")
 }
 ```
 

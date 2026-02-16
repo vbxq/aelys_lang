@@ -50,13 +50,13 @@ impl Compiler {
                 self.compile_typed_member_access(object, member, dest, expr.span)
             }
             TypedExprKind::ArrayLiteral { elements, .. } => {
-                self.compile_typed_array_literal(elements, dest, expr.span)
+                self.compile_typed_array_literal(&expr.ty, elements, dest, expr.span)
             }
             TypedExprKind::ArraySized { element_type, size } => {
                 self.compile_typed_array_sized(element_type, size, dest, expr.span)
             }
             TypedExprKind::VecLiteral { elements, .. } => {
-                self.compile_typed_vec_literal(elements, dest, expr.span)
+                self.compile_typed_vec_literal(&expr.ty, elements, dest, expr.span)
             }
             TypedExprKind::Index { object, index } => {
                 self.compile_typed_index_access(object, index, dest, expr.span)

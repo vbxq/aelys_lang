@@ -324,6 +324,16 @@ pub(super) fn required_registers(bytecode: &[u32]) -> usize {
                     Some(a as usize),
                 );
             }
+            // Vec/Array for loop - uses consecutive regs [element(a), index(a+1), collection_ptr(a+2)]
+            OpCode::VecForLoop | OpCode::ArrayForLoop => {
+                update_max_reg(
+                    &mut max_reg,
+                    &mut used,
+                    a as usize + 2,
+                    Some(a as usize + 1),
+                    Some(a as usize),
+                );
+            }
         }
         ip += 1;
     }

@@ -75,7 +75,7 @@ fn test_closure_mutable_counter() {
         fn make_counter() {
             let mut count = 0
             return fn() {
-                count = count + 1
+                count++
                 return count
             }
         }
@@ -98,7 +98,7 @@ fn test_closure_separate_counters() {
         fn make_counter() {
             let mut count = 0
             return fn() {
-                count = count + 1
+                count++
                 return count
             }
         }
@@ -123,7 +123,7 @@ fn test_closure_counter_with_step() {
         fn make_stepper(step_size) {
             let mut count = 0
             return fn() {
-                count = count + step_size
+                count += step_size
                 return count
             }
         }
@@ -145,7 +145,7 @@ fn test_closure_accumulator() {
         fn make_accumulator() {
             let mut total = 0
             return fn(n) {
-                total = total + n
+                total += n
                 return total
             }
         }
@@ -268,8 +268,8 @@ fn test_closure_in_loop_capture_current() {
             while i <= 3 {
                 let val = i
                 let f = fn() { return val }
-                sum = sum + f()
-                i = i + 1
+                sum += f()
+                i++
             }
             return sum
         }
@@ -289,7 +289,7 @@ fn test_closure_captures_loop_variable_by_ref() {
             let mut i = 0
             let f = fn() { return i }
             while i < 5 {
-                i = i + 1
+                i++
             }
             return f()
         }
@@ -380,9 +380,9 @@ fn test_closure_captures_bool() {
         // a=true(1), b=false(0), c=true(1) => sum = 2
         let sum = 0
         let mut result = sum
-        if a { result = result + 1 }
-        if b { result = result + 1 }
-        if c { result = result + 1 }
+        if a { result++ }
+        if b { result++ }
+        if c { result++ }
         result
     "#,
     );
@@ -447,7 +447,7 @@ fn test_closure_modifies_outer_mutable() {
         r#"
         fn test() {
             let mut x = 0
-            let inc = fn() { x = x + 1 }
+            let inc = fn() { x++ }
             inc()
             inc()
             inc()
@@ -481,8 +481,8 @@ fn test_closure_chain() {
         r#"
         fn chain(initial) {
             let mut value = initial
-            let add = fn(n) { value = value + n; return value }
-            let mul = fn(n) { value = value * n; return value }
+            let add = fn(n) { value += n; return value }
+            let mul = fn(n) { value *= n; return value }
             let get = fn() { return value }
             add(5)
             mul(2)

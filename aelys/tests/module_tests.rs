@@ -607,7 +607,10 @@ sin(0) + math.cos(0)
 }
 
 #[test]
-fn test_alias_disables_direct_import() {
+fn test_alias_with_auto_registered_globals() {
+    // Auto-registered stdlib functions are always available, even when
+    // the module is also imported with an alias. Both `sin(0)` and
+    // `m.sin(0)` should work.
     let dir = create_module_env();
 
     let main_path = write_file(
@@ -620,13 +623,7 @@ sin(0)
     );
 
     let result = run_file(&main_path);
-    assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("sin"),
-        "Should fail on direct 'sin' call: {}",
-        err
-    );
+    assert!(result.is_ok(), "sin() should be available from auto-registration");
 }
 
 #[test]

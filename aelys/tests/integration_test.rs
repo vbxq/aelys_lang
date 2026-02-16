@@ -63,7 +63,7 @@ fn test_mutable_variables() {
     let result = run_ok("let mut x = 10; x = 20; x;");
     assert_eq!(result.as_int(), Some(20));
 
-    let result = run_ok("let mut count = 0; count = count + 1; count;");
+    let result = run_ok("let mut count = 0; count++; count;");
     assert_eq!(result.as_int(), Some(1));
 }
 
@@ -129,8 +129,8 @@ fn test_while_loop() {
         let mut i = 0;
         let mut sum = 0;
         while i < 5 {
-            sum = sum + i;
-            i = i + 1;
+            sum += i;
+            i++;
         }
         sum;
     "#,
@@ -145,8 +145,8 @@ fn test_factorial_iterative() {
         let mut n = 5;
         let mut result = 1;
         while n > 0 {
-            result = result * n;
-            n = n - 1;
+            result *= n;
+            n--;
         }
         result;
     "#,
@@ -196,17 +196,17 @@ fn test_fizzbuzz() {
         let mut count = 0;
         while i <= 15 {
             if i % 15 == 0 {
-                count = count + 1;
+                count++;
             } else {
                 if i % 3 == 0 {
-                    count = count + 1;
+                    count++;
                 } else {
                     if i % 5 == 0 {
-                        count = count + 1;
+                        count++;
                     }
                 }
             }
-            i = i + 1;
+            i++;
         }
         count;
     "#,
@@ -287,8 +287,8 @@ fn test_break_statement() {
             if i == 5 {
                 break;
             }
-            sum = sum + i;
-            i = i + 1;
+            sum += i;
+            i++;
         }
         sum;
     "#,
@@ -303,11 +303,11 @@ fn test_continue_statement() {
         let mut i = 0;
         let mut sum = 0;
         while i < 5 {
-            i = i + 1;
+            i++;
             if i == 3 {
                 continue;
             }
-            sum = sum + i;
+            sum += i;
         }
         sum;
     "#,
@@ -347,13 +347,13 @@ fn test_error_assign_to_immutable() {
 
 #[test]
 fn test_error_assign_to_immutable_param() {
-    let error = run_err("fn f(x: int) -> int { x = x + 1; x } f(1);");
+    let error = run_err("fn f(x: int) -> int { x++; x } f(1);");
     assert!(error.contains("immutable") || error.contains("not mutable"));
 }
 
 #[test]
 fn test_mut_param_reassign() {
-    let result = run_ok("fn f(mut x: int) -> int { x = x + 1; x } f(10);");
+    let result = run_ok("fn f(mut x: int) -> int { x++; x } f(10);");
     assert_eq!(result.as_int(), Some(11));
 }
 
@@ -361,7 +361,7 @@ fn test_mut_param_reassign() {
 fn test_mut_param_in_loop() {
     let result = run_ok(
         "fn accumulate(mut acc: int, n: int) -> int { \
-         for i in 0..n { acc = acc + 1 } \
+         for i in 0..n { acc++ } \
          return acc } \
          accumulate(10, 5);",
     );
@@ -371,7 +371,7 @@ fn test_mut_param_in_loop() {
 #[test]
 fn test_mut_param_does_not_affect_caller() {
     let result = run_ok(
-        "fn inc(mut x: int) -> int { x = x + 100; x } \
+        "fn inc(mut x: int) -> int { x += 100; x } \
          let a = 1; let b = inc(a); a;",
     );
     assert_eq!(result.as_int(), Some(1));

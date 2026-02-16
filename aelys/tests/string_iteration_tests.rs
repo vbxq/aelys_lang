@@ -5,10 +5,9 @@ use common::*;
 #[test]
 fn string_index_first_char() {
     let code = r#"
-needs std.string
 let s = "hello"
 let c = s[0]
-string.char_len(c)
+c.char_len()
 "#;
     assert_aelys_int(code, 1);
 }
@@ -16,10 +15,9 @@ string.char_len(c)
 #[test]
 fn string_index_last_char() {
     let code = r#"
-needs std.string
 let s = "abcde"
 let c = s[4]
-string.char_len(c)
+c.char_len()
 "#;
     assert_aelys_int(code, 1);
 }
@@ -27,12 +25,11 @@ string.char_len(c)
 #[test]
 fn string_index_accumulate_with_range_for() {
     let code = r#"
-needs std.string
 let s = "hello"
 let mut count = 0
-for i in 0..string.char_len(s) {
+for i in 0..s.char_len() {
     let c = s[i]
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -76,7 +73,7 @@ fn string_foreach_count_chars() {
     let code = r#"
 let mut count = 0
 for c in "hello" {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -89,7 +86,7 @@ fn string_foreach_with_variable() {
 let stuff = "abcdef"
 let mut count = 0
 for letter in stuff {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -101,7 +98,7 @@ fn string_foreach_empty_string() {
     let code = r#"
 let mut count = 0
 for c in "" {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -113,7 +110,7 @@ fn string_foreach_single_char() {
     let code = r#"
 let mut count = 0
 for c in "x" {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -139,7 +136,7 @@ fn string_foreach_in_function() {
 fn count_chars(s: string) -> int {
     let mut n = 0
     for c in s {
-        n = n + 1
+        n++
     }
     return n
 }
@@ -154,7 +151,7 @@ fn string_foreach_nested_in_range_for() {
 let mut total = 0
 for i in 0..3 {
     for c in "ab" {
-        total = total + 1
+        total++
     }
 }
 total
@@ -165,11 +162,10 @@ total
 #[test]
 fn string_foreach_with_conditional() {
     let code = r#"
-needs std.string
 let mut count = 0
 for c in "aAbBcC" {
     if c == "a" or c == "b" or c == "c" {
-        count = count + 1
+        count++
     }
 }
 count
@@ -184,16 +180,15 @@ count
 #[test]
 fn string_index_and_foreach_same_count() {
     let code = r#"
-needs std.string
 let s = "hello world"
 let mut count_index = 0
-for i in 0..string.char_len(s) {
+for i in 0..s.char_len() {
     let c = s[i]
-    count_index = count_index + 1
+    count_index++
 }
 let mut count_foreach = 0
 for c in s {
-    count_foreach = count_foreach + 1
+    count_foreach++
 }
 if count_index == count_foreach { count_index } else { -1 }
 "#;
@@ -209,7 +204,7 @@ fn string_foreach_unicode_accented() {
     let code = r#"
 let mut count = 0
 for c in "café" {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -221,7 +216,7 @@ fn string_foreach_unicode_multibyte() {
     let code = r#"
 let mut count = 0
 for c in "héllo" {
-    count = count + 1
+    count++
 }
 count
 "#;
@@ -237,7 +232,7 @@ fn string_foreach_break_early() {
     let code = r#"
 let mut count = 0
 for c in "abcdefgh" {
-    count = count + 1
+    count++
     if count == 3 {
         break
     }

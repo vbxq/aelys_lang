@@ -144,7 +144,7 @@ fn test_if_else_statement() {
 
 #[test]
 fn test_while_statement() {
-    let stmts = parse("while x < 10 { x = x + 1 }");
+    let stmts = parse("while x < 10 { x++ }");
 
     match &stmts[0].kind {
         StmtKind::While { condition, body } => {

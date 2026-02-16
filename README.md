@@ -6,16 +6,47 @@
 <a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
 <a href="https://github.com/vbxq/aelys_lang/releases/latest"><img src="https://img.shields.io/github/v/release/vbxq/aelys_lang?color=8A2BE2" alt="Release"></a>
 
-# aelys 0.19.11-a
+# aelys 0.19.13-a
 
 Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
 
 You choose between comfort and performance on a per-function basis.
 
+## Quick Example
+
+```rust
+// No imports needed for basic functions
+println("Hello from Aelys!")
+
+// String methods
+let name = "  Aelys  ".trim().to_upper()
+println("Name: {name}")
+
+// Arrays and iteration
+let numbers = [1, 2, 3, 4, 5]
+let mut sum = 0
+for n in numbers {
+    sum += n
+}
+println("Sum: {sum}")
+
+// Vectors (dynamic)
+let items = Vec[10, 20, 30]
+items.push(40)
+println("Length: {items.len()}")
+
+// Functions
+fn factorial(n: int) -> int {
+    if n <= 1 { return 1 }
+    return n * factorial(n - 1)
+}
+println("5! = {factorial(5)}")
+```
+
 ## Documentation
 
-- [Getting Started Guide](docs/getting-started.md)
 - [Build Instructions](docs/installation.md)
+- [Getting Started Guide](docs/getting-started.md)
 - [Language Specification](docs/language-spec.md)
 - [Standard Library Documentation](docs/standard-library.md)
 

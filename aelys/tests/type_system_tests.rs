@@ -65,7 +65,7 @@ fn test_let_mutable_with_type() {
     let result = run_ok(
         r#"
         let mut x: int = 10
-        x = x + 5
+        x += 5
         x
     "#,
     );
@@ -118,7 +118,7 @@ fn test_function_void_return_type() {
         let mut counter: int = 0
 
         fn increment() -> void {
-            counter = counter + 1
+            counter++
         }
 
         increment()
@@ -413,8 +413,8 @@ fn test_inferred_types_in_loop() {
         let mut sum = 0
         let mut i = 0
         while i < 10 {
-            sum = sum + i
-            i = i + 1
+            sum += i
+            i++
         }
         sum
     "#,
@@ -429,8 +429,8 @@ fn test_typed_loop_counter() {
         let mut sum: int = 0
         let mut i: int = 0
         while i < 5 {
-            sum = sum + i * i
-            i = i + 1
+            sum += i * i
+            i++
         }
         sum
     "#,
@@ -445,7 +445,7 @@ fn test_for_loop_with_typed_bounds() {
         r#"
         let mut sum: int = 0
         for i in 1..6 {
-            sum = sum + i
+            sum += i
         }
         sum
     "#,

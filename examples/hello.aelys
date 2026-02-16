@@ -1,6 +1,5 @@
-needs std.io
 needs std.sys
 
-print("Hello, World!")
-print("Welcome to Aelys v0.19.11-a!")
-print("Platform: {sys.platform()} {sys.arch()}")
+println("Hello, World!")
+println("Welcome to Aelys v0.19.13-a!")
+println("Platform: {sys.platform()} {sys.arch()}")

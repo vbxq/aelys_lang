@@ -4,6 +4,16 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
 
+**0.19.13-a**
+- `print()` no longer adds a newline (`println()` still does)
+- `for item in myVec { }` and `for item in myArray { }` iteration syntax
+- String method syntax: `s.trim()`, `s.contains("x")`, `"hello".to_upper()` instead of `trim(s)`
+- `.to_string()` on any type: `(42).to_string()`, `true.to_string()`
+- Now, safe stdlib auto-registered at startup (io, math, string, convert, time), `needs std.X` no longer required !
+- `.len()` now works on dynamic-typed parameters (polymorphic over vec, array, string)
+- Fixed `fs.join` path traversal detection on windows
+- Fixed module alias calls being intercepted by string method dispatch
+
 **0.19.12-a**
 - compoud assignment operators: `+=`, `-=`, `*=`, `/=`, `%=`
 - postfix increment/decrement: `x++`, `x--`
