@@ -25,7 +25,7 @@ impl Compiler {
         let count = elements.len();
 
         if count == 0 {
-            self.emit_a(OpCode::ArrayNewI, dest, 0, 0, span);
+            self.emit_a(OpCode::ArrayNewP, dest, 0, 0, span);
             return Ok(());
         }
 
@@ -58,7 +58,7 @@ impl Compiler {
         let count = elements.len();
 
         if count == 0 {
-            self.emit_a(OpCode::VecNewI, dest, 0, 0, span);
+            self.emit_a(OpCode::VecNewP, dest, 0, 0, span);
             return Ok(());
         }
 
