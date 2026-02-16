@@ -63,6 +63,9 @@ impl VM {
             repl_symbol_origins: HashMap::new(),
         };
         super::builtins::register_builtins(&mut vm)?;
+        // auto-register string module so s.method() works without `needs std.string`
+        // TODO: no but.. this feels wrong..
+        crate::stdlib::string::register(&mut vm)?;
         Ok(vm)
     }
 }
