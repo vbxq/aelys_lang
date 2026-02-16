@@ -191,14 +191,14 @@ fn display_frame(fb: int) {
             let code = fb_get(fb, x, y)
             row = row + code_to_char(code)
         }
-        io.print(row)
+        println(row)
     }
 }
 
 fn main() {
-    io.print("Initializing 3D Donut Renderer...")
-    io.print("Screen: " + convert.to_string(WIDTH) + "x" + convert.to_string(HEIGHT))
-    io.print("")
+    println("Initializing 3D Donut Renderer...")
+    println("Screen: " + convert.to_string(WIDTH) + "x" + convert.to_string(HEIGHT))
+    println("")
 
     let fb = fb_new(WIDTH, HEIGHT)
     let zbuf = zbuf_new(WIDTH, HEIGHT)
@@ -208,7 +208,7 @@ fn main() {
     let num_frames: int = 500
     let frame_delay: int = 15
 
-    io.print("Rendering " + convert.to_string(num_frames) + " frames...")
+    println("Rendering " + convert.to_string(num_frames) + " frames...")
     time.sleep(1000)
 
     io.hide_cursor()
@@ -219,8 +219,8 @@ fn main() {
         render_frame(fb, zbuf, A, B)
         display_frame(fb)
 
-        io.print("")
-        io.print("Frame " + convert.to_string(frame + 1) + "/" + convert.to_string(num_frames) + " | A=" + convert.to_string(math.floor(A * 100.0) / 100.0) + " B=" + convert.to_string(math.floor(B * 100.0) / 100.0))
+        println("")
+        println("Frame " + convert.to_string(frame + 1) + "/" + convert.to_string(num_frames) + " | A=" + convert.to_string(math.floor(A * 100.0) / 100.0) + " B=" + convert.to_string(math.floor(B * 100.0) / 100.0))
 
         A = A + 0.07
         B = B + 0.03
@@ -231,8 +231,8 @@ fn main() {
     zbuf_free(zbuf)
     io.show_cursor()
 
-    io.print("")
-    io.print("Animation complete!")
+    println("")
+    println("Animation complete!")
 }
 
 main()

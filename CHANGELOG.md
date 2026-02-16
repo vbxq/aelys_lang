@@ -13,6 +13,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 - `.len()` now works on dynamic-typed parameters (polymorphic over vec, array, string)
 - Fixed `fs.join` path traversal detection on windows
 - Fixed module alias calls being intercepted by string method dispatch
+- (0.19.14-b) Multiline expressions: function calls, array/vec literals, and grouped expressions can now span multiple lines
 
 **0.19.12-a**
 - compoud assignment operators: `+=`, `-=`, `*=`, `/=`, `%=`

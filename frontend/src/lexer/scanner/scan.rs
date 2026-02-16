@@ -10,7 +10,10 @@ impl Lexer {
             ' ' | '\r' | '\t' => {}
 
             '\n' => {
-                if self.pending_semicolon && !self.next_token_is_else() {
+                if self.pending_semicolon
+                    && self.nesting_depth == 0
+                    && !self.next_token_is_else()
+                {
                     self.add_token(TokenKind::Semicolon);
                     self.pending_semicolon = false;
                 }
@@ -18,12 +21,24 @@ impl Lexer {
                 self.column = 1;
             }
 
-            '(' => self.add_token(TokenKind::LParen),
-            ')' => self.add_token(TokenKind::RParen),
+            '(' => {
+                self.nesting_depth += 1;
+                self.add_token(TokenKind::LParen);
+            }
+            ')' => {
+                self.nesting_depth = self.nesting_depth.saturating_sub(1);
+                self.add_token(TokenKind::RParen);
+            }
             '{' => self.add_token(TokenKind::LBrace),
             '}' => self.add_token(TokenKind::RBrace),
-            '[' => self.add_token(TokenKind::LBracket),
-            ']' => self.add_token(TokenKind::RBracket),
+            '[' => {
+                self.nesting_depth += 1;
+                self.add_token(TokenKind::LBracket);
+            }
+            ']' => {
+                self.nesting_depth = self.nesting_depth.saturating_sub(1);
+                self.add_token(TokenKind::RBracket);
+            }
             ',' => self.add_token(TokenKind::Comma),
             ';' => self.add_token(TokenKind::Semicolon),
             '.' => {

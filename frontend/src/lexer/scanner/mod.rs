@@ -26,6 +26,7 @@ pub struct Lexer {
     column: u32,
     start_column: u32,
     pending_semicolon: bool,
+    nesting_depth: u32,
 }
 
 impl Lexer {
@@ -40,6 +41,7 @@ impl Lexer {
             column: 1,
             start_column: 1,
             pending_semicolon: false,
+            nesting_depth: 0,
         }
     }
 
@@ -55,6 +57,7 @@ impl Lexer {
             column: 1,
             start_column: 1,
             pending_semicolon: false,
+            nesting_depth: 0,
         }
     }
 
