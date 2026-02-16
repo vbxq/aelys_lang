@@ -40,8 +40,8 @@ fn run() {
     bytes.write_u8(pal_g, MAX_ITER, 0)
     bytes.write_u8(pal_b, MAX_ITER, 0)
 
-    io.print_inline(ESC + "[?25l")
-    io.print_inline(ESC + "[2J")
+    print_inline(ESC + "[?25l")
+    print_inline(ESC + "[2J")
 
     let cx = -0.745
     let cy = 0.186
@@ -69,7 +69,7 @@ fn run() {
             }
         }
 
-        io.print_inline(ESC + "[H")
+        print_inline(ESC + "[H")
         for row in 0..ROWS {
             let y1 = row * 2
             let y2 = y1 + 1
@@ -82,10 +82,10 @@ fn run() {
                 let r2 = bytes.read_u8(pal_r, i2)
                 let g2 = bytes.read_u8(pal_g, i2)
                 let b2 = bytes.read_u8(pal_b, i2)
-                io.print_inline(ESC + "[38;2;" + convert.to_string(r1) + ";" + convert.to_string(g1) + ";" + convert.to_string(b1) + ";48;2;" + convert.to_string(r2) + ";" + convert.to_string(g2) + ";" + convert.to_string(b2) + "m" + HALF)
+                print_inline(ESC + "[38;2;" + convert.to_string(r1) + ";" + convert.to_string(g1) + ";" + convert.to_string(b1) + ";48;2;" + convert.to_string(r2) + ";" + convert.to_string(g2) + ";" + convert.to_string(b2) + "m" + HALF)
             }
-            io.print_inline(ESC + "[0m")
-            io.print("")
+            print_inline(ESC + "[0m")
+            println("")
         }
         io.flush()
 
@@ -93,8 +93,8 @@ fn run() {
         time.sleep(30)
     }
 
-    io.print_inline(ESC + "[?25h")
-    io.print_inline(ESC + "[2J" + ESC + "[H")
+    print_inline(ESC + "[?25h")
+    print_inline(ESC + "[2J" + ESC + "[H")
 
     bytes.free(fb)
     bytes.free(pal_r)
@@ -103,4 +103,4 @@ fn run() {
 }
 
 run()
-io.print("Mandelbrot zoom complete!")
+println("Mandelbrot zoom complete!")
