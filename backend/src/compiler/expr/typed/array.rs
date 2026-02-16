@@ -31,6 +31,7 @@ impl Compiler {
 
     pub(super) fn compile_typed_array_literal(
         &mut self,
+        expr_ty: &InferType,
         elements: &[TypedExpr],
         dest: u8,
         span: Span,
@@ -38,7 +39,18 @@ impl Compiler {
         let count = elements.len();
 
         if count == 0 {
-            self.emit_a(OpCode::ArrayNewI, dest, 0, 0, span);
+            let opcode = if let InferType::Array(inner) = expr_ty {
+                Self::select_typed_opcode(
+                    inner,
+                    OpCode::ArrayNewI,
+                    OpCode::ArrayNewF,
+                    OpCode::ArrayNewB,
+                    OpCode::ArrayNewP,
+                )
+            } else {
+                OpCode::ArrayNewP
+            };
+            self.emit_a(opcode, dest, 0, 0, span);
             return Ok(());
         }
 
@@ -69,6 +81,7 @@ impl Compiler {
 
     pub(super) fn compile_typed_vec_literal(
         &mut self,
+        expr_ty: &InferType,
         elements: &[TypedExpr],
         dest: u8,
         span: Span,
@@ -76,7 +89,18 @@ impl Compiler {
         let count = elements.len();
 
         if count == 0 {
-            self.emit_a(OpCode::VecNewI, dest, 0, 0, span);
+            let opcode = if let InferType::Vec(inner) = expr_ty {
+                Self::select_typed_opcode(
+                    inner,
+                    OpCode::VecNewI,
+                    OpCode::VecNewF,
+                    OpCode::VecNewB,
+                    OpCode::VecNewP,
+                )
+            } else {
+                OpCode::VecNewP
+            };
+            self.emit_a(opcode, dest, 0, 0, span);
             return Ok(());
         }
 
