@@ -1,8 +1,8 @@
 mod common;
 
 use aelys_bytecode::{AelysArray, AelysVec, ArrayData, TypeTag, Value};
-use common::{
-    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys, run_aelys_ok,
+use common::{assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, assert_aelys_str, run_aelys,
+    run_aelys_ok,
 };
 
 #[test]
@@ -804,5 +804,94 @@ fn test_e2e_vec_len_in_condition() {
         if v.len() > 2 { 100 } else { 0 }
         "#,
         100,
+    );
+}
+
+// Regression tests: empty Vec[] / Array[] must work with non-int types
+
+#[test]
+fn test_e2e_vec_push_string() {
+    assert_aelys_str(
+        r#"
+        let v = Vec[]
+        v.push("hello")
+        v.push("world")
+        v[0]
+        "#,
+        "hello",
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_string_in_typed_fn() {
+    assert_aelys_int(
+        r#"
+        fn build(n: int) -> int {
+            let buffer = Vec[]
+            for i in 0..n {
+                buffer.push("-")
+            }
+            return buffer.len()
+        }
+        build(5)
+        "#,
+        5,
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_float() {
+    let result = run_aelys(
+        r#"
+        let v = Vec[]
+        v.push(1.5)
+        v.push(2.5)
+        v[0]
+        "#,
+    );
+    assert_eq!(result.as_float(), Some(1.5));
+}
+
+#[test]
+fn test_e2e_vec_push_bool() {
+    assert_aelys_bool(
+        r#"
+        let v = Vec[]
+        v.push(true)
+        v.push(false)
+        v[0]
+        "#,
+        true,
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_then_modify() {
+    assert_aelys_str(
+        r#"
+        let v = Vec[]
+        v.push("a")
+        v.push("b")
+        v[1] = "z"
+        v[1]
+        "#,
+        "z",
+    );
+}
+
+#[test]
+fn test_e2e_vec_push_in_untyped_fn() {
+    assert_aelys_int(
+        r#"
+        fn build_vec() {
+            let v = Vec[]
+            v.push(10)
+            v.push(20)
+            v.push(30)
+            return v.len()
+        }
+        build_vec()
+        "#,
+        3,
     );
 }
