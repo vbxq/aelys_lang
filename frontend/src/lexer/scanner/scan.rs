@@ -10,10 +10,7 @@ impl Lexer {
             ' ' | '\r' | '\t' => {}
 
             '\n' => {
-                if self.pending_semicolon
-                    && self.nesting_depth == 0
-                    && !self.next_token_is_else()
-                {
+                if self.pending_semicolon && self.nesting_depth == 0 && !self.next_token_is_else() {
                     self.add_token(TokenKind::Semicolon);
                     self.pending_semicolon = false;
                 }
