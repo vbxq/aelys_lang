@@ -8,6 +8,17 @@ impl Parser {
             let start = self.previous().span;
             let operand = self.unary()?;
             let span = start.merge(operand.span);
+
+            match operand.kind {
+                ExprKind::Int(n) => {
+                    return Ok(Expr::new(ExprKind::Int(n.wrapping_neg()), span));
+                }
+                ExprKind::Float(f) => {
+                    return Ok(Expr::new(ExprKind::Float(-f), span));
+                }
+                _ => {}
+            }
+
             return Ok(Expr::new(
                 ExprKind::Unary {
                     op: UnaryOp::Neg,
