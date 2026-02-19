@@ -32,6 +32,7 @@ impl Compiler {
             symbol_origins: Rc::new(HashMap::new()),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
+            function_depth: 0,
         }
     }
 
@@ -67,6 +68,7 @@ impl Compiler {
             symbol_origins: Rc::new(HashMap::new()),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
+            function_depth: 0,
         }
     }
 
@@ -115,6 +117,7 @@ impl Compiler {
             symbol_origins,
             accessed_globals: HashSet::new(),
             next_call_site_slot,
+            function_depth: 1,
         }
     }
 
@@ -151,6 +154,7 @@ impl Compiler {
             symbol_origins: Rc::new(symbol_origins),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
+            function_depth: 0,
         }
     }
 
@@ -189,6 +193,7 @@ impl Compiler {
             symbol_origins: Rc::new(symbol_origins),
             accessed_globals: HashSet::new(),
             next_call_site_slot: 0,
+            function_depth: 0,
         }
     }
 }
