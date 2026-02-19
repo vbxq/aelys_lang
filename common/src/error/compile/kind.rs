@@ -33,6 +33,7 @@ pub enum CompileErrorKind {
     TooManyUpvalues,
     BreakOutsideLoop,
     ContinueOutsideLoop,
+    ReturnOutsideFunction,
     AssignToLoopVariable(String),
 
     // 48-bit signed range for NaN-boxed ints

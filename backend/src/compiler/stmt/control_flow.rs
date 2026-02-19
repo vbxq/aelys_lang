@@ -67,6 +67,15 @@ impl Compiler {
         expr: Option<&aelys_syntax::ast::Expr>,
         span: Span,
     ) -> Result<()> {
+        if self.function_depth == 0 {
+            return Err(CompileError::new(
+                CompileErrorKind::ReturnOutsideFunction,
+                span,
+                self.source.clone(),
+            )
+            .into());
+        }
+
         if self.has_no_gc {
             let line = self.current_line(span);
             self.current.emit_a(OpCode::ExitNoGc, 0, 0, 0, line);
@@ -116,6 +125,15 @@ impl Compiler {
         expr: Option<&aelys_sema::TypedExpr>,
         span: Span,
     ) -> Result<()> {
+        if self.function_depth == 0 {
+            return Err(CompileError::new(
+                CompileErrorKind::ReturnOutsideFunction,
+                span,
+                self.source.clone(),
+            )
+            .into());
+        }
+
         if self.has_no_gc {
             self.emit_a(OpCode::ExitNoGc, 0, 0, 0, span);
         }

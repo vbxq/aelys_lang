@@ -79,10 +79,18 @@ fn test_unary_expression() {
     let stmts = parse("-42");
 
     match &stmts[0].kind {
+        StmtKind::Expression(expr) => {
+            assert!(matches!(expr.kind, ExprKind::Int(-42)));
+        }
+        _ => panic!("Expected expression statement"),
+    }
+
+    let stmts = parse("-x");
+
+    match &stmts[0].kind {
         StmtKind::Expression(expr) => match &expr.kind {
-            ExprKind::Unary { op, operand } => {
+            ExprKind::Unary { op, .. } => {
                 assert_eq!(*op, UnaryOp::Neg);
-                assert!(matches!(operand.kind, ExprKind::Int(42)));
             }
             _ => panic!("Expected unary expression"),
         },

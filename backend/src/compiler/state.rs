@@ -63,4 +63,5 @@ pub struct Compiler {
     pub symbol_origins: Rc<HashMap<String, String>>, // bare name -> qualified name
     pub accessed_globals: HashSet<String>,
     pub next_call_site_slot: u16,
+    pub function_depth: usize,
 }

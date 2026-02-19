@@ -36,6 +36,7 @@ impl CompileErrorKind {
             Self::TooManyUpvalues => "too many captured variables (max 255)".to_string(),
             Self::BreakOutsideLoop => "'break' outside of loop".to_string(),
             Self::ContinueOutsideLoop => "'continue' outside of loop".to_string(),
+            Self::ReturnOutsideFunction => "'return' outside of function".to_string(),
             Self::AssignToLoopVariable(name) => {
                 format!("cannot assign to loop variable '{}'", name)
             }

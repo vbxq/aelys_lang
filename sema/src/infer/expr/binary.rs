@@ -2,6 +2,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::TypedExpr;
 use crate::types::InferType;
+use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{BinaryOp, Span, UnaryOp};
 
 impl TypeInference {
@@ -69,12 +70,23 @@ impl TypeInference {
             }
 
             BinaryOp::Eq | BinaryOp::Ne => {
-                self.constraints.push(Constraint::equal(
-                    left.ty.clone(),
-                    right.ty.clone(),
-                    span,
-                    ConstraintReason::Comparison,
-                ));
+                if left.ty.is_concrete() && right.ty.is_concrete() && left.ty != right.ty {
+                    self.warnings.push(Warning::new(
+                        WarningKind::IncompatibleComparison {
+                            left: left.ty.to_string(),
+                            right: right.ty.to_string(),
+                            op: op.to_string(),
+                        },
+                        span,
+                    ));
+                } else {
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        right.ty.clone(),
+                        span,
+                        ConstraintReason::Comparison,
+                    ));
+                }
 
                 InferType::Bool
             }

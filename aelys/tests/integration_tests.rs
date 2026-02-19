@@ -611,16 +611,13 @@ fn test_max_int_value() {
 
 #[test]
 fn test_min_int_value() {
-    // Test value near 48-bit min: -(1 << 47) = -140737488355328
-    // We can't test -140737488355328 directly because the parser treats it as
-    // unary negation of 140737488355328, which is already out of range.
-    // So we test -140737488355327 instead (which is INT_MIN + 1)
     let result = run_aelys("-140737488355327");
     assert_eq!(result.as_int(), Some(-140737488355327));
 
-    // Values exceeding 48-bit range should error
-    // Test with a value whose absolute value exceeds INT_MAX
-    let err = run_aelys_err("-140737488355328");
+    let result = run_aelys("-140737488355328");
+    assert_eq!(result.as_int(), Some(-140737488355328));
+
+    let err = run_aelys_err("-140737488355329");
     assert!(err.contains("integer") && err.contains("exceeds") && err.contains("range"));
 }
 

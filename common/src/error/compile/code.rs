@@ -24,6 +24,7 @@ impl CompileErrorKind {
             Self::TooManyUpvalues => 211,
             Self::BreakOutsideLoop => 207,
             Self::ContinueOutsideLoop => 208,
+            Self::ReturnOutsideFunction => 212,
             Self::AssignToLoopVariable(_) => 210,
             Self::IntegerOverflow { .. } => 209,
             Self::ModuleNotFound { .. } => 401,

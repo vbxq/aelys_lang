@@ -11,6 +11,7 @@ impl CompileErrorKind {
             Self::RecursionDepthExceeded { .. } => "nesting limit exceeded",
             Self::CommentNestingTooDeep { .. } => "nesting limit exceeded",
             Self::UnexpectedToken { .. } => "unexpected token",
+            Self::ReturnOutsideFunction => "not inside a function",
             Self::IntegerOverflow { .. } => "value exceeds range",
             Self::ModuleNotFound { .. } => "module not found",
             Self::CircularDependency { .. } => "creates circular dependency",

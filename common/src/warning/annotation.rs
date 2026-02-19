@@ -15,6 +15,7 @@ impl WarningKind {
             Self::ShadowedVariable { .. } => "shadows earlier binding",
             Self::UnknownType { .. } => "unknown type name",
             Self::UnknownTypeParameter { .. } => "unknown type parameter",
+            Self::IncompatibleComparison { .. } => "mismatched types",
         }
     }
 
@@ -32,6 +33,7 @@ impl WarningKind {
             Self::ShadowedVariable { .. } => Some("use a different name"),
             Self::UnknownType { .. } => Some("use int, float, bool, string, array, or vec"),
             Self::UnknownTypeParameter { .. } => Some("use a known type like int, float, string"),
+            Self::IncompatibleComparison { .. } => None,
         }
     }
 

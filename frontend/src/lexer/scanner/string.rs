@@ -116,10 +116,27 @@ impl Lexer {
                     expr.push(self.advance());
                 }
                 '"' => {
-                    // end of string before closing }
-                    return Err(AelysError::Compile(
-                        self.error(CompileErrorKind::UnterminatedFmtExpr),
-                    ));
+                    expr.push(self.advance());
+                    while !self.is_at_end() && self.peek() != '"' {
+                        if self.peek() == '\\' {
+                            expr.push(self.advance());
+                            if !self.is_at_end() {
+                                expr.push(self.advance());
+                            }
+                        } else {
+                            if self.peek() == '\n' {
+                                self.line += 1;
+                                self.column = 1;
+                            }
+                            expr.push(self.advance());
+                        }
+                    }
+                    if self.is_at_end() {
+                        return Err(AelysError::Compile(
+                            self.error(CompileErrorKind::UnterminatedFmtExpr),
+                        ));
+                    }
+                    expr.push(self.advance());
                 }
                 '\n' => {
                     self.line += 1;
