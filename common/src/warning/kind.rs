@@ -41,6 +41,11 @@ pub enum WarningKind {
         param: String,
         in_type: String,
     },
+    IncompatibleComparison {
+        left: String,
+        right: String,
+        op: String,
+    },
 }
 
 impl WarningKind {
@@ -71,7 +76,9 @@ impl WarningKind {
 
             WarningKind::ShadowedVariable { .. } => "shadow",
 
-            WarningKind::UnknownType { .. } | WarningKind::UnknownTypeParameter { .. } => "type",
+            WarningKind::UnknownType { .. }
+            | WarningKind::UnknownTypeParameter { .. }
+            | WarningKind::IncompatibleComparison { .. } => "type",
         }
     }
 }

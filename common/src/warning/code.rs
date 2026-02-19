@@ -24,6 +24,7 @@ impl WarningKind {
             // type: 500-599
             Self::UnknownType { .. } => 501,
             Self::UnknownTypeParameter { .. } => 502,
+            Self::IncompatibleComparison { .. } => 503,
         }
     }
 }

@@ -69,6 +69,16 @@ impl WarningKind {
                     param, in_type
                 )
             }
+
+            Self::IncompatibleComparison { left, right, op } => {
+                format!(
+                    "comparing {} {} {} will always be {}",
+                    left,
+                    op,
+                    right,
+                    if op == "!=" { "true" } else { "false" }
+                )
+            }
         }
     }
 }
