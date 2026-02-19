@@ -23,17 +23,33 @@ impl Lexer {
             self.advance();
         }
 
+        let mut is_float = false;
+
         if self.peek() == '.' && self.peek_next().is_ascii_digit() {
+            is_float = true;
             self.advance();
             while self.peek().is_ascii_digit() || self.peek() == '_' {
                 self.advance();
             }
+        }
 
-            let text: String = self.chars[self.start..self.current]
-                .iter()
-                .filter(|&&c| c != '_')
-                .collect();
+        if self.peek() == 'e' || self.peek() == 'E' {
+            is_float = true;
+            self.advance();
+            if self.peek() == '+' || self.peek() == '-' {
+                self.advance();
+            }
+            while self.peek().is_ascii_digit() || self.peek() == '_' {
+                self.advance();
+            }
+        }
 
+        let text: String = self.chars[self.start..self.current]
+            .iter()
+            .filter(|&&c| c != '_')
+            .collect();
+
+        if is_float {
             match text.parse::<f64>() {
                 Ok(n) => self.add_token(TokenKind::Float(n)),
                 Err(_) => {
@@ -43,11 +59,6 @@ impl Lexer {
                 }
             }
         } else {
-            let text: String = self.chars[self.start..self.current]
-                .iter()
-                .filter(|&&c| c != '_')
-                .collect();
-
             match text.parse::<i64>() {
                 Ok(n) => self.add_token(TokenKind::Int(n)),
                 Err(_) => {
