@@ -54,6 +54,17 @@ impl InferType {
         matches!(self, InferType::Int | InferType::Float)
     }
 
+    pub fn is_concrete(&self) -> bool {
+        matches!(
+            self,
+            InferType::Int
+                | InferType::Float
+                | InferType::Bool
+                | InferType::String
+                | InferType::Null
+        )
+    }
+
     /// Convert from type annotation string
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
         let name = ann.name.to_lowercase();
