@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.20.x - Preparing for LLVM
 
+**0.20.2-a**
+- Explicit casts with `x as T` syntax
+
 **0.20.1-a**
 - New `air` crate: AIR (Aelys Intermediate Representation) between typed AST and backend
 - Lowering pass from `TypedProgram` to `AirProgram` (closures, loops, string interpolation desugared)
