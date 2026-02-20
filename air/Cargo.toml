@@ -1,0 +1,11 @@
+[package]
+name = "aelys-air"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+aelys-sema = { path = "../sema" }
+aelys-syntax = { path = "../syntax" }
+
+[lib]
+doctest = false

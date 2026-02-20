@@ -7,6 +7,7 @@ edition = "2024"
 aelys-common = { path = "../common" }
 aelys-syntax = { path = "../syntax" }
 aelys-sema = { path = "../sema" }
+aelys-air = { path = "../air" }
 aelys-bytecode = { path = "../bytecode" }
 
 [lib]

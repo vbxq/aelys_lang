@@ -4,6 +4,10 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.20.x - Preparing for LLVM
 
+**0.20.1-a**
+- New `air` crate: AIR (Aelys Intermediate Representation) between typed AST and backend
+- Lowering pass from `TypedProgram` to `AirProgram` (closures, loops, string interpolation desugared)
+
 **0.20.0-a**
 - Sized integer and float types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 (int/float kept as aliases)
 

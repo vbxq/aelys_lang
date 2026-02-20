@@ -7,6 +7,7 @@ members = [
     "frontend",
     "sema",
     "opt",
+    "air",
     "bytecode",
     "backend",
     "runtime",

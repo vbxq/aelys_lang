@@ -1,7 +1,7 @@
 use super::pipeline::Pipeline;
 use super::stages::{
-    CompilerStage, DebugStripStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage,
-    VMStage,
+    AirLowerStage, CompilerStage, DebugStripStage, LexerStage, OptimizationStage, ParserStage,
+    TypeInferenceStage, VMStage,
 };
 use aelys_opt::OptimizationLevel;
 use std::collections::{HashMap, HashSet};
@@ -16,6 +16,7 @@ pub fn standard_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline.add_stage(Box::new(ParserStage));
     pipeline.add_stage(Box::new(TypeInferenceStage::new()));
     pipeline.add_stage(Box::new(OptimizationStage::new(opt_level)));
+    pipeline.add_stage(Box::new(AirLowerStage));
     pipeline.add_stage(Box::new(CompilerStage::new()));
     pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
     pipeline.add_stage(Box::new(VMStage::new()));
@@ -33,6 +34,7 @@ pub fn compilation_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline.add_stage(Box::new(ParserStage));
     pipeline.add_stage(Box::new(TypeInferenceStage::new()));
     pipeline.add_stage(Box::new(OptimizationStage::new(opt_level)));
+    pipeline.add_stage(Box::new(AirLowerStage));
     pipeline.add_stage(Box::new(CompilerStage::new()));
     pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
     pipeline
@@ -54,6 +56,7 @@ pub fn compilation_pipeline_with_modules(
         known_globals.clone(),
     )));
     pipeline.add_stage(Box::new(OptimizationStage::new(opt_level)));
+    pipeline.add_stage(Box::new(AirLowerStage));
     pipeline.add_stage(Box::new(CompilerStage::with_modules(
         module_aliases,
         known_globals,
