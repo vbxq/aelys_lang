@@ -76,6 +76,18 @@ impl TypeInference {
                 self.handle_needs_stmt(needs);
                 TypedStmtKind::Needs(needs.clone())
             }
+            StmtKind::StructDecl {
+                name, fields, ..
+            } => TypedStmtKind::StructDecl {
+                name: name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|f| {
+                        let ty = crate::types::InferType::from_annotation(&f.type_annotation);
+                        (f.name.clone(), ty)
+                    })
+                    .collect(),
+            },
         };
 
         TypedStmt {

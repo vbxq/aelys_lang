@@ -80,6 +80,7 @@ impl TypeInference {
             TypedStmtKind::Return(None) | TypedStmtKind::Break | TypedStmtKind::Continue => {}
             TypedStmtKind::Function(_) => {}
             TypedStmtKind::Needs(_) => {}
+            TypedStmtKind::StructDecl { .. } => {}
         }
     }
 
@@ -182,6 +183,11 @@ impl TypeInference {
                     if let crate::typed_ast::TypedFmtStringPart::Expr(e) = part {
                         self.collect_captures_inner(e, params, captures, seen);
                     }
+                }
+            }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.collect_captures_inner(value, params, captures, seen);
                 }
             }
             TypedExprKind::Int(_)

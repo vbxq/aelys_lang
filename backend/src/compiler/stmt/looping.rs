@@ -83,7 +83,7 @@ impl Compiler {
             iterator.to_string(),
             false,
             iter_reg,
-            aelys_sema::ResolvedType::Int,
+            aelys_sema::ResolvedType::I64,
         );
         self.loop_variables.push(iterator.to_string());
 
@@ -193,13 +193,7 @@ impl Compiler {
     }
 
     fn infer_to_resolved(ty: &InferType) -> aelys_sema::ResolvedType {
-        match ty {
-            InferType::Int => aelys_sema::ResolvedType::Int,
-            InferType::Float => aelys_sema::ResolvedType::Float,
-            InferType::Bool => aelys_sema::ResolvedType::Bool,
-            InferType::String => aelys_sema::ResolvedType::String,
-            _ => aelys_sema::ResolvedType::Dynamic,
-        }
+        aelys_sema::ResolvedType::from_infer_type(ty)
     }
 
     fn compile_collection_for_each(

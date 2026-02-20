@@ -73,7 +73,8 @@ fn collect_uses_in_stmt(stmt: &TypedStmt, used: &mut HashSet<String>) {
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
-        | TypedStmtKind::Needs(_) => {}
+        | TypedStmtKind::Needs(_)
+        | TypedStmtKind::StructDecl { .. } => {}
     }
 }
 
@@ -169,6 +170,11 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
                     collect_uses_in_expr(e, used);
                 }
+            }
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, value) in fields {
+                collect_uses_in_expr(value, used);
             }
         }
         TypedExprKind::Int(_)

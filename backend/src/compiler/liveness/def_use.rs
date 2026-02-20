@@ -88,7 +88,8 @@ fn collect_def_use_stmt(
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
-        | TypedStmtKind::Needs(_) => {}
+        | TypedStmtKind::Needs(_)
+        | TypedStmtKind::StructDecl { .. } => {}
     }
 }
 
@@ -185,6 +186,11 @@ fn collect_uses_expr(
                 if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
                     collect_uses_expr(analysis, e, uses);
                 }
+            }
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, value) in fields {
+                collect_uses_expr(analysis, value, uses);
             }
         }
         TypedExprKind::Int(_)

@@ -63,13 +63,13 @@ impl TypeInference {
 
         self.constraints.push(Constraint::equal(
             typed_start.ty.clone(),
-            InferType::Int,
+            InferType::I64,
             start.span,
             ConstraintReason::ForBounds,
         ));
         self.constraints.push(Constraint::equal(
             typed_end.ty.clone(),
-            InferType::Int,
+            InferType::I64,
             end.span,
             ConstraintReason::ForBounds,
         ));
@@ -77,14 +77,14 @@ impl TypeInference {
             let step_span = step.map(|s| s.span).unwrap_or(body.span);
             self.constraints.push(Constraint::equal(
                 ts.ty.clone(),
-                InferType::Int,
+                InferType::I64,
                 step_span,
                 ConstraintReason::ForBounds,
             ));
         }
 
         self.env.push_scope();
-        self.env.define_local(iterator.to_string(), InferType::Int);
+        self.env.define_local(iterator.to_string(), InferType::I64);
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
 

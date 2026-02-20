@@ -84,6 +84,11 @@ impl GlobalConstantPropagator {
                     }
                 }
             }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.substitute_constants(value);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
@@ -139,7 +144,8 @@ impl GlobalConstantPropagator {
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
-            | TypedStmtKind::Needs(_) => {}
+            | TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. } => {}
         }
     }
 

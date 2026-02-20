@@ -10,21 +10,24 @@ pub fn select_opcode(op: BinaryOp, left: &ResolvedType, right: &ResolvedType) ->
     let right_inner = right.unwrap_uncertain();
 
     match (left_inner, right_inner) {
-        (ResolvedType::Int, ResolvedType::Int) => {
+        // sized integer types collapse to int opcodes until LLVM backend
+        (l, r) if l.is_integer() && r.is_integer() => {
             if needs_guard {
                 select_guarded_int_opcode(op)
             } else {
                 select_typed_int_opcode(op)
             }
         }
-        (ResolvedType::Float, ResolvedType::Float) => {
+        // sized float types collapse to float opcodes until LLVM backend
+        (l, r) if l.is_float() && r.is_float() => {
             if needs_guard {
                 select_guarded_float_opcode(op)
             } else {
                 select_typed_float_opcode(op)
             }
         }
-        (ResolvedType::Int, ResolvedType::Float) | (ResolvedType::Float, ResolvedType::Int) => {
+        // int+float cross-type falls back to guarded float
+        (l, r) if (l.is_integer() && r.is_float()) || (l.is_float() && r.is_integer()) => {
             select_guarded_float_opcode(op)
         }
         (ResolvedType::Dynamic, _) | (_, ResolvedType::Dynamic) => select_generic_opcode(op),
@@ -149,10 +152,12 @@ pub fn compute_result_type(
     let result = match op {
         BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod => {
             match (left_inner, right_inner) {
-                (ResolvedType::Int, ResolvedType::Int) => ResolvedType::Int,
-                (ResolvedType::Float, ResolvedType::Float) => ResolvedType::Float,
-                (ResolvedType::Int, ResolvedType::Float)
-                | (ResolvedType::Float, ResolvedType::Int) => ResolvedType::Float,
+                // same sized type from unification
+                (a, b) if a.is_integer() && b.is_integer() => a.clone(),
+                (a, b) if a.is_float() && b.is_float() => a.clone(),
+                // cross-type int+float falls back to float
+                (_, r) if left_inner.is_integer() && r.is_float() => r.clone(),
+                (l, _) if l.is_float() && right_inner.is_integer() => l.clone(),
                 (ResolvedType::String, ResolvedType::String) if matches!(op, BinaryOp::Add) => {
                     ResolvedType::String
                 }
@@ -163,7 +168,12 @@ pub fn compute_result_type(
             ResolvedType::Bool
         }
         BinaryOp::Shl | BinaryOp::Shr | BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor => {
-            ResolvedType::Int
+            // sized integer types collapse to the left operand's type
+            if left_inner.is_integer() {
+                left_inner.clone()
+            } else {
+                ResolvedType::I64
+            }
         }
     };
 

@@ -1,7 +1,7 @@
-use super::{KNOWN_TYPES, TypeInference};
+use super::{KNOWN_TYPE_NAMES, TypeInference};
 use crate::constraint::ConstraintReason;
 use crate::typed_ast::TypedProgram;
-use crate::types::InferType;
+use crate::types::{InferType, TypeTable};
 use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{Source, Stmt, TypeAnnotation};
 use std::collections::HashSet;
@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct InferenceResult {
     pub program: TypedProgram,
     pub warnings: Vec<Warning>,
+    pub type_table: TypeTable,
 }
 
 impl Default for TypeInference {
@@ -22,17 +23,16 @@ impl Default for TypeInference {
             return_type_stack: Vec::new(),
             depth: 0,
             warnings: Vec::new(),
+            type_table: TypeTable::new(),
         }
     }
 }
 
 impl TypeInference {
-    /// Create a new inference engine
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// Convert type annotation to InferType with warning emission
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
         self.check_type_annotation(ann);
         InferType::from_annotation(ann)
@@ -41,34 +41,47 @@ impl TypeInference {
     fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
         let name_lower = ann.name.to_lowercase();
 
-        if !KNOWN_TYPES.contains(&name_lower.as_str()) {
-            self.warnings.push(Warning::new(
-                WarningKind::UnknownType {
-                    name: ann.name.clone(),
-                },
-                ann.span,
-            ));
+        if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
+            if let Some(ref param) = ann.type_param {
+                let param_lower = param.name.to_lowercase();
+                if !KNOWN_TYPE_NAMES.contains(&param_lower.as_str())
+                    && !param.name.chars().next().map_or(false, |c| c.is_uppercase())
+                {
+                    self.warnings.push(Warning::new(
+                        WarningKind::UnknownTypeParameter {
+                            param: param.name.clone(),
+                            in_type: ann.name.clone(),
+                        },
+                        param.span,
+                    ));
+                }
+                if let Some(ref nested) = param.type_param {
+                    self.check_type_annotation(nested);
+                }
+            }
             return;
         }
 
-        if let Some(ref param) = ann.type_param {
-            let param_lower = param.name.to_lowercase();
-            if !KNOWN_TYPES.contains(&param_lower.as_str()) {
+        if ann.name.chars().next().map_or(false, |c| c.is_uppercase()) {
+            if !self.type_table.has_struct(&ann.name) {
                 self.warnings.push(Warning::new(
-                    WarningKind::UnknownTypeParameter {
-                        param: param.name.clone(),
-                        in_type: ann.name.clone(),
+                    WarningKind::UnknownType {
+                        name: ann.name.clone(),
                     },
-                    param.span,
+                    ann.span,
                 ));
             }
-            if let Some(ref nested) = param.type_param {
-                self.check_type_annotation(nested);
-            }
+            return;
         }
+
+        self.warnings.push(Warning::new(
+            WarningKind::UnknownType {
+                name: ann.name.clone(),
+            },
+            ann.span,
+        ));
     }
 
-    /// Main entry point: infer types for a program
     pub fn infer_program(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
@@ -78,7 +91,6 @@ impl TypeInference {
         Ok(result.program)
     }
 
-    /// Infer types for a program with module imports pre-registered
     pub fn infer_program_with_imports(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
@@ -89,7 +101,6 @@ impl TypeInference {
         Ok(result.program)
     }
 
-    /// Full inference with warnings returned
     pub fn infer_program_full(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
@@ -106,6 +117,7 @@ impl TypeInference {
             inf.env.define_local(global.clone(), InferType::Dynamic);
         }
 
+        inf.collect_structs(&stmts);
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);
@@ -134,12 +146,16 @@ impl TypeInference {
             }
         }
 
+        let type_table = inf.type_table;
+
         Ok(InferenceResult {
             program: TypedProgram {
                 stmts: final_stmts,
                 source,
+                type_table: type_table.clone(),
             },
             warnings: inf.warnings,
+            type_table,
         })
     }
 }

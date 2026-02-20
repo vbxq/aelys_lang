@@ -48,7 +48,7 @@ impl ConstantFolder {
         self.stats.constants_folded += 1;
         Some(TypedExpr::new(
             TypedExprKind::Float(result),
-            InferType::Float,
+            InferType::F64,
             original.span,
         ))
     }

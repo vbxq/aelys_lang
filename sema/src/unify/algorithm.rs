@@ -3,25 +3,31 @@ use super::occurs::occurs_check;
 use super::{Substitution, UnifyError};
 use crate::types::InferType;
 
-// standard HM unification
 pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyResult<()> {
     let t1 = subst.apply(t1);
     let t2 = subst.apply(t2);
 
     match (&t1, &t2) {
-        // same concrete types - ok
-        (InferType::Int, InferType::Int) => Ok(()),
-        (InferType::Float, InferType::Float) => Ok(()),
-        (InferType::Bool, InferType::Bool) => Ok(()),
-        (InferType::String, InferType::String) => Ok(()),
-        (InferType::Null, InferType::Null) => Ok(()),
+        (InferType::I8, InferType::I8)
+        | (InferType::I16, InferType::I16)
+        | (InferType::I32, InferType::I32)
+        | (InferType::I64, InferType::I64)
+        | (InferType::U8, InferType::U8)
+        | (InferType::U16, InferType::U16)
+        | (InferType::U32, InferType::U32)
+        | (InferType::U64, InferType::U64)
+        | (InferType::F32, InferType::F32)
+        | (InferType::F64, InferType::F64)
+        | (InferType::Bool, InferType::Bool)
+        | (InferType::String, InferType::String)
+        | (InferType::Null, InferType::Null) => Ok(()),
 
-        // dynamic unifies with anything (gradual typing)
+        (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
+
         (InferType::Dynamic, _) | (_, InferType::Dynamic) => Ok(()),
 
         (InferType::Var(id1), InferType::Var(id2)) if id1 == id2 => Ok(()),
 
-        // type var on left
         (InferType::Var(v), ty) => {
             if *ty != InferType::Dynamic && occurs_check(*v, ty) {
                 return Err(UnifyError::InfiniteType(*v, ty.clone()));
@@ -30,7 +36,6 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
             Ok(())
         }
 
-        // type var on right - same thing
         (ty, InferType::Var(v)) => {
             if *ty != InferType::Dynamic && occurs_check(*v, ty) {
                 return Err(UnifyError::InfiniteType(*v, ty.clone()));

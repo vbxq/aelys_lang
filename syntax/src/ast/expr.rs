@@ -169,6 +169,18 @@ pub enum ExprKind {
         object: Box<Expr>,
         range: Box<Expr>,
     },
+
+    StructLiteral {
+        name: String,
+        fields: Vec<StructFieldInit>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct StructFieldInit {
+    pub name: String,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

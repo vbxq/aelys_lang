@@ -109,6 +109,11 @@ impl ConstantFolder {
                     }
                 }
             }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.optimize_expr(value);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

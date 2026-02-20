@@ -5,8 +5,8 @@ use aelys_syntax::Span;
 #[test]
 fn test_constraint_creation() {
     let c = Constraint::equal(
-        InferType::Int,
-        InferType::Float,
+        InferType::I64,
+        InferType::F64,
         Span::dummy(),
         ConstraintReason::BinaryOp {
             op: "+".to_string(),
@@ -19,7 +19,7 @@ fn test_constraint_creation() {
 fn test_one_of_constraint() {
     let c = Constraint::one_of(
         InferType::Var(TypeVarId(0)),
-        vec![InferType::Int, InferType::Float, InferType::String],
+        vec![InferType::I64, InferType::F64, InferType::String],
         Span::dummy(),
         ConstraintReason::BinaryOp {
             op: "+".to_string(),
@@ -31,8 +31,8 @@ fn test_one_of_constraint() {
 #[test]
 fn test_type_error_display() {
     let err = aelys_sema::constraint::TypeError::mismatch(
-        InferType::Int,
-        InferType::Float,
+        InferType::I64,
+        InferType::F64,
         Span::dummy(),
         ConstraintReason::BinaryOp {
             op: "+".to_string(),
@@ -40,6 +40,6 @@ fn test_type_error_display() {
     );
     let msg = format!("{}", err);
     assert!(msg.contains("type mismatch"));
-    assert!(msg.contains("int"));
-    assert!(msg.contains("float"));
+    assert!(msg.contains("i64"));
+    assert!(msg.contains("f64"));
 }

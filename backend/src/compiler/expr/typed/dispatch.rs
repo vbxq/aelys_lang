@@ -74,6 +74,15 @@ impl Compiler {
             TypedExprKind::Slice { object, range } => {
                 self.compile_typed_slice(object, range, dest, expr.span)
             }
+            TypedExprKind::StructLiteral { .. } => Err(aelys_common::error::AelysError::Compile(
+                aelys_common::error::CompileError::new(
+                    aelys_common::error::CompileErrorKind::TypeInferenceError(
+                        "structs are not supported in the VM backend".to_string(),
+                    ),
+                    expr.span,
+                    self.source.clone(),
+                ),
+            )),
         }
     }
 
@@ -134,6 +143,9 @@ impl Compiler {
                 }
                 _ => false,
             }),
+            TypedExprKind::StructLiteral { fields, .. } => {
+                fields.iter().any(|(_, v)| Self::typed_expr_may_have_side_effects(v))
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

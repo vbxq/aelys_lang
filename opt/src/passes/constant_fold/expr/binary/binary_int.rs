@@ -29,7 +29,7 @@ impl ConstantFolder {
             this.stats.constants_folded += 1;
             Some(TypedExpr::new(
                 TypedExprKind::Int(v),
-                InferType::Int,
+                InferType::I64,
                 original.span,
             ))
         };

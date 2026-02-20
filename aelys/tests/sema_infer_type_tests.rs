@@ -15,12 +15,12 @@ fn make_generic_ann(name: &str, param: &str) -> TypeAnnotation {
 
 #[test]
 fn test_infer_type_has_vars() {
-    assert!(!InferType::Int.has_vars());
+    assert!(!InferType::I64.has_vars());
     assert!(!InferType::Dynamic.has_vars());
     assert!(InferType::Var(TypeVarId(0)).has_vars());
 
     let fn_with_var = InferType::Function {
-        params: vec![InferType::Int],
+        params: vec![InferType::I64],
         ret: Box::new(InferType::Var(TypeVarId(0))),
     };
     assert!(fn_with_var.has_vars());
@@ -28,10 +28,10 @@ fn test_infer_type_has_vars() {
 
 #[test]
 fn test_from_annotation() {
-    assert_eq!(InferType::from_annotation(&make_ann("int")), InferType::Int);
+    assert_eq!(InferType::from_annotation(&make_ann("int")), InferType::I64);
     assert_eq!(
         InferType::from_annotation(&make_ann("float")),
-        InferType::Float
+        InferType::F64
     );
     assert_eq!(
         InferType::from_annotation(&make_ann("bool")),
@@ -51,7 +51,7 @@ fn test_from_annotation() {
 fn test_from_annotation_generic_types() {
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("array", "int")),
-        InferType::Array(Box::new(InferType::Int))
+        InferType::Array(Box::new(InferType::I64))
     );
 
     assert_eq!(
@@ -62,6 +62,6 @@ fn test_from_annotation_generic_types() {
     // Array<Int> (PascalCase should also work)
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("Array", "Int")),
-        InferType::Array(Box::new(InferType::Int))
+        InferType::Array(Box::new(InferType::I64))
     );
 }

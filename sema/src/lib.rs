@@ -1,5 +1,3 @@
-//! Semantic analysis and typed AST (compiler IR).
-
 pub mod constraint;
 pub mod env;
 pub mod infer;
@@ -14,5 +12,5 @@ pub use typed_ast::{
     TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedParam, TypedProgram,
     TypedStmt, TypedStmtKind,
 };
-pub use types::{InferType, ResolvedType, TypeVarGen, TypeVarId};
+pub use types::{InferType, ResolvedType, StructDef, StructField, TypeTable, TypeVarGen, TypeVarId};
 pub use unify::{Substitution, UnifyError};

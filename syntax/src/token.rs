@@ -53,6 +53,7 @@ pub enum TokenKind {
     For,
     In,
     Step,
+    Struct,
 
     // operators
     Plus,
@@ -173,6 +174,7 @@ impl std::fmt::Display for TokenKind {
             Self::For => write!(f, "for"),
             Self::In => write!(f, "in"),
             Self::Step => write!(f, "step"),
+            Self::Struct => write!(f, "struct"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),

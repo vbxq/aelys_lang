@@ -77,6 +77,7 @@ impl Compiler {
             TypedStmtKind::Continue => self.compile_continue(stmt.span),
             TypedStmtKind::Function(func) => self.compile_typed_function(func),
             TypedStmtKind::Needs(_needs) => Ok(()),
+            TypedStmtKind::StructDecl { .. } => Ok(()),
         }
     }
 }

@@ -24,7 +24,7 @@ impl ConstantFolder {
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Int(result),
-                    InferType::Int,
+                    InferType::I64,
                     original.span,
                 ))
             }
@@ -32,7 +32,7 @@ impl ConstantFolder {
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Float(-f),
-                    InferType::Float,
+                    InferType::F64,
                     original.span,
                 ))
             }
@@ -51,7 +51,7 @@ impl ConstantFolder {
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Int(!*n),
-                    InferType::Int,
+                    InferType::I64,
                     original.span,
                 ))
             }

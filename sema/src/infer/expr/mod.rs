@@ -28,8 +28,8 @@ impl TypeInference {
         }
 
         let (kind, ty) = match &expr.kind {
-            ExprKind::Int(n) => (TypedExprKind::Int(*n), InferType::Int),
-            ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::Float),
+            ExprKind::Int(n) => (TypedExprKind::Int(*n), InferType::I64),
+            ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::F64),
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
             ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
             ExprKind::FmtString(parts) => {
@@ -120,6 +120,9 @@ impl TypeInference {
                 inclusive,
             } => self.infer_range_expr(start, end, *inclusive, expr.span),
             ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
+            ExprKind::StructLiteral { name, fields } => {
+                self.infer_struct_literal(name, fields, expr.span)
+            }
         };
 
         self.depth -= 1;

@@ -7,6 +7,7 @@ mod decorators;
 mod function;
 mod let_decl;
 mod needs;
+mod struct_decl;
 mod types;
 
 impl Parser {
@@ -17,6 +18,16 @@ impl Parser {
 
         let decorators = self.decorators()?;
         let is_pub = self.match_token(&TokenKind::Pub);
+
+        if self.check(&TokenKind::Struct) {
+            if !decorators.is_empty() {
+                return Err(self.error(CompileErrorKind::UnexpectedToken {
+                    expected: "function after decorator".to_string(),
+                    found: self.peek().kind.to_string(),
+                }));
+            }
+            return self.struct_declaration(is_pub);
+        }
 
         if self.check(&TokenKind::Fn) {
             return self.function_declaration(decorators, is_pub);
@@ -35,7 +46,7 @@ impl Parser {
 
         if is_pub {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: "fn or let after pub".to_string(),
+                expected: "fn, let, or struct after pub".to_string(),
                 found: self.peek().kind.to_string(),
             }));
         }

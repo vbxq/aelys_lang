@@ -114,7 +114,8 @@ impl LocalConstantPropagator {
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
-            | TypedStmtKind::Needs(_) => {}
+            | TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. } => {}
         }
     }
 
@@ -239,6 +240,11 @@ impl LocalConstantPropagator {
                 }
             }
 
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields.iter_mut() {
+                    self.propagate_expr(value);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
