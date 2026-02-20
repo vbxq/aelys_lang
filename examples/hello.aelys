@@ -1,5 +1,5 @@
 needs std.sys
 
 println("Hello, World!")
-println("Welcome to Aelys v0.19.15-b!")
+println("Welcome to Aelys v0.20.0-a!")
 println("Platform: {sys.platform()} {sys.arch()}")

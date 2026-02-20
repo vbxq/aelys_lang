@@ -2,16 +2,21 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
+## 0.20.x - Preparing for LLVM
 
-**0.19.15-a**
+**0.20.0-a**
+- Sized integer and float types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 (int/float kept as aliases)
+
+## 0.19.x - Array/Vec, @inline, and bugs fixes
+
+**0.19.15-b**
 - Fixed negative 48-bit integer minimum (`-140737488355328` now parses correctly)
 - Scientific notation support (`1e-300`, `2.5e10`)
 - Fixed escaped quotes inside string interpolation (`"hello {"\""}"`)
 - Warning W0503 for `==`/`!=` between incompatible types
 - `return` outside a function is now a compile error
 
-**0.19.14-a**
+**0.19.14-b**
 - `print()` no longer adds a newline (`println()` still does)
 - `for item in myVec { }` and `for item in myArray { }` iteration syntax
 - String method syntax: `s.trim()`, `s.contains("x")`, `"hello".to_upper()` instead of `trim(s)`
