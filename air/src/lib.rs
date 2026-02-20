@@ -1,5 +1,6 @@
 // AIR, the Aelys Intermediate Representation
 
+pub mod layout;
 pub mod lower;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

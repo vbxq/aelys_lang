@@ -18,10 +18,9 @@ impl Stage for AirLowerStage {
             }
         };
 
-        let _air_program = aelys_air::lower::lower(&typed_program);
+        let mut air_program = aelys_air::lower::lower(&typed_program);
+        aelys_air::layout::compute_layouts(&mut air_program);
 
-        // TODO! Here !
-        // we return typedast FOR NOW
         Ok(StageOutput::TypedAst(typed_program, source))
     }
 }
