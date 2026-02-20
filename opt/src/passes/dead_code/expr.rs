@@ -89,6 +89,9 @@ impl DeadCodeEliminator {
                     self.eliminate_in_expr(value);
                 }
             }
+            TypedExprKind::Cast { expr, .. } => {
+                self.eliminate_in_expr(expr);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

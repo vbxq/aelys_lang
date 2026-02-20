@@ -193,6 +193,9 @@ fn collect_uses_expr(
                 collect_uses_expr(analysis, value, uses);
             }
         }
+        TypedExprKind::Cast { expr, .. } => {
+            collect_uses_expr(analysis, expr, uses);
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

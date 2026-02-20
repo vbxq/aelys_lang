@@ -8,7 +8,7 @@ mod member;
 mod primary;
 
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind};
@@ -122,6 +122,30 @@ impl TypeInference {
             ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
             ExprKind::StructLiteral { name, fields } => {
                 self.infer_struct_literal(name, fields, expr.span)
+            }
+            ExprKind::Cast { expr: inner, target } => {
+                let typed_inner = self.infer_expr(inner);
+                let target_ty = InferType::from_annotation(target);
+                let src = &typed_inner.ty;
+                let allowed = (src.is_numeric() || *src == InferType::Bool || *src == InferType::Dynamic)
+                    && (target_ty.is_numeric() || target_ty == InferType::Bool);
+                if !allowed {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: target_ty.clone(),
+                            found: src.clone(),
+                        },
+                        span: inner.span,
+                        reason: ConstraintReason::InvalidCast,
+                    });
+                }
+                (
+                    TypedExprKind::Cast {
+                        expr: Box::new(typed_inner),
+                        target: target_ty.clone(),
+                    },
+                    target_ty,
+                )
             }
         };
 

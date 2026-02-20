@@ -177,6 +177,9 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 collect_uses_in_expr(value, used);
             }
         }
+        TypedExprKind::Cast { expr, .. } => {
+            collect_uses_in_expr(expr, used);
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

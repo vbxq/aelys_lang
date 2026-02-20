@@ -226,6 +226,11 @@ pub enum TypedExprKind {
         name: String,
         fields: Vec<(String, Box<TypedExpr>)>,
     },
+
+    Cast {
+        expr: Box<TypedExpr>,
+        target: InferType,
+    },
 }
 
 impl TypedExpr {

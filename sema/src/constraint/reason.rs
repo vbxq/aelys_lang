@@ -31,6 +31,8 @@ pub enum ConstraintReason {
     ArrayIndex,
     /// Range bounds must be int
     RangeBound,
+    /// Invalid cast (FATAL error)
+    InvalidCast,
     /// Generic constraint
     Other(String),
 }
@@ -65,6 +67,7 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::ArrayElement => write!(f, "array element"),
             ConstraintReason::ArrayIndex => write!(f, "array index"),
             ConstraintReason::RangeBound => write!(f, "range bound"),
+            ConstraintReason::InvalidCast => write!(f, "invalid cast"),
             ConstraintReason::Other(s) => write!(f, "{}", s),
         }
     }

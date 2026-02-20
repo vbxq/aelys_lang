@@ -93,6 +93,16 @@ impl Parser {
                 } else {
                     break;
                 }
+            } else if self.match_token(&TokenKind::As) {
+                let target = self.parse_type_annotation()?;
+                let span = expr.span.merge(self.previous().span);
+                expr = Expr::new(
+                    ExprKind::Cast {
+                        expr: Box::new(expr),
+                        target,
+                    },
+                    span,
+                );
             } else {
                 break;
             }

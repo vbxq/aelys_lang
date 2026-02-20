@@ -132,7 +132,9 @@ impl TypeInference {
             inf.errors.iter().cloned().partition(|err| {
                 matches!(
                     err.reason,
-                    ConstraintReason::BitwiseOp { .. } | ConstraintReason::TypeAnnotation { .. }
+                    ConstraintReason::BitwiseOp { .. }
+                        | ConstraintReason::TypeAnnotation { .. }
+                        | ConstraintReason::InvalidCast
                 )
             });
 

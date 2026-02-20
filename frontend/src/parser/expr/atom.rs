@@ -477,6 +477,9 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                 remap_expr_spans(&mut field.value, span);
             }
         }
+        ExprKind::Cast { expr, .. } => {
+            remap_expr_spans(expr, span);
+        }
         // Leaf nodes: Int, Float, String, Bool, Null, Identifier
         _ => {}
     }

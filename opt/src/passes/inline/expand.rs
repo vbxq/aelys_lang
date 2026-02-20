@@ -284,6 +284,10 @@ impl InlineExpander {
                     .map(|(n, v)| (n.clone(), Box::new(self.substitute_expr(v, params, span))))
                     .collect(),
             },
+            TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {
+                expr: Box::new(self.substitute_expr(expr, params, span)),
+                target: target.clone(),
+            },
             TypedExprKind::Int(n) => TypedExprKind::Int(*n),
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),

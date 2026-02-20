@@ -83,6 +83,11 @@ impl Compiler {
                     self.source.clone(),
                 ),
             )),
+            TypedExprKind::Cast { expr: inner, .. } => {
+                // stub.
+                // cast: sized types collapse in VM backend
+                self.compile_typed_expr(inner, dest)
+            }
         }
     }
 
@@ -146,6 +151,7 @@ impl Compiler {
             TypedExprKind::StructLiteral { fields, .. } => {
                 fields.iter().any(|(_, v)| Self::typed_expr_may_have_side_effects(v))
             }
+            TypedExprKind::Cast { expr, .. } => Self::typed_expr_may_have_side_effects(expr),
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

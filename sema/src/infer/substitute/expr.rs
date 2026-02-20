@@ -166,6 +166,10 @@ impl TypeInference {
                     })
                     .collect(),
             },
+            TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {
+                expr: Box::new(self.apply_substitution_expr(expr, subst)),
+                target: subst.apply(target),
+            },
         };
 
         TypedExpr {

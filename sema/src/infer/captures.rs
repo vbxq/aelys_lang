@@ -190,6 +190,9 @@ impl TypeInference {
                     self.collect_captures_inner(value, params, captures, seen);
                 }
             }
+            TypedExprKind::Cast { expr, .. } => {
+                self.collect_captures_inner(expr, params, captures, seen);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

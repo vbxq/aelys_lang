@@ -1052,6 +1052,21 @@ impl<'a> LoweringContext<'a> {
                 );
                 Operand::Copy(tmp)
             }
+
+            TypedExprKind::Cast { expr: inner, target } => {
+                let operand = self.lower_expr(inner);
+                let from = self.lower_type_from_infer(&inner.ty);
+                let to = self.lower_type_from_infer(target);
+                let tmp = self.alloc_temp(to.clone());
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(tmp),
+                        rvalue: Rvalue::Cast { operand, from, to },
+                    },
+                    sp,
+                );
+                Operand::Copy(tmp)
+            }
         }
     }
 

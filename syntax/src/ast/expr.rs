@@ -174,6 +174,11 @@ pub enum ExprKind {
         name: String,
         fields: Vec<StructFieldInit>,
     },
+
+    Cast {
+        expr: Box<Expr>,
+        target: TypeAnnotation,
+    },
 }
 
 #[derive(Debug, Clone)]

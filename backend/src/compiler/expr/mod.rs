@@ -77,6 +77,8 @@ impl Compiler {
                     self.source.clone(),
                 ),
             )),
+            // cast: sized types collapse in VM backend
+            ExprKind::Cast { expr: inner, .. } => self.compile_expr(inner, dest),
         }
     }
 }

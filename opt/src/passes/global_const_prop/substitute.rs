@@ -89,6 +89,9 @@ impl GlobalConstantPropagator {
                     self.substitute_constants(value);
                 }
             }
+            TypedExprKind::Cast { expr, .. } => {
+                self.substitute_constants(expr);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

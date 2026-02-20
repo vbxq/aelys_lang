@@ -114,6 +114,9 @@ impl ConstantFolder {
                     self.optimize_expr(value);
                 }
             }
+            TypedExprKind::Cast { expr, .. } => {
+                self.optimize_expr(expr);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
