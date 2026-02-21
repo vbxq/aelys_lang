@@ -105,11 +105,13 @@ impl TypeInference {
         let mut inf = TypeInference::new();
 
         for alias in &module_aliases {
-            inf.env.define_local(alias.clone(), InferType::Dynamic);
+            inf.env
+                .define_function_owned(alias.clone(), InferType::Dynamic);
         }
 
         for global in &known_globals {
-            inf.env.define_local(global.clone(), InferType::Dynamic);
+            inf.env
+                .define_function_owned(global.clone(), InferType::Dynamic);
         }
 
         inf.collect_structs(&stmts);
@@ -131,6 +133,7 @@ impl TypeInference {
                         | ConstraintReason::TypeAnnotation { .. }
                         | ConstraintReason::InvalidCast
                         | ConstraintReason::UnknownType { .. }
+                        | ConstraintReason::IntLiteralOverflow { .. }
                 )
             });
 

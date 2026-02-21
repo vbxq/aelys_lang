@@ -8,6 +8,8 @@ Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new
 
 **0.20.4-a**
 - AIR pretty-printer, `--emit-air` CLI flag for `compile` command
+- fixed stdlib/module globals leaking into closure captures
+- int literals at call sites now narrowed to match parameter types (overflow is a compile error)
 
 **0.20.3-a**
 - generic type parameters on functions & structs (`fn identity<T>(x: T) -> T`)
