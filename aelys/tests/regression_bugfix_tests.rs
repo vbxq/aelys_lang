@@ -417,6 +417,7 @@ fn caller() -> f64 {
 }
 
 // Integration: full pipeline test
+#[test]
 fn vec2_length_correct_air() {
     let air = lower_source(
         r#"
