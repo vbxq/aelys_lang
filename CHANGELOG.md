@@ -6,6 +6,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
 
+**0.20.4-a**
+- AIR pretty-printer, `--emit-air` CLI flag for `compile` command
+
 **0.20.3-a**
 - generic type parameters on functions & structs (`fn identity<T>(x: T) -> T`)
 - monomorphization pass in AIR (`air::mono`)

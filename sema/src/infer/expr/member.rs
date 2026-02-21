@@ -49,16 +49,17 @@ impl TypeInference {
                 let typed_value = self.infer_expr(&f.value);
 
                 if let Some(def) = self.type_table.get_struct(name)
-                    && let Some(field_def) = def.fields.iter().find(|df| df.name == f.name) {
-                        self.constraints.push(Constraint::equal(
-                            typed_value.ty.clone(),
-                            field_def.ty.clone(),
-                            f.span,
-                            ConstraintReason::TypeAnnotation {
-                                var_name: format!("{}.{}", name, f.name),
-                            },
-                        ));
-                    }
+                    && let Some(field_def) = def.fields.iter().find(|df| df.name == f.name)
+                {
+                    self.constraints.push(Constraint::equal(
+                        typed_value.ty.clone(),
+                        field_def.ty.clone(),
+                        f.span,
+                        ConstraintReason::TypeAnnotation {
+                            var_name: format!("{}.{}", name, f.name),
+                        },
+                    ));
+                }
 
                 (f.name.clone(), Box::new(typed_value))
             })

@@ -425,21 +425,22 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_toplevel_stmt(&mut self, stmt: &TypedStmt) {
         if let TypedStmtKind::Let {
-                name,
-                initializer,
-                var_type,
-                ..
-            } = &stmt.kind {
-                let ty = self.lower_type_from_infer(var_type);
-                let init = self.try_const_expr(initializer);
-                self.globals.push(AirGlobal {
-                    name: name.clone(),
-                    ty,
-                    init,
-                    gc_mode: self.file_gc_mode,
-                    span: Some(self.span(&stmt.span)),
-                });
-            }
+            name,
+            initializer,
+            var_type,
+            ..
+        } = &stmt.kind
+        {
+            let ty = self.lower_type_from_infer(var_type);
+            let init = self.try_const_expr(initializer);
+            self.globals.push(AirGlobal {
+                name: name.clone(),
+                ty,
+                init,
+                gc_mode: self.file_gc_mode,
+                span: Some(self.span(&stmt.span)),
+            });
+        }
     }
 
     fn try_const_expr(&self, expr: &TypedExpr) -> Option<AirConst> {

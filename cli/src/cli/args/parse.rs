@@ -28,6 +28,7 @@ struct Parser<'a> {
     opt_level: OptimizationLevel,
     output: Option<String>,
     stdout: bool,
+    emit_air: bool,
     warning_flags: Vec<String>,
 }
 
@@ -44,6 +45,7 @@ impl<'a> Parser<'a> {
             opt_level: OptimizationLevel::Standard,
             output: None,
             stdout: false,
+            emit_air: false,
             warning_flags: Vec::new(),
         }
     }
@@ -95,6 +97,12 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if token_str == "--emit-air" {
+                self.emit_air = true;
+                self.advance();
+                continue;
+            }
+
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
                 self.advance();
@@ -140,6 +148,9 @@ impl<'a> Parser<'a> {
                 if self.output.is_some() || self.stdout {
                     return Err("repl does not accept output flags".to_string());
                 }
+                if self.emit_air {
+                    return Err("--emit-air is only supported for compile".to_string());
+                }
                 Command::Repl
             }
             Some(CommandName::Run) => {
@@ -148,6 +159,9 @@ impl<'a> Parser<'a> {
                     .ok_or_else(|| "missing file for run".to_string())?;
                 if self.output.is_some() || self.stdout {
                     return Err("output flags are only supported for compile or asm".to_string());
+                }
+                if self.emit_air {
+                    return Err("--emit-air is only supported for compile".to_string());
                 }
                 Command::Run {
                     path,
@@ -164,9 +178,13 @@ impl<'a> Parser<'a> {
                 if self.stdout {
                     return Err("compile does not support --stdout".to_string());
                 }
+                if self.emit_air && self.output.is_some() {
+                    return Err("--emit-air and --output cannot be combined".to_string());
+                }
                 Command::Compile {
                     path,
                     output: self.output,
+                    emit_air: self.emit_air,
                 }
             }
             Some(CommandName::Asm) => {
@@ -175,6 +193,9 @@ impl<'a> Parser<'a> {
                     .ok_or_else(|| "missing file for asm".to_string())?;
                 if !self.program_args.is_empty() {
                     return Err("asm does not accept extra arguments".to_string());
+                }
+                if self.emit_air {
+                    return Err("--emit-air is only supported for compile".to_string());
                 }
                 Command::Asm {
                     path,
