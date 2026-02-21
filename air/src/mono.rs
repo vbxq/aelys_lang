@@ -1,6 +1,8 @@
 use crate::*;
 use std::collections::{HashMap, HashSet};
 
+type MangledMap<'a> = HashMap<&'a str, Vec<(&'a (String, Vec<String>), &'a String)>>;
+
 pub fn monomorphize(mut program: AirProgram) -> AirProgram {
     let mut ctx = MonoContext::new(&program);
     ctx.collect_mono_requests(&program);
@@ -71,10 +73,11 @@ impl MonoContext {
         generic_names: &HashSet<String>,
     ) {
         match &stmt.kind {
-            AirStmtKind::Assign { rvalue, .. } => {
-                if let Rvalue::Call { func: callee, args } = rvalue {
-                    self.try_collect(callee, args, program, generic_names);
-                }
+            AirStmtKind::Assign {
+                rvalue: Rvalue::Call { func: callee, args },
+                ..
+            } => {
+                self.try_collect(callee, args, program, generic_names);
             }
             AirStmtKind::CallVoid { func: callee, args } => {
                 self.try_collect(callee, args, program, generic_names);
@@ -260,7 +263,7 @@ impl MonoContext {
     }
 
     fn rewrite_call_sites(&self, program: &mut AirProgram) {
-        let name_to_mangled: HashMap<&str, Vec<(&(String, Vec<String>), &String)>> = {
+        let name_to_mangled: MangledMap = {
             let mut map: HashMap<&str, Vec<_>> = HashMap::new();
             for (key, mangled) in &self.instantiated {
                 map.entry(key.0.as_str()).or_default().push((key, mangled));
@@ -285,16 +288,13 @@ impl MonoContext {
         }
     }
 
-    fn rewrite_stmt(
-        &self,
-        stmt: &mut AirStmt,
-        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
-    ) {
+    fn rewrite_stmt(&self, stmt: &mut AirStmt, name_map: &MangledMap) {
         match &mut stmt.kind {
-            AirStmtKind::Assign { rvalue, .. } => {
-                if let Rvalue::Call { func: callee, .. } = rvalue {
-                    self.rewrite_callee(callee, name_map);
-                }
+            AirStmtKind::Assign {
+                rvalue: Rvalue::Call { func: callee, .. },
+                ..
+            } => {
+                self.rewrite_callee(callee, name_map);
             }
             AirStmtKind::CallVoid { func: callee, .. } => {
                 self.rewrite_callee(callee, name_map);
@@ -303,32 +303,23 @@ impl MonoContext {
         }
     }
 
-    fn rewrite_terminator(
-        &self,
-        term: &mut AirTerminator,
-        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
-    ) {
+    fn rewrite_terminator(&self, term: &mut AirTerminator, name_map: &MangledMap) {
         if let AirTerminator::Invoke { func: callee, .. } = term {
             self.rewrite_callee(callee, name_map);
         }
     }
 
-    fn rewrite_callee(
-        &self,
-        callee: &mut Callee,
-        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
-    ) {
-        if let Callee::Named(name) = callee {
-            if let Some(entries) = name_map.get(name.as_str()) {
-                if let Some((_, mangled)) = entries.first() {
-                    *name = (*mangled).clone();
-                }
-            }
+    fn rewrite_callee(&self, callee: &mut Callee, name_map: &MangledMap) {
+        if let Callee::Named(name) = callee
+            && let Some(entries) = name_map.get(name.as_str())
+            && let Some((_, mangled)) = entries.first()
+        {
+            *name = (*mangled).clone();
         }
     }
 
     fn type_args_key(&self, types: &[AirType]) -> Vec<String> {
-        types.iter().map(|t| type_to_string(t)).collect()
+        types.iter().map(type_to_string).collect()
     }
 
     fn mangle_name(&self, name: &str, type_args: &[AirType]) -> String {
@@ -337,7 +328,7 @@ impl MonoContext {
         }
         let type_str = type_args
             .iter()
-            .map(|t| type_to_string(t))
+            .map(type_to_string)
             .collect::<Vec<_>>()
             .join("_");
         format!("__mono_{}_{}", name, type_str)
@@ -394,10 +385,10 @@ fn type_to_string(ty: &AirType) -> String {
 fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[AirType]) {
     match ty {
         AirType::Param(id) => {
-            if let Some(idx) = type_params.iter().position(|p| p == id) {
-                if let Some(replacement) = type_args.get(idx) {
-                    *ty = replacement.clone();
-                }
+            if let Some(idx) = type_params.iter().position(|p| p == id)
+                && let Some(replacement) = type_args.get(idx)
+            {
+                *ty = replacement.clone();
             }
         }
         AirType::Ptr(inner) => substitute_type(inner, type_params, type_args),
@@ -451,11 +442,8 @@ fn substitute_terminator(
     type_params: &[TypeParamId],
     type_args: &[AirType],
 ) {
-    match term {
-        AirTerminator::Invoke { func: callee, .. } => {
-            substitute_callee(callee, type_params, type_args);
-        }
-        _ => {}
+    if let AirTerminator::Invoke { func: callee, .. } = term {
+        substitute_callee(callee, type_params, type_args);
     }
 }
 

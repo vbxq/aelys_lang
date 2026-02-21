@@ -424,13 +424,12 @@ impl<'a> LoweringContext<'a> {
     // ========================================================================
 
     fn lower_toplevel_stmt(&mut self, stmt: &TypedStmt) {
-        match &stmt.kind {
-            TypedStmtKind::Let {
+        if let TypedStmtKind::Let {
                 name,
                 initializer,
                 var_type,
                 ..
-            } => {
+            } = &stmt.kind {
                 let ty = self.lower_type_from_infer(var_type);
                 let init = self.try_const_expr(initializer);
                 self.globals.push(AirGlobal {
@@ -441,8 +440,6 @@ impl<'a> LoweringContext<'a> {
                     span: Some(self.span(&stmt.span)),
                 });
             }
-            _ => {}
-        }
     }
 
     fn try_const_expr(&self, expr: &TypedExpr) -> Option<AirConst> {
@@ -480,9 +477,9 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn finalize_function_body(&mut self) {
-        if self.current_stmts.is_empty() && self.current_blocks.is_empty() {
-            self.seal_block(AirTerminator::Return(None));
-        } else if !self.current_stmts.is_empty() {
+        if (self.current_stmts.is_empty() && self.current_blocks.is_empty())
+            || !self.current_stmts.is_empty()
+        {
             self.seal_block(AirTerminator::Return(None));
         }
     }
@@ -532,7 +529,7 @@ impl<'a> LoweringContext<'a> {
                 step,
                 body,
             } => {
-                self.lower_for(iterator, start, end, *inclusive, step.as_ref(), body, sp);
+                self.lower_for(iterator, start, end, *inclusive, step.as_ref(), body);
             }
             TypedStmtKind::ForEach {
                 iterator,
@@ -642,7 +639,6 @@ impl<'a> LoweringContext<'a> {
         inclusive: bool,
         step: &Option<TypedExpr>,
         body: &TypedStmt,
-        _sp: Option<Span>,
     ) {
         let start_span = Some(self.span(&start.span));
         let iter_ty = self.lower_type_from_infer(&start.ty);
@@ -851,7 +847,7 @@ impl<'a> LoweringContext<'a> {
 
     fn last_block_is_terminated(&self) -> bool {
         self.current_stmts.is_empty()
-            && self.current_blocks.last().map_or(false, |b| {
+            && self.current_blocks.last().is_some_and(|b| {
                 !matches!(b.terminator, AirTerminator::Goto(_))
                     || matches!(b.terminator, AirTerminator::Return(_))
                     || matches!(b.terminator, AirTerminator::Unreachable)

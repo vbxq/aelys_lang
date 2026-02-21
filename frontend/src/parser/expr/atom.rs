@@ -142,7 +142,7 @@ impl Parser {
                 return self.typed_collection_literal(name, span);
             }
             TokenKind::Identifier(ref name)
-                if name.chars().next().map_or(false, |c| c.is_uppercase())
+                if name.chars().next().is_some_and(|c| c.is_uppercase())
                     && self.check(&TokenKind::LBrace)
                     && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
                     && matches!(self.peek_at(2).kind, TokenKind::Colon) =>

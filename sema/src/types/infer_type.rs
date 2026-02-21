@@ -126,7 +126,7 @@ impl InferType {
                 InferType::Vec(Box::new(inner))
             }
             _ => {
-                if ann.name.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
                     InferType::Struct(ann.name.clone())
                 } else {
                     InferType::Dynamic
@@ -151,7 +151,7 @@ impl InferType {
             "string" => InferType::String,
             "null" | "void" => InferType::Null,
             _ => {
-                if name.chars().next().map_or(false, |c| c.is_uppercase()) {
+                if name.chars().next().is_some_and(|c| c.is_uppercase()) {
                     InferType::Struct(name.to_string())
                 } else {
                     InferType::Dynamic

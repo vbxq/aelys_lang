@@ -10,7 +10,7 @@ impl Parser {
 
         let name = self.consume_identifier("struct name")?;
 
-        if name.chars().next().map_or(true, |c| !c.is_uppercase()) {
+        if name.chars().next().is_none_or(|c| !c.is_uppercase()) {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
                 expected: "capitalized struct name".to_string(),
                 found: name,

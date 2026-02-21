@@ -48,7 +48,7 @@ impl TypeInference {
             return;
         }
 
-        if ann.name.chars().next().map_or(false, |c| c.is_uppercase()) {
+        if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             if self.type_table.has_struct(&ann.name) || self.env.contains(&ann.name) {
                 return;
             }

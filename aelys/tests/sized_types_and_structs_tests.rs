@@ -474,7 +474,7 @@ fn e2e_int_alias_still_works() {
 #[test]
 fn e2e_f64_annotation() {
     let v = run_ok("let x: f64 = 2.718\nx");
-    assert!((v.as_float().unwrap() - 2.718).abs() < 0.001);
+    assert!((v.as_float().unwrap() - std::f64::consts::E).abs() < 0.001);
 }
 
 #[test]
