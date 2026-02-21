@@ -4,6 +4,8 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.20.x - Preparing for LLVM
 
+Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
+
 **0.20.3-a**
 - generic type parameters on functions & structs (`fn identity<T>(x: T) -> T`)
 - monomorphization pass in AIR (`air::mono`)
@@ -22,6 +24,8 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 - Sized integer and float types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 (int/float kept as aliases)
 
 ## 0.19.x - Array/Vec, @inline, and bugs fixes
+
+Language maturity: arrays, vecs, compound operators, dot-syntax string methods, auto-registered stdlib, and some parser/runtime bug fixes.
 
 **0.19.15-b**
 - Fixed negative 48-bit integer minimum (`-140737488355328` now parses correctly)
