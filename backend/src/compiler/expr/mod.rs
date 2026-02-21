@@ -68,6 +68,17 @@ impl Compiler {
                 inclusive,
             } => self.compile_range(start, end, *inclusive, dest, expr.span),
             ExprKind::Slice { object, range } => self.compile_slice(object, range, dest, expr.span),
+            ExprKind::StructLiteral { .. } => Err(aelys_common::error::AelysError::Compile(
+                aelys_common::error::CompileError::new(
+                    aelys_common::error::CompileErrorKind::TypeInferenceError(
+                        "structs are not supported in the VM backend".to_string(),
+                    ),
+                    expr.span,
+                    self.source.clone(),
+                ),
+            )),
+            // cast: sized types collapse in VM backend
+            ExprKind::Cast { expr: inner, .. } => self.compile_expr(inner, dest),
         }
     }
 }

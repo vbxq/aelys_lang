@@ -6,7 +6,12 @@ impl GlobalConstantPropagator {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(c) = self.constants.get(name) {
-                    *expr = TypedExpr::new(c.kind.clone(), c.ty.clone(), expr.span);
+                    let ty = if expr.ty.is_integer() && c.ty.is_integer() {
+                        expr.ty.clone()
+                    } else {
+                        c.ty.clone()
+                    };
+                    *expr = TypedExpr::new(c.kind.clone(), ty, expr.span);
                     self.stats.globals_propagated += 1;
                 }
             }
@@ -84,6 +89,14 @@ impl GlobalConstantPropagator {
                     }
                 }
             }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.substitute_constants(value);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => {
+                self.substitute_constants(expr);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
@@ -139,7 +152,8 @@ impl GlobalConstantPropagator {
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
-            | TypedStmtKind::Needs(_) => {}
+            | TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. } => {}
         }
     }
 

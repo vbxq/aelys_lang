@@ -118,6 +118,15 @@ impl Parser {
         &self.tokens[self.current]
     }
 
+    fn peek_at(&self, offset: usize) -> &Token {
+        let idx = self.current + offset;
+        if idx < self.tokens.len() {
+            &self.tokens[idx]
+        } else {
+            self.tokens.last().unwrap()
+        }
+    }
+
     fn previous(&self) -> &Token {
         &self.tokens[self.current - 1]
     }

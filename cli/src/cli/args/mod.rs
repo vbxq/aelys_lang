@@ -16,6 +16,7 @@ pub enum Command {
     Compile {
         path: String,
         output: Option<String>,
+        emit_air: bool,
     },
     Asm {
         path: String,

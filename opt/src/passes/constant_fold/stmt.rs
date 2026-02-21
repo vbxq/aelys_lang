@@ -49,7 +49,8 @@ impl ConstantFolder {
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
-            | TypedStmtKind::Needs(_) => {}
+            | TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. } => {}
         }
     }
 

@@ -74,6 +74,20 @@ impl Compiler {
             TypedExprKind::Slice { object, range } => {
                 self.compile_typed_slice(object, range, dest, expr.span)
             }
+            TypedExprKind::StructLiteral { .. } => Err(aelys_common::error::AelysError::Compile(
+                aelys_common::error::CompileError::new(
+                    aelys_common::error::CompileErrorKind::TypeInferenceError(
+                        "structs are not supported in the VM backend".to_string(),
+                    ),
+                    expr.span,
+                    self.source.clone(),
+                ),
+            )),
+            TypedExprKind::Cast { expr: inner, .. } => {
+                // stub.
+                // cast: sized types collapse in VM backend
+                self.compile_typed_expr(inner, dest)
+            }
         }
     }
 
@@ -134,6 +148,10 @@ impl Compiler {
                 }
                 _ => false,
             }),
+            TypedExprKind::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| Self::typed_expr_may_have_side_effects(v)),
+            TypedExprKind::Cast { expr, .. } => Self::typed_expr_may_have_side_effects(expr),
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

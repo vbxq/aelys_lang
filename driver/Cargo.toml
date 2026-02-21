@@ -9,6 +9,7 @@ aelys-syntax = { path = "../syntax" }
 aelys-frontend = { path = "../frontend" }
 aelys-sema = { path = "../sema" }
 aelys-opt = { path = "../opt" }
+aelys-air = { path = "../air" }
 aelys-backend = { path = "../backend" }
 aelys-bytecode = { path = "../bytecode" }
 aelys-runtime = { path = "../runtime" }

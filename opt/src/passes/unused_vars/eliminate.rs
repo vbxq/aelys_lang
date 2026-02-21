@@ -118,6 +118,10 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
                 false
             }
         }),
+        TypedExprKind::StructLiteral { fields, .. } => {
+            fields.iter().any(|(_, v)| has_side_effects(v))
+        }
+        TypedExprKind::Cast { expr, .. } => has_side_effects(expr),
         TypedExprKind::Identifier(_)
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

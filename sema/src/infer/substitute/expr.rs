@@ -154,6 +154,17 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 range: Box::new(self.apply_substitution_expr(range, subst)),
             },
+            TypedExprKind::StructLiteral { name, fields } => TypedExprKind::StructLiteral {
+                name: name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(n, v)| (n.clone(), Box::new(self.apply_substitution_expr(v, subst))))
+                    .collect(),
+            },
+            TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {
+                expr: Box::new(self.apply_substitution_expr(expr, subst)),
+                target: subst.apply(target),
+            },
         };
 
         TypedExpr {

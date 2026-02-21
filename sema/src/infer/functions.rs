@@ -15,6 +15,14 @@ impl TypeInference {
             _ => (None, None),
         };
 
+        let saved_type_params =
+            std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
+
+        for type_param in &func.type_params {
+            let fresh_var = self.type_gen.fresh();
+            self.env.define_local(type_param.clone(), fresh_var);
+        }
+
         let mut typed_params = Vec::with_capacity(func.params.len());
         for (i, p) in func.params.iter().enumerate() {
             let ty = sig_params
@@ -75,9 +83,11 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.type_params_in_scope = saved_type_params;
 
         TypedFunction {
             name: func.name.clone(),
+            type_params: func.type_params.clone(),
             params: typed_params,
             return_type,
             body: typed_body,

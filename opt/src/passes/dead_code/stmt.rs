@@ -124,7 +124,8 @@ impl DeadCodeEliminator {
             TypedStmtKind::Return(_)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
-            | TypedStmtKind::Needs(_) => {}
+            | TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. } => {}
         }
     }
 

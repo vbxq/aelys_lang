@@ -51,7 +51,7 @@ impl TypeInference {
 
         self.constraints.push(Constraint::equal(
             typed_size.ty.clone(),
-            InferType::Int,
+            InferType::I64,
             span,
             ConstraintReason::ArrayIndex,
         ));
@@ -120,7 +120,7 @@ impl TypeInference {
 
         self.constraints.push(Constraint::equal(
             typed_index.ty.clone(),
-            InferType::Int,
+            InferType::I64,
             index.span,
             ConstraintReason::ArrayIndex,
         ));
@@ -156,7 +156,7 @@ impl TypeInference {
 
         self.constraints.push(Constraint::equal(
             typed_index.ty.clone(),
-            InferType::Int,
+            InferType::I64,
             index.span,
             ConstraintReason::ArrayIndex,
         ));
@@ -205,7 +205,7 @@ impl TypeInference {
         if let Some(ref s) = typed_start {
             self.constraints.push(Constraint::equal(
                 s.ty.clone(),
-                InferType::Int,
+                InferType::I64,
                 s.span,
                 ConstraintReason::RangeBound,
             ));
@@ -213,7 +213,7 @@ impl TypeInference {
         if let Some(ref e) = typed_end {
             self.constraints.push(Constraint::equal(
                 e.ty.clone(),
-                InferType::Int,
+                InferType::I64,
                 e.span,
                 ConstraintReason::RangeBound,
             ));

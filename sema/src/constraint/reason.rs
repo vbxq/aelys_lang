@@ -1,3 +1,4 @@
+use crate::types::InferType;
 use std::fmt;
 
 /// Reason for a constraint (for error messages)
@@ -31,6 +32,12 @@ pub enum ConstraintReason {
     ArrayIndex,
     /// Range bounds must be int
     RangeBound,
+    /// Invalid cast (fatal error)
+    InvalidCast,
+    /// Unknown type in annotation (fatal error)
+    UnknownType { name: String },
+    /// Integer literal does not fit in target type (fatal error)
+    IntLiteralOverflow { value: i64, target: InferType },
     /// Generic constraint
     Other(String),
 }
@@ -65,6 +72,11 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::ArrayElement => write!(f, "array element"),
             ConstraintReason::ArrayIndex => write!(f, "array index"),
             ConstraintReason::RangeBound => write!(f, "range bound"),
+            ConstraintReason::InvalidCast => write!(f, "invalid cast"),
+            ConstraintReason::UnknownType { name } => write!(f, "unknown type '{}'", name),
+            ConstraintReason::IntLiteralOverflow { value, target } => {
+                write!(f, "integer literal {} does not fit in {:?}", value, target)
+            }
             ConstraintReason::Other(s) => write!(f, "{}", s),
         }
     }

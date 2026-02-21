@@ -2,16 +2,45 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
-## 0.19.x - Array, Vec, and @inline decorator, and bugs fixes
+## 0.20.x - Preparing for LLVM
 
-**0.19.15-a**
+Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
+
+**0.20.4-a**
+- AIR pretty-printer, `--emit-air` CLI flag for `compile` command
+- fixed stdlib/module globals leaking into closure captures
+- int literals at call sites and `let` bindings now narrowed to match target type (overflow is a compile error)
+- mono `operand_type` resolves locals from caller instead of defaulting to i64
+
+**0.20.3-a**
+- generic type parameters on functions & structs (`fn identity<T>(x: T) -> T`)
+- monomorphization pass in AIR (`air::mono`)
+- unknown type annotations are now a compile error instead of silently falling back to `dynamic`
+- added type aliases: int8–int64, uint8–uint64, float32, float64, void
+
+**0.20.2-a**
+- Explicit casts with `x as T` syntax
+
+**0.20.1-a**
+- New `air` crate: AIR (Aelys Intermediate Representation) between typed AST and backend
+- Lowering pass from `TypedProgram` to `AirProgram` (closures, loops, string interpolation desugared)
+- Struct layout pass (`air::layout`): System V AMD64 field offset computation with topological ordering and cycle detection
+
+**0.20.0-a**
+- Sized integer and float types: i8, i16, i32, i64, u8, u16, u32, u64, f32, f64 (int/float kept as aliases)
+
+## 0.19.x - Array/Vec, @inline, and bugs fixes
+
+Language maturity: arrays, vecs, compound operators, dot-syntax string methods, auto-registered stdlib, and some parser/runtime bug fixes.
+
+**0.19.15-b**
 - Fixed negative 48-bit integer minimum (`-140737488355328` now parses correctly)
 - Scientific notation support (`1e-300`, `2.5e10`)
 - Fixed escaped quotes inside string interpolation (`"hello {"\""}"`)
 - Warning W0503 for `==`/`!=` between incompatible types
 - `return` outside a function is now a compile error
 
-**0.19.14-a**
+**0.19.14-b**
 - `print()` no longer adds a newline (`println()` still does)
 - `for item in myVec { }` and `for item in myArray { }` iteration syntax
 - String method syntax: `s.trim()`, `s.contains("x")`, `"hello".to_upper()` instead of `trim(s)`

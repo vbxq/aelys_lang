@@ -84,6 +84,14 @@ impl DeadCodeEliminator {
                     }
                 }
             }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, value) in fields {
+                    self.eliminate_in_expr(value);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => {
+                self.eliminate_in_expr(expr);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

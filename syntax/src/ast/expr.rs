@@ -2,8 +2,10 @@ use crate::Span;
 
 #[derive(Debug, Clone)]
 pub struct TypeAnnotation {
-    pub name: String, // "int", "float", "string", "array", "vec", etc
-    pub type_param: Option<Box<TypeAnnotation>>, // for generics: array<int>, vec<string>
+    pub name: String,
+    pub type_param: Option<Box<TypeAnnotation>>,
+    pub fn_params: Option<Vec<TypeAnnotation>>,
+    pub fn_ret: Option<Box<TypeAnnotation>>,
     pub span: Span,
 }
 
@@ -12,6 +14,8 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: None,
+            fn_params: None,
+            fn_ret: None,
             span,
         }
     }
@@ -20,8 +24,24 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: Some(Box::new(type_param)),
+            fn_params: None,
+            fn_ret: None,
             span,
         }
+    }
+
+    pub fn function_type(params: Vec<TypeAnnotation>, ret: TypeAnnotation, span: Span) -> Self {
+        Self {
+            name: "fn".to_string(),
+            type_param: None,
+            fn_params: Some(params),
+            fn_ret: Some(Box::new(ret)),
+            span,
+        }
+    }
+
+    pub fn is_function_type(&self) -> bool {
+        self.fn_params.is_some()
     }
 }
 
@@ -169,6 +189,23 @@ pub enum ExprKind {
         object: Box<Expr>,
         range: Box<Expr>,
     },
+
+    StructLiteral {
+        name: String,
+        fields: Vec<StructFieldInit>,
+    },
+
+    Cast {
+        expr: Box<Expr>,
+        target: TypeAnnotation,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct StructFieldInit {
+    pub name: String,
+    pub value: Box<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

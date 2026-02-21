@@ -72,7 +72,8 @@ fn collect_all_uses_in_stmt(stmt: &TypedStmt, uses: &mut HashSet<String>) {
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
-        | TypedStmtKind::Needs(_) => {}
+        | TypedStmtKind::Needs(_)
+        | TypedStmtKind::StructDecl { .. } => {}
     }
 }
 
@@ -168,6 +169,14 @@ fn collect_all_uses_in_expr(expr: &TypedExpr, uses: &mut HashSet<String>) {
                     collect_all_uses_in_expr(e, uses);
                 }
             }
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, value) in fields {
+                collect_all_uses_in_expr(value, uses);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => {
+            collect_all_uses_in_expr(expr, uses);
         }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

@@ -59,6 +59,20 @@ pub enum StmtKind {
     Return(Option<Expr>),
     Function(Function),
     Needs(NeedsStmt),
+
+    StructDecl {
+        name: String,
+        type_params: Vec<String>,
+        fields: Vec<StructFieldDecl>,
+        is_pub: bool,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct StructFieldDecl {
+    pub name: String,
+    pub type_annotation: TypeAnnotation,
+    pub span: Span,
 }
 
 // module import - `needs utils.helpers` or `needs cos, sin from std.math`
@@ -79,6 +93,7 @@ pub enum ImportKind {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
+    pub type_params: Vec<String>,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Vec<Stmt>,

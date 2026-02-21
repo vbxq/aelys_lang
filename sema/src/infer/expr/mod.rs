@@ -8,7 +8,7 @@ mod member;
 mod primary;
 
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind};
@@ -28,8 +28,8 @@ impl TypeInference {
         }
 
         let (kind, ty) = match &expr.kind {
-            ExprKind::Int(n) => (TypedExprKind::Int(*n), InferType::Int),
-            ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::Float),
+            ExprKind::Int(n) => (TypedExprKind::Int(*n), InferType::I64),
+            ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::F64),
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
             ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
             ExprKind::FmtString(parts) => {
@@ -50,8 +50,9 @@ impl TypeInference {
             ExprKind::Null => (TypedExprKind::Null, InferType::Null),
             ExprKind::Identifier(name) => self.infer_identifier_expr(name, expr.span),
             ExprKind::Binary { left, op, right } => {
-                let typed_left = self.infer_expr(left);
-                let typed_right = self.infer_expr(right);
+                let mut typed_left = self.infer_expr(left);
+                let mut typed_right = self.infer_expr(right);
+                Self::narrow_binop_int_literals(&mut typed_left, &mut typed_right);
                 let result_type = self.infer_binary_op(*op, &typed_left, &typed_right, expr.span);
 
                 (
@@ -120,6 +121,41 @@ impl TypeInference {
                 inclusive,
             } => self.infer_range_expr(start, end, *inclusive, expr.span),
             ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
+            ExprKind::StructLiteral { name, fields } => {
+                self.infer_struct_literal(name, fields, expr.span)
+            }
+            ExprKind::Cast {
+                expr: inner,
+                target,
+            } => {
+                let typed_inner = self.infer_expr(inner);
+                let target_ty = InferType::from_annotation(target);
+                let src = &typed_inner.ty;
+                let src_is_type_param = matches!(src, InferType::Var(_))
+                    || matches!(src, InferType::Struct(name) if self.type_params_in_scope.contains(name));
+                let allowed = src_is_type_param
+                    || ((src.is_numeric()
+                        || *src == InferType::Bool
+                        || *src == InferType::Dynamic)
+                        && (target_ty.is_numeric() || target_ty == InferType::Bool));
+                if !allowed {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: target_ty.clone(),
+                            found: src.clone(),
+                        },
+                        span: inner.span,
+                        reason: ConstraintReason::InvalidCast,
+                    });
+                }
+                (
+                    TypedExprKind::Cast {
+                        expr: Box::new(typed_inner),
+                        target: target_ty.clone(),
+                    },
+                    target_ty,
+                )
+            }
         };
 
         self.depth -= 1;
@@ -127,6 +163,23 @@ impl TypeInference {
             kind,
             ty,
             span: expr.span,
+        }
+    }
+
+    fn narrow_binop_int_literals(left: &mut TypedExpr, right: &mut TypedExpr) {
+        let narrow = |lit: &mut TypedExpr, target: &InferType| {
+            if let TypedExprKind::Int(v) = &lit.kind
+                && target.is_integer()
+                && *target != InferType::I64
+                && InferType::int_fits(*v, target)
+            {
+                lit.ty = target.clone();
+            }
+        };
+        if matches!(&left.kind, TypedExprKind::Int(_)) && right.ty.is_integer() {
+            narrow(left, &right.ty.clone());
+        } else if matches!(&right.kind, TypedExprKind::Int(_)) && left.ty.is_integer() {
+            narrow(right, &left.ty.clone());
         }
     }
 

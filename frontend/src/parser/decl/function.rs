@@ -13,6 +13,20 @@ impl Parser {
 
         let name = self.consume_identifier("function name")?;
 
+        let type_params = if self.match_token(&TokenKind::Lt) {
+            let mut params = Vec::new();
+            loop {
+                params.push(self.consume_identifier("type parameter")?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume(&TokenKind::Gt, ">")?;
+            params
+        } else {
+            Vec::new()
+        };
+
         self.consume(&TokenKind::LParen, "(")?;
 
         let mut params = Vec::new();
@@ -40,6 +54,7 @@ impl Parser {
 
         let function = Function {
             name: name.clone(),
+            type_params,
             params,
             return_type,
             body,

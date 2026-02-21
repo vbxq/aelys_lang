@@ -2,7 +2,9 @@ use super::Parser;
 use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
-use aelys_syntax::{Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, TokenKind};
+use aelys_syntax::{
+    Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, StructFieldInit, TokenKind,
+};
 use std::sync::Arc;
 
 impl Parser {
@@ -138,6 +140,15 @@ impl Parser {
             {
                 let name = name.clone();
                 return self.typed_collection_literal(name, span);
+            }
+            TokenKind::Identifier(ref name)
+                if name.chars().next().is_some_and(|c| c.is_uppercase())
+                    && self.check(&TokenKind::LBrace)
+                    && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+                    && matches!(self.peek_at(2).kind, TokenKind::Colon) =>
+            {
+                let name = name.clone();
+                return self.struct_literal(name, span);
             }
             TokenKind::Identifier(name) => ExprKind::Identifier(name),
 
@@ -296,6 +307,37 @@ impl Parser {
         Ok(Expr::new(kind, start_span.merge(end_span)))
     }
 
+    fn struct_literal(&mut self, name: String, start_span: aelys_syntax::Span) -> Result<Expr> {
+        self.consume(&TokenKind::LBrace, "{")?;
+
+        let mut fields = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            let field_span = self.peek().span;
+            let field_name = self.consume_identifier("field name")?;
+            self.consume(&TokenKind::Colon, ":")?;
+            let value = self.expression()?;
+            let end_span = self.previous().span;
+
+            fields.push(StructFieldInit {
+                name: field_name,
+                value: Box::new(value),
+                span: field_span.merge(end_span),
+            });
+
+            if !self.match_token(&TokenKind::Comma) {
+                break;
+            }
+        }
+
+        self.consume(&TokenKind::RBrace, "}")?;
+        let end_span = self.previous().span;
+
+        Ok(Expr::new(
+            ExprKind::StructLiteral { name, fields },
+            start_span.merge(end_span),
+        ))
+    }
+
     fn parse_fmt_string(&mut self, parts: Vec<FmtPart>, span: aelys_syntax::Span) -> Result<Expr> {
         let mut result = Vec::new();
 
@@ -429,6 +471,14 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                     remap_expr_spans(e, span);
                 }
             }
+        }
+        ExprKind::StructLiteral { fields, .. } => {
+            for field in fields {
+                remap_expr_spans(&mut field.value, span);
+            }
+        }
+        ExprKind::Cast { expr, .. } => {
+            remap_expr_spans(expr, span);
         }
         // Leaf nodes: Int, Float, String, Bool, Null, Identifier
         _ => {}

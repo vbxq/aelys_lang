@@ -88,7 +88,8 @@ fn collect_def_use_stmt(
         TypedStmtKind::Return(None)
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
-        | TypedStmtKind::Needs(_) => {}
+        | TypedStmtKind::Needs(_)
+        | TypedStmtKind::StructDecl { .. } => {}
     }
 }
 
@@ -186,6 +187,14 @@ fn collect_uses_expr(
                     collect_uses_expr(analysis, e, uses);
                 }
             }
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, value) in fields {
+                collect_uses_expr(analysis, value, uses);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => {
+            collect_uses_expr(analysis, expr, uses);
         }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

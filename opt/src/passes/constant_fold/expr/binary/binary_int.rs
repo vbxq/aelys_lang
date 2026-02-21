@@ -25,11 +25,16 @@ impl ConstantFolder {
             ))
         };
         // helper to emit an int result
+        let result_ty = if original.ty.is_integer() {
+            original.ty.clone()
+        } else {
+            InferType::I64
+        };
         let int_result = |this: &mut Self, v: i64| {
             this.stats.constants_folded += 1;
             Some(TypedExpr::new(
                 TypedExprKind::Int(v),
-                InferType::Int,
+                result_ty.clone(),
                 original.span,
             ))
         };

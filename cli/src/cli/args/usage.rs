@@ -13,6 +13,7 @@ Flags (any position):
   -O<level> or -O <level>    Optimization level: 0,1,2,3, none, basic, standard, aggressive
   -o, --output <path>        Output path (compile/asm)
   --stdout                   Print asm to stdout (asm)
+  --emit-air                 Print AIR instead of compiling (compile)
   -ae.<k>=<v>                VM option (e.g., -ae.max-heap=64M)
   --ae-<k>=<v>               VM option (e.g., --ae-max-heap=64M)
   --allow-caps=<list>        Allow native capabilities (comma-separated)

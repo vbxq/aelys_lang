@@ -5,42 +5,42 @@ use std::rc::Rc;
 #[test]
 fn test_define_and_lookup() {
     let mut env = TypeEnv::new();
-    env.define_local("x".to_string(), InferType::Int);
+    env.define_local("x".to_string(), InferType::I64);
 
-    assert_eq!(env.lookup("x"), Some(&InferType::Int));
+    assert_eq!(env.lookup("x"), Some(&InferType::I64));
     assert_eq!(env.lookup("y"), None);
 }
 
 #[test]
 fn test_nested_scopes() {
     let mut env = TypeEnv::new();
-    env.define_local("x".to_string(), InferType::Int);
+    env.define_local("x".to_string(), InferType::I64);
 
     env.push_scope();
-    env.define_local("y".to_string(), InferType::Float);
+    env.define_local("y".to_string(), InferType::F64);
 
-    assert_eq!(env.lookup("x"), Some(&InferType::Int));
-    assert_eq!(env.lookup("y"), Some(&InferType::Float));
+    assert_eq!(env.lookup("x"), Some(&InferType::I64));
+    assert_eq!(env.lookup("y"), Some(&InferType::F64));
 
     env.pop_scope();
 
-    assert_eq!(env.lookup("x"), Some(&InferType::Int));
+    assert_eq!(env.lookup("x"), Some(&InferType::I64));
     assert_eq!(env.lookup("y"), None);
 }
 
 #[test]
 fn test_shadowing() {
     let mut env = TypeEnv::new();
-    env.define_local("x".to_string(), InferType::Int);
+    env.define_local("x".to_string(), InferType::I64);
 
     env.push_scope();
-    env.define_local("x".to_string(), InferType::Float);
+    env.define_local("x".to_string(), InferType::F64);
 
-    assert_eq!(env.lookup("x"), Some(&InferType::Float));
+    assert_eq!(env.lookup("x"), Some(&InferType::F64));
 
     env.pop_scope();
 
-    assert_eq!(env.lookup("x"), Some(&InferType::Int));
+    assert_eq!(env.lookup("x"), Some(&InferType::I64));
 }
 
 #[test]
@@ -55,8 +55,8 @@ fn test_captures() {
 fn test_functions() {
     let mut env = TypeEnv::new();
     let fn_type = InferType::Function {
-        params: vec![InferType::Int],
-        ret: Box::new(InferType::Int),
+        params: vec![InferType::I64],
+        ret: Box::new(InferType::I64),
     };
     let fn_type_rc = Rc::new(fn_type.clone());
     env.define_function("double".to_string(), fn_type_rc.clone());
@@ -68,14 +68,14 @@ fn test_functions() {
 #[test]
 fn test_for_closure() {
     let mut env = TypeEnv::new();
-    env.define_local("x".to_string(), InferType::Int);
+    env.define_local("x".to_string(), InferType::I64);
     env.push_scope();
-    env.define_local("y".to_string(), InferType::Float);
+    env.define_local("y".to_string(), InferType::F64);
 
     let closure_env = env.for_closure();
 
-    assert_eq!(closure_env.lookup("x"), Some(&InferType::Int));
-    assert_eq!(closure_env.lookup("y"), Some(&InferType::Float));
+    assert_eq!(closure_env.lookup("x"), Some(&InferType::I64));
+    assert_eq!(closure_env.lookup("y"), Some(&InferType::F64));
 
     assert_eq!(closure_env.depth(), 1);
 }

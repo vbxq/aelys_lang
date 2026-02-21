@@ -59,6 +59,7 @@ impl Compiler {
             StmtKind::Return(expr) => self.compile_return(expr.as_ref(), stmt.span),
             StmtKind::Function(func) => self.compile_function(func),
             StmtKind::Needs(needs) => self.compile_needs(needs, stmt.span),
+            StmtKind::StructDecl { .. } => Ok(()),
         }
     }
 

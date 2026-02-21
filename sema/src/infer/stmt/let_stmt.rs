@@ -1,6 +1,7 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::TypedStmtKind;
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
+use crate::typed_ast::{TypedExprKind, TypedStmtKind};
+use crate::types::InferType;
 use aelys_syntax::{Expr, Span, TypeAnnotation};
 
 impl TypeInference {
@@ -13,21 +14,42 @@ impl TypeInference {
         initializer: &Expr,
         is_pub: bool,
     ) -> TypedStmtKind {
-        let typed_init = self.infer_expr(initializer);
+        let mut typed_init = self.infer_expr(initializer);
 
         let declared_type = type_annotation
             .as_ref()
             .map(|ann| self.type_from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
-            self.constraints.push(Constraint::equal(
-                typed_init.ty.clone(),
-                decl.clone(),
-                span,
-                ConstraintReason::TypeAnnotation {
-                    var_name: name.to_string(),
-                },
-            ));
+            if let TypedExprKind::Int(value) = &typed_init.kind
+                && decl.is_integer()
+                && *decl != InferType::I64
+            {
+                if InferType::int_fits(*value, decl) {
+                    typed_init.ty = decl.clone();
+                } else {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: decl.clone(),
+                            found: InferType::I64,
+                        },
+                        span: typed_init.span,
+                        reason: ConstraintReason::IntLiteralOverflow {
+                            value: *value,
+                            target: decl.clone(),
+                        },
+                    });
+                }
+            } else {
+                self.constraints.push(Constraint::equal(
+                    typed_init.ty.clone(),
+                    decl.clone(),
+                    span,
+                    ConstraintReason::TypeAnnotation {
+                        var_name: name.to_string(),
+                    },
+                ));
+            }
             decl.clone()
         } else {
             typed_init.ty.clone()

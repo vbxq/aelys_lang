@@ -18,8 +18,8 @@ impl Compiler {
 
         // Select opcode based on element type
         let opcode = match element_type {
-            Some(ResolvedType::Int) => OpCode::ArrayNewI,
-            Some(ResolvedType::Float) => OpCode::ArrayNewF,
+            Some(t) if t.is_integer() => OpCode::ArrayNewI,
+            Some(t) if t.is_float() => OpCode::ArrayNewF,
             Some(ResolvedType::Bool) => OpCode::ArrayNewB,
             _ => OpCode::ArrayNewP,
         };
@@ -246,8 +246,8 @@ impl Compiler {
         p: OpCode,
     ) -> OpCode {
         match inner {
-            InferType::Int => i,
-            InferType::Float => f,
+            t if t.is_integer() => i,
+            t if t.is_float() => f,
             InferType::Bool => b,
             _ => p,
         }

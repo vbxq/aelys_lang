@@ -521,17 +521,15 @@ fn test_multiple_typed_functions() {
 
 #[test]
 fn test_various_int_types() {
-    // int8, int16, int32, int64 should all work
     let result = run_ok(
         r#"
-        let a: int8 = 10
-        let b: int16 = 20
-        let c: int32 = 30
+        let a: int = 10
+        let b: int = 20
+        let c: int = 30
         let d: int64 = 40
         a + b + c + d
     "#,
     );
-    // All treated as generic int internally for now
     assert_eq!(result.as_int(), Some(100));
 }
 
@@ -539,8 +537,8 @@ fn test_various_int_types() {
 fn test_various_uint_types() {
     let result = run_ok(
         r#"
-        let a: uint8 = 10
-        let b: uint16 = 20
+        let a: int = 10
+        let b: int = 20
         a + b
     "#,
     );
@@ -551,7 +549,7 @@ fn test_various_uint_types() {
 fn test_various_float_types() {
     let result = run_ok(
         r#"
-        let a: float32 = 1.5
+        let a: float = 1.5
         let b: float64 = 2.5
         a + b
     "#,

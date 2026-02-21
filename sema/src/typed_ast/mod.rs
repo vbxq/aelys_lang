@@ -7,12 +7,13 @@ use aelys_syntax::Span;
 use aelys_syntax::{BinaryOp, Decorator, NeedsStmt, UnaryOp};
 
 use crate::types::InferType;
+use crate::types::TypeTable;
 
-/// A fully typed program
 #[derive(Debug, Clone)]
 pub struct TypedProgram {
     pub stmts: Vec<TypedStmt>,
     pub source: Arc<Source>,
+    pub type_table: TypeTable,
 }
 
 /// A typed statement
@@ -72,12 +73,19 @@ pub enum TypedStmtKind {
     Function(TypedFunction),
 
     Needs(NeedsStmt),
+
+    StructDecl {
+        name: String,
+        type_params: Vec<String>,
+        fields: Vec<(String, InferType)>,
+    },
 }
 
 /// A typed function
 #[derive(Debug, Clone)]
 pub struct TypedFunction {
     pub name: String,
+    pub type_params: Vec<String>,
     pub params: Vec<TypedParam>,
     pub return_type: InferType,
     pub body: Vec<TypedStmt>,
@@ -214,6 +222,16 @@ pub enum TypedExprKind {
     Slice {
         object: Box<TypedExpr>,
         range: Box<TypedExpr>,
+    },
+
+    StructLiteral {
+        name: String,
+        fields: Vec<(String, Box<TypedExpr>)>,
+    },
+
+    Cast {
+        expr: Box<TypedExpr>,
+        target: InferType,
     },
 }
 

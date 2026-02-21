@@ -102,6 +102,7 @@ fn parse_compile_output_flag() {
             command: Command::Compile {
                 path: "main.aelys".to_string(),
                 output: Some("out.avbc".to_string()),
+                emit_air: false,
             },
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,

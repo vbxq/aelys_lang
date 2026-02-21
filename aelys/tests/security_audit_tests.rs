@@ -644,8 +644,8 @@ fn type_inference_rc_shared() {
     use std::rc::Rc;
     let mut env = TypeEnv::new();
     let fn_type = Rc::new(InferType::Function {
-        params: vec![InferType::Int],
-        ret: Box::new(InferType::Int),
+        params: vec![InferType::I64],
+        ret: Box::new(InferType::I64),
     });
     env.define_function("test_fn".to_string(), Rc::clone(&fn_type));
     assert_eq!(Rc::strong_count(&fn_type), 2);
