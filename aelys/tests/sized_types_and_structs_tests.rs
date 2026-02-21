@@ -1,7 +1,7 @@
 use aelys::run;
 use aelys_runtime::Value;
 use aelys_sema::types::{InferType, ResolvedType, TypeVarId};
-use aelys_sema::{Substitution, StructDef, StructField, TypeTable};
+use aelys_sema::{StructDef, StructField, Substitution, TypeTable};
 
 fn run_ok(source: &str) -> Value {
     run(source, "test.aelys").expect("program should succeed")
@@ -19,7 +19,9 @@ fn parse(source: &str) -> Vec<aelys_syntax::Stmt> {
     let tokens = aelys_frontend::lexer::Lexer::with_source(src.clone())
         .scan()
         .unwrap();
-    aelys_frontend::parser::Parser::new(tokens, src).parse().unwrap()
+    aelys_frontend::parser::Parser::new(tokens, src)
+        .parse()
+        .unwrap()
 }
 
 fn infer(source: &str) -> aelys_sema::InferenceResult {
@@ -30,13 +32,8 @@ fn infer(source: &str) -> aelys_sema::InferenceResult {
     let ast = aelys_frontend::parser::Parser::new(tokens, src.clone())
         .parse()
         .unwrap();
-    aelys_sema::TypeInference::infer_program_full(
-        ast,
-        src,
-        Default::default(),
-        Default::default(),
-    )
-    .unwrap()
+    aelys_sema::TypeInference::infer_program_full(ast, src, Default::default(), Default::default())
+        .unwrap()
 }
 
 fn make_ann(name: &str) -> aelys_syntax::TypeAnnotation {
@@ -62,7 +59,10 @@ fn infer_type_from_annotation_sized_integers() {
 
 #[test]
 fn infer_type_from_annotation_sized_floats() {
-    assert_eq!(InferType::from_annotation(&make_ann("float")), InferType::F64);
+    assert_eq!(
+        InferType::from_annotation(&make_ann("float")),
+        InferType::F64
+    );
     assert_eq!(InferType::from_annotation(&make_ann("f64")), InferType::F64);
     assert_eq!(InferType::from_annotation(&make_ann("f32")), InferType::F32);
 }
@@ -82,7 +82,10 @@ fn infer_type_from_annotation_struct() {
 #[test]
 fn infer_type_from_annotation_case_insensitive_builtins() {
     assert_eq!(InferType::from_annotation(&make_ann("Int")), InferType::I64);
-    assert_eq!(InferType::from_annotation(&make_ann("Float")), InferType::F64);
+    assert_eq!(
+        InferType::from_annotation(&make_ann("Float")),
+        InferType::F64
+    );
     assert_eq!(InferType::from_annotation(&make_ann("I32")), InferType::I32);
 }
 
@@ -178,9 +181,18 @@ fn resolved_type_is_integer_ish() {
 
 #[test]
 fn resolved_type_from_infer_type_sized() {
-    assert_eq!(ResolvedType::from_infer_type(&InferType::I8), ResolvedType::I8);
-    assert_eq!(ResolvedType::from_infer_type(&InferType::U64), ResolvedType::U64);
-    assert_eq!(ResolvedType::from_infer_type(&InferType::F32), ResolvedType::F32);
+    assert_eq!(
+        ResolvedType::from_infer_type(&InferType::I8),
+        ResolvedType::I8
+    );
+    assert_eq!(
+        ResolvedType::from_infer_type(&InferType::U64),
+        ResolvedType::U64
+    );
+    assert_eq!(
+        ResolvedType::from_infer_type(&InferType::F32),
+        ResolvedType::F32
+    );
     assert_eq!(
         ResolvedType::from_infer_type(&InferType::Struct("P".to_string())),
         ResolvedType::Struct("P".to_string())
@@ -198,8 +210,14 @@ fn type_table_register_and_get() {
         name: "Point".to_string(),
         type_params: Vec::new(),
         fields: vec![
-            StructField { name: "x".to_string(), ty: InferType::F64 },
-            StructField { name: "y".to_string(), ty: InferType::F64 },
+            StructField {
+                name: "x".to_string(),
+                ty: InferType::F64,
+            },
+            StructField {
+                name: "y".to_string(),
+                ty: InferType::F64,
+            },
         ],
     });
 
@@ -222,7 +240,12 @@ fn parse_struct_declaration() {
     assert_eq!(stmts.len(), 1);
 
     match &stmts[0].kind {
-        aelys_syntax::StmtKind::StructDecl { name, type_params, fields, is_pub } => {
+        aelys_syntax::StmtKind::StructDecl {
+            name,
+            type_params,
+            fields,
+            is_pub,
+        } => {
             assert_eq!(name, "Point");
             assert!(type_params.is_empty());
             assert!(!is_pub);
@@ -240,7 +263,12 @@ fn parse_pub_struct_declaration() {
     assert_eq!(stmts.len(), 1);
 
     match &stmts[0].kind {
-        aelys_syntax::StmtKind::StructDecl { name, is_pub, fields, .. } => {
+        aelys_syntax::StmtKind::StructDecl {
+            name,
+            is_pub,
+            fields,
+            ..
+        } => {
             assert_eq!(name, "Color");
             assert!(is_pub);
             assert_eq!(fields.len(), 3);
@@ -288,7 +316,10 @@ fn parse_uppercase_identifier_without_brace_is_not_struct_literal() {
     let stmts = parse("let DEBUG = true");
     match &stmts[0].kind {
         aelys_syntax::StmtKind::Let { initializer, .. } => {
-            assert!(matches!(initializer.kind, aelys_syntax::ExprKind::Bool(true)));
+            assert!(matches!(
+                initializer.kind,
+                aelys_syntax::ExprKind::Bool(true)
+            ));
         }
         _ => panic!("expected let statement"),
     }
@@ -307,7 +338,9 @@ fn parse_uppercase_var_before_block_is_not_struct_literal() {
 #[test]
 fn lexer_recognizes_struct_keyword() {
     let src = aelys_syntax::Source::new("<test>", "struct");
-    let tokens = aelys_frontend::lexer::Lexer::with_source(src).scan().unwrap();
+    let tokens = aelys_frontend::lexer::Lexer::with_source(src)
+        .scan()
+        .unwrap();
     assert!(matches!(tokens[0].kind, aelys_syntax::TokenKind::Struct));
 }
 
@@ -379,7 +412,10 @@ fn infer_struct_field_access_type() {
     let expr_stmt = &result.program.stmts[2];
     match &expr_stmt.kind {
         aelys_sema::TypedStmtKind::Expression(expr) => {
-            assert!(matches!(&expr.kind, aelys_sema::TypedExprKind::Member { .. }));
+            assert!(matches!(
+                &expr.kind,
+                aelys_sema::TypedExprKind::Member { .. }
+            ));
         }
         _ => panic!("expected Expression"),
     }

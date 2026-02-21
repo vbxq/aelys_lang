@@ -19,9 +19,9 @@ use aelys_common::Warning;
 const MAX_INFERENCE_DEPTH: usize = 200;
 
 const KNOWN_TYPE_NAMES: &[&str] = &[
-    "int", "i8", "i16", "i32", "i64", "int8", "int16", "int32", "int64", "u8", "u16", "u32",
-    "u64", "uint8", "uint16", "uint32", "uint64", "float", "f32", "f64", "float32", "float64",
-    "bool", "string", "null", "void", "array", "vec",
+    "int", "i8", "i16", "i32", "i64", "int8", "int16", "int32", "int64", "u8", "u16", "u32", "u64",
+    "uint8", "uint16", "uint32", "uint64", "float", "f32", "f64", "float32", "float64", "bool",
+    "string", "null", "void", "array", "vec",
 ];
 
 pub struct TypeInference {

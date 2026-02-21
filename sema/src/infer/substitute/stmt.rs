@@ -84,7 +84,11 @@ impl TypeInference {
                 TypedStmtKind::Function(self.apply_substitution_func(func, subst))
             }
             TypedStmtKind::Needs(needs) => TypedStmtKind::Needs(needs.clone()),
-            TypedStmtKind::StructDecl { name, type_params, fields } => TypedStmtKind::StructDecl {
+            TypedStmtKind::StructDecl {
+                name,
+                type_params,
+                fields,
+            } => TypedStmtKind::StructDecl {
                 name: name.clone(),
                 type_params: type_params.clone(),
                 fields: fields

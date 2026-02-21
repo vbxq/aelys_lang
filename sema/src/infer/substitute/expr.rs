@@ -158,12 +158,7 @@ impl TypeInference {
                 name: name.clone(),
                 fields: fields
                     .iter()
-                    .map(|(n, v)| {
-                        (
-                            n.clone(),
-                            Box::new(self.apply_substitution_expr(v, subst)),
-                        )
-                    })
+                    .map(|(n, v)| (n.clone(), Box::new(self.apply_substitution_expr(v, subst))))
                     .collect(),
             },
             TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {

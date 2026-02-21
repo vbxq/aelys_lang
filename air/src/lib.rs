@@ -28,9 +28,16 @@ pub struct Span {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AirType {
-    I8, I16, I32, I64,
-    U8, U16, U32, U64,
-    F32, F64,
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
     Bool,
     Str,
     Ptr(Box<AirType>),
@@ -47,10 +54,22 @@ pub enum AirType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AirIntSize { I8, I16, I32, I64, U8, U16, U32, U64 }
+pub enum AirIntSize {
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AirFloatSize { F32, F64 }
+pub enum AirFloatSize {
+    F32,
+    F64,
+}
 
 #[derive(Clone)]
 pub struct AirStructDef {
@@ -195,7 +214,11 @@ pub enum AirStmtKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ordering {
-    Relaxed, Acquire, Release, AcqRel, SeqCst,
+    Relaxed,
+    Acquire,
+    Release,
+    AcqRel,
+    SeqCst,
 }
 
 #[derive(Clone)]
@@ -291,14 +314,32 @@ pub enum AirTerminator {
 
 #[derive(Clone)]
 pub enum BinOp {
-    Add, Sub, Mul, Div, Rem,
-    Eq, Ne, Lt, Le, Gt, Ge,
-    And, Or,
-    BitAnd, BitOr, BitXor, Shl, Shr,
-    CheckedAdd, CheckedSub, CheckedMul,
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+    BitAnd,
+    BitOr,
+    BitXor,
+    Shl,
+    Shr,
+    CheckedAdd,
+    CheckedSub,
+    CheckedMul,
 }
 
 #[derive(Clone)]
 pub enum UnOp {
-    Neg, Not, BitNot,
+    Neg,
+    Not,
+    BitNot,
 }

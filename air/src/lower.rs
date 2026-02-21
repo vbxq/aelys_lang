@@ -97,7 +97,13 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-    fn alloc_named_local(&mut self, name: &str, ty: AirType, is_mut: bool, span: Option<Span>) -> LocalId {
+    fn alloc_named_local(
+        &mut self,
+        name: &str,
+        ty: AirType,
+        is_mut: bool,
+        span: Option<Span>,
+    ) -> LocalId {
         let id = self.alloc_local_id();
         self.current_locals.push(AirLocal {
             id,
@@ -111,7 +117,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lookup_local(&self, name: &str) -> Option<LocalId> {
-        self.locals_by_name.iter().rev().find(|(n, _)| n == name).map(|(_, id)| *id)
+        self.locals_by_name
+            .iter()
+            .rev()
+            .find(|(n, _)| n == name)
+            .map(|(_, id)| *id)
     }
 
     fn emit(&mut self, kind: AirStmtKind, span: Option<Span>) {
@@ -164,7 +174,10 @@ impl<'a> LoweringContext<'a> {
             InferType::String => AirType::Str,
             InferType::Null => AirType::Void,
             InferType::Function { params, ret } => AirType::FnPtr {
-                params: params.iter().map(|p| self.lower_type_from_infer(p)).collect(),
+                params: params
+                    .iter()
+                    .map(|p| self.lower_type_from_infer(p))
+                    .collect(),
                 ret: Box::new(self.lower_type_from_infer(ret)),
                 conv: CallingConv::Aelys,
             },
@@ -191,7 +204,12 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_program(&mut self) {
         for stmt in &self.program.stmts {
-            if let TypedStmtKind::StructDecl { name, type_params, fields } = &stmt.kind {
+            if let TypedStmtKind::StructDecl {
+                name,
+                type_params,
+                fields,
+            } = &stmt.kind
+            {
                 self.lower_struct_decl(name, type_params, fields, &stmt.span);
             }
         }
@@ -206,7 +224,13 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn lower_struct_decl(&mut self, name: &str, type_params: &[String], fields: &[(String, InferType)], span: &aelys_syntax::Span) {
+    fn lower_struct_decl(
+        &mut self,
+        name: &str,
+        type_params: &[String],
+        fields: &[(String, InferType)],
+        span: &aelys_syntax::Span,
+    ) {
         let air_type_params = self.lower_type_params(type_params);
         let air_fields = fields
             .iter()
@@ -317,7 +341,8 @@ impl<'a> LoweringContext<'a> {
         });
 
         for (cap_name, cap_ty) in &func.captures {
-            let local_id = self.alloc_named_local(cap_name, self.lower_type_from_infer(cap_ty), false, None);
+            let local_id =
+                self.alloc_named_local(cap_name, self.lower_type_from_infer(cap_ty), false, None);
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(local_id),
@@ -362,7 +387,12 @@ impl<'a> LoweringContext<'a> {
             .iter()
             .map(|p| {
                 let ty = self.lower_type_from_infer(&p.ty);
-                let id = self.alloc_named_local(&p.name, ty.clone(), p.mutable, Some(self.span(&p.span)));
+                let id = self.alloc_named_local(
+                    &p.name,
+                    ty.clone(),
+                    p.mutable,
+                    Some(self.span(&p.span)),
+                );
                 AirParam {
                     id,
                     ty,
@@ -395,7 +425,12 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_toplevel_stmt(&mut self, stmt: &TypedStmt) {
         match &stmt.kind {
-            TypedStmtKind::Let { name, initializer, var_type, .. } => {
+            TypedStmtKind::Let {
+                name,
+                initializer,
+                var_type,
+                ..
+            } => {
                 let ty = self.lower_type_from_infer(var_type);
                 let init = self.try_const_expr(initializer);
                 self.globals.push(AirGlobal {
@@ -458,7 +493,13 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Expression(expr) => {
                 self.lower_expr_discard(expr);
             }
-            TypedStmtKind::Let { name, mutable, initializer, var_type, .. } => {
+            TypedStmtKind::Let {
+                name,
+                mutable,
+                initializer,
+                var_type,
+                ..
+            } => {
                 let ty = self.lower_type_from_infer(var_type);
                 let local = self.alloc_named_local(name, ty, *mutable, sp);
                 let operand = self.lower_expr(initializer);
@@ -473,16 +514,32 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Block(stmts) => {
                 self.lower_body(stmts);
             }
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.lower_if(condition, then_branch, else_branch.as_deref(), sp);
             }
             TypedStmtKind::While { condition, body } => {
                 self.lower_while(condition, body, sp);
             }
-            TypedStmtKind::For { iterator, start, end, inclusive, step, body } => {
+            TypedStmtKind::For {
+                iterator,
+                start,
+                end,
+                inclusive,
+                step,
+                body,
+            } => {
                 self.lower_for(iterator, start, end, *inclusive, step.as_ref(), body, sp);
             }
-            TypedStmtKind::ForEach { iterator, iterable, elem_type, body } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                elem_type,
+                body,
+            } => {
                 self.lower_foreach(iterator, iterable, elem_type, body, sp);
             }
             TypedStmtKind::Return(val) => {
@@ -524,7 +581,11 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Branch {
             cond,
             then_block: then_id,
-            else_block: if else_branch.is_some() { else_id } else { merge_id },
+            else_block: if else_branch.is_some() {
+                else_id
+            } else {
+                merge_id
+            },
         });
 
         self.lower_stmt(then_branch);
@@ -544,12 +605,7 @@ impl<'a> LoweringContext<'a> {
         self.fixup_block_id_noop(merge_id);
     }
 
-    fn lower_while(
-        &mut self,
-        condition: &TypedExpr,
-        body: &TypedStmt,
-        _sp: Option<Span>,
-    ) {
+    fn lower_while(&mut self, condition: &TypedExpr, body: &TypedStmt, _sp: Option<Span>) {
         let header_id = self.alloc_block_id();
         let body_id = self.alloc_block_id();
         let exit_id = self.alloc_block_id();
@@ -564,7 +620,10 @@ impl<'a> LoweringContext<'a> {
         });
         self.fixup_block_id(header_id);
 
-        self.loop_stack.push(LoopBlocks { header: header_id, exit: exit_id });
+        self.loop_stack.push(LoopBlocks {
+            header: header_id,
+            exit: exit_id,
+        });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(header_id));
@@ -619,7 +678,11 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(cond_local),
-                rvalue: Rvalue::BinaryOp(cmp_op, Operand::Copy(iter_local), Operand::Copy(end_local)),
+                rvalue: Rvalue::BinaryOp(
+                    cmp_op,
+                    Operand::Copy(iter_local),
+                    Operand::Copy(end_local),
+                ),
             },
             None,
         );
@@ -630,7 +693,10 @@ impl<'a> LoweringContext<'a> {
         });
         self.fixup_block_id(header_id);
 
-        self.loop_stack.push(LoopBlocks { header: incr_id, exit: exit_id });
+        self.loop_stack.push(LoopBlocks {
+            header: incr_id,
+            exit: exit_id,
+        });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(incr_id));
@@ -710,7 +776,11 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(cond_local),
-                rvalue: Rvalue::BinaryOp(BinOp::Lt, Operand::Copy(idx_local), Operand::Copy(len_local)),
+                rvalue: Rvalue::BinaryOp(
+                    BinOp::Lt,
+                    Operand::Copy(idx_local),
+                    Operand::Copy(len_local),
+                ),
             },
             None,
         );
@@ -732,7 +802,10 @@ impl<'a> LoweringContext<'a> {
             None,
         );
 
-        self.loop_stack.push(LoopBlocks { header: incr_id, exit: exit_id });
+        self.loop_stack.push(LoopBlocks {
+            header: incr_id,
+            exit: exit_id,
+        });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(incr_id));
@@ -784,7 +857,6 @@ impl<'a> LoweringContext<'a> {
                     || matches!(b.terminator, AirTerminator::Unreachable)
             })
     }
-    
 
     fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
         let sp = Some(self.span(&expr.span));
@@ -858,13 +930,9 @@ impl<'a> LoweringContext<'a> {
                 Operand::Copy(tmp)
             }
 
-            TypedExprKind::And { left, right } => {
-                self.lower_short_circuit(left, right, true, expr)
-            }
+            TypedExprKind::And { left, right } => self.lower_short_circuit(left, right, true, expr),
 
-            TypedExprKind::Or { left, right } => {
-                self.lower_short_circuit(left, right, false, expr)
-            }
+            TypedExprKind::Or { left, right } => self.lower_short_circuit(left, right, false, expr),
 
             TypedExprKind::Call { callee, args } => {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
@@ -874,7 +942,10 @@ impl<'a> LoweringContext<'a> {
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Local(tmp),
-                        rvalue: Rvalue::Call { func, args: lowered_args },
+                        rvalue: Rvalue::Call {
+                            func,
+                            args: lowered_args,
+                        },
                     },
                     sp,
                 );
@@ -906,15 +977,20 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::Grouping(inner) => self.lower_expr(inner),
 
-            TypedExprKind::If { condition, then_branch, else_branch } => {
-                self.lower_if_expr(condition, then_branch, else_branch, expr)
-            }
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => self.lower_if_expr(condition, then_branch, else_branch, expr),
 
             TypedExprKind::Lambda(inner) => self.lower_expr(inner),
 
-            TypedExprKind::LambdaInner { params, return_type, body, captures } => {
-                self.lower_lambda(params, return_type, body, captures, expr)
-            }
+            TypedExprKind::LambdaInner {
+                params,
+                return_type,
+                body,
+                captures,
+            } => self.lower_lambda(params, return_type, body, captures, expr),
 
             TypedExprKind::FmtString(parts) => self.lower_fmt_string(parts, sp),
 
@@ -1021,7 +1097,11 @@ impl<'a> LoweringContext<'a> {
                 Operand::Copy(tmp)
             }
 
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 let obj = self.lower_expr(object);
                 let idx = self.lower_expr(index);
                 let val = self.lower_expr(value);
@@ -1074,7 +1154,10 @@ impl<'a> LoweringContext<'a> {
                 Operand::Copy(tmp)
             }
 
-            TypedExprKind::Cast { expr: inner, target } => {
+            TypedExprKind::Cast {
+                expr: inner,
+                target,
+            } => {
                 let operand = self.lower_expr(inner);
                 let from = self.lower_type_from_infer(&inner.ty);
                 let to = self.lower_type_from_infer(target);
@@ -1098,13 +1181,22 @@ impl<'a> LoweringContext<'a> {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
                 let func = self.lower_callee(callee);
                 if matches!(expr.ty, InferType::Null) {
-                    self.emit(AirStmtKind::CallVoid { func, args: lowered_args }, sp);
+                    self.emit(
+                        AirStmtKind::CallVoid {
+                            func,
+                            args: lowered_args,
+                        },
+                        sp,
+                    );
                 } else {
                     let tmp = self.alloc_temp(self.lower_type_from_infer(&expr.ty));
                     self.emit(
                         AirStmtKind::Assign {
                             place: Place::Local(tmp),
-                            rvalue: Rvalue::Call { func, args: lowered_args },
+                            rvalue: Rvalue::Call {
+                                func,
+                                args: lowered_args,
+                            },
                         },
                         sp,
                     );
@@ -1130,7 +1222,11 @@ impl<'a> LoweringContext<'a> {
                     );
                 }
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 let obj = self.lower_expr(object);
                 let idx = self.lower_expr(index);
                 let val = self.lower_expr(value);

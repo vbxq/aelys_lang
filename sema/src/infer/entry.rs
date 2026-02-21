@@ -58,7 +58,9 @@ impl TypeInference {
                     found: InferType::Struct(ann.name.clone()),
                 },
                 span: ann.span,
-                reason: ConstraintReason::UnknownType { name: ann.name.clone() },
+                reason: ConstraintReason::UnknownType {
+                    name: ann.name.clone(),
+                },
             });
             return;
         }
@@ -69,7 +71,9 @@ impl TypeInference {
                 found: InferType::Dynamic,
             },
             span: ann.span,
-            reason: ConstraintReason::UnknownType { name: ann.name.clone() },
+            reason: ConstraintReason::UnknownType {
+                name: ann.name.clone(),
+            },
         });
     }
 

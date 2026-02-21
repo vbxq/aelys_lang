@@ -50,7 +50,12 @@ impl MonoContext {
         }
     }
 
-    fn collect_from_function(&mut self, func: &AirFunction, program: &AirProgram, generic_names: &HashSet<String>) {
+    fn collect_from_function(
+        &mut self,
+        func: &AirFunction,
+        program: &AirProgram,
+        generic_names: &HashSet<String>,
+    ) {
         for block in &func.blocks {
             for stmt in &block.stmts {
                 self.collect_from_stmt(stmt, program, generic_names);
@@ -59,7 +64,12 @@ impl MonoContext {
         }
     }
 
-    fn collect_from_stmt(&mut self, stmt: &AirStmt, program: &AirProgram, generic_names: &HashSet<String>) {
+    fn collect_from_stmt(
+        &mut self,
+        stmt: &AirStmt,
+        program: &AirProgram,
+        generic_names: &HashSet<String>,
+    ) {
         match &stmt.kind {
             AirStmtKind::Assign { rvalue, .. } => {
                 if let Rvalue::Call { func: callee, args } = rvalue {
@@ -73,13 +83,27 @@ impl MonoContext {
         }
     }
 
-    fn collect_from_terminator(&mut self, term: &AirTerminator, program: &AirProgram, generic_names: &HashSet<String>) {
-        if let AirTerminator::Invoke { func: callee, args, .. } = term {
+    fn collect_from_terminator(
+        &mut self,
+        term: &AirTerminator,
+        program: &AirProgram,
+        generic_names: &HashSet<String>,
+    ) {
+        if let AirTerminator::Invoke {
+            func: callee, args, ..
+        } = term
+        {
             self.try_collect(callee, args, program, generic_names);
         }
     }
 
-    fn try_collect(&mut self, callee: &Callee, args: &[Operand], program: &AirProgram, generic_names: &HashSet<String>) {
+    fn try_collect(
+        &mut self,
+        callee: &Callee,
+        args: &[Operand],
+        program: &AirProgram,
+        generic_names: &HashSet<String>,
+    ) {
         let name = match callee {
             Callee::Named(n) if generic_names.contains(n) => n,
             _ => return,
@@ -99,7 +123,12 @@ impl MonoContext {
         }
     }
 
-    fn infer_type_args(&self, generic_func: &AirFunction, args: &[Operand], program: &AirProgram) -> Option<Vec<AirType>> {
+    fn infer_type_args(
+        &self,
+        generic_func: &AirFunction,
+        args: &[Operand],
+        program: &AirProgram,
+    ) -> Option<Vec<AirType>> {
         let mut resolved: HashMap<u32, AirType> = HashMap::new();
 
         for (param, arg) in generic_func.params.iter().zip(args.iter()) {
@@ -114,7 +143,12 @@ impl MonoContext {
         Some(type_args)
     }
 
-    fn unify_param(&self, param_ty: &AirType, arg_ty: &AirType, resolved: &mut HashMap<u32, AirType>) {
+    fn unify_param(
+        &self,
+        param_ty: &AirType,
+        arg_ty: &AirType,
+        resolved: &mut HashMap<u32, AirType>,
+    ) {
         match param_ty {
             AirType::Param(id) => {
                 resolved.entry(id.0).or_insert_with(|| arg_ty.clone());
@@ -135,7 +169,12 @@ impl MonoContext {
                 }
             }
             AirType::FnPtr { params, ret, .. } => {
-                if let AirType::FnPtr { params: arg_params, ret: arg_ret, .. } = arg_ty {
+                if let AirType::FnPtr {
+                    params: arg_params,
+                    ret: arg_ret,
+                    ..
+                } = arg_ty
+                {
                     for (p, a) in params.iter().zip(arg_params.iter()) {
                         self.unify_param(p, a, resolved);
                     }
@@ -178,7 +217,10 @@ impl MonoContext {
         let mut mono_instances = Vec::new();
 
         for request in &self.requests {
-            let key = (request.function_name.clone(), self.type_args_key(&request.type_args));
+            let key = (
+                request.function_name.clone(),
+                self.type_args_key(&request.type_args),
+            );
 
             if self.instantiated.contains_key(&key) {
                 continue;
@@ -197,7 +239,11 @@ impl MonoContext {
             new_func.name = mangled_name.clone();
             new_func.type_params = Vec::new();
 
-            self.substitute_types_in_function(&mut new_func, &saved_type_params, &request.type_args);
+            self.substitute_types_in_function(
+                &mut new_func,
+                &saved_type_params,
+                &request.type_args,
+            );
 
             new_functions.push(new_func);
             self.instantiated.insert(key, mangled_name);
@@ -239,7 +285,11 @@ impl MonoContext {
         }
     }
 
-    fn rewrite_stmt(&self, stmt: &mut AirStmt, name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>) {
+    fn rewrite_stmt(
+        &self,
+        stmt: &mut AirStmt,
+        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
+    ) {
         match &mut stmt.kind {
             AirStmtKind::Assign { rvalue, .. } => {
                 if let Rvalue::Call { func: callee, .. } = rvalue {
@@ -253,13 +303,21 @@ impl MonoContext {
         }
     }
 
-    fn rewrite_terminator(&self, term: &mut AirTerminator, name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>) {
+    fn rewrite_terminator(
+        &self,
+        term: &mut AirTerminator,
+        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
+    ) {
         if let AirTerminator::Invoke { func: callee, .. } = term {
             self.rewrite_callee(callee, name_map);
         }
     }
 
-    fn rewrite_callee(&self, callee: &mut Callee, name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>) {
+    fn rewrite_callee(
+        &self,
+        callee: &mut Callee,
+        name_map: &HashMap<&str, Vec<(&(String, Vec<String>), &String)>>,
+    ) {
         if let Callee::Named(name) = callee {
             if let Some(entries) = name_map.get(name.as_str()) {
                 if let Some((_, mangled)) = entries.first() {
@@ -285,7 +343,12 @@ impl MonoContext {
         format!("__mono_{}_{}", name, type_str)
     }
 
-    fn substitute_types_in_function(&self, func: &mut AirFunction, type_params: &[TypeParamId], type_args: &[AirType]) {
+    fn substitute_types_in_function(
+        &self,
+        func: &mut AirFunction,
+        type_params: &[TypeParamId],
+        type_args: &[AirType],
+    ) {
         for param in &mut func.params {
             substitute_type(&mut param.ty, type_params, type_args);
         }
@@ -383,7 +446,11 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
     }
 }
 
-fn substitute_terminator(term: &mut AirTerminator, type_params: &[TypeParamId], type_args: &[AirType]) {
+fn substitute_terminator(
+    term: &mut AirTerminator,
+    type_params: &[TypeParamId],
+    type_args: &[AirType],
+) {
     match term {
         AirTerminator::Invoke { func: callee, .. } => {
             substitute_callee(callee, type_params, type_args);

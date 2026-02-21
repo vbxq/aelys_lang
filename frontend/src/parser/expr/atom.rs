@@ -3,7 +3,7 @@ use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{
-    Expr, ExprKind, FmtPart, FmtStringPart, Source, StructFieldInit, Stmt, StmtKind, TokenKind,
+    Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, StructFieldInit, TokenKind,
 };
 use std::sync::Arc;
 

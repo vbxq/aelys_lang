@@ -12,5 +12,7 @@ pub use typed_ast::{
     TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedParam, TypedProgram,
     TypedStmt, TypedStmtKind,
 };
-pub use types::{InferType, ResolvedType, StructDef, StructField, TypeTable, TypeVarGen, TypeVarId};
+pub use types::{
+    InferType, ResolvedType, StructDef, StructField, TypeTable, TypeVarGen, TypeVarId,
+};
 pub use unify::{Substitution, UnifyError};

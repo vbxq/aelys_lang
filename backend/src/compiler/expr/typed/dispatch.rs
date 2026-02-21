@@ -148,9 +148,9 @@ impl Compiler {
                 }
                 _ => false,
             }),
-            TypedExprKind::StructLiteral { fields, .. } => {
-                fields.iter().any(|(_, v)| Self::typed_expr_may_have_side_effects(v))
-            }
+            TypedExprKind::StructLiteral { fields, .. } => fields
+                .iter()
+                .any(|(_, v)| Self::typed_expr_may_have_side_effects(v)),
             TypedExprKind::Cast { expr, .. } => Self::typed_expr_may_have_side_effects(expr),
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

@@ -6,7 +6,13 @@ use aelys_syntax::{Stmt, StmtKind};
 impl TypeInference {
     pub(super) fn collect_structs(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
-            if let StmtKind::StructDecl { name, type_params, fields, .. } = &stmt.kind {
+            if let StmtKind::StructDecl {
+                name,
+                type_params,
+                fields,
+                ..
+            } = &stmt.kind
+            {
                 if self.type_table.has_struct(name) {
                     self.warnings.push(Warning::new(
                         WarningKind::UnknownType {

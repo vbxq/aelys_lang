@@ -7,8 +7,12 @@ use aelys_syntax::Source;
 
 fn source_to_air(code: &str) -> AirProgram {
     let src = Source::new("<test>", code);
-    let tokens = Lexer::with_source(src.clone()).scan().expect("lexer failed");
-    let ast = Parser::new(tokens, src.clone()).parse().expect("parser failed");
+    let tokens = Lexer::with_source(src.clone())
+        .scan()
+        .expect("lexer failed");
+    let ast = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parser failed");
     let typed = TypeInference::infer_program(ast, src).expect("sema failed");
     lower(&typed)
 }

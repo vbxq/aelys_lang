@@ -19,16 +19,21 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::Param(_) => TypeLayout { size: 8, align: 8 },
         AirType::Array(inner, n) => {
             let el = layout_of(inner);
-            TypeLayout { size: el.size * (*n as u32), align: el.align }
+            TypeLayout {
+                size: el.size * (*n as u32),
+                align: el.align,
+            }
         }
-        AirType::Struct(name) => panic!(
-            "layout_of: Struct({name}) requires program context; run compute_layouts first"
-        ),
+        AirType::Struct(name) => {
+            panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
+        }
     }
 }
 
 pub fn compute_layouts(program: &mut AirProgram) {
-    let name_to_idx: HashMap<String, usize> = program.structs.iter()
+    let name_to_idx: HashMap<String, usize> = program
+        .structs
+        .iter()
         .enumerate()
         .map(|(i, s)| (s.name.clone(), i))
         .collect();
@@ -49,12 +54,15 @@ pub fn compute_layouts(program: &mut AirProgram) {
 
 fn resolved_layout(ty: &AirType, structs: &HashMap<String, TypeLayout>) -> TypeLayout {
     match ty {
-        AirType::Struct(name) => *structs.get(name.as_str()).unwrap_or_else(|| {
-            panic!("struct `{name}` referenced before its layout is computed")
-        }),
+        AirType::Struct(name) => *structs
+            .get(name.as_str())
+            .unwrap_or_else(|| panic!("struct `{name}` referenced before its layout is computed")),
         AirType::Array(inner, n) => {
             let el = resolved_layout(inner, structs);
-            TypeLayout { size: el.size * (*n as u32), align: el.align }
+            TypeLayout {
+                size: el.size * (*n as u32),
+                align: el.align,
+            }
         }
         other => layout_of(other),
     }
@@ -110,16 +118,15 @@ fn references_by_value(ty: &AirType, target: &str) -> bool {
 
 fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
     match ty {
-        AirType::Struct(name) => { deps.insert(name.clone()); }
+        AirType::Struct(name) => {
+            deps.insert(name.clone());
+        }
         AirType::Array(inner, _) => field_struct_deps(inner, deps),
         _ => {}
     }
 }
 
-fn topological_order(
-    structs: &[AirStructDef],
-    name_to_idx: &HashMap<String, usize>,
-) -> Vec<usize> {
+fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usize>) -> Vec<usize> {
     let n = structs.len();
     let mut in_degree = vec![0u32; n];
     let mut dependents: Vec<Vec<usize>> = vec![vec![]; n];

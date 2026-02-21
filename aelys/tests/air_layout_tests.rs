@@ -4,7 +4,11 @@ use aelys_air::{
 };
 
 fn field(name: &str, ty: AirType) -> AirStructField {
-    AirStructField { name: name.to_string(), ty, offset: None }
+    AirStructField {
+        name: name.to_string(),
+        ty,
+        offset: None,
+    }
 }
 
 fn sdef(name: &str, fields: Vec<AirStructField>) -> AirStructDef {
@@ -60,12 +64,10 @@ fn array_layout() {
 // a@0(1) + 3 padding + b@4(4) = size 8, align 4
 #[test]
 fn padding_i8_i32() {
-    let mut prog = program(vec![
-        sdef("Padded", vec![
-            field("a", AirType::I8),
-            field("b", AirType::I32),
-        ]),
-    ]);
+    let mut prog = program(vec![sdef(
+        "Padded",
+        vec![field("a", AirType::I8), field("b", AirType::I32)],
+    )]);
     compute_layouts(&mut prog);
     assert_eq!(prog.structs[0].fields[0].offset, Some(0));
     assert_eq!(prog.structs[0].fields[1].offset, Some(4));
@@ -75,12 +77,10 @@ fn padding_i8_i32() {
 // x@0(8) + y@8(1) + 7 trailing padding = size 16, align 8
 #[test]
 fn trailing_padding() {
-    let mut prog = program(vec![
-        sdef("Wide", vec![
-            field("x", AirType::I64),
-            field("y", AirType::I8),
-        ]),
-    ]);
+    let mut prog = program(vec![sdef(
+        "Wide",
+        vec![field("x", AirType::I64), field("y", AirType::I8)],
+    )]);
     compute_layouts(&mut prog);
     assert_eq!(prog.structs[0].fields[0].offset, Some(0));
     assert_eq!(prog.structs[0].fields[1].offset, Some(8));
@@ -90,14 +90,15 @@ fn trailing_padding() {
 // a@0, pad 1, b@2, c@4, d@8 → size 16, align 8
 #[test]
 fn mixed_alignment() {
-    let mut prog = program(vec![
-        sdef("Mixed", vec![
+    let mut prog = program(vec![sdef(
+        "Mixed",
+        vec![
             field("a", AirType::I8),
             field("b", AirType::I16),
             field("c", AirType::I32),
             field("d", AirType::I64),
-        ]),
-    ]);
+        ],
+    )]);
     compute_layouts(&mut prog);
     let s = &prog.structs[0];
     assert_eq!(s.fields[0].offset, Some(0));
@@ -111,14 +112,17 @@ fn mixed_alignment() {
 #[test]
 fn nested_struct() {
     let mut prog = program(vec![
-        sdef("Inner", vec![
-            field("x", AirType::I32),
-            field("y", AirType::I32),
-        ]),
-        sdef("Outer", vec![
-            field("tag", AirType::I8),
-            field("inner", AirType::Struct("Inner".into())),
-        ]),
+        sdef(
+            "Inner",
+            vec![field("x", AirType::I32), field("y", AirType::I32)],
+        ),
+        sdef(
+            "Outer",
+            vec![
+                field("tag", AirType::I8),
+                field("inner", AirType::Struct("Inner".into())),
+            ],
+        ),
     ]);
     compute_layouts(&mut prog);
 
@@ -133,14 +137,17 @@ fn nested_struct() {
 #[test]
 fn reverse_declaration_order() {
     let mut prog = program(vec![
-        sdef("Outer", vec![
-            field("tag", AirType::I8),
-            field("inner", AirType::Struct("Inner".into())),
-        ]),
-        sdef("Inner", vec![
-            field("x", AirType::I32),
-            field("y", AirType::I32),
-        ]),
+        sdef(
+            "Outer",
+            vec![
+                field("tag", AirType::I8),
+                field("inner", AirType::Struct("Inner".into())),
+            ],
+        ),
+        sdef(
+            "Inner",
+            vec![field("x", AirType::I32), field("y", AirType::I32)],
+        ),
     ]);
     compute_layouts(&mut prog);
 
@@ -153,12 +160,16 @@ fn reverse_declaration_order() {
 // Ptr(Self) is valid (linked list)
 #[test]
 fn self_ptr_is_valid() {
-    let mut prog = program(vec![
-        sdef("Node", vec![
+    let mut prog = program(vec![sdef(
+        "Node",
+        vec![
             field("value", AirType::I64),
-            field("next", AirType::Ptr(Box::new(AirType::Struct("Node".into())))),
-        ]),
-    ]);
+            field(
+                "next",
+                AirType::Ptr(Box::new(AirType::Struct("Node".into()))),
+            ),
+        ],
+    )]);
     compute_layouts(&mut prog);
     assert_eq!(prog.structs[0].fields[0].offset, Some(0));
     assert_eq!(prog.structs[0].fields[1].offset, Some(8));
@@ -175,17 +186,20 @@ fn empty_struct() {
 #[test]
 fn array_of_struct_field() {
     let mut prog = program(vec![
-        sdef("Vec2", vec![
-            field("x", AirType::F32),
-            field("y", AirType::F32),
-        ]),
-        sdef("Mesh", vec![
-            field("id", AirType::I32),
-            field("vertices", AirType::Array(
-                Box::new(AirType::Struct("Vec2".into())),
-                4,
-            )),
-        ]),
+        sdef(
+            "Vec2",
+            vec![field("x", AirType::F32), field("y", AirType::F32)],
+        ),
+        sdef(
+            "Mesh",
+            vec![
+                field("id", AirType::I32),
+                field(
+                    "vertices",
+                    AirType::Array(Box::new(AirType::Struct("Vec2".into())), 4),
+                ),
+            ],
+        ),
     ]);
     compute_layouts(&mut prog);
     assert_eq!(prog.structs[1].fields[0].offset, Some(0));
@@ -195,19 +209,17 @@ fn array_of_struct_field() {
 // Closure env with mixed captures: i64@0, bool@8, str@16
 #[test]
 fn closure_env() {
-    let mut prog = program(vec![
-        AirStructDef {
-            name: "__closure_env_foo".to_string(),
-            type_params: vec![],
-            fields: vec![
-                field("captured_x", AirType::I64),
-                field("captured_flag", AirType::Bool),
-                field("captured_name", AirType::Str),
-            ],
-            is_closure_env: true,
-            span: None,
-        },
-    ]);
+    let mut prog = program(vec![AirStructDef {
+        name: "__closure_env_foo".to_string(),
+        type_params: vec![],
+        fields: vec![
+            field("captured_x", AirType::I64),
+            field("captured_flag", AirType::Bool),
+            field("captured_name", AirType::Str),
+        ],
+        is_closure_env: true,
+        span: None,
+    }]);
     compute_layouts(&mut prog);
     assert_eq!(prog.structs[0].fields[0].offset, Some(0));
     assert_eq!(prog.structs[0].fields[1].offset, Some(8));
@@ -217,11 +229,10 @@ fn closure_env() {
 #[test]
 #[should_panic(expected = "infinite size")]
 fn self_reference_panics() {
-    let mut prog = program(vec![
-        sdef("Bad", vec![
-            field("inner", AirType::Struct("Bad".into())),
-        ]),
-    ]);
+    let mut prog = program(vec![sdef(
+        "Bad",
+        vec![field("inner", AirType::Struct("Bad".into()))],
+    )]);
     compute_layouts(&mut prog);
 }
 

@@ -1,6 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::{TypedExprKind, TypedExpr};
+use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span, StructFieldInit};
 

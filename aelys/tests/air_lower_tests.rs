@@ -21,14 +21,24 @@ fn func<'a>(air: &'a AirProgram, name: &str) -> &'a AirFunction {
 }
 
 fn has_named_call(f: &AirFunction, target: &str) -> bool {
-    f.blocks.iter().flat_map(|b| &b.stmts).any(|s| match &s.kind {
-        AirStmtKind::Assign {
-            rvalue: Rvalue::Call { func: Callee::Named(n), .. },
-            ..
-        } => n == target,
-        AirStmtKind::CallVoid { func: Callee::Named(n), .. } => n == target,
-        _ => false,
-    })
+    f.blocks
+        .iter()
+        .flat_map(|b| &b.stmts)
+        .any(|s| match &s.kind {
+            AirStmtKind::Assign {
+                rvalue:
+                    Rvalue::Call {
+                        func: Callee::Named(n),
+                        ..
+                    },
+                ..
+            } => n == target,
+            AirStmtKind::CallVoid {
+                func: Callee::Named(n),
+                ..
+            } => n == target,
+            _ => false,
+        })
 }
 
 #[test]
@@ -109,10 +119,11 @@ fn short_circuit_and_produces_branch() {
     let air = lower_source("fn f() {\n    let x = true && false\n}");
     let f = func(&air, "f");
     assert!(f.blocks.len() >= 3);
-    assert!(f
-        .blocks
-        .iter()
-        .any(|b| matches!(b.terminator, AirTerminator::Branch { .. })));
+    assert!(
+        f.blocks
+            .iter()
+            .any(|b| matches!(b.terminator, AirTerminator::Branch { .. }))
+    );
 }
 
 #[test]
@@ -151,13 +162,24 @@ fn no_gc_decorator_sets_manual_mode() {
 #[test]
 fn int_literal_defaults_to_i64() {
     let air = lower_source("let a = 42");
-    let g = air.globals.iter().find(|g| g.name == "a").expect("global 'a' not found");
+    let g = air
+        .globals
+        .iter()
+        .find(|g| g.name == "a")
+        .expect("global 'a' not found");
     assert!(matches!(g.init, Some(AirConst::Int(42, AirIntSize::I64))));
 }
 
 #[test]
 fn float_literal_defaults_to_f64() {
     let air = lower_source("let pi = 3.14");
-    let g = air.globals.iter().find(|g| g.name == "pi").expect("global 'pi' not found");
-    assert!(matches!(g.init, Some(AirConst::Float(_, AirFloatSize::F64))));
+    let g = air
+        .globals
+        .iter()
+        .find(|g| g.name == "pi")
+        .expect("global 'pi' not found");
+    assert!(matches!(
+        g.init,
+        Some(AirConst::Float(_, AirFloatSize::F64))
+    ));
 }
