@@ -96,19 +96,19 @@ impl InferType {
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
         let name_lower = ann.name.to_lowercase();
         match name_lower.as_str() {
-            "int" | "i64" => InferType::I64,
-            "i8" => InferType::I8,
-            "i16" => InferType::I16,
-            "i32" => InferType::I32,
-            "u8" => InferType::U8,
-            "u16" => InferType::U16,
-            "u32" => InferType::U32,
-            "u64" => InferType::U64,
-            "float" | "f64" => InferType::F64,
-            "f32" => InferType::F32,
+            "int" | "i64" | "int64" => InferType::I64,
+            "i8" | "int8" => InferType::I8,
+            "i16" | "int16" => InferType::I16,
+            "i32" | "int32" => InferType::I32,
+            "u8" | "uint8" => InferType::U8,
+            "u16" | "uint16" => InferType::U16,
+            "u32" | "uint32" => InferType::U32,
+            "u64" | "uint64" => InferType::U64,
+            "float" | "f64" | "float64" => InferType::F64,
+            "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
             "string" => InferType::String,
-            "null" => InferType::Null,
+            "null" | "void" => InferType::Null,
             "array" => {
                 let inner = ann
                     .type_param
@@ -137,19 +137,19 @@ impl InferType {
 
     pub fn from_name(name: &str) -> Self {
         match name.to_lowercase().as_str() {
-            "int" | "i64" => InferType::I64,
-            "i8" => InferType::I8,
-            "i16" => InferType::I16,
-            "i32" => InferType::I32,
-            "u8" => InferType::U8,
-            "u16" => InferType::U16,
-            "u32" => InferType::U32,
-            "u64" => InferType::U64,
-            "float" | "f64" => InferType::F64,
-            "f32" => InferType::F32,
+            "int" | "i64" | "int64" => InferType::I64,
+            "i8" | "int8" => InferType::I8,
+            "i16" | "int16" => InferType::I16,
+            "i32" | "int32" => InferType::I32,
+            "u8" | "uint8" => InferType::U8,
+            "u16" | "uint16" => InferType::U16,
+            "u32" | "uint32" => InferType::U32,
+            "u64" | "uint64" => InferType::U64,
+            "float" | "f64" | "float64" => InferType::F64,
+            "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
             "string" => InferType::String,
-            "null" => InferType::Null,
+            "null" | "void" => InferType::Null,
             _ => {
                 if name.chars().next().map_or(false, |c| c.is_uppercase()) {
                     InferType::Struct(name.to_string())

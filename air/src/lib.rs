@@ -2,6 +2,7 @@
 
 pub mod layout;
 pub mod lower;
+pub mod mono;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -51,6 +52,7 @@ pub enum AirIntSize { I8, I16, I32, I64, U8, U16, U32, U64 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AirFloatSize { F32, F64 }
 
+#[derive(Clone)]
 pub struct AirStructDef {
     pub name: String,
     pub type_params: Vec<TypeParamId>,
@@ -59,12 +61,14 @@ pub struct AirStructDef {
     pub span: Option<Span>,
 }
 
+#[derive(Clone)]
 pub struct AirStructField {
     pub name: String,
     pub ty: AirType,
     pub offset: Option<u32>,
 }
 
+#[derive(Clone)]
 pub struct AirProgram {
     pub functions: Vec<AirFunction>,
     pub structs: Vec<AirStructDef>,
@@ -73,6 +77,7 @@ pub struct AirProgram {
     pub mono_instances: Vec<MonoInstance>,
 }
 
+#[derive(Clone)]
 pub struct AirGlobal {
     pub name: String,
     pub ty: AirType,
@@ -81,12 +86,14 @@ pub struct AirGlobal {
     pub span: Option<Span>,
 }
 
+#[derive(Clone)]
 pub struct MonoInstance {
     pub original: FunctionId,
     pub type_args: Vec<AirType>,
     pub result: FunctionId,
 }
 
+#[derive(Clone)]
 pub struct AirFunction {
     pub id: FunctionId,
     pub name: String,
@@ -102,6 +109,7 @@ pub struct AirFunction {
     pub span: Option<Span>,
 }
 
+#[derive(Clone)]
 pub struct FunctionAttribs {
     pub inline: InlineHint,
     pub no_gc: bool,
@@ -116,6 +124,7 @@ pub enum InlineHint {
     Never,
 }
 
+#[derive(Clone)]
 pub struct AirParam {
     pub id: LocalId,
     pub ty: AirType,
@@ -123,6 +132,7 @@ pub struct AirParam {
     pub span: Option<Span>,
 }
 
+#[derive(Clone)]
 pub struct AirLocal {
     pub id: LocalId,
     pub ty: AirType,
@@ -144,17 +154,20 @@ pub enum CallingConv {
     Rust,
 }
 
+#[derive(Clone)]
 pub struct AirBlock {
     pub id: BlockId,
     pub stmts: Vec<AirStmt>,
     pub terminator: AirTerminator,
 }
 
+#[derive(Clone)]
 pub struct AirStmt {
     pub kind: AirStmtKind,
     pub span: Option<Span>,
 }
 
+#[derive(Clone)]
 pub enum AirStmtKind {
     Assign {
         place: Place,
@@ -185,6 +198,7 @@ pub enum Ordering {
     Relaxed, Acquire, Release, AcqRel, SeqCst,
 }
 
+#[derive(Clone)]
 pub enum Rvalue {
     Use(Operand),
     BinaryOp(BinOp, Operand, Operand),
@@ -211,6 +225,7 @@ pub enum Rvalue {
     Discriminant(Operand),
 }
 
+#[derive(Clone)]
 pub enum Callee {
     Direct(FunctionId),
     Named(String),
@@ -218,13 +233,14 @@ pub enum Callee {
     Extern(String, CallingConv),
 }
 
-
+#[derive(Clone)]
 pub enum Operand {
     Copy(LocalId),
     Move(LocalId),
     Const(AirConst),
 }
 
+#[derive(Clone)]
 pub enum AirConst {
     IntLiteral(i64),
     Int(i64, AirIntSize),
@@ -236,6 +252,7 @@ pub enum AirConst {
     Undef(AirType),
 }
 
+#[derive(Clone)]
 pub enum Place {
     Local(LocalId),
     Field(LocalId, String),
@@ -243,6 +260,7 @@ pub enum Place {
     Index(LocalId, Operand),
 }
 
+#[derive(Clone)]
 pub enum AirTerminator {
     Return(Option<Operand>),
     Goto(BlockId),
@@ -271,6 +289,7 @@ pub enum AirTerminator {
     },
 }
 
+#[derive(Clone)]
 pub enum BinOp {
     Add, Sub, Mul, Div, Rem,
     Eq, Ne, Lt, Le, Gt, Ge,
@@ -279,6 +298,7 @@ pub enum BinOp {
     CheckedAdd, CheckedSub, CheckedMul,
 }
 
+#[derive(Clone)]
 pub enum UnOp {
     Neg, Not, BitNot,
 }

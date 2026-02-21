@@ -76,6 +76,7 @@ pub enum TypedStmtKind {
 
     StructDecl {
         name: String,
+        type_params: Vec<String>,
         fields: Vec<(String, InferType)>,
     },
 }
@@ -84,6 +85,7 @@ pub enum TypedStmtKind {
 #[derive(Debug, Clone)]
 pub struct TypedFunction {
     pub name: String,
+    pub type_params: Vec<String>,
     pub params: Vec<TypedParam>,
     pub return_type: InferType,
     pub body: Vec<TypedStmt>,

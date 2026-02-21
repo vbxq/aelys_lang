@@ -77,9 +77,10 @@ impl TypeInference {
                 TypedStmtKind::Needs(needs.clone())
             }
             StmtKind::StructDecl {
-                name, fields, ..
+                name, type_params, fields, ..
             } => TypedStmtKind::StructDecl {
                 name: name.clone(),
+                type_params: type_params.clone(),
                 fields: fields
                     .iter()
                     .map(|f| {

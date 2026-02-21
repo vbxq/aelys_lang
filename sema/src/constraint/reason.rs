@@ -33,6 +33,8 @@ pub enum ConstraintReason {
     RangeBound,
     /// Invalid cast (FATAL error)
     InvalidCast,
+    /// Unknown type in annotation (fatal error)
+    UnknownType { name: String },
     /// Generic constraint
     Other(String),
 }
@@ -68,6 +70,7 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::ArrayIndex => write!(f, "array index"),
             ConstraintReason::RangeBound => write!(f, "range bound"),
             ConstraintReason::InvalidCast => write!(f, "invalid cast"),
+            ConstraintReason::UnknownType { name } => write!(f, "unknown type '{}'", name),
             ConstraintReason::Other(s) => write!(f, "{}", s),
         }
     }

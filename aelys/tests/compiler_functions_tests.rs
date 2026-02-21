@@ -19,6 +19,7 @@ fn untyped_function_merges_call_site_slots_without_implicit_return() {
 
     let func = Function {
         name: "f".to_string(),
+        type_params: Vec::new(),
         params: Vec::new(),
         return_type: None,
         body: vec![

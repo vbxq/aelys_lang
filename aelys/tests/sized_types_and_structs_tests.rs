@@ -196,6 +196,7 @@ fn type_table_register_and_get() {
     let mut table = TypeTable::new();
     table.register_struct(StructDef {
         name: "Point".to_string(),
+        type_params: Vec::new(),
         fields: vec![
             StructField { name: "x".to_string(), ty: InferType::F64 },
             StructField { name: "y".to_string(), ty: InferType::F64 },
@@ -221,8 +222,9 @@ fn parse_struct_declaration() {
     assert_eq!(stmts.len(), 1);
 
     match &stmts[0].kind {
-        aelys_syntax::StmtKind::StructDecl { name, fields, is_pub } => {
+        aelys_syntax::StmtKind::StructDecl { name, type_params, fields, is_pub } => {
             assert_eq!(name, "Point");
+            assert!(type_params.is_empty());
             assert!(!is_pub);
             assert_eq!(fields.len(), 2);
             assert_eq!(fields[0].name, "x");

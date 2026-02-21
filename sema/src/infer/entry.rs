@@ -1,8 +1,8 @@
 use super::{KNOWN_TYPE_NAMES, TypeInference};
-use crate::constraint::ConstraintReason;
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::TypedProgram;
 use crate::types::{InferType, TypeTable};
-use aelys_common::{Warning, WarningKind};
+use aelys_common::Warning;
 use aelys_syntax::{Source, Stmt, TypeAnnotation};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -43,43 +43,34 @@ impl TypeInference {
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
             if let Some(ref param) = ann.type_param {
-                let param_lower = param.name.to_lowercase();
-                if !KNOWN_TYPE_NAMES.contains(&param_lower.as_str())
-                    && !param.name.chars().next().map_or(false, |c| c.is_uppercase())
-                {
-                    self.warnings.push(Warning::new(
-                        WarningKind::UnknownTypeParameter {
-                            param: param.name.clone(),
-                            in_type: ann.name.clone(),
-                        },
-                        param.span,
-                    ));
-                }
-                if let Some(ref nested) = param.type_param {
-                    self.check_type_annotation(nested);
-                }
+                self.check_type_annotation(param);
             }
             return;
         }
 
         if ann.name.chars().next().map_or(false, |c| c.is_uppercase()) {
-            if !self.type_table.has_struct(&ann.name) {
-                self.warnings.push(Warning::new(
-                    WarningKind::UnknownType {
-                        name: ann.name.clone(),
-                    },
-                    ann.span,
-                ));
+            if self.type_table.has_struct(&ann.name) || self.env.contains(&ann.name) {
+                return;
             }
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Struct(ann.name.clone()),
+                },
+                span: ann.span,
+                reason: ConstraintReason::UnknownType { name: ann.name.clone() },
+            });
             return;
         }
 
-        self.warnings.push(Warning::new(
-            WarningKind::UnknownType {
-                name: ann.name.clone(),
+        self.errors.push(TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
             },
-            ann.span,
-        ));
+            span: ann.span,
+            reason: ConstraintReason::UnknownType { name: ann.name.clone() },
+        });
     }
 
     pub fn infer_program(
@@ -135,6 +126,7 @@ impl TypeInference {
                     ConstraintReason::BitwiseOp { .. }
                         | ConstraintReason::TypeAnnotation { .. }
                         | ConstraintReason::InvalidCast
+                        | ConstraintReason::UnknownType { .. }
                 )
             });
 

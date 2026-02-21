@@ -11,6 +11,7 @@ impl TypeInference {
     ) -> TypedFunction {
         TypedFunction {
             name: func.name.clone(),
+            type_params: func.type_params.clone(),
             params: func
                 .params
                 .iter()

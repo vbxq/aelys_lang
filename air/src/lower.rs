@@ -27,6 +27,7 @@ struct LoweringContext<'a> {
     current_stmts: Vec<AirStmt>,
     locals_by_name: Vec<(String, LocalId)>,
     loop_stack: Vec<LoopBlocks>,
+    type_params_map: Vec<(String, TypeParamId)>,
 }
 
 struct LoopBlocks {
@@ -52,6 +53,7 @@ impl<'a> LoweringContext<'a> {
             current_stmts: Vec::new(),
             locals_by_name: Vec::new(),
             loop_stack: Vec::new(),
+            type_params_map: Vec::new(),
         }
     }
 
@@ -134,6 +136,18 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
+        type_params
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let id = TypeParamId(i as u32);
+                self.type_params_map.push((name.clone(), id));
+                id
+            })
+            .collect()
+    }
+
     fn lower_type_from_infer(&self, ty: &InferType) -> AirType {
         match ty {
             InferType::I8 => AirType::I8,
@@ -177,8 +191,8 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_program(&mut self) {
         for stmt in &self.program.stmts {
-            if let TypedStmtKind::StructDecl { name, fields } = &stmt.kind {
-                self.lower_struct_decl(name, fields, &stmt.span);
+            if let TypedStmtKind::StructDecl { name, type_params, fields } = &stmt.kind {
+                self.lower_struct_decl(name, type_params, fields, &stmt.span);
             }
         }
 
@@ -192,7 +206,8 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn lower_struct_decl(&mut self, name: &str, fields: &[(String, InferType)], span: &aelys_syntax::Span) {
+    fn lower_struct_decl(&mut self, name: &str, type_params: &[String], fields: &[(String, InferType)], span: &aelys_syntax::Span) {
+        let air_type_params = self.lower_type_params(type_params);
         let air_fields = fields
             .iter()
             .map(|(fname, fty)| AirStructField {
@@ -203,11 +218,12 @@ impl<'a> LoweringContext<'a> {
             .collect();
         self.structs.push(AirStructDef {
             name: name.to_string(),
-            type_params: Vec::new(),
+            type_params: air_type_params,
             fields: air_fields,
             is_closure_env: false,
             span: Some(self.span(span)),
         });
+        self.type_params_map.clear();
     }
 
     // ========================================================================
@@ -244,6 +260,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+        let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
         let ret_ty = self.lower_type_from_infer(&func.return_type);
 
@@ -254,7 +271,7 @@ impl<'a> LoweringContext<'a> {
             id: func_id,
             name: func.name.clone(),
             gc_mode,
-            type_params: Vec::new(),
+            type_params,
             params,
             ret_ty,
             locals: std::mem::take(&mut self.current_locals),
@@ -265,9 +282,12 @@ impl<'a> LoweringContext<'a> {
             span: Some(self.span(&func.span)),
         };
         self.functions.push(air_func);
+        self.type_params_map.clear();
     }
 
     fn lower_closure(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+        let type_params = self.lower_type_params(&func.type_params);
+
         let env_name = format!("__closure_env_{}", func.name);
         let env_fields: Vec<AirStructField> = func
             .captures
@@ -323,7 +343,7 @@ impl<'a> LoweringContext<'a> {
             id: func_id,
             name: func.name.clone(),
             gc_mode,
-            type_params: Vec::new(),
+            type_params,
             params: all_params,
             ret_ty,
             locals: std::mem::take(&mut self.current_locals),
@@ -334,6 +354,7 @@ impl<'a> LoweringContext<'a> {
             span: Some(self.span(&func.span)),
         };
         self.functions.push(air_func);
+        self.type_params_map.clear();
     }
 
     fn lower_params(&mut self, params: &[TypedParam]) -> Vec<AirParam> {
@@ -1286,6 +1307,7 @@ impl<'a> LoweringContext<'a> {
         let lambda_name = format!("__lambda_{}", self.next_function_id);
         let fake_func = TypedFunction {
             name: lambda_name.clone(),
+            type_params: Vec::new(),
             params: params.to_vec(),
             return_type: return_type.clone(),
             body: body.to_vec(),

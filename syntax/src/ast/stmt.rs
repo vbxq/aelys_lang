@@ -62,6 +62,7 @@ pub enum StmtKind {
 
     StructDecl {
         name: String,
+        type_params: Vec<String>,
         fields: Vec<StructFieldDecl>,
         is_pub: bool,
     },
@@ -92,6 +93,7 @@ pub enum ImportKind {
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
+    pub type_params: Vec<String>,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Vec<Stmt>,

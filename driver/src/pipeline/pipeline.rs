@@ -84,6 +84,7 @@ impl Pipeline {
             | StageInput::Tokens(_, source)
             | StageInput::Ast(_, source)
             | StageInput::TypedAst(_, source)
+            | StageInput::Air(_, _, source)
             | StageInput::Compiled(_, _, source) => source_hash(source),
         };
 

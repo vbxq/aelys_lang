@@ -17,6 +17,20 @@ impl Parser {
             }));
         }
 
+        let type_params = if self.match_token(&TokenKind::Lt) {
+            let mut params = Vec::new();
+            loop {
+                params.push(self.consume_identifier("type parameter")?);
+                if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume(&TokenKind::Gt, ">")?;
+            params
+        } else {
+            Vec::new()
+        };
+
         self.consume(&TokenKind::LBrace, "{")?;
 
         let mut fields = Vec::new();
@@ -44,6 +58,7 @@ impl Parser {
         Ok(Stmt::new(
             StmtKind::StructDecl {
                 name,
+                type_params,
                 fields,
                 is_pub,
             },
