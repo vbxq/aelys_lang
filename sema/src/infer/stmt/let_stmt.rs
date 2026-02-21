@@ -4,20 +4,6 @@ use crate::typed_ast::{TypedExprKind, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span, TypeAnnotation};
 
-fn int_fits(value: i64, ty: &InferType) -> bool {
-    match ty {
-        InferType::I8 => i8::try_from(value).is_ok(),
-        InferType::I16 => i16::try_from(value).is_ok(),
-        InferType::I32 => i32::try_from(value).is_ok(),
-        InferType::I64 => true,
-        InferType::U8 => u8::try_from(value).is_ok(),
-        InferType::U16 => u16::try_from(value).is_ok(),
-        InferType::U32 => u32::try_from(value).is_ok(),
-        InferType::U64 => value >= 0,
-        _ => false,
-    }
-}
-
 impl TypeInference {
     pub(super) fn infer_let_stmt(
         &mut self,
@@ -39,7 +25,7 @@ impl TypeInference {
                 && decl.is_integer()
                 && *decl != InferType::I64
             {
-                if int_fits(*value, decl) {
+                if InferType::int_fits(*value, decl) {
                     typed_init.ty = decl.clone();
                 } else {
                     self.errors.push(TypeError {

@@ -6,7 +6,12 @@ impl GlobalConstantPropagator {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(c) = self.constants.get(name) {
-                    *expr = TypedExpr::new(c.kind.clone(), c.ty.clone(), expr.span);
+                    let ty = if expr.ty.is_integer() && c.ty.is_integer() {
+                        expr.ty.clone()
+                    } else {
+                        c.ty.clone()
+                    };
+                    *expr = TypedExpr::new(c.kind.clone(), ty, expr.span);
                     self.stats.globals_propagated += 1;
                 }
             }

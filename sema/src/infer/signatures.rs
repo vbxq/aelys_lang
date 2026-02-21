@@ -59,10 +59,8 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
-        let saved_type_params = std::mem::replace(
-            &mut self.type_params_in_scope,
-            func.type_params.clone(),
-        );
+        let saved_type_params =
+            std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
 
         let mut param_types = Vec::with_capacity(func.params.len());
         for p in &func.params {

@@ -35,6 +35,8 @@ struct LoweringContext<'a> {
     locals_by_name: Vec<(String, LocalId)>,
     loop_stack: Vec<LoopBlocks>,
     type_params_map: Vec<(String, TypeParamId)>,
+    pending_block_id: Option<BlockId>,
+    block_aliases: Vec<(u32, u32)>,
 }
 
 struct LoopBlocks {
@@ -61,6 +63,8 @@ impl<'a> LoweringContext<'a> {
             locals_by_name: Vec::new(),
             loop_stack: Vec::new(),
             type_params_map: Vec::new(),
+            pending_block_id: None,
+            block_aliases: Vec::new(),
         }
     }
 
@@ -136,7 +140,10 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn seal_block(&mut self, terminator: AirTerminator) -> BlockId {
-        let id = self.alloc_block_id();
+        let id = self
+            .pending_block_id
+            .take()
+            .unwrap_or_else(|| self.alloc_block_id());
         self.current_blocks.push(AirBlock {
             id,
             stmts: std::mem::take(&mut self.current_stmts),
@@ -273,6 +280,8 @@ impl<'a> LoweringContext<'a> {
         let saved_blocks = std::mem::take(&mut self.current_blocks);
         let saved_stmts = std::mem::take(&mut self.current_stmts);
         let saved_names = std::mem::take(&mut self.locals_by_name);
+        let saved_aliases = std::mem::take(&mut self.block_aliases);
+        let saved_pending = self.pending_block_id.take();
         let saved_next_local = self.next_local_id;
         let saved_next_block = self.next_block_id;
         self.next_local_id = 0;
@@ -292,6 +301,8 @@ impl<'a> LoweringContext<'a> {
         self.current_blocks = saved_blocks;
         self.current_stmts = saved_stmts;
         self.locals_by_name = saved_names;
+        self.block_aliases = saved_aliases;
+        self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
         self.next_block_id = saved_next_block;
     }
@@ -303,6 +314,7 @@ impl<'a> LoweringContext<'a> {
 
         self.lower_body(&func.body);
         self.finalize_function_body();
+        self.resolve_block_aliases();
 
         let air_func = AirFunction {
             id: func_id,
@@ -373,6 +385,7 @@ impl<'a> LoweringContext<'a> {
 
         self.lower_body(&func.body);
         self.finalize_function_body();
+        self.resolve_block_aliases();
 
         let mut all_params = vec![self.current_params.remove(0)];
         all_params.extend(user_params);
@@ -850,13 +863,64 @@ impl<'a> LoweringContext<'a> {
 
     fn fixup_block_id(&mut self, target: BlockId) {
         if let Some(block) = self.current_blocks.last_mut() {
+            let old_id = block.id;
             block.id = target;
+            if old_id != target {
+                self.block_aliases.push((old_id.0, target.0));
+            }
         }
     }
 
-    fn fixup_block_id_noop(&mut self, _target: BlockId) {
-        // merge/exit blocks: the next sealed block will get this ID naturally
-        // nothing to do, next seal_block will advance the counter <3
+    fn fixup_block_id_noop(&mut self, target: BlockId) {
+        self.pending_block_id = Some(target);
+    }
+
+    fn resolve_block_aliases(&mut self) {
+        if self.block_aliases.is_empty() {
+            return;
+        }
+        let resolve = |id: &mut BlockId, aliases: &[(u32, u32)]| {
+            let mut current = id.0;
+            for _ in 0..aliases.len() {
+                if let Some(&(_, to)) = aliases.iter().find(|(from, _)| *from == current) {
+                    current = to;
+                } else {
+                    break;
+                }
+            }
+            *id = BlockId(current);
+        };
+        for block in &mut self.current_blocks {
+            let aliases = &self.block_aliases;
+            match &mut block.terminator {
+                AirTerminator::Goto(id) => resolve(id, aliases),
+                AirTerminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
+                    resolve(then_block, aliases);
+                    resolve(else_block, aliases);
+                }
+                AirTerminator::Switch {
+                    targets, default, ..
+                } => {
+                    for (_, id) in targets {
+                        resolve(id, aliases);
+                    }
+                    resolve(default, aliases);
+                }
+                AirTerminator::Invoke { normal, unwind, .. } => {
+                    resolve(normal, aliases);
+                    resolve(unwind, aliases);
+                }
+                AirTerminator::Return(_)
+                | AirTerminator::Unreachable
+                | AirTerminator::Unwind
+                | AirTerminator::Panic { .. } => {}
+            }
+        }
+        self.block_aliases.clear();
     }
 
     fn last_block_is_terminated(&self) -> bool {

@@ -1,7 +1,7 @@
-use aelys_air::*;
 use aelys_air::layout::compute_layouts;
 use aelys_air::lower::{lower, lower_with_gc_mode};
 use aelys_air::mono::monomorphize;
+use aelys_air::*;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_sema::TypeInference;
@@ -11,7 +11,9 @@ use std::collections::HashSet;
 fn lower_source(code: &str) -> AirProgram {
     let src = Source::new("<test>", code);
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
-    let stmts = Parser::new(tokens, src.clone()).parse().expect("parse failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
     lower(&typed)
 }
@@ -19,11 +21,12 @@ fn lower_source(code: &str) -> AirProgram {
 fn lower_with_globals(code: &str, globals: &[&str]) -> AirProgram {
     let src = Source::new("<test>", code);
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
-    let stmts = Parser::new(tokens, src.clone()).parse().expect("parse failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
     let known: HashSet<String> = globals.iter().map(|s| s.to_string()).collect();
-    let typed =
-        TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known)
-            .expect("sema failed");
+    let typed = TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known)
+        .expect("sema failed");
     lower(&typed)
 }
 
@@ -33,7 +36,6 @@ fn func<'a>(air: &'a AirProgram, name: &str) -> &'a AirFunction {
         .find(|f| f.name == name)
         .unwrap_or_else(|| panic!("function `{}` not found in AIR", name))
 }
-
 
 #[test]
 fn stdlib_call_print() {
@@ -48,13 +50,14 @@ fn greet() {
 
     let f = func(&air, "greet");
 
-    let has_print_call = f.blocks.iter().any(|b| {
-        b.stmts.iter().any(|s| matches!(&s.kind,
+    let has_print_call =
+        f.blocks.iter().any(|b| {
+            b.stmts.iter().any(|s| matches!(&s.kind,
             AirStmtKind::CallVoid { func: Callee::Named(n), .. }
             | AirStmtKind::Assign { rvalue: Rvalue::Call { func: Callee::Named(n), .. }, .. }
             if n == "print"
         ))
-    });
+        });
     assert!(has_print_call, "expected a call to `print`");
 
     assert!(
@@ -98,14 +101,20 @@ fn caller() {
         }
     }
 
-    let has_i32_arg = call_args.iter().any(|op| {
-        matches!(op, Operand::Const(AirConst::Int(2, AirIntSize::I32)))
-    });
-    let has_i16_arg = call_args.iter().any(|op| {
-        matches!(op, Operand::Const(AirConst::Int(2, AirIntSize::I16)))
-    });
-    assert!(has_i32_arg, "expected Int(2, I32) argument for take_i32 call");
-    assert!(has_i16_arg, "expected Int(2, I16) argument for take_i16 call");
+    let has_i32_arg = call_args
+        .iter()
+        .any(|op| matches!(op, Operand::Const(AirConst::Int(2, AirIntSize::I32))));
+    let has_i16_arg = call_args
+        .iter()
+        .any(|op| matches!(op, Operand::Const(AirConst::Int(2, AirIntSize::I16))));
+    assert!(
+        has_i32_arg,
+        "expected Int(2, I32) argument for take_i32 call"
+    );
+    assert!(
+        has_i16_arg,
+        "expected Int(2, I16) argument for take_i16 call"
+    );
 }
 
 #[test]
@@ -120,9 +129,14 @@ fn caller() {
 "#;
     let src = Source::new("<test>", code);
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
-    let stmts = Parser::new(tokens, src.clone()).parse().expect("parse failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
     let result = TypeInference::infer_program(stmts, src);
-    assert!(result.is_err(), "expected sema to reject overflow literal 300 for i8");
+    assert!(
+        result.is_err(),
+        "expected sema to reject overflow literal 300 for i8"
+    );
 }
 
 #[test]
@@ -177,12 +191,17 @@ fn get_x(p: Point) -> i64 {
     let f = func(&air, "get_x");
 
     let has_field_access = f.blocks.iter().any(|b| {
-        b.stmts.iter().any(|s| matches!(&s.kind,
-            AirStmtKind::Assign { rvalue: Rvalue::FieldAccess { field, .. }, .. }
-            if field == "x"
-        ))
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign { rvalue: Rvalue::FieldAccess { field, .. }, .. }
+                if field == "x"
+            )
+        })
     });
-    assert!(has_field_access, "expected Rvalue::FieldAccess {{ field: \"x\" }}");
+    assert!(
+        has_field_access,
+        "expected Rvalue::FieldAccess {{ field: \"x\" }}"
+    );
 
     let field_local = f.blocks.iter().flat_map(|b| b.stmts.iter()).find_map(|s| {
         if let AirStmtKind::Assign {
@@ -196,8 +215,16 @@ fn get_x(p: Point) -> i64 {
         }
     });
     if let Some(lid) = field_local {
-        let local = f.locals.iter().find(|l| l.id == lid).expect("local not found");
-        assert_eq!(local.ty, AirType::I64, "field access result local should be I64");
+        let local = f
+            .locals
+            .iter()
+            .find(|l| l.id == lid)
+            .expect("local not found");
+        assert_eq!(
+            local.ty,
+            AirType::I64,
+            "field access result local should be I64"
+        );
     }
 }
 
@@ -214,21 +241,17 @@ fn make() -> Point {
 
     let f = func(&air, "make");
 
-    let init = f
-        .blocks
-        .iter()
-        .flat_map(|b| b.stmts.iter())
-        .find_map(|s| {
-            if let AirStmtKind::Assign {
-                rvalue: Rvalue::StructInit { name, fields },
-                ..
-            } = &s.kind
-            {
-                Some((name.clone(), fields.len()))
-            } else {
-                None
-            }
-        });
+    let init = f.blocks.iter().flat_map(|b| b.stmts.iter()).find_map(|s| {
+        if let AirStmtKind::Assign {
+            rvalue: Rvalue::StructInit { name, fields },
+            ..
+        } = &s.kind
+        {
+            Some((name.clone(), fields.len()))
+        } else {
+            None
+        }
+    });
 
     let (name, field_count) = init.expect("expected Rvalue::StructInit");
     assert_eq!(name, "Point", "struct init should be for `Point`");
@@ -267,9 +290,22 @@ fn chain() -> f64 {
         })
         .collect();
 
-    assert_eq!(casts.len(), 2, "expected exactly 2 casts, got {}", casts.len());
-    assert_eq!(casts[0], (AirType::I64, AirType::I32), "first cast should be I64 → I32");
-    assert_eq!(casts[1], (AirType::I32, AirType::F64), "second cast should be I32 → F64");
+    assert_eq!(
+        casts.len(),
+        2,
+        "expected exactly 2 casts, got {}",
+        casts.len()
+    );
+    assert_eq!(
+        casts[0],
+        (AirType::I64, AirType::I32),
+        "first cast should be I64 → I32"
+    );
+    assert_eq!(
+        casts[1],
+        (AirType::I32, AirType::F64),
+        "second cast should be I32 → F64"
+    );
 }
 
 #[test]
@@ -297,7 +333,11 @@ fn caller() -> i32 {
     assert!(
         mono_fn.is_some(),
         "expected `__mono_identity_i32` function, found: {:?}",
-        program.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+        program
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
     );
 
     assert!(
@@ -309,11 +349,12 @@ fn caller() -> i32 {
 
     let caller = func(&program, "caller");
     let has_rewritten_call = caller.blocks.iter().any(|b| {
-        b.stmts.iter().any(|s| matches!(&s.kind,
-            AirStmtKind::Assign { rvalue: Rvalue::Call { func: Callee::Named(n), .. }, .. }
-            if n.contains("__mono_identity_i32")
-        ))
-        || matches!(&b.terminator,
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign { rvalue: Rvalue::Call { func: Callee::Named(n), .. }, .. }
+                if n.contains("__mono_identity_i32")
+            )
+        }) || matches!(&b.terminator,
             AirTerminator::Invoke { func: Callee::Named(n), .. }
             if n.contains("__mono_identity_i32")
         )
@@ -364,7 +405,9 @@ fn some_func() {
 "#;
     let src = Source::new("<test>", code);
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
-    let stmts = Parser::new(tokens, src.clone()).parse().expect("parse failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
 
     let air_manual = lower_with_gc_mode(&typed, GcMode::Manual);

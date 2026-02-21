@@ -214,11 +214,19 @@ impl MonoContext {
                 AirConst::Null => AirType::Void,
                 AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
             },
-            Operand::Copy(id) | Operand::Move(id) => {
-                caller.params.iter().find(|p| p.id == *id).map(|p| p.ty.clone())
-                    .or_else(|| caller.locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone()))
-                    .unwrap_or(AirType::I64)
-            }
+            Operand::Copy(id) | Operand::Move(id) => caller
+                .params
+                .iter()
+                .find(|p| p.id == *id)
+                .map(|p| p.ty.clone())
+                .or_else(|| {
+                    caller
+                        .locals
+                        .iter()
+                        .find(|l| l.id == *id)
+                        .map(|l| l.ty.clone())
+                })
+                .unwrap_or(AirType::I64),
         }
     }
 

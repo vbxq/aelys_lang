@@ -94,6 +94,22 @@ impl InferType {
     }
 
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
+        if ann.is_function_type() {
+            let params = ann
+                .fn_params
+                .as_ref()
+                .map(|ps| ps.iter().map(Self::from_annotation).collect())
+                .unwrap_or_default();
+            let ret = ann
+                .fn_ret
+                .as_ref()
+                .map(|r| Self::from_annotation(r))
+                .unwrap_or(InferType::Null);
+            return InferType::Function {
+                params,
+                ret: Box::new(ret),
+            };
+        }
         let name_lower = ann.name.to_lowercase();
         match name_lower.as_str() {
             "int" | "i64" | "int64" => InferType::I64,
@@ -164,6 +180,20 @@ impl InferType {
         match self {
             InferType::Var(id) => Some(*id),
             _ => None,
+        }
+    }
+
+    pub fn int_fits(value: i64, ty: &InferType) -> bool {
+        match ty {
+            InferType::I8 => i8::try_from(value).is_ok(),
+            InferType::I16 => i16::try_from(value).is_ok(),
+            InferType::I32 => i32::try_from(value).is_ok(),
+            InferType::I64 => true,
+            InferType::U8 => u8::try_from(value).is_ok(),
+            InferType::U16 => u16::try_from(value).is_ok(),
+            InferType::U32 => u32::try_from(value).is_ok(),
+            InferType::U64 => value >= 0,
+            _ => false,
         }
     }
 
