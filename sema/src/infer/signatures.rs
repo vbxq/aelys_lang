@@ -59,6 +59,11 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
+        let saved_type_params = std::mem::replace(
+            &mut self.type_params_in_scope,
+            func.type_params.clone(),
+        );
+
         let mut param_types = Vec::with_capacity(func.params.len());
         for p in &func.params {
             let ty = match &p.type_annotation {
@@ -72,6 +77,8 @@ impl TypeInference {
             Some(ann) => self.type_from_annotation(ann),
             None => self.type_gen.fresh(),
         };
+
+        self.type_params_in_scope = saved_type_params;
 
         let fn_type = Rc::new(InferType::Function {
             params: param_types,

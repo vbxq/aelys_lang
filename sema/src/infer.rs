@@ -33,4 +33,5 @@ pub struct TypeInference {
     depth: usize,
     warnings: Vec<Warning>,
     pub(crate) type_table: TypeTable,
+    type_params_in_scope: Vec<String>,
 }

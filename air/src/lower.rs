@@ -11,6 +11,13 @@ pub fn lower(program: &TypedProgram) -> AirProgram {
     cx.finish()
 }
 
+pub fn lower_with_gc_mode(program: &TypedProgram, file_gc_mode: GcMode) -> AirProgram {
+    let mut cx = LoweringContext::new(program);
+    cx.file_gc_mode = file_gc_mode;
+    cx.lower_program();
+    cx.finish()
+}
+
 struct LoweringContext<'a> {
     program: &'a TypedProgram,
     functions: Vec<AirFunction>,
@@ -185,7 +192,13 @@ impl<'a> LoweringContext<'a> {
             InferType::Vec(inner) => AirType::Slice(Box::new(self.lower_type_from_infer(inner))),
             InferType::Tuple(_) => AirType::Void,
             InferType::Range => AirType::Void,
-            InferType::Struct(name) => AirType::Struct(name.clone()),
+            InferType::Struct(name) => {
+                if let Some((_, id)) = self.type_params_map.iter().find(|(n, _)| n == name) {
+                    AirType::Param(*id)
+                } else {
+                    AirType::Struct(name.clone())
+                }
+            }
             InferType::Var(_) | InferType::Dynamic => AirType::I64,
         }
     }

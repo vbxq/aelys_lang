@@ -24,6 +24,7 @@ impl Default for TypeInference {
             depth: 0,
             warnings: Vec::new(),
             type_table: TypeTable::new(),
+            type_params_in_scope: Vec::new(),
         }
     }
 }
@@ -39,6 +40,10 @@ impl TypeInference {
     }
 
     fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+        if self.type_params_in_scope.iter().any(|tp| tp == &ann.name) {
+            return;
+        }
+
         let name_lower = ann.name.to_lowercase();
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {

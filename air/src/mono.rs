@@ -60,15 +60,16 @@ impl MonoContext {
     ) {
         for block in &func.blocks {
             for stmt in &block.stmts {
-                self.collect_from_stmt(stmt, program, generic_names);
+                self.collect_from_stmt(stmt, func, program, generic_names);
             }
-            self.collect_from_terminator(&block.terminator, program, generic_names);
+            self.collect_from_terminator(&block.terminator, func, program, generic_names);
         }
     }
 
     fn collect_from_stmt(
         &mut self,
         stmt: &AirStmt,
+        caller: &AirFunction,
         program: &AirProgram,
         generic_names: &HashSet<String>,
     ) {
@@ -77,10 +78,10 @@ impl MonoContext {
                 rvalue: Rvalue::Call { func: callee, args },
                 ..
             } => {
-                self.try_collect(callee, args, program, generic_names);
+                self.try_collect(callee, args, caller, program, generic_names);
             }
             AirStmtKind::CallVoid { func: callee, args } => {
-                self.try_collect(callee, args, program, generic_names);
+                self.try_collect(callee, args, caller, program, generic_names);
             }
             _ => {}
         }
@@ -89,6 +90,7 @@ impl MonoContext {
     fn collect_from_terminator(
         &mut self,
         term: &AirTerminator,
+        caller: &AirFunction,
         program: &AirProgram,
         generic_names: &HashSet<String>,
     ) {
@@ -96,7 +98,7 @@ impl MonoContext {
             func: callee, args, ..
         } = term
         {
-            self.try_collect(callee, args, program, generic_names);
+            self.try_collect(callee, args, caller, program, generic_names);
         }
     }
 
@@ -104,6 +106,7 @@ impl MonoContext {
         &mut self,
         callee: &Callee,
         args: &[Operand],
+        caller: &AirFunction,
         program: &AirProgram,
         generic_names: &HashSet<String>,
     ) {
@@ -115,7 +118,7 @@ impl MonoContext {
         let func_idx = self.generic_functions[name];
         let generic_func = &program.functions[func_idx];
 
-        if let Some(type_args) = self.infer_type_args(generic_func, args, program) {
+        if let Some(type_args) = self.infer_type_args(generic_func, args, caller) {
             let key = (name.clone(), self.type_args_key(&type_args));
             if !self.instantiated.contains_key(&key) {
                 self.requests.push(MonoRequest {
@@ -130,12 +133,12 @@ impl MonoContext {
         &self,
         generic_func: &AirFunction,
         args: &[Operand],
-        program: &AirProgram,
+        caller: &AirFunction,
     ) -> Option<Vec<AirType>> {
         let mut resolved: HashMap<u32, AirType> = HashMap::new();
 
         for (param, arg) in generic_func.params.iter().zip(args.iter()) {
-            let arg_ty = self.operand_type(arg, program);
+            let arg_ty = self.operand_type(arg, caller);
             self.unify_param(&param.ty, &arg_ty, &mut resolved);
         }
 
@@ -188,7 +191,7 @@ impl MonoContext {
         }
     }
 
-    fn operand_type(&self, operand: &Operand, _program: &AirProgram) -> AirType {
+    fn operand_type(&self, operand: &Operand, caller: &AirFunction) -> AirType {
         match operand {
             Operand::Const(c) => match c {
                 AirConst::IntLiteral(_) => AirType::I64,
@@ -211,7 +214,11 @@ impl MonoContext {
                 AirConst::Null => AirType::Void,
                 AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
             },
-            Operand::Copy(_) | Operand::Move(_) => AirType::I64,
+            Operand::Copy(id) | Operand::Move(id) => {
+                caller.params.iter().find(|p| p.id == *id).map(|p| p.ty.clone())
+                    .or_else(|| caller.locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone()))
+                    .unwrap_or(AirType::I64)
+            }
         }
     }
 

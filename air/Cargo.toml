@@ -7,8 +7,5 @@ edition = "2024"
 aelys-sema = { path = "../sema" }
 aelys-syntax = { path = "../syntax" }
 
-[dev-dependencies]
-aelys-frontend = { path = "../frontend" }
-
 [lib]
 doctest = false
