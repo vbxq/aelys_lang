@@ -4,6 +4,12 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.20.x - Preparing for LLVM
 
+**0.20.3-a**
+- generic type parameters on functions & structs (`fn identity<T>(x: T) -> T`)
+- monomorphization pass in AIR (`air::mono`)
+- unknown type annotations are now a compile error instead of silently falling back to `dynamic`
+- added type aliases: int8–int64, uint8–uint64, float32, float64, void
+
 **0.20.2-a**
 - Explicit casts with `x as T` syntax
 
