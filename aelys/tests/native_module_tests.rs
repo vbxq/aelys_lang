@@ -3,12 +3,34 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Mutex, OnceLock};
 use tempfile::TempDir;
 
+fn native_build_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 fn build_test_cdylib() -> PathBuf {
+    let _guard = native_build_lock()
+        .lock()
+        .expect("native build lock should not be poisoned");
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let crate_dir = manifest_dir.join("tests/fixtures/native_test");
     let target_dir = manifest_dir.join("target/native_test");
+    let lib_name = if cfg!(target_os = "linux") {
+        "libaelys_native_test.so"
+    } else if cfg!(target_os = "macos") {
+        "libaelys_native_test.dylib"
+    } else if cfg!(target_os = "windows") {
+        "aelys_native_test.dll"
+    } else {
+        panic!("unsupported target for native module test");
+    };
+    let lib_path = target_dir.join("release").join(lib_name);
+    if lib_path.exists() {
+        return lib_path;
+    }
 
     let status = Command::new("cargo")
         .arg("build")
@@ -19,18 +41,6 @@ fn build_test_cdylib() -> PathBuf {
         .status()
         .expect("cargo build should run");
     assert!(status.success(), "native test crate build failed");
-
-    let lib_name = if cfg!(target_os = "linux") {
-        "libaelys_native_test.so"
-    } else if cfg!(target_os = "macos") {
-        "libaelys_native_test.dylib"
-    } else if cfg!(target_os = "windows") {
-        "aelys_native_test.dll"
-    } else {
-        panic!("unsupported target for native module test");
-    };
-
-    let lib_path = target_dir.join("release").join(lib_name);
     assert!(lib_path.exists(), "missing built library at {:?}", lib_path);
     lib_path
 }
