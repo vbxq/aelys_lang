@@ -29,7 +29,8 @@ impl TypeInference {
                 ));
 
                 TypedStmt {
-                    kind: TypedStmtKind::Expression(typed_expr),
+                    // happens here. you'll have to manually return 0 without it
+                    kind: TypedStmtKind::Return(Some(typed_expr)),
                     span: stmt.span,
                 }
             }

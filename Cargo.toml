@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "aelys",
+    "core",
     "common",
     "syntax",
     "frontend",
@@ -20,7 +21,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.21.0-a"
+version = "0.21.2-a"
 
 [profile.release]
 lto = "fat"
