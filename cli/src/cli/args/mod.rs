@@ -7,6 +7,12 @@ pub use parse::parse_args;
 pub use usage::usage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Backend {
+    Vm,
+    Llvm,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Help,
     Run {
@@ -17,6 +23,8 @@ pub enum Command {
         path: String,
         output: Option<String>,
         emit_air: bool,
+        backend: Backend,
+        emit_llvm_ir: bool,
     },
     Asm {
         path: String,

@@ -1,6 +1,6 @@
 // hand-rolled recursive descent, clap felt overkill for this
 
-use super::{Command, ParsedArgs};
+use super::{Backend, Command, ParsedArgs};
 use aelys_opt::OptimizationLevel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +29,8 @@ struct Parser<'a> {
     output: Option<String>,
     stdout: bool,
     emit_air: bool,
+    backend: Backend,
+    emit_llvm_ir: bool,
     warning_flags: Vec<String>,
 }
 
@@ -46,6 +48,8 @@ impl<'a> Parser<'a> {
             output: None,
             stdout: false,
             emit_air: false,
+            backend: Backend::Vm,
+            emit_llvm_ir: false,
             warning_flags: Vec::new(),
         }
     }
@@ -103,6 +107,21 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if token_str == "--emit-llvm-ir" {
+                self.emit_llvm_ir = true;
+                self.advance();
+                continue;
+            }
+
+            if let Some((backend, consumed_next)) = self.parse_backend_option(token_str)? {
+                self.backend = backend;
+                self.advance();
+                if consumed_next {
+                    self.advance();
+                }
+                continue;
+            }
+
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
                 self.advance();
@@ -151,6 +170,12 @@ impl<'a> Parser<'a> {
                 if self.emit_air {
                     return Err("--emit-air is only supported for compile".to_string());
                 }
+                if self.backend != Backend::Vm {
+                    return Err("--backend is only supported for compile".to_string());
+                }
+                if self.emit_llvm_ir {
+                    return Err("--emit-llvm-ir is only supported for compile".to_string());
+                }
                 Command::Repl
             }
             Some(CommandName::Run) => {
@@ -162,6 +187,12 @@ impl<'a> Parser<'a> {
                 }
                 if self.emit_air {
                     return Err("--emit-air is only supported for compile".to_string());
+                }
+                if self.backend != Backend::Vm {
+                    return Err("--backend is only supported for compile".to_string());
+                }
+                if self.emit_llvm_ir {
+                    return Err("--emit-llvm-ir is only supported for compile".to_string());
                 }
                 Command::Run {
                     path,
@@ -181,10 +212,18 @@ impl<'a> Parser<'a> {
                 if self.emit_air && self.output.is_some() {
                     return Err("--emit-air and --output cannot be combined".to_string());
                 }
+                if self.emit_air && self.backend != Backend::Vm {
+                    return Err("--emit-air is only supported with --backend vm".to_string());
+                }
+                if self.emit_llvm_ir && self.backend != Backend::Llvm {
+                    return Err("--emit-llvm-ir requires --backend llvm".to_string());
+                }
                 Command::Compile {
                     path,
                     output: self.output,
                     emit_air: self.emit_air,
+                    backend: self.backend,
+                    emit_llvm_ir: self.emit_llvm_ir,
                 }
             }
             Some(CommandName::Asm) => {
@@ -196,6 +235,12 @@ impl<'a> Parser<'a> {
                 }
                 if self.emit_air {
                     return Err("--emit-air is only supported for compile".to_string());
+                }
+                if self.backend != Backend::Vm {
+                    return Err("--backend is only supported for compile".to_string());
+                }
+                if self.emit_llvm_ir {
+                    return Err("--emit-llvm-ir is only supported for compile".to_string());
                 }
                 Command::Asm {
                     path,
@@ -355,6 +400,23 @@ impl<'a> Parser<'a> {
         Ok(None)
     }
 
+    fn parse_backend_option(&self, token: &str) -> Result<Option<(Backend, bool)>, String> {
+        if let Some(value) = token.strip_prefix("--backend=") {
+            let backend = parse_backend(value)?;
+            return Ok(Some((backend, false)));
+        }
+
+        if token == "--backend" {
+            let next = self
+                .peek_next()
+                .ok_or_else(|| "missing value for --backend".to_string())?;
+            let backend = parse_backend(next)?;
+            return Ok(Some((backend, true)));
+        }
+
+        Ok(None)
+    }
+
     fn is_help(&self, token: &str) -> bool {
         matches!(token, "-h" | "--help")
     }
@@ -384,5 +446,13 @@ impl<'a> Parser<'a> {
 
     fn advance(&mut self) {
         self.index = self.index.saturating_add(1);
+    }
+}
+
+fn parse_backend(value: &str) -> Result<Backend, String> {
+    match value {
+        "vm" => Ok(Backend::Vm),
+        "llvm" => Ok(Backend::Llvm),
+        _ => Err(format!("invalid backend: {}", value)),
     }
 }
