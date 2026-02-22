@@ -1,0 +1,11 @@
+[package]
+name = "aelys-codegen"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+aelys-air = { path = "../air" }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm18-1"] }
+
+[lib]
+doctest = false

@@ -11,11 +11,16 @@ aelys-sema = { path = "../sema" }
 aelys-opt = { path = "../opt" }
 aelys-air = { path = "../air" }
 aelys-backend = { path = "../backend" }
+aelys-codegen = { path = "../codegen", optional = true }
 aelys-bytecode = { path = "../bytecode" }
 aelys-runtime = { path = "../runtime" }
 aelys-modules = { path = "../modules" }
 aelys-native = { path = "../native" }
 semver = "1"
+
+[features]
+default = []
+llvm-backend = ["dep:aelys-codegen"]
 
 [lib]
 doctest = false

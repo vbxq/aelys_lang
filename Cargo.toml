@@ -8,6 +8,7 @@ members = [
     "sema",
     "opt",
     "air",
+    "codegen",
     "bytecode",
     "backend",
     "runtime",

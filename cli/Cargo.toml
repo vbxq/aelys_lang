@@ -8,7 +8,7 @@ aelys = { path = "../aelys" }
 aelys-backend = { path = "../backend" }
 aelys-bytecode = { path = "../bytecode" }
 aelys-common = { path = "../common" }
-aelys-driver = { path = "../driver" }
+aelys-driver = { path = "../driver", features = ["llvm-backend"] }
 aelys-frontend = { path = "../frontend" }
 aelys-opt = { path = "../opt" }
 aelys-runtime = { path = "../runtime" }
