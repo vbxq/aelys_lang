@@ -20,7 +20,9 @@ impl Stage for AirLowerStage {
 
         let mut air_program = aelys_air::lower::lower(&typed_program);
         aelys_air::layout::compute_layouts(&mut air_program);
-        let air_program = aelys_air::mono::monomorphize(air_program);
+        let mut air_program = aelys_air::mono::monomorphize(air_program);
+        aelys_air::passes::copy_elim::eliminate_copies(&mut air_program);
+        aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air_program);
 
         Ok(StageOutput::Air(air_program, typed_program, source))
     }
