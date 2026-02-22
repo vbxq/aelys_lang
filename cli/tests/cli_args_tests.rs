@@ -1,6 +1,6 @@
 use aelys_opt::OptimizationLevel;
 
-use aelys_cli::cli::args::{Command, ParsedArgs, parse_args};
+use aelys_cli::cli::args::{Backend, Command, ParsedArgs, parse_args};
 
 #[test]
 fn parse_run_with_flags_anywhere() {
@@ -103,6 +103,8 @@ fn parse_compile_output_flag() {
                 path: "main.aelys".to_string(),
                 output: Some("out.avbc".to_string()),
                 emit_air: false,
+                backend: Backend::Vm,
+                emit_llvm_ir: false,
             },
             vm_args: Vec::new(),
             opt_level: OptimizationLevel::Standard,
@@ -257,4 +259,36 @@ fn parse_powershell_split_ae_dot_before_path() {
             program_args: Vec::new(),
         }
     );
+}
+
+#[test]
+fn parse_compile_backend_llvm() {
+    let args = vec!["aelys", "compile", "--backend", "llvm", "main.aelys"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let parsed = parse_args(&args).unwrap();
+
+    assert_eq!(
+        parsed.command,
+        Command::Compile {
+            path: "main.aelys".to_string(),
+            output: None,
+            emit_air: false,
+            backend: Backend::Llvm,
+            emit_llvm_ir: false,
+        }
+    );
+}
+
+#[test]
+fn parse_compile_emit_llvm_ir_requires_llvm_backend() {
+    let args = vec!["aelys", "compile", "--emit-llvm-ir", "main.aelys"]
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let err = parse_args(&args).unwrap_err();
+    assert!(err.contains("--emit-llvm-ir requires --backend llvm"));
 }
