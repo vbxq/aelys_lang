@@ -1,0 +1,28 @@
+flowchart TD
+    A[User written .aelys code] --> B[Lexer]
+    B --> C[Parser]
+    C --> D[Semantical analysis and type inference]
+    D --> AIR_LABEL[Aelys Intermediate Representation]
+    D -. legacy path .-> V[Old Aelys Virtual Machine]
+
+    AIR_LABEL --> L1
+
+    subgraph BUILD[AIR build]
+        direction TB
+        L1[Lower] --> L2[Layout]
+        L2 --> L3[Monomorph]
+        L3 -- rebuild when needed --> L1
+    end
+
+    L3 --> P1
+
+    subgraph OPT[AIR opt passes]
+        direction TB
+        P1[Copy elim] --> P2[Dead locals]
+        P2 --> P3[Other passes]
+        P3 -- iterate until stable --> P1
+    end
+
+    P3 --> G[LLVM codegen]
+    G --> H[LLVM IR]
+    H --> N[Native binary code from LLVM backend]
