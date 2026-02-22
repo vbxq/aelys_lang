@@ -3,6 +3,15 @@
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
 ## 0.21.x - LLVM backend implementation
+
+**0.21.2-a**
+- Added `core/` crate (`aelys-core`) as a C runtime static library built via `cc` (`build.rs` + `src/aelys_core.c`).
+- LLVM native linking now auto-resolves and links `aelys-core` for `--backend llvm` executables.
+
+**0.21.1-a**
+- AIR pass `copy_elim`: élimination des copies paramètre -> local en single-assignment.
+- AIR pass `dead_locals`: suppression des `AirLocal` jamais référencés.
+
 **0.21.0-a**
 - LLVM backend bootstrap: inkwell integration, AIR->LLVM type lowering, function declaration/body codegen, `module.verify()`, and `--backend llvm --emit-llvm-ir`.
 
