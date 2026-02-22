@@ -1,0 +1,1 @@
+$vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath; $vc="$vs\VC\Auxiliary\Build\vcvars64.bat"; cmd /c "`"$vc`" >nul && set" | % { if($_ -match "^(.*?)=(.*)$"){ Set-Item -Path "Env:$($matches[1])" -Value $matches[2] } }; where cl
