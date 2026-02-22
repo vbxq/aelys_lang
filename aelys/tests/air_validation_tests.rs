@@ -418,3 +418,112 @@ fn some_func() {
         "file-level Manual gc mode should propagate to functions"
     );
 }
+
+#[test]
+fn copy_elim_removes_param_to_local_copies() {
+    let mut air = lower_source(
+        r#"
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
+    let a64: i64 = x
+    let a32: i32 = y
+    let a16: i16 = z
+    let a8: i8 = w
+    let ab: bool = b
+    let af32: f32 = f
+    let af64: f64 = d
+    let sp: string = p
+    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+
+    let f = func(&air, "align_probe");
+    let params: HashSet<LocalId> = f.params.iter().map(|p| p.id).collect();
+
+    let has_param_copy = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign {
+                    place: Place::Local(dst),
+                    rvalue: Rvalue::Use(Operand::Copy(src) | Operand::Move(src)),
+                }
+                if params.contains(src) && !params.contains(dst)
+            )
+        })
+    });
+    assert!(
+        !has_param_copy,
+        "copy elimination should remove param-to-local copies"
+    );
+}
+
+#[test]
+fn copy_elim_keeps_reassigned_param_copy() {
+    let mut air = lower_source(
+        r#"
+fn keep_copy(x: i64) -> i64 {
+    let y: i64 = x
+    y = y + 1
+    return y
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    aelys_air::passes::copy_elim::eliminate_copies(&mut air);
+
+    let f = func(&air, "keep_copy");
+    let params: HashSet<LocalId> = f.params.iter().map(|p| p.id).collect();
+
+    let has_param_copy = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign {
+                    place: Place::Local(dst),
+                    rvalue: Rvalue::Use(Operand::Copy(src) | Operand::Move(src)),
+                }
+                if params.contains(src) && !params.contains(dst)
+            )
+        })
+    });
+    assert!(
+        has_param_copy,
+        "copy should remain when destination local is reassigned"
+    );
+}
+
+#[test]
+fn dead_locals_removes_align_probe_copy_targets() {
+    let mut air = lower_source(
+        r#"
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
+    let a64: i64 = x
+    let a32: i32 = y
+    let a16: i16 = z
+    let a8: i8 = w
+    let ab: bool = b
+    let af32: f32 = f
+    let af64: f64 = d
+    let sp: string = p
+    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let f = func(&air, "align_probe");
+    let local_ids: HashSet<u32> = f.locals.iter().map(|l| l.id.0).collect();
+    for id in 8..=14 {
+        assert!(
+            !local_ids.contains(&id),
+            "local %{} should be removed by dead_locals",
+            id
+        );
+    }
+}

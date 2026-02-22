@@ -66,6 +66,7 @@ pub fn lower_file_to_air(
     aelys_air::layout::compute_layouts(&mut air);
     let mut air = aelys_air::mono::monomorphize(air);
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
+    aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air);
     Ok(air)
 }
 
