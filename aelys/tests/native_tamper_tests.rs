@@ -6,8 +6,17 @@ use tempfile::TempDir;
 
 fn build_fixture(dir_name: &str, package_name: &str) -> PathBuf {
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let crate_dir = manifest_dir.join("tests/fixtures").join(dir_name);
-    let target_dir = manifest_dir.join("target").join(dir_name);
+    let cache_dir = manifest_dir.join("target").join(dir_name);
+    let cached_lib_path = cache_dir.join("release").join(lib_filename(package_name));
+    if cached_lib_path.exists() {
+        return cached_lib_path;
+    }
+
+    let fixture_src_dir = manifest_dir.join("tests/fixtures").join(dir_name);
+    let build_dir = tempfile::tempdir().expect("temp build dir should be created");
+    let crate_dir = build_dir.path().join(dir_name);
+    copy_dir_all(&fixture_src_dir, &crate_dir).expect("fixture copy should succeed");
+    let target_dir = build_dir.path().join("target");
 
     let status = Command::new("cargo")
         .arg("build")
@@ -22,7 +31,26 @@ fn build_fixture(dir_name: &str, package_name: &str) -> PathBuf {
     let lib_name = lib_filename(package_name);
     let lib_path = target_dir.join("release").join(lib_name);
     assert!(lib_path.exists(), "missing built library at {:?}", lib_path);
-    lib_path
+
+    let cache_release = cache_dir.join("release");
+    fs::create_dir_all(&cache_release).expect("cache release dir should be created");
+    fs::copy(&lib_path, &cached_lib_path).expect("fixture library should be cached");
+    cached_lib_path
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let entry_path = entry.path();
+        let dest_path = dst.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir_all(&entry_path, &dest_path)?;
+        } else {
+            fs::copy(&entry_path, &dest_path)?;
+        }
+    }
+    Ok(())
 }
 
 fn lib_filename(package_name: &str) -> String {
