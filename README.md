@@ -8,9 +8,21 @@
 
 # aelys 0.20.3-a
 
-Register-based VM with dual memory management: GC by default, `@no_gc` for performance-critical code.
+Experimental language and compiler toolchain with dual memory management:
+GC by default, `@no_gc` for performance-critical code.
 
-You choose between comfort and performance on a per-function basis.
+> [!NOTE]
+> Welcome !
+>
+> You are on the LLVM rewrite branch of Aelys.  
+> This branch is focused on a major backend rewrite and is expected to change quickly.
+
+> [!WARNING]
+>
+> The documentation is currently outdated.
+> Expect breaking changes in language features, compiler behavior, APIs, and project structure.
+> (Pre-alpha) Aelys is unstable and under active rewrite.
+
 
 ## Documentation
 

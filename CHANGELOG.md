@@ -2,9 +2,15 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## 0.21.x - LLVM backend implementation
+**0.21.0-a**
+- LLVM backend bootstrap: inkwell integration, AIR->LLVM type lowering, function declaration/body codegen, `module.verify()`, and `--backend llvm --emit-llvm-ir`.
+
 ## 0.20.x - Preparing for LLVM
 
 Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
+
+Edit : current VM is fragile. I plan on rewriting a small/powerful VM when the LLVM backend is mature enough.
 
 **0.20.4-a**
 - AIR pretty-printer, `--emit-air` CLI flag for `compile` command
@@ -60,7 +66,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 - String indexing with `s[i]` (unicode-aware, returns single-character string)
 - `for c in "hello" { }` iteration syntax
 
-**0.19.10-a** (i'll squash all of these updates)
+**0.19.10-a**
 - fn foo(mut param: type) now working
 
 **0.19.9-a** (not a "real" update again sorry, needed a new tag
@@ -109,7 +115,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 
 ## 0.18.x - Native Binary Data Manipulation 
 
-This update adds real memory manipulation for @no_gc mode
+This update adds real memory manipulation for @no_gc mode & some bug fixes
 
 **0.18.6-a**
 - Fixed call site cache using stale entries after global mutation
