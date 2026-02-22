@@ -1,7 +1,6 @@
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
 use crate::operands::{constant_kind_name, is_signed_int_size};
-use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirConst, AirTerminator, AirType};
 use inkwell::values::IntValue;
 
@@ -22,11 +21,8 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                     return Ok(());
                 }
-
-                let ret_ty = air_basic_type_to_llvm(&self.air_function.ret_ty, self.context)?;
-                let zero = ret_ty.const_zero();
                 self.builder
-                    .build_return(Some(&zero))
+                    .build_unreachable()
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 Ok(())
             }

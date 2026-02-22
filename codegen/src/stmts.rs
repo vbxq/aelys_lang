@@ -12,8 +12,13 @@ impl<'a> FunctionCodegen<'a> {
             AirStmtKind::Assign { place, rvalue } => {
                 let expected_ty = self.place_type(place)?;
                 let value = self.generate_rvalue(rvalue, Some(&expected_ty))?;
-                let ptr = self.place_ptr(place)?;
-                self.store_value(ptr, value, &expected_ty)
+                match place {
+                    Place::Local(local) => self.assign_local(*local, value),
+                    _ => {
+                        let ptr = self.place_ptr(place)?;
+                        self.store_value(ptr, value)
+                    }
+                }
             }
             AirStmtKind::CallVoid { func, args } => {
                 let _ = self.generate_call(func, args, None)?;
@@ -49,8 +54,7 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_pointer_cast(raw_ptr, target_ptr_ty, "alloc_cast")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                let local_ptr = self.lookup_local_ptr(*local)?;
-                self.store_value(local_ptr, casted.into(), &local_ty)
+                self.assign_local(*local, casted.into())
             }
             AirStmtKind::Free(local) => {
                 let free_fn = self.ensure_free_function();

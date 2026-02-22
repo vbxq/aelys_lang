@@ -1,5 +1,4 @@
 use crate::CodegenError;
-use crate::layout::alignment_for_type;
 use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirFunction, AirProgram, AirType, BlockId, FunctionId, LocalId};
 use inkwell::basic_block::BasicBlock;
@@ -7,7 +6,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::values::{BasicValueEnum, FunctionValue, PointerValue};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) struct FunctionCodegen<'a> {
     pub(crate) context: &'static Context,
@@ -18,7 +17,9 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) program: &'a AirProgram,
     pub(crate) function_names: &'a HashMap<FunctionId, String>,
     pub(crate) block_map: HashMap<BlockId, BasicBlock<'static>>,
-    pub(crate) local_allocas: HashMap<LocalId, PointerValue<'static>>,
+    pub(crate) alloca_locals: HashSet<LocalId>,
+    pub(crate) alloca_map: HashMap<LocalId, PointerValue<'static>>,
+    pub(crate) value_map: HashMap<LocalId, BasicValueEnum<'static>>,
     pub(crate) local_types: HashMap<LocalId, AirType>,
     pub(crate) string_id: u64,
 }
@@ -33,11 +34,16 @@ impl<'a> FunctionCodegen<'a> {
         function_names: &'a HashMap<FunctionId, String>,
     ) -> Self {
         let mut local_types = HashMap::new();
+        let mut alloca_locals = HashSet::new();
         for param in &air_function.params {
             local_types.insert(param.id, param.ty.clone());
+            alloca_locals.insert(param.id);
         }
         for local in &air_function.locals {
             local_types.insert(local.id, local.ty.clone());
+            if local.name.is_some() || local.is_mut {
+                alloca_locals.insert(local.id);
+            }
         }
 
         Self {
@@ -49,7 +55,9 @@ impl<'a> FunctionCodegen<'a> {
             program,
             function_names,
             block_map: HashMap::new(),
-            local_allocas: HashMap::new(),
+            alloca_locals,
+            alloca_map: HashMap::new(),
+            value_map: HashMap::new(),
             local_types,
             string_id: 0,
         }
@@ -74,14 +82,16 @@ impl<'a> FunctionCodegen<'a> {
         let entry = self.entry_block()?;
         self.builder.position_at_end(entry);
 
-        let locals: Vec<_> = self
-            .air_function
-            .locals
-            .iter()
-            .map(|local| (local.id, local.ty.clone()))
-            .collect();
-        for (id, ty) in locals {
-            self.ensure_local_alloca(id, &ty)?;
+        let params = self.air_function.params.clone();
+        for param in params {
+            self.ensure_local_alloca(param.id, &param.ty)?;
+        }
+
+        let locals = self.air_function.locals.clone();
+        for local in locals {
+            if self.local_uses_alloca(local.id) {
+                self.ensure_local_alloca(local.id, &local.ty)?;
+            }
         }
 
         Ok(())
@@ -97,7 +107,7 @@ impl<'a> FunctionCodegen<'a> {
                 ))
             })?;
             let ptr = self.lookup_local_ptr(param.id)?;
-            self.store_value(ptr, value.into(), &param.ty)?;
+            self.store_value(ptr, value.into())?;
         }
 
         Ok(())
@@ -122,8 +132,14 @@ impl<'a> FunctionCodegen<'a> {
         local: LocalId,
         ty: &AirType,
     ) -> Result<PointerValue<'static>, CodegenError> {
-        if let Some(ptr) = self.local_allocas.get(&local).copied() {
+        if let Some(ptr) = self.alloca_map.get(&local).copied() {
             return Ok(ptr);
+        }
+        if !self.local_uses_alloca(local) {
+            return Err(CodegenError::LlvmError(format!(
+                "local {} has no stack storage",
+                local.0
+            )));
         }
 
         let alloca_ty = air_basic_type_to_llvm(ty, self.context)?;
@@ -131,14 +147,9 @@ impl<'a> FunctionCodegen<'a> {
             .builder
             .build_alloca(alloca_ty, &format!("l{}", local.0))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.align_alloca(ptr, alloca_ty)?;
 
-        let align = alignment_for_type(self, ty)?;
-        if let Some(inst) = ptr.as_instruction() {
-            inst.set_alignment(align)
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        }
-
-        self.local_allocas.insert(local, ptr);
+        self.alloca_map.insert(local, ptr);
         Ok(ptr)
     }
 
@@ -163,10 +174,32 @@ impl<'a> FunctionCodegen<'a> {
         &self,
         local: LocalId,
     ) -> Result<PointerValue<'static>, CodegenError> {
-        self.local_allocas
+        self.alloca_map
             .get(&local)
             .copied()
             .ok_or_else(|| CodegenError::LlvmError(format!("unknown local {}", local.0)))
+    }
+
+    pub(crate) fn local_uses_alloca(&self, local: LocalId) -> bool {
+        self.alloca_locals.contains(&local)
+    }
+
+    pub(crate) fn assign_local(
+        &mut self,
+        local: LocalId,
+        value: BasicValueEnum<'static>,
+    ) -> Result<(), CodegenError> {
+        if let Some(ptr) = self.alloca_map.get(&local).copied() {
+            return self.store_value(ptr, value);
+        }
+        if self.local_uses_alloca(local) {
+            return Err(CodegenError::LlvmError(format!(
+                "missing stack slot for local {}",
+                local.0
+            )));
+        }
+        self.value_map.insert(local, value);
+        Ok(())
     }
 
     pub(crate) fn local_air_type(&self, local: LocalId) -> Result<&AirType, CodegenError> {
@@ -179,10 +212,13 @@ impl<'a> FunctionCodegen<'a> {
         &mut self,
         local: LocalId,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        let ptr = self.lookup_local_ptr(local)?;
-        let ty = air_basic_type_to_llvm(self.local_air_type(local)?, self.context)?;
-        self.builder
-            .build_load(ty, ptr, &format!("ld{}", local.0))
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+        if let Some(ptr) = self.alloca_map.get(&local).copied() {
+            let ty = air_basic_type_to_llvm(self.local_air_type(local)?, self.context)?;
+            return self.load_value(ty, ptr, &format!("ld{}", local.0));
+        }
+        self.value_map
+            .get(&local)
+            .copied()
+            .ok_or_else(|| CodegenError::LlvmError(format!("local {} used before assignment", local.0)))
     }
 }

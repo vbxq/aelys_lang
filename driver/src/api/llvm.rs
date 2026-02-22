@@ -64,7 +64,9 @@ pub fn lower_file_to_air(
 
     let mut air = aelys_air::lower::lower(&typed_program);
     aelys_air::layout::compute_layouts(&mut air);
-    Ok(aelys_air::mono::monomorphize(air))
+    let mut air = aelys_air::mono::monomorphize(air);
+    aelys_air::passes::copy_elim::eliminate_copies(&mut air);
+    Ok(air)
 }
 
 pub fn compile_file_with_llvm(

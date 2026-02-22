@@ -34,9 +34,7 @@ impl<'a> FunctionCodegen<'a> {
                     }
                 };
                 let inner_ty = air_basic_type_to_llvm(&inner, self.context)?;
-                self.builder
-                    .build_load(inner_ty, ptr, "deref")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
+                self.load_value(inner_ty, ptr, "deref")
             }
             Rvalue::Cast { operand, from, to } => self.generate_cast(operand, from, to),
             Rvalue::Discriminant(_) => todo!(),

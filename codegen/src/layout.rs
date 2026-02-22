@@ -1,23 +1,53 @@
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
+use crate::types::alignment_of;
 use aelys_air::AirType;
-use inkwell::values::{BasicValueEnum, PointerValue};
+use inkwell::types::BasicTypeEnum;
+use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn store_value(
         &self,
         ptr: PointerValue<'static>,
         value: BasicValueEnum<'static>,
-        ty: &AirType,
     ) -> Result<(), CodegenError> {
         let store = self
             .builder
             .build_store(ptr, value)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        let align = alignment_for_type(self, ty)?;
         store
-            .set_alignment(align)
+            .set_alignment(alignment_of(value.get_type()))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        Ok(())
+    }
+
+    pub(crate) fn load_value(
+        &self,
+        ty: BasicTypeEnum<'static>,
+        ptr: PointerValue<'static>,
+        name: &str,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let value = self
+            .builder
+            .build_load(ty, ptr, name)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        if let Some(instruction) = value.as_instruction_value() {
+            instruction
+                .set_alignment(alignment_of(ty))
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+        Ok(value)
+    }
+
+    pub(crate) fn align_alloca(
+        &self,
+        ptr: PointerValue<'static>,
+        ty: BasicTypeEnum<'static>,
+    ) -> Result<(), CodegenError> {
+        if let Some(inst) = ptr.as_instruction() {
+            inst.set_alignment(alignment_of(ty))
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
         Ok(())
     }
 
@@ -75,14 +105,6 @@ impl<'a> FunctionCodegen<'a> {
             ))),
         }
     }
-}
-
-pub(crate) fn alignment_for_type(
-    fcx: &FunctionCodegen<'_>,
-    ty: &AirType,
-) -> Result<u32, CodegenError> {
-    let (_, align) = fcx.type_size_align(ty)?;
-    Ok(align.max(1))
 }
 
 fn align_to(offset: u32, align: u32) -> u32 {

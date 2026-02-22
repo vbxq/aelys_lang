@@ -3,6 +3,7 @@
 pub mod layout;
 pub mod lower;
 pub mod mono;
+pub mod passes;
 pub mod print;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

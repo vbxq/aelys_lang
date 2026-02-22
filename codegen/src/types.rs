@@ -82,6 +82,49 @@ pub fn air_basic_type_to_llvm<'ctx>(
     }
 }
 
+pub fn alignment_of(ty: BasicTypeEnum<'_>) -> u32 {
+    match ty {
+        BasicTypeEnum::IntType(int_ty) => int_alignment(int_ty.get_bit_width()),
+        BasicTypeEnum::FloatType(float_ty) => float_alignment(float_ty.get_bit_width()),
+        BasicTypeEnum::PointerType(_) => 8,
+        BasicTypeEnum::ArrayType(array_ty) => alignment_of(array_ty.get_element_type()),
+        BasicTypeEnum::StructType(struct_ty) => struct_alignment(struct_ty),
+        BasicTypeEnum::VectorType(vector_ty) => alignment_of(vector_ty.get_element_type()),
+        BasicTypeEnum::ScalableVectorType(vector_ty) => alignment_of(vector_ty.get_element_type()),
+    }
+}
+
+fn int_alignment(bit_width: u32) -> u32 {
+    match bit_width {
+        0..=8 => 1,
+        9..=16 => 2,
+        17..=32 => 4,
+        _ => 8,
+    }
+}
+
+fn float_alignment(bit_width: u32) -> u32 {
+    match bit_width {
+        0..=16 => 2,
+        17..=32 => 4,
+        _ => 8,
+    }
+}
+
+fn struct_alignment(ty: inkwell::types::StructType<'_>) -> u32 {
+    if ty.is_opaque() {
+        return 1;
+    }
+    if ty.is_packed() {
+        return 1;
+    }
+    ty.get_field_types()
+        .into_iter()
+        .map(alignment_of)
+        .max()
+        .unwrap_or(1)
+}
+
 fn pointer_to_i8<'ctx>(context: &'ctx inkwell::context::Context) -> PointerType<'ctx> {
     #[allow(deprecated)]
     {

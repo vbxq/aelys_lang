@@ -26,11 +26,12 @@ impl<'a> FunctionCodegen<'a> {
         match callee {
             Callee::FnPtr(local) => {
                 let fn_ptr = self.load_local(*local)?.into_pointer_value();
-                let fn_ty = self.fn_ptr_type_for_local(*local)?;
+                let (fn_ty, call_conv) = self.fn_ptr_signature_for_local(*local)?;
                 let call = self
                     .builder
                     .build_indirect_call(fn_ty, fn_ptr, &metadata_args, "call_indirect")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                call.set_call_convention(call_conv);
                 Ok(call.try_as_basic_value().basic())
             }
             _ => {
@@ -39,6 +40,7 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_call(fn_value, &metadata_args, "call_direct")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                call.set_call_convention(fn_value.get_call_conventions());
                 Ok(call.try_as_basic_value().basic())
             }
         }
@@ -93,18 +95,22 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    fn fn_ptr_type_for_local(&self, local: LocalId) -> Result<FunctionType<'static>, CodegenError> {
+    fn fn_ptr_signature_for_local(
+        &self,
+        local: LocalId,
+    ) -> Result<(FunctionType<'static>, u32), CodegenError> {
         match self.local_air_type(local)? {
-            AirType::FnPtr { params, ret, .. } => {
+            AirType::FnPtr { params, ret, conv } => {
                 let mut param_types = Vec::with_capacity(params.len());
                 for param in params {
                     param_types.push(air_basic_type_to_llvm(param, self.context)?.into());
                 }
 
-                match ret.as_ref() {
-                    AirType::Void => Ok(self.context.void_type().fn_type(&param_types, false)),
-                    other => Ok(air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false)),
-                }
+                let fn_ty = match ret.as_ref() {
+                    AirType::Void => self.context.void_type().fn_type(&param_types, false),
+                    other => air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false),
+                };
+                Ok((fn_ty, llvm_calling_convention(*conv)))
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "local {} is not fn ptr: {:?}",

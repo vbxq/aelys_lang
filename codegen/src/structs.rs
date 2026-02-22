@@ -49,21 +49,19 @@ impl<'a> FunctionCodegen<'a> {
             .builder
             .build_alloca(struct_ty, "struct_tmp")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.align_alloca(tmp, struct_ty.into())?;
 
         for (field_name, operand) in fields {
             let index = self.struct_field_index(name, field_name)?;
-            let field_ty = self.struct_field_type(name, field_name)?.clone();
             let ptr = self
                 .builder
                 .build_struct_gep(struct_ty, tmp, index, "field_ptr")
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             let value = self.generate_operand(operand)?;
-            self.store_value(ptr, value, &field_ty)?;
+            self.store_value(ptr, value)?;
         }
 
-        self.builder
-            .build_load(struct_ty, tmp, "struct_value")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+        self.load_value(struct_ty.into(), tmp, "struct_value")
     }
 
     pub(crate) fn generate_field_access(
@@ -71,6 +69,19 @@ impl<'a> FunctionCodegen<'a> {
         base: &Operand,
         field: &str,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        if let Operand::Copy(local) | Operand::Move(local) = base {
+            if let AirType::Struct(name) = self.local_air_type(*local)?.clone() {
+                if !self.local_uses_alloca(*local) {
+                    let index = self.struct_field_index(&name, field)?;
+                    let struct_value = self.load_local(*local)?.into_struct_value();
+                    return Ok(self
+                        .builder
+                        .build_extract_value(struct_value, index, "field_extract")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?);
+                }
+            }
+        }
+
         let (struct_name, struct_ty, base_ptr) = self.struct_pointer_from_operand(base)?;
         let index = self.struct_field_index(&struct_name, field)?;
         let field_ty = self.struct_field_type(&struct_name, field)?;
@@ -79,9 +90,7 @@ impl<'a> FunctionCodegen<'a> {
             .build_struct_gep(struct_ty, base_ptr, index, "field_ptr")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         let llvm_field_ty = air_basic_type_to_llvm(field_ty, self.context)?;
-        self.builder
-            .build_load(llvm_field_ty, field_ptr, "field_load")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+        self.load_value(llvm_field_ty, field_ptr, "field_load")
     }
 
     pub(crate) fn struct_pointer_from_operand(
