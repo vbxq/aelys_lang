@@ -1,8 +1,9 @@
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
 use crate::functions::llvm_calling_convention;
-use crate::types::air_basic_type_to_llvm;
-use aelys_air::{AirType, Callee, LocalId, Operand};
+use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
+use crate::types::{aelys_string_type, air_basic_type_to_llvm};
+use aelys_air::{AirConst, AirType, Callee, LocalId, Operand};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
@@ -16,6 +17,26 @@ impl<'a> FunctionCodegen<'a> {
         let mut arg_values = Vec::with_capacity(args.len());
         for arg in args {
             arg_values.push(self.generate_operand(arg)?);
+        }
+
+        // During bootstrap, print/println are reserved names lowered to __aelys_write.
+        // Declaration phase rejects user definitions with these names.
+        if let Callee::Named(name) = callee && is_reserved_bootstrap_builtin(name) {
+            debug_assert!(
+                self.module.get_function(name).is_none(),
+                "reserved builtin must be rejected during declaration phase"
+            );
+            if self.module.get_function(name).is_some() {
+                return Err(CodegenError::UnsupportedInstruction(
+                    reserved_bootstrap_builtin_message(name),
+                ));
+            }
+            return self.generate_bootstrap_print_call(
+                name == "println",
+                args,
+                &arg_values,
+                expected_ret,
+            );
         }
 
         let metadata_args: Vec<BasicMetadataValueEnum<'static>> =
@@ -92,6 +113,61 @@ impl<'a> FunctionCodegen<'a> {
         match expected_ret {
             None | Some(AirType::Void) => Ok(self.context.void_type().fn_type(arg_types, false)),
             Some(ret) => Ok(air_basic_type_to_llvm(ret, self.context)?.fn_type(arg_types, false)),
+        }
+    }
+
+    fn generate_bootstrap_print_call(
+        &mut self,
+        newline: bool,
+        args: &[Operand],
+        arg_values: &[BasicValueEnum<'static>],
+        expected_ret: Option<&AirType>,
+    ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        if args.len() != 1 || arg_values.len() != 1 {
+            return Err(CodegenError::UnsupportedInstruction(
+                "print/println expects exactly one argument".to_string(),
+            ));
+        }
+
+        // bootstrap: move to stdlib when ready
+        let (ptr, len) = match (&args[0], arg_values[0]) {
+            (Operand::Const(AirConst::Str(text)), _) => {
+                let (ptr, len) = self.global_string_ptr_len(text)?;
+                (ptr, self.context.i64_type().const_int(len, false))
+            }
+            (_, value) if value.is_struct_value() => {
+                let struct_value = value.into_struct_value();
+                if struct_value.get_type() != aelys_string_type(self.context) {
+                    return Err(CodegenError::UnsupportedType(
+                        "print/println currently expects a string argument".to_string(),
+                    ));
+                }
+                let (ptr, len) = self.string_parts_from_value(struct_value)?;
+                (ptr, len)
+            }
+            _ => {
+                return Err(CodegenError::UnsupportedType(
+                    "print/println currently expects a string argument".to_string(),
+                ));
+            }
+        };
+
+        let write_fn = self.ensure_write_function();
+        self.builder
+            .build_call(write_fn, &[ptr.into(), len.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        if newline {
+            let (nl_ptr, nl_len) = self.global_string_ptr_len("\n")?;
+            let nl_len = self.context.i64_type().const_int(nl_len, false);
+            self.builder
+                .build_call(write_fn, &[nl_ptr.into(), nl_len.into()], "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+
+        match expected_ret {
+            None | Some(AirType::Void) => Ok(None),
+            Some(ret) => Ok(Some(air_basic_type_to_llvm(ret, self.context)?.const_zero())),
         }
     }
 

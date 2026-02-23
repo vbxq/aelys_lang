@@ -22,6 +22,7 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) value_map: HashMap<LocalId, BasicValueEnum<'static>>,
     pub(crate) local_types: HashMap<LocalId, AirType>,
     pub(crate) string_id: u64,
+    pub(crate) string_globals: HashMap<String, PointerValue<'static>>,
 }
 
 impl<'a> FunctionCodegen<'a> {
@@ -60,6 +61,7 @@ impl<'a> FunctionCodegen<'a> {
             value_map: HashMap::new(),
             local_types,
             string_id: 0,
+            string_globals: HashMap::new(),
         }
     }
 

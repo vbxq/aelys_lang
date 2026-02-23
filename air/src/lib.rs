@@ -41,6 +41,8 @@ pub enum AirType {
     F32,
     F64,
     Bool,
+    /// Byte string slice ABI: (ptr, len), never NUL-terminated.
+    /// Payload may contain internal '\0' bytes.
     Str,
     Ptr(Box<AirType>),
     Struct(String),
