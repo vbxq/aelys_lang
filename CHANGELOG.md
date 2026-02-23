@@ -4,6 +4,10 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.21.x - LLVM backend implementation
 
+**0.21.3-a**
+- Hardened Aelys string ABI: `str` is now consistently lowered as `{ ptr, len }`
+- Temporary `print/println` bootstrap, they're reserved during LLVM bootstrap and lowered to `__aelys_write(ptr, len)`; added regression tests for IR ABI and internal `\0` handling.
+
 **0.21.2-a**
 - Added `core/` crate (`aelys-core`) as a C runtime static library built via `cc` (`build.rs` + `src/aelys_core.c`).
 - LLVM native linking now auto-resolves and links `aelys-core` for `--backend llvm` executables.
