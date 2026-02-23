@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #if defined(_MSC_VER)
 #define AELYS_NORETURN __declspec(noreturn)
@@ -8,33 +7,13 @@
 #define AELYS_NORETURN _Noreturn
 #endif
 
-// bootstrap: move to stdlib when ready
-long long println(const char *s) {
-    puts(s);
-    fflush(stdout);
-    return 0;
-}
-
-// bootstrap: move to stdlib when ready
-long long print(const char *s) {
-    fputs(s, stdout);
-    fflush(stdout);
-    return 0;
-}
-
+/* String ABI is a byte slice (ptr, len); data may contain '\0'. */
 void __aelys_write(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stdout);
 }
 
 void __aelys_write_err(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stderr);
-}
-
-long long __aelys_read_stdin(char *buf, long long max_len) {
-    if (!fgets(buf, (int)max_len, stdin)) {
-        return 0;
-    }
-    return (long long)strlen(buf);
 }
 
 void *__aelys_alloc(long long size) {

@@ -55,9 +55,10 @@ impl<'a> FunctionCodegen<'a> {
             }
             AirTerminator::Panic { message, .. } => {
                 let panic_fn = self.ensure_panic_function();
-                let msg_ptr = self.global_string_ptr(message)?;
+                let (msg_ptr, msg_len) = self.global_string_ptr_len(message)?;
+                let msg_len = self.context.i64_type().const_int(msg_len, false);
                 self.builder
-                    .build_call(panic_fn, &[msg_ptr.into()], "")
+                    .build_call(panic_fn, &[msg_ptr.into(), msg_len.into()], "")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.builder
                     .build_unreachable()

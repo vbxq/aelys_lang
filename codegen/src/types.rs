@@ -1,7 +1,11 @@
 use crate::CodegenError;
 use aelys_air::AirType;
 use inkwell::AddressSpace;
-use inkwell::types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, PointerType};
+use inkwell::types::{
+    AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, PointerType, StructType,
+};
+
+const AELYS_STRING_STRUCT_NAME: &str = "__aelys_string";
 
 pub fn air_type_to_llvm<'ctx>(
     ty: &AirType,
@@ -15,7 +19,7 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::F32 => Ok(context.f32_type().into()),
         AirType::F64 => Ok(context.f64_type().into()),
         AirType::Bool => Ok(context.bool_type().into()),
-        AirType::Str => Ok(pointer_to_i8(context).into()),
+        AirType::Str => Ok(aelys_string_type(context).into()),
         AirType::Ptr(inner) => Ok(pointer_to_air_type(inner, context)?.into()),
         AirType::Struct(name) => context
             .get_struct_type(name)
@@ -130,6 +134,21 @@ fn pointer_to_i8<'ctx>(context: &'ctx inkwell::context::Context) -> PointerType<
     {
         context.i8_type().ptr_type(AddressSpace::default())
     }
+}
+
+pub(crate) fn aelys_string_type<'ctx>(
+    context: &'ctx inkwell::context::Context,
+) -> StructType<'ctx> {
+    if let Some(existing) = context.get_struct_type(AELYS_STRING_STRUCT_NAME) {
+        if existing.is_opaque() {
+            existing.set_body(&[pointer_to_i8(context).into(), context.i64_type().into()], false);
+        }
+        return existing;
+    }
+
+    let ty = context.opaque_struct_type(AELYS_STRING_STRUCT_NAME);
+    ty.set_body(&[pointer_to_i8(context).into(), context.i64_type().into()], false);
+    ty
 }
 
 fn pointer_to_air_type<'ctx>(

@@ -28,7 +28,7 @@ impl<'a> FunctionCodegen<'a> {
             AirConst::Float(v, AirFloatSize::F32) => Ok(self.context.f32_type().const_float(*v).into()),
             AirConst::Float(v, AirFloatSize::F64) => Ok(self.context.f64_type().const_float(*v).into()),
             AirConst::Bool(v) => Ok(self.context.bool_type().const_int(u64::from(*v), false).into()),
-            AirConst::Str(s) => Ok(self.global_string_ptr(s)?.into()),
+            AirConst::Str(s) => self.global_string_value(s),
             AirConst::Null => Ok(self.context.ptr_type(AddressSpace::default()).const_null().into()),
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
             AirConst::Undef(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),

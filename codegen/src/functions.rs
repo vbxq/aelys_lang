@@ -1,6 +1,7 @@
 use crate::CodegenContext;
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
+use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use crate::types::air_basic_type_to_llvm;
 use aelys_air::{
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
@@ -13,6 +14,8 @@ use std::collections::HashMap;
 
 impl CodegenContext {
     pub(crate) fn declare_functions(&self, program: &AirProgram) -> Result<(), CodegenError> {
+        self.ensure_no_reserved_bootstrap_builtins(program)?;
+
         for function in &program.functions {
             let symbol_name = function_symbol_name(function);
             let fn_type = self.function_type(function)?;
@@ -26,6 +29,22 @@ impl CodegenContext {
             self.apply_function_attributes(fn_value, &function.attributes)?;
         }
 
+        Ok(())
+    }
+
+    fn ensure_no_reserved_bootstrap_builtins(
+        &self,
+        program: &AirProgram,
+    ) -> Result<(), CodegenError> {
+        if let Some(function) = program
+            .functions
+            .iter()
+            .find(|function| is_reserved_bootstrap_builtin(&function.name))
+        {
+            return Err(CodegenError::UnsupportedInstruction(
+                reserved_bootstrap_builtin_message(&function.name),
+            ));
+        }
         Ok(())
     }
 
