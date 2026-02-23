@@ -38,7 +38,7 @@ fn primitives() {
     assert_eq!(layout_of(&AirType::I32).size, 4);
     assert_eq!(layout_of(&AirType::F64).size, 8);
     assert_eq!(layout_of(&AirType::Bool).size, 1);
-    assert_eq!(layout_of(&AirType::Str).size, 8);
+    assert_eq!(layout_of(&AirType::Str).size, 16);
     assert_eq!(layout_of(&AirType::Void).size, 0);
     assert_eq!(layout_of(&AirType::Void).align, 1);
     assert_eq!(layout_of(&AirType::Slice(Box::new(AirType::I32))).size, 16);

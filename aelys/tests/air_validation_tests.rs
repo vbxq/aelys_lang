@@ -496,6 +496,54 @@ fn keep_copy(x: i64) -> i64 {
 }
 
 #[test]
+fn stdlib_call_println_uses_str_operand() {
+    let air = lower_with_globals(
+        r#"
+fn main() {
+    println("Hello")
+}
+"#,
+        &["print", "println"],
+    );
+
+    let f = func(&air, "main");
+    let arg = f
+        .blocks
+        .iter()
+        .flat_map(|b| b.stmts.iter())
+        .find_map(|s| match &s.kind {
+            AirStmtKind::CallVoid {
+                func: Callee::Named(n),
+                args,
+            }
+            | AirStmtKind::Assign {
+                rvalue: Rvalue::Call {
+                    func: Callee::Named(n),
+                    args,
+                },
+                ..
+            } if n == "println" => args.first(),
+            _ => None,
+        })
+        .expect("expected a println call");
+
+    match arg {
+        Operand::Const(AirConst::Str(_)) => {}
+        Operand::Copy(id) | Operand::Move(id) => {
+            let ty = f
+                .params
+                .iter()
+                .find(|p| p.id == *id)
+                .map(|p| &p.ty)
+                .or_else(|| f.locals.iter().find(|l| l.id == *id).map(|l| &l.ty))
+                .expect("println argument local should exist");
+            assert_eq!(ty, &AirType::Str, "println argument must be `str`");
+        }
+        _ => panic!("unexpected println arg operand kind"),
+    }
+}
+
+#[test]
 fn dead_locals_removes_align_probe_copy_targets() {
     let mut air = lower_source(
         r#"

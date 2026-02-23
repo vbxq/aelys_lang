@@ -5,6 +5,7 @@ use aelys_opt::OptimizationLevel;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use std::fs;
+use std::process::Command;
 use tempfile::tempdir;
 
 fn compile_to_verified_ir(source: &str) -> String {
@@ -83,6 +84,20 @@ fn parse_branch_targets(line: &str) -> Vec<u32> {
     targets
 }
 
+fn executable_path_for(source_path: &std::path::Path) -> std::path::PathBuf {
+    let mut output = source_path.with_extension("");
+    if cfg!(windows) {
+        output.set_extension("exe");
+    }
+    output
+}
+
+fn linker_unavailable(error: &str) -> bool {
+    error.contains("failed to run `lld-link`: program not found")
+        || error.contains("failed to run `link`: program not found")
+        || error.contains("failed with status Some(-1073741819)")
+}
+
 #[test]
 fn llvm_returns_integer_constant() {
     let ir = compile_to_verified_ir("fn constant() -> i64 { return 42 }");
@@ -158,6 +173,92 @@ fn llvm_emits_global_string_constant() {
     let ir = compile_to_verified_ir("fn hello() -> string { return \"hello\" }");
     assert!(ir.contains("@str_"));
     assert!(ir.contains("hello"));
+}
+
+#[test]
+fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
+    let ir = compile_to_verified_ir("fn greet() -> i64 { return println(\"Hello\") }");
+    assert!(ir.contains("declare void @__aelys_write(ptr, i64)"), "{ir}");
+    assert!(!ir.contains("declare i64 @println"), "{ir}");
+    assert!(ir.contains("c\"Hello\\00\""), "{ir}");
+    assert!(!ir.contains("c\"\\00Hello"), "{ir}");
+    assert!(!ir.contains(", i64 0, i64 1"), "{ir}");
+    assert!(ir.contains("call void @__aelys_write"), "{ir}");
+    assert!(ir.contains("i64 5"), "{ir}");
+}
+
+#[test]
+fn llvm_exec_println_outputs_hello_newline() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    println("Hello")
+    return 0
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(output.status.success(), "program failed: {:?}", output.status);
+    assert!(
+        output.stdout == b"Hello\n" || output.stdout == b"Hello\r\n",
+        "unexpected stdout bytes: {:?}",
+        output.stdout
+    );
+}
+
+#[test]
+fn llvm_exec_println_keeps_internal_nul_bytes() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    println("A\0B")
+    return 0
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(output.status.success(), "program failed: {:?}", output.status);
+    assert!(
+        output.stdout == b"A\0B\n" || output.stdout == b"A\0B\r\n",
+        "unexpected stdout bytes: {:?}",
+        output.stdout
+    );
 }
 
 #[test]

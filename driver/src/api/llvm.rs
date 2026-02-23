@@ -426,10 +426,13 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
 fn windows_linkers() -> Vec<String> {
     let mut linkers = Vec::new();
 
-    if let Ok(prefix) = std::env::var("LLVM_SYS_181_PREFIX") {
-        let candidate = PathBuf::from(prefix).join("bin").join("lld-link.exe");
+    for prefix in llvm_sys_18x_prefixes() {
+        let candidate = prefix.join("bin").join("lld-link.exe");
         if candidate.is_file() {
-            linkers.push(candidate.to_string_lossy().to_string());
+            let linker = candidate.to_string_lossy().to_string();
+            if !linkers.iter().any(|existing| existing == &linker) {
+                linkers.push(linker);
+            }
         }
     }
 
@@ -444,6 +447,21 @@ fn windows_linkers() -> Vec<String> {
     linkers.push("lld-link".to_string());
     linkers.push("link".to_string());
     linkers
+}
+
+#[cfg(feature = "llvm-backend")]
+#[cfg(windows)]
+fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
+    let mut entries = std::env::vars()
+        .filter(|(key, value)| {
+            key.starts_with("LLVM_SYS_18") && key.ends_with("_PREFIX") && !value.is_empty()
+        })
+        .collect::<Vec<_>>();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    entries
+        .into_iter()
+        .map(|(_, value)| PathBuf::from(value))
+        .collect()
 }
 
 #[cfg(not(feature = "llvm-backend"))]

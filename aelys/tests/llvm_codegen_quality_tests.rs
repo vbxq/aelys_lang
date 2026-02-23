@@ -43,7 +43,7 @@ fn assert_all_aligned(ir: &str, needle: &str, expected_align: u32) {
 }
 
 #[test]
-fn llvm_uses_expected_alignment_for_scalars_and_pointers() {
+fn llvm_uses_expected_alignment_for_scalars_and_string_struct() {
     let ir = compile_to_verified_ir(
         r#"
 fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
@@ -72,7 +72,7 @@ fn ptr_probe(p: string) -> string {
     assert_all_aligned(&ir, "alloca i1,", 1);
     assert_all_aligned(&ir, "alloca float,", 4);
     assert_all_aligned(&ir, "alloca double,", 8);
-    assert_all_aligned(&ir, "alloca ptr,", 8);
+    assert_all_aligned(&ir, "alloca %__aelys_string,", 8);
 
     assert_all_aligned(&ir, "store i8 ", 1);
     assert_all_aligned(&ir, "store i16 ", 2);
@@ -81,7 +81,7 @@ fn ptr_probe(p: string) -> string {
     assert_all_aligned(&ir, "store i1 ", 1);
     assert_all_aligned(&ir, "store float ", 4);
     assert_all_aligned(&ir, "store double ", 8);
-    assert_all_aligned(&ir, "store ptr ", 8);
+    assert_all_aligned(&ir, "store %__aelys_string ", 8);
 
     assert_all_aligned(&ir, "load i8,", 1);
     assert_all_aligned(&ir, "load i16,", 2);
@@ -90,7 +90,7 @@ fn ptr_probe(p: string) -> string {
     assert_all_aligned(&ir, "load i1,", 1);
     assert_all_aligned(&ir, "load float,", 4);
     assert_all_aligned(&ir, "load double,", 8);
-    assert_all_aligned(&ir, "load ptr,", 8);
+    assert_all_aligned(&ir, "load %__aelys_string,", 8);
 }
 
 #[test]

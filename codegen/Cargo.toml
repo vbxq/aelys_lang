@@ -7,5 +7,8 @@ edition = "2024"
 aelys-air = { path = "../air" }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", default-features = false, features = ["llvm18-1", "target-x86"] }
 
+[dev-dependencies]
+tempfile = "3"
+
 [lib]
 doctest = false
