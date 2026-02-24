@@ -100,3 +100,19 @@ fn caller() -> i64 {
     assert!(!ir.contains("define fastcc i64 @sink(ptr"), "{ir}");
     assert!(ir.contains("call fastcc i64 @sink(%__aelys_string"), "{ir}");
 }
+
+#[test]
+fn unknown_field_on_str() {
+    let error = compile_source_expect_error(
+        r#"
+fn main() -> i64 {
+    let s = "Hello"
+    return s.foo
+}
+"#,
+    );
+    assert!(
+        error.contains("unknown field 'foo' on Str; supported: 'len'"),
+        "{error}"
+    );
+}

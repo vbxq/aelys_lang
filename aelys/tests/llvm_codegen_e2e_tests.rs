@@ -180,6 +180,9 @@ fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
     let ir = compile_to_verified_ir("fn greet() -> i64 { return println(\"Hello\") }");
     assert!(ir.contains("declare void @__aelys_write(ptr, i64)"), "{ir}");
     assert!(!ir.contains("declare i64 @println"), "{ir}");
+    assert!(!ir.contains("declare void @println"), "{ir}");
+    assert!(!ir.contains("declare i64 @print"), "{ir}");
+    assert!(!ir.contains("declare void @print"), "{ir}");
     assert!(ir.contains("c\"Hello\\00\""), "{ir}");
     assert!(!ir.contains("c\"\\00Hello"), "{ir}");
     assert!(!ir.contains(", i64 0, i64 1"), "{ir}");
@@ -188,15 +191,16 @@ fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
 }
 
 #[test]
-fn llvm_exec_println_outputs_hello_newline() {
+fn echo_example() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
         &source_path,
         r#"
 fn main() -> i64 {
-    println("Hello")
-    return 0
+    let s = "Hello"
+    println(s)
+    return s.len
 }
 "#,
     )
@@ -216,16 +220,12 @@ fn main() -> i64 {
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    assert!(output.status.success(), "program failed: {:?}", output.status);
-    assert!(
-        output.stdout == b"Hello\n" || output.stdout == b"Hello\r\n",
-        "unexpected stdout bytes: {:?}",
-        output.stdout
-    );
+    assert!(output.stdout == b"Hello\n" || output.stdout == b"Hello\r\n");
+    assert_eq!(output.status.code().unwrap_or(-1), 5);
 }
 
 #[test]
-fn llvm_exec_println_keeps_internal_nul_bytes() {
+fn internal_nul_preserved() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -253,12 +253,224 @@ fn main() -> i64 {
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    assert!(output.status.success(), "program failed: {:?}", output.status);
-    assert!(
-        output.stdout == b"A\0B\n" || output.stdout == b"A\0B\r\n",
-        "unexpected stdout bytes: {:?}",
-        output.stdout
-    );
+    assert!(output.stdout == b"A\0B\n" || output.stdout == b"A\0B\r\n");
+}
+
+#[test]
+fn len_on_temporary_literal_expression() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    return "hello".len
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert_eq!(output.status.code().unwrap_or(-1), 5);
+}
+
+#[test]
+fn len_in_callee_on_string_parameter() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn sink(s: string) -> i64 {
+    return s.len
+}
+
+fn main() -> i64 {
+    return sink("Hello")
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert_eq!(output.status.code().unwrap_or(-1), 5);
+}
+
+#[test]
+fn entry_wrapper_maps_u8_main_exit_code() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> u8 {
+    return 255 as u8
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert_eq!(output.status.code().unwrap_or(-1), 255);
+}
+
+#[test]
+fn entry_wrapper_maps_negative_i64_main_exit_code() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    return -1
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    let code = output.status.code().unwrap_or(-1);
+    if cfg!(windows) {
+        assert_eq!(code, -1);
+    } else {
+        assert_eq!(code, 255);
+    }
+}
+
+#[test]
+fn entry_wrapper_non_integer_main_return_defaults_to_zero() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> string {
+    return "ignored"
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert_eq!(output.status.code().unwrap_or(-1), 0);
+}
+
+#[test]
+fn llvm_multi_module_strings_compile_and_run() {
+    let dir = tempdir().expect("tempdir should be created");
+    let module_path = dir.path().join("strings.aelys");
+    let source_path = dir.path().join("main.aelys");
+
+    fs::write(
+        &module_path,
+        r#"
+pub fn alpha() -> string {
+    return "A"
+}
+
+pub fn beta() -> string {
+    return "B"
+}
+"#,
+    )
+    .expect("module source should be written");
+
+    fs::write(
+        &source_path,
+        r#"
+needs strings
+
+fn main() -> i64 {
+    strings.alpha()
+    strings.beta()
+    return 0
+}
+"#,
+    )
+    .expect("main source should be written");
+
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(output.stdout.is_empty(), "unexpected stdout: {:?}", output.stdout);
+    assert_eq!(output.status.code().unwrap_or(-1), 0);
 }
 
 #[test]
