@@ -3,8 +3,6 @@ use common::*;
 
 // Unicode edge cases
 
-
-
 #[test]
 fn unicode_combining_characters() {
     let code = r#"
@@ -22,7 +20,6 @@ fn unicode_zero_width_characters() {
     let result = run_aelys(code);
     assert!(result.as_int().unwrap() > 2);
 }
-
 
 // String literal max length tests
 
@@ -202,8 +199,6 @@ if result > 1000000000.0 { 1 } else { 0 }
 }
 
 // Empty collections and edge cases
-
-
 
 // Boundary conditions for loops
 
@@ -748,4 +743,3 @@ test()
 "#;
     assert_aelys_int(code, 10);
 }
-

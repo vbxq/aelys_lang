@@ -93,12 +93,12 @@ fn compile_air_with_llvm(
         .unwrap_or("aelys_module");
     let mut codegen = aelys_codegen::CodegenContext::new(module_name);
 
-    codegen.compile(air).map_err(|err| format!("{:?}", err))?;
+    codegen.compile(air).map_err(|err| err.to_string())?;
     let object_path = object_path_for(path);
     let object_path_str = object_path.to_string_lossy().to_string();
     codegen
         .emit_object(&object_path_str)
-        .map_err(|err| format!("{:?}", err))?;
+        .map_err(|err| err.to_string())?;
 
     if emit_llvm_ir {
         let mut ir_path = PathBuf::from(path);
@@ -106,7 +106,7 @@ fn compile_air_with_llvm(
         let ir_path_str = ir_path.to_string_lossy().to_string();
         codegen
             .emit_ir(&ir_path_str)
-            .map_err(|err| format!("{:?}", err))?;
+            .map_err(|err| err.to_string())?;
     }
 
     let has_main_entry = air
@@ -308,7 +308,11 @@ fn build_aelys_core(root: &Path) -> Result<(), String> {
         ));
     }
 
-    let mut args = vec!["build".to_string(), "-p".to_string(), "aelys-core".to_string()];
+    let mut args = vec![
+        "build".to_string(),
+        "-p".to_string(),
+        "aelys-core".to_string(),
+    ];
     if running_release_binary() {
         args.push("--release".to_string());
     }

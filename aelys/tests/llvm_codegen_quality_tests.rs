@@ -34,11 +34,17 @@ fn compile_to_verified_ir_with_opt(source: &str, opt: OptimizationLevel) -> Stri
 
 fn assert_all_aligned(ir: &str, needle: &str, expected_align: u32) {
     let matching: Vec<_> = ir.lines().filter(|line| line.contains(needle)).collect();
-    assert!(!matching.is_empty(), "missing instruction pattern: {needle}\n{ir}");
+    assert!(
+        !matching.is_empty(),
+        "missing instruction pattern: {needle}\n{ir}"
+    );
 
     let required = format!("align {expected_align}");
     for line in matching {
-        assert!(line.contains(&required), "bad alignment for `{needle}`: {line}");
+        assert!(
+            line.contains(&required),
+            "bad alignment for `{needle}`: {line}"
+        );
     }
 }
 

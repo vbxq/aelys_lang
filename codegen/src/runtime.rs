@@ -3,9 +3,7 @@ use crate::body::FunctionCodegen;
 use crate::types::aelys_string_type;
 use inkwell::AddressSpace;
 use inkwell::module::Linkage;
-use inkwell::values::{
-    BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue,
-};
+use inkwell::values::{BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue};
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn ensure_alloc_function(&self) -> FunctionValue<'static> {
@@ -67,8 +65,9 @@ impl<'a> FunctionCodegen<'a> {
         text: &str,
     ) -> Result<(PointerValue<'static>, u64), CodegenError> {
         let i8_ty = self.context.i8_type();
-        let text_len = u64::try_from(text.len())
-            .map_err(|_| CodegenError::UnsupportedInstruction("string literal too large".to_string()))?;
+        let text_len = u64::try_from(text.len()).map_err(|_| {
+            CodegenError::UnsupportedInstruction("string literal too large".to_string())
+        })?;
         let array_len = u32::try_from(text.len())
             .ok()
             .and_then(|n| n.checked_add(1))
@@ -88,7 +87,9 @@ impl<'a> FunctionCodegen<'a> {
             }
             bytes.push(i8_ty.const_zero());
 
-            let global = self.module.add_global(i8_ty.array_type(array_len), None, &name);
+            let global = self
+                .module
+                .add_global(i8_ty.array_type(array_len), None, &name);
             global.set_linkage(Linkage::Private);
             global.set_constant(true);
             global.set_initializer(&i8_ty.const_array(&bytes));
@@ -101,12 +102,8 @@ impl<'a> FunctionCodegen<'a> {
 
         let zero = self.context.i64_type().const_zero();
         let ptr = unsafe {
-            self.builder.build_in_bounds_gep(
-                array_ty,
-                global_ptr,
-                &[zero, zero],
-                "str_ptr",
-            )
+            self.builder
+                .build_in_bounds_gep(array_ty, global_ptr, &[zero, zero], "str_ptr")
         }
         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 

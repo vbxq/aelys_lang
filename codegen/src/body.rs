@@ -1,5 +1,5 @@
-use crate::CodegenError;
 use crate::types::air_basic_type_to_llvm;
+use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{AirFunction, AirProgram, AirType, BlockId, FunctionId, LocalId};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -23,6 +23,8 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) local_types: HashMap<LocalId, AirType>,
     pub(crate) string_id: u64,
     pub(crate) string_globals: HashMap<String, PointerValue<'static>>,
+    pub(crate) current_block: Option<BlockId>,
+    pub(crate) current_stmt_index: Option<usize>,
 }
 
 impl<'a> FunctionCodegen<'a> {
@@ -62,6 +64,8 @@ impl<'a> FunctionCodegen<'a> {
             local_types,
             string_id: 0,
             string_globals: HashMap::new(),
+            current_block: None,
+            current_stmt_index: None,
         }
     }
 
@@ -118,13 +122,19 @@ impl<'a> FunctionCodegen<'a> {
     fn generate_blocks(&mut self) -> Result<(), CodegenError> {
         let blocks = self.air_function.blocks.clone();
         for block in &blocks {
+            self.current_block = Some(block.id);
             let llvm_block = self.lookup_block(block.id)?;
             self.builder.position_at_end(llvm_block);
-            for stmt in &block.stmts {
+            for (stmt_index, stmt) in block.stmts.iter().enumerate() {
+                self.current_stmt_index = Some(stmt_index);
                 self.generate_stmt(&stmt.kind)?;
             }
+            self.current_stmt_index = None;
             self.generate_terminator(&block.terminator)?;
         }
+
+        self.current_block = None;
+        self.current_stmt_index = None;
 
         Ok(())
     }
@@ -218,9 +228,25 @@ impl<'a> FunctionCodegen<'a> {
             let ty = air_basic_type_to_llvm(self.local_air_type(local)?, self.context)?;
             return self.load_value(ty, ptr, &format!("ld{}", local.0));
         }
-        self.value_map
-            .get(&local)
-            .copied()
-            .ok_or_else(|| CodegenError::LlvmError(format!("local {} used before assignment", local.0)))
+        self.value_map.get(&local).copied().ok_or_else(|| {
+            CodegenError::LlvmError(format!("local {} used before assignment", local.0))
+        })
+    }
+
+    pub(crate) fn unsupported_air(
+        &self,
+        kind: &'static str,
+        detail: impl Into<String>,
+    ) -> CodegenError {
+        let position = match self.current_stmt_index {
+            Some(index) => AirNodePosition::Stmt(index),
+            None => AirNodePosition::Terminator,
+        };
+        let location = AirNodeLocation {
+            function: self.air_function.name.clone(),
+            block: self.current_block.map(|block| block.0),
+            position,
+        };
+        CodegenError::unsupported_with_location(kind, detail, location)
     }
 }

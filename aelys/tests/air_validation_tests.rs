@@ -517,10 +517,11 @@ fn main() {
                 args,
             }
             | AirStmtKind::Assign {
-                rvalue: Rvalue::Call {
-                    func: Callee::Named(n),
-                    args,
-                },
+                rvalue:
+                    Rvalue::Call {
+                        func: Callee::Named(n),
+                        args,
+                    },
                 ..
             } if n == "println" => args.first(),
             _ => None,

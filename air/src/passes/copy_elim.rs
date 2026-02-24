@@ -150,7 +150,9 @@ fn rewrite_terminator(term: &mut AirTerminator, replacements: &HashMap<LocalId, 
         AirTerminator::Return(Some(op)) => rewrite_operand(op, replacements),
         AirTerminator::Branch { cond, .. } => rewrite_operand(cond, replacements),
         AirTerminator::Switch { discr, .. } => rewrite_operand(discr, replacements),
-        AirTerminator::Invoke { func, args, ret, .. } => {
+        AirTerminator::Invoke {
+            func, args, ret, ..
+        } => {
             rewrite_callee(func, replacements);
             for arg in args {
                 rewrite_operand(arg, replacements);

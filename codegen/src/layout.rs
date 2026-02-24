@@ -75,7 +75,9 @@ impl<'a> FunctionCodegen<'a> {
                     .structs
                     .iter()
                     .find(|s| s.name == *name)
-                    .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown struct {}", name)))?;
+                    .ok_or_else(|| {
+                        CodegenError::UnsupportedType(format!("unknown struct {}", name))
+                    })?;
                 if def.fields.is_empty() {
                     return Ok((0, 1));
                 }

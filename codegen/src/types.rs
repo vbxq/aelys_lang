@@ -141,13 +141,19 @@ pub(crate) fn aelys_string_type<'ctx>(
 ) -> StructType<'ctx> {
     if let Some(existing) = context.get_struct_type(AELYS_STRING_STRUCT_NAME) {
         if existing.is_opaque() {
-            existing.set_body(&[pointer_to_i8(context).into(), context.i64_type().into()], false);
+            existing.set_body(
+                &[pointer_to_i8(context).into(), context.i64_type().into()],
+                false,
+            );
         }
         return existing;
     }
 
     let ty = context.opaque_struct_type(AELYS_STRING_STRUCT_NAME);
-    ty.set_body(&[pointer_to_i8(context).into(), context.i64_type().into()], false);
+    ty.set_body(
+        &[pointer_to_i8(context).into(), context.i64_type().into()],
+        false,
+    );
     ty
 }
 

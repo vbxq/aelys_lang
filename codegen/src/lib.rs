@@ -3,31 +3,36 @@ pub mod types;
 mod body;
 mod calls;
 mod casts;
+mod error;
 mod functions;
 mod layout;
 mod operands;
 mod ops;
-mod rvalues;
 mod runtime;
+mod rvalues;
 mod stmts;
 mod structs;
 mod terminators;
 
 use aelys_air::AirProgram;
+use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine,
 };
-use inkwell::OptimizationLevel;
 use std::path::Path;
+
+pub use error::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 
 pub struct CodegenContext {
     context: &'static Context,
     module: Module<'static>,
     builder: Builder<'static>,
 }
+
+pub type CodegenError = LlvmBackendError;
 
 // TODO: this until proper bootstrapping
 pub(crate) fn is_reserved_bootstrap_builtin(name: &str) -> bool {
@@ -65,8 +70,8 @@ impl CodegenContext {
         Target::initialize_native(&InitializationConfig::default())
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         let triple = TargetMachine::get_default_triple();
-        let target = Target::from_triple(&triple)
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let target =
+            Target::from_triple(&triple).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         let cpu = TargetMachine::get_host_cpu_name().to_string();
         let features = TargetMachine::get_host_cpu_features().to_string();
         let target_machine = target
@@ -78,7 +83,9 @@ impl CodegenContext {
                 RelocMode::Default,
                 CodeModel::Default,
             )
-            .ok_or_else(|| CodegenError::LlvmError("failed to create target machine".to_string()))?;
+            .ok_or_else(|| {
+                CodegenError::LlvmError("failed to create target machine".to_string())
+            })?;
 
         self.module.set_triple(&triple);
         let data_layout = target_machine.get_target_data().get_data_layout();
@@ -94,11 +101,4 @@ impl CodegenContext {
             .print_to_file(path)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))
     }
-}
-
-#[derive(Debug)]
-pub enum CodegenError {
-    LlvmError(String),
-    UnsupportedType(String),
-    UnsupportedInstruction(String),
 }

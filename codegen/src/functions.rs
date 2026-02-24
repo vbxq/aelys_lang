@@ -1,8 +1,8 @@
 use crate::CodegenContext;
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
-use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use crate::types::air_basic_type_to_llvm;
+use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
 };
@@ -61,7 +61,10 @@ impl CodegenContext {
 
             let symbol_name = function_symbol_name(function);
             let fn_value = self.module.get_function(&symbol_name).ok_or_else(|| {
-                CodegenError::LlvmError(format!("missing declared LLVM function for {}", function.name))
+                CodegenError::LlvmError(format!(
+                    "missing declared LLVM function for {}",
+                    function.name
+                ))
             })?;
 
             let mut fcx = FunctionCodegen::new(
@@ -133,7 +136,10 @@ impl CodegenContext {
             return Ok(self.context.i32_type().const_zero());
         }
 
-        let is_signed = matches!(ret_ty, AirType::I8 | AirType::I16 | AirType::I32 | AirType::I64);
+        let is_signed = matches!(
+            ret_ty,
+            AirType::I8 | AirType::I16 | AirType::I32 | AirType::I64
+        );
         let is_unsigned = matches!(
             ret_ty,
             AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 | AirType::Bool

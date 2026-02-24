@@ -18,18 +18,37 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    fn generate_const(&mut self, constant: &AirConst) -> Result<BasicValueEnum<'static>, CodegenError> {
+    fn generate_const(
+        &mut self,
+        constant: &AirConst,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
         match constant {
-            AirConst::IntLiteral(v) => Ok(self.context.i64_type().const_int(*v as u64, true).into()),
+            AirConst::IntLiteral(v) => {
+                Ok(self.context.i64_type().const_int(*v as u64, true).into())
+            }
             AirConst::Int(v, size) => {
                 let int_ty = int_type_for_size(self.context, *size);
-                Ok(int_ty.const_int(*v as u64, is_signed_int_size(*size)).into())
+                Ok(int_ty
+                    .const_int(*v as u64, is_signed_int_size(*size))
+                    .into())
             }
-            AirConst::Float(v, AirFloatSize::F32) => Ok(self.context.f32_type().const_float(*v).into()),
-            AirConst::Float(v, AirFloatSize::F64) => Ok(self.context.f64_type().const_float(*v).into()),
-            AirConst::Bool(v) => Ok(self.context.bool_type().const_int(u64::from(*v), false).into()),
+            AirConst::Float(v, AirFloatSize::F32) => {
+                Ok(self.context.f32_type().const_float(*v).into())
+            }
+            AirConst::Float(v, AirFloatSize::F64) => {
+                Ok(self.context.f64_type().const_float(*v).into())
+            }
+            AirConst::Bool(v) => Ok(self
+                .context
+                .bool_type()
+                .const_int(u64::from(*v), false)
+                .into()),
             AirConst::Str(s) => self.global_string_value(s),
-            AirConst::Null => Ok(self.context.ptr_type(AddressSpace::default()).const_null().into()),
+            AirConst::Null => Ok(self
+                .context
+                .ptr_type(AddressSpace::default())
+                .const_null()
+                .into()),
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
             AirConst::Undef(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
         }

@@ -2,8 +2,7 @@ mod common;
 
 use aelys_bytecode::{AelysArray, AelysVec, ArrayData, TypeTag, Value};
 use common::{
-    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys,
-    run_aelys_ok,
+    assert_aelys_bool, assert_aelys_error_contains, assert_aelys_int, run_aelys, run_aelys_ok,
 };
 
 #[test]
@@ -285,7 +284,6 @@ fn test_e2e_int_array_literal() {
     assert_aelys_int("let arr = [1, 2, 3]; arr[2]", 3);
 }
 
-
 #[test]
 fn test_e2e_array_index_expression() {
     // Index with computed expression
@@ -326,7 +324,6 @@ fn test_e2e_nested_array_access() {
     );
 }
 
-
 #[test]
 fn test_e2e_array_trailing_comma() {
     // Trailing comma is allowed
@@ -344,10 +341,6 @@ fn test_e2e_vec_literal() {
     assert_aelys_int("let v = Vec[1, 2, 3]; v[0]", 1);
     assert_aelys_int("let v = Vec[1, 2, 3]; v[2]", 3);
 }
-
-
-
-
 
 #[test]
 fn test_e2e_vec_store() {
@@ -394,9 +387,6 @@ fn test_e2e_array_negative_index() {
 fn test_e2e_vec_oob_read() {
     assert_aelys_error_contains("let v = Vec[1, 2]; v[5]", "out of bounds");
 }
-
-
-
 
 #[test]
 fn test_e2e_array_swap() {
@@ -458,8 +448,6 @@ fn test_e2e_array_nested_access() {
     );
 }
 
-
-
 #[test]
 fn test_e2e_vec_modify_elements() {
     assert_aelys_int(
@@ -473,8 +461,6 @@ fn test_e2e_vec_modify_elements() {
         600,
     );
 }
-
-
 
 #[test]
 fn test_e2e_vec_passed_to_function() {
@@ -495,26 +481,7 @@ fn test_e2e_vec_passed_to_function() {
     );
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 // Regression tests: empty Vec[] / Array[] must work with non-int types
-
-
-
-
-
-
 
 // Multidimensional array tests
 
@@ -597,7 +564,6 @@ fn test_e2e_2d_vec_basic() {
         2,
     );
 }
-
 
 #[test]
 fn test_e2e_2d_vec_modify() {
@@ -722,7 +688,6 @@ fn test_e2e_2d_array_bool() {
     );
 }
 
-
 #[test]
 fn test_e2e_2d_array_computed_index() {
     // Use computed indices
@@ -775,4 +740,3 @@ fn test_e2e_2d_array_find_max() {
         9,
     );
 }
-

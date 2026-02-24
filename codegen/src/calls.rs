@@ -1,8 +1,8 @@
 use crate::CodegenError;
 use crate::body::FunctionCodegen;
 use crate::functions::llvm_calling_convention;
-use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
+use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
@@ -21,7 +21,9 @@ impl<'a> FunctionCodegen<'a> {
 
         // During bootstrap, print/println are reserved names lowered to __aelys_write.
         // Declaration phase rejects user definitions with these names.
-        if let Callee::Named(name) = callee && is_reserved_bootstrap_builtin(name) {
+        if let Callee::Named(name) = callee
+            && is_reserved_bootstrap_builtin(name)
+        {
             debug_assert!(
                 self.module.get_function(name).is_none(),
                 "reserved builtin must be rejected during declaration phase"
@@ -167,7 +169,9 @@ impl<'a> FunctionCodegen<'a> {
 
         match expected_ret {
             None | Some(AirType::Void) => Ok(None),
-            Some(ret) => Ok(Some(air_basic_type_to_llvm(ret, self.context)?.const_zero())),
+            Some(ret) => Ok(Some(
+                air_basic_type_to_llvm(ret, self.context)?.const_zero(),
+            )),
         }
     }
 
@@ -184,7 +188,9 @@ impl<'a> FunctionCodegen<'a> {
 
                 let fn_ty = match ret.as_ref() {
                     AirType::Void => self.context.void_type().fn_type(&param_types, false),
-                    other => air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false),
+                    other => {
+                        air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false)
+                    }
                 };
                 Ok((fn_ty, llvm_calling_convention(*conv)))
             }

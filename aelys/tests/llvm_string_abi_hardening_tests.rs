@@ -10,7 +10,8 @@ fn compile_source_to_verified_ir_with_opt(source: &str, opt: OptimizationLevel) 
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, source).expect("source should be written");
 
-    compile_file_with_llvm(&source_path, opt, true).expect("llvm backend compilation should succeed");
+    compile_file_with_llvm(&source_path, opt, true)
+        .expect("llvm backend compilation should succeed");
 
     let ll_path = source_path.with_extension("ll");
     let ir = fs::read_to_string(&ll_path).expect("llvm ir file should be generated");
@@ -96,7 +97,10 @@ fn caller() -> i64 {
         OptimizationLevel::None,
     );
 
-    assert!(ir.contains("define fastcc i64 @sink(%__aelys_string"), "{ir}");
+    assert!(
+        ir.contains("define fastcc i64 @sink(%__aelys_string"),
+        "{ir}"
+    );
     assert!(!ir.contains("define fastcc i64 @sink(ptr"), "{ir}");
     assert!(ir.contains("call fastcc i64 @sink(%__aelys_string"), "{ir}");
 }

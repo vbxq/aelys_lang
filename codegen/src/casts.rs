@@ -18,7 +18,8 @@ impl<'a> FunctionCodegen<'a> {
             return Ok(value);
         }
 
-        if let (Some((from_bits, from_signed)), Some((to_bits, _))) = (int_info(from), int_info(to)) {
+        if let (Some((from_bits, from_signed)), Some((to_bits, _))) = (int_info(from), int_info(to))
+        {
             let target_ty = int_type_for_air(self.context, to)?;
             if from_bits > to_bits {
                 return self
@@ -92,14 +93,20 @@ impl<'a> FunctionCodegen<'a> {
     }
 }
 
-fn int_type_for_air(context: &'static Context, ty: &AirType) -> Result<IntType<'static>, CodegenError> {
+fn int_type_for_air(
+    context: &'static Context,
+    ty: &AirType,
+) -> Result<IntType<'static>, CodegenError> {
     match ty {
         AirType::I8 | AirType::U8 => Ok(context.i8_type()),
         AirType::I16 | AirType::U16 => Ok(context.i16_type()),
         AirType::I32 | AirType::U32 => Ok(context.i32_type()),
         AirType::I64 | AirType::U64 => Ok(context.i64_type()),
         AirType::Bool => Ok(context.bool_type()),
-        _ => Err(CodegenError::UnsupportedType(format!("expected int type, got {:?}", ty))),
+        _ => Err(CodegenError::UnsupportedType(format!(
+            "expected int type, got {:?}",
+            ty
+        ))),
     }
 }
 
@@ -110,7 +117,10 @@ fn float_type_for_air(
     match ty {
         AirType::F32 => Ok(context.f32_type()),
         AirType::F64 => Ok(context.f64_type()),
-        _ => Err(CodegenError::UnsupportedType(format!("expected float type, got {:?}", ty))),
+        _ => Err(CodegenError::UnsupportedType(format!(
+            "expected float type, got {:?}",
+            ty
+        ))),
     }
 }
 

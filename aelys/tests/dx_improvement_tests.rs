@@ -29,7 +29,6 @@ fn test_for_each_vec_int() {
     );
 }
 
-
 #[test]
 fn test_for_each_vec_float() {
     let result = run_aelys(
@@ -209,28 +208,3 @@ fn test_for_each_nested_vec() {
 fn test_string_method_len() {
     assert_aelys_int(r#""hello".len()"#, 5);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

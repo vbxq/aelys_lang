@@ -84,7 +84,14 @@ impl<'a> FunctionCodegen<'a> {
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 Ok(())
             }
-            AirTerminator::Invoke { .. } | AirTerminator::Unwind => todo!(),
+            AirTerminator::Invoke { .. } => Err(self.unsupported_air(
+                "AirTerminator::Invoke",
+                "invoke/unwind control flow is not implemented for LLVM backend",
+            )),
+            AirTerminator::Unwind => Err(self.unsupported_air(
+                "AirTerminator::Unwind",
+                "unwind terminator is not implemented for LLVM backend",
+            )),
         }
     }
 

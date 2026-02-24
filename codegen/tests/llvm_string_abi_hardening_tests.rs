@@ -3,13 +3,13 @@ use aelys_air::{
     AirBlock, AirConst, AirFunction, AirIntSize, AirProgram, AirTerminator, AirType, BlockId,
     CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint, Operand,
 };
-use aelys_codegen::types::alignment_of;
 use aelys_codegen::CodegenContext;
+use aelys_codegen::types::alignment_of;
+use inkwell::OptimizationLevel;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::targets::{CodeModel, InitializationConfig, RelocMode, Target, TargetMachine};
 use inkwell::types::BasicTypeEnum;
-use inkwell::OptimizationLevel;
 use std::fs;
 use tempfile::tempdir;
 
@@ -22,7 +22,9 @@ fn compile_air_to_verified_ir(program: &AirProgram) -> String {
     codegen
         .compile(program)
         .expect("codegen compilation should succeed");
-    codegen.emit_ir(&ll_path_str).expect("llvm ir should be emitted");
+    codegen
+        .emit_ir(&ll_path_str)
+        .expect("llvm ir should be emitted");
 
     let ir = fs::read_to_string(&ll_path).expect("llvm ir file should be generated");
 
@@ -125,7 +127,10 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
 
     let ir = compile_air_to_verified_ir(&program);
     assert!(ir.contains("%__aelys_string = type { ptr, i64 }"), "{ir}");
-    assert!(ir.contains("define fastcc i64 @sink(%__aelys_string"), "{ir}");
+    assert!(
+        ir.contains("define fastcc i64 @sink(%__aelys_string"),
+        "{ir}"
+    );
     assert!(!ir.contains("define fastcc i64 @sink(ptr"), "{ir}");
 
     let context = Context::create();
@@ -142,7 +147,11 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
     assert!(!str_ty.is_packed(), "string struct must be non-packed");
 
     let fields = str_ty.get_field_types();
-    assert_eq!(fields.len(), 2, "string struct must have exactly two fields");
+    assert_eq!(
+        fields.len(),
+        2,
+        "string struct must have exactly two fields"
+    );
     assert!(
         matches!(fields[0], BasicTypeEnum::PointerType(_)),
         "field #0 must be ptr"
@@ -178,5 +187,8 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
     assert_eq!(llvm_align_abi, 8);
     assert_eq!(llvm_size, 16);
     assert_eq!(llvm_align, air_layout.align);
-    assert_eq!(u32::try_from(llvm_size).expect("size should fit u32"), air_layout.size);
+    assert_eq!(
+        u32::try_from(llvm_size).expect("size should fit u32"),
+        air_layout.size
+    );
 }

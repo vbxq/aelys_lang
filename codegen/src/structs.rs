@@ -15,12 +15,15 @@ impl CodegenContext {
         }
 
         for struct_def in &program.structs {
-            let llvm_struct = self.context.get_struct_type(&struct_def.name).ok_or_else(|| {
-                CodegenError::LlvmError(format!(
-                    "failed to retrieve declared struct: {}",
-                    struct_def.name
-                ))
-            })?;
+            let llvm_struct = self
+                .context
+                .get_struct_type(&struct_def.name)
+                .ok_or_else(|| {
+                    CodegenError::LlvmError(format!(
+                        "failed to retrieve declared struct: {}",
+                        struct_def.name
+                    ))
+                })?;
 
             if llvm_struct.is_opaque() {
                 let mut field_types = Vec::with_capacity(struct_def.fields.len());
@@ -129,7 +132,11 @@ impl<'a> FunctionCodegen<'a> {
                         let ty = self.context.get_struct_type(name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
                         })?;
-                        Ok((name.clone(), ty, self.load_local(*local)?.into_pointer_value()))
+                        Ok((
+                            name.clone(),
+                            ty,
+                            self.load_local(*local)?.into_pointer_value(),
+                        ))
                     }
                     other => Err(CodegenError::UnsupportedType(format!(
                         "field access pointer to non-struct {:?}",
@@ -147,7 +154,11 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    pub(crate) fn struct_field_index(&self, struct_name: &str, field: &str) -> Result<u32, CodegenError> {
+    pub(crate) fn struct_field_index(
+        &self,
+        struct_name: &str,
+        field: &str,
+    ) -> Result<u32, CodegenError> {
         let index = self
             .program
             .structs
@@ -155,7 +166,10 @@ impl<'a> FunctionCodegen<'a> {
             .find(|s| s.name == struct_name)
             .and_then(|s| s.fields.iter().position(|f| f.name == field))
             .ok_or_else(|| {
-                CodegenError::UnsupportedType(format!("unknown field `{}` on `{}`", field, struct_name))
+                CodegenError::UnsupportedType(format!(
+                    "unknown field `{}` on `{}`",
+                    field, struct_name
+                ))
             })?;
 
         u32::try_from(index).map_err(|_| {
@@ -175,7 +189,10 @@ impl<'a> FunctionCodegen<'a> {
             .and_then(|s| s.fields.iter().find(|f| f.name == field))
             .map(|f| &f.ty)
             .ok_or_else(|| {
-                CodegenError::UnsupportedType(format!("unknown field `{}` on `{}`", field, struct_name))
+                CodegenError::UnsupportedType(format!(
+                    "unknown field `{}` on `{}`",
+                    field, struct_name
+                ))
             })
     }
 }

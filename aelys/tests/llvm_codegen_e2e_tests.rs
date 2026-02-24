@@ -469,7 +469,11 @@ fn main() -> i64 {
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    assert!(output.stdout.is_empty(), "unexpected stdout: {:?}", output.stdout);
+    assert!(
+        output.stdout.is_empty(),
+        "unexpected stdout: {:?}",
+        output.stdout
+    );
     assert_eq!(output.status.code().unwrap_or(-1), 0);
 }
 

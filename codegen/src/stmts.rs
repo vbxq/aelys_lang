@@ -35,7 +35,9 @@ impl<'a> FunctionCodegen<'a> {
                 let raw_ptr = call
                     .try_as_basic_value()
                     .basic()
-                    .ok_or_else(|| CodegenError::LlvmError("__aelys_alloc returned void".to_string()))?
+                    .ok_or_else(|| {
+                        CodegenError::LlvmError("__aelys_alloc returned void".to_string())
+                    })?
                     .into_pointer_value();
 
                 let local_ty = self.local_air_type(*local)?.clone();
@@ -70,10 +72,22 @@ impl<'a> FunctionCodegen<'a> {
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 Ok(())
             }
-            AirStmtKind::GcDrop(_)
-            | AirStmtKind::ArenaCreate(_)
-            | AirStmtKind::ArenaDestroy(_)
-            | AirStmtKind::MemoryFence(_) => todo!(),
+            AirStmtKind::GcDrop(_) => Err(self.unsupported_air(
+                "AirStmtKind::GcDrop",
+                "gc_drop is not implemented for LLVM backend",
+            )),
+            AirStmtKind::ArenaCreate(_) => Err(self.unsupported_air(
+                "AirStmtKind::ArenaCreate",
+                "arena_create is not implemented for LLVM backend",
+            )),
+            AirStmtKind::ArenaDestroy(_) => Err(self.unsupported_air(
+                "AirStmtKind::ArenaDestroy",
+                "arena_destroy is not implemented for LLVM backend",
+            )),
+            AirStmtKind::MemoryFence(ordering) => Err(self.unsupported_air(
+                "AirStmtKind::MemoryFence",
+                format!("memory fence ordering {ordering:?} is not implemented"),
+            )),
         }
     }
 
@@ -113,7 +127,10 @@ impl<'a> FunctionCodegen<'a> {
                 ))),
             },
             Place::Deref(local) => Ok(self.load_local(*local)?.into_pointer_value()),
-            Place::Index(_, _) => todo!(),
+            Place::Index(_, _) => Err(self.unsupported_air(
+                "Place::Index",
+                "indexed place writes are not implemented for LLVM backend",
+            )),
         }
     }
 
@@ -148,8 +165,9 @@ impl<'a> FunctionCodegen<'a> {
                     other
                 ))),
             },
-            Place::Index(_, _) => Err(CodegenError::UnsupportedInstruction(
-                "index place not implemented".to_string(),
+            Place::Index(_, _) => Err(self.unsupported_air(
+                "Place::Index",
+                "indexed place type resolution is not implemented for LLVM backend",
             )),
         }
     }

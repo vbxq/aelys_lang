@@ -17,7 +17,9 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
         }
         collect_terminator_locals(&block.terminator, &mut referenced);
     }
-    function.locals.retain(|local| referenced.contains(&local.id));
+    function
+        .locals
+        .retain(|local| referenced.contains(&local.id));
 }
 
 fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
@@ -49,7 +51,9 @@ fn collect_terminator_locals(term: &AirTerminator, out: &mut HashSet<LocalId>) {
         AirTerminator::Return(Some(op)) => collect_operand_locals(op, out),
         AirTerminator::Branch { cond, .. } => collect_operand_locals(cond, out),
         AirTerminator::Switch { discr, .. } => collect_operand_locals(discr, out),
-        AirTerminator::Invoke { func, args, ret, .. } => {
+        AirTerminator::Invoke {
+            func, args, ret, ..
+        } => {
             collect_callee_locals(func, out);
             for arg in args {
                 collect_operand_locals(arg, out);

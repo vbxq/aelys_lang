@@ -42,11 +42,26 @@ impl<'a> FunctionCodegen<'a> {
         right: IntValue<'static>,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let value = match op {
-            BinOp::Add => self.builder.build_int_add(left, right, "iadd").map(Into::into),
-            BinOp::Sub => self.builder.build_int_sub(left, right, "isub").map(Into::into),
-            BinOp::Mul => self.builder.build_int_mul(left, right, "imul").map(Into::into),
-            BinOp::Div => self.builder.build_int_signed_div(left, right, "isdiv").map(Into::into),
-            BinOp::Rem => self.builder.build_int_signed_rem(left, right, "isrem").map(Into::into),
+            BinOp::Add => self
+                .builder
+                .build_int_add(left, right, "iadd")
+                .map(Into::into),
+            BinOp::Sub => self
+                .builder
+                .build_int_sub(left, right, "isub")
+                .map(Into::into),
+            BinOp::Mul => self
+                .builder
+                .build_int_mul(left, right, "imul")
+                .map(Into::into),
+            BinOp::Div => self
+                .builder
+                .build_int_signed_div(left, right, "isdiv")
+                .map(Into::into),
+            BinOp::Rem => self
+                .builder
+                .build_int_signed_rem(left, right, "isrem")
+                .map(Into::into),
             BinOp::Eq => self
                 .builder
                 .build_int_compare(IntPredicate::EQ, left, right, "icmp_eq")
@@ -71,7 +86,9 @@ impl<'a> FunctionCodegen<'a> {
                 .builder
                 .build_int_compare(IntPredicate::SGE, left, right, "icmp_ge")
                 .map(Into::into),
-            BinOp::And | BinOp::BitAnd => self.builder.build_and(left, right, "iand").map(Into::into),
+            BinOp::And | BinOp::BitAnd => {
+                self.builder.build_and(left, right, "iand").map(Into::into)
+            }
             BinOp::Or | BinOp::BitOr => self.builder.build_or(left, right, "ior").map(Into::into),
             BinOp::BitXor => self.builder.build_xor(left, right, "ixor").map(Into::into),
             BinOp::Shl => self
@@ -82,7 +99,24 @@ impl<'a> FunctionCodegen<'a> {
                 .builder
                 .build_right_shift(left, right, true, "ishr")
                 .map(Into::into),
-            BinOp::CheckedAdd | BinOp::CheckedSub | BinOp::CheckedMul => todo!(),
+            BinOp::CheckedAdd => {
+                return Err(self.unsupported_air(
+                    "BinOp::CheckedAdd",
+                    "checked integer add is not implemented for LLVM backend",
+                ));
+            }
+            BinOp::CheckedSub => {
+                return Err(self.unsupported_air(
+                    "BinOp::CheckedSub",
+                    "checked integer sub is not implemented for LLVM backend",
+                ));
+            }
+            BinOp::CheckedMul => {
+                return Err(self.unsupported_air(
+                    "BinOp::CheckedMul",
+                    "checked integer mul is not implemented for LLVM backend",
+                ));
+            }
         };
 
         value.map_err(|e| CodegenError::LlvmError(e.to_string()))
@@ -95,11 +129,26 @@ impl<'a> FunctionCodegen<'a> {
         right: FloatValue<'static>,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let value = match op {
-            BinOp::Add => self.builder.build_float_add(left, right, "fadd").map(Into::into),
-            BinOp::Sub => self.builder.build_float_sub(left, right, "fsub").map(Into::into),
-            BinOp::Mul => self.builder.build_float_mul(left, right, "fmul").map(Into::into),
-            BinOp::Div => self.builder.build_float_div(left, right, "fdiv").map(Into::into),
-            BinOp::Rem => self.builder.build_float_rem(left, right, "frem").map(Into::into),
+            BinOp::Add => self
+                .builder
+                .build_float_add(left, right, "fadd")
+                .map(Into::into),
+            BinOp::Sub => self
+                .builder
+                .build_float_sub(left, right, "fsub")
+                .map(Into::into),
+            BinOp::Mul => self
+                .builder
+                .build_float_mul(left, right, "fmul")
+                .map(Into::into),
+            BinOp::Div => self
+                .builder
+                .build_float_div(left, right, "fdiv")
+                .map(Into::into),
+            BinOp::Rem => self
+                .builder
+                .build_float_rem(left, right, "frem")
+                .map(Into::into),
             BinOp::Eq => self
                 .builder
                 .build_float_compare(FloatPredicate::OEQ, left, right, "fcmp_eq")
