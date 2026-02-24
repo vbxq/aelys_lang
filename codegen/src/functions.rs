@@ -9,7 +9,7 @@ use aelys_air::{
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::llvm_sys::LLVMCallConv;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
-use inkwell::values::FunctionValue;
+use inkwell::values::{CallSiteValue, FunctionValue};
 use std::collections::HashMap;
 
 impl CodegenContext {
@@ -114,11 +114,59 @@ impl CodegenContext {
             .build_call(user_fn, &[], "user_main")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         call.set_call_convention(user_fn.get_call_conventions());
+
+        let code = self.entry_return_code_from_user_main_call(&builder, call, &user_main.ret_ty)?;
         builder
-            .build_return(Some(&self.context.i32_type().const_zero()))
+            .build_return(Some(&code))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
         Ok(())
+    }
+
+    fn entry_return_code_from_user_main_call(
+        &self,
+        builder: &inkwell::builder::Builder<'static>,
+        call: CallSiteValue<'static>,
+        ret_ty: &AirType,
+    ) -> Result<inkwell::values::IntValue<'static>, CodegenError> {
+        if matches!(ret_ty, AirType::Void) {
+            return Ok(self.context.i32_type().const_zero());
+        }
+
+        let is_signed = matches!(ret_ty, AirType::I8 | AirType::I16 | AirType::I32 | AirType::I64);
+        let is_unsigned = matches!(
+            ret_ty,
+            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 | AirType::Bool
+        );
+        if !(is_signed || is_unsigned) {
+            return Ok(self.context.i32_type().const_zero());
+        }
+
+        let raw = call
+            .try_as_basic_value()
+            .basic()
+            .ok_or_else(|| CodegenError::LlvmError("__aelys_main returned void".to_string()))?
+            .into_int_value();
+
+        let width = raw.get_type().get_bit_width();
+        if width == 32 {
+            return Ok(raw);
+        }
+        if width < 32 {
+            return if is_signed {
+                builder
+                    .build_int_s_extend(raw, self.context.i32_type(), "main_exit_sext")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            } else {
+                builder
+                    .build_int_z_extend(raw, self.context.i32_type(), "main_exit_zext")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            };
+        }
+
+        builder
+            .build_int_truncate(raw, self.context.i32_type(), "main_exit_trunc")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))
     }
 
     fn function_type(&self, function: &AirFunction) -> Result<FunctionType<'static>, CodegenError> {

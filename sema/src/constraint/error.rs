@@ -33,6 +33,8 @@ pub enum TypeErrorKind {
     UndefinedVariable { name: String },
     /// Undefined function
     UndefinedFunction { name: String },
+    /// Invalid field/member access
+    MemberAccess { message: String },
     /// Recursion depth limit exceeded in type inference
     RecursionLimit,
 }
@@ -73,6 +75,7 @@ impl fmt::Display for TypeError {
             TypeErrorKind::UndefinedFunction { name } => {
                 write!(f, "undefined function: {}", name)
             }
+            TypeErrorKind::MemberAccess { message } => write!(f, "{message}"),
             TypeErrorKind::RecursionLimit => {
                 write!(f, "type inference recursion limit exceeded")
             }
@@ -156,6 +159,14 @@ impl TypeError {
             kind: TypeErrorKind::UndefinedFunction { name },
             span,
             reason: ConstraintReason::Other("function call".to_string()),
+        }
+    }
+
+    pub fn member_access(message: String, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MemberAccess { message },
+            span,
+            reason: ConstraintReason::Other("member access".to_string()),
         }
     }
 

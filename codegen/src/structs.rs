@@ -69,6 +69,25 @@ impl<'a> FunctionCodegen<'a> {
         base: &Operand,
         field: &str,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        if matches!(self.operand_type(base)?, AirType::Str) {
+            if field != "len" {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "unknown field `{}` on `Str`",
+                    field
+                )));
+            }
+            let str_value = self.generate_operand(base)?;
+            if !str_value.is_struct_value() {
+                return Err(CodegenError::UnsupportedType(
+                    "expected Str fat pointer value for field access".to_string(),
+                ));
+            }
+            return Ok(self
+                .builder
+                .build_extract_value(str_value.into_struct_value(), 1, "str_len_extract")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?);
+        }
+
         if let Operand::Copy(local) | Operand::Move(local) = base {
             if let AirType::Struct(name) = self.local_air_type(*local)?.clone() {
                 if !self.local_uses_alloca(*local) {

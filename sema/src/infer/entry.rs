@@ -132,14 +132,15 @@ impl TypeInference {
 
         let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) =
             inf.errors.iter().cloned().partition(|err| {
-                matches!(
-                    err.reason,
-                    ConstraintReason::BitwiseOp { .. }
-                        | ConstraintReason::TypeAnnotation { .. }
-                        | ConstraintReason::InvalidCast
-                        | ConstraintReason::UnknownType { .. }
-                        | ConstraintReason::IntLiteralOverflow { .. }
-                )
+                matches!(&err.kind, TypeErrorKind::MemberAccess { .. })
+                    || matches!(
+                        err.reason,
+                        ConstraintReason::BitwiseOp { .. }
+                            | ConstraintReason::TypeAnnotation { .. }
+                            | ConstraintReason::InvalidCast
+                            | ConstraintReason::UnknownType { .. }
+                            | ConstraintReason::IntLiteralOverflow { .. }
+                    )
             });
 
         if !fatal_errors.is_empty() {
