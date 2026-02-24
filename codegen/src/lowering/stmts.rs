@@ -141,12 +141,7 @@ impl<'a> FunctionCodegen<'a> {
                         let zero = self.context.i64_type().const_zero();
                         unsafe {
                             self.builder
-                                .build_in_bounds_gep(
-                                    arr_ty,
-                                    ptr,
-                                    &[zero, idx_val],
-                                    "idx_ptr",
-                                )
+                                .build_in_bounds_gep(arr_ty, ptr, &[zero, idx_val], "idx_ptr")
                                 .map_err(|e| CodegenError::LlvmError(e.to_string()))
                         }
                     }

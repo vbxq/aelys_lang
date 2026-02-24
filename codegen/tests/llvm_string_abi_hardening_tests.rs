@@ -1,8 +1,8 @@
 use aelys_air::layout::layout_of;
 use aelys_air::{
     AirBlock, AirConst, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram, AirStmt,
-    AirStmtKind, AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId,
-    GcMode, InlineHint, LocalId, Operand, Place, Rvalue,
+    AirStmtKind, AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId, GcMode,
+    InlineHint, LocalId, Operand, Place, Rvalue,
 };
 use aelys_codegen::CodegenContext;
 use aelys_codegen::types::alignment_of;

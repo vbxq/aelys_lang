@@ -1,7 +1,7 @@
 use aelys_air::{
-    AirBlock, AirConst, AirFunction, AirLocal, AirParam, AirProgram, AirStmt,
-    AirStmtKind, AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId,
-    GcMode, InlineHint, LocalId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirFunction, AirLocal, AirParam, AirProgram, AirStmt, AirStmtKind,
+    AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint,
+    LocalId, Operand, Place, Rvalue,
 };
 use aelys_codegen::CodegenContext;
 use std::fs;
@@ -134,14 +134,8 @@ fn array_index_read_generates_gep_and_bounds_check() {
         "array index should call __aelys_panic on OOB:\n{ir}"
     );
     // Should have idx_oob and idx_ok labels
-    assert!(
-        ir.contains("idx_oob:"),
-        "should have idx_oob block:\n{ir}"
-    );
-    assert!(
-        ir.contains("idx_ok:"),
-        "should have idx_ok block:\n{ir}"
-    );
+    assert!(ir.contains("idx_oob:"), "should have idx_oob block:\n{ir}");
+    assert!(ir.contains("idx_ok:"), "should have idx_ok block:\n{ir}");
     // Should have unreachable after panic
     assert!(
         ir.contains("unreachable"),

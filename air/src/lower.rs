@@ -1161,7 +1161,10 @@ impl<'a> LoweringContext<'a> {
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Local(tmp),
-                        rvalue: Rvalue::Index { base: obj, index: idx },
+                        rvalue: Rvalue::Index {
+                            base: obj,
+                            index: idx,
+                        },
                     },
                     sp,
                 );

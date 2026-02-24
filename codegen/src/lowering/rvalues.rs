@@ -107,12 +107,9 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_call(char_at_fn, &[str_val.into(), idx_val.into()], "str_char_at")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                result
-                    .try_as_basic_value()
-                    .basic()
-                    .ok_or_else(|| CodegenError::LlvmError(
-                        "__aelys_str_char_at returned void".to_string(),
-                    ))
+                result.try_as_basic_value().basic().ok_or_else(|| {
+                    CodegenError::LlvmError("__aelys_str_char_at returned void".to_string())
+                })
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",

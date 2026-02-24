@@ -41,16 +41,13 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Self {
         let mut local_types = HashMap::new();
         let mut alloca_locals = HashSet::new();
-        let param_ids: HashSet<LocalId> =
-            air_function.params.iter().map(|p| p.id).collect();
+        let param_ids: HashSet<LocalId> = air_function.params.iter().map(|p| p.id).collect();
         for param in &air_function.params {
             local_types.insert(param.id, param.ty.clone());
         }
         for local in &air_function.locals {
             local_types.insert(local.id, local.ty.clone());
-            if !param_ids.contains(&local.id)
-                && (local.name.is_some() || local.is_mut)
-            {
+            if !param_ids.contains(&local.id) && (local.name.is_some() || local.is_mut) {
                 alloca_locals.insert(local.id);
             }
         }

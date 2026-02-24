@@ -614,14 +614,8 @@ fn at(arr: Array<i64>, i: i64) -> i64 {
         ir.contains("@__aelys_panic"),
         "variable index should panic on OOB:\n{ir}"
     );
-    assert!(
-        ir.contains("idx_oob:"),
-        "should have idx_oob block:\n{ir}"
-    );
-    assert!(
-        ir.contains("idx_ok:"),
-        "should have idx_ok block:\n{ir}"
-    );
+    assert!(ir.contains("idx_oob:"), "should have idx_oob block:\n{ir}");
+    assert!(ir.contains("idx_ok:"), "should have idx_ok block:\n{ir}");
 }
 
 /// Index read + write in a void function (swap pattern)

@@ -70,10 +70,7 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         let string_ty = aelys_string_type(self.context);
-        let fn_ty = string_ty.fn_type(
-            &[string_ty.into(), self.context.i64_type().into()],
-            false,
-        );
+        let fn_ty = string_ty.fn_type(&[string_ty.into(), self.context.i64_type().into()], false);
         self.module.add_function("__aelys_str_char_at", fn_ty, None)
     }
 
