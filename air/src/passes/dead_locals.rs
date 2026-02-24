@@ -91,6 +91,10 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
         Rvalue::FieldAccess { base, .. } | Rvalue::Cast { operand: base, .. } => {
             collect_operand_locals(base, out);
         }
+        Rvalue::Index { base, index } => {
+            collect_operand_locals(base, out);
+            collect_operand_locals(index, out);
+        }
         Rvalue::AddressOf(local) => {
             out.insert(*local);
         }

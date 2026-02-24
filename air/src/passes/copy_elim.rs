@@ -186,6 +186,10 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
         Rvalue::FieldAccess { base, .. } | Rvalue::Cast { operand: base, .. } => {
             rewrite_operand(base, replacements);
         }
+        Rvalue::Index { base, index } => {
+            rewrite_operand(base, replacements);
+            rewrite_operand(index, replacements);
+        }
         Rvalue::AddressOf(local) => {
             *local = rewrite_local(*local, replacements);
         }

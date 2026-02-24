@@ -250,6 +250,10 @@ pub enum Rvalue {
         to: AirType,
     },
     Discriminant(Operand),
+    Index {
+        base: Operand,
+        index: Operand,
+    },
 }
 
 #[derive(Clone)]

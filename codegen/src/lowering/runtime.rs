@@ -2,6 +2,7 @@ use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::aelys_string_type;
 use inkwell::AddressSpace;
+use inkwell::IntPredicate;
 use inkwell::module::Linkage;
 use inkwell::values::{BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue};
 
@@ -149,5 +150,42 @@ impl<'a> FunctionCodegen<'a> {
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?
             .into_int_value();
         Ok((ptr, len))
+    }
+
+    /// Emit a bounds check: if `index >= length` (unsigned), branch to a panic
+    /// block; otherwise continue in a new `idx_ok` block.
+    pub(crate) fn emit_bounds_check(
+        &mut self,
+        index: IntValue<'static>,
+        length: IntValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let oob = self
+            .builder
+            .build_int_compare(IntPredicate::UGE, index, length, "idx_oob_cmp")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        let current_fn = self.function;
+        let oob_block = self.context.append_basic_block(current_fn, "idx_oob");
+        let ok_block = self.context.append_basic_block(current_fn, "idx_ok");
+
+        self.builder
+            .build_conditional_branch(oob, oob_block, ok_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // OOB block: call __aelys_panic + unreachable
+        self.builder.position_at_end(oob_block);
+        let panic_fn = self.ensure_panic_function();
+        let (msg_ptr, msg_len) = self.global_string_ptr_len("index out of bounds")?;
+        let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+        self.builder
+            .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // Continue building in the ok block
+        self.builder.position_at_end(ok_block);
+        Ok(())
     }
 }

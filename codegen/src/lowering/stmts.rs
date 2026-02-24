@@ -127,10 +127,55 @@ impl<'a> FunctionCodegen<'a> {
                 ))),
             },
             Place::Deref(local) => Ok(self.load_local(*local)?.into_pointer_value()),
-            Place::Index(_, _) => Err(self.unsupported_air(
-                "Place::Index",
-                "indexed place writes are not implemented for LLVM backend",
-            )),
+            Place::Index(local, index_op) => {
+                let idx_val = self.generate_operand(index_op)?.into_int_value();
+                match self.local_air_type(*local)?.clone() {
+                    AirType::Array(ref inner, n) => {
+                        let length = self.context.i64_type().const_int(n, false);
+                        self.emit_bounds_check(idx_val, length)?;
+                        let arr_ty = air_basic_type_to_llvm(
+                            &AirType::Array(inner.clone(), n),
+                            self.context,
+                        )?;
+                        let ptr = self.lookup_local_ptr(*local)?;
+                        let zero = self.context.i64_type().const_zero();
+                        unsafe {
+                            self.builder
+                                .build_in_bounds_gep(
+                                    arr_ty,
+                                    ptr,
+                                    &[zero, idx_val],
+                                    "idx_ptr",
+                                )
+                                .map_err(|e| CodegenError::LlvmError(e.to_string()))
+                        }
+                    }
+                    AirType::Slice(ref inner) => {
+                        let slice_val = self.load_local(*local)?.into_struct_value();
+                        let data_ptr = self
+                            .builder
+                            .build_extract_value(slice_val, 0, "slice_ptr")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                            .into_pointer_value();
+                        let length = self
+                            .builder
+                            .build_extract_value(slice_val, 1, "slice_len")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                            .into_int_value();
+                        self.emit_bounds_check(idx_val, length)?;
+                        let elem_ty = air_basic_type_to_llvm(inner, self.context)?;
+                        unsafe {
+                            self.builder
+                                .build_in_bounds_gep(elem_ty, data_ptr, &[idx_val], "idx_ptr")
+                                .map_err(|e| CodegenError::LlvmError(e.to_string()))
+                        }
+                    }
+                    other => Err(CodegenError::UnsupportedType(format!(
+                        "cannot index into {:?}",
+                        other
+                    ))),
+                }
+            }
         }
     }
 
@@ -165,10 +210,13 @@ impl<'a> FunctionCodegen<'a> {
                     other
                 ))),
             },
-            Place::Index(_, _) => Err(self.unsupported_air(
-                "Place::Index",
-                "indexed place type resolution is not implemented for LLVM backend",
-            )),
+            Place::Index(local, _) => match self.local_air_type(*local)? {
+                AirType::Array(inner, _) | AirType::Slice(inner) => Ok((**inner).clone()),
+                other => Err(CodegenError::UnsupportedType(format!(
+                    "cannot index into {:?}",
+                    other
+                ))),
+            },
         }
     }
 }

@@ -1,7 +1,8 @@
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{
-    AirFunction, AirProgram, AirStmtKind, AirType, BlockId, FunctionId, LocalId, Place, Rvalue,
+    AirFunction, AirProgram, AirStmtKind, AirType, BlockId, FunctionId, LocalId, Operand, Place,
+    Rvalue,
 };
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -59,8 +60,18 @@ impl<'a> FunctionCodegen<'a> {
                     if let Place::Field(local, _) = place {
                         alloca_locals.insert(*local);
                     }
+                    if let Place::Index(local, _) = place {
+                        alloca_locals.insert(*local);
+                    }
                     if let Rvalue::AddressOf(local) = rvalue {
                         alloca_locals.insert(*local);
+                    }
+                    if let Rvalue::Index { base, .. } = rvalue {
+                        if let Operand::Copy(local) | Operand::Move(local) = base {
+                            if matches!(local_types.get(local), Some(AirType::Array(_, _))) {
+                                alloca_locals.insert(*local);
+                            }
+                        }
                     }
                 }
             }

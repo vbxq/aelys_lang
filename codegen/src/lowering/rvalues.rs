@@ -1,7 +1,7 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::types::air_basic_type_to_llvm;
-use aelys_air::{AirType, Rvalue};
+use crate::types::{aelys_string_type, air_basic_type_to_llvm};
+use aelys_air::{AirType, Operand, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};
 
 impl<'a> FunctionCodegen<'a> {
@@ -41,6 +41,94 @@ impl<'a> FunctionCodegen<'a> {
                 "Rvalue::Discriminant",
                 "discriminant extraction is not implemented for LLVM backend",
             )),
+            Rvalue::Index { base, index } => self.generate_index(base, index),
+        }
+    }
+
+    fn generate_index(
+        &mut self,
+        base: &Operand,
+        index: &Operand,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let idx_val = self.generate_operand(index)?.into_int_value();
+        let base_ty = self.operand_type(base)?;
+
+        match base_ty {
+            AirType::Array(ref inner, n) => {
+                let length = self.context.i64_type().const_int(n, false);
+                self.emit_bounds_check(idx_val, length)?;
+
+                let base_local = match base {
+                    Operand::Copy(id) | Operand::Move(id) => *id,
+                    _ => {
+                        return Err(CodegenError::LlvmError(
+                            "array index base must be a local".to_string(),
+                        ));
+                    }
+                };
+                let arr_ty = air_basic_type_to_llvm(&base_ty, self.context)?;
+                let ptr = self.lookup_local_ptr(base_local)?;
+                let zero = self.context.i64_type().const_zero();
+                let elem_ptr = unsafe {
+                    self.builder
+                        .build_in_bounds_gep(arr_ty, ptr, &[zero, idx_val], "idx_elem_ptr")
+                }
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let elem_ty = air_basic_type_to_llvm(inner, self.context)?;
+                self.load_value(elem_ty, elem_ptr, "idx_load")
+            }
+            AirType::Slice(ref inner) => {
+                let slice_val = self.generate_operand(base)?.into_struct_value();
+                let data_ptr = self
+                    .builder
+                    .build_extract_value(slice_val, 0, "slice_ptr")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .into_pointer_value();
+                let length = self
+                    .builder
+                    .build_extract_value(slice_val, 1, "slice_len")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .into_int_value();
+                self.emit_bounds_check(idx_val, length)?;
+                let elem_ty = air_basic_type_to_llvm(inner, self.context)?;
+                let elem_ptr = unsafe {
+                    self.builder
+                        .build_in_bounds_gep(elem_ty, data_ptr, &[idx_val], "idx_elem_ptr")
+                }
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.load_value(elem_ty, elem_ptr, "idx_load")
+            }
+            AirType::Str => {
+                let str_val = self.generate_operand(base)?.into_struct_value();
+                let (data_ptr, length) = self.string_parts_from_value(str_val)?;
+                self.emit_bounds_check(idx_val, length)?;
+
+                let i8_ty = self.context.i8_type();
+                let char_ptr = unsafe {
+                    self.builder
+                        .build_in_bounds_gep(i8_ty, data_ptr, &[idx_val], "str_idx_ptr")
+                }
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+                // Build a new string {ptr+i, 1}
+                let string_ty = aelys_string_type(self.context);
+                let one = self.context.i64_type().const_int(1, false);
+                let result = self
+                    .builder
+                    .build_insert_value(string_ty.get_undef(), char_ptr, 0, "str_idx_init_ptr")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .into_struct_value();
+                let result = self
+                    .builder
+                    .build_insert_value(result, one, 1, "str_idx_init_len")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .into_struct_value();
+                Ok(result.into())
+            }
+            other => Err(CodegenError::UnsupportedType(format!(
+                "cannot index into {:?}",
+                other
+            ))),
         }
     }
 }

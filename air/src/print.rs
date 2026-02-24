@@ -217,6 +217,9 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
             format!("cast {} -> {}", fmt_operand(operand, func), fmt_type(to))
         }
         Rvalue::Discriminant(op) => format!("discriminant {}", fmt_operand(op, func)),
+        Rvalue::Index { base, index } => {
+            format!("index {}[{}]", fmt_operand(base, func), fmt_operand(index, func))
+        }
     }
 }
 

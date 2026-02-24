@@ -817,9 +817,9 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(elem_local),
-                rvalue: Rvalue::Call {
-                    func: Callee::Named("__aelys_index".to_string()),
-                    args: vec![Operand::Copy(col_local), Operand::Copy(idx_local)],
+                rvalue: Rvalue::Index {
+                    base: Operand::Copy(col_local),
+                    index: Operand::Copy(idx_local),
                 },
             },
             None,
@@ -1161,10 +1161,7 @@ impl<'a> LoweringContext<'a> {
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Local(tmp),
-                        rvalue: Rvalue::Call {
-                            func: Callee::Named("__aelys_index".to_string()),
-                            args: vec![obj, idx],
-                        },
+                        rvalue: Rvalue::Index { base: obj, index: idx },
                     },
                     sp,
                 );
@@ -1179,10 +1176,25 @@ impl<'a> LoweringContext<'a> {
                 let obj = self.lower_expr(object);
                 let idx = self.lower_expr(index);
                 let val = self.lower_expr(value);
+                let base_local = match obj {
+                    Operand::Copy(id) | Operand::Move(id) => id,
+                    Operand::Const(_) => {
+                        let ty = self.lower_type_from_infer(&object.ty);
+                        let tmp = self.alloc_temp(ty);
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Local(tmp),
+                                rvalue: Rvalue::Use(obj),
+                            },
+                            sp,
+                        );
+                        tmp
+                    }
+                };
                 self.emit(
-                    AirStmtKind::CallVoid {
-                        func: Callee::Named("__aelys_index_set".to_string()),
-                        args: vec![obj, idx, val],
+                    AirStmtKind::Assign {
+                        place: Place::Index(base_local, idx),
+                        rvalue: Rvalue::Use(val),
                     },
                     sp,
                 );
@@ -1304,10 +1316,25 @@ impl<'a> LoweringContext<'a> {
                 let obj = self.lower_expr(object);
                 let idx = self.lower_expr(index);
                 let val = self.lower_expr(value);
+                let base_local = match obj {
+                    Operand::Copy(id) | Operand::Move(id) => id,
+                    Operand::Const(_) => {
+                        let ty = self.lower_type_from_infer(&object.ty);
+                        let tmp = self.alloc_temp(ty);
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Local(tmp),
+                                rvalue: Rvalue::Use(obj),
+                            },
+                            sp,
+                        );
+                        tmp
+                    }
+                };
                 self.emit(
-                    AirStmtKind::CallVoid {
-                        func: Callee::Named("__aelys_index_set".to_string()),
-                        args: vec![obj, idx, val],
+                    AirStmtKind::Assign {
+                        place: Place::Index(base_local, idx),
+                        rvalue: Rvalue::Use(val),
                     },
                     sp,
                 );
