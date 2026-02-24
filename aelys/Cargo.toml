@@ -19,7 +19,6 @@ aelys-driver = { path = "../driver" }
 tempfile = "3"
 aelys-opt = { path = "../opt" }
 aelys-air = { path = "../air" }
-aelys-bytecode = { path = "../bytecode" }
 aelys-driver = { path = "../driver", features = ["llvm-backend"] }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", default-features = false, features = ["llvm18-1", "target-x86"] }
 
