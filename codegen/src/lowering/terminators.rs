@@ -1,6 +1,6 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
-use crate::operands::{constant_kind_name, is_signed_int_size};
+use crate::lowering::body::FunctionCodegen;
+use crate::lowering::operands::{constant_kind_name, is_signed_int_size};
 use aelys_air::{AirConst, AirTerminator, AirType};
 use inkwell::values::IntValue;
 

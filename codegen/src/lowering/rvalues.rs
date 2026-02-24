@@ -1,5 +1,5 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
+use crate::lowering::body::FunctionCodegen;
 use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirType, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};

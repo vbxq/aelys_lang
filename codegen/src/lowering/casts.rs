@@ -1,5 +1,5 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
+use crate::lowering::body::FunctionCodegen;
 use aelys_air::{AirType, Operand};
 use inkwell::context::Context;
 use inkwell::types::{FloatType, IntType};

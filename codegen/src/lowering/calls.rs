@@ -1,6 +1,6 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
-use crate::functions::llvm_calling_convention;
+use crate::lowering::body::FunctionCodegen;
+use crate::lowering::functions::llvm_calling_convention;
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand};

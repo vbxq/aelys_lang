@@ -1,5 +1,5 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
+use crate::lowering::body::FunctionCodegen;
 use crate::types::aelys_string_type;
 use inkwell::AddressSpace;
 use inkwell::module::Linkage;

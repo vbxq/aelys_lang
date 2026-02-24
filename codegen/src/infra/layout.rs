@@ -1,5 +1,5 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
+use crate::lowering::body::FunctionCodegen;
 use crate::types::alignment_of;
 use aelys_air::AirType;
 use inkwell::types::BasicTypeEnum;

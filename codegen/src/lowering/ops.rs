@@ -1,5 +1,5 @@
 use crate::CodegenError;
-use crate::body::FunctionCodegen;
+use crate::lowering::body::FunctionCodegen;
 use aelys_air::{AirType, BinOp, Operand, UnOp};
 use inkwell::values::{BasicValueEnum, FloatValue, IntValue};
 use inkwell::{FloatPredicate, IntPredicate};
