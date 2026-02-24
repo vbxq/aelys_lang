@@ -1,7 +1,8 @@
 use aelys_air::layout::layout_of;
 use aelys_air::{
-    AirBlock, AirConst, AirFunction, AirIntSize, AirProgram, AirTerminator, AirType, BlockId,
-    CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint, Operand,
+    AirBlock, AirConst, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram, AirStmt,
+    AirStmtKind, AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId,
+    GcMode, InlineHint, LocalId, Operand, Place, Rvalue,
 };
 use aelys_codegen::CodegenContext;
 use aelys_codegen::types::alignment_of;
@@ -191,4 +192,162 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
         u32::try_from(llvm_size).expect("size should fit u32"),
         air_layout.size
     );
+}
+
+#[test]
+fn ssa_params_use_llvm_args_directly() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "echo".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![AirParam {
+                id: LocalId(0),
+                ty: AirType::Str,
+                name: "s".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(1),
+                ty: AirType::I64,
+                name: None,
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![AirStmt {
+                    kind: AirStmtKind::Assign {
+                        place: Place::Local(LocalId(1)),
+                        rvalue: Rvalue::FieldAccess {
+                            base: Operand::Copy(LocalId(0)),
+                            field: "len".to_string(),
+                        },
+                    },
+                    span: None,
+                }],
+                terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let ir = compile_air_to_verified_ir(&program);
+    assert!(
+        !ir.contains("alloca"),
+        "SSA params/locals must not generate alloca:\n{ir}"
+    );
+    assert!(
+        !ir.contains("store"),
+        "SSA params/locals must not generate store:\n{ir}"
+    );
+    assert!(
+        ir.contains("extractvalue"),
+        "field access on SSA str should use extractvalue:\n{ir}"
+    );
+}
+
+#[test]
+fn mutable_locals_use_alloca_with_correct_alignment() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "mut_probe".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![
+                AirParam {
+                    id: LocalId(0),
+                    ty: AirType::I64,
+                    name: "x".to_string(),
+                    span: None,
+                },
+                AirParam {
+                    id: LocalId(1),
+                    ty: AirType::I64,
+                    name: "y".to_string(),
+                    span: None,
+                },
+            ],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(2),
+                ty: AirType::I64,
+                name: Some("a".to_string()),
+                is_mut: true,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![
+                    AirStmt {
+                        kind: AirStmtKind::Assign {
+                            place: Place::Local(LocalId(2)),
+                            rvalue: Rvalue::Use(Operand::Copy(LocalId(0))),
+                        },
+                        span: None,
+                    },
+                    AirStmt {
+                        kind: AirStmtKind::Assign {
+                            place: Place::Local(LocalId(2)),
+                            rvalue: Rvalue::Use(Operand::Copy(LocalId(1))),
+                        },
+                        span: None,
+                    },
+                ],
+                terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(2)))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let ir = compile_air_to_verified_ir(&program);
+    assert!(
+        ir.contains("alloca i64"),
+        "mutable local must use alloca:\n{ir}"
+    );
+    for line in ir.lines().filter(|l| l.contains("alloca i64")) {
+        assert!(
+            line.contains("align 8"),
+            "i64 alloca must have align 8: {line}"
+        );
+    }
+    for line in ir.lines().filter(|l| l.contains("store i64 ")) {
+        assert!(
+            line.contains("align 8"),
+            "i64 store must have align 8: {line}"
+        );
+    }
+    for line in ir.lines().filter(|l| l.contains("load i64,")) {
+        assert!(
+            line.contains("align 8"),
+            "i64 load must have align 8: {line}"
+        );
+    }
 }
