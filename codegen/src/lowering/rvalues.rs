@@ -1,6 +1,6 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::types::{aelys_string_type, air_basic_type_to_llvm};
+use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirType, Operand, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};
 
@@ -99,31 +99,20 @@ impl<'a> FunctionCodegen<'a> {
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
             AirType::Str => {
-                let str_val = self.generate_operand(base)?.into_struct_value();
-                let (data_ptr, length) = self.string_parts_from_value(str_val)?;
-                self.emit_bounds_check(idx_val, length)?;
-
-                let i8_ty = self.context.i8_type();
-                let char_ptr = unsafe {
-                    self.builder
-                        .build_in_bounds_gep(i8_ty, data_ptr, &[idx_val], "str_idx_ptr")
-                }
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-
-                // Build a new string {ptr+i, 1}
-                let string_ty = aelys_string_type(self.context);
-                let one = self.context.i64_type().const_int(1, false);
+                // UTF-8 character indexing: delegate to runtime because
+                // finding the n-th codepoint requires scanning byte boundaries.
+                let str_val = self.generate_operand(base)?;
+                let char_at_fn = self.ensure_str_char_at_function();
                 let result = self
                     .builder
-                    .build_insert_value(string_ty.get_undef(), char_ptr, 0, "str_idx_init_ptr")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .into_struct_value();
-                let result = self
-                    .builder
-                    .build_insert_value(result, one, 1, "str_idx_init_len")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .into_struct_value();
-                Ok(result.into())
+                    .build_call(char_at_fn, &[str_val.into(), idx_val.into()], "str_char_at")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                result
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError(
+                        "__aelys_str_char_at returned void".to_string(),
+                    ))
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",

@@ -61,6 +61,22 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_panic", fn_ty, None)
     }
 
+    /// `__aelys_str_char_at(str, i64) -> str`
+    /// UTF-8 character indexing: returns the i-th Unicode codepoint as a
+    /// single-character string. Panics internally on OOB.
+    pub(crate) fn ensure_str_char_at_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_char_at") {
+            return function;
+        }
+
+        let string_ty = aelys_string_type(self.context);
+        let fn_ty = string_ty.fn_type(
+            &[string_ty.into(), self.context.i64_type().into()],
+            false,
+        );
+        self.module.add_function("__aelys_str_char_at", fn_ty, None)
+    }
+
     pub(crate) fn global_string_ptr_len(
         &mut self,
         text: &str,

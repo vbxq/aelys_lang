@@ -154,9 +154,9 @@ fn array_index_read_generates_gep_and_bounds_check() {
     );
 }
 
-/// String index: Rvalue::Index on Str, verify extractvalue + GEP + result string {ptr, 1}
+/// String index: Rvalue::Index on Str delegates to __aelys_str_char_at (UTF-8 char indexing)
 #[test]
-fn string_index_read_generates_substr_view() {
+fn string_index_read_calls_runtime_char_at() {
     // fn probe(s: str, idx: i64) -> str {
     //   return s[idx]
     // }
@@ -215,25 +215,20 @@ fn string_index_read_generates_substr_view() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Should extract ptr and len from string
+    // Should call the UTF-8 runtime function, not inline byte-level GEP
     assert!(
-        ir.contains("extractvalue"),
-        "string index should extract string parts:\n{ir}"
+        ir.contains("@__aelys_str_char_at"),
+        "string index should call __aelys_str_char_at:\n{ir}"
     );
-    // Should have bounds check
+    // Should declare the function with string ABI: (str, i64) -> str
     assert!(
-        ir.contains("icmp uge"),
-        "string index should have bounds check:\n{ir}"
+        ir.contains("declare %__aelys_string @__aelys_str_char_at(%__aelys_string, i64)"),
+        "should declare __aelys_str_char_at with correct signature:\n{ir}"
     );
-    // Should have GEP into the string data
+    // Should NOT do byte-level GEP into string data
     assert!(
-        ir.contains("getelementptr inbounds"),
-        "string index should GEP into string data:\n{ir}"
-    );
-    // Should build result with insertvalue (for {ptr, 1} string)
-    assert!(
-        ir.contains("insertvalue"),
-        "string index should build result string:\n{ir}"
+        !ir.contains("str_idx_ptr"),
+        "string index must not use byte-level GEP:\n{ir}"
     );
 }
 

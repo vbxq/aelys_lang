@@ -498,3 +498,198 @@ fn unit_like() -> void {
     assert!(!ir.contains("ret i64 0"));
     assert!(all_i64_stores_align8(&ir));
 }
+
+// ─── Index E2E tests ────────────────────────────────────────────
+
+/// String indexing compiles through full pipeline and delegates to runtime.
+#[test]
+fn llvm_string_index_compiles_and_calls_runtime() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn char_at(s: string, i: i64) -> string {
+    return s[i]
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_str_char_at"),
+        "string index should call __aelys_str_char_at:\n{ir}"
+    );
+    assert!(
+        ir.contains("declare %__aelys_string @__aelys_str_char_at(%__aelys_string, i64)"),
+        "should declare __aelys_str_char_at with correct ABI:\n{ir}"
+    );
+}
+
+/// Array literal creation + index read compiles through full pipeline.
+#[test]
+fn llvm_array_literal_index_read_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn second() -> i64 {
+    let arr = [10, 20, 30]
+    return arr[1]
+}
+"#,
+    );
+    // Array literal delegates to runtime
+    assert!(
+        ir.contains("@__aelys_array_new"),
+        "array literal should call __aelys_array_new:\n{ir}"
+    );
+    // Slice-based index: extracts ptr, bounds check, GEP, load
+    assert!(
+        ir.contains("icmp uge"),
+        "array index should have bounds check:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "array index should panic on OOB:\n{ir}"
+    );
+    assert!(
+        ir.contains("getelementptr"),
+        "array index should generate GEP:\n{ir}"
+    );
+}
+
+/// Array index write compiles through full pipeline.
+#[test]
+fn llvm_array_index_write_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn mutate() -> i64 {
+    let arr = [10, 20, 30]
+    arr[0] = 99
+    return arr[0]
+}
+"#,
+    );
+    assert!(
+        ir.contains("store i64"),
+        "array index write should generate store:\n{ir}"
+    );
+    assert!(
+        ir.contains("icmp uge"),
+        "array index write should have bounds check:\n{ir}"
+    );
+}
+
+/// Index as function argument compiles (indexing in expression position).
+#[test]
+fn llvm_index_in_function_argument_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn identity(x: i64) -> i64 { return x }
+fn use_index() -> i64 {
+    let arr = [10, 20, 30]
+    return identity(arr[1])
+}
+"#,
+    );
+    assert!(
+        ir.contains("@identity"),
+        "should call identity function:\n{ir}"
+    );
+    assert!(
+        ir.contains("getelementptr"),
+        "index in arg position should generate GEP:\n{ir}"
+    );
+}
+
+/// Array index with variable (not constant) generates bounds check.
+#[test]
+fn llvm_array_index_with_variable_has_bounds_check() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn at(arr: Array<i64>, i: i64) -> i64 {
+    return arr[i]
+}
+"#,
+    );
+    assert!(
+        ir.contains("icmp uge"),
+        "variable index should have bounds check:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "variable index should panic on OOB:\n{ir}"
+    );
+    assert!(
+        ir.contains("idx_oob:"),
+        "should have idx_oob block:\n{ir}"
+    );
+    assert!(
+        ir.contains("idx_ok:"),
+        "should have idx_ok block:\n{ir}"
+    );
+}
+
+/// Index read + write in the same function (swap pattern).
+#[test]
+fn llvm_array_swap_pattern_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn swap(arr: Array<i64>, i: i64, j: i64) -> i64 {
+    let tmp = arr[i]
+    arr[i] = arr[j]
+    arr[j] = tmp
+    return 0
+}
+"#,
+    );
+    // Multiple GEPs and stores for the swap
+    let gep_count = ir.matches("getelementptr").count();
+    assert!(
+        gep_count >= 3,
+        "swap should generate at least 3 GEPs (read i, read j, write i, write j), got {gep_count}:\n{ir}"
+    );
+    let store_count = ir.matches("store i64").count();
+    assert!(
+        store_count >= 2,
+        "swap should generate at least 2 stores, got {store_count}:\n{ir}"
+    );
+}
+
+/// String indexing on a literal compiles.
+#[test]
+fn llvm_string_literal_index_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn first_char() -> string {
+    let s = "hello"
+    return s[0]
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_str_char_at"),
+        "string literal index should call __aelys_str_char_at:\n{ir}"
+    );
+}
+
+/// Loop with array indexing compiles (index in while body).
+#[test]
+fn llvm_loop_with_array_index_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn sum_array(arr: Array<i64>, n: i64) -> i64 {
+    let total: i64 = 0
+    let i: i64 = 0
+    while i < n {
+        total = total + arr[i]
+        i = i + 1
+    }
+    return total
+}
+"#,
+    );
+    assert!(has_back_edge(&ir), "loop should have a back edge:\n{ir}");
+    assert!(
+        ir.contains("getelementptr"),
+        "loop body index should generate GEP:\n{ir}"
+    );
+    assert!(
+        ir.contains("icmp uge"),
+        "loop body index should have bounds check:\n{ir}"
+    );
+}
