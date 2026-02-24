@@ -7,6 +7,8 @@
 #define AELYS_NORETURN _Noreturn
 #endif
 
+extern long long __aelys_user_main(void);
+
 /* String ABI is a byte slice (ptr, len); data may contain '\0'. */
 void __aelys_write(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stdout);
@@ -37,4 +39,13 @@ AELYS_NORETURN void __aelys_panic(const char *ptr, long long len) {
 
 AELYS_NORETURN void __aelys_exit(int code) {
     exit(code);
+}
+
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
+    long long ret = __aelys_user_main();
+    int code = (int)(ret & 0xFF);
+    return code;
 }

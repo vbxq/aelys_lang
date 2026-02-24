@@ -323,38 +323,53 @@ fn main() -> i64 {
 }
 
 #[test]
-fn entry_wrapper_maps_u8_main_exit_code() {
+fn llvm_rejects_main_with_parameters_for_native_entry() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
         &source_path,
         r#"
-fn main() -> u8 {
-    return 255 as u8
+fn main(x: i64) -> i64 {
+    return x
 }
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
-            return;
-        }
-        panic!("llvm backend compilation should succeed: {err}");
-    }
-
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
-    let exe_path = executable_path_for(&source_path);
-    let output = Command::new(&exe_path)
-        .output()
-        .expect("compiled executable should run");
-    assert_eq!(output.status.code().unwrap_or(-1), 255);
+    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect_err("llvm backend compilation should fail");
+    assert!(
+        err.contains(
+            "error[llvm-backend]: invalid native entry: main must have no parameters (found 1)"
+        ),
+        "{err}"
+    );
 }
 
 #[test]
-fn entry_wrapper_maps_negative_i64_main_exit_code() {
+fn llvm_rejects_main_returning_i32_for_native_entry() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i32 {
+    return 1
+}
+"#,
+    )
+    .expect("source should be written");
+    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect_err("llvm backend compilation should fail");
+    assert!(
+        err.contains(
+            "error[llvm-backend]: invalid native entry: main return type must be void or i64 (found i32)",
+        ),
+        "{err}"
+    );
+}
+
+#[test]
+fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -381,23 +396,18 @@ fn main() -> i64 {
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    let code = output.status.code().unwrap_or(-1);
-    if cfg!(windows) {
-        assert_eq!(code, -1);
-    } else {
-        assert_eq!(code, 255);
-    }
+    assert_eq!(output.status.code().unwrap_or(-1), 255);
 }
 
 #[test]
-fn entry_wrapper_non_integer_main_return_defaults_to_zero() {
+fn llvm_native_entry_returns_zero_for_void_main() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
         &source_path,
         r#"
-fn main() -> string {
-    return "ignored"
+fn main() -> void {
+    let x: i64 = 1
 }
 "#,
     )

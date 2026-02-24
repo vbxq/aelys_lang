@@ -9,8 +9,11 @@ use aelys_air::{
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::llvm_sys::LLVMCallConv;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
-use inkwell::values::{CallSiteValue, FunctionValue};
+use inkwell::values::FunctionValue;
 use std::collections::HashMap;
+
+const USER_MAIN_SYMBOL: &str = "__aelys_main";
+const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 
 impl CodegenContext {
     pub(crate) fn declare_functions(&self, program: &AirProgram) -> Result<(), CodegenError> {
@@ -91,13 +94,24 @@ impl CodegenContext {
         };
 
         if !user_main.params.is_empty() {
-            return Err(CodegenError::UnsupportedInstruction(
-                "main with parameters is not supported for LLVM native entry".to_string(),
-            ));
+            return Err(CodegenError::InvalidNativeEntry(format!(
+                "main must have no parameters (found {})",
+                user_main.params.len()
+            )));
         }
 
-        if self.module.get_function("main").is_some() {
-            return Ok(());
+        if !matches!(user_main.ret_ty, AirType::Void | AirType::I64) {
+            return Err(CodegenError::InvalidNativeEntry(format!(
+                "main return type must be void or i64 (found {})",
+                native_entry_type_name(&user_main.ret_ty)
+            )));
+        }
+
+        if self.module.get_function(NATIVE_ENTRY_SYMBOL).is_some() {
+            return Err(CodegenError::InvalidNativeEntry(format!(
+                "symbol '{}' is reserved by the native runtime",
+                NATIVE_ENTRY_SYMBOL
+            )));
         }
 
         let user_symbol = function_symbol_name(user_main);
@@ -106,8 +120,10 @@ impl CodegenContext {
             .get_function(&user_symbol)
             .ok_or_else(|| CodegenError::LlvmError(format!("missing function {}", user_symbol)))?;
 
-        let wrapper_ty = self.context.i32_type().fn_type(&[], false);
-        let wrapper = self.module.add_function("main", wrapper_ty, None);
+        let wrapper_ty = self.context.i64_type().fn_type(&[], false);
+        let wrapper = self
+            .module
+            .add_function(NATIVE_ENTRY_SYMBOL, wrapper_ty, None);
         wrapper.set_call_conventions(llvm_calling_convention(AirCallingConv::C));
 
         let builder = self.context.create_builder();
@@ -118,61 +134,25 @@ impl CodegenContext {
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         call.set_call_convention(user_fn.get_call_conventions());
 
-        let code = self.entry_return_code_from_user_main_call(&builder, call, &user_main.ret_ty)?;
+        let return_value = if matches!(user_main.ret_ty, AirType::Void) {
+            self.context.i64_type().const_zero()
+        } else {
+            call.try_as_basic_value()
+                .basic()
+                .ok_or_else(|| {
+                    CodegenError::LlvmError(format!(
+                        "function {} returned void for i64 native entry",
+                        user_symbol
+                    ))
+                })?
+                .into_int_value()
+        };
+
         builder
-            .build_return(Some(&code))
+            .build_return(Some(&return_value))
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
         Ok(())
-    }
-
-    fn entry_return_code_from_user_main_call(
-        &self,
-        builder: &inkwell::builder::Builder<'static>,
-        call: CallSiteValue<'static>,
-        ret_ty: &AirType,
-    ) -> Result<inkwell::values::IntValue<'static>, CodegenError> {
-        if matches!(ret_ty, AirType::Void) {
-            return Ok(self.context.i32_type().const_zero());
-        }
-
-        let is_signed = matches!(
-            ret_ty,
-            AirType::I8 | AirType::I16 | AirType::I32 | AirType::I64
-        );
-        let is_unsigned = matches!(
-            ret_ty,
-            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 | AirType::Bool
-        );
-        if !(is_signed || is_unsigned) {
-            return Ok(self.context.i32_type().const_zero());
-        }
-
-        let raw = call
-            .try_as_basic_value()
-            .basic()
-            .ok_or_else(|| CodegenError::LlvmError("__aelys_main returned void".to_string()))?
-            .into_int_value();
-
-        let width = raw.get_type().get_bit_width();
-        if width == 32 {
-            return Ok(raw);
-        }
-        if width < 32 {
-            return if is_signed {
-                builder
-                    .build_int_s_extend(raw, self.context.i32_type(), "main_exit_sext")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
-            } else {
-                builder
-                    .build_int_z_extend(raw, self.context.i32_type(), "main_exit_zext")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
-            };
-        }
-
-        builder
-            .build_int_truncate(raw, self.context.i32_type(), "main_exit_trunc")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
     }
 
     fn function_type(&self, function: &AirFunction) -> Result<FunctionType<'static>, CodegenError> {
@@ -241,8 +221,32 @@ pub(crate) fn llvm_calling_convention(conv: AirCallingConv) -> u32 {
 
 pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
     if !function.is_extern && function.name == "main" {
-        "__aelys_main".to_string()
+        USER_MAIN_SYMBOL.to_string()
     } else {
         function.name.clone()
+    }
+}
+
+fn native_entry_type_name(ty: &AirType) -> &'static str {
+    match ty {
+        AirType::I8 => "i8",
+        AirType::I16 => "i16",
+        AirType::I32 => "i32",
+        AirType::I64 => "i64",
+        AirType::U8 => "u8",
+        AirType::U16 => "u16",
+        AirType::U32 => "u32",
+        AirType::U64 => "u64",
+        AirType::F32 => "f32",
+        AirType::F64 => "f64",
+        AirType::Bool => "bool",
+        AirType::Str => "string",
+        AirType::Ptr(_) => "ptr",
+        AirType::Struct(_) => "struct",
+        AirType::Array(_, _) => "array",
+        AirType::Slice(_) => "slice",
+        AirType::FnPtr { .. } => "fn",
+        AirType::Param(_) => "param",
+        AirType::Void => "void",
     }
 }

@@ -21,6 +21,7 @@ pub enum LlvmBackendError {
     LlvmError(String),
     UnsupportedType(String),
     UnsupportedInstruction(String),
+    InvalidNativeEntry(String),
     UnsupportedAir {
         kind: &'static str,
         detail: String,
@@ -59,6 +60,9 @@ impl Display for LlvmBackendError {
             }
             Self::UnsupportedInstruction(message) => {
                 write!(f, "error[llvm-backend]: unsupported instruction: {message}")
+            }
+            Self::InvalidNativeEntry(message) => {
+                write!(f, "error[llvm-backend]: invalid native entry: {message}")
             }
             Self::UnsupportedAir {
                 kind,
