@@ -1,12 +1,16 @@
 use crate::modules::load_modules_with_loader;
+#[cfg(feature = "llvm-backend")]
+use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
+use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
 use aelys_runtime::{VM, VmConfig};
-use aelys_syntax::{Source, StmtKind};
+use aelys_syntax::{Source, Span as SyntaxSpan, StmtKind};
 use std::path::{Path, PathBuf};
 #[cfg(feature = "llvm-backend")]
 use std::process::Command;
+use std::sync::Arc;
 
 const BUILTIN_NAMES: &[&str] = &["alloc", "free", "load", "store", "type"];
 
@@ -76,9 +80,19 @@ pub fn compile_file_with_llvm(
     path: &Path,
     opt_level: OptimizationLevel,
     emit_llvm_ir: bool,
-) -> Result<(), String> {
-    let air = lower_file_to_air(path, opt_level)?;
-    compile_air_with_llvm(path, &air, emit_llvm_ir)
+) -> Result<(), AelysError> {
+    let source = load_source_for_diagnostics(path);
+    let air = lower_file_to_air(path, opt_level).map_err(|message| {
+        backend_diagnostic_error(
+            source.clone(),
+            fallback_source_span(source.as_ref()),
+            "llvm-backend",
+            message,
+            None,
+            None,
+        )
+    })?;
+    compile_air_with_llvm(path, &air, emit_llvm_ir, source)
 }
 
 #[cfg(feature = "llvm-backend")]
@@ -86,19 +100,22 @@ fn compile_air_with_llvm(
     path: &Path,
     air: &aelys_air::AirProgram,
     emit_llvm_ir: bool,
-) -> Result<(), String> {
+    source: Arc<Source>,
+) -> Result<(), AelysError> {
     let module_name = path
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("aelys_module");
     let mut codegen = aelys_codegen::CodegenContext::new(module_name);
 
-    codegen.compile(air).map_err(|err| err.to_string())?;
+    codegen
+        .compile(air)
+        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
     let object_path = object_path_for(path);
     let object_path_str = object_path.to_string_lossy().to_string();
     codegen
         .emit_object(&object_path_str)
-        .map_err(|err| err.to_string())?;
+        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     if emit_llvm_ir {
         let mut ir_path = PathBuf::from(path);
@@ -106,7 +123,7 @@ fn compile_air_with_llvm(
         let ir_path_str = ir_path.to_string_lossy().to_string();
         codegen
             .emit_ir(&ir_path_str)
-            .map_err(|err| err.to_string())?;
+            .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
     }
 
     let has_main_entry = air
@@ -114,12 +131,219 @@ fn compile_air_with_llvm(
         .iter()
         .any(|function| !function.is_extern && function.name == "main");
     if has_main_entry {
-        let core_lib = resolve_aelys_core_lib()?;
+        let anchor = program_anchor_span(air, source.as_ref());
+        let core_lib = resolve_aelys_core_lib().map_err(|message| {
+            backend_diagnostic_error(source.clone(), anchor, "llvm-linker", message, None, None)
+        })?;
         let exe_path = executable_path_for(path);
-        link_native_executable(&object_path, &exe_path, &core_lib)?;
+        link_native_executable(&object_path, &exe_path, &core_lib).map_err(|message| {
+            backend_diagnostic_error(source.clone(), anchor, "llvm-linker", message, None, None)
+        })?;
     }
 
     Ok(())
+}
+
+fn load_source_for_diagnostics(path: &Path) -> Arc<Source> {
+    let name = path.display().to_string();
+    match std::fs::read_to_string(path) {
+        Ok(content) => Source::new(name, content),
+        Err(_) => Source::new(name, ""),
+    }
+}
+
+fn backend_diagnostic_error(
+    source: Arc<Source>,
+    span: SyntaxSpan,
+    backend: &str,
+    message: impl Into<String>,
+    note: Option<String>,
+    help: Option<String>,
+) -> AelysError {
+    AelysError::Compile(CompileError::new(
+        CompileErrorKind::BackendDiagnostic {
+            backend: backend.to_string(),
+            message: message.into(),
+            note,
+            help,
+        },
+        span,
+        source,
+    ))
+}
+
+fn fallback_source_span(source: &Source) -> SyntaxSpan {
+    let end = if source.content.is_empty() { 0 } else { 1 };
+    SyntaxSpan::new(0, end, 1, 1)
+}
+
+fn program_anchor_span(air: &aelys_air::AirProgram, source: &Source) -> SyntaxSpan {
+    main_function_air_span(air)
+        .or_else(|| air.functions.iter().find_map(|function| function.span))
+        .map(|span| air_span_to_syntax_span(span, source))
+        .unwrap_or_else(|| fallback_source_span(source))
+}
+
+fn main_function_air_span(air: &aelys_air::AirProgram) -> Option<aelys_air::Span> {
+    air.functions
+        .iter()
+        .find(|function| !function.is_extern && function.name == "main")
+        .and_then(|function| function.span)
+}
+
+fn air_span_to_syntax_span(span: aelys_air::Span, source: &Source) -> SyntaxSpan {
+    let len = source.content.len();
+    let mut start = span.lo as usize;
+    let mut end = span.hi as usize;
+
+    if start > len {
+        start = len;
+    }
+    if end > len {
+        end = len;
+    }
+    if end < start {
+        end = start;
+    }
+    if end == start && start < len {
+        end += 1;
+    }
+
+    let (line, column) = line_col_for_offset(&source.content, start);
+    SyntaxSpan::new(start, end, line, column)
+}
+
+fn line_col_for_offset(content: &str, offset: usize) -> (u32, u32) {
+    let bytes = content.as_bytes();
+    let clamped = offset.min(bytes.len());
+    let mut line = 1u32;
+    let mut line_start = 0usize;
+
+    for (index, byte) in bytes.iter().enumerate().take(clamped) {
+        if *byte == b'\n' {
+            line = line.saturating_add(1);
+            line_start = index + 1;
+        }
+    }
+
+    let column = clamped.saturating_sub(line_start).saturating_add(1) as u32;
+    (line, column)
+}
+
+#[cfg(feature = "llvm-backend")]
+fn llvm_backend_error_to_diagnostic(
+    err: LlvmBackendError,
+    air: &aelys_air::AirProgram,
+    source: Arc<Source>,
+) -> AelysError {
+    let (message, note, help, location) = match err {
+        LlvmBackendError::LlvmError(message) => {
+            (format!("llvm error: {message}"), None, None, None)
+        }
+        LlvmBackendError::UnsupportedType(message) => {
+            (format!("unsupported type: {message}"), None, None, None)
+        }
+        LlvmBackendError::UnsupportedInstruction(message) => (
+            format!("unsupported instruction: {message}"),
+            None,
+            None,
+            None,
+        ),
+        LlvmBackendError::InvalidNativeEntry(message) => (
+            format!("invalid native entry: {message}"),
+            None,
+            native_entry_help(&message),
+            None,
+        ),
+        LlvmBackendError::UnsupportedAir {
+            kind,
+            detail,
+            location,
+        } => {
+            let mut note_parts = Vec::new();
+            if !detail.is_empty() {
+                note_parts.push(format!("reason: {detail}"));
+            }
+            if let Some(loc) = location.as_ref() {
+                note_parts.push(format!("location: {}", format_air_location(loc)));
+            }
+            let note = if note_parts.is_empty() {
+                None
+            } else {
+                Some(note_parts.join("; "))
+            };
+            (format!("unsupported AIR: {kind}"), note, None, location)
+        }
+    };
+
+    let span = location
+        .as_ref()
+        .and_then(|loc| air_location_span(air, loc))
+        .or_else(|| main_function_air_span(air))
+        .map(|span| air_span_to_syntax_span(span, source.as_ref()))
+        .unwrap_or_else(|| fallback_source_span(source.as_ref()));
+
+    backend_diagnostic_error(source, span, "llvm-backend", message, note, help)
+}
+
+#[cfg(feature = "llvm-backend")]
+fn air_location_span(
+    air: &aelys_air::AirProgram,
+    location: &AirNodeLocation,
+) -> Option<aelys_air::Span> {
+    let function = air
+        .functions
+        .iter()
+        .find(|function| function.name == location.function)?;
+
+    if let Some(block_id) = location.block {
+        let block = function
+            .blocks
+            .iter()
+            .find(|block| block.id.0 == block_id)?;
+        return match location.position {
+            AirNodePosition::Stmt(index) => block
+                .stmts
+                .get(index)
+                .and_then(|stmt| stmt.span)
+                .or(function.span),
+            AirNodePosition::Terminator => terminator_span(&block.terminator).or(function.span),
+        };
+    }
+
+    function.span
+}
+
+#[cfg(feature = "llvm-backend")]
+fn terminator_span(terminator: &aelys_air::AirTerminator) -> Option<aelys_air::Span> {
+    match terminator {
+        aelys_air::AirTerminator::Panic { span, .. } => *span,
+        _ => None,
+    }
+}
+
+#[cfg(feature = "llvm-backend")]
+fn format_air_location(location: &AirNodeLocation) -> String {
+    let mut rendered = format!("fn `{}`", location.function);
+    if let Some(block) = location.block {
+        rendered.push_str(&format!(", bb{block}"));
+    }
+    match location.position {
+        AirNodePosition::Stmt(index) => rendered.push_str(&format!(", stmt #{index}")),
+        AirNodePosition::Terminator => rendered.push_str(", terminator"),
+    }
+    rendered
+}
+
+#[cfg(feature = "llvm-backend")]
+fn native_entry_help(message: &str) -> Option<String> {
+    if message.contains("main must have no parameters") {
+        return Some("use `fn main()` or `fn main() -> i64`".to_string());
+    }
+    if message.contains("main return type must be void or i64") {
+        return Some("change `main` return type to `void` or `i64`".to_string());
+    }
+    None
 }
 
 #[cfg(feature = "llvm-backend")]
@@ -470,9 +694,20 @@ fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
 
 #[cfg(not(feature = "llvm-backend"))]
 fn compile_air_with_llvm(
-    _path: &Path,
+    path: &Path,
     _air: &aelys_air::AirProgram,
     _emit_llvm_ir: bool,
-) -> Result<(), String> {
-    Err("LLVM backend is not enabled in this build of aelys-driver!".to_string())
+    source: Arc<Source>,
+) -> Result<(), AelysError> {
+    Err(backend_diagnostic_error(
+        source.clone(),
+        fallback_source_span(source.as_ref()),
+        "llvm-backend",
+        format!(
+            "LLVM backend is not enabled in this build of aelys-driver! ({})",
+            path.display()
+        ),
+        None,
+        None,
+    ))
 }

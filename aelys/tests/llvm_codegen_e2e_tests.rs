@@ -206,7 +206,7 @@ fn main() -> i64 {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -239,7 +239,7 @@ fn main() -> i64 {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -270,7 +270,7 @@ fn main() -> i64 {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -305,7 +305,7 @@ fn main() -> i64 {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -337,11 +337,10 @@ fn main(x: i64) -> i64 {
     .expect("source should be written");
     let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
         .expect_err("llvm backend compilation should fail");
+    let rendered = err.to_string();
     assert!(
-        err.contains(
-            "error[llvm-backend]: invalid native entry: main must have no parameters (found 1)"
-        ),
-        "{err}"
+        rendered.contains("invalid native entry: main must have no parameters (found 1)"),
+        "{rendered}"
     );
 }
 
@@ -360,11 +359,10 @@ fn main() -> i32 {
     .expect("source should be written");
     let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
         .expect_err("llvm backend compilation should fail");
+    let rendered = err.to_string();
     assert!(
-        err.contains(
-            "error[llvm-backend]: invalid native entry: main return type must be void or i64 (found i32)",
-        ),
-        "{err}"
+        rendered.contains("invalid native entry: main return type must be void or i64 (found i32)"),
+        "{rendered}"
     );
 }
 
@@ -382,7 +380,7 @@ fn main() -> i64 {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -413,7 +411,7 @@ fn main() -> void {
     )
     .expect("source should be written");
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -465,7 +463,7 @@ fn main() -> i64 {
     .expect("main source should be written");
 
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err) {
+        if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");

@@ -23,6 +23,7 @@ impl CompileErrorKind {
             Self::NativeChecksumMismatch { .. } => "checksum mismatch",
             Self::NativeVersionMismatch { .. } => "version constraint not satisfied",
             Self::TypeInferenceError(_) => "type inference failed",
+            Self::BackendDiagnostic { .. } => "backend error",
             _ => "",
         }
     }

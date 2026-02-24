@@ -207,7 +207,8 @@ pub fn run_with_options(
             if output.is_some() {
                 return Err("--output is not supported with --backend llvm yet".to_string());
             }
-            compile_file_with_llvm(Path::new(path), opt_level, emit_llvm_ir)?;
+            compile_file_with_llvm(Path::new(path), opt_level, emit_llvm_ir)
+                .map_err(|err| err.to_string())?;
             if emit_llvm_ir {
                 let mut ir_path = PathBuf::from(path);
                 ir_path.set_extension("ll");

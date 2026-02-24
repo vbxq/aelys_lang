@@ -1,5 +1,3 @@
-// TODO: rewrite this entire thing and use our common module, this is temporary until we get rid of the VM
-
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
@@ -54,22 +52,18 @@ impl LlvmBackendError {
 impl Display for LlvmBackendError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::LlvmError(message) => write!(f, "error[llvm-backend]: llvm error: {message}"),
-            Self::UnsupportedType(message) => {
-                write!(f, "error[llvm-backend]: unsupported type: {message}")
-            }
+            Self::LlvmError(message) => write!(f, "llvm error: {message}"),
+            Self::UnsupportedType(message) => write!(f, "unsupported type: {message}"),
             Self::UnsupportedInstruction(message) => {
-                write!(f, "error[llvm-backend]: unsupported instruction: {message}")
+                write!(f, "unsupported instruction: {message}")
             }
-            Self::InvalidNativeEntry(message) => {
-                write!(f, "error[llvm-backend]: invalid native entry: {message}")
-            }
+            Self::InvalidNativeEntry(message) => write!(f, "invalid native entry: {message}"),
             Self::UnsupportedAir {
                 kind,
                 detail,
                 location,
             } => {
-                write!(f, "error[llvm-backend]: unsupported AIR: {kind}")?;
+                write!(f, "unsupported AIR: {kind}")?;
                 if !detail.is_empty() {
                     write!(f, " (reason: {detail})")?;
                 }

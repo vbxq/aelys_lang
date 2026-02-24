@@ -38,7 +38,7 @@ fn compile_source_expect_error(source: &str) -> String {
 
     match compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
         Ok(()) => panic!("expected llvm compilation to fail"),
-        Err(err) => err,
+        Err(err) => err.to_string(),
     }
 }
 

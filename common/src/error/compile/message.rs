@@ -116,6 +116,23 @@ impl CompileErrorKind {
                     modules.join(", ")
                 )
             }
+            Self::BackendDiagnostic {
+                backend,
+                message,
+                note,
+                help,
+            } => {
+                let mut rendered = format!("[{}] {}", backend, message);
+                if let Some(note) = note {
+                    rendered.push_str("\n   = note: ");
+                    rendered.push_str(note);
+                }
+                if let Some(help) = help {
+                    rendered.push_str("\n   = help: ");
+                    rendered.push_str(help);
+                }
+                rendered
+            }
         }
     }
 }

@@ -87,4 +87,10 @@ pub enum CompileErrorKind {
     },
 
     TypeInferenceError(String),
+    BackendDiagnostic {
+        backend: String,
+        message: String,
+        note: Option<String>,
+        help: Option<String>,
+    },
 }

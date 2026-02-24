@@ -31,7 +31,7 @@ pub fn run() -> i32 {
     }
 
     dispatch(parsed).unwrap_or_else(|err| {
-        eprintln!("Error: {}", err);
+        eprintln!("{}", err);
         1
     })
 }
