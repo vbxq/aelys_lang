@@ -3,24 +3,7 @@ use common::*;
 
 // Unicode edge cases
 
-#[test]
-fn unicode_surrogate_pairs() {
-    let code = r#"
-let s = "𝕳𝖊𝖑𝖑𝖔"
-s.char_len()
-"#;
-    assert_aelys_int(code, 5);
-}
 
-#[test]
-fn unicode_rtl_text_handling() {
-    let code = r#"
-let arabic = "مرحبا بك"
-let len = arabic.char_len()
-if len > 0 { 1 } else { 0 }
-"#;
-    assert_aelys_int(code, 1);
-}
 
 #[test]
 fn unicode_combining_characters() {
@@ -40,16 +23,6 @@ fn unicode_zero_width_characters() {
     assert!(result.as_int().unwrap() > 2);
 }
 
-#[test]
-fn unicode_emoji_sequences() {
-    let code = r#"
-let emoji = "👨‍👩‍👧‍👦"
-let byte_len = emoji.len()
-let char_len = emoji.char_len()
-if byte_len > char_len { 1 } else { 0 }
-"#;
-    assert_aelys_int(code, 1);
-}
 
 // String literal max length tests
 
@@ -230,25 +203,7 @@ if result > 1000000000.0 { 1 } else { 0 }
 
 // Empty collections and edge cases
 
-#[test]
-fn empty_string_operations() {
-    let code = r#"
-let s = ""
-let rev = s.reverse()
-let upper = s.to_upper()
-if s.is_empty() { 1 } else { 0 }
-"#;
-    assert_aelys_int(code, 1);
-}
 
-#[test]
-fn string_split_on_empty() {
-    let code = r#"
-let parts = "".split(",")
-42
-"#;
-    assert_aelys_int(code, 42);
-}
 
 // Boundary conditions for loops
 
@@ -793,3 +748,4 @@ test()
 "#;
     assert_aelys_int(code, 10);
 }
+

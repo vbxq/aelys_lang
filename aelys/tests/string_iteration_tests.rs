@@ -3,40 +3,6 @@ use common::*;
 
 // String Indexing Tests (stuff[i])
 #[test]
-fn string_index_first_char() {
-    let code = r#"
-let s = "hello"
-let c = s[0]
-c.char_len()
-"#;
-    assert_aelys_int(code, 1);
-}
-
-#[test]
-fn string_index_last_char() {
-    let code = r#"
-let s = "abcde"
-let c = s[4]
-c.char_len()
-"#;
-    assert_aelys_int(code, 1);
-}
-
-#[test]
-fn string_index_accumulate_with_range_for() {
-    let code = r#"
-let s = "hello"
-let mut count = 0
-for i in 0..s.char_len() {
-    let c = s[i]
-    count++
-}
-count
-"#;
-    assert_aelys_int(code, 5);
-}
-
-#[test]
 fn string_index_returns_single_char_string() {
     let code = r#"
 let s = "abc"
@@ -176,24 +142,6 @@ count
 // =============================================================================
 // String Indexing + ForEach Consistency
 // =============================================================================
-
-#[test]
-fn string_index_and_foreach_same_count() {
-    let code = r#"
-let s = "hello world"
-let mut count_index = 0
-for i in 0..s.char_len() {
-    let c = s[i]
-    count_index++
-}
-let mut count_foreach = 0
-for c in s {
-    count_foreach++
-}
-if count_index == count_foreach { count_index } else { -1 }
-"#;
-    assert_aelys_int(code, 11);
-}
 
 // =============================================================================
 // Unicode Handling

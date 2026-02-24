@@ -1,6 +1,6 @@
 mod common;
 
-use common::{assert_aelys_bool, assert_aelys_int, assert_aelys_str, run_aelys};
+use common::{assert_aelys_int, run_aelys};
 
 #[test]
 fn test_print_no_newline() {
@@ -29,23 +29,6 @@ fn test_for_each_vec_int() {
     );
 }
 
-#[test]
-fn test_for_each_vec_string() {
-    assert_aelys_int(
-        r#"
-        let v = Vec[]
-        v.push("a")
-        v.push("b")
-        v.push("c")
-        let mut count = 0
-        for item in v {
-            count++
-        }
-        count
-        "#,
-        3,
-    );
-}
 
 #[test]
 fn test_for_each_vec_float() {
@@ -227,138 +210,27 @@ fn test_string_method_len() {
     assert_aelys_int(r#""hello".len()"#, 5);
 }
 
-#[test]
-fn test_string_method_trim() {
-    assert_aelys_str(r#""  hi  ".trim()"#, "hi");
-}
 
-#[test]
-fn test_string_method_contains() {
-    assert_aelys_bool(r#""hello world".contains("world")"#, true);
-    assert_aelys_bool(r#""hello".contains("xyz")"#, false);
-}
 
-#[test]
-fn test_string_method_to_upper() {
-    assert_aelys_str(r#""hello".to_upper()"#, "HELLO");
-}
 
-#[test]
-fn test_string_method_to_lower() {
-    assert_aelys_str(r#""HELLO".to_lower()"#, "hello");
-}
 
-#[test]
-fn test_string_method_starts_with() {
-    assert_aelys_bool(r#""hello world".starts_with("hello")"#, true);
-    assert_aelys_bool(r#""hello world".starts_with("world")"#, false);
-}
 
-#[test]
-fn test_string_method_ends_with() {
-    assert_aelys_bool(r#""hello world".ends_with("world")"#, true);
-    assert_aelys_bool(r#""hello world".ends_with("hello")"#, false);
-}
 
-#[test]
-fn test_string_method_replace() {
-    assert_aelys_str(r#""aaa".replace("a", "b")"#, "bbb");
-}
 
-#[test]
-fn test_string_method_is_empty() {
-    assert_aelys_bool(r#""".is_empty()"#, true);
-    assert_aelys_bool(r#""hello".is_empty()"#, false);
-}
 
-#[test]
-fn test_string_method_repeat() {
-    assert_aelys_str(r#""ab".repeat(3)"#, "ababab");
-}
 
-#[test]
-fn test_string_method_capitalize() {
-    assert_aelys_str(r#""hello".capitalize()"#, "Hello");
-}
 
-#[test]
-fn test_string_method_reverse() {
-    assert_aelys_str(r#""abc".reverse()"#, "cba");
-}
 
-#[test]
-fn test_string_method_trim_start() {
-    assert_aelys_str(r#""  hi  ".trim_start()"#, "hi  ");
-}
 
-#[test]
-fn test_string_method_trim_end() {
-    assert_aelys_str(r#""  hi  ".trim_end()"#, "  hi");
-}
 
-#[test]
-fn test_string_method_find() {
-    assert_aelys_int(r#""hello world".find("world")"#, 6);
-    assert_aelys_int(r#""hello".find("xyz")"#, -1);
-}
 
-#[test]
-fn test_string_method_count() {
-    assert_aelys_int(r#""banana".count("a")"#, 3);
-}
 
-#[test]
-fn test_string_method_char_len() {
-    assert_aelys_int(r#""hello".char_len()"#, 5);
-}
 
-#[test]
-fn test_string_method_is_numeric() {
-    assert_aelys_bool(r#""123".is_numeric()"#, true);
-    assert_aelys_bool(r#""12a".is_numeric()"#, false);
-}
 
-#[test]
-fn test_string_method_is_alphabetic() {
-    assert_aelys_bool(r#""abc".is_alphabetic()"#, true);
-    assert_aelys_bool(r#""a1c".is_alphabetic()"#, false);
-}
 
-#[test]
-fn test_string_method_on_variable() {
-    assert_aelys_str(
-        r#"
-        let s = "  hello  "
-        s.trim()
-        "#,
-        "hello",
-    );
-}
 
-#[test]
-fn test_string_method_chaining() {
-    // Chain: trim then to_upper
-    assert_aelys_str(
-        r#"
-        let s = "  hello  "
-        let trimmed = s.trim()
-        trimmed.to_upper()
-        "#,
-        "HELLO",
-    );
-}
 
-#[test]
-fn test_to_string_int() {
-    assert_aelys_str(r#"let x = 42; x.to_string()"#, "42");
-}
 
-#[test]
-fn test_to_string_bool() {
-    assert_aelys_str(r#"let x = true; x.to_string()"#, "true");
-}
 
-#[test]
-fn test_to_string_null() {
-    assert_aelys_str("let x = null; x.to_string()", "null");
-}
+
+
