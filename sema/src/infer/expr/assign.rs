@@ -28,7 +28,7 @@ impl TypeInference {
                     name: name.to_string(),
                     value: Box::new(typed_value),
                 },
-                var_type,
+                InferType::Null,
             )
         } else {
             self.errors
@@ -38,7 +38,7 @@ impl TypeInference {
                     name: name.to_string(),
                     value: Box::new(typed_value),
                 },
-                InferType::Dynamic,
+                InferType::Null,
             )
         }
     }

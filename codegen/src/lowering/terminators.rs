@@ -8,6 +8,12 @@ impl<'a> FunctionCodegen<'a> {
     pub(crate) fn generate_terminator(&mut self, term: &AirTerminator) -> Result<(), CodegenError> {
         match term {
             AirTerminator::Return(Some(operand)) => {
+                if matches!(self.air_function.ret_ty, AirType::Void) {
+                    self.builder
+                        .build_return(None)
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    return Ok(());
+                }
                 let value = self.generate_operand(operand)?;
                 self.builder
                     .build_return(Some(&value))

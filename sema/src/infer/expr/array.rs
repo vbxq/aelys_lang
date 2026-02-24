@@ -161,15 +161,13 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-        let result_ty = typed_value.ty.clone();
-
         (
             TypedExprKind::IndexAssign {
                 object: Box::new(typed_object),
                 index: Box::new(typed_index),
                 value: Box::new(typed_value),
             },
-            result_ty,
+            InferType::Null,
         )
     }
 

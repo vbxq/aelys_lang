@@ -624,16 +624,16 @@ fn at(arr: Array<i64>, i: i64) -> i64 {
     );
 }
 
-/// Index read + write in the same function (swap pattern).
+/// Index read + write in a void function (swap pattern)
+/// Check if it does produces `ret void` instead of `ret ptr null`
 #[test]
 fn llvm_array_swap_pattern_compiles() {
     let ir = compile_to_verified_ir(
         r#"
-fn swap(arr: Array<i64>, i: i64, j: i64) -> i64 {
+fn swap(arr: Array<i64>, i: i64, j: i64) -> void {
     let tmp = arr[i]
     arr[i] = arr[j]
     arr[j] = tmp
-    return 0
 }
 "#,
     );
@@ -647,6 +647,11 @@ fn swap(arr: Array<i64>, i: i64, j: i64) -> i64 {
     assert!(
         store_count >= 2,
         "swap should generate at least 2 stores, got {store_count}:\n{ir}"
+    );
+    // Void function must emit ret void, not ret ptr null
+    assert!(
+        ir.contains("ret void"),
+        "void function with index assignment should emit ret void:\n{ir}"
     );
 }
 
@@ -691,5 +696,46 @@ fn sum_array(arr: Array<i64>, n: i64) -> i64 {
     assert!(
         ir.contains("icmp uge"),
         "loop body index should have bounds check:\n{ir}"
+    );
+}
+
+/// Void function with plain assignment as last expression produces ret void.
+#[test]
+fn llvm_void_function_with_assignment_produces_ret_void() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn set_it(x: i64) -> void {
+    let y: i64 = 0
+    y = x
+}
+"#,
+    );
+    assert!(
+        ir.contains("ret void"),
+        "void function with assignment should emit ret void:\n{ir}"
+    );
+    assert!(
+        !ir.contains("ret ptr null"),
+        "void function must not emit ret ptr null:\n{ir}"
+    );
+}
+
+/// Void function with index assignment as last expression produces ret void.
+#[test]
+fn llvm_void_function_with_index_assign_produces_ret_void() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn fill(arr: Array<i64>, i: i64, val: i64) -> void {
+    arr[i] = val
+}
+"#,
+    );
+    assert!(
+        ir.contains("ret void"),
+        "void function with index assign should emit ret void:\n{ir}"
+    );
+    assert!(
+        !ir.contains("ret ptr null"),
+        "void function must not emit ret ptr null:\n{ir}"
     );
 }
