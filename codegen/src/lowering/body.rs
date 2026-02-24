@@ -1,6 +1,8 @@
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
-use aelys_air::{AirFunction, AirProgram, AirType, BlockId, FunctionId, LocalId};
+use aelys_air::{
+    AirFunction, AirProgram, AirStmtKind, AirType, BlockId, FunctionId, LocalId, Place, Rvalue,
+};
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -40,12 +42,23 @@ impl<'a> FunctionCodegen<'a> {
         let mut alloca_locals = HashSet::new();
         for param in &air_function.params {
             local_types.insert(param.id, param.ty.clone());
-            alloca_locals.insert(param.id);
         }
         for local in &air_function.locals {
             local_types.insert(local.id, local.ty.clone());
-            if local.name.is_some() || local.is_mut {
+            if local.is_mut {
                 alloca_locals.insert(local.id);
+            }
+        }
+        for block in &air_function.blocks {
+            for stmt in &block.stmts {
+                if let AirStmtKind::Assign { place, rvalue } = &stmt.kind {
+                    if let Place::Field(local, _) = place {
+                        alloca_locals.insert(*local);
+                    }
+                    if let Rvalue::AddressOf(local) = rvalue {
+                        alloca_locals.insert(*local);
+                    }
+                }
             }
         }
 
@@ -90,7 +103,9 @@ impl<'a> FunctionCodegen<'a> {
 
         let params = self.air_function.params.clone();
         for param in params {
-            self.ensure_local_alloca(param.id, &param.ty)?;
+            if self.local_uses_alloca(param.id) {
+                self.ensure_local_alloca(param.id, &param.ty)?;
+            }
         }
 
         let locals = self.air_function.locals.clone();
@@ -112,8 +127,12 @@ impl<'a> FunctionCodegen<'a> {
                     index, self.air_function.name
                 ))
             })?;
-            let ptr = self.lookup_local_ptr(param.id)?;
-            self.store_value(ptr, value.into())?;
+            if self.local_uses_alloca(param.id) {
+                let ptr = self.lookup_local_ptr(param.id)?;
+                self.store_value(ptr, value.into())?;
+            } else {
+                self.value_map.insert(param.id, value);
+            }
         }
 
         Ok(())
