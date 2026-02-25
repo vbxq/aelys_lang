@@ -5,36 +5,52 @@
 <a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
 <a href="https://github.com/vbxq/aelys_lang/releases/latest"><img src="https://img.shields.io/github/v/release/vbxq/aelys_lang?color=8A2BE2" alt="Release"></a>
 
-# aelys 0.21.5-a
+# aelys
 
-Experimental language and compiler toolchain with dual memory management:
-GC by default, `@no_gc` for performance-critical code.
+**A programming language that treats you like an adult**
+```rust
+fn add(a, b) {
+    a + b  // dynamic, GC'd
+}
 
-> [!NOTE]
-> Welcome !
->
-> You are on the LLVM rewrite branch of Aelys.  
-> This branch is focused on a major backend rewrite and is expected to change quickly.
+@no_gc
+fn add(a: i8, b: i8) -> i8 {
+    return a + b  // zero-cost when you need it
+}
+```
+
+**Write like Python. Control like Rust. You choose your level**
+
+Simple syntax, GC by default, easy to learn. When you need C-level performance, add `@no_gc`, explicit types, manual memory.
+
+You decide how close to the metal you want to be, function by function.  
+Aelys scales from beginner-friendly scripts to zero-cost systems code. You control the abstraction level.
+
+---
+
+- Arena GC by default, swap allocators with `std.mem`
+- FFI that just works: `needs "gtk.h"`
+- LLVM backend
+- Metaprogramming planned for stable releases
 
 > [!WARNING]
->
-> The documentation is currently outdated.
-> Expect breaking changes in language features, compiler behavior, APIs, and project structure.
-> (Pre-alpha) Aelys is unstable and under active rewrite.
-
+> **Version 0.21.5-alpha**: LLVM backend rewrite in progress. Expect breaking changes. Docs may be outdated.
 
 ## Documentation
 
 - [Build Instructions](docs/installation.md)
-- [Getting Started Guide](docs/getting-started.md)
-- [Language Specification](docs/language-spec.md)
-- [Standard Library Documentation](docs/standard-library.md)
-
-## Additional Information
-
-- [Performance Benchmarks](docs/performance-benchmarks.md)
-- [Acknowledgements](ACKNOWLEDGEMENTS.md)
-- [Changelog](CHANGELOG.md)
+- [Getting Started](docs/getting-started.md)
+- [Language Spec](docs/language-spec.md)
+- [Standard Library](docs/standard-library.md)
 - [Examples](examples/README.md)
-- [License](LICENSE)
+
+## Additional Resources
+
+- [Benchmarks](docs/performance-benchmarks.md)
 - [FAQ](docs/faq.md)
+- [Changelog](CHANGELOG.md)
+- [License](LICENSE)
+
+---
+
+**Pre-alpha. Active rewrite. Use at your own risk.**
