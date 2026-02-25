@@ -30,6 +30,18 @@ impl<'a> FunctionCodegen<'a> {
             );
         }
 
+        let left_ty = self.operand_type(left)?;
+        if matches!(left_ty, AirType::Str) {
+            let right_ty = self.operand_type(right)?;
+            if matches!(right_ty, AirType::Str) {
+                return self.generate_string_binary_op(
+                    op.clone(),
+                    left_val.into_struct_value(),
+                    right_val.into_struct_value(),
+                );
+            }
+        }
+
         Err(CodegenError::UnsupportedInstruction(
             "binary op with non int/float operands".to_string(),
         ))
@@ -231,5 +243,45 @@ impl<'a> FunctionCodegen<'a> {
         Err(CodegenError::UnsupportedInstruction(
             "unsupported unary op".to_string(),
         ))
+    }
+
+    fn generate_string_binary_op(
+        &mut self,
+        op: BinOp,
+        left: inkwell::values::StructValue<'static>,
+        right: inkwell::values::StructValue<'static>,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        match op {
+            BinOp::Eq => {
+                let str_eq_fn = self.ensure_str_eq_function();
+                let result = self
+                    .builder
+                    .build_call(str_eq_fn, &[left.into(), right.into()], "str_eq")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                result
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("str_eq returned void".to_string()))
+            }
+            BinOp::Ne => {
+                let str_eq_fn = self.ensure_str_eq_function();
+                let eq_result = self
+                    .builder
+                    .build_call(str_eq_fn, &[left.into(), right.into()], "str_eq")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let eq_val = eq_result
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("str_eq returned void".to_string()))?
+                    .into_int_value();
+                self.builder
+                    .build_not(eq_val, "str_ne")
+                    .map(Into::into)
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            }
+            _ => Err(CodegenError::UnsupportedInstruction(
+                "unsupported string binary op (only == and != are supported)".to_string()
+            )),
+        }
     }
 }
