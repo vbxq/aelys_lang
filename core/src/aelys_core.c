@@ -122,6 +122,77 @@ AELYS_NORETURN void __aelys_exit(int code) {
     exit(code);
 }
 
+/////////////////////////////////////////////////////
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_i64(long long value) {
+    char *buffer = (char *)malloc(21);
+    if (!buffer) {
+        __aelys_panic("malloc failed in to_string_i64", 31);
+    }
+
+    int len = snprintf(buffer, 21, "%lld", value);
+    if (len < 0) {
+        free(buffer);
+        __aelys_panic("snprintf failed in to_string_i64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_f64(double value) {
+    /* allocate enough space for any double representation */
+    char *buffer = (char *)malloc(64);
+    if (!buffer) {
+        __aelys_panic("malloc failed in to_string_f64", 31);
+    }
+
+    int len = snprintf(buffer, 64, "%.17g", value);
+    if (len < 0) {
+        free(buffer);
+        __aelys_panic("snprintf failed in to_string_f64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_bool(long long value) {
+    if (value) {
+        AelysString result;
+        result.ptr = "true";
+        result.len = 4;
+        return result;
+    } else {
+        AelysString result;
+        result.ptr = "false";
+        result.len = 5;
+        return result;
+    }
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+long long __aelys_str_eq(AelysString a, AelysString b) {
+    /* different lengths means not equal */
+    if (a.len != b.len) {
+        return 0;
+    }
+
+    /* compare bytes */
+    if (a.len == 0) {
+        return 1; /* empty strings are equal */
+    }
+
+    return (memcmp(a.ptr, b.ptr, (size_t)a.len) == 0) ? 1 : 0;
+}
+
 int main(int argc, char **argv) {
     (void)argc;
     (void)argv;
