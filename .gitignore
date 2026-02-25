@@ -4,4 +4,7 @@ Cargo.lock
 /aelys/target/
 \target
 .idea/
-AELYS_TECHNICAL_REFERENCE.md
+architecture.md
+backend_status.md
+aelys/tests/exploration/*
+*.ps1
