@@ -74,6 +74,51 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_str_char_at", fn_ty, None)
     }
 
+    /// `__aelys_to_string_i64(i64) -> str` (BOOTSTRAP)
+    pub(crate) fn ensure_to_string_i64_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_to_string_i64") {
+            return function;
+        }
+
+        let string_ty = aelys_string_type(self.context);
+        let fn_ty = string_ty.fn_type(&[self.context.i64_type().into()], false);
+        self.module.add_function("__aelys_to_string_i64", fn_ty, None)
+    }
+
+    /// `__aelys_to_string_f64(f64) -> str` (BOOTSTRAP)
+    pub(crate) fn ensure_to_string_f64_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_to_string_f64") {
+            return function;
+        }
+
+        let string_ty = aelys_string_type(self.context);
+        let fn_ty = string_ty.fn_type(&[self.context.f64_type().into()], false);
+        self.module.add_function("__aelys_to_string_f64", fn_ty, None)
+    }
+
+    /// `__aelys_to_string_bool(i64) -> str` (BOOTSTRAP)
+    /// Note: bool is passed as i64 (0 or 1)
+    pub(crate) fn ensure_to_string_bool_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_to_string_bool") {
+            return function;
+        }
+
+        let string_ty = aelys_string_type(self.context);
+        let fn_ty = string_ty.fn_type(&[self.context.i64_type().into()], false);
+        self.module.add_function("__aelys_to_string_bool", fn_ty, None)
+    }
+
+    /// `__aelys_str_eq(str, str) -> i1` (BOOTSTRAP)
+    pub(crate) fn ensure_str_eq_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_eq") {
+            return function;
+        }
+
+        let string_ty = aelys_string_type(self.context);
+        let fn_ty = self.context.bool_type().fn_type(&[string_ty.into(), string_ty.into()], false);
+        self.module.add_function("__aelys_str_eq", fn_ty, None)
+    }
+
     pub(crate) fn global_string_ptr_len(
         &mut self,
         text: &str,
