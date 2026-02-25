@@ -8,3 +8,5 @@ architecture.md
 backend_status.md
 aelys/tests/exploration/*
 *.ps1
+**/*.obj
+**/*.exe
