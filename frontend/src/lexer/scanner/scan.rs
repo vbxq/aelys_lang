@@ -113,9 +113,7 @@ impl Lexer {
                 if self.match_char('=') {
                     self.add_token(TokenKind::BangEq);
                 } else {
-                    return Err(AelysError::Compile(
-                        self.error(CompileErrorKind::InvalidCharacter(c)),
-                    ));
+                    self.add_token(TokenKind::Not);
                 }
             }
 
