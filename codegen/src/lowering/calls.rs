@@ -131,27 +131,113 @@ impl<'a> FunctionCodegen<'a> {
             ));
         }
 
-        // bootstrap: move to stdlib when ready
-        let (ptr, len) = match (&args[0], arg_values[0]) {
-            (Operand::Const(AirConst::Str(text)), _) => {
-                let (ptr, len) = self.global_string_ptr_len(text)?;
-                (ptr, self.context.i64_type().const_int(len, false))
-            }
-            (_, value) if value.is_struct_value() => {
-                let struct_value = value.into_struct_value();
-                if struct_value.get_type() != aelys_string_type(self.context) {
+        let arg_type = self.operand_type(&args[0])?;
+        let value = arg_values[0];
+
+        // TODO BOOTSTRAP: auto-convert primitive types to string
+        let string_value = match arg_type {
+            AirType::I64 | AirType::I32 | AirType::I16 | AirType::I8 => {
+                let to_string_fn = self.ensure_to_string_i64_function();
+                let int_val = if value.is_int_value() {
+                    value.into_int_value()
+                } else {
                     return Err(CodegenError::UnsupportedType(
-                        "print/println currently expects a string argument".to_string(),
+                        "expected int value for i64/i32 argument".to_string(),
                     ));
+                };
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
+                } else {
+                    self.builder
+                        .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                self.builder
+                    .build_call(to_string_fn, &[i64_val.into()], "to_str")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("to_string_i64 returned void".to_string()))?
+            }
+            AirType::F64 | AirType::F32 => {
+                let to_string_fn = self.ensure_to_string_f64_function();
+                let float_val = if value.is_float_value() {
+                    value.into_float_value()
+                } else {
+                    return Err(CodegenError::UnsupportedType(
+                        "expected float value for f64/f32 argument".to_string(),
+                    ));
+                };
+                let f64_val = if float_val.get_type() == self.context.f64_type() {
+                    float_val
+                } else {
+                    self.builder
+                        .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                self.builder
+                    .build_call(to_string_fn, &[f64_val.into()], "to_str")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("to_string_f64 returned void".to_string()))?
+            }
+            AirType::Bool => {
+                let to_string_fn = self.ensure_to_string_bool_function();
+                let bool_val = if value.is_int_value() {
+                    value.into_int_value()
+                } else {
+                    return Err(CodegenError::UnsupportedType(
+                        "expected int value for bool argument".to_string(),
+                    ));
+                };
+                let i64_val = self
+                    .builder
+                    .build_int_z_extend(bool_val, self.context.i64_type(), "bool_to_i64")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.builder
+                    .build_call(to_string_fn, &[i64_val.into()], "to_str")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError("to_string_bool returned void".to_string()))?
+            }
+            AirType::Str => {
+                // Already a string, use directly
+                match &args[0] {
+                    Operand::Const(AirConst::Str(text)) => {
+                        self.global_string_value(text)?
+                    }
+                    _ if value.is_struct_value() => {
+                        let struct_val = value.into_struct_value();
+                        if struct_val.get_type() != aelys_string_type(self.context) {
+                            return Err(CodegenError::UnsupportedType(
+                                "expected string struct value".to_string(),
+                            ));
+                        }
+                        value
+                    }
+                    _ => {
+                        return Err(CodegenError::UnsupportedType(
+                            "expected string value".to_string(),
+                        ));
+                    }
                 }
-                let (ptr, len) = self.string_parts_from_value(struct_value)?;
-                (ptr, len)
             }
             _ => {
-                return Err(CodegenError::UnsupportedType(
-                    "print/println currently expects a string argument".to_string(),
-                ));
+                return Err(CodegenError::UnsupportedType(format!(
+                    "print/println does not support type {:?}",
+                    arg_type
+                )));
             }
+        };
+
+        let (ptr, len) = if string_value.is_struct_value() {
+            self.string_parts_from_value(string_value.into_struct_value())?
+        } else {
+            return Err(CodegenError::LlvmError(
+                "to_string did not return struct".to_string(),
+            ));
         };
 
         let write_fn = self.ensure_write_function();
