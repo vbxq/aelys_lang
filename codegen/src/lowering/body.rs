@@ -31,6 +31,15 @@ pub(crate) struct FunctionCodegen<'a> {
 }
 
 impl<'a> FunctionCodegen<'a> {
+    /// Check if the LLVM target triple indicates Windows (requires sret for large struct returns)
+    pub(crate) fn target_is_windows(&self) -> bool {
+        self.module
+            .get_triple()
+            .as_str()
+            .to_str()
+            .map_or(false, |t| t.contains("windows"))
+    }
+
     pub(crate) fn new(
         context: &'static Context,
         module: &'a Module<'static>,

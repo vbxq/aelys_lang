@@ -1,4 +1,4 @@
-use crate::CodegenError;
+﻿use crate::CodegenError;
 use aelys_air::AirProgram;
 use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
@@ -20,6 +20,12 @@ impl CodegenContext {
         let context = Box::leak(Box::new(Context::create()));
         let module = context.create_module(module_name);
         let builder = context.create_builder();
+
+        // set target triple immediately so ABI decisions (e.g., sret) are correct
+        Target::initialize_native(&InitializationConfig::default()).ok();
+        let triple = TargetMachine::get_default_triple();
+        module.set_triple(&triple);
+
         Self {
             context,
             module,

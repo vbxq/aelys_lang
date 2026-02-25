@@ -5,6 +5,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 ## 0.21.x - LLVM backend implementation
 
 **0.21.5-a**
+- LLVM codegen: Windows x64 MSVC sret ABI fix for struct returns (fixes bootstrap println segfault)
 - string comparison (==, !=), logical not (!), println` accepts i64/f64/bool (bootstrap to_string)
 
 **0.21.4-a**

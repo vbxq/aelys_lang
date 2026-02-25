@@ -152,12 +152,28 @@ impl<'a> FunctionCodegen<'a> {
                         .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
-                self.builder
-                    .build_call(to_string_fn, &[i64_val.into()], "to_str")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .try_as_basic_value()
-                    .basic()
-                    .ok_or_else(|| CodegenError::LlvmError("to_string_i64 returned void".to_string()))?
+
+                // Windows x64 MSVC uses sret for struct returns
+                if self.target_is_windows() {
+                    let string_ty = aelys_string_type(self.context);
+                    let result_ptr = self
+                        .builder
+                        .build_alloca(string_ty, "sret_slot")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_call(to_string_fn, &[result_ptr.into(), i64_val.into()], "")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_load(string_ty, result_ptr, "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                } else {
+                    self.builder
+                        .build_call(to_string_fn, &[i64_val.into()], "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                        .try_as_basic_value()
+                        .basic()
+                        .ok_or_else(|| CodegenError::LlvmError("to_string_i64 returned void".to_string()))?
+                }
             }
             AirType::F64 | AirType::F32 => {
                 let to_string_fn = self.ensure_to_string_f64_function();
@@ -175,12 +191,28 @@ impl<'a> FunctionCodegen<'a> {
                         .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
-                self.builder
-                    .build_call(to_string_fn, &[f64_val.into()], "to_str")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .try_as_basic_value()
-                    .basic()
-                    .ok_or_else(|| CodegenError::LlvmError("to_string_f64 returned void".to_string()))?
+
+                // Windows x64 MSVC uses sret for struct returns
+                if self.target_is_windows() {
+                    let string_ty = aelys_string_type(self.context);
+                    let result_ptr = self
+                        .builder
+                        .build_alloca(string_ty, "sret_slot")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_call(to_string_fn, &[result_ptr.into(), f64_val.into()], "")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_load(string_ty, result_ptr, "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                } else {
+                    self.builder
+                        .build_call(to_string_fn, &[f64_val.into()], "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                        .try_as_basic_value()
+                        .basic()
+                        .ok_or_else(|| CodegenError::LlvmError("to_string_f64 returned void".to_string()))?
+                }
             }
             AirType::Bool => {
                 let to_string_fn = self.ensure_to_string_bool_function();
@@ -195,12 +227,28 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_int_z_extend(bool_val, self.context.i64_type(), "bool_to_i64")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                self.builder
-                    .build_call(to_string_fn, &[i64_val.into()], "to_str")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                    .try_as_basic_value()
-                    .basic()
-                    .ok_or_else(|| CodegenError::LlvmError("to_string_bool returned void".to_string()))?
+
+                // Windows x64 MSVC uses sret for struct returns
+                if self.target_is_windows() {
+                    let string_ty = aelys_string_type(self.context);
+                    let result_ptr = self
+                        .builder
+                        .build_alloca(string_ty, "sret_slot")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_call(to_string_fn, &[result_ptr.into(), i64_val.into()], "")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_load(string_ty, result_ptr, "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                } else {
+                    self.builder
+                        .build_call(to_string_fn, &[i64_val.into()], "to_str")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                        .try_as_basic_value()
+                        .basic()
+                        .ok_or_else(|| CodegenError::LlvmError("to_string_bool returned void".to_string()))?
+                }
             }
             AirType::Str => {
                 // Already a string, use directly

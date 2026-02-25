@@ -10,3 +10,5 @@ aelys/tests/exploration/*
 *.ps1
 **/*.obj
 **/*.exe
+main.aelys
+main.ll

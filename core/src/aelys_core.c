@@ -24,6 +24,7 @@ AELYS_NORETURN void __aelys_panic(const char *ptr, long long len);
 
 void __aelys_write(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stdout);
+    fflush(stdout);
 }
 
 void __aelys_write_err(const char *ptr, long long len) {

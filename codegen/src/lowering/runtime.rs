@@ -64,48 +64,157 @@ impl<'a> FunctionCodegen<'a> {
     /// `__aelys_str_char_at(str, i64) -> str`
     /// UTF-8 character indexing: returns the i-th Unicode codepoint as a
     /// single-character string. Panics internally on OOB.
+    /// On Windows x64 MSVC: `void __aelys_str_char_at(ptr sret(str), str, i64)`
     pub(crate) fn ensure_str_char_at_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_str_char_at") {
             return function;
         }
 
         let string_ty = aelys_string_type(self.context);
-        let fn_ty = string_ty.fn_type(&[string_ty.into(), self.context.i64_type().into()], false);
-        self.module.add_function("__aelys_str_char_at", fn_ty, None)
+        let use_sret = self.target_is_windows();
+
+        let fn_ty = if use_sret {
+            // Windows: void(ptr sret, str, i64)
+            self.context.void_type().fn_type(
+                &[
+                    self.context.ptr_type(AddressSpace::default()).into(),
+                    string_ty.into(),
+                    self.context.i64_type().into(),
+                ],
+                false,
+            )
+        } else {
+            // Non-Windows: str(str, i64)
+            string_ty.fn_type(&[string_ty.into(), self.context.i64_type().into()], false)
+        };
+
+        let function = self.module.add_function("__aelys_str_char_at", fn_ty, None);
+
+        if use_sret {
+            use inkwell::attributes::AttributeLoc;
+            let sret_attr = self.context.create_type_attribute(
+                inkwell::attributes::Attribute::get_named_enum_kind_id("sret"),
+                string_ty.into(),
+            );
+            function.add_attribute(AttributeLoc::Param(0), sret_attr);
+        }
+
+        function
     }
 
     /// `__aelys_to_string_i64(i64) -> str` (BOOTSTRAP)
+    /// On Windows x64 MSVC: `void __aelys_to_string_i64(ptr sret(str), i64)`
     pub(crate) fn ensure_to_string_i64_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_to_string_i64") {
             return function;
         }
 
         let string_ty = aelys_string_type(self.context);
-        let fn_ty = string_ty.fn_type(&[self.context.i64_type().into()], false);
-        self.module.add_function("__aelys_to_string_i64", fn_ty, None)
+        let use_sret = self.target_is_windows();
+
+        let fn_ty = if use_sret {
+            // Windows: void(ptr sret, i64)
+            self.context.void_type().fn_type(
+                &[
+                    self.context.ptr_type(AddressSpace::default()).into(),
+                    self.context.i64_type().into(),
+                ],
+                false,
+            )
+        } else {
+            // Non-Windows: str(i64)
+            string_ty.fn_type(&[self.context.i64_type().into()], false)
+        };
+
+        let function = self.module.add_function("__aelys_to_string_i64", fn_ty, None);
+
+        if use_sret {
+            use inkwell::attributes::AttributeLoc;
+            let sret_attr = self.context.create_type_attribute(
+                inkwell::attributes::Attribute::get_named_enum_kind_id("sret"),
+                string_ty.into(),
+            );
+            function.add_attribute(AttributeLoc::Param(0), sret_attr);
+        }
+
+        function
     }
 
     /// `__aelys_to_string_f64(f64) -> str` (BOOTSTRAP)
+    /// On Windows x64 MSVC: `void __aelys_to_string_f64(ptr sret(str), f64)`
     pub(crate) fn ensure_to_string_f64_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_to_string_f64") {
             return function;
         }
 
         let string_ty = aelys_string_type(self.context);
-        let fn_ty = string_ty.fn_type(&[self.context.f64_type().into()], false);
-        self.module.add_function("__aelys_to_string_f64", fn_ty, None)
+        let use_sret = self.target_is_windows();
+
+        let fn_ty = if use_sret {
+            // Windows: void(ptr sret, f64)
+            self.context.void_type().fn_type(
+                &[
+                    self.context.ptr_type(AddressSpace::default()).into(),
+                    self.context.f64_type().into(),
+                ],
+                false,
+            )
+        } else {
+            // Non-Windows: str(f64)
+            string_ty.fn_type(&[self.context.f64_type().into()], false)
+        };
+
+        let function = self.module.add_function("__aelys_to_string_f64", fn_ty, None);
+
+        if use_sret {
+            use inkwell::attributes::AttributeLoc;
+            let sret_attr = self.context.create_type_attribute(
+                inkwell::attributes::Attribute::get_named_enum_kind_id("sret"),
+                string_ty.into(),
+            );
+            function.add_attribute(AttributeLoc::Param(0), sret_attr);
+        }
+
+        function
     }
 
     /// `__aelys_to_string_bool(i64) -> str` (BOOTSTRAP)
     /// Note: bool is passed as i64 (0 or 1)
+    /// On Windows x64 MSVC: `void __aelys_to_string_bool(ptr sret(str), i64)`
     pub(crate) fn ensure_to_string_bool_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_to_string_bool") {
             return function;
         }
 
         let string_ty = aelys_string_type(self.context);
-        let fn_ty = string_ty.fn_type(&[self.context.i64_type().into()], false);
-        self.module.add_function("__aelys_to_string_bool", fn_ty, None)
+        let use_sret = self.target_is_windows();
+
+        let fn_ty = if use_sret {
+            // Windows: void(ptr sret, i64)
+            self.context.void_type().fn_type(
+                &[
+                    self.context.ptr_type(AddressSpace::default()).into(),
+                    self.context.i64_type().into(),
+                ],
+                false,
+            )
+        } else {
+            // Non-Windows: str(i64)
+            string_ty.fn_type(&[self.context.i64_type().into()], false)
+        };
+
+        let function = self.module.add_function("__aelys_to_string_bool", fn_ty, None);
+
+        if use_sret {
+            use inkwell::attributes::AttributeLoc;
+            let sret_attr = self.context.create_type_attribute(
+                inkwell::attributes::Attribute::get_named_enum_kind_id("sret"),
+                string_ty.into(),
+            );
+            function.add_attribute(AttributeLoc::Param(0), sret_attr);
+        }
+
+        function
     }
 
     /// `__aelys_str_eq(str, str) -> i1` (BOOTSTRAP)
@@ -133,7 +242,7 @@ impl<'a> FunctionCodegen<'a> {
             .ok_or_else(|| {
                 CodegenError::UnsupportedInstruction("string literal too large".to_string())
             })?;
-
+        
         let global_ptr = if let Some(existing) = self.string_globals.get(text).copied() {
             existing
         } else {

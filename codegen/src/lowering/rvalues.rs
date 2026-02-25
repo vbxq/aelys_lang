@@ -103,13 +103,33 @@ impl<'a> FunctionCodegen<'a> {
                 // finding the n-th codepoint requires scanning byte boundaries.
                 let str_val = self.generate_operand(base)?;
                 let char_at_fn = self.ensure_str_char_at_function();
-                let result = self
-                    .builder
-                    .build_call(char_at_fn, &[str_val.into(), idx_val.into()], "str_char_at")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                result.try_as_basic_value().basic().ok_or_else(|| {
-                    CodegenError::LlvmError("__aelys_str_char_at returned void".to_string())
-                })
+
+                // Windows x64 MSVC uses sret for struct returns
+                if self.target_is_windows() {
+                    let string_ty = crate::types::aelys_string_type(self.context);
+                    let result_ptr = self
+                        .builder
+                        .build_alloca(string_ty, "sret_slot")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_call(
+                            char_at_fn,
+                            &[result_ptr.into(), str_val.into(), idx_val.into()],
+                            "",
+                        )
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.builder
+                        .build_load(string_ty, result_ptr, "str_char_at")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))
+                } else {
+                    let result = self
+                        .builder
+                        .build_call(char_at_fn, &[str_val.into(), idx_val.into()], "str_char_at")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    result.try_as_basic_value().basic().ok_or_else(|| {
+                        CodegenError::LlvmError("__aelys_str_char_at returned void".to_string())
+                    })
+                }
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",
