@@ -1,10 +1,7 @@
-// pipeline orchestration - chains lexer->parser->sema->opt->codegen->vm
+// pipeline orchestration - chains lexer->parser->sema->opt->codegen
 
-mod cache;
-mod compile;
 #[allow(clippy::module_inception)]
 mod pipeline;
-mod run;
 mod standard;
 mod types;
 
@@ -12,7 +9,7 @@ pub mod stages;
 
 pub use pipeline::Pipeline;
 pub use stages::{
-    CompilerStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage, VMStage,
+    CompilerStage, LexerStage, OptimizationStage, ParserStage, TypeInferenceStage,
 };
 pub use standard::{
     compilation_pipeline, compilation_pipeline_with_modules, compilation_pipeline_with_opt,

@@ -1,11 +1,7 @@
 pub mod args;
-pub mod vm_config;
 
 pub mod commands {
-    pub mod asm;
     pub mod compile;
-    pub mod repl;
-    pub mod run;
 }
 
 use aelys_common::WarningConfig;
@@ -57,46 +53,18 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
         args::Command::Help => Ok(0),
         args::Command::Version => Ok(0),
 
-        args::Command::Run { path, program_args } => commands::run::run_with_options(
-            &path,
-            program_args,
-            parsed.vm_args,
-            parsed.opt_level,
-            warn_config,
-        ),
-
         args::Command::Compile {
             path,
             output,
             emit_air,
-            backend,
             emit_llvm_ir,
-        } => {
-            if !parsed.vm_args.is_empty() {
-                return Err("vm flags are only supported for run or repl".to_string());
-            }
-            commands::compile::run_with_options(
-                &path,
-                output,
-                parsed.opt_level,
-                warn_config,
-                backend,
-                emit_air,
-                emit_llvm_ir,
-            )
-        }
-
-        args::Command::Asm {
-            path,
+        } => commands::compile::run_with_options(
+            &path,
             output,
-            stdout,
-        } => {
-            commands::asm::run_with_options(&path, output, stdout, parsed.opt_level, parsed.vm_args)
-        }
-
-        args::Command::Repl => {
-            let repl_opt = aelys_opt::OptimizationLevel::Basic;
-            commands::repl::run_with_options(repl_opt, parsed.vm_args)
-        }
+            parsed.opt_level,
+            warn_config,
+            emit_air,
+            emit_llvm_ir,
+        ),
     }
 }

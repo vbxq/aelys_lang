@@ -1,18 +1,14 @@
-use crate::modules::load_modules_with_loader;
-#[cfg(feature = "llvm-backend")]
+
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
-use aelys_runtime::{VM, VmConfig};
-use aelys_syntax::{Source, Span as SyntaxSpan, StmtKind};
+use aelys_syntax::{Source, Span as SyntaxSpan};
 use std::path::{Path, PathBuf};
-#[cfg(feature = "llvm-backend")]
+
 use std::process::Command;
 use std::sync::Arc;
-
-const BUILTIN_NAMES: &[&str] = &["alloc", "free", "load", "store", "type"];
 
 pub fn lower_file_to_air(
     path: &Path,
@@ -31,39 +27,14 @@ pub fn lower_file_to_air(
         .parse()
         .map_err(|err| err.to_string())?;
 
-    let mut vm = VM::with_config_and_args(src.clone(), VmConfig::default(), Vec::new())
-        .map_err(|err| err.to_string())?;
-    if let Ok(abs_path) = path.canonicalize() {
-        vm.set_script_path(abs_path.display().to_string());
-    } else {
-        vm.set_script_path(path.display().to_string());
-    }
-
-    let (imports, _) = load_modules_with_loader(&stmts, path, src.clone(), &mut vm)
-        .map_err(|err| err.to_string())?;
-
-    let main_stmts: Vec<_> = stmts
-        .into_iter()
-        .filter(|stmt| !matches!(stmt.kind, StmtKind::Needs(_)))
-        .collect();
-
-    let mut all_known_globals = imports.known_globals.clone();
-    for builtin in BUILTIN_NAMES {
-        all_known_globals.insert(builtin.to_string());
-    }
-
-    let typed_program = aelys_sema::TypeInference::infer_program_with_imports(
-        main_stmts,
-        src,
-        imports.module_aliases,
-        all_known_globals,
-    )
-    .map_err(|errors| {
-        errors
-            .first()
-            .map(|e| e.to_string())
-            .unwrap_or_else(|| "Unknown type error".to_string())
-    })?;
+    // Single-file compilation only (no module system)
+    let typed_program = aelys_sema::TypeInference::infer_program(stmts, src)
+        .map_err(|errors| {
+            errors
+                .first()
+                .map(|e| e.to_string())
+                .unwrap_or_else(|| "Unknown type error".to_string())
+        })?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
@@ -95,7 +66,7 @@ pub fn compile_file_with_llvm(
     compile_air_with_llvm(path, &air, emit_llvm_ir, source)
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn compile_air_with_llvm(
     path: &Path,
     air: &aelys_air::AirProgram,
@@ -230,7 +201,7 @@ fn line_col_for_offset(content: &str, offset: usize) -> (u32, u32) {
     (line, column)
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn llvm_backend_error_to_diagnostic(
     err: LlvmBackendError,
     air: &aelys_air::AirProgram,
@@ -286,7 +257,7 @@ fn llvm_backend_error_to_diagnostic(
     backend_diagnostic_error(source, span, "llvm-backend", message, note, help)
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn air_location_span(
     air: &aelys_air::AirProgram,
     location: &AirNodeLocation,
@@ -314,7 +285,7 @@ fn air_location_span(
     function.span
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn terminator_span(terminator: &aelys_air::AirTerminator) -> Option<aelys_air::Span> {
     match terminator {
         aelys_air::AirTerminator::Panic { span, .. } => *span,
@@ -322,7 +293,7 @@ fn terminator_span(terminator: &aelys_air::AirTerminator) -> Option<aelys_air::S
     }
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn format_air_location(location: &AirNodeLocation) -> String {
     let mut rendered = format!("fn `{}`", location.function);
     if let Some(block) = location.block {
@@ -335,7 +306,7 @@ fn format_air_location(location: &AirNodeLocation) -> String {
     rendered
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn native_entry_help(message: &str) -> Option<String> {
     if message.contains("main must have no parameters") {
         return Some("use `fn main()` or `fn main() -> i64`".to_string());
@@ -346,14 +317,14 @@ fn native_entry_help(message: &str) -> Option<String> {
     None
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn object_path_for(path: &Path) -> PathBuf {
     let mut object = path.to_path_buf();
     object.set_extension(if cfg!(windows) { "obj" } else { "o" });
     object
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn executable_path_for(path: &Path) -> PathBuf {
     let mut output = path.with_extension("");
     if cfg!(windows) {
@@ -362,7 +333,7 @@ fn executable_path_for(path: &Path) -> PathBuf {
     output
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn resolve_aelys_core_lib() -> Result<PathBuf, String> {
     if let Ok(raw) = std::env::var("AELYS_CORE_LIB") {
         let path = PathBuf::from(&raw);
@@ -404,7 +375,7 @@ fn resolve_aelys_core_lib() -> Result<PathBuf, String> {
     ))
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn find_aelys_core_lib(root: &Path) -> Option<PathBuf> {
     for profile_dir in core_profile_dirs(root) {
         if let Some(path) = find_core_lib_in_build_out(&profile_dir.join("build")) {
@@ -421,7 +392,7 @@ fn find_aelys_core_lib(root: &Path) -> Option<PathBuf> {
     None
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn exact_core_lib_candidates(root: &Path) -> Vec<PathBuf> {
     const NAMES: &[&str] = &["aelys-core.lib", "libaelys-core.a"];
 
@@ -433,7 +404,7 @@ fn exact_core_lib_candidates(root: &Path) -> Vec<PathBuf> {
     candidates
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn is_core_lib_name(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
         return false;
@@ -445,7 +416,7 @@ fn is_core_lib_name(path: &Path) -> bool {
     )
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn find_core_lib_in_dir(dir: &Path) -> Option<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return None;
@@ -459,7 +430,7 @@ fn find_core_lib_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn find_core_lib_in_build_out(build_dir: &Path) -> Option<PathBuf> {
     let Ok(entries) = std::fs::read_dir(build_dir) else {
         return None;
@@ -473,7 +444,7 @@ fn find_core_lib_in_build_out(build_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn core_profile_dirs(root: &Path) -> Vec<PathBuf> {
     vec![
         root.join("target").join("debug"),
@@ -481,7 +452,7 @@ fn core_profile_dirs(root: &Path) -> Vec<PathBuf> {
     ]
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn candidate_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
 
@@ -516,14 +487,14 @@ fn candidate_search_roots() -> Vec<PathBuf> {
     roots
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn push_unique(items: &mut Vec<PathBuf>, candidate: PathBuf) {
     if !items.iter().any(|existing| existing == &candidate) {
         items.push(candidate);
     }
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn build_aelys_core(root: &Path) -> Result<(), String> {
     if !root.join("Cargo.toml").is_file() {
         return Err(format!(
@@ -544,7 +515,7 @@ fn build_aelys_core(root: &Path) -> Result<(), String> {
     run_process_in_dir("cargo", &args, Some(root))
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn running_release_binary() -> bool {
     if let Ok(exe) = std::env::current_exe() {
         return exe
@@ -554,7 +525,7 @@ fn running_release_binary() -> bool {
     false
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn link_native_executable(
     object_path: &Path,
     exe_path: &Path,
@@ -570,7 +541,7 @@ fn link_native_executable(
     }
 }
 
-#[cfg(feature = "llvm-backend")]
+
 #[cfg(windows)]
 fn link_windows(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(), String> {
     let obj = object_path.to_string_lossy().to_string();
@@ -598,7 +569,7 @@ fn link_windows(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<
     Err(errors.join("\n"))
 }
 
-#[cfg(feature = "llvm-backend")]
+
 #[cfg(not(windows))]
 fn link_unix(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(), String> {
     let obj = object_path.to_string_lossy().to_string();
@@ -617,12 +588,12 @@ fn link_unix(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(),
     run_process("cc", &args)
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn run_process(program: &str, args: &[String]) -> Result<(), String> {
     run_process_in_dir(program, args, None)
 }
 
-#[cfg(feature = "llvm-backend")]
+
 fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Result<(), String> {
     let mut command = Command::new(program);
     command.args(args);
@@ -649,7 +620,7 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
     ))
 }
 
-#[cfg(feature = "llvm-backend")]
+
 #[cfg(windows)]
 fn windows_linkers() -> Vec<String> {
     let mut linkers = Vec::new();
@@ -677,7 +648,7 @@ fn windows_linkers() -> Vec<String> {
     linkers
 }
 
-#[cfg(feature = "llvm-backend")]
+
 #[cfg(windows)]
 fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
     let mut entries = std::env::vars()
@@ -692,22 +663,3 @@ fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
         .collect()
 }
 
-#[cfg(not(feature = "llvm-backend"))]
-fn compile_air_with_llvm(
-    path: &Path,
-    _air: &aelys_air::AirProgram,
-    _emit_llvm_ir: bool,
-    source: Arc<Source>,
-) -> Result<(), AelysError> {
-    Err(backend_diagnostic_error(
-        source.clone(),
-        fallback_source_span(source.as_ref()),
-        "llvm-backend",
-        format!(
-            "LLVM backend is not enabled in this build of aelys-driver! ({})",
-            path.display()
-        ),
-        None,
-        None,
-    ))
-}

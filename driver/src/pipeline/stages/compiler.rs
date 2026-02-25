@@ -1,6 +1,32 @@
-use crate::pipeline::types::{PipelineError, Stage, StageInput, StageOutput};
-use aelys_backend::Compiler;
+use crate::pipeline::types::{PipelineError, Stage, StageInput, StageOutput, Function, Heap};
+use aelys_sema::TypedProgram;
+use aelys_syntax::Source;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
+
+// Stub - bytecode backend removed
+struct Compiler;
+
+impl Compiler {
+    fn new(_name: Option<String>, _source: Arc<Source>) -> Self {
+        Self
+    }
+
+    fn with_modules(
+        _name: Option<String>,
+        _source: Arc<Source>,
+        _module_aliases: HashSet<String>,
+        _known_globals: HashSet<String>,
+        _known_native_globals: HashSet<String>,
+        _symbol_origins: HashMap<String, String>,
+    ) -> Self {
+        Self
+    }
+
+    fn compile_typed(&self, _program: &TypedProgram) -> Result<(Function, Heap, HashMap<String, ()>), String> {
+        Err("Bytecode compiler removed - use LLVM backend".to_string())
+    }
+}
 
 // Typed AST -> Compiled bytecode
 pub struct CompilerStage {

@@ -7,6 +7,13 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 **0.21.5-a**
 - LLVM codegen: Windows x64 MSVC sret ABI fix for struct returns (fixes bootstrap println segfault)
 - string comparison (==, !=), logical not (!), println` accepts i64/f64/bool (bootstrap to_string)
+- Delete the legacy VM backend
+
+#### Note about that : 
+
+The previous VM served its purpose for prototyping, but Aelys is a systems programming language, not a scripting engine.  
+
+A compact alternative VM will return later once LLVM is mature enough (meta-programming?)
 
 **0.21.4-a**
 - LLVM codegen: SSA-aware local lowering, no more round-tripping with alloca/store/load
@@ -31,9 +38,7 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.20.x - Preparing for LLVM
 
-Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
-
-Edit : current VM is fragile. I plan on rewriting a small/powerful VM when the LLVM backend is mature enough.
+Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that.  is mature enough.
 
 **0.20.4-a**
 - AIR pretty-printer, `--emit-air` CLI flag for `compile` command

@@ -1,12 +1,21 @@
-use super::cache::{CachedOutput, source_hash};
-use super::types::{PipelineError, Stage, StageInput, StageOutput};
-use aelys_bytecode::{Function, Heap};
-use aelys_runtime::Value;
+use super::types::{PipelineError, Stage, StageInput, StageOutput, Value, Function, Heap};
 use aelys_syntax::Source;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-// TODO: LRU cache eviction? unbounded cache could get big on long REPL sessions
+// Dummy cache types since cache module is removed
+#[derive(Clone)]
+#[allow(unused)]
+pub struct CachedOutput {
+    pub source_hash: u64,
+    pub output: StageOutput,
+}
+
+#[allow(unused)]
+fn source_hash(_source: &Source) -> u64 {
+    0 // Stub, cache unused without VM
+}
+
 
 // caches intermediate results by source hash
 pub struct Pipeline {
@@ -31,6 +40,7 @@ impl Pipeline {
         self.cache.len()
     }
 
+    #[allow(unused)]
     pub(crate) fn exec(&mut self, source: Arc<Source>) -> Result<Value, PipelineError> {
         let hash = source_hash(&source);
         let mut current = StageInput::Source(source);
@@ -75,6 +85,7 @@ impl Pipeline {
         })
     }
 
+    #[allow(unused)]
     pub(crate) fn compile_internal(
         &mut self,
         input: StageInput,

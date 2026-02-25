@@ -2,7 +2,6 @@
   <img src="docs/aelys_banner.png?v=2" alt="aelys virtual machine" width="1000">
 </p>
 
-<a href="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml"><img src="https://github.com/vbxq/aelys_lang/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
 <a href="https://github.com/vbxq/aelys_lang/releases/latest"><img src="https://img.shields.io/github/v/release/vbxq/aelys_lang?color=8A2BE2" alt="Release"></a>
 

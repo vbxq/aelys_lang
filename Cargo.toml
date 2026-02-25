@@ -10,14 +10,8 @@ members = [
     "opt",
     "air",
     "codegen",
-    "bytecode",
-    "backend",
-    "runtime",
-    "modules",
     "driver",
     "cli",
-    "native",
-    "native-macros",
 ]
 
 [workspace.package]

@@ -515,9 +515,10 @@ fn char_at(s: string, i: i64) -> string {
         ir.contains("@__aelys_str_char_at"),
         "string index should call __aelys_str_char_at:\n{ir}"
     );
+    // Windows x64 MSVC uses sret for struct returns
     assert!(
-        ir.contains("declare %__aelys_string @__aelys_str_char_at(%__aelys_string, i64)"),
-        "should declare __aelys_str_char_at with correct ABI:\n{ir}"
+        ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), %__aelys_string, i64)"),
+        "should declare __aelys_str_char_at with correct Windows x64 MSVC sret ABI:\n{ir}"
     );
 }
 

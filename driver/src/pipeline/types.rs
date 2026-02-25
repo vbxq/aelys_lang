@@ -1,10 +1,21 @@
 use aelys_air::AirProgram;
-use aelys_bytecode::{Function, Heap};
-use aelys_runtime::Value;
 use aelys_sema::TypedProgram;
 use aelys_syntax::{Source, Stmt, Token};
 use std::fmt;
 use std::sync::Arc;
+
+// Dummy types since VM/bytecode removed (pipeline is legacy)
+#[derive(Clone)]
+pub struct Value;
+#[derive(Clone)]
+pub struct Function;
+impl Function {
+    pub fn strip_debug_info(&mut self) {
+        // Stub - bytecode removed
+    }
+}
+#[derive(Clone)]
+pub struct Heap;
 
 #[derive(Debug)]
 pub enum PipelineError {
@@ -82,6 +93,7 @@ pub enum StageOutput {
 }
 
 impl StageOutput {
+    #[allow(unused)]
     pub(crate) fn into_input(self) -> Result<StageInput, PipelineError> {
         match self {
             StageOutput::Tokens(t, s) => Ok(StageInput::Tokens(t, s)),

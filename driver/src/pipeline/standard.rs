@@ -1,7 +1,7 @@
 use super::pipeline::Pipeline;
 use super::stages::{
     AirLowerStage, CompilerStage, DebugStripStage, LexerStage, OptimizationStage, ParserStage,
-    TypeInferenceStage, VMStage,
+    TypeInferenceStage,
 };
 use aelys_opt::OptimizationLevel;
 use std::collections::{HashMap, HashSet};
@@ -19,11 +19,10 @@ pub fn standard_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline.add_stage(Box::new(AirLowerStage));
     pipeline.add_stage(Box::new(CompilerStage::new()));
     pipeline.add_stage(Box::new(DebugStripStage::new(opt_level)));
-    pipeline.add_stage(Box::new(VMStage::new()));
     pipeline
 }
 
-// no VM - use pipeline.compile() to get (Function, Heap)
+// use pipeline.compile() to get (Function, Heap)
 pub fn compilation_pipeline() -> Pipeline {
     compilation_pipeline_with_opt(OptimizationLevel::Standard)
 }
@@ -40,7 +39,7 @@ pub fn compilation_pipeline_with_opt(opt_level: OptimizationLevel) -> Pipeline {
     pipeline
 }
 
-// for programs with `needs` statements
+// for programs with `needs` statements (legacy - modules not yet supported for LLVM)
 pub fn compilation_pipeline_with_modules(
     opt_level: OptimizationLevel,
     module_aliases: HashSet<String>,

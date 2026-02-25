@@ -214,9 +214,9 @@ fn string_index_read_calls_runtime_char_at() {
         ir.contains("@__aelys_str_char_at"),
         "string index should call __aelys_str_char_at:\n{ir}"
     );
-    // Should declare the function with string ABI: (str, i64) -> str
+    // Should declare the function with Windows x64 MSVC sret ABI: (ptr sret, str, i64) -> void
     assert!(
-        ir.contains("declare %__aelys_string @__aelys_str_char_at(%__aelys_string, i64)"),
+        ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), %__aelys_string, i64)"),
         "should declare __aelys_str_char_at with correct signature:\n{ir}"
     );
     // Should NOT do byte-level GEP into string data

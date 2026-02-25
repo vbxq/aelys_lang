@@ -1,2 +1,0 @@
-// std_not_available.aelys - Should error for stdlib module
-needs std.math
