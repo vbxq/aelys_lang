@@ -4,6 +4,9 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 
 ## 0.21.x - LLVM backend implementation
 
+**0.21.5-a**
+- string comparison (==, !=), logical not (!), println` accepts i64/f64/bool (bootstrap to_string)
+
 **0.21.4-a**
 - LLVM codegen: SSA-aware local lowering, no more round-tripping with alloca/store/load
 - LLVM backend hardening, no panic/todo path now, unsupported AIR node will give a compile time error
