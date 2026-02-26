@@ -1523,7 +1523,7 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(tmp),
-                rvalue: Rvalue::Use(Operand::Const(AirConst::Null)),
+                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(lambda_name))),
             },
             Some(self.span(&parent.span)),
         );

@@ -279,6 +279,8 @@ pub enum AirConst {
     Bool(bool),
     Str(String),
     Null,
+    /// Reference to a named function as a pointer value (for lambdas / first-class functions).
+    FnRef(String),
     ZeroInit(AirType),
     Undef(AirType),
 }

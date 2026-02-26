@@ -49,6 +49,12 @@ impl<'a> FunctionCodegen<'a> {
                 .ptr_type(AddressSpace::default())
                 .const_null()
                 .into()),
+            AirConst::FnRef(name) => {
+                let func = self.module.get_function(name).ok_or_else(|| {
+                    CodegenError::LlvmError(format!("fnref: unknown function '{}'", name))
+                })?;
+                Ok(func.as_global_value().as_pointer_value().into())
+            }
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
             AirConst::Undef(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
         }
@@ -64,6 +70,7 @@ impl<'a> FunctionCodegen<'a> {
             Operand::Const(AirConst::Bool(_)) => Ok(AirType::Bool),
             Operand::Const(AirConst::Str(_)) => Ok(AirType::Str),
             Operand::Const(AirConst::Null) => Ok(AirType::Ptr(Box::new(AirType::Void))),
+            Operand::Const(AirConst::FnRef(_)) => Ok(AirType::Ptr(Box::new(AirType::Void))),
             Operand::Const(AirConst::ZeroInit(ty)) | Operand::Const(AirConst::Undef(ty)) => {
                 Ok(ty.clone())
             }
@@ -108,6 +115,7 @@ pub(crate) fn constant_kind_name(c: &AirConst) -> &'static str {
         AirConst::Bool(_) => "Bool",
         AirConst::Str(_) => "Str",
         AirConst::Null => "Null",
+        AirConst::FnRef(_) => "FnRef",
         AirConst::ZeroInit(_) => "ZeroInit",
         AirConst::Undef(_) => "Undef",
     }

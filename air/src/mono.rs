@@ -561,6 +561,7 @@ fn operand_type_from(operand: &Operand, params: &[AirParam], locals: &[AirLocal]
             AirConst::Bool(_) => AirType::Bool,
             AirConst::Str(_) => AirType::Str,
             AirConst::Null => AirType::Void,
+            AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
         },
         Operand::Copy(id) | Operand::Move(id) => params

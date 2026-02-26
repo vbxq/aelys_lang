@@ -63,6 +63,7 @@ pub fn fmt_const(c: &AirConst) -> String {
         AirConst::Bool(b) => b.to_string(),
         AirConst::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
         AirConst::Null => "null".into(),
+        AirConst::FnRef(name) => format!("fnref @{}", name),
         AirConst::ZeroInit(ty) => format!("zeroinit {}", fmt_type(ty)),
         AirConst::Undef(ty) => format!("undef {}", fmt_type(ty)),
     }
