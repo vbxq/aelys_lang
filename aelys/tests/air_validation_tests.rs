@@ -375,7 +375,11 @@ fn caller() -> i32 {
         b.stmts.iter().find_map(|s| match &s.kind {
             AirStmtKind::Assign {
                 place: Place::Local(id),
-                rvalue: Rvalue::Call { func: Callee::Named(n), .. },
+                rvalue:
+                    Rvalue::Call {
+                        func: Callee::Named(n),
+                        ..
+                    },
             } if n.contains("__mono_identity_i32") => Some(*id),
             _ => None,
         })

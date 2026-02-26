@@ -1,0 +1,269 @@
+use super::LoweringContext;
+use crate::*;
+use aelys_sema::{InferType, TypedFunction, TypedParam, TypedStmtKind};
+
+impl<'a> LoweringContext<'a> {
+    pub(super) fn lower_program(&mut self) {
+        for stmt in &self.program.stmts {
+            if let TypedStmtKind::StructDecl {
+                name,
+                type_params,
+                fields,
+            } = &stmt.kind
+            {
+                self.lower_struct_decl(name, type_params, fields, &stmt.span);
+            }
+        }
+
+        let stmts: Vec<_> = self.program.stmts.clone();
+        for stmt in &stmts {
+            match &stmt.kind {
+                TypedStmtKind::Function(func) => self.lower_function(func),
+                TypedStmtKind::StructDecl { .. } => {}
+                _ => self.lower_toplevel_stmt(stmt),
+            }
+        }
+    }
+
+    fn lower_struct_decl(
+        &mut self,
+        name: &str,
+        type_params: &[String],
+        fields: &[(String, InferType)],
+        span: &aelys_syntax::Span,
+    ) {
+        let air_type_params = self.lower_type_params(type_params);
+        let air_fields = fields
+            .iter()
+            .map(|(fname, fty)| AirStructField {
+                name: fname.clone(),
+                ty: self.lower_type_from_infer(fty),
+                offset: None,
+            })
+            .collect();
+        self.structs.push(AirStructDef {
+            name: name.to_string(),
+            type_params: air_type_params,
+            fields: air_fields,
+            is_closure_env: false,
+            span: Some(self.span(span)),
+        });
+        self.type_params_map.clear();
+    }
+
+    pub(super) fn lower_function(&mut self, func: &TypedFunction) {
+        let saved_locals = std::mem::take(&mut self.current_locals);
+        let saved_params = std::mem::take(&mut self.current_params);
+        let saved_blocks = std::mem::take(&mut self.current_blocks);
+        let saved_stmts = std::mem::take(&mut self.current_stmts);
+        let saved_names = std::mem::take(&mut self.locals_by_name);
+        let saved_aliases = std::mem::take(&mut self.block_aliases);
+        let saved_pending = self.pending_block_id.take();
+        let saved_next_local = self.next_local_id;
+        let saved_next_block = self.next_block_id;
+        self.next_local_id = 0;
+        self.next_block_id = 0;
+
+        let func_id = self.alloc_function_id();
+        let gc_mode = self.gc_mode_for_function(func);
+
+        if !func.captures.is_empty() {
+            self.lower_closure(func, func_id, gc_mode);
+        } else {
+            self.lower_plain_function(func, func_id, gc_mode);
+        }
+
+        self.current_locals = saved_locals;
+        self.current_params = saved_params;
+        self.current_blocks = saved_blocks;
+        self.current_stmts = saved_stmts;
+        self.locals_by_name = saved_names;
+        self.block_aliases = saved_aliases;
+        self.pending_block_id = saved_pending;
+        self.next_local_id = saved_next_local;
+        self.next_block_id = saved_next_block;
+    }
+
+    fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+        let type_params = self.lower_type_params(&func.type_params);
+        let params = self.lower_params(&func.params);
+        let ret_ty = self.lower_type_from_infer(&func.return_type);
+
+        self.lower_body(&func.body);
+        self.finalize_function_body();
+        self.resolve_block_aliases();
+
+        let air_func = AirFunction {
+            id: func_id,
+            name: func.name.clone(),
+            gc_mode,
+            type_params,
+            params,
+            ret_ty,
+            locals: std::mem::take(&mut self.current_locals),
+            blocks: std::mem::take(&mut self.current_blocks),
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: self.func_attribs(func),
+            span: Some(self.span(&func.span)),
+        };
+        self.functions.push(air_func);
+        self.type_params_map.clear();
+    }
+
+    fn lower_closure(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+        let type_params = self.lower_type_params(&func.type_params);
+
+        let env_name = format!("__closure_env_{}", func.name);
+        let env_fields: Vec<AirStructField> = func
+            .captures
+            .iter()
+            .map(|(name, ty)| AirStructField {
+                name: name.clone(),
+                ty: self.lower_type_from_infer(ty),
+                offset: None,
+            })
+            .collect();
+
+        self.structs.push(AirStructDef {
+            name: env_name.clone(),
+            type_params: Vec::new(),
+            fields: env_fields,
+            is_closure_env: true,
+            span: Some(self.span(&func.span)),
+        });
+
+        let env_param_id = self.alloc_local_id();
+        let env_ty = AirType::Ptr(Box::new(AirType::Struct(env_name.clone())));
+        self.current_params.push(AirParam {
+            id: env_param_id,
+            ty: env_ty.clone(),
+            name: "__env".to_string(),
+            span: Some(self.span(&func.span)),
+        });
+
+        for (cap_name, cap_ty) in &func.captures {
+            let local_id =
+                self.alloc_named_local(cap_name, self.lower_type_from_infer(cap_ty), false, None);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(local_id),
+                    rvalue: Rvalue::FieldAccess {
+                        base: Operand::Copy(env_param_id),
+                        field: cap_name.clone(),
+                    },
+                },
+                None,
+            );
+        }
+
+        let user_params = self.lower_params(&func.params);
+        let ret_ty = self.lower_type_from_infer(&func.return_type);
+
+        self.lower_body(&func.body);
+        self.finalize_function_body();
+        self.resolve_block_aliases();
+
+        let mut all_params = vec![self.current_params.remove(0)];
+        all_params.extend(user_params);
+
+        let air_func = AirFunction {
+            id: func_id,
+            name: func.name.clone(),
+            gc_mode,
+            type_params,
+            params: all_params,
+            ret_ty,
+            locals: std::mem::take(&mut self.current_locals),
+            blocks: std::mem::take(&mut self.current_blocks),
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: self.func_attribs(func),
+            span: Some(self.span(&func.span)),
+        };
+        self.functions.push(air_func);
+        self.type_params_map.clear();
+    }
+
+    pub(super) fn lower_params(&mut self, params: &[TypedParam]) -> Vec<AirParam> {
+        params
+            .iter()
+            .map(|p| {
+                let ty = self.lower_type_from_infer(&p.ty);
+                let id = self.alloc_named_local(
+                    &p.name,
+                    ty.clone(),
+                    p.mutable,
+                    Some(self.span(&p.span)),
+                );
+                AirParam {
+                    id,
+                    ty,
+                    name: p.name.clone(),
+                    span: Some(self.span(&p.span)),
+                }
+            })
+            .collect()
+    }
+
+    pub(super) fn func_attribs(&self, func: &TypedFunction) -> FunctionAttribs {
+        let inline = if func.decorators.iter().any(|d| d.name == "inline_always") {
+            InlineHint::Always
+        } else if func.decorators.iter().any(|d| d.name == "inline_never") {
+            InlineHint::Never
+        } else {
+            InlineHint::Default
+        };
+        FunctionAttribs {
+            inline,
+            no_gc: func.decorators.iter().any(|d| d.name == "no_gc"),
+            no_unwind: false,
+            cold: func.decorators.iter().any(|d| d.name == "cold"),
+        }
+    }
+
+    fn lower_toplevel_stmt(&mut self, stmt: &aelys_sema::TypedStmt) {
+        if let TypedStmtKind::Let {
+            name,
+            initializer,
+            var_type,
+            ..
+        } = &stmt.kind
+        {
+            let ty = self.lower_type_from_infer(var_type);
+            let init = self.try_const_expr(initializer);
+            self.globals.push(AirGlobal {
+                name: name.clone(),
+                ty,
+                init,
+                gc_mode: self.file_gc_mode,
+                span: Some(self.span(&stmt.span)),
+            });
+        }
+    }
+
+    pub(super) fn try_const_expr(&self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
+        use aelys_sema::TypedExprKind;
+        match &expr.kind {
+            TypedExprKind::Int(v) => {
+                if expr.ty.is_integer() {
+                    Some(AirConst::Int(*v, super::infer_to_int_size(&expr.ty)))
+                } else {
+                    Some(AirConst::IntLiteral(*v))
+                }
+            }
+            TypedExprKind::Float(v) => {
+                let size = if matches!(expr.ty, InferType::F32) {
+                    AirFloatSize::F32
+                } else {
+                    AirFloatSize::F64
+                };
+                Some(AirConst::Float(*v, size))
+            }
+            TypedExprKind::Bool(v) => Some(AirConst::Bool(*v)),
+            TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
+            TypedExprKind::Null => Some(AirConst::Null),
+            _ => None,
+        }
+    }
+}
