@@ -434,7 +434,10 @@ fn type_to_string(ty: &AirType) -> String {
         AirType::Struct(name) => name.clone(),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
-        AirType::FnPtr { .. } => "fnptr".to_string(),
+        AirType::FnPtr { params, ret, .. } => {
+            let params_str = params.iter().map(type_to_string).collect::<Vec<_>>().join("_");
+            format!("fnptr_{}_{}", params_str, type_to_string(ret))
+        }
         AirType::Param(id) => format!("param_{}", id.0),
         AirType::Void => "void".to_string(),
     }
