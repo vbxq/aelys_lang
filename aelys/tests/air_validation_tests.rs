@@ -368,6 +368,30 @@ fn caller() -> i32 {
         !program.functions.iter().any(|f| f.name == "identity"),
         "original generic `identity` should be removed after monomorphization"
     );
+
+    // verify that monomorphization patched the caller's local type
+    // to match the monomorphized return type (was I64 placeholder from Dynamic).
+    let call_result_local = caller.blocks.iter().find_map(|b| {
+        b.stmts.iter().find_map(|s| match &s.kind {
+            AirStmtKind::Assign {
+                place: Place::Local(id),
+                rvalue: Rvalue::Call { func: Callee::Named(n), .. },
+            } if n.contains("__mono_identity_i32") => Some(*id),
+            _ => None,
+        })
+    });
+    if let Some(local_id) = call_result_local {
+        let local_ty = caller
+            .locals
+            .iter()
+            .find(|l| l.id == local_id)
+            .map(|l| &l.ty);
+        assert_eq!(
+            local_ty,
+            Some(&AirType::I32),
+            "caller's temp for identity<i32> result should have type I32 after mono, not I64"
+        );
+    }
 }
 
 #[test]

@@ -222,7 +222,13 @@ impl<'a> LoweringContext<'a> {
                     AirType::Struct(name.clone())
                 }
             }
-            InferType::Var(_) | InferType::Dynamic => AirType::I64,
+            // unresolved type vars reaching lowering = void (no explicit return annotation)
+            InferType::Var(_) => AirType::Void,
+            // TODO: Terrible, terrible, terrible, did I forgot to say terrible ?
+            // Dynamic = sema's "gradual typing" fallback, which we use for generic call results
+            // that monomorphization will fix later. i64 placeholder works because
+            // monomorphization replaces the type before codegen sees it.
+            InferType::Dynamic => AirType::I64,
         }
     }
 
@@ -1024,18 +1030,31 @@ impl<'a> LoweringContext<'a> {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
                 let func = self.lower_callee(callee);
                 let result_ty = self.lower_type_from_infer(&expr.ty);
-                let tmp = self.alloc_temp(result_ty);
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Local(tmp),
-                        rvalue: Rvalue::Call {
+                // S5: void-returning calls can't be used as values in LLVM.
+                // Emit CallVoid and return a null placeholder if someone tries.
+                if result_ty == AirType::Void {
+                    self.emit(
+                        AirStmtKind::CallVoid {
                             func,
                             args: lowered_args,
                         },
-                    },
-                    sp,
-                );
-                Operand::Copy(tmp)
+                        sp,
+                    );
+                    Operand::Const(AirConst::Null)
+                } else {
+                    let tmp = self.alloc_temp(result_ty);
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Local(tmp),
+                            rvalue: Rvalue::Call {
+                                func,
+                                args: lowered_args,
+                            },
+                        },
+                        sp,
+                    );
+                    Operand::Copy(tmp)
+                }
             }
 
             TypedExprKind::Assign { name, value } => {
@@ -1281,7 +1300,10 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Call { callee, args } => {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
                 let func = self.lower_callee(callee);
-                if matches!(expr.ty, InferType::Null) {
+                // check lowered type, not just InferType::Null, Dynamic and Var
+                // also lower to Void now, and emitting Rvalue::Call for void is a pure LLVM error
+                let ret_ty = self.lower_type_from_infer(&expr.ty);
+                if ret_ty == AirType::Void {
                     self.emit(
                         AirStmtKind::CallVoid {
                             func,

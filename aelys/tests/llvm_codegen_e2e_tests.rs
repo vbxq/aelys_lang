@@ -1,5 +1,3 @@
-/* i know those are bad ways to check for the IR */
-
 use aelys_driver::compile_file_with_llvm;
 use aelys_opt::OptimizationLevel;
 use inkwell::context::Context;
@@ -177,7 +175,7 @@ fn llvm_emits_global_string_constant() {
 
 #[test]
 fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
-    let ir = compile_to_verified_ir("fn greet() -> i64 { return println(\"Hello\") }");
+    let ir = compile_to_verified_ir("fn greet() { println(\"Hello\") }");
     assert!(ir.contains("declare void @__aelys_write(ptr, i64)"), "{ir}");
     assert!(!ir.contains("declare i64 @println"), "{ir}");
     assert!(!ir.contains("declare void @println"), "{ir}");

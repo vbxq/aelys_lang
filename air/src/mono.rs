@@ -245,8 +245,22 @@ impl MonoContext {
             return;
         }
 
-        // pre-collect generic function signatures for type inference during rewriting.
-        // We need clones because we'll mutate program.functions in the loop below
+        // Collect return types of monomorphized functions so we can patch
+        // caller locals that store generic call results (before, their type was
+        // a placeholder i64 from Dynamic, but needs to become the real type)
+        let mono_ret_types: HashMap<String, AirType> = self
+            .instantiated
+            .values()
+            .filter_map(|mangled_name| {
+                program
+                    .functions
+                    .iter()
+                    .find(|f| f.name == *mangled_name)
+                    .map(|f| (mangled_name.clone(), f.ret_ty.clone()))
+            })
+            .collect();
+
+        // pre-collect generic function signatures for type inference during rewriting
         let generic_sigs: HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)> = self
             .generic_functions
             .iter()
@@ -255,17 +269,15 @@ impl MonoContext {
                 (name.clone(), (f.params.clone(), f.type_params.clone()))
             })
             .collect();
-        // the set of generic base namesn
-        // quick membership check
         let generic_names: HashSet<&str> = generic_sigs.keys().map(|s| s.as_str()).collect();
 
         for func in &mut program.functions {
             if !func.type_params.is_empty() {
                 continue;
             }
-            // now, we clone caller's type info for operand resolution, we only mutate callees in stmts/terminators but never params/locals.
             let caller_params = func.params.clone();
             let caller_locals = func.locals.clone();
+            let mut local_type_patches: Vec<(LocalId, AirType)> = Vec::new();
 
             for block in &mut func.blocks {
                 for stmt in &mut block.stmts {
@@ -275,6 +287,8 @@ impl MonoContext {
                         &caller_locals,
                         &generic_sigs,
                         &generic_names,
+                        &mono_ret_types,
+                        &mut local_type_patches,
                     );
                 }
                 self.rewrite_terminator(
@@ -283,7 +297,18 @@ impl MonoContext {
                     &caller_locals,
                     &generic_sigs,
                     &generic_names,
+                    &mono_ret_types,
+                    &mut local_type_patches,
                 );
+            }
+
+            // apply collected type patches to the caller's locals
+            // this fixes the type mismatch between the placeholder i64 and
+            // the actual return type of the monomorphized callee
+            for (local_id, new_ty) in local_type_patches {
+                if let Some(local) = func.locals.iter_mut().find(|l| l.id == local_id) {
+                    local.ty = new_ty;
+                }
             }
         }
     }
@@ -295,11 +320,13 @@ impl MonoContext {
         caller_locals: &[AirLocal],
         generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
         generic_names: &HashSet<&str>,
+        mono_ret_types: &HashMap<String, AirType>,
+        local_type_patches: &mut Vec<(LocalId, AirType)>,
     ) {
         match &mut stmt.kind {
             AirStmtKind::Assign {
+                place,
                 rvalue: Rvalue::Call { func: callee, args },
-                ..
             } => {
                 self.rewrite_callee(
                     callee,
@@ -309,6 +336,15 @@ impl MonoContext {
                     generic_sigs,
                     generic_names,
                 );
+                // after rewriting, patch the destination local's type to match
+                // the monomorphized function's return type
+                if let Place::Local(local_id) = place {
+                    if let Callee::Named(name) = callee {
+                        if let Some(ret_ty) = mono_ret_types.get(name.as_str()) {
+                            local_type_patches.push((*local_id, ret_ty.clone()));
+                        }
+                    }
+                }
             }
             AirStmtKind::CallVoid { func: callee, args } => {
                 self.rewrite_callee(
@@ -331,9 +367,14 @@ impl MonoContext {
         caller_locals: &[AirLocal],
         generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
         generic_names: &HashSet<&str>,
+        mono_ret_types: &HashMap<String, AirType>,
+        local_type_patches: &mut Vec<(LocalId, AirType)>,
     ) {
         if let AirTerminator::Invoke {
-            func: callee, args, ..
+            func: callee,
+            args,
+            ret,
+            ..
         } = term
         {
             self.rewrite_callee(
@@ -344,6 +385,14 @@ impl MonoContext {
                 generic_sigs,
                 generic_names,
             );
+            // patch destination local for Invoke too
+            if let Place::Local(local_id) = ret {
+                if let Callee::Named(name) = callee {
+                    if let Some(ret_ty) = mono_ret_types.get(name.as_str()) {
+                        local_type_patches.push((*local_id, ret_ty.clone()));
+                    }
+                }
+            }
         }
     }
 
@@ -529,18 +578,12 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
 }
 
 fn substitute_terminator(
-    term: &mut AirTerminator,
-    type_params: &[TypeParamId],
-    type_args: &[AirType],
+    _term: &mut AirTerminator,
+    _type_params: &[TypeParamId],
+    _type_args: &[AirType],
 ) {
-    if let AirTerminator::Invoke { func: callee, .. } = term {
-        substitute_callee(callee, type_params, type_args);
-    }
-}
-
-fn substitute_callee(_callee: &mut Callee, _type_params: &[TypeParamId], _type_args: &[AirType]) {
-    // Callee rewriting happens in the separate rewrite_call_sites pass
-    // after all instances are known. No per-function substitution needed.
+    // Callee rewriting happens in rewrite_call_sites (after all instances exist).
+    // Operand/place types come from locals, which are already substituted.
 }
 
 fn operand_type_from(operand: &Operand, params: &[AirParam], locals: &[AirLocal]) -> AirType {
@@ -572,6 +615,11 @@ fn operand_type_from(operand: &Operand, params: &[AirParam], locals: &[AirLocal]
             .find(|p| p.id == *id)
             .map(|p| p.ty.clone())
             .or_else(|| locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone()))
-            .unwrap_or(AirType::I64),
+            .unwrap_or_else(|| {
+                panic!(
+                    "mono: operand_type_from: local %{} not found in params or locals",
+                    id.0
+                )
+            }),
     }
 }
