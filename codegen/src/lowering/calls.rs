@@ -260,17 +260,13 @@ impl<'a> FunctionCodegen<'a> {
                 .functions
                 .iter()
                 .find(|f| f.id == *id)
-                .map_or(false, |f| {
-                    needs_sret(&f.ret_ty, f.calling_conv, is_windows)
-                }),
+                .map_or(false, |f| needs_sret(&f.ret_ty, f.calling_conv, is_windows)),
             Callee::Extern(name, _) => self
                 .program
                 .functions
                 .iter()
                 .find(|f| f.name == *name && f.is_extern)
-                .map_or(false, |f| {
-                    needs_sret(&f.ret_ty, f.calling_conv, is_windows)
-                }),
+                .map_or(false, |f| needs_sret(&f.ret_ty, f.calling_conv, is_windows)),
             _ => false,
         }
     }

@@ -38,12 +38,15 @@ impl CodegenContext {
             fn_value.set_call_conventions(llvm_calling_convention(function.calling_conv));
             self.apply_function_attributes(fn_value, &function.attributes)?;
 
-            if needs_sret(&function.ret_ty, function.calling_conv, self.target_is_windows()) {
+            if needs_sret(
+                &function.ret_ty,
+                function.calling_conv,
+                self.target_is_windows(),
+            ) {
                 let ret_any_ty = air_type_to_llvm(&function.ret_ty, self.context)?;
-                let sret_attr = self.context.create_type_attribute(
-                    Attribute::get_named_enum_kind_id("sret"),
-                    ret_any_ty,
-                );
+                let sret_attr = self
+                    .context
+                    .create_type_attribute(Attribute::get_named_enum_kind_id("sret"), ret_any_ty);
                 fn_value.add_attribute(AttributeLoc::Param(0), sret_attr);
             }
         }
@@ -263,11 +266,7 @@ pub(crate) fn is_abi_unsafe_type(ty: &AirType) -> bool {
 /// True when a function with this return type + calling convention needs sret
 /// on the current target. Only C-convention functions need sret because
 /// fastcc (Aelys-internal) is handled consistently by LLVM itself
-pub(crate) fn needs_sret(
-    ret_ty: &AirType,
-    conv: AirCallingConv,
-    is_windows: bool,
-) -> bool {
+pub(crate) fn needs_sret(ret_ty: &AirType, conv: AirCallingConv, is_windows: bool) -> bool {
     is_windows && matches!(conv, AirCallingConv::C) && is_abi_unsafe_type(ret_ty)
 }
 

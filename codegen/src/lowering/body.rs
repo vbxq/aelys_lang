@@ -104,17 +104,16 @@ impl<'a> FunctionCodegen<'a> {
         let entry_block_id = find_entry_block(air_function);
 
         let is_windows = crate::module_targets_windows(module);
-        let sret_ptr =
-            if needs_sret(&air_function.ret_ty, air_function.calling_conv, is_windows) {
-                Some(
-                    function
-                        .get_nth_param(0)
-                        .expect("sret function must have param 0")
-                        .into_pointer_value(),
-                )
-            } else {
-                None
-            };
+        let sret_ptr = if needs_sret(&air_function.ret_ty, air_function.calling_conv, is_windows) {
+            Some(
+                function
+                    .get_nth_param(0)
+                    .expect("sret function must have param 0")
+                    .into_pointer_value(),
+            )
+        } else {
+            None
+        };
 
         Self {
             context,
@@ -191,12 +190,15 @@ impl<'a> FunctionCodegen<'a> {
         // sret pointer occupies LLVM param 0, so real params start at 1
         let offset = if self.sret_ptr.is_some() { 1u32 } else { 0 };
         for (index, param) in params.iter().enumerate() {
-            let value = self.function.get_nth_param(index as u32 + offset).ok_or_else(|| {
-                CodegenError::LlvmError(format!(
-                    "missing LLVM param {} in `{}`",
-                    index, self.air_function.name
-                ))
-            })?;
+            let value = self
+                .function
+                .get_nth_param(index as u32 + offset)
+                .ok_or_else(|| {
+                    CodegenError::LlvmError(format!(
+                        "missing LLVM param {} in `{}`",
+                        index, self.air_function.name
+                    ))
+                })?;
             if self.local_uses_alloca(param.id) {
                 let ptr = self.lookup_local_ptr(param.id)?;
                 self.store_value(ptr, value.into())?;
@@ -371,8 +373,5 @@ fn find_entry_block(func: &AirFunction) -> BlockId {
         }
     }
 
-    func.blocks
-        .first()
-        .map(|b| b.id)
-        .unwrap_or(BlockId(0))
+    func.blocks.first().map(|b| b.id).unwrap_or(BlockId(0))
 }

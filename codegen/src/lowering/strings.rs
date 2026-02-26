@@ -3,7 +3,9 @@ use crate::lowering::body::FunctionCodegen;
 use crate::types::aelys_string_type;
 use inkwell::module::Linkage;
 use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue};
+use inkwell::values::{
+    BasicMetadataValueEnum, BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue,
+};
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn global_string_ptr_len(
@@ -129,9 +131,9 @@ impl<'a> FunctionCodegen<'a> {
                 .build_call(fn_val, args, name)
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             call.set_call_convention(fn_val.get_call_conventions());
-            call.try_as_basic_value().basic().ok_or_else(|| {
-                CodegenError::LlvmError(format!("{} returned void", name))
-            })
+            call.try_as_basic_value()
+                .basic()
+                .ok_or_else(|| CodegenError::LlvmError(format!("{} returned void", name)))
         }
     }
 

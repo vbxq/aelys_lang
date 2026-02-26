@@ -81,26 +81,22 @@ impl<'a> FunctionCodegen<'a> {
                 if def.fields.is_empty() {
                     return Ok((0, 1));
                 }
-                if def.fields.iter().all(|f| f.offset.is_some()) {
-                    let mut max_align = 1u32;
-                    let mut end = 0u32;
-                    for field in &def.fields {
-                        let (fs, fa) = self.type_size_align(&field.ty)?;
-                        max_align = max_align.max(fa);
-                        end = end.max(field.offset.unwrap_or(0).saturating_add(fs));
-                    }
-                    return Ok((align_to(end, max_align), max_align));
+                // Codegen must never compute layout, that's AIR's job.
+                // If offsets are missing, the AIR is just malformed
+                if !def.fields.iter().all(|f| f.offset.is_some()) {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "struct `{}` has uncomputed field offsets; AIR layout pass was not run",
+                        name
+                    )));
                 }
-
-                let mut offset = 0u32;
                 let mut max_align = 1u32;
+                let mut end = 0u32;
                 for field in &def.fields {
                     let (fs, fa) = self.type_size_align(&field.ty)?;
-                    offset = align_to(offset, fa);
-                    offset = offset.saturating_add(fs);
                     max_align = max_align.max(fa);
+                    end = end.max(field.offset.expect("offset checked above").saturating_add(fs));
                 }
-                Ok((align_to(offset, max_align), max_align))
+                Ok((align_to(end, max_align), max_align))
             }
             AirType::Param(id) => Err(CodegenError::UnsupportedType(format!(
                 "unexpected unresolved type parameter {:?}",

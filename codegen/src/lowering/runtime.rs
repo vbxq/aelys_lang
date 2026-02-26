@@ -85,8 +85,7 @@ impl<'a> FunctionCodegen<'a> {
         let string_ty = aelys_string_type(self.context);
         let use_sret = self.target_is_windows();
         let fn_ty = if use_sret {
-            let mut all_params =
-                vec![self.context.ptr_type(AddressSpace::default()).into()];
+            let mut all_params = vec![self.context.ptr_type(AddressSpace::default()).into()];
             all_params.extend_from_slice(params);
             self.context.void_type().fn_type(&all_params, false)
         } else {

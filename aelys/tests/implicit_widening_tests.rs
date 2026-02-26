@@ -2,8 +2,8 @@ use aelys_air::lower::lower;
 use aelys_air::{AirProgram, AirStmtKind, AirType, Rvalue};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
-use aelys_sema::types::InferType;
 use aelys_sema::TypeInference;
+use aelys_sema::types::InferType;
 use aelys_syntax::Source;
 
 fn source_to_air(code: &str) -> AirProgram {
@@ -130,7 +130,9 @@ fn main() {
     let air = source_to_air(code);
     let casts = collect_casts(&air);
     assert!(
-        casts.iter().any(|(from, to)| *from == &AirType::I8 && *to == &AirType::I64),
+        casts
+            .iter()
+            .any(|(from, to)| *from == &AirType::I8 && *to == &AirType::I64),
         "expected implicit cast i8=>i64, got: {casts:?}"
     );
 }
@@ -147,7 +149,9 @@ fn main() {
     let air = source_to_air(code);
     let casts = collect_casts(&air);
     assert!(
-        casts.iter().any(|(from, to)| *from == &AirType::U8 && *to == &AirType::I32),
+        casts
+            .iter()
+            .any(|(from, to)| *from == &AirType::U8 && *to == &AirType::I32),
         "expected implicit cast u8=>i32, got: {casts:?}"
     );
 }
@@ -164,7 +168,9 @@ fn main() {
     let air = source_to_air(code);
     let casts = collect_casts(&air);
     assert!(
-        casts.iter().any(|(from, to)| *from == &AirType::I32 && *to == &AirType::F64),
+        casts
+            .iter()
+            .any(|(from, to)| *from == &AirType::I32 && *to == &AirType::F64),
         "expected implicit cast i32=>f64, got: {casts:?}"
     );
 }

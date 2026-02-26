@@ -39,7 +39,6 @@ fn default_attribs() -> FunctionAttribs {
     }
 }
 
-
 #[test]
 fn extern_c_struct_return_compiles_and_verifies() {
     let program = AirProgram {
@@ -90,10 +89,7 @@ fn extern_c_struct_return_compiles_and_verifies() {
                             kind: AirStmtKind::Assign {
                                 place: Place::Local(LocalId(0)),
                                 rvalue: Rvalue::Call {
-                                    func: Callee::Extern(
-                                        "get_name".to_string(),
-                                        CallingConv::C,
-                                    ),
+                                    func: Callee::Extern("get_name".to_string(), CallingConv::C),
                                     args: vec![],
                                 },
                             },
@@ -173,9 +169,7 @@ fn c_convention_aelys_fn_returning_struct_uses_sret() {
                 stmts: vec![AirStmt {
                     kind: AirStmtKind::Assign {
                         place: Place::Local(LocalId(0)),
-                        rvalue: Rvalue::Use(Operand::Const(AirConst::Str(
-                            "hello".to_string(),
-                        ))),
+                        rvalue: Rvalue::Use(Operand::Const(AirConst::Str("hello".to_string()))),
                     },
                     span: None,
                 }],
@@ -241,9 +235,7 @@ fn fastcc_struct_return_does_not_use_sret() {
                 stmts: vec![AirStmt {
                     kind: AirStmtKind::Assign {
                         place: Place::Local(LocalId(0)),
-                        rvalue: Rvalue::Use(Operand::Const(AirConst::Str(
-                            "hello".to_string(),
-                        ))),
+                        rvalue: Rvalue::Use(Operand::Const(AirConst::Str("hello".to_string()))),
                     },
                     span: None,
                 }],
@@ -271,8 +263,5 @@ fn fastcc_struct_return_does_not_use_sret() {
     let sret_on_internal = ir
         .lines()
         .any(|l| l.contains("internal_fn") && l.contains("sret"));
-    assert!(
-        !sret_on_internal,
-        "fastcc function must not use sret: {ir}"
-    );
+    assert!(!sret_on_internal, "fastcc function must not use sret: {ir}");
 }
