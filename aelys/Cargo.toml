@@ -11,6 +11,7 @@ aelys-driver = { path = "../driver" }
 tempfile = "3"
 aelys-opt = { path = "../opt" }
 aelys-air = { path = "../air" }
+aelys-codegen = { path = "../codegen" }
 aelys-driver = { path = "../driver" }
 aelys-frontend = { path = "../frontend" }
 aelys-sema = { path = "../sema" }
