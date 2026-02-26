@@ -80,6 +80,10 @@ fn llvm_panic_uses_ptr_len_signature() {
     assert!(ir.contains("declare void @__aelys_panic(ptr, i64)"), "{ir}");
     assert!(ir.contains("call void @__aelys_panic(ptr"), "{ir}");
     assert!(!ir.contains("declare void @__aelys_panic(ptr)"), "{ir}");
+    assert!(
+        ir.contains("noreturn"),
+        "panic declaration should have noreturn attribute: {ir}"
+    );
 }
 
 #[test]

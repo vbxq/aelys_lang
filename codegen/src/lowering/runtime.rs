@@ -57,7 +57,14 @@ impl<'a> FunctionCodegen<'a> {
             ],
             false,
         );
-        self.module.add_function("__aelys_panic", fn_ty, None)
+        // Trivial optimization, LLVM declaration doesn't add `noreturn` attribute, so it basically
+        // can't optimize based on the fact that panic never returns
+        // yeah I be fixing up the most useless stuff possible
+        let function = self.module.add_function("__aelys_panic", fn_ty, None);
+        let noreturn_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noreturn");
+        let noreturn_attr = self.context.create_enum_attribute(noreturn_id, 0);
+        function.add_attribute(inkwell::attributes::AttributeLoc::Function, noreturn_attr);
+        function
     }
 
     // sret-returning runtime functions (return %__aelys_string)
