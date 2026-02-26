@@ -105,7 +105,11 @@ AelysString __aelys_str_char_at(const char *str_ptr, long long str_len,
 }
 
 void *__aelys_alloc(long long size) {
-    return malloc((size_t)size);
+    void *p = malloc((size_t)size);
+    if (!p && size > 0) {
+        __aelys_panic("out of memory", 13);
+    }
+    return p;
 }
 
 void __aelys_free(void *ptr) {
@@ -113,7 +117,11 @@ void __aelys_free(void *ptr) {
 }
 
 void *__aelys_realloc(void *ptr, long long size) {
-    return realloc(ptr, (size_t)size);
+    void *p = realloc(ptr, (size_t)size);
+    if (!p && size > 0) {
+        __aelys_panic("out of memory", 13);
+    }
+    return p;
 }
 
 AELYS_NORETURN void __aelys_panic(const char *ptr, long long len) {
