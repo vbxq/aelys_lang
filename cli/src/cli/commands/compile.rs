@@ -5,7 +5,6 @@ use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::path::{Path, PathBuf};
 
-
 pub fn run_with_options(
     path: &str,
     output: Option<String>,
@@ -40,4 +39,3 @@ pub fn emit_air_program(path: &str, opt_level: OptimizationLevel) -> Result<i32,
     print!("{}", aelys_air::print::print_program(&air));
     Ok(0)
 }
-

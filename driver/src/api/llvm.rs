@@ -1,4 +1,3 @@
-
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
@@ -28,13 +27,12 @@ pub fn lower_file_to_air(
         .map_err(|err| err.to_string())?;
 
     // Single-file compilation only (no module system)
-    let typed_program = aelys_sema::TypeInference::infer_program(stmts, src)
-        .map_err(|errors| {
-            errors
-                .first()
-                .map(|e| e.to_string())
-                .unwrap_or_else(|| "Unknown type error".to_string())
-        })?;
+    let typed_program = aelys_sema::TypeInference::infer_program(stmts, src).map_err(|errors| {
+        errors
+            .first()
+            .map(|e| e.to_string())
+            .unwrap_or_else(|| "Unknown type error".to_string())
+    })?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
@@ -65,7 +63,6 @@ pub fn compile_file_with_llvm(
     })?;
     compile_air_with_llvm(path, &air, emit_llvm_ir, source)
 }
-
 
 fn compile_air_with_llvm(
     path: &Path,
@@ -201,7 +198,6 @@ fn line_col_for_offset(content: &str, offset: usize) -> (u32, u32) {
     (line, column)
 }
 
-
 fn llvm_backend_error_to_diagnostic(
     err: LlvmBackendError,
     air: &aelys_air::AirProgram,
@@ -257,7 +253,6 @@ fn llvm_backend_error_to_diagnostic(
     backend_diagnostic_error(source, span, "llvm-backend", message, note, help)
 }
 
-
 fn air_location_span(
     air: &aelys_air::AirProgram,
     location: &AirNodeLocation,
@@ -285,14 +280,12 @@ fn air_location_span(
     function.span
 }
 
-
 fn terminator_span(terminator: &aelys_air::AirTerminator) -> Option<aelys_air::Span> {
     match terminator {
         aelys_air::AirTerminator::Panic { span, .. } => *span,
         _ => None,
     }
 }
-
 
 fn format_air_location(location: &AirNodeLocation) -> String {
     let mut rendered = format!("fn `{}`", location.function);
@@ -306,7 +299,6 @@ fn format_air_location(location: &AirNodeLocation) -> String {
     rendered
 }
 
-
 fn native_entry_help(message: &str) -> Option<String> {
     if message.contains("main must have no parameters") {
         return Some("use `fn main()` or `fn main() -> i64`".to_string());
@@ -317,13 +309,11 @@ fn native_entry_help(message: &str) -> Option<String> {
     None
 }
 
-
 fn object_path_for(path: &Path) -> PathBuf {
     let mut object = path.to_path_buf();
     object.set_extension(if cfg!(windows) { "obj" } else { "o" });
     object
 }
-
 
 fn executable_path_for(path: &Path) -> PathBuf {
     let mut output = path.with_extension("");
@@ -332,7 +322,6 @@ fn executable_path_for(path: &Path) -> PathBuf {
     }
     output
 }
-
 
 fn resolve_aelys_core_lib() -> Result<PathBuf, String> {
     if let Ok(raw) = std::env::var("AELYS_CORE_LIB") {
@@ -375,7 +364,6 @@ fn resolve_aelys_core_lib() -> Result<PathBuf, String> {
     ))
 }
 
-
 fn find_aelys_core_lib(root: &Path) -> Option<PathBuf> {
     for profile_dir in core_profile_dirs(root) {
         if let Some(path) = find_core_lib_in_build_out(&profile_dir.join("build")) {
@@ -392,7 +380,6 @@ fn find_aelys_core_lib(root: &Path) -> Option<PathBuf> {
     None
 }
 
-
 fn exact_core_lib_candidates(root: &Path) -> Vec<PathBuf> {
     const NAMES: &[&str] = &["aelys-core.lib", "libaelys-core.a"];
 
@@ -404,7 +391,6 @@ fn exact_core_lib_candidates(root: &Path) -> Vec<PathBuf> {
     candidates
 }
 
-
 fn is_core_lib_name(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
         return false;
@@ -415,7 +401,6 @@ fn is_core_lib_name(path: &Path) -> bool {
         "aelys-core.lib" | "libaelys-core.a"
     )
 }
-
 
 fn find_core_lib_in_dir(dir: &Path) -> Option<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
@@ -430,7 +415,6 @@ fn find_core_lib_in_dir(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-
 fn find_core_lib_in_build_out(build_dir: &Path) -> Option<PathBuf> {
     let Ok(entries) = std::fs::read_dir(build_dir) else {
         return None;
@@ -444,14 +428,12 @@ fn find_core_lib_in_build_out(build_dir: &Path) -> Option<PathBuf> {
     None
 }
 
-
 fn core_profile_dirs(root: &Path) -> Vec<PathBuf> {
     vec![
         root.join("target").join("debug"),
         root.join("target").join("release"),
     ]
 }
-
 
 fn candidate_search_roots() -> Vec<PathBuf> {
     let mut roots = Vec::new();
@@ -487,13 +469,11 @@ fn candidate_search_roots() -> Vec<PathBuf> {
     roots
 }
 
-
 fn push_unique(items: &mut Vec<PathBuf>, candidate: PathBuf) {
     if !items.iter().any(|existing| existing == &candidate) {
         items.push(candidate);
     }
 }
-
 
 fn build_aelys_core(root: &Path) -> Result<(), String> {
     if !root.join("Cargo.toml").is_file() {
@@ -515,7 +495,6 @@ fn build_aelys_core(root: &Path) -> Result<(), String> {
     run_process_in_dir("cargo", &args, Some(root))
 }
 
-
 fn running_release_binary() -> bool {
     if let Ok(exe) = std::env::current_exe() {
         return exe
@@ -524,7 +503,6 @@ fn running_release_binary() -> bool {
     }
     false
 }
-
 
 fn link_native_executable(
     object_path: &Path,
@@ -540,7 +518,6 @@ fn link_native_executable(
         link_unix(object_path, exe_path, core_lib)
     }
 }
-
 
 #[cfg(windows)]
 fn link_windows(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(), String> {
@@ -569,7 +546,6 @@ fn link_windows(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<
     Err(errors.join("\n"))
 }
 
-
 #[cfg(not(windows))]
 fn link_unix(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(), String> {
     let obj = object_path.to_string_lossy().to_string();
@@ -588,11 +564,9 @@ fn link_unix(object_path: &Path, exe_path: &Path, core_lib: &Path) -> Result<(),
     run_process("cc", &args)
 }
 
-
 fn run_process(program: &str, args: &[String]) -> Result<(), String> {
     run_process_in_dir(program, args, None)
 }
-
 
 fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Result<(), String> {
     let mut command = Command::new(program);
@@ -619,7 +593,6 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
         stderr.trim()
     ))
 }
-
 
 #[cfg(windows)]
 fn windows_linkers() -> Vec<String> {
@@ -648,7 +621,6 @@ fn windows_linkers() -> Vec<String> {
     linkers
 }
 
-
 #[cfg(windows)]
 fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
     let mut entries = std::env::vars()
@@ -662,4 +634,3 @@ fn llvm_sys_18x_prefixes() -> Vec<PathBuf> {
         .map(|(_, value)| PathBuf::from(value))
         .collect()
 }
-

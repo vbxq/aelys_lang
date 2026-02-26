@@ -173,7 +173,9 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                         .try_as_basic_value()
                         .basic()
-                        .ok_or_else(|| CodegenError::LlvmError("to_string_i64 returned void".to_string()))?
+                        .ok_or_else(|| {
+                            CodegenError::LlvmError("to_string_i64 returned void".to_string())
+                        })?
                 }
             }
             AirType::F64 | AirType::F32 => {
@@ -213,7 +215,9 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                         .try_as_basic_value()
                         .basic()
-                        .ok_or_else(|| CodegenError::LlvmError("to_string_f64 returned void".to_string()))?
+                        .ok_or_else(|| {
+                            CodegenError::LlvmError("to_string_f64 returned void".to_string())
+                        })?
                 }
             }
             AirType::Bool => {
@@ -250,15 +254,15 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                         .try_as_basic_value()
                         .basic()
-                        .ok_or_else(|| CodegenError::LlvmError("to_string_bool returned void".to_string()))?
+                        .ok_or_else(|| {
+                            CodegenError::LlvmError("to_string_bool returned void".to_string())
+                        })?
                 }
             }
             AirType::Str => {
                 // Already a string, use directly
                 match &args[0] {
-                    Operand::Const(AirConst::Str(text)) => {
-                        self.global_string_value(text)?
-                    }
+                    Operand::Const(AirConst::Str(text)) => self.global_string_value(text)?,
                     _ if value.is_struct_value() => {
                         let struct_val = value.into_struct_value();
                         if struct_val.get_type() != aelys_string_type(self.context) {

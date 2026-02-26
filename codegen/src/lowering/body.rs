@@ -132,8 +132,8 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     fn find_entry_block(&self) -> BlockId {
-        use std::collections::HashSet;
         use aelys_air::AirTerminator;
+        use std::collections::HashSet;
 
         // collect all blocks that are branch targets
         let mut has_predecessors = HashSet::new();
@@ -142,11 +142,17 @@ impl<'a> FunctionCodegen<'a> {
                 AirTerminator::Goto(target) => {
                     has_predecessors.insert(*target);
                 }
-                AirTerminator::Branch { then_block, else_block, .. } => {
+                AirTerminator::Branch {
+                    then_block,
+                    else_block,
+                    ..
+                } => {
                     has_predecessors.insert(*then_block);
                     has_predecessors.insert(*else_block);
                 }
-                AirTerminator::Switch { targets, default, .. } => {
+                AirTerminator::Switch {
+                    targets, default, ..
+                } => {
                     for (_, target) in targets {
                         has_predecessors.insert(*target);
                     }
@@ -164,7 +170,11 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         // fallback to first block if no clear entry (.. but that shouldn't happen)
-        self.air_function.blocks.first().map(|b| b.id).unwrap_or(BlockId(0))
+        self.air_function
+            .blocks
+            .first()
+            .map(|b| b.id)
+            .unwrap_or(BlockId(0))
     }
 
     fn create_allocas(&mut self) -> Result<(), CodegenError> {

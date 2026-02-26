@@ -257,8 +257,7 @@ impl MonoContext {
             .collect();
         // the set of generic base namesn
         // quick membership check
-        let generic_names: HashSet<&str> =
-            generic_sigs.keys().map(|s| s.as_str()).collect();
+        let generic_names: HashSet<&str> = generic_sigs.keys().map(|s| s.as_str()).collect();
 
         for func in &mut program.functions {
             if !func.type_params.is_empty() {
@@ -302,10 +301,24 @@ impl MonoContext {
                 rvalue: Rvalue::Call { func: callee, args },
                 ..
             } => {
-                self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
+                self.rewrite_callee(
+                    callee,
+                    args,
+                    caller_params,
+                    caller_locals,
+                    generic_sigs,
+                    generic_names,
+                );
             }
             AirStmtKind::CallVoid { func: callee, args } => {
-                self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
+                self.rewrite_callee(
+                    callee,
+                    args,
+                    caller_params,
+                    caller_locals,
+                    generic_sigs,
+                    generic_names,
+                );
             }
             _ => {}
         }
@@ -319,8 +332,18 @@ impl MonoContext {
         generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
         generic_names: &HashSet<&str>,
     ) {
-        if let AirTerminator::Invoke { func: callee, args, .. } = term {
-            self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
+        if let AirTerminator::Invoke {
+            func: callee, args, ..
+        } = term
+        {
+            self.rewrite_callee(
+                callee,
+                args,
+                caller_params,
+                caller_locals,
+                generic_sigs,
+                generic_names,
+            );
         }
     }
 
@@ -435,7 +458,11 @@ fn type_to_string(ty: &AirType) -> String {
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
         AirType::FnPtr { params, ret, .. } => {
-            let params_str = params.iter().map(type_to_string).collect::<Vec<_>>().join("_");
+            let params_str = params
+                .iter()
+                .map(type_to_string)
+                .collect::<Vec<_>>()
+                .join("_");
             format!("fnptr_{}_{}", params_str, type_to_string(ret))
         }
         AirType::Param(id) => format!("param_{}", id.0),

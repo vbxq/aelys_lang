@@ -116,7 +116,12 @@ impl<'a> FunctionCodegen<'a> {
                     self.builder
                         .build_call(
                             char_at_fn,
-                            &[result_ptr.into(), str_ptr.into(), str_len.into(), idx_val.into()],
+                            &[
+                                result_ptr.into(),
+                                str_ptr.into(),
+                                str_len.into(),
+                                idx_val.into(),
+                            ],
                             "",
                         )
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;

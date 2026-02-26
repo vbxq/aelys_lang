@@ -236,7 +236,10 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
 /// Returns true if the AirType is a struct-like type that would be >8 bytes
 /// and therefore unsafe to pass by value across the LLVM -> C ABI boundary
 fn is_abi_unsafe_type(ty: &AirType) -> bool {
-    matches!(ty, AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _))
+    matches!(
+        ty,
+        AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _)
+    )
 }
 
 fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenError> {

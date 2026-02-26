@@ -273,7 +273,11 @@ impl<'a> FunctionCodegen<'a> {
                     .into_int_value();
 
                 let is_eq = matches!(op, BinOp::Eq);
-                let pred = if is_eq { IntPredicate::NE } else { IntPredicate::EQ };
+                let pred = if is_eq {
+                    IntPredicate::NE
+                } else {
+                    IntPredicate::EQ
+                };
                 let name = if is_eq { "str_eq" } else { "str_ne" };
                 self.builder
                     .build_int_compare(pred, i64_val, self.context.i64_type().const_zero(), name)
@@ -281,7 +285,7 @@ impl<'a> FunctionCodegen<'a> {
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))
             }
             _ => Err(CodegenError::UnsupportedInstruction(
-                "unsupported string binary op (only == and != are supported)".to_string()
+                "unsupported string binary op (only == and != are supported)".to_string(),
             )),
         }
     }

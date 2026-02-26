@@ -608,12 +608,20 @@ fn caller() -> i64 {
     assert!(
         mono_i32.is_some(),
         "expected __mono_identity_i32, found: {:?}",
-        program.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+        program
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
     );
     assert!(
         mono_i64.is_some(),
         "expected __mono_identity_i64, found: {:?}",
-        program.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+        program
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
     );
 
     // verify the i32 instance has i32 param/return, and the i64 instance has i64
@@ -634,25 +642,36 @@ fn caller() -> i64 {
                 .iter()
                 .filter_map(|s| match &s.kind {
                     AirStmtKind::Assign {
-                        rvalue: Rvalue::Call { func: Callee::Named(n), .. },
+                        rvalue:
+                            Rvalue::Call {
+                                func: Callee::Named(n),
+                                ..
+                            },
                         ..
                     } => Some(n.clone()),
                     _ => None,
                 })
                 .chain(match &b.terminator {
-                    AirTerminator::Invoke { func: Callee::Named(n), .. } => Some(n.clone()),
+                    AirTerminator::Invoke {
+                        func: Callee::Named(n),
+                        ..
+                    } => Some(n.clone()),
                     _ => None,
                 })
         })
         .collect();
 
     assert!(
-        call_targets.iter().any(|n| n.contains("__mono_identity_i32")),
+        call_targets
+            .iter()
+            .any(|n| n.contains("__mono_identity_i32")),
         "caller should call __mono_identity_i32, found calls: {:?}",
         call_targets
     );
     assert!(
-        call_targets.iter().any(|n| n.contains("__mono_identity_i64")),
+        call_targets
+            .iter()
+            .any(|n| n.contains("__mono_identity_i64")),
         "caller should call __mono_identity_i64, found calls: {:?}",
         call_targets
     );

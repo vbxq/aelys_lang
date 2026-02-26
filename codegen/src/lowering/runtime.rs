@@ -78,10 +78,9 @@ impl<'a> FunctionCodegen<'a> {
 
         let fn_ty = if use_sret {
             // Windows: void(ptr sret, ptr str_ptr, i64 str_len, i64 index)
-            self.context.void_type().fn_type(
-                &[ptr_ty, ptr_ty, i64_ty, i64_ty],
-                false,
-            )
+            self.context
+                .void_type()
+                .fn_type(&[ptr_ty, ptr_ty, i64_ty, i64_ty], false)
         } else {
             // Non-Windows: str(ptr str_ptr, i64 str_len, i64 index)
             string_ty.fn_type(&[ptr_ty, i64_ty, i64_ty], false)
@@ -125,7 +124,9 @@ impl<'a> FunctionCodegen<'a> {
             string_ty.fn_type(&[self.context.i64_type().into()], false)
         };
 
-        let function = self.module.add_function("__aelys_to_string_i64", fn_ty, None);
+        let function = self
+            .module
+            .add_function("__aelys_to_string_i64", fn_ty, None);
 
         if use_sret {
             use inkwell::attributes::AttributeLoc;
@@ -163,7 +164,9 @@ impl<'a> FunctionCodegen<'a> {
             string_ty.fn_type(&[self.context.f64_type().into()], false)
         };
 
-        let function = self.module.add_function("__aelys_to_string_f64", fn_ty, None);
+        let function = self
+            .module
+            .add_function("__aelys_to_string_f64", fn_ty, None);
 
         if use_sret {
             use inkwell::attributes::AttributeLoc;
@@ -202,7 +205,9 @@ impl<'a> FunctionCodegen<'a> {
             string_ty.fn_type(&[self.context.i64_type().into()], false)
         };
 
-        let function = self.module.add_function("__aelys_to_string_bool", fn_ty, None);
+        let function = self
+            .module
+            .add_function("__aelys_to_string_bool", fn_ty, None);
 
         if use_sret {
             use inkwell::attributes::AttributeLoc;
@@ -225,7 +230,10 @@ impl<'a> FunctionCodegen<'a> {
 
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         let i64_ty = self.context.i64_type().into();
-        let fn_ty = self.context.i64_type().fn_type(&[ptr_ty, i64_ty, ptr_ty, i64_ty], false);
+        let fn_ty = self
+            .context
+            .i64_type()
+            .fn_type(&[ptr_ty, i64_ty, ptr_ty, i64_ty], false);
         self.module.add_function("__aelys_str_eq", fn_ty, None)
     }
 
@@ -243,7 +251,7 @@ impl<'a> FunctionCodegen<'a> {
             .ok_or_else(|| {
                 CodegenError::UnsupportedInstruction("string literal too large".to_string())
             })?;
-        
+
         let global_ptr = if let Some(existing) = self.string_globals.get(text).copied() {
             existing
         } else {

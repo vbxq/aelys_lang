@@ -67,7 +67,6 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-
             if let Some(consumed_next) = self.parse_output_option(token_str)? {
                 self.advance();
                 if consumed_next {
@@ -75,7 +74,6 @@ impl<'a> Parser<'a> {
                 }
                 continue;
             }
-
 
             if token_str == "--emit-air" {
                 self.emit_air = true;
@@ -88,7 +86,6 @@ impl<'a> Parser<'a> {
                 self.advance();
                 continue;
             }
-
 
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
@@ -165,7 +162,10 @@ impl<'a> Parser<'a> {
     fn consume_positional(&mut self, token: &str) -> Result<(), String> {
         match self.command {
             None => {
-                return Err(format!("unexpected argument: {}. Use 'aelys compile <file>' to compile.", token));
+                return Err(format!(
+                    "unexpected argument: {}. Use 'aelys compile <file>' to compile.",
+                    token
+                ));
             }
             Some(CommandName::Compile) => {
                 if self.path.is_none() {
