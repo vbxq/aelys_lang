@@ -231,11 +231,13 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn last_block_is_terminated(&self) -> bool {
+        // a block is terminated if it has a terminator than Goto
+        // Goto is a fallthrough to a merge block, not a definitive exit
+        // other terminator return, unreachable, branch etc are definitive exits.
         self.current_stmts.is_empty()
-            && self.current_blocks.last().is_some_and(|b| {
-                !matches!(b.terminator, AirTerminator::Goto(_))
-                    || matches!(b.terminator, AirTerminator::Return(_))
-                    || matches!(b.terminator, AirTerminator::Unreachable)
-            })
+            && self
+                .current_blocks
+                .last()
+                .is_some_and(|b| !matches!(b.terminator, AirTerminator::Goto(_)))
     }
 }
