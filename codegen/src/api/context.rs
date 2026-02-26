@@ -21,10 +21,24 @@ impl CodegenContext {
         let module = context.create_module(module_name);
         let builder = context.create_builder();
 
-        // set target triple immediately so ABI decisions (e.g., sret) are correct
+        // Set target triple and data layout immediately so ABI decisions
+        // (for eg sret, struct sizes/alignments) are correct during codegen
         Target::initialize_native(&InitializationConfig::default()).ok();
         let triple = TargetMachine::get_default_triple();
         module.set_triple(&triple);
+
+        if let Ok(target) = Target::from_triple(&triple) {
+            if let Some(machine) = target.create_target_machine(
+                &triple,
+                "generic",
+                "",
+                OptimizationLevel::None,
+                RelocMode::Default,
+                CodeModel::Default,
+            ) {
+                module.set_data_layout(&machine.get_target_data().get_data_layout());
+            }
+        }
 
         Self {
             context,
@@ -64,10 +78,6 @@ impl CodegenContext {
             .ok_or_else(|| {
                 CodegenError::LlvmError("failed to create target machine".to_string())
             })?;
-
-        self.module.set_triple(&triple);
-        let data_layout = target_machine.get_target_data().get_data_layout();
-        self.module.set_data_layout(&data_layout);
 
         target_machine
             .write_to_file(&self.module, FileType::Object, Path::new(path))
