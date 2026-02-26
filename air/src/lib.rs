@@ -57,6 +57,22 @@ pub enum AirType {
     Void,
 }
 
+impl AirType {
+    pub fn int_size(&self) -> Option<AirIntSize> {
+        match self {
+            AirType::I8 => Some(AirIntSize::I8),
+            AirType::I16 => Some(AirIntSize::I16),
+            AirType::I32 => Some(AirIntSize::I32),
+            AirType::I64 => Some(AirIntSize::I64),
+            AirType::U8 => Some(AirIntSize::U8),
+            AirType::U16 => Some(AirIntSize::U16),
+            AirType::U32 => Some(AirIntSize::U32),
+            AirType::U64 => Some(AirIntSize::U64),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AirIntSize {
     I8,

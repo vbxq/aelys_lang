@@ -747,7 +747,11 @@ impl<'a> LoweringContext<'a> {
         let step_operand = if let Some(step_expr) = step {
             self.lower_expr(step_expr)
         } else {
-            Operand::Const(AirConst::IntLiteral(1))
+            let step = iter_ty
+                .int_size()
+                .map(|s| AirConst::Int(1, s))
+                .unwrap_or(AirConst::IntLiteral(1));
+            Operand::Const(step)
         };
         self.emit(
             AirStmtKind::Assign {
