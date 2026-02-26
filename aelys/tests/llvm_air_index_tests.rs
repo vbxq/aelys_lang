@@ -118,30 +118,30 @@ fn array_index_read_generates_gep_and_bounds_check() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Should have GEP into the array
+    // should have GEP into the array
     assert!(
         ir.contains("getelementptr inbounds"),
         "array index should generate GEP:\n{ir}"
     );
-    // Should have bounds check
+    // should have bounds check
     assert!(
         ir.contains("icmp uge"),
         "array index should generate unsigned bounds check:\n{ir}"
     );
-    // Should call __aelys_panic for OOB
+    // should call __aelys_panic for OOB
     assert!(
         ir.contains("@__aelys_panic"),
         "array index should call __aelys_panic on OOB:\n{ir}"
     );
-    // Should have idx_oob and idx_ok labels
+    // should have idx_oob and idx_ok labels
     assert!(ir.contains("idx_oob:"), "should have idx_oob block:\n{ir}");
     assert!(ir.contains("idx_ok:"), "should have idx_ok block:\n{ir}");
-    // Should have unreachable after panic
+    // should have unreachable after panic
     assert!(
         ir.contains("unreachable"),
         "should have unreachable after panic:\n{ir}"
     );
-    // Should load the element
+    // should load the element
     assert!(
         ir.contains("load i64"),
         "array index should load element:\n{ir}"
@@ -209,17 +209,17 @@ fn string_index_read_calls_runtime_char_at() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Should call the UTF-8 runtime function, not inline byte-level GEP
+    // should call the UTF-8 runtime function, not inline byte-level GEP
     assert!(
         ir.contains("@__aelys_str_char_at"),
         "string index should call __aelys_str_char_at:\n{ir}"
     );
-    // Should declare the function with Windows x64 MSVC flat+sret ABI: (ptr sret, ptr, i64, i64) -> void
+    // should declare the function with Windows x64 MSVC flat+sret ABI: (ptr sret, ptr, i64, i64) -> void
     assert!(
         ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), ptr, i64, i64)"),
         "should declare __aelys_str_char_at with correct signature:\n{ir}"
     );
-    // Should NOT do byte-level GEP into string data
+    // should NOT do byte-level GEP into string data
     assert!(
         !ir.contains("str_idx_ptr"),
         "string index must not use byte-level GEP:\n{ir}"
@@ -297,17 +297,17 @@ fn array_index_write_generates_gep_and_store() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Should have GEP
+    // should have GEP
     assert!(
         ir.contains("getelementptr inbounds"),
         "array write should generate GEP:\n{ir}"
     );
-    // Should store the value
+    // should store the value
     assert!(
         ir.contains("store i64"),
         "array write should generate store:\n{ir}"
     );
-    // Should have bounds check
+    // should have bounds check
     assert!(
         ir.contains("icmp uge"),
         "array write should have bounds check:\n{ir}"
