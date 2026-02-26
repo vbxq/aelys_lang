@@ -462,8 +462,8 @@ fn type_to_string(ty: &AirType) -> String {
                 .iter()
                 .map(type_to_string)
                 .collect::<Vec<_>>()
-                .join("_");
-            format!("fnptr_{}_{}", params_str, type_to_string(ret))
+                .join("$");
+            format!("fnptr${}$R{}", params_str, type_to_string(ret))
         }
         AirType::Param(id) => format!("param_{}", id.0),
         AirType::Void => "void".to_string(),
