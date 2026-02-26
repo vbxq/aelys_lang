@@ -70,20 +70,32 @@ impl<'a> FunctionCodegen<'a> {
 
         if float_info(from).is_some() && int_info(to).is_some() {
             let target_ty = int_type_for_air(self.context, to)?;
-            return self
-                .builder
-                .build_float_to_signed_int(value.into_float_value(), target_ty, "fptosi")
-                .map(Into::into)
-                .map_err(|e| CodegenError::LlvmError(e.to_string()));
+            let (_, to_signed) = int_info(to).unwrap();
+            return if to_signed {
+                self.builder
+                    .build_float_to_signed_int(value.into_float_value(), target_ty, "fptosi")
+                    .map(Into::into)
+            } else {
+                self.builder
+                    .build_float_to_unsigned_int(value.into_float_value(), target_ty, "fptoui")
+                    .map(Into::into)
+            }
+            .map_err(|e| CodegenError::LlvmError(e.to_string()));
         }
 
         if int_info(from).is_some() && float_info(to).is_some() {
             let target_ty = float_type_for_air(self.context, to)?;
-            return self
-                .builder
-                .build_signed_int_to_float(value.into_int_value(), target_ty, "sitofp")
-                .map(Into::into)
-                .map_err(|e| CodegenError::LlvmError(e.to_string()));
+            let (_, from_signed) = int_info(from).unwrap();
+            return if from_signed {
+                self.builder
+                    .build_signed_int_to_float(value.into_int_value(), target_ty, "sitofp")
+                    .map(Into::into)
+            } else {
+                self.builder
+                    .build_unsigned_int_to_float(value.into_int_value(), target_ty, "uitofp")
+                    .map(Into::into)
+            }
+            .map_err(|e| CodegenError::LlvmError(e.to_string()));
         }
 
         Err(CodegenError::UnsupportedInstruction(format!(
