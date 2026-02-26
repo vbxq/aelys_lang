@@ -1,8 +1,6 @@
 use crate::*;
 use std::collections::{HashMap, HashSet};
 
-type MangledMap<'a> = HashMap<&'a str, Vec<(&'a (String, Vec<String>), &'a String)>>;
-
 pub fn monomorphize(mut program: AirProgram) -> AirProgram {
     let mut ctx = MonoContext::new(&program);
     ctx.collect_mono_requests(&program);
@@ -192,42 +190,7 @@ impl MonoContext {
     }
 
     fn operand_type(&self, operand: &Operand, caller: &AirFunction) -> AirType {
-        match operand {
-            Operand::Const(c) => match c {
-                AirConst::IntLiteral(_) => AirType::I64,
-                AirConst::Int(_, size) => match size {
-                    AirIntSize::I8 => AirType::I8,
-                    AirIntSize::I16 => AirType::I16,
-                    AirIntSize::I32 => AirType::I32,
-                    AirIntSize::I64 => AirType::I64,
-                    AirIntSize::U8 => AirType::U8,
-                    AirIntSize::U16 => AirType::U16,
-                    AirIntSize::U32 => AirType::U32,
-                    AirIntSize::U64 => AirType::U64,
-                },
-                AirConst::Float(_, size) => match size {
-                    AirFloatSize::F32 => AirType::F32,
-                    AirFloatSize::F64 => AirType::F64,
-                },
-                AirConst::Bool(_) => AirType::Bool,
-                AirConst::Str(_) => AirType::Str,
-                AirConst::Null => AirType::Void,
-                AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
-            },
-            Operand::Copy(id) | Operand::Move(id) => caller
-                .params
-                .iter()
-                .find(|p| p.id == *id)
-                .map(|p| p.ty.clone())
-                .or_else(|| {
-                    caller
-                        .locals
-                        .iter()
-                        .find(|l| l.id == *id)
-                        .map(|l| l.ty.clone())
-                })
-                .unwrap_or(AirType::I64),
-        }
+        operand_type_from(operand, &caller.params, &caller.locals)
     }
 
     fn instantiate(&mut self, program: &mut AirProgram) {
@@ -278,59 +241,139 @@ impl MonoContext {
     }
 
     fn rewrite_call_sites(&self, program: &mut AirProgram) {
-        let name_to_mangled: MangledMap = {
-            let mut map: HashMap<&str, Vec<_>> = HashMap::new();
-            for (key, mangled) in &self.instantiated {
-                map.entry(key.0.as_str()).or_default().push((key, mangled));
-            }
-            map
-        };
-
-        if name_to_mangled.is_empty() {
+        if self.instantiated.is_empty() {
             return;
         }
+
+        // pre-collect generic function signatures for type inference during rewriting.
+        // We need clones because we'll mutate program.functions in the loop below
+        let generic_sigs: HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)> = self
+            .generic_functions
+            .iter()
+            .map(|(name, &idx)| {
+                let f = &program.functions[idx];
+                (name.clone(), (f.params.clone(), f.type_params.clone()))
+            })
+            .collect();
+        // the set of generic base namesn
+        // quick membership check
+        let generic_names: HashSet<&str> =
+            generic_sigs.keys().map(|s| s.as_str()).collect();
 
         for func in &mut program.functions {
             if !func.type_params.is_empty() {
                 continue;
             }
+            // now, we clone caller's type info for operand resolution, we only mutate callees in stmts/terminators but never params/locals.
+            let caller_params = func.params.clone();
+            let caller_locals = func.locals.clone();
+
             for block in &mut func.blocks {
                 for stmt in &mut block.stmts {
-                    self.rewrite_stmt(stmt, &name_to_mangled);
+                    self.rewrite_stmt(
+                        stmt,
+                        &caller_params,
+                        &caller_locals,
+                        &generic_sigs,
+                        &generic_names,
+                    );
                 }
-                self.rewrite_terminator(&mut block.terminator, &name_to_mangled);
+                self.rewrite_terminator(
+                    &mut block.terminator,
+                    &caller_params,
+                    &caller_locals,
+                    &generic_sigs,
+                    &generic_names,
+                );
             }
         }
     }
 
-    fn rewrite_stmt(&self, stmt: &mut AirStmt, name_map: &MangledMap) {
+    fn rewrite_stmt(
+        &self,
+        stmt: &mut AirStmt,
+        caller_params: &[AirParam],
+        caller_locals: &[AirLocal],
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_names: &HashSet<&str>,
+    ) {
         match &mut stmt.kind {
             AirStmtKind::Assign {
-                rvalue: Rvalue::Call { func: callee, .. },
+                rvalue: Rvalue::Call { func: callee, args },
                 ..
             } => {
-                self.rewrite_callee(callee, name_map);
+                self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
             }
-            AirStmtKind::CallVoid { func: callee, .. } => {
-                self.rewrite_callee(callee, name_map);
+            AirStmtKind::CallVoid { func: callee, args } => {
+                self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
             }
             _ => {}
         }
     }
 
-    fn rewrite_terminator(&self, term: &mut AirTerminator, name_map: &MangledMap) {
-        if let AirTerminator::Invoke { func: callee, .. } = term {
-            self.rewrite_callee(callee, name_map);
+    fn rewrite_terminator(
+        &self,
+        term: &mut AirTerminator,
+        caller_params: &[AirParam],
+        caller_locals: &[AirLocal],
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_names: &HashSet<&str>,
+    ) {
+        if let AirTerminator::Invoke { func: callee, args, .. } = term {
+            self.rewrite_callee(callee, args, caller_params, caller_locals, generic_sigs, generic_names);
         }
     }
 
-    fn rewrite_callee(&self, callee: &mut Callee, name_map: &MangledMap) {
+    fn rewrite_callee(
+        &self,
+        callee: &mut Callee,
+        args: &[Operand],
+        caller_params: &[AirParam],
+        caller_locals: &[AirLocal],
+        generic_sigs: &HashMap<String, (Vec<AirParam>, Vec<TypeParamId>)>,
+        generic_names: &HashSet<&str>,
+    ) {
         if let Callee::Named(name) = callee
-            && let Some(entries) = name_map.get(name.as_str())
-            && let Some((_, mangled)) = entries.first()
+            && generic_names.contains(name.as_str())
         {
-            *name = (*mangled).clone();
+            if let Some((gen_params, gen_type_params)) = generic_sigs.get(name.as_str()) {
+                // re-infer type arguments from the call site's actual operand types
+                if let Some(type_args) = self.infer_type_args_from_sig(
+                    gen_params,
+                    gen_type_params,
+                    args,
+                    caller_params,
+                    caller_locals,
+                ) {
+                    let key = (name.clone(), self.type_args_key(&type_args));
+                    if let Some(mangled) = self.instantiated.get(&key) {
+                        *name = mangled.clone();
+                    }
+                }
+            }
         }
+    }
+
+    fn infer_type_args_from_sig(
+        &self,
+        generic_params: &[AirParam],
+        type_params: &[TypeParamId],
+        args: &[Operand],
+        caller_params: &[AirParam],
+        caller_locals: &[AirLocal],
+    ) -> Option<Vec<AirType>> {
+        let mut resolved: HashMap<u32, AirType> = HashMap::new();
+
+        for (param, arg) in generic_params.iter().zip(args.iter()) {
+            let arg_ty = operand_type_from(arg, caller_params, caller_locals);
+            self.unify_param(&param.ty, &arg_ty, &mut resolved);
+        }
+
+        let mut type_args = Vec::with_capacity(type_params.len());
+        for tp in type_params {
+            type_args.push(resolved.get(&tp.0)?.clone());
+        }
+        Some(type_args)
     }
 
     fn type_args_key(&self, types: &[AirType]) -> Vec<String> {
@@ -465,4 +508,36 @@ fn substitute_terminator(
 fn substitute_callee(_callee: &mut Callee, _type_params: &[TypeParamId], _type_args: &[AirType]) {
     // Callee rewriting happens in the separate rewrite_call_sites pass
     // after all instances are known. No per-function substitution needed.
+}
+
+fn operand_type_from(operand: &Operand, params: &[AirParam], locals: &[AirLocal]) -> AirType {
+    match operand {
+        Operand::Const(c) => match c {
+            AirConst::IntLiteral(_) => AirType::I64,
+            AirConst::Int(_, size) => match size {
+                AirIntSize::I8 => AirType::I8,
+                AirIntSize::I16 => AirType::I16,
+                AirIntSize::I32 => AirType::I32,
+                AirIntSize::I64 => AirType::I64,
+                AirIntSize::U8 => AirType::U8,
+                AirIntSize::U16 => AirType::U16,
+                AirIntSize::U32 => AirType::U32,
+                AirIntSize::U64 => AirType::U64,
+            },
+            AirConst::Float(_, size) => match size {
+                AirFloatSize::F32 => AirType::F32,
+                AirFloatSize::F64 => AirType::F64,
+            },
+            AirConst::Bool(_) => AirType::Bool,
+            AirConst::Str(_) => AirType::Str,
+            AirConst::Null => AirType::Void,
+            AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
+        },
+        Operand::Copy(id) | Operand::Move(id) => params
+            .iter()
+            .find(|p| p.id == *id)
+            .map(|p| p.ty.clone())
+            .or_else(|| locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone()))
+            .unwrap_or(AirType::I64),
+    }
 }

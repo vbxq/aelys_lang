@@ -576,3 +576,84 @@ fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string
         );
     }
 }
+
+#[test]
+fn multi_instantiation_generic_dispatches_correctly() {
+    let air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i64 {
+    let a: i32 = identity(42 as i32)
+    let b: i64 = identity(100)
+    return (a as i64) + b
+}
+"#,
+    );
+
+    let mut program = air;
+    compute_layouts(&mut program);
+    let program = monomorphize(program);
+
+    // Both instantiations should exist
+    let mono_i32 = program
+        .functions
+        .iter()
+        .find(|f| f.name.contains("__mono_identity_i32"));
+    let mono_i64 = program
+        .functions
+        .iter()
+        .find(|f| f.name.contains("__mono_identity_i64"));
+    assert!(
+        mono_i32.is_some(),
+        "expected __mono_identity_i32, found: {:?}",
+        program.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+    assert!(
+        mono_i64.is_some(),
+        "expected __mono_identity_i64, found: {:?}",
+        program.functions.iter().map(|f| &f.name).collect::<Vec<_>>()
+    );
+
+    // verify the i32 instance has i32 param/return, and the i64 instance has i64
+    let mono_i32 = mono_i32.unwrap();
+    assert_eq!(mono_i32.params[0].ty, AirType::I32);
+    assert_eq!(mono_i32.ret_ty, AirType::I32);
+    let mono_i64 = mono_i64.unwrap();
+    assert_eq!(mono_i64.params[0].ty, AirType::I64);
+    assert_eq!(mono_i64.ret_ty, AirType::I64);
+
+    // verify call sites too are rewritten to the correct mangled names
+    let caller = func(&program, "caller");
+    let call_targets: Vec<String> = caller
+        .blocks
+        .iter()
+        .flat_map(|b| {
+            b.stmts
+                .iter()
+                .filter_map(|s| match &s.kind {
+                    AirStmtKind::Assign {
+                        rvalue: Rvalue::Call { func: Callee::Named(n), .. },
+                        ..
+                    } => Some(n.clone()),
+                    _ => None,
+                })
+                .chain(match &b.terminator {
+                    AirTerminator::Invoke { func: Callee::Named(n), .. } => Some(n.clone()),
+                    _ => None,
+                })
+        })
+        .collect();
+
+    assert!(
+        call_targets.iter().any(|n| n.contains("__mono_identity_i32")),
+        "caller should call __mono_identity_i32, found calls: {:?}",
+        call_targets
+    );
+    assert!(
+        call_targets.iter().any(|n| n.contains("__mono_identity_i64")),
+        "caller should call __mono_identity_i64, found calls: {:?}",
+        call_targets
+    );
+}
