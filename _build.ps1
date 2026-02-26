@@ -8,4 +8,4 @@ cmd /c ('"' + $vc + '" >nul 2>&1 && set') | ForEach-Object {
 $env:LLVM_SYS_181_PREFIX = 'C:\llvm'
 $env:PATH = "C:\llvm\bin;$env:PATH"
 Set-Location 'C:\Users\admin\RustroverProjects\aelys_lang'
-.\target\debug\aelys-cli.exe compile .\main.aelys --backend llvm --emit-llvm-ir
+.\target\debug\aelys-cli.exe compile .\main.aelys --emit-llvm-ir

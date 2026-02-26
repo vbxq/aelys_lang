@@ -17,9 +17,46 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
         }
         collect_terminator_locals(&block.terminator, &mut referenced);
     }
+
+    // remove dead locals from the locals list
     function
         .locals
         .retain(|local| referenced.contains(&local.id));
+
+    // Transform or remove statements that assign to dead locals, dead store elimination
+    for block in &mut function.blocks {
+        for stmt in &mut block.stmts {
+            if let AirStmtKind::Assign {
+                place: Place::Local(local),
+                rvalue,
+            } = &stmt.kind
+            {
+                if !referenced.contains(local) {
+                    // Dead store - transform Call into CallVoid (preserves side effects)
+                    if let Rvalue::Call { func, args } = rvalue {
+                        stmt.kind = AirStmtKind::CallVoid {
+                            func: func.clone(),
+                            args: args.clone(),
+                        };
+                    }
+                    // other rvalues without side effects can be left as-is and will be removed in a second pass
+                }
+            }
+        }
+
+        // remove remaining dead stores (non-Call assigns to dead locals)
+        block.stmts.retain(|stmt| {
+            if let AirStmtKind::Assign {
+                place: Place::Local(local),
+                ..
+            } = &stmt.kind
+            {
+                referenced.contains(local)
+            } else {
+                true
+            }
+        });
+    }
 }
 
 fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
@@ -103,12 +140,17 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
 
 fn collect_place_locals(place: &Place, out: &mut HashSet<LocalId>) {
     match place {
-        Place::Local(local) | Place::Field(local, _) | Place::Deref(local) => {
+        Place::Local(_) => {
+            // this is just a write destination, don't mark as referenced, only Field/Index/Deref need the base local to exist because they read it
+        }
+        Place::Field(local, _) | Place::Deref(local) => {
+            // must read the base to access field/deref
             out.insert(*local);
         }
         Place::Index(local, operand) => {
+            // same thing
             out.insert(*local);
-            collect_operand_locals(operand, out);
+            collect_operand_locals(operand, out); // index expression uses this operand
         }
     }
 }
