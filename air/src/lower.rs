@@ -1,3 +1,5 @@
+// TODO: REFACTOR ! This is becoming a "god" object and I don't like it.
+
 use crate::*;
 use aelys_sema::{
     InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedParam,
@@ -103,6 +105,20 @@ impl<'a> LoweringContext<'a> {
             ty,
             name: None,
             is_mut: false,
+            span: None,
+        });
+        id
+    }
+
+    /// This is like `alloc_temp` but marks the local as mutable, forcing codegen to use an alloca instead of SSA `value_map`.
+    /// Required for locals written from multiple basic blocks (short-circuit, if-expr, loop counters, etc)
+    fn alloc_temp_mut(&mut self, ty: AirType) -> LocalId {
+        let id = self.alloc_local_id();
+        self.current_locals.push(AirLocal {
+            id,
+            ty,
+            name: None,
+            is_mut: true,
             span: None,
         });
         id
@@ -764,7 +780,7 @@ impl<'a> LoweringContext<'a> {
             sp,
         );
 
-        let idx_local = self.alloc_temp(AirType::I64);
+        let idx_local = self.alloc_temp_mut(AirType::I64);
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(idx_local),
@@ -1402,7 +1418,7 @@ impl<'a> LoweringContext<'a> {
         is_and: bool,
         _parent: &TypedExpr,
     ) -> Operand {
-        let result = self.alloc_temp(AirType::Bool);
+        let result = self.alloc_temp_mut(AirType::Bool);
         let lhs = self.lower_expr(left);
         self.emit(
             AirStmtKind::Assign {
@@ -1456,7 +1472,7 @@ impl<'a> LoweringContext<'a> {
         parent: &TypedExpr,
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(&parent.ty);
-        let result = self.alloc_temp(result_ty);
+        let result = self.alloc_temp_mut(result_ty);
 
         let cond = self.lower_expr(condition);
         let then_id = self.alloc_block_id();
