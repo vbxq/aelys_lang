@@ -112,6 +112,7 @@ impl<'a> FunctionCodegen<'a> {
                         .builder
                         .build_alloca(string_ty, "sret_slot")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.align_alloca(result_ptr, string_ty.into())?;
                     self.builder
                         .build_call(
                             char_at_fn,
