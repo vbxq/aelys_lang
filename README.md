@@ -38,7 +38,7 @@ Aelys scales from beginner-friendly scripts to zero-cost systems code. You contr
 
 ## Documentation
 
-- [Build Instructions](docs/installation.md)
+- [Installation Instructions](docs/installation.md)
 - [Getting Started](docs/getting-started.md)
 - [Language Spec](docs/language-spec.md)
 - [Standard Library](docs/standard-library.md)
@@ -54,3 +54,9 @@ Aelys scales from beginner-friendly scripts to zero-cost systems code. You contr
 ---
 
 **Pre-alpha. Active rewrite. Use at your own risk.**
+
+## Contributing
+
+Aelys is currently mid-rewrite, so the codebase is moving fast and PRs may conflict or become obsolete quickly. It's not the best time for large contributions.
+
+That said, bug reports and feedback are always useful. If you want to contribute code, open an issue first, we'll let you know if it's a good fit given where things are.
