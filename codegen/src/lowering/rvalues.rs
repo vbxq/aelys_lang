@@ -99,48 +99,15 @@ impl<'a> FunctionCodegen<'a> {
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
             AirType::Str => {
-                // UTF-8 character indexing: delegate to runtime because
-                // finding the n-th codepoint requires scanning byte boundaries.
+                // UTF-8 char indexing, runtime handles multi-byte scanning
                 let str_val = self.generate_operand(base)?.into_struct_value();
                 let (str_ptr, str_len) = self.string_parts_from_value(str_val)?;
                 let char_at_fn = self.ensure_str_char_at_function();
-
-                // Windows x64 MSVC uses sret for struct returns
-                if self.target_is_windows() {
-                    let string_ty = crate::types::aelys_string_type(self.context);
-                    let result_ptr = self
-                        .builder
-                        .build_alloca(string_ty, "sret_slot")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.align_alloca(result_ptr, string_ty.into())?;
-                    self.builder
-                        .build_call(
-                            char_at_fn,
-                            &[
-                                result_ptr.into(),
-                                str_ptr.into(),
-                                str_len.into(),
-                                idx_val.into(),
-                            ],
-                            "",
-                        )
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.builder
-                        .build_load(string_ty, result_ptr, "str_char_at")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))
-                } else {
-                    let result = self
-                        .builder
-                        .build_call(
-                            char_at_fn,
-                            &[str_ptr.into(), str_len.into(), idx_val.into()],
-                            "str_char_at",
-                        )
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    result.try_as_basic_value().basic().ok_or_else(|| {
-                        CodegenError::LlvmError("__aelys_str_char_at returned void".to_string())
-                    })
-                }
+                self.call_sret_returning_fn(
+                    char_at_fn,
+                    &[str_ptr.into(), str_len.into(), idx_val.into()],
+                    "str_char_at",
+                )
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",

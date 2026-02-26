@@ -28,10 +28,11 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) string_globals: HashMap<String, PointerValue<'static>>,
     pub(crate) current_block: Option<BlockId>,
     pub(crate) current_stmt_index: Option<usize>,
+    // cached so we don't recompute it 3 times
+    entry_block_id: BlockId,
 }
 
 impl<'a> FunctionCodegen<'a> {
-    /// Check if the LLVM target triple indicates Windows (requires sret for large struct returns)
     pub(crate) fn target_is_windows(&self) -> bool {
         self.module
             .get_triple()
@@ -83,6 +84,8 @@ impl<'a> FunctionCodegen<'a> {
             }
         }
 
+        let entry_block_id = find_entry_block(air_function);
+
         Self {
             context,
             module,
@@ -100,6 +103,7 @@ impl<'a> FunctionCodegen<'a> {
             string_globals: HashMap::new(),
             current_block: None,
             current_stmt_index: None,
+            entry_block_id,
         }
     }
 
@@ -110,71 +114,24 @@ impl<'a> FunctionCodegen<'a> {
         self.generate_blocks()
     }
 
-    fn create_blocks(&mut self) {
-        let entry_id = self.find_entry_block();
-
-        // create entry block first (LLVM requires it to be first)
-        if let Some(entry) = self.air_function.blocks.iter().find(|b| b.id == entry_id) {
-            let name = format!("bb{}", entry.id.0);
-            let llvm_block = self.context.append_basic_block(self.function, &name);
-            self.block_map.insert(entry.id, llvm_block);
-        }
-
-        // create remaining blocks in order
+    /// Returns block IDs in codegen order: entry first, then the rest.
+    fn ordered_block_ids(&self) -> Vec<BlockId> {
+        let mut ids = Vec::with_capacity(self.air_function.blocks.len());
+        ids.push(self.entry_block_id);
         for block in &self.air_function.blocks {
-            if block.id == entry_id {
-                continue; // already created
+            if block.id != self.entry_block_id {
+                ids.push(block.id);
             }
-            let name = format!("bb{}", block.id.0);
-            let llvm_block = self.context.append_basic_block(self.function, &name);
-            self.block_map.insert(block.id, llvm_block);
         }
+        ids
     }
 
-    fn find_entry_block(&self) -> BlockId {
-        use aelys_air::AirTerminator;
-        use std::collections::HashSet;
-
-        // collect all blocks that are branch targets
-        let mut has_predecessors = HashSet::new();
-        for block in &self.air_function.blocks {
-            match &block.terminator {
-                AirTerminator::Goto(target) => {
-                    has_predecessors.insert(*target);
-                }
-                AirTerminator::Branch {
-                    then_block,
-                    else_block,
-                    ..
-                } => {
-                    has_predecessors.insert(*then_block);
-                    has_predecessors.insert(*else_block);
-                }
-                AirTerminator::Switch {
-                    targets, default, ..
-                } => {
-                    for (_, target) in targets {
-                        has_predecessors.insert(*target);
-                    }
-                    has_predecessors.insert(*default);
-                }
-                _ => {}
-            }
+    fn create_blocks(&mut self) {
+        for id in self.ordered_block_ids() {
+            let name = format!("bb{}", id.0);
+            let llvm_block = self.context.append_basic_block(self.function, &name);
+            self.block_map.insert(id, llvm_block);
         }
-
-        // entry block is the one with no predecessors
-        for block in &self.air_function.blocks {
-            if !has_predecessors.contains(&block.id) {
-                return block.id;
-            }
-        }
-
-        // fallback to first block if no clear entry (.. but that shouldn't happen)
-        self.air_function
-            .blocks
-            .first()
-            .map(|b| b.id)
-            .unwrap_or(BlockId(0))
     }
 
     fn create_allocas(&mut self) -> Result<(), CodegenError> {
@@ -219,28 +176,11 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     fn generate_blocks(&mut self) -> Result<(), CodegenError> {
-        // Generate entry block first, then remaining blocks
-        let entry_id = self.find_entry_block();
         let blocks = self.air_function.blocks.clone();
+        let order = self.ordered_block_ids();
 
-        // Generate entry block
-        if let Some(entry) = blocks.iter().find(|b| b.id == entry_id) {
-            self.current_block = Some(entry.id);
-            let llvm_block = self.lookup_block(entry.id)?;
-            self.builder.position_at_end(llvm_block);
-            for (stmt_index, stmt) in entry.stmts.iter().enumerate() {
-                self.current_stmt_index = Some(stmt_index);
-                self.generate_stmt(&stmt.kind)?;
-            }
-            self.current_stmt_index = None;
-            self.generate_terminator(&entry.terminator)?;
-        }
-
-        // Generate remaining blocks
-        for block in &blocks {
-            if block.id == entry_id {
-                continue; // Already generated
-            }
+        for block_id in order {
+            let block = blocks.iter().find(|b| b.id == block_id).unwrap();
             self.current_block = Some(block.id);
             let llvm_block = self.lookup_block(block.id)?;
             self.builder.position_at_end(llvm_block);
@@ -253,8 +193,6 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         self.current_block = None;
-        self.current_stmt_index = None;
-
         Ok(())
     }
 
@@ -285,13 +223,7 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     fn entry_block(&self) -> Result<BasicBlock<'static>, CodegenError> {
-        let first = self.air_function.blocks.first().ok_or_else(|| {
-            CodegenError::UnsupportedInstruction(format!(
-                "function `{}` has no blocks",
-                self.air_function.name
-            ))
-        })?;
-        self.lookup_block(first.id)
+        self.lookup_block(self.entry_block_id)
     }
 
     pub(crate) fn lookup_block(&self, id: BlockId) -> Result<BasicBlock<'static>, CodegenError> {
@@ -368,4 +300,46 @@ impl<'a> FunctionCodegen<'a> {
         };
         CodegenError::unsupported_with_location(kind, detail, location)
     }
+}
+
+/// Find the entry block (no predecessors). Falls back to first block.
+fn find_entry_block(func: &AirFunction) -> BlockId {
+    use aelys_air::AirTerminator;
+
+    let mut has_predecessors = HashSet::new();
+    for block in &func.blocks {
+        match &block.terminator {
+            AirTerminator::Goto(target) => {
+                has_predecessors.insert(*target);
+            }
+            AirTerminator::Branch {
+                then_block,
+                else_block,
+                ..
+            } => {
+                has_predecessors.insert(*then_block);
+                has_predecessors.insert(*else_block);
+            }
+            AirTerminator::Switch {
+                targets, default, ..
+            } => {
+                for (_, target) in targets {
+                    has_predecessors.insert(*target);
+                }
+                has_predecessors.insert(*default);
+            }
+            _ => {}
+        }
+    }
+
+    for block in &func.blocks {
+        if !has_predecessors.contains(&block.id) {
+            return block.id;
+        }
+    }
+
+    func.blocks
+        .first()
+        .map(|b| b.id)
+        .unwrap_or(BlockId(0))
 }

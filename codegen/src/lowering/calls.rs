@@ -19,8 +19,7 @@ impl<'a> FunctionCodegen<'a> {
             arg_values.push(self.generate_operand(arg)?);
         }
 
-        // During bootstrap, print/println are reserved names lowered to __aelys_write.
-        // Declaration phase rejects user definitions with these names.
+        // print/println are reserved bootstrap names lowered to __aelys_write
         if let Callee::Named(name) = callee
             && is_reserved_bootstrap_builtin(name)
         {
@@ -134,17 +133,9 @@ impl<'a> FunctionCodegen<'a> {
         let arg_type = self.operand_type(&args[0])?;
         let value = arg_values[0];
 
-        // TODO BOOTSTRAP: auto-convert primitive types to string
         let string_value = match arg_type {
             AirType::I64 | AirType::I32 | AirType::I16 | AirType::I8 => {
-                let to_string_fn = self.ensure_to_string_i64_function();
-                let int_val = if value.is_int_value() {
-                    value.into_int_value()
-                } else {
-                    return Err(CodegenError::UnsupportedType(
-                        "expected int value for i64/i32 argument".to_string(),
-                    ));
-                };
+                let int_val = value.into_int_value();
                 let i64_val = if int_val.get_type() == self.context.i64_type() {
                     int_val
                 } else {
@@ -152,41 +143,24 @@ impl<'a> FunctionCodegen<'a> {
                         .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
-
-                // Windows x64 MSVC uses sret for struct returns
-                if self.target_is_windows() {
-                    let string_ty = aelys_string_type(self.context);
-                    let result_ptr = self
-                        .builder
-                        .build_alloca(string_ty, "sret_slot")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.align_alloca(result_ptr, string_ty.into())?;
-                    self.builder
-                        .build_call(to_string_fn, &[result_ptr.into(), i64_val.into()], "")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.builder
-                        .build_load(string_ty, result_ptr, "to_str")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                let fn_val = self.ensure_to_string_i64_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
+            }
+            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 => {
+                // unsigned: zero-extend to i64 before calling to_string_i64
+                let int_val = value.into_int_value();
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
                 } else {
                     self.builder
-                        .build_call(to_string_fn, &[i64_val.into()], "to_str")
+                        .build_int_z_extend(int_val, self.context.i64_type(), "zext_i64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                        .try_as_basic_value()
-                        .basic()
-                        .ok_or_else(|| {
-                            CodegenError::LlvmError("to_string_i64 returned void".to_string())
-                        })?
-                }
+                };
+                let fn_val = self.ensure_to_string_i64_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
             }
             AirType::F64 | AirType::F32 => {
-                let to_string_fn = self.ensure_to_string_f64_function();
-                let float_val = if value.is_float_value() {
-                    value.into_float_value()
-                } else {
-                    return Err(CodegenError::UnsupportedType(
-                        "expected float value for f64/f32 argument".to_string(),
-                    ));
-                };
+                let float_val = value.into_float_value();
                 let f64_val = if float_val.get_type() == self.context.f64_type() {
                     float_val
                 } else {
@@ -194,91 +168,35 @@ impl<'a> FunctionCodegen<'a> {
                         .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?
                 };
-
-                // Windows x64 MSVC uses sret for struct returns
-                if self.target_is_windows() {
-                    let string_ty = aelys_string_type(self.context);
-                    let result_ptr = self
-                        .builder
-                        .build_alloca(string_ty, "sret_slot")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.align_alloca(result_ptr, string_ty.into())?;
-                    self.builder
-                        .build_call(to_string_fn, &[result_ptr.into(), f64_val.into()], "")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.builder
-                        .build_load(string_ty, result_ptr, "to_str")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                } else {
-                    self.builder
-                        .build_call(to_string_fn, &[f64_val.into()], "to_str")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                        .try_as_basic_value()
-                        .basic()
-                        .ok_or_else(|| {
-                            CodegenError::LlvmError("to_string_f64 returned void".to_string())
-                        })?
-                }
+                let fn_val = self.ensure_to_string_f64_function();
+                self.call_sret_returning_fn(fn_val, &[f64_val.into()], "to_str")?
             }
             AirType::Bool => {
-                let to_string_fn = self.ensure_to_string_bool_function();
-                let bool_val = if value.is_int_value() {
-                    value.into_int_value()
-                } else {
-                    return Err(CodegenError::UnsupportedType(
-                        "expected int value for bool argument".to_string(),
-                    ));
-                };
+                let bool_val = value.into_int_value();
                 let i64_val = self
                     .builder
                     .build_int_z_extend(bool_val, self.context.i64_type(), "bool_to_i64")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-
-                // Windows x64 MSVC uses sret for struct returns
-                if self.target_is_windows() {
-                    let string_ty = aelys_string_type(self.context);
-                    let result_ptr = self
-                        .builder
-                        .build_alloca(string_ty, "sret_slot")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.align_alloca(result_ptr, string_ty.into())?;
-                    self.builder
-                        .build_call(to_string_fn, &[result_ptr.into(), i64_val.into()], "")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.builder
-                        .build_load(string_ty, result_ptr, "to_str")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                } else {
-                    self.builder
-                        .build_call(to_string_fn, &[i64_val.into()], "to_str")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                        .try_as_basic_value()
-                        .basic()
-                        .ok_or_else(|| {
-                            CodegenError::LlvmError("to_string_bool returned void".to_string())
-                        })?
-                }
+                let fn_val = self.ensure_to_string_bool_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
             }
-            AirType::Str => {
-                // Already a string, use directly
-                match &args[0] {
-                    Operand::Const(AirConst::Str(text)) => self.global_string_value(text)?,
-                    _ if value.is_struct_value() => {
-                        let struct_val = value.into_struct_value();
-                        if struct_val.get_type() != aelys_string_type(self.context) {
-                            return Err(CodegenError::UnsupportedType(
-                                "expected string struct value".to_string(),
-                            ));
-                        }
-                        value
-                    }
-                    _ => {
+            AirType::Str => match &args[0] {
+                Operand::Const(AirConst::Str(text)) => self.global_string_value(text)?,
+                _ if value.is_struct_value() => {
+                    let struct_val = value.into_struct_value();
+                    if struct_val.get_type() != aelys_string_type(self.context) {
                         return Err(CodegenError::UnsupportedType(
-                            "expected string value".to_string(),
+                            "expected string struct value".to_string(),
                         ));
                     }
+                    value
                 }
-            }
+                _ => {
+                    return Err(CodegenError::UnsupportedType(
+                        "expected string value".to_string(),
+                    ));
+                }
+            },
             _ => {
                 return Err(CodegenError::UnsupportedType(format!(
                     "print/println does not support type {:?}",
@@ -308,6 +226,10 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
 
+        // print/println is semantically void but sema infers Dynamic → I64 for its return,
+        // so the AIR may emit Rvalue::Call (not CallVoid). We return const_zero() here because
+        // erroring would break normal println("hi") calls. The real fix is in sema: type
+        // bootstrap builtins as void so the AIR always emits CallVoid. (ARCHITECTURE_PROBLEMS.md)
         match expected_ret {
             None | Some(AirType::Void) => Ok(None),
             Some(ret) => Ok(Some(
