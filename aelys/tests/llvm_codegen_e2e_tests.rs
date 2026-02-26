@@ -517,8 +517,8 @@ fn char_at(s: string, i: i64) -> string {
     );
     // Windows x64 MSVC uses sret for struct returns
     assert!(
-        ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), %__aelys_string, i64)"),
-        "should declare __aelys_str_char_at with correct Windows x64 MSVC sret ABI:\n{ir}"
+        ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), ptr, i64, i64)"),
+        "should declare __aelys_str_char_at with correct Windows x64 MSVC flat+sret ABI:\n{ir}"
     );
 }
 
