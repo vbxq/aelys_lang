@@ -111,11 +111,60 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     fn create_blocks(&mut self) {
+        let entry_id = self.find_entry_block();
+
+        // create entry block first (LLVM requires it to be first)
+        if let Some(entry) = self.air_function.blocks.iter().find(|b| b.id == entry_id) {
+            let name = format!("bb{}", entry.id.0);
+            let llvm_block = self.context.append_basic_block(self.function, &name);
+            self.block_map.insert(entry.id, llvm_block);
+        }
+
+        // create remaining blocks in order
         for block in &self.air_function.blocks {
+            if block.id == entry_id {
+                continue; // already created
+            }
             let name = format!("bb{}", block.id.0);
             let llvm_block = self.context.append_basic_block(self.function, &name);
             self.block_map.insert(block.id, llvm_block);
         }
+    }
+
+    fn find_entry_block(&self) -> BlockId {
+        use std::collections::HashSet;
+        use aelys_air::AirTerminator;
+
+        // collect all blocks that are branch targets
+        let mut has_predecessors = HashSet::new();
+        for block in &self.air_function.blocks {
+            match &block.terminator {
+                AirTerminator::Goto(target) => {
+                    has_predecessors.insert(*target);
+                }
+                AirTerminator::Branch { then_block, else_block, .. } => {
+                    has_predecessors.insert(*then_block);
+                    has_predecessors.insert(*else_block);
+                }
+                AirTerminator::Switch { targets, default, .. } => {
+                    for (_, target) in targets {
+                        has_predecessors.insert(*target);
+                    }
+                    has_predecessors.insert(*default);
+                }
+                _ => {}
+            }
+        }
+
+        // entry block is the one with no predecessors
+        for block in &self.air_function.blocks {
+            if !has_predecessors.contains(&block.id) {
+                return block.id;
+            }
+        }
+
+        // fallback to first block if no clear entry (.. but that shouldn't happen)
+        self.air_function.blocks.first().map(|b| b.id).unwrap_or(BlockId(0))
     }
 
     fn create_allocas(&mut self) -> Result<(), CodegenError> {
@@ -160,8 +209,28 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     fn generate_blocks(&mut self) -> Result<(), CodegenError> {
+        // Generate entry block first, then remaining blocks
+        let entry_id = self.find_entry_block();
         let blocks = self.air_function.blocks.clone();
+
+        // Generate entry block
+        if let Some(entry) = blocks.iter().find(|b| b.id == entry_id) {
+            self.current_block = Some(entry.id);
+            let llvm_block = self.lookup_block(entry.id)?;
+            self.builder.position_at_end(llvm_block);
+            for (stmt_index, stmt) in entry.stmts.iter().enumerate() {
+                self.current_stmt_index = Some(stmt_index);
+                self.generate_stmt(&stmt.kind)?;
+            }
+            self.current_stmt_index = None;
+            self.generate_terminator(&entry.terminator)?;
+        }
+
+        // Generate remaining blocks
         for block in &blocks {
+            if block.id == entry_id {
+                continue; // Already generated
+            }
             self.current_block = Some(block.id);
             let llvm_block = self.lookup_block(block.id)?;
             self.builder.position_at_end(llvm_block);
