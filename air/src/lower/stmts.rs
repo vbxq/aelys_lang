@@ -10,7 +10,9 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn finalize_function_body(&mut self) {
-        if (self.current_stmts.is_empty() && self.current_blocks.is_empty())
+        // seal any pending block (for example loop exit blocks) or unsealed statements with implicit return
+        if self.pending_block_id.is_some()
+            || (self.current_stmts.is_empty() && self.current_blocks.is_empty())
             || !self.current_stmts.is_empty()
         {
             self.seal_block(AirTerminator::Return(None));

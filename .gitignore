@@ -12,3 +12,4 @@ aelys/tests/exploration/*
 **/*.exe
 main.aelys
 main.ll
+torture/
