@@ -123,7 +123,7 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
-            "string" => InferType::String,
+            "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
             "array" => {
                 let inner = ann
@@ -164,7 +164,7 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
-            "string" => InferType::String,
+            "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
             _ => {
                 if name.chars().next().is_some_and(|c| c.is_uppercase()) {
