@@ -31,18 +31,22 @@ void __aelys_write_err(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stderr);
 }
 
-/* UTF-8 character indexing: return the i-th Unicode codepoint as a single character string */
-AelysString __aelys_str_char_at(AelysString str, long long index) {
+/*
+UTF-8 character indexing: return the i-th Unicode codepoint as a single character string.
+Flat ABI: takes (str_ptr, str_len) instead of AelysString struct to avoid struct passing issues across MSVC/LLVM on Windows x64
+*/
+AelysString __aelys_str_char_at(const char *str_ptr, long long str_len,
+                                long long index) {
     if (index < 0) {
         __aelys_panic("index out of bounds", 20);
     }
 
-    const unsigned char *data = (const unsigned char *)str.ptr;
+    const unsigned char *data = (const unsigned char *)str_ptr;
     long long byte_pos = 0;
     long long char_index = 0;
 
     /* scan UTF-8 to find the index-th codepoint. */
-    while (byte_pos < str.len && char_index < index) {
+    while (byte_pos < str_len && char_index < index) {
         unsigned char byte = data[byte_pos];
 
         /* skip continuation bytes to find the next codepoint start. */
@@ -67,7 +71,7 @@ AelysString __aelys_str_char_at(AelysString str, long long index) {
     }
 
     /* check bounds: did we reach the requested codepoint */
-    if (char_index < index || byte_pos >= str.len) {
+    if (char_index < index || byte_pos >= str_len) {
         __aelys_panic("index out of bounds", 20);
     }
 
@@ -89,13 +93,13 @@ AelysString __aelys_str_char_at(AelysString str, long long index) {
     }
 
     /* bounds check: ensure the full character fits in the string */
-    if (byte_pos + char_len > str.len) {
+    if (byte_pos + char_len > str_len) {
         __aelys_panic("invalid UTF-8", 13);
     }
 
     /* return the single-character substring. */
     AelysString result;
-    result.ptr = str.ptr + byte_pos;
+    result.ptr = str_ptr + byte_pos;
     result.len = char_len;
     return result;
 }
@@ -180,18 +184,19 @@ AelysString __aelys_to_string_bool(long long value) {
 }
 
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
-long long __aelys_str_eq(AelysString a, AelysString b) {
+long long __aelys_str_eq(const char *a_ptr, long long a_len,
+                         const char *b_ptr, long long b_len) {
     /* different lengths means not equal */
-    if (a.len != b.len) {
+    if (a_len != b_len) {
         return 0;
     }
 
     /* compare bytes */
-    if (a.len == 0) {
+    if (a_len == 0) {
         return 1; /* empty strings are equal */
     }
 
-    return (memcmp(a.ptr, b.ptr, (size_t)a.len) == 0) ? 1 : 0;
+    return (memcmp(a_ptr, b_ptr, (size_t)a_len) == 0) ? 1 : 0;
 }
 
 int main(int argc, char **argv) {

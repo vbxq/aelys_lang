@@ -101,7 +101,8 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Str => {
                 // UTF-8 character indexing: delegate to runtime because
                 // finding the n-th codepoint requires scanning byte boundaries.
-                let str_val = self.generate_operand(base)?;
+                let str_val = self.generate_operand(base)?.into_struct_value();
+                let (str_ptr, str_len) = self.string_parts_from_value(str_val)?;
                 let char_at_fn = self.ensure_str_char_at_function();
 
                 // Windows x64 MSVC uses sret for struct returns
@@ -114,7 +115,7 @@ impl<'a> FunctionCodegen<'a> {
                     self.builder
                         .build_call(
                             char_at_fn,
-                            &[result_ptr.into(), str_val.into(), idx_val.into()],
+                            &[result_ptr.into(), str_ptr.into(), str_len.into(), idx_val.into()],
                             "",
                         )
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
@@ -124,7 +125,11 @@ impl<'a> FunctionCodegen<'a> {
                 } else {
                     let result = self
                         .builder
-                        .build_call(char_at_fn, &[str_val.into(), idx_val.into()], "str_char_at")
+                        .build_call(
+                            char_at_fn,
+                            &[str_ptr.into(), str_len.into(), idx_val.into()],
+                            "str_char_at",
+                        )
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                     result.try_as_basic_value().basic().ok_or_else(|| {
                         CodegenError::LlvmError("__aelys_str_char_at returned void".to_string())

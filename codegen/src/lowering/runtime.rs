@@ -61,31 +61,30 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_panic", fn_ty, None)
     }
 
-    /// `__aelys_str_char_at(str, i64) -> str`
+    /// `__aelys_str_char_at(ptr, i64, i64) -> str`
     /// UTF-8 character indexing: returns the i-th Unicode codepoint as a
     /// single-character string. Panics internally on OOB.
-    /// On Windows x64 MSVC: `void __aelys_str_char_at(ptr sret(str), str, i64)`
+    /// Flat ABI: takes (str_ptr, str_len, index) to avoid struct passing issues.
+    /// On Windows x64 MSVC: `void __aelys_str_char_at(ptr sret(str), ptr, i64, i64)`
     pub(crate) fn ensure_str_char_at_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_str_char_at") {
             return function;
         }
 
         let string_ty = aelys_string_type(self.context);
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
         let use_sret = self.target_is_windows();
 
         let fn_ty = if use_sret {
-            // Windows: void(ptr sret, str, i64)
+            // Windows: void(ptr sret, ptr str_ptr, i64 str_len, i64 index)
             self.context.void_type().fn_type(
-                &[
-                    self.context.ptr_type(AddressSpace::default()).into(),
-                    string_ty.into(),
-                    self.context.i64_type().into(),
-                ],
+                &[ptr_ty, ptr_ty, i64_ty, i64_ty],
                 false,
             )
         } else {
-            // Non-Windows: str(str, i64)
-            string_ty.fn_type(&[string_ty.into(), self.context.i64_type().into()], false)
+            // Non-Windows: str(ptr str_ptr, i64 str_len, i64 index)
+            string_ty.fn_type(&[ptr_ty, i64_ty, i64_ty], false)
         };
 
         let function = self.module.add_function("__aelys_str_char_at", fn_ty, None);
@@ -217,14 +216,16 @@ impl<'a> FunctionCodegen<'a> {
         function
     }
 
-    /// `__aelys_str_eq(str, str) -> i1` (BOOTSTRAP)
+    /// `__aelys_str_eq(ptr, i64, ptr, i64) -> i64` (BOOTSTRAP)
+    /// Flat ABI: takes (a_ptr, a_len, b_ptr, b_len) to avoid struct passing issues across MSVC/LLVM on Windows x64.
     pub(crate) fn ensure_str_eq_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_str_eq") {
             return function;
         }
 
-        let string_ty = aelys_string_type(self.context);
-        let fn_ty = self.context.bool_type().fn_type(&[string_ty.into(), string_ty.into()], false);
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self.context.i64_type().fn_type(&[ptr_ty, i64_ty, ptr_ty, i64_ty], false);
         self.module.add_function("__aelys_str_eq", fn_ty, None)
     }
 

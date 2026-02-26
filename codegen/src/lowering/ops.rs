@@ -252,30 +252,31 @@ impl<'a> FunctionCodegen<'a> {
         right: inkwell::values::StructValue<'static>,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         match op {
-            BinOp::Eq => {
+            BinOp::Eq | BinOp::Ne => {
+                // exctract ptr/len from both string structs (flat ABI)
+                let (a_ptr, a_len) = self.string_parts_from_value(left)?;
+                let (b_ptr, b_len) = self.string_parts_from_value(right)?;
+
                 let str_eq_fn = self.ensure_str_eq_function();
                 let result = self
                     .builder
-                    .build_call(str_eq_fn, &[left.into(), right.into()], "str_eq")
+                    .build_call(
+                        str_eq_fn,
+                        &[a_ptr.into(), a_len.into(), b_ptr.into(), b_len.into()],
+                        "str_eq",
+                    )
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                result
-                    .try_as_basic_value()
-                    .basic()
-                    .ok_or_else(|| CodegenError::LlvmError("str_eq returned void".to_string()))
-            }
-            BinOp::Ne => {
-                let str_eq_fn = self.ensure_str_eq_function();
-                let eq_result = self
-                    .builder
-                    .build_call(str_eq_fn, &[left.into(), right.into()], "str_eq")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                let eq_val = eq_result
+                let i64_val = result
                     .try_as_basic_value()
                     .basic()
                     .ok_or_else(|| CodegenError::LlvmError("str_eq returned void".to_string()))?
                     .into_int_value();
+
+                let is_eq = matches!(op, BinOp::Eq);
+                let pred = if is_eq { IntPredicate::NE } else { IntPredicate::EQ };
+                let name = if is_eq { "str_eq" } else { "str_ne" };
                 self.builder
-                    .build_not(eq_val, "str_ne")
+                    .build_int_compare(pred, i64_val, self.context.i64_type().const_zero(), name)
                     .map(Into::into)
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))
             }

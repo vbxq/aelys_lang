@@ -1,12 +1,21 @@
 fn main() -> i64 {
-    let a = 10
-    let b = 20
-    let sum = a + b
-    let product = a * b
-    let diff = b - a
-    let quot = b / a
-    let result = sum + product + diff + quot
-    println(result)
-    println(result)
-    println(result)
+    let s1 = "hello"
+    let s2 = "hello"
+    let s3 = "world"
+
+    if s1 == s2 {
+        println("s1 == s2: true")
+    } else {
+        println("s1 == s2: false")
+        return 1
+    }
+
+    if s1 != s3 {
+        println("s1 != s3: true")
+    } else {
+        println("s1 != s3: false")
+        return 2
+    }
+
+    return 0
 }
