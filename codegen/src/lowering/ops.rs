@@ -15,10 +15,12 @@ impl<'a> FunctionCodegen<'a> {
         let right_val = self.generate_operand(right)?;
 
         if left_val.is_int_value() && right_val.is_int_value() {
+            let left_ty = self.operand_type(left)?;
             return self.generate_int_binary_op(
                 op.clone(),
                 left_val.into_int_value(),
                 right_val.into_int_value(),
+                &left_ty,
             );
         }
 
@@ -52,7 +54,10 @@ impl<'a> FunctionCodegen<'a> {
         op: BinOp,
         left: IntValue<'static>,
         right: IntValue<'static>,
+        operand_ty: &AirType,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let is_unsigned = matches!(operand_ty, AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64);
+
         let value = match op {
             BinOp::Add => self
                 .builder
@@ -66,14 +71,24 @@ impl<'a> FunctionCodegen<'a> {
                 .builder
                 .build_int_mul(left, right, "imul")
                 .map(Into::into),
-            BinOp::Div => self
-                .builder
-                .build_int_signed_div(left, right, "isdiv")
-                .map(Into::into),
-            BinOp::Rem => self
-                .builder
-                .build_int_signed_rem(left, right, "isrem")
-                .map(Into::into),
+            BinOp::Div => if is_unsigned {
+                self.builder
+                    .build_int_unsigned_div(left, right, "iudiv")
+                    .map(Into::into)
+            } else {
+                self.builder
+                    .build_int_signed_div(left, right, "isdiv")
+                    .map(Into::into)
+            },
+            BinOp::Rem => if is_unsigned {
+                self.builder
+                    .build_int_unsigned_rem(left, right, "iurem")
+                    .map(Into::into)
+            } else {
+                self.builder
+                    .build_int_signed_rem(left, right, "isrem")
+                    .map(Into::into)
+            },
             BinOp::Eq => self
                 .builder
                 .build_int_compare(IntPredicate::EQ, left, right, "icmp_eq")
@@ -84,19 +99,19 @@ impl<'a> FunctionCodegen<'a> {
                 .map(Into::into),
             BinOp::Lt => self
                 .builder
-                .build_int_compare(IntPredicate::SLT, left, right, "icmp_lt")
+                .build_int_compare(if is_unsigned { IntPredicate::ULT } else { IntPredicate::SLT }, left, right, "icmp_lt")
                 .map(Into::into),
             BinOp::Le => self
                 .builder
-                .build_int_compare(IntPredicate::SLE, left, right, "icmp_le")
+                .build_int_compare(if is_unsigned { IntPredicate::ULE } else { IntPredicate::SLE }, left, right, "icmp_le")
                 .map(Into::into),
             BinOp::Gt => self
                 .builder
-                .build_int_compare(IntPredicate::SGT, left, right, "icmp_gt")
+                .build_int_compare(if is_unsigned { IntPredicate::UGT } else { IntPredicate::SGT }, left, right, "icmp_gt")
                 .map(Into::into),
             BinOp::Ge => self
                 .builder
-                .build_int_compare(IntPredicate::SGE, left, right, "icmp_ge")
+                .build_int_compare(if is_unsigned { IntPredicate::UGE } else { IntPredicate::SGE }, left, right, "icmp_ge")
                 .map(Into::into),
             BinOp::And | BinOp::BitAnd => {
                 self.builder.build_and(left, right, "iand").map(Into::into)
@@ -109,7 +124,7 @@ impl<'a> FunctionCodegen<'a> {
                 .map(Into::into),
             BinOp::Shr => self
                 .builder
-                .build_right_shift(left, right, true, "ishr")
+                .build_right_shift(left, right, !is_unsigned, "ishr")
                 .map(Into::into),
             BinOp::CheckedAdd => {
                 return Err(self.unsupported_air(
