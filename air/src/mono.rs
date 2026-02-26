@@ -511,14 +511,13 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
             substitute_type(to, type_params, type_args);
         }
         Rvalue::StructInit { name, .. } => {
-            for tp in type_params {
-                if let Some(replacement) = type_args.get(tp.0 as usize) {
-                    let mangled_suffix = type_to_string(replacement);
-                    if name.contains("__mono_") {
-                        continue;
-                    }
-                    *name = format!("__mono_{}_{}", name, mangled_suffix);
-                }
+            if !name.contains("__mono_") && !type_args.is_empty() {
+                let suffix = type_args
+                    .iter()
+                    .map(type_to_string)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                *name = format!("__mono_{}_{}", name, suffix);
             }
         }
         _ => {}
