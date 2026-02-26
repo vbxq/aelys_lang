@@ -20,6 +20,12 @@ impl CodegenContext {
         self.ensure_no_reserved_bootstrap_builtins(program)?;
 
         for function in &program.functions {
+            // SAFETY! we need to reject struct-like params/returns on extern C functions.
+            // The LLVM/MSVC ABI mismatch for >8-byte structs causes silent crashes that are.. insane to debug.
+            if function.is_extern && matches!(function.calling_conv, AirCallingConv::C) {
+                reject_struct_abi_on_extern(function)?;
+            }
+
             let symbol_name = function_symbol_name(function);
             let fn_type = self.function_type(function)?;
             let fn_value = if let Some(existing) = self.module.get_function(&symbol_name) {
@@ -225,6 +231,32 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
     } else {
         function.name.clone()
     }
+}
+
+/// Returns true if the AirType is a struct-like type that would be >8 bytes
+/// and therefore unsafe to pass by value across the LLVM -> C ABI boundary
+fn is_abi_unsafe_type(ty: &AirType) -> bool {
+    matches!(ty, AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _))
+}
+
+fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenError> {
+    for param in &function.params {
+        if is_abi_unsafe_type(&param.ty) {
+            return Err(CodegenError::UnsupportedType(format!(
+                "extern function '{}' has struct parameter '{}' (type {:?}) — \
+                 struct params must be flattened to scalars for C ABI compatibility",
+                function.name, param.name, param.ty
+            )));
+        }
+    }
+    if is_abi_unsafe_type(&function.ret_ty) {
+        return Err(CodegenError::UnsupportedType(format!(
+            "extern function '{}' has struct return type {:?} — \
+             struct returns require manual sret handling for C ABI compatibility",
+            function.name, function.ret_ty
+        )));
+    }
+    Ok(())
 }
 
 fn native_entry_type_name(ty: &AirType) -> &'static str {
