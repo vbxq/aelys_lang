@@ -61,9 +61,26 @@ impl<'a> FunctionCodegen<'a> {
                 alloca_locals.insert(local.id);
             }
         }
+        // locals assigned in 2+ blocks need alloca, value_map can't express
+        // phi nodes, so multi-block assignments (if-expressions, short-circuit
+        // AND/OR) would silently read stale values from codegen order instead
+        // of control flow. alloca + mem2reg fixes this though
+        let mut first_assign_block: HashMap<LocalId, BlockId> = HashMap::new();
         for block in &air_function.blocks {
             for stmt in &block.stmts {
                 if let AirStmtKind::Assign { place, rvalue } = &stmt.kind {
+                    if let Place::Local(local) = place {
+                        match first_assign_block.entry(*local) {
+                            std::collections::hash_map::Entry::Vacant(e) => {
+                                e.insert(block.id);
+                            }
+                            std::collections::hash_map::Entry::Occupied(e) => {
+                                if *e.get() != block.id {
+                                    alloca_locals.insert(*local);
+                                }
+                            }
+                        }
+                    }
                     if let Place::Field(local, _) = place {
                         alloca_locals.insert(*local);
                     }

@@ -229,7 +229,7 @@ impl<'a> FunctionCodegen<'a> {
         // print/println is semantically void but sema infers Dynamic → I64 for its return,
         // so the AIR may emit Rvalue::Call (not CallVoid). We return const_zero() here because
         // erroring would break normal println("hi") calls. The real fix is in sema: type
-        // bootstrap builtins as void so the AIR always emits CallVoid. (ARCHITECTURE_PROBLEMS.md)
+        // bootstrap builtins as void so the AIR always emits CallVoid
         match expected_ret {
             None | Some(AirType::Void) => Ok(None),
             Some(ret) => Ok(Some(
