@@ -4,7 +4,7 @@ use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirConst, AirFloatSize, AirIntSize, AirType, Operand};
 use inkwell::AddressSpace;
 use inkwell::context::Context;
-use inkwell::types::IntType;
+use inkwell::types::{BasicTypeEnum, IntType};
 use inkwell::values::BasicValueEnum;
 
 impl<'a> FunctionCodegen<'a> {
@@ -56,7 +56,18 @@ impl<'a> FunctionCodegen<'a> {
                 Ok(func.as_global_value().as_pointer_value().into())
             }
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
-            AirConst::Undef(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
+            AirConst::Undef(ty) => {
+                let llvm_ty = air_basic_type_to_llvm(ty, self.context)?;
+                Ok(match llvm_ty {
+                    BasicTypeEnum::IntType(t) => t.get_undef().into(),
+                    BasicTypeEnum::FloatType(t) => t.get_undef().into(),
+                    BasicTypeEnum::PointerType(t) => t.get_undef().into(),
+                    BasicTypeEnum::StructType(t) => t.get_undef().into(),
+                    BasicTypeEnum::ArrayType(t) => t.get_undef().into(),
+                    BasicTypeEnum::VectorType(t) => t.get_undef().into(),
+                    BasicTypeEnum::ScalableVectorType(t) => t.get_undef().into(),
+                })
+            }
         }
     }
 
