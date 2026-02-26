@@ -628,18 +628,18 @@ impl<'a> LoweringContext<'a> {
             },
         });
 
+        self.fixup_block_id_noop(then_id);
         self.lower_stmt(then_branch);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(merge_id));
         }
-        self.fixup_block_id(then_id);
 
         if let Some(else_br) = else_branch {
+            self.fixup_block_id_noop(else_id);
             self.lower_stmt(else_br);
             if !self.last_block_is_terminated() {
                 self.seal_block(AirTerminator::Goto(merge_id));
             }
-            self.fixup_block_id(else_id);
         }
 
         self.fixup_block_id_noop(merge_id);
@@ -652,23 +652,23 @@ impl<'a> LoweringContext<'a> {
 
         self.seal_block(AirTerminator::Goto(header_id));
 
+        self.fixup_block_id_noop(header_id);
         let cond = self.lower_expr(condition);
         self.seal_block(AirTerminator::Branch {
             cond,
             then_block: body_id,
             else_block: exit_id,
         });
-        self.fixup_block_id(header_id);
 
         self.loop_stack.push(LoopBlocks {
             header: header_id,
             exit: exit_id,
         });
+        self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(header_id));
         }
-        self.fixup_block_id(body_id);
         self.loop_stack.pop();
 
         self.fixup_block_id_noop(exit_id);
@@ -712,6 +712,7 @@ impl<'a> LoweringContext<'a> {
 
         self.seal_block(AirTerminator::Goto(header_id));
 
+        self.fixup_block_id_noop(header_id);
         let cmp_op = if inclusive { BinOp::Le } else { BinOp::Lt };
         let cond_local = self.alloc_temp(AirType::Bool);
         self.emit(
@@ -730,19 +731,19 @@ impl<'a> LoweringContext<'a> {
             then_block: body_id,
             else_block: exit_id,
         });
-        self.fixup_block_id(header_id);
 
         self.loop_stack.push(LoopBlocks {
             header: incr_id,
             exit: exit_id,
         });
+        self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(incr_id));
         }
-        self.fixup_block_id(body_id);
         self.loop_stack.pop();
 
+        self.fixup_block_id_noop(incr_id);
         let step_operand = if let Some(step_expr) = step {
             self.lower_expr(step_expr)
         } else {
@@ -756,7 +757,6 @@ impl<'a> LoweringContext<'a> {
             None,
         );
         self.seal_block(AirTerminator::Goto(header_id));
-        self.fixup_block_id(incr_id);
 
         self.fixup_block_id_noop(exit_id);
     }
@@ -810,6 +810,7 @@ impl<'a> LoweringContext<'a> {
         let exit_id = self.alloc_block_id();
 
         self.seal_block(AirTerminator::Goto(header_id));
+        self.fixup_block_id_noop(header_id);
 
         let cond_local = self.alloc_temp(AirType::Bool);
         self.emit(
@@ -828,8 +829,8 @@ impl<'a> LoweringContext<'a> {
             then_block: body_id,
             else_block: exit_id,
         });
-        self.fixup_block_id(header_id);
 
+        self.fixup_block_id_noop(body_id);
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(elem_local),
@@ -849,9 +850,9 @@ impl<'a> LoweringContext<'a> {
         if !self.last_block_is_terminated() {
             self.seal_block(AirTerminator::Goto(incr_id));
         }
-        self.fixup_block_id(body_id);
         self.loop_stack.pop();
 
+        self.fixup_block_id_noop(incr_id);
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(idx_local),
@@ -864,7 +865,6 @@ impl<'a> LoweringContext<'a> {
             None,
         );
         self.seal_block(AirTerminator::Goto(header_id));
-        self.fixup_block_id(incr_id);
 
         self.fixup_block_id_noop(exit_id);
     }
@@ -877,17 +877,12 @@ impl<'a> LoweringContext<'a> {
     // the pre-allocated ID so branch targets stay valid.
     // ========================================================================
 
-    fn fixup_block_id(&mut self, target: BlockId) {
-        if let Some(block) = self.current_blocks.last_mut() {
-            let old_id = block.id;
-            block.id = target;
-            if old_id != target {
-                self.block_aliases.push((old_id.0, target.0));
+    fn fixup_block_id_noop(&mut self, target: BlockId) {
+        if let Some(old) = self.pending_block_id {
+            if old != target {
+                self.block_aliases.push((old.0, target.0));
             }
         }
-    }
-
-    fn fixup_block_id_noop(&mut self, target: BlockId) {
         self.pending_block_id = Some(target);
     }
 
@@ -1445,6 +1440,7 @@ impl<'a> LoweringContext<'a> {
             });
         }
 
+        self.fixup_block_id_noop(eval_right_id);
         let rhs = self.lower_expr(right);
         self.emit(
             AirStmtKind::Assign {
@@ -1454,7 +1450,6 @@ impl<'a> LoweringContext<'a> {
             None,
         );
         self.seal_block(AirTerminator::Goto(merge_id));
-        self.fixup_block_id(eval_right_id);
 
         self.fixup_block_id_noop(merge_id);
         Operand::Copy(result)
@@ -1485,6 +1480,7 @@ impl<'a> LoweringContext<'a> {
             else_block: else_id,
         });
 
+        self.fixup_block_id_noop(then_id);
         let then_val = self.lower_expr(then_branch);
         self.emit(
             AirStmtKind::Assign {
@@ -1494,8 +1490,8 @@ impl<'a> LoweringContext<'a> {
             None,
         );
         self.seal_block(AirTerminator::Goto(merge_id));
-        self.fixup_block_id(then_id);
 
+        self.fixup_block_id_noop(else_id);
         let else_val = self.lower_expr(else_branch);
         self.emit(
             AirStmtKind::Assign {
@@ -1505,7 +1501,6 @@ impl<'a> LoweringContext<'a> {
             None,
         );
         self.seal_block(AirTerminator::Goto(merge_id));
-        self.fixup_block_id(else_id);
 
         self.fixup_block_id_noop(merge_id);
         Operand::Copy(result)
