@@ -225,4 +225,56 @@ impl TypeInference {
             InferType::Bool,
         )
     }
+
+    /// Try to narrow a numeric literal to the target type.
+    /// Returns true if narrowing succeeded or wasn't needed, false if it failed.
+    /// Pushes an error if the literal doesn't fit in the target type.
+    pub(super) fn try_narrow_literal(
+        &mut self,
+        expr: &mut TypedExpr,
+        target_ty: &InferType,
+    ) -> bool {
+        match &expr.kind {
+            TypedExprKind::Int(value) if target_ty.is_integer() && *target_ty != InferType::I64 => {
+                if InferType::int_fits(*value, target_ty) {
+                    expr.ty = target_ty.clone();
+                    true
+                } else {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: target_ty.clone(),
+                            found: InferType::I64,
+                        },
+                        span: expr.span,
+                        reason: ConstraintReason::IntLiteralOverflow {
+                            value: *value,
+                            target: target_ty.clone(),
+                        },
+                    });
+                    false
+                }
+            }
+            TypedExprKind::Float(value) if target_ty.is_float() && *target_ty != InferType::F64 => {
+                if InferType::float_fits(*value, target_ty) {
+                    expr.ty = target_ty.clone();
+                    true
+                } else {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: target_ty.clone(),
+                            found: InferType::F64,
+                        },
+                        span: expr.span,
+                        reason: ConstraintReason::FloatLiteralOverflow {
+                            value: *value,
+                            target: target_ty.clone(),
+                        },
+                    });
+                    false
+                }
+            }
+            // not a narrowable literal, caller should handle constraint
+            _ => true,
+        }
+    }
 }

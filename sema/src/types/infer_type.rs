@@ -197,6 +197,14 @@ impl InferType {
         }
     }
 
+    pub fn float_fits(value: f64, ty: &InferType) -> bool {
+        match ty {
+            InferType::F32 => value.is_finite() && value.abs() <= f32::MAX as f64,
+            InferType::F64 => true,
+            _ => false,
+        }
+    }
+
     pub fn all_integer_types() -> Vec<InferType> {
         vec![
             InferType::I8,

@@ -94,7 +94,12 @@ impl<'a> FunctionCodegen<'a> {
                 for field in &def.fields {
                     let (fs, fa) = self.type_size_align(&field.ty)?;
                     max_align = max_align.max(fa);
-                    end = end.max(field.offset.expect("offset checked above").saturating_add(fs));
+                    end = end.max(
+                        field
+                            .offset
+                            .expect("offset checked above")
+                            .saturating_add(fs),
+                    );
                 }
                 Ok((align_to(end, max_align), max_align))
             }

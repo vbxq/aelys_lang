@@ -21,26 +21,11 @@ impl TypeInference {
             .map(|ann| self.type_from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
-            if let TypedExprKind::Int(value) = &typed_init.kind
-                && decl.is_integer()
-                && *decl != InferType::I64
-            {
-                if InferType::int_fits(*value, decl) {
-                    typed_init.ty = decl.clone();
-                } else {
-                    self.errors.push(TypeError {
-                        kind: TypeErrorKind::Mismatch {
-                            expected: decl.clone(),
-                            found: InferType::I64,
-                        },
-                        span: typed_init.span,
-                        reason: ConstraintReason::IntLiteralOverflow {
-                            value: *value,
-                            target: decl.clone(),
-                        },
-                    });
-                }
-            } else {
+            // try to narrow numeric literal to match declared type
+            if !self.try_narrow_literal(&mut typed_init, decl) {
+                // Narrowing failed (error already pushed), but continue with declared type
+            } else if typed_init.ty != *decl {
+                // not a narrowable literal, add constraint
                 self.constraints.push(Constraint::equal(
                     typed_init.ty.clone(),
                     decl.clone(),

@@ -20,27 +20,9 @@ impl TypeInference {
             if let InferType::Function { params, .. } = &typed_callee.ty
                 && params.len() == typed_args.len()
             {
+                // try to narrow numeric literals to match parameter types
                 for (arg, param_ty) in typed_args.iter_mut().zip(params.iter()) {
-                    if let TypedExprKind::Int(value) = &arg.kind
-                        && param_ty.is_integer()
-                        && *param_ty != InferType::I64
-                    {
-                        if InferType::int_fits(*value, param_ty) {
-                            arg.ty = param_ty.clone();
-                        } else {
-                            self.errors.push(TypeError {
-                                kind: TypeErrorKind::Mismatch {
-                                    expected: param_ty.clone(),
-                                    found: InferType::I64,
-                                },
-                                span: arg.span,
-                                reason: ConstraintReason::IntLiteralOverflow {
-                                    value: *value,
-                                    target: param_ty.clone(),
-                                },
-                            });
-                        }
-                    }
+                    self.try_narrow_literal(arg, param_ty);
                 }
 
                 // implicit numeric widening for non-literal arguments

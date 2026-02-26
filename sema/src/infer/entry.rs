@@ -140,6 +140,7 @@ impl TypeInference {
                             | ConstraintReason::InvalidCast
                             | ConstraintReason::UnknownType { .. }
                             | ConstraintReason::IntLiteralOverflow { .. }
+                            | ConstraintReason::FloatLiteralOverflow { .. }
                     )
             });
 
