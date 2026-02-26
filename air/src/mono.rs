@@ -457,6 +457,8 @@ fn type_to_string(ty: &AirType) -> String {
         AirType::Struct(name) => name.clone(),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
+        // was usingg _ as separator everywhere, so fn(i32, f64)->bool and
+        // fn(i32)->f64 with a bool from somewhere else both gave "fnptr_i32_f64_bool"
         AirType::FnPtr { params, ret, .. } => {
             let params_str = params
                 .iter()
@@ -510,6 +512,8 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
             substitute_type(from, type_params, type_args);
             substitute_type(to, type_params, type_args);
         }
+        // old code looped over type_params and renamed one at a time
+        // second iteration saw __mono_ prefix and bailed , which meant that only first param got encoded
         Rvalue::StructInit { name, .. } => {
             if !name.contains("__mono_") && !type_args.is_empty() {
                 let suffix = type_args

@@ -110,8 +110,8 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-    /// This is like `alloc_temp` but marks the local as mutable, forcing codegen to use an alloca instead of SSA `value_map`.
-    /// Required for locals written from multiple basic blocks (short-circuit, if-expr, loop counters, etc)
+    // alloc_temp creates immutable locals ->> codegen uses a flat value_map that doesn't respect SSA dominance
+    // anything written from 2+ blocks needs an alloca.
     fn alloc_temp_mut(&mut self, ty: AirType) -> LocalId {
         let id = self.alloc_local_id();
         self.current_locals.push(AirLocal {
@@ -744,6 +744,7 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.pop();
 
         self.fixup_block_id_noop(incr_id);
+        // S1: was always IntLiteral(1) aka i64. Blows up on i32/i16/i8 iterators.
         let step_operand = if let Some(step_expr) = step {
             self.lower_expr(step_expr)
         } else {
@@ -873,14 +874,10 @@ impl<'a> LoweringContext<'a> {
         self.fixup_block_id_noop(exit_id);
     }
 
-    // ========================================================================
-    // Block ID fixup helpers
-    //
-    // We pre-allocate block IDs, then seal blocks in order.
-    // After sealing, the block gets the next sequential ID. We fix it up to
-    // the pre-allocated ID so branch targets stay valid.
-    // ========================================================================
-
+    // C7/C8: the old fixup_block_id(X) renamed the LAST sealed block to X.
+    // With nested control flow that creates multiple blocks, the last block is
+    // some inner merge — not the branch entry. This nuked entire loop bodies.
+    // Now we set the pending ID BEFORE lowering so the first seal_block picks it up.
     fn fixup_block_id_noop(&mut self, target: BlockId) {
         if let Some(old) = self.pending_block_id {
             if old != target {
@@ -1538,6 +1535,7 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(tmp),
+                // C6: was AirConst::Null — a placeholder that never got replaced
                 rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(lambda_name))),
             },
             Some(self.span(&parent.span)),

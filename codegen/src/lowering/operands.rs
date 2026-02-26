@@ -49,6 +49,7 @@ impl<'a> FunctionCodegen<'a> {
                 .ptr_type(AddressSpace::default())
                 .const_null()
                 .into()),
+            // was emitting Null here for lambdas, now we actually reference the function.
             AirConst::FnRef(name) => {
                 let func = self.module.get_function(name).ok_or_else(|| {
                     CodegenError::LlvmError(format!("fnref: unknown function '{}'", name))
