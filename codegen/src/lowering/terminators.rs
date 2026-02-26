@@ -15,9 +15,17 @@ impl<'a> FunctionCodegen<'a> {
                     return Ok(());
                 }
                 let value = self.generate_operand(operand)?;
-                self.builder
-                    .build_return(Some(&value))
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                if let Some(sret_ptr) = self.sret_ptr {
+                    // C-convention sret: store into caller-provided slot, return void
+                    self.store_value(sret_ptr, value)?;
+                    self.builder
+                        .build_return(None)
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                } else {
+                    self.builder
+                        .build_return(Some(&value))
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                }
                 Ok(())
             }
             AirTerminator::Return(None) => {

@@ -47,6 +47,10 @@ impl CodegenContext {
         }
     }
 
+    pub(crate) fn target_is_windows(&self) -> bool {
+        crate::module_targets_windows(&self.module)
+    }
+
     pub fn compile(&mut self, program: &AirProgram) -> Result<(), CodegenError> {
         let _ = self.builder.get_insert_block();
         self.declare_struct_types(program)?;

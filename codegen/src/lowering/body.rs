@@ -1,3 +1,4 @@
+use crate::lowering::functions::needs_sret;
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{
@@ -30,15 +31,14 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) current_stmt_index: Option<usize>,
     // cached so we don't recompute it 3 times
     entry_block_id: BlockId,
+    // sret pointer (LLVM param 0) for C-convention functions returning structs
+    // on Windows. Terminators store to this instead of returning directly.
+    pub(crate) sret_ptr: Option<PointerValue<'static>>,
 }
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn target_is_windows(&self) -> bool {
-        self.module
-            .get_triple()
-            .as_str()
-            .to_str()
-            .map_or(false, |t| t.contains("windows"))
+        crate::module_targets_windows(self.module)
     }
 
     pub(crate) fn new(
@@ -103,6 +103,19 @@ impl<'a> FunctionCodegen<'a> {
 
         let entry_block_id = find_entry_block(air_function);
 
+        let is_windows = crate::module_targets_windows(module);
+        let sret_ptr =
+            if needs_sret(&air_function.ret_ty, air_function.calling_conv, is_windows) {
+                Some(
+                    function
+                        .get_nth_param(0)
+                        .expect("sret function must have param 0")
+                        .into_pointer_value(),
+                )
+            } else {
+                None
+            };
+
         Self {
             context,
             module,
@@ -121,6 +134,7 @@ impl<'a> FunctionCodegen<'a> {
             current_block: None,
             current_stmt_index: None,
             entry_block_id,
+            sret_ptr,
         }
     }
 
@@ -174,8 +188,10 @@ impl<'a> FunctionCodegen<'a> {
 
     fn copy_params(&mut self) -> Result<(), CodegenError> {
         let params = self.air_function.params.clone();
+        // sret pointer occupies LLVM param 0, so real params start at 1
+        let offset = if self.sret_ptr.is_some() { 1u32 } else { 0 };
         for (index, param) in params.iter().enumerate() {
-            let value = self.function.get_nth_param(index as u32).ok_or_else(|| {
+            let value = self.function.get_nth_param(index as u32 + offset).ok_or_else(|| {
                 CodegenError::LlvmError(format!(
                     "missing LLVM param {} in `{}`",
                     index, self.air_function.name

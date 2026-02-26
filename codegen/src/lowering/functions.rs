@@ -1,11 +1,12 @@
 use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::types::air_basic_type_to_llvm;
+use crate::types::{air_basic_type_to_llvm, air_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
 };
+use inkwell::AddressSpace;
 use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::llvm_sys::LLVMCallConv;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
@@ -36,6 +37,15 @@ impl CodegenContext {
 
             fn_value.set_call_conventions(llvm_calling_convention(function.calling_conv));
             self.apply_function_attributes(fn_value, &function.attributes)?;
+
+            if needs_sret(&function.ret_ty, function.calling_conv, self.target_is_windows()) {
+                let ret_any_ty = air_type_to_llvm(&function.ret_ty, self.context)?;
+                let sret_attr = self.context.create_type_attribute(
+                    Attribute::get_named_enum_kind_id("sret"),
+                    ret_any_ty,
+                );
+                fn_value.add_attribute(AttributeLoc::Param(0), sret_attr);
+            }
         }
 
         Ok(())
@@ -162,14 +172,22 @@ impl CodegenContext {
     }
 
     fn function_type(&self, function: &AirFunction) -> Result<FunctionType<'static>, CodegenError> {
-        let mut params = Vec::with_capacity(function.params.len());
+        let use_sret = needs_sret(
+            &function.ret_ty,
+            function.calling_conv,
+            self.target_is_windows(),
+        );
+        let mut params = Vec::with_capacity(function.params.len() + usize::from(use_sret));
+        if use_sret {
+            params.push(self.context.ptr_type(AddressSpace::default()).into());
+        }
         for param in &function.params {
             let param_ty: BasicMetadataTypeEnum<'static> =
                 air_basic_type_to_llvm(&param.ty, self.context)?.into();
             params.push(param_ty);
         }
 
-        if matches!(function.ret_ty, AirType::Void) {
+        if matches!(function.ret_ty, AirType::Void) || use_sret {
             return Ok(self.context.void_type().fn_type(&params, false));
         }
 
@@ -235,11 +253,22 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
 
 /// Returns true if the AirType is a struct-like type that would be >8 bytes
 /// and therefore unsafe to pass by value across the LLVM -> C ABI boundary
-fn is_abi_unsafe_type(ty: &AirType) -> bool {
+pub(crate) fn is_abi_unsafe_type(ty: &AirType) -> bool {
     matches!(
         ty,
         AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _)
     )
+}
+
+/// True when a function with this return type + calling convention needs sret
+/// on the current target. Only C-convention functions need sret because
+/// fastcc (Aelys-internal) is handled consistently by LLVM itself
+pub(crate) fn needs_sret(
+    ret_ty: &AirType,
+    conv: AirCallingConv,
+    is_windows: bool,
+) -> bool {
+    is_windows && matches!(conv, AirCallingConv::C) && is_abi_unsafe_type(ret_ty)
 }
 
 fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenError> {
@@ -252,13 +281,7 @@ fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenErro
             )));
         }
     }
-    if is_abi_unsafe_type(&function.ret_ty) {
-        return Err(CodegenError::UnsupportedType(format!(
-            "extern function '{}' has struct return type {:?} — \
-             struct returns require manual sret handling for C ABI compatibility",
-            function.name, function.ret_ty
-        )));
-    }
+    // struct returns are handled via sret in function_type() + declare_functions()
     Ok(())
 }
 

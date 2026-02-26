@@ -1,6 +1,6 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::lowering::functions::llvm_calling_convention;
+use crate::lowering::functions::{llvm_calling_convention, needs_sret};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand};
@@ -58,12 +58,24 @@ impl<'a> FunctionCodegen<'a> {
             }
             _ => {
                 let fn_value = self.resolve_callee(callee, &arg_types, expected_ret)?;
-                let call = self
-                    .builder
-                    .build_call(fn_value, &metadata_args, "call_direct")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                call.set_call_convention(fn_value.get_call_conventions());
-                Ok(call.try_as_basic_value().basic())
+                if let Some(ret_air_ty) = expected_ret
+                    && self.callee_needs_sret(callee)
+                {
+                    let ret_ty = air_basic_type_to_llvm(ret_air_ty, self.context)?;
+                    Ok(Some(self.call_with_sret(
+                        fn_value,
+                        &metadata_args,
+                        ret_ty,
+                        "call_sret",
+                    )?))
+                } else {
+                    let call = self
+                        .builder
+                        .build_call(fn_value, &metadata_args, "call_direct")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    call.set_call_convention(fn_value.get_call_conventions());
+                    Ok(call.try_as_basic_value().basic())
+                }
             }
         }
     }
@@ -235,6 +247,31 @@ impl<'a> FunctionCodegen<'a> {
             Some(ret) => Ok(Some(
                 air_basic_type_to_llvm(ret, self.context)?.const_zero(),
             )),
+        }
+    }
+
+    /// Check if a callee uses sret convention on the current target.
+    /// Only C-convention functions with struct-like returns need this.
+    fn callee_needs_sret(&self, callee: &Callee) -> bool {
+        let is_windows = self.target_is_windows();
+        match callee {
+            Callee::Direct(id) => self
+                .program
+                .functions
+                .iter()
+                .find(|f| f.id == *id)
+                .map_or(false, |f| {
+                    needs_sret(&f.ret_ty, f.calling_conv, is_windows)
+                }),
+            Callee::Extern(name, _) => self
+                .program
+                .functions
+                .iter()
+                .find(|f| f.name == *name && f.is_extern)
+                .map_or(false, |f| {
+                    needs_sret(&f.ret_ty, f.calling_conv, is_windows)
+                }),
+            _ => false,
         }
     }
 

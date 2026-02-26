@@ -2,6 +2,7 @@ use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::aelys_string_type;
 use inkwell::module::Linkage;
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue};
 
 impl<'a> FunctionCodegen<'a> {
@@ -96,38 +97,51 @@ impl<'a> FunctionCodegen<'a> {
         Ok((ptr, len))
     }
 
-    /// Call a runtime function that returns a string (%__aelys_string).
-    /// On Windows x64 MSVC, these use sret (first param is ptr to result slot).
-    /// On other platforms, they return the struct directly.
+    /// Call a function that uses sret convention (struct return via pointer).
+    /// On Windows, alloca a result slot, pass as first arg, call, load result.
+    /// On other targets, call normally and extract the return value.
+    pub(crate) fn call_with_sret(
+        &mut self,
+        fn_val: FunctionValue<'static>,
+        args: &[BasicMetadataValueEnum<'static>],
+        ret_ty: BasicTypeEnum<'static>,
+        name: &str,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        if self.target_is_windows() {
+            let result_ptr = self
+                .builder
+                .build_alloca(ret_ty, "sret_slot")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.align_alloca(result_ptr, ret_ty)?;
+            let mut all_args: Vec<BasicMetadataValueEnum<'static>> = vec![result_ptr.into()];
+            all_args.extend_from_slice(args);
+            let call = self
+                .builder
+                .build_call(fn_val, &all_args, "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            call.set_call_convention(fn_val.get_call_conventions());
+            self.builder
+                .build_load(ret_ty, result_ptr, name)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))
+        } else {
+            let call = self
+                .builder
+                .build_call(fn_val, args, name)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            call.set_call_convention(fn_val.get_call_conventions());
+            call.try_as_basic_value().basic().ok_or_else(|| {
+                CodegenError::LlvmError(format!("{} returned void", name))
+            })
+        }
+    }
+
+    /// Call a runtime function that returns %__aelys_string via sret.
     pub(crate) fn call_sret_returning_fn(
         &mut self,
         fn_val: FunctionValue<'static>,
         args: &[BasicMetadataValueEnum<'static>],
         name: &str,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        if self.target_is_windows() {
-            let string_ty = aelys_string_type(self.context);
-            let result_ptr = self
-                .builder
-                .build_alloca(string_ty, "sret_slot")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.align_alloca(result_ptr, string_ty.into())?;
-            let mut all_args: Vec<BasicMetadataValueEnum<'static>> = vec![result_ptr.into()];
-            all_args.extend_from_slice(args);
-            self.builder
-                .build_call(fn_val, &all_args, "")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.builder
-                .build_load(string_ty, result_ptr, name)
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))
-        } else {
-            let result = self
-                .builder
-                .build_call(fn_val, args, name)
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            result.try_as_basic_value().basic().ok_or_else(|| {
-                CodegenError::LlvmError(format!("{} returned void", name))
-            })
-        }
+        self.call_with_sret(fn_val, args, aelys_string_type(self.context).into(), name)
     }
 }
