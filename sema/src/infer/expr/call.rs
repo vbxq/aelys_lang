@@ -42,6 +42,29 @@ impl TypeInference {
                         }
                     }
                 }
+
+                // implicit numeric widening for non-literal arguments
+                for (arg, param_ty) in typed_args.iter_mut().zip(params.iter()) {
+                    if arg.ty != *param_ty && arg.ty.can_implicit_widen_to(param_ty) {
+                        let span = arg.span;
+                        let original = std::mem::replace(
+                            arg,
+                            TypedExpr {
+                                kind: TypedExprKind::Null,
+                                ty: InferType::Null,
+                                span,
+                            },
+                        );
+                        *arg = TypedExpr {
+                            kind: TypedExprKind::Cast {
+                                expr: Box::new(original),
+                                target: param_ty.clone(),
+                            },
+                            ty: param_ty.clone(),
+                            span,
+                        };
+                    }
+                }
             }
 
             let ret = self.type_gen.fresh();

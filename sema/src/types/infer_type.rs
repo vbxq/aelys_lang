@@ -219,6 +219,84 @@ impl InferType {
         types.extend(Self::all_float_types());
         types
     }
+
+    /// Returns `(bit_width, is_signed)` for numeric types, or just `None` for non-numeric
+    /// floats use negative bit widths to separate them from integers in rank comp
+    fn numeric_rank(&self) -> Option<(i16, bool)> {
+        match self {
+            InferType::I8 => Some((8, true)),
+            InferType::I16 => Some((16, true)),
+            InferType::I32 => Some((32, true)),
+            InferType::I64 => Some((64, true)),
+            InferType::U8 => Some((8, false)),
+            InferType::U16 => Some((16, false)),
+            InferType::U32 => Some((32, false)),
+            InferType::U64 => Some((64, false)),
+            InferType::F32 => Some((-32, true)),
+            InferType::F64 => Some((-64, true)),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` if `self` can be implicitly go to `target` without loss
+    ///
+    /// here's the rules
+    ///
+    /// - Signed -> wider signed: i8 -> i16, i8 -> i32, i8 -> i64, i16 -> i32, i16 -> i64, i32 -> i64
+    /// - Unsigned -> wider unsigned: u8 -> u16, u8 -> u32, u8 -> u64, u16 -> u32, u16 -> u64, u32 -> u64
+    /// - Unsigned -> wider signed (always fits): u8 -> i16, u8 - > i32, u8 -> i64, u16 -> i32, u16 -> i64, u32 -> i64
+    /// - smoll int → float (exact): i8/u8/i16/u16 -> f32, any int <(or egal) 32 bits -> f64
+    ///
+    /// not allowed (because their lossy or they change sema)
+    /// - signed to unsigned, unsigned to same-size signed, wider to narrower
+    /// - i64/u64->f64, i32/u32->f32, float->int
+    pub fn can_implicit_widen_to(&self, target: &InferType) -> bool {
+        if self == target {
+            return false;
+        }
+
+        let (src_rank, src_signed) = match self.numeric_rank() {
+            Some(r) => r,
+            None => return false,
+        };
+
+        let (tgt_rank, tgt_signed) = match target.numeric_rank() {
+            Some(r) => r,
+            None => return false,
+        };
+
+        // le source must be an integer (not a float)
+        if src_rank < 0 {
+            return false;
+        }
+
+        // le target is a float
+        if tgt_rank < 0 {
+            let tgt_bits = -tgt_rank; // 32 or 64
+            return if tgt_bits == 32 {
+                // f32 has 24bit mantissa, exact for <(or egal) 16bit int
+                src_rank <= 16
+            } else {
+                // f64 has 53bit mantissa, also exact for <(or equal) 32bit int
+                src_rank <= 32
+            };
+        }
+
+        // if they both are integers
+        if src_signed && tgt_signed {
+            // signed -> wider signed
+            tgt_rank > src_rank
+        } else if !src_signed && !tgt_signed {
+            // unsigned -> wider unsigned
+            tgt_rank > src_rank
+        } else if !src_signed && tgt_signed {
+            // unsigned -> wider signed (need strictly more bits to fit all values)
+            tgt_rank > src_rank
+        } else {
+            // signed -> unsigned: nuh huh.
+            false
+        }
+    }
 }
 
 impl fmt::Display for InferType {
