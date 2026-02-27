@@ -4,6 +4,7 @@ use inkwell::OptimizationLevel;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
+use inkwell::passes::PassBuilderOptions;
 use inkwell::targets::{
     CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine,
 };
@@ -62,7 +63,31 @@ impl CodegenContext {
             .map_err(|e| CodegenError::LlvmError(e.to_string()))
     }
 
-    pub fn emit_object(&self, path: &str) -> Result<(), CodegenError> {
+    pub fn optimize(&self, pass_pipeline: &str, opt_numeric: u8) -> Result<(), CodegenError> {
+        let triple = TargetMachine::get_default_triple();
+        let target =
+            Target::from_triple(&triple).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let cpu = TargetMachine::get_host_cpu_name().to_string();
+        let features = TargetMachine::get_host_cpu_features().to_string();
+        let machine = target
+            .create_target_machine(
+                &triple,
+                &cpu,
+                &features,
+                inkwell_opt_level(opt_numeric),
+                RelocMode::Default,
+                CodeModel::Default,
+            )
+            .ok_or_else(|| {
+                CodegenError::LlvmError("failed to create target machine".to_string())
+            })?;
+
+        self.module
+            .run_passes(pass_pipeline, &machine, PassBuilderOptions::create())
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+    }
+
+    pub fn emit_object(&self, path: &str, opt_numeric: u8) -> Result<(), CodegenError> {
         Target::initialize_native(&InitializationConfig::default())
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         let triple = TargetMachine::get_default_triple();
@@ -75,7 +100,7 @@ impl CodegenContext {
                 &triple,
                 &cpu,
                 &features,
-                OptimizationLevel::Aggressive,
+                inkwell_opt_level(opt_numeric),
                 RelocMode::Default,
                 CodeModel::Default,
             )
@@ -92,5 +117,14 @@ impl CodegenContext {
         self.module
             .print_to_file(path)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))
+    }
+}
+
+fn inkwell_opt_level(numeric: u8) -> OptimizationLevel {
+    match numeric {
+        0 => OptimizationLevel::None,
+        1 => OptimizationLevel::Less,
+        3 => OptimizationLevel::Aggressive,
+        _ => OptimizationLevel::Default,
     }
 }

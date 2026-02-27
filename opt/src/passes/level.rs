@@ -18,4 +18,22 @@ impl OptimizationLevel {
             _ => None,
         }
     }
+
+    pub fn llvm_pass_pipeline(&self) -> &'static str {
+        match self {
+            Self::None => "default<O0>",
+            Self::Basic => "default<O1>",
+            Self::Standard => "default<O2>",
+            Self::Aggressive => "default<O3>",
+        }
+    }
+
+    pub fn numeric(&self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Basic => 1,
+            Self::Standard => 2,
+            Self::Aggressive => 3,
+        }
+    }
 }

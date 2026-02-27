@@ -61,12 +61,13 @@ pub fn compile_file_with_llvm(
             None,
         )
     })?;
-    compile_air_with_llvm(path, &air, emit_llvm_ir, source)
+    compile_air_with_llvm(path, &air, opt_level, emit_llvm_ir, source)
 }
 
 fn compile_air_with_llvm(
     path: &Path,
     air: &aelys_air::AirProgram,
+    opt_level: OptimizationLevel,
     emit_llvm_ir: bool,
     source: Arc<Source>,
 ) -> Result<(), AelysError> {
@@ -79,10 +80,13 @@ fn compile_air_with_llvm(
     codegen
         .compile(air)
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
+    codegen
+        .optimize(opt_level.llvm_pass_pipeline(), opt_level.numeric())
+        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
     let object_path = object_path_for(path);
     let object_path_str = object_path.to_string_lossy().to_string();
     codegen
-        .emit_object(&object_path_str)
+        .emit_object(&object_path_str, opt_level.numeric())
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     if emit_llvm_ir {

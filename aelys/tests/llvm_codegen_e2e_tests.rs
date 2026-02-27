@@ -7,10 +7,14 @@ use std::process::Command;
 use tempfile::tempdir;
 
 fn compile_to_verified_ir(source: &str) -> String {
+    compile_to_verified_ir_with_opt(source, OptimizationLevel::None)
+}
+
+fn compile_to_verified_ir_with_opt(source: &str, opt: OptimizationLevel) -> String {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, source).expect("source should be written");
-    compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+    compile_file_with_llvm(&source_path, opt, true)
         .expect("llvm backend compilation should succeed");
     let ll_path = source_path.with_extension("ll");
     let ir = fs::read_to_string(&ll_path).expect("llvm ir file should be generated");

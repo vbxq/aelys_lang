@@ -6,7 +6,7 @@ use std::fs;
 use tempfile::tempdir;
 
 fn compile_to_verified_ir(source: &str) -> String {
-    compile_to_verified_ir_with_opt(source, OptimizationLevel::Standard)
+    compile_to_verified_ir_with_opt(source, OptimizationLevel::None)
 }
 
 fn compile_to_verified_ir_with_opt(source: &str, opt: OptimizationLevel) -> String {
@@ -200,4 +200,37 @@ fn caller(v: i64) -> i64 {
 
     assert!(ir.contains("define fastcc i64 @callee"));
     assert!(ir.contains("call fastcc i64 @callee"));
+}
+
+#[test]
+fn llvm_o2_eliminates_allocas_via_mem2reg() {
+    let source = r#"
+fn sum(n: i64) -> i64 {
+    let acc: i64 = 0
+    let i: i64 = 0
+    while i < n {
+        acc = acc + i
+        i = i + 1
+    }
+    return acc
+}
+"#;
+    let ir_o0 = compile_to_verified_ir_with_opt(source, OptimizationLevel::None);
+    let ir_o2 = compile_to_verified_ir_with_opt(source, OptimizationLevel::Standard);
+
+    // O0 must keep allocas (no mem2reg)
+    assert!(
+        ir_o0.contains("alloca"),
+        "O0 should preserve alloca instructions:\n{ir_o0}"
+    );
+
+    // O2 should run mem2reg and eliminate allocas in favor of phi nodes
+    assert!(
+        !ir_o2.contains("alloca"),
+        "O2 should eliminate allocas via mem2reg:\n{ir_o2}"
+    );
+    assert!(
+        ir_o2.contains("phi"),
+        "O2 should introduce phi nodes after mem2reg:\n{ir_o2}"
+    );
 }
