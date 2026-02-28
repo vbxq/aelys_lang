@@ -1,4 +1,4 @@
 fn main() {
     println("Hello, World!")
-    println("Welcome to Aelys v0.21.5-a!")
+    println("Welcome to Aelys v0.21.8-a!")
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/aelys_banner.png?v=2" alt="aelys virtual machine" width="1000">
+  <img src="docs/aelys_banner.png?v=2" alt="aelys" width="1000">
 </p>
 
 <a href="LICENSE"><img src="https://img.shields.io/github/license/vbxq/aelys_lang?color=8A2BE2" alt="License"></a>
@@ -34,7 +34,7 @@ Aelys scales from beginner-friendly scripts to zero-cost systems code. You contr
 - Metaprogramming planned for stable releases
 
 > [!WARNING]
-> **Version 0.21.5-alpha**: LLVM backend rewrite in progress. Expect breaking changes. Docs may be outdated.
+> **Version 0.21.8-alpha**: LLVM backend rewrite in progress. Expect breaking changes. Docs may be outdated.
 
 ## Documentation
 
@@ -52,8 +52,6 @@ Aelys scales from beginner-friendly scripts to zero-cost systems code. You contr
 - [License](LICENSE)
 
 ---
-
-**Pre-alpha. Active rewrite. Use at your own risk.**
 
 ## Contributing
 
