@@ -191,9 +191,10 @@ impl InlineExpander {
                     .collect(),
             },
 
-            TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
+            TypedExprKind::ArraySized { element_type, size, fill_value } => TypedExprKind::ArraySized {
                 element_type: element_type.clone(),
                 size: Box::new(self.substitute_expr(size, params, span)),
+                fill_value: fill_value.as_ref().map(|fv| Box::new(self.substitute_expr(fv, params, span))),
             },
 
             TypedExprKind::Index { object, index } => TypedExprKind::Index {

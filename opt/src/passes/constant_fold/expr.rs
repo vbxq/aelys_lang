@@ -74,8 +74,11 @@ impl ConstantFolder {
                     self.optimize_expr(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized { size, fill_value, .. } => {
                 self.optimize_expr(size);
+                if let Some(fv) = fill_value {
+                    self.optimize_expr(fv);
+                }
             }
             TypedExprKind::Index { object, index } => {
                 self.optimize_expr(object);

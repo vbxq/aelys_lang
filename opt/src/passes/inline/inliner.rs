@@ -1,3 +1,5 @@
+// TODO: consider deleting this or refactor it
+
 use super::analyze::{BlockReason, InlineDecision, ProgramAnalysis};
 use super::expand::InlineExpander;
 use crate::passes::{OptimizationLevel, OptimizationPass, OptimizationStats};
@@ -147,7 +149,12 @@ impl FunctionInliner {
                     self.inline_in_expr(e, analysis);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => self.inline_in_expr(size, analysis),
+            TypedExprKind::ArraySized { size, fill_value, .. } => {
+                self.inline_in_expr(size, analysis);
+                if let Some(fv) = fill_value {
+                    self.inline_in_expr(fv, analysis);
+                }
+            }
             TypedExprKind::Index { object, index } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);

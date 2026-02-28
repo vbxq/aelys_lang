@@ -240,7 +240,12 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
                 collect_calls_in_expr(e, calls);
             }
         }
-        TypedExprKind::ArraySized { size, .. } => collect_calls_in_expr(size, calls),
+        TypedExprKind::ArraySized { size, fill_value, .. } => {
+            collect_calls_in_expr(size, calls);
+            if let Some(fv) = fill_value {
+                collect_calls_in_expr(fv, calls);
+            }
+        }
         TypedExprKind::Index { object, index } => {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(index, calls);
@@ -367,7 +372,12 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
                 count_calls_in_expr(e, counts);
             }
         }
-        TypedExprKind::ArraySized { size, .. } => count_calls_in_expr(size, counts),
+        TypedExprKind::ArraySized { size, fill_value, .. } => {
+            count_calls_in_expr(size, counts);
+            if let Some(fv) = fill_value {
+                count_calls_in_expr(fv, counts);
+            }
+        }
         TypedExprKind::Index { object, index } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(index, counts);

@@ -99,7 +99,9 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Member { object, .. } => has_side_effects(object),
         TypedExprKind::ArrayLiteral { elements, .. }
         | TypedExprKind::VecLiteral { elements, .. } => elements.iter().any(has_side_effects),
-        TypedExprKind::ArraySized { size, .. } => has_side_effects(size),
+        TypedExprKind::ArraySized { size, fill_value, .. } => {
+            has_side_effects(size) || fill_value.as_ref().is_some_and(|fv| has_side_effects(fv))
+        }
         TypedExprKind::Index { object, index } => {
             has_side_effects(object) || has_side_effects(index)
         }

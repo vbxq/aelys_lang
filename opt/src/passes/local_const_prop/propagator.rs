@@ -226,8 +226,11 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars_expr(e, out);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized { size, fill_value, .. } => {
                 Self::collect_assigned_vars_expr(size, out);
+                if let Some(fv) = fill_value {
+                    Self::collect_assigned_vars_expr(fv, out);
+                }
             }
             TypedExprKind::StructLiteral { fields, .. } => {
                 for (_, val) in fields {
@@ -343,8 +346,11 @@ impl LocalConstantPropagator {
                 }
             }
 
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized { size, fill_value, .. } => {
                 self.propagate_expr(size);
+                if let Some(fv) = fill_value {
+                    self.propagate_expr(fv);
+                }
             }
 
             TypedExprKind::Index { object, index } => {
