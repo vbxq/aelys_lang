@@ -110,9 +110,10 @@ impl TypeInference {
                     .map(|e| self.apply_substitution_expr(e, subst))
                     .collect(),
             },
-            TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
+            TypedExprKind::ArraySized { element_type, size, fill_value } => TypedExprKind::ArraySized {
                 element_type: element_type.clone(),
                 size: Box::new(self.apply_substitution_expr(size, subst)),
+                fill_value: fill_value.as_ref().map(|fv| Box::new(self.apply_substitution_expr(fv, subst))),
             },
             TypedExprKind::VecLiteral {
                 element_type,

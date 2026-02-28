@@ -24,7 +24,7 @@ pub enum ResolvedType {
         ret: Box<ResolvedType>,
     },
 
-    Array(Box<ResolvedType>),
+    Array(Box<ResolvedType>, Option<u64>),
     Vec(Box<ResolvedType>),
     Tuple(Vec<ResolvedType>),
     Range,
@@ -109,8 +109,8 @@ impl ResolvedType {
                 params: params.iter().map(ResolvedType::from_infer_type).collect(),
                 ret: Box::new(ResolvedType::from_infer_type(ret)),
             },
-            InferType::Array(inner) => {
-                ResolvedType::Array(Box::new(ResolvedType::from_infer_type(inner)))
+            InferType::Array(inner, len) => {
+                ResolvedType::Array(Box::new(ResolvedType::from_infer_type(inner)), *len)
             }
             InferType::Vec(inner) => {
                 ResolvedType::Vec(Box::new(ResolvedType::from_infer_type(inner)))
@@ -152,7 +152,8 @@ impl fmt::Display for ResolvedType {
                 }
                 write!(f, ") -> {}", ret)
             }
-            ResolvedType::Array(inner) => write!(f, "[{}]", inner),
+            ResolvedType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
+            ResolvedType::Array(inner, None) => write!(f, "[{}]", inner),
             ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
             ResolvedType::Tuple(elems) => {
                 write!(f, "(")?;

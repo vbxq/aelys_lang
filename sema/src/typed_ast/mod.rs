@@ -195,6 +195,7 @@ pub enum TypedExprKind {
     ArraySized {
         element_type: Option<crate::types::ResolvedType>,
         size: Box<TypedExpr>,
+        fill_value: Option<Box<TypedExpr>>,
     },
 
     VecLiteral {

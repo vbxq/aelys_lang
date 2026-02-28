@@ -79,7 +79,7 @@ impl TypeInference {
                 }
                 self.force_dynamic(ret, subst);
             }
-            InferType::Array(inner) => {
+            InferType::Array(inner, _) => {
                 self.force_dynamic(inner, subst);
             }
             InferType::Tuple(elems) => {

@@ -18,7 +18,7 @@ impl TypeEnv {
                     }
                     collect_vars(ret, vars);
                 }
-                InferType::Array(inner) => collect_vars(inner, vars),
+                InferType::Array(inner, _) => collect_vars(inner, vars),
                 InferType::Tuple(elems) => {
                     for e in elems {
                         collect_vars(e, vars);

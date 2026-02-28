@@ -32,12 +32,13 @@ impl TypeInference {
             (first_ty, None)
         };
 
+        let len = typed_elements.len() as u64;
         (
             TypedExprKind::ArrayLiteral {
                 element_type: resolved_elem,
                 elements: typed_elements,
             },
-            InferType::Array(Box::new(elem_ty)),
+            InferType::Array(Box::new(elem_ty), Some(len)),
         )
     }
 
@@ -45,6 +46,7 @@ impl TypeInference {
         &mut self,
         element_type: &Option<TypeAnnotation>,
         size: &Expr,
+        fill_value: Option<&Expr>,
         span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_size = self.infer_expr(size);
@@ -56,10 +58,21 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
+        // Extract const size for the array length
+        let array_len = match &typed_size.kind {
+            TypedExprKind::Int(n) if *n >= 0 => Some(*n as u64),
+            _ => None,
+        };
+
+        let typed_fill = fill_value.map(|fv| Box::new(self.infer_expr(fv)));
+
         let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
             let ty = self.type_from_annotation(ann);
             let resolved = ResolvedType::from_infer_type(&ty);
             (ty, Some(resolved))
+        } else if let Some(ref fv) = typed_fill {
+            // infer element type from fill value
+            (fv.ty.clone(), None)
         } else {
             (InferType::Dynamic, None)
         };
@@ -68,8 +81,9 @@ impl TypeInference {
             TypedExprKind::ArraySized {
                 element_type: resolved_elem,
                 size: Box::new(typed_size),
+                fill_value: typed_fill,
             },
-            InferType::Array(Box::new(elem_ty)),
+            InferType::Array(Box::new(elem_ty), array_len),
         )
     }
 
@@ -126,7 +140,7 @@ impl TypeInference {
         ));
 
         let elem_ty = match &typed_object.ty {
-            InferType::Array(inner) => (**inner).clone(),
+            InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
             InferType::String => InferType::String,
             InferType::Dynamic => InferType::Dynamic,

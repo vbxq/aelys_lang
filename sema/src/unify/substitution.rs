@@ -40,7 +40,7 @@ impl Substitution {
                 params: params.iter().map(|p| self.apply(p)).collect(),
                 ret: Box::new(self.apply(ret)),
             },
-            InferType::Array(inner) => InferType::Array(Box::new(self.apply(inner))),
+            InferType::Array(inner, len) => InferType::Array(Box::new(self.apply(inner)), *len),
             InferType::Vec(inner) => InferType::Vec(Box::new(self.apply(inner))),
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.iter().map(|e| self.apply(e)).collect())

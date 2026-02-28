@@ -22,7 +22,7 @@ pub enum InferType {
         ret: Box<InferType>,
     },
 
-    Array(Box<InferType>),
+    Array(Box<InferType>, Option<u64>),
     Vec(Box<InferType>),
     Tuple(Vec<InferType>),
     Range,
@@ -63,7 +63,7 @@ impl InferType {
             InferType::Function { params, ret } => {
                 params.iter().any(|p| p.has_vars()) || ret.has_vars()
             }
-            InferType::Array(inner) | InferType::Vec(inner) => inner.has_vars(),
+            InferType::Array(inner, _) | InferType::Vec(inner) => inner.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
             _ => false,
         }
@@ -131,7 +131,7 @@ impl InferType {
                     .as_ref()
                     .map(|p| Self::from_annotation(p))
                     .unwrap_or(InferType::Dynamic);
-                InferType::Array(Box::new(inner))
+                InferType::Array(Box::new(inner), ann.array_size)
             }
             "vec" => {
                 let inner = ann
@@ -333,7 +333,8 @@ impl fmt::Display for InferType {
                 }
                 write!(f, ") -> {}", ret)
             }
-            InferType::Array(inner) => write!(f, "[{}]", inner),
+            InferType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
+            InferType::Array(inner, None) => write!(f, "[{}]", inner),
             InferType::Vec(inner) => write!(f, "vec[{}]", inner),
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
