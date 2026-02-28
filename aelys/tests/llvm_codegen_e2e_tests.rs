@@ -535,23 +535,30 @@ fn second() -> i64 {
 }
 "#,
     );
-    // Array literal delegates to runtime
+    // stack-allocated array: alloca + stores + GEP
     assert!(
-        ir.contains("@__aelys_array_new"),
-        "array literal should call __aelys_array_new:\n{ir}"
-    );
-    // Slice-based index: extracts ptr, bounds check, GEP, load
-    assert!(
-        ir.contains("icmp uge"),
-        "array index should have bounds check:\n{ir}"
+        ir.contains("alloca [3 x i64]"),
+        "array literal should use alloca [3 x i64]:\n{ir}"
     );
     assert!(
-        ir.contains("@__aelys_panic"),
-        "array index should panic on OOB:\n{ir}"
+        ir.contains("store i64 10"),
+        "array literal should store first element:\n{ir}"
+    );
+    assert!(
+        ir.contains("store i64 20"),
+        "array literal should store second element:\n{ir}"
+    );
+    assert!(
+        ir.contains("store i64 30"),
+        "array literal should store third element:\n{ir}"
     );
     assert!(
         ir.contains("getelementptr"),
         "array index should generate GEP:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "array index should panic on OOB:\n{ir}"
     );
 }
 
@@ -568,12 +575,16 @@ fn mutate() -> i64 {
 "#,
     );
     assert!(
-        ir.contains("store i64"),
-        "array index write should generate store:\n{ir}"
+        ir.contains("alloca [3 x i64]"),
+        "array should use stack allocation:\n{ir}"
     );
     assert!(
-        ir.contains("icmp uge"),
-        "array index write should have bounds check:\n{ir}"
+        ir.contains("store i64 99"),
+        "array index write should generate store for new value:\n{ir}"
+    );
+    assert!(
+        ir.contains("getelementptr"),
+        "array index write should generate GEP:\n{ir}"
     );
 }
 
@@ -669,7 +680,6 @@ fn first_char() -> string {
     );
 }
 
-/// Loop with array indexing compiles (index in while body).
 #[test]
 fn llvm_loop_with_array_index_compiles() {
     let ir = compile_to_verified_ir(
@@ -696,7 +706,6 @@ fn sum_array(arr: Array<i64>, n: i64) -> i64 {
     );
 }
 
-/// Void function with plain assignment as last expression produces ret void.
 #[test]
 fn llvm_void_function_with_assignment_produces_ret_void() {
     let ir = compile_to_verified_ir(
@@ -717,7 +726,6 @@ fn set_it(x: i64) -> void {
     );
 }
 
-/// Void function with index assignment as last expression produces ret void.
 #[test]
 fn llvm_void_function_with_index_assign_produces_ret_void() {
     let ir = compile_to_verified_ir(

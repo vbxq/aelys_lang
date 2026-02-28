@@ -1,5 +1,5 @@
 use aelys_air::{
-    AirBlock, AirConst, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram, AirStmt,
+    AirBlock, AirConst, AirFunction, AirLocal, AirProgram, AirStmt,
     AirStmtKind, AirTerminator, AirType, BlockId, Callee, CallingConv, FunctionAttribs, FunctionId,
     GcMode, InlineHint, LocalId, Operand, Place, Rvalue,
 };

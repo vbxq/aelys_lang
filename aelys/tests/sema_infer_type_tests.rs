@@ -51,7 +51,7 @@ fn test_from_annotation() {
 fn test_from_annotation_generic_types() {
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("array", "int")),
-        InferType::Array(Box::new(InferType::I64))
+        InferType::Array(Box::new(InferType::I64), None)
     );
 
     assert_eq!(
@@ -62,6 +62,30 @@ fn test_from_annotation_generic_types() {
     // Array<Int> (PascalCase should also work)
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("Array", "Int")),
-        InferType::Array(Box::new(InferType::I64))
+        InferType::Array(Box::new(InferType::I64), None)
+    );
+}
+
+#[test]
+fn test_from_annotation_sized_array() {
+    let inner = TypeAnnotation::new("i64".to_string(), Span::new(0, 0, 1, 1));
+    let ann = TypeAnnotation::array_sized(inner, 3, Span::new(0, 0, 1, 1));
+    assert_eq!(
+        InferType::from_annotation(&ann),
+        InferType::Array(Box::new(InferType::I64), Some(3))
+    );
+}
+
+#[test]
+fn test_from_annotation_nested_sized_array() {
+    let inner = TypeAnnotation::new("i64".to_string(), Span::new(0, 0, 1, 1));
+    let inner_arr = TypeAnnotation::array_sized(inner, 2, Span::new(0, 0, 1, 1));
+    let outer = TypeAnnotation::array_sized(inner_arr, 3, Span::new(0, 0, 1, 1));
+    assert_eq!(
+        InferType::from_annotation(&outer),
+        InferType::Array(
+            Box::new(InferType::Array(Box::new(InferType::I64), Some(2))),
+            Some(3)
+        )
     );
 }
