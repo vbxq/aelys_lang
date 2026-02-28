@@ -98,15 +98,12 @@ impl TypeInference {
             ExprKind::Member { object, member } => {
                 self.infer_member_expr(object, member, expr.span)
             }
-            ExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            } => self.infer_array_literal(element_type, elements, expr.span),
-            ExprKind::ArraySized {
-                element_type,
-                size,
-                fill_value,
-            } => self.infer_array_sized(element_type, size, fill_value.as_deref(), expr.span),
+            ExprKind::ArrayLiteral { elements } => {
+                self.infer_array_literal(elements, expr.span)
+            }
+            ExprKind::ArraySized { size, fill_value } => {
+                self.infer_array_sized(size, fill_value.as_deref(), expr.span)
+            }
             ExprKind::VecLiteral {
                 element_type,
                 elements,

@@ -136,10 +136,10 @@ impl Parser {
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
             TokenKind::Identifier(ref name)
-                if name.eq_ignore_ascii_case("array") || name.eq_ignore_ascii_case("vec") =>
+                if name.eq_ignore_ascii_case("vec") =>
             {
                 let name = name.clone();
-                return self.typed_collection_literal(name, span);
+                return self.vec_literal(name, span);
             }
             TokenKind::Identifier(ref name)
                 if name.chars().next().is_some_and(|c| c.is_uppercase())
@@ -196,7 +196,6 @@ impl Parser {
             let end_span = self.previous().span;
             return Ok(Expr::new(
                 ExprKind::ArraySized {
-                    element_type: None,
                     size: Box::new(size),
                     fill_value: None,
                 },
@@ -210,7 +209,6 @@ impl Parser {
             let end_span = self.previous().span;
             return Ok(Expr::new(
                 ExprKind::ArrayLiteral {
-                    element_type: None,
                     elements: Vec::new(),
                 },
                 start_span.merge(end_span),
@@ -224,7 +222,6 @@ impl Parser {
             let end_span = self.previous().span;
             return Ok(Expr::new(
                 ExprKind::ArraySized {
-                    element_type: None,
                     size: Box::new(size),
                     fill_value: Some(Box::new(first)),
                 },
@@ -246,19 +243,16 @@ impl Parser {
 
         Ok(Expr::new(
             ExprKind::ArrayLiteral {
-                element_type: None,
                 elements,
             },
             start_span.merge(end_span),
         ))
     }
 
-    /// Parse typed collection literal: Array<Int>[1, 2, 3] or Vec<Float>[1.0, 2.0]
-    /// Also handles sized arrays: Array(10) or Array<int>(10)
-    // FIXME: this is the old VM syntax. consider wipping this out.
-    fn typed_collection_literal(
+    /// Parse typed vec literal: Vec<Float>[1.0, 2.0]
+    fn vec_literal(
         &mut self,
-        collection_name: String,
+        _collection_name: String,
         start_span: aelys_syntax::Span,
     ) -> Result<Expr> {
         let element_type = if self.match_token(&TokenKind::Lt) {
@@ -269,39 +263,7 @@ impl Parser {
             None
         };
 
-        // Check for sized array constructor: Array(10) or Array<int>(10)
-        // Only valid for Array, not Vec (Vec will fail at "[" consumption)
-        if collection_name.eq_ignore_ascii_case("array") && self.match_token(&TokenKind::LParen) {
-            let size = self.expression()?;
-            self.consume(&TokenKind::RParen, ")")?;
-            let end_span = self.previous().span;
-
-            return Ok(Expr::new(
-                ExprKind::ArraySized {
-                    element_type,
-                    size: Box::new(size),
-                    fill_value: None,
-                },
-                start_span.merge(end_span),
-            ));
-        }
-
         self.consume(&TokenKind::LBracket, "[")?;
-
-        // Check for sized array syntax: Array[; 10] or Array<int>[; 10]
-        if self.match_token(&TokenKind::Semicolon) {
-            let size = self.expression()?;
-            self.consume(&TokenKind::RBracket, "]")?;
-            let end_span = self.previous().span;
-            return Ok(Expr::new(
-                ExprKind::ArraySized {
-                    element_type,
-                    size: Box::new(size),
-                    fill_value: None,
-                },
-                start_span.merge(end_span),
-            ));
-        }
 
         let mut elements = Vec::new();
         if !self.check(&TokenKind::RBracket) {
@@ -319,19 +281,13 @@ impl Parser {
         self.consume(&TokenKind::RBracket, "]")?;
         let end_span = self.previous().span;
 
-        let kind = if collection_name.eq_ignore_ascii_case("vec") {
+        Ok(Expr::new(
             ExprKind::VecLiteral {
                 element_type,
                 elements,
-            }
-        } else {
-            ExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            }
-        };
-
-        Ok(Expr::new(kind, start_span.merge(end_span)))
+            },
+            start_span.merge(end_span),
+        ))
     }
 
     fn struct_literal(&mut self, name: String, start_span: aelys_syntax::Span) -> Result<Expr> {

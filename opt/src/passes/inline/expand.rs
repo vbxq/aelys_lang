@@ -169,11 +169,7 @@ impl InlineExpander {
                 member: member.clone(),
             },
 
-            TypedExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            } => TypedExprKind::ArrayLiteral {
-                element_type: element_type.clone(),
+            TypedExprKind::ArrayLiteral { elements } => TypedExprKind::ArrayLiteral {
                 elements: elements
                     .iter()
                     .map(|e| self.substitute_expr(e, params, span))
@@ -191,12 +187,7 @@ impl InlineExpander {
                     .collect(),
             },
 
-            TypedExprKind::ArraySized {
-                element_type,
-                size,
-                fill_value,
-            } => TypedExprKind::ArraySized {
-                element_type: element_type.clone(),
+            TypedExprKind::ArraySized { size, fill_value } => TypedExprKind::ArraySized {
                 size: Box::new(self.substitute_expr(size, params, span)),
                 fill_value: fill_value
                     .as_ref()

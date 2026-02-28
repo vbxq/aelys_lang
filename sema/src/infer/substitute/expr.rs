@@ -100,22 +100,13 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 member: member.clone(),
             },
-            TypedExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            } => TypedExprKind::ArrayLiteral {
-                element_type: element_type.clone(),
+            TypedExprKind::ArrayLiteral { elements } => TypedExprKind::ArrayLiteral {
                 elements: elements
                     .iter()
                     .map(|e| self.apply_substitution_expr(e, subst))
                     .collect(),
             },
-            TypedExprKind::ArraySized {
-                element_type,
-                size,
-                fill_value,
-            } => TypedExprKind::ArraySized {
-                element_type: element_type.clone(),
+            TypedExprKind::ArraySized { size, fill_value } => TypedExprKind::ArraySized {
                 size: Box::new(self.apply_substitution_expr(size, subst)),
                 fill_value: fill_value
                     .as_ref()

@@ -175,11 +175,9 @@ pub enum ExprKind {
 
     // Arrays and Vecs
     ArrayLiteral {
-        element_type: Option<TypeAnnotation>, // Array<Int>[...] or Array[...]
         elements: Vec<Expr>,
     },
     ArraySized {
-        element_type: Option<TypeAnnotation>, // Array<int>(10) or Array(10) or [; 10]
         size: Box<Expr>,
         fill_value: Option<Box<Expr>>, // [val; N] syntax
     },

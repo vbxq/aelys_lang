@@ -7,18 +7,13 @@ use aelys_syntax::{Expr, Span, TypeAnnotation};
 impl TypeInference {
     pub(super) fn infer_array_literal(
         &mut self,
-        element_type: &Option<TypeAnnotation>,
         elements: &[Expr],
         _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
 
-        let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
-            let ty = self.type_from_annotation(ann);
-            let resolved = ResolvedType::from_infer_type(&ty);
-            (ty, Some(resolved))
-        } else if typed_elements.is_empty() {
-            (self.type_gen.fresh(), None)
+        let elem_ty = if typed_elements.is_empty() {
+            self.type_gen.fresh()
         } else {
             let first_ty = typed_elements[0].ty.clone();
             for elem in typed_elements.iter().skip(1) {
@@ -29,13 +24,12 @@ impl TypeInference {
                     ConstraintReason::ArrayElement,
                 ));
             }
-            (first_ty, None)
+            first_ty
         };
 
         let len = typed_elements.len() as u64;
         (
             TypedExprKind::ArrayLiteral {
-                element_type: resolved_elem,
                 elements: typed_elements,
             },
             InferType::Array(Box::new(elem_ty), Some(len)),
@@ -44,7 +38,6 @@ impl TypeInference {
 
     pub(super) fn infer_array_sized(
         &mut self,
-        element_type: &Option<TypeAnnotation>,
         size: &Expr,
         fill_value: Option<&Expr>,
         span: Span,
@@ -66,20 +59,14 @@ impl TypeInference {
 
         let typed_fill = fill_value.map(|fv| Box::new(self.infer_expr(fv)));
 
-        let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
-            let ty = self.type_from_annotation(ann);
-            let resolved = ResolvedType::from_infer_type(&ty);
-            (ty, Some(resolved))
-        } else if let Some(ref fv) = typed_fill {
-            // infer element type from fill value
-            (fv.ty.clone(), None)
+        let elem_ty = if let Some(ref fv) = typed_fill {
+            fv.ty.clone()
         } else {
-            (InferType::Dynamic, None)
+            InferType::Dynamic
         };
 
         (
             TypedExprKind::ArraySized {
-                element_type: resolved_elem,
                 size: Box::new(typed_size),
                 fill_value: typed_fill,
             },
