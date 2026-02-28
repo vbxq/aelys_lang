@@ -65,7 +65,6 @@ fn second() -> i64 {
     );
 }
 
-
 #[test]
 fn array_literal_annotated() {
     let ir = compile_to_verified_ir(
@@ -215,10 +214,7 @@ fn first_b() -> bool {
         ir.contains("alloca [3 x i1]"),
         "bool array should allocate [3 x i1]:\n{ir}"
     );
-    assert!(
-        ir.contains("store i1"),
-        "should store i1 values:\n{ir}"
-    );
+    assert!(ir.contains("store i1"), "should store i1 values:\n{ir}");
 }
 
 #[test]
@@ -363,18 +359,9 @@ fn get() -> i64 {
         ir.contains("alloca [3 x i64]"),
         "should allocate [3 x i64]:\n{ir}"
     );
-    assert!(
-        ir.contains("store i64 5"),
-        "should store 5:\n{ir}"
-    );
-    assert!(
-        ir.contains("store i64 10"),
-        "should store 10:\n{ir}"
-    );
-    assert!(
-        ir.contains("store i64 15"),
-        "should store 15:\n{ir}"
-    );
+    assert!(ir.contains("store i64 5"), "should store 5:\n{ir}");
+    assert!(ir.contains("store i64 10"), "should store 10:\n{ir}");
+    assert!(ir.contains("store i64 15"), "should store 15:\n{ir}");
 }
 
 #[test]
@@ -412,10 +399,7 @@ fn only() -> i64 {
         ir.contains("alloca [1 x i64]"),
         "single-element array should allocate [1 x i64]:\n{ir}"
     );
-    assert!(
-        ir.contains("store i64 42"),
-        "should store 42:\n{ir}"
-    );
+    assert!(ir.contains("store i64 42"), "should store 42:\n{ir}");
 }
 
 #[test]

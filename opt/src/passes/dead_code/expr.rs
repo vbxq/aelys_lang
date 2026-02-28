@@ -49,7 +49,9 @@ impl DeadCodeEliminator {
                     self.eliminate_in_expr(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.eliminate_in_expr(size);
                 if let Some(fv) = fill_value {
                     self.eliminate_in_expr(fv);

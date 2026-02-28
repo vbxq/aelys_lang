@@ -464,7 +464,9 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                 remap_expr_spans(el, span);
             }
         }
-        ExprKind::ArraySized { size, fill_value, .. } => {
+        ExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
             remap_expr_spans(size, span);
             if let Some(fv) = fill_value {
                 remap_expr_spans(fv, span);

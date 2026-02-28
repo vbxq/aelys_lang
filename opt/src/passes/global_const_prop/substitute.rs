@@ -54,7 +54,9 @@ impl GlobalConstantPropagator {
                     self.substitute_constants(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.substitute_constants(size);
                 if let Some(fv) = fill_value {
                     self.substitute_constants(fv);

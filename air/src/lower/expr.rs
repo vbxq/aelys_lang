@@ -132,7 +132,10 @@ impl<'a> LoweringContext<'a> {
                 for (i, elem_op) in lowered.into_iter().enumerate() {
                     self.emit(
                         AirStmtKind::Assign {
-                            place: Place::Index(arr_local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                            place: Place::Index(
+                                arr_local,
+                                Operand::Const(AirConst::IntLiteral(i as i64)),
+                            ),
                             rvalue: Rvalue::Use(elem_op),
                         },
                         sp,
@@ -141,7 +144,9 @@ impl<'a> LoweringContext<'a> {
                 Operand::Copy(arr_local)
             }
 
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 // exctract le const size
                 let n = match &size.kind {
                     TypedExprKind::Int(v) => *v as u64,
@@ -167,7 +172,10 @@ impl<'a> LoweringContext<'a> {
                 for i in 0..n {
                     self.emit(
                         AirStmtKind::Assign {
-                            place: Place::Index(arr_local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                            place: Place::Index(
+                                arr_local,
+                                Operand::Const(AirConst::IntLiteral(i as i64)),
+                            ),
                             rvalue: Rvalue::Use(fill_op.clone()),
                         },
                         sp,

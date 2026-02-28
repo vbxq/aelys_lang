@@ -149,7 +149,9 @@ impl FunctionInliner {
                     self.inline_in_expr(e, analysis);
                 }
             }
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.inline_in_expr(size, analysis);
                 if let Some(fv) = fill_value {
                     self.inline_in_expr(fv, analysis);

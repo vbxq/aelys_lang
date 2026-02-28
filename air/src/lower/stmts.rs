@@ -43,7 +43,10 @@ impl<'a> LoweringContext<'a> {
                                 let elem_op = self.lower_expr(elem);
                                 self.emit(
                                     AirStmtKind::Assign {
-                                        place: Place::Index(local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                                        place: Place::Index(
+                                            local,
+                                            Operand::Const(AirConst::IntLiteral(i as i64)),
+                                        ),
                                         rvalue: Rvalue::Use(elem_op),
                                     },
                                     sp,
@@ -51,7 +54,9 @@ impl<'a> LoweringContext<'a> {
                             }
                             return;
                         }
-                        TypedExprKind::ArraySized { size, fill_value, .. } => {
+                        TypedExprKind::ArraySized {
+                            size, fill_value, ..
+                        } => {
                             let n = match &size.kind {
                                 TypedExprKind::Int(v) => *v as u64,
                                 _ => panic!("ArraySized requires a constant integer size"),
@@ -75,7 +80,10 @@ impl<'a> LoweringContext<'a> {
                             for i in 0..n {
                                 self.emit(
                                     AirStmtKind::Assign {
-                                        place: Place::Index(local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                                        place: Place::Index(
+                                            local,
+                                            Operand::Const(AirConst::IntLiteral(i as i64)),
+                                        ),
                                         rvalue: Rvalue::Use(fill_op.clone()),
                                     },
                                     sp,

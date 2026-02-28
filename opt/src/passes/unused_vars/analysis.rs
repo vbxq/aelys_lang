@@ -137,7 +137,9 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 collect_uses_in_expr(elem, used);
             }
         }
-        TypedExprKind::ArraySized { size, fill_value, .. } => {
+        TypedExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
             collect_uses_in_expr(size, used);
             if let Some(fv) = fill_value {
                 collect_uses_in_expr(fv, used);

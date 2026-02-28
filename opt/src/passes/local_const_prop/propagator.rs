@@ -226,7 +226,9 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars_expr(e, out);
                 }
             }
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 Self::collect_assigned_vars_expr(size, out);
                 if let Some(fv) = fill_value {
                     Self::collect_assigned_vars_expr(fv, out);
@@ -346,7 +348,9 @@ impl LocalConstantPropagator {
                 }
             }
 
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.propagate_expr(size);
                 if let Some(fv) = fill_value {
                     self.propagate_expr(fv);

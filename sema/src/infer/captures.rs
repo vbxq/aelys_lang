@@ -150,7 +150,9 @@ impl TypeInference {
                     self.collect_captures_inner(elem, params, captures, seen);
                 }
             }
-            TypedExprKind::ArraySized { size, fill_value, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.collect_captures_inner(size, params, captures, seen);
                 if let Some(fv) = fill_value {
                     self.collect_captures_inner(fv, params, captures, seen);

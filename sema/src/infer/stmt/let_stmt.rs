@@ -1,6 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::{TypedStmtKind};
+use crate::typed_ast::TypedStmtKind;
 use aelys_syntax::{Expr, Span, TypeAnnotation};
 
 impl TypeInference {
