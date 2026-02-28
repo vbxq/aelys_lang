@@ -105,7 +105,7 @@ impl<'a> LoweringContext<'a> {
     ) {
         let collection = self.lower_expr(iterable);
         let col_ty = self.lower_type_from_infer(&iterable.ty);
-        let col_local = self.alloc_temp(col_ty);
+        let col_local = self.alloc_temp(col_ty.clone());
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(col_local),
@@ -124,13 +124,19 @@ impl<'a> LoweringContext<'a> {
         );
 
         let len_local = self.alloc_temp(AirType::I64);
+        // for stack arrays with known length, use the constant directly
+        let len_rvalue = if let AirType::Array(_, n) = &col_ty {
+            Rvalue::Use(Operand::Const(AirConst::IntLiteral(*n as i64)))
+        } else {
+            Rvalue::Call {
+                func: Callee::Named("__aelys_len".to_string()),
+                args: vec![Operand::Copy(col_local)],
+            }
+        };
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(len_local),
-                rvalue: Rvalue::Call {
-                    func: Callee::Named("__aelys_len".to_string()),
-                    args: vec![Operand::Copy(col_local)],
-                },
+                rvalue: len_rvalue,
             },
             None,
         );

@@ -247,7 +247,12 @@ impl<'a> LoweringContext<'a> {
                 ret: Box::new(self.lower_type_from_infer(ret)),
                 conv: CallingConv::Aelys,
             },
-            InferType::Array(inner) => AirType::Slice(Box::new(self.lower_type_from_infer(inner))),
+            InferType::Array(inner, Some(n)) => {
+                AirType::Array(Box::new(self.lower_type_from_infer(inner)), *n)
+            }
+            InferType::Array(inner, None) => {
+                AirType::Slice(Box::new(self.lower_type_from_infer(inner)))
+            }
             InferType::Vec(inner) => AirType::Slice(Box::new(self.lower_type_from_infer(inner))),
             InferType::Tuple(_) => AirType::Void,
             InferType::Range => AirType::Void,
@@ -265,6 +270,25 @@ impl<'a> LoweringContext<'a> {
             // that monomorphization will fix later. i64 placeholder works because
             // monomorphization replaces the type before codegen sees it.
             InferType::Dynamic => AirType::I64,
+        }
+    }
+
+    /// Check that a stack array doesn't exceed the 1MB stack size threshold.
+    /// Panics at compile time if the array is too large.
+    // TODO: use aelys comptime error handling instead of panic
+    pub(super) fn check_stack_array_size(&self, elem_ty: &AirType, n: u64) {
+        const MAX_STACK_BYTES: u64 = 1024 * 1024; // 1 MB
+        let elem_size = crate::layout::layout_of(elem_ty).size as u64;
+        let total = n.saturating_mul(elem_size);
+        if total > MAX_STACK_BYTES {
+            panic!(
+                "stack array too large: [{}; {}] = {} bytes (max {} bytes). \
+                 Consider using a smaller size or a heap-allocated collection.",
+                crate::print::fmt_type(elem_ty),
+                n,
+                total,
+                MAX_STACK_BYTES,
+            );
         }
     }
 

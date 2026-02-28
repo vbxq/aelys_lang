@@ -121,26 +121,59 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::ArrayLiteral { elements, .. } => {
                 let lowered: Vec<Operand> = elements.iter().map(|e| self.lower_expr(e)).collect();
-                self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&expr.ty),
-                    Rvalue::Call {
-                        func: Callee::Named("__aelys_array_new".to_string()),
-                        args: lowered,
-                    },
-                    sp,
-                )
+                let n = lowered.len() as u64;
+                // extract element type from the array type
+                let elem_ty = match &expr.ty {
+                    InferType::Array(inner, _) => self.lower_type_from_infer(inner),
+                    _ => AirType::I64,
+                };
+                let arr_ty = AirType::Array(Box::new(elem_ty), n);
+                let arr_local = self.alloc_temp_mut(arr_ty);
+                for (i, elem_op) in lowered.into_iter().enumerate() {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Index(arr_local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                            rvalue: Rvalue::Use(elem_op),
+                        },
+                        sp,
+                    );
+                }
+                Operand::Copy(arr_local)
             }
 
-            TypedExprKind::ArraySized { size, .. } => {
-                let sz = self.lower_expr(size);
-                self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&expr.ty),
-                    Rvalue::Call {
-                        func: Callee::Named("__aelys_array_sized".to_string()),
-                        args: vec![sz],
-                    },
-                    sp,
-                )
+            TypedExprKind::ArraySized { size, fill_value, .. } => {
+                // exctract le const size
+                let n = match &size.kind {
+                    TypedExprKind::Int(v) => *v as u64,
+                    _ => panic!("ArraySized requires a constant integer size"),
+                };
+                let elem_ty = match &expr.ty {
+                    InferType::Array(inner, _) => self.lower_type_from_infer(inner),
+                    _ => AirType::I64,
+                };
+                self.check_stack_array_size(&elem_ty, n);
+                let arr_ty = AirType::Array(Box::new(elem_ty), n);
+                let arr_local = self.alloc_temp_mut(arr_ty);
+                // lower fill value or use zero-init
+                let fill_op = if let Some(fv) = fill_value {
+                    self.lower_expr(fv)
+                } else {
+                    let elem_ty_for_zero = match &expr.ty {
+                        InferType::Array(inner, _) => self.lower_type_from_infer(inner),
+                        _ => AirType::I64,
+                    };
+                    Operand::Const(AirConst::ZeroInit(elem_ty_for_zero))
+                };
+                for i in 0..n {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Index(arr_local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                            rvalue: Rvalue::Use(fill_op.clone()),
+                        },
+                        sp,
+                    );
+                }
+                Operand::Copy(arr_local)
             }
 
             TypedExprKind::VecLiteral { elements, .. } => {

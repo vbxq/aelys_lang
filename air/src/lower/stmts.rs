@@ -1,6 +1,6 @@
 use super::LoweringContext;
 use crate::*;
-use aelys_sema::{TypedStmt, TypedStmtKind};
+use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_body(&mut self, stmts: &[TypedStmt]) {
@@ -33,6 +33,59 @@ impl<'a> LoweringContext<'a> {
                 ..
             } => {
                 let ty = self.lower_type_from_infer(var_type);
+                // Optimization: for array initializers, emit stores directly to the named local
+                // instead of going through a temp + copy
+                if matches!(ty, AirType::Array(_, _)) {
+                    match &initializer.kind {
+                        TypedExprKind::ArrayLiteral { elements, .. } => {
+                            let local = self.alloc_named_local(name, ty, true, sp);
+                            for (i, elem) in elements.iter().enumerate() {
+                                let elem_op = self.lower_expr(elem);
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Index(local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                                        rvalue: Rvalue::Use(elem_op),
+                                    },
+                                    sp,
+                                );
+                            }
+                            return;
+                        }
+                        TypedExprKind::ArraySized { size, fill_value, .. } => {
+                            let n = match &size.kind {
+                                TypedExprKind::Int(v) => *v as u64,
+                                _ => panic!("ArraySized requires a constant integer size"),
+                            };
+                            // Stack size check
+                            let elem_air_ty = match var_type {
+                                InferType::Array(inner, _) => self.lower_type_from_infer(inner),
+                                _ => AirType::I64,
+                            };
+                            self.check_stack_array_size(&elem_air_ty, n);
+                            let local = self.alloc_named_local(name, ty, true, sp);
+                            let fill_op = if let Some(fv) = fill_value {
+                                self.lower_expr(fv)
+                            } else {
+                                let elem_ty = match var_type {
+                                    InferType::Array(inner, _) => self.lower_type_from_infer(inner),
+                                    _ => AirType::I64,
+                                };
+                                Operand::Const(AirConst::ZeroInit(elem_ty))
+                            };
+                            for i in 0..n {
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Index(local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                                        rvalue: Rvalue::Use(fill_op.clone()),
+                                    },
+                                    sp,
+                                );
+                            }
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
                 let local = self.alloc_named_local(name, ty, *mutable, sp);
                 let operand = self.lower_expr(initializer);
                 self.emit(
@@ -75,6 +128,15 @@ impl<'a> LoweringContext<'a> {
                 self.lower_foreach(iterator, iterable, elem_type, body, sp);
             }
             TypedStmtKind::Return(val) => {
+                if let Some(e) = val {
+                    let ret_ty = self.lower_type_from_infer(&e.ty);
+                    if matches!(ret_ty, AirType::Array(_, _)) {
+                        panic!(
+                            "cannot return stack-allocated array from function. \
+                             Stack arrays are deallocated when the function returns."
+                        );
+                    }
+                }
                 let operand = val.as_ref().map(|e| self.lower_expr(e));
                 self.seal_block(AirTerminator::Return(operand));
             }
@@ -171,10 +233,10 @@ impl<'a> LoweringContext<'a> {
         self.fixup_block_id_noop(exit_id);
     }
 
-    // the old fixup_block_id(X) renamed the LAST sealed block to X
-    // With nested control flow that creates multiple blocks, the last block is
-    // some inner merge, not the branch entry. This nuked entire loop bodies.
-    // Now we set the pending id BEFORE lowering so the first seal_block picks it up.
+    /// the old fixup_block_id(X) renamed the last sealed block to X
+    /// With nested control flow that creates multiple blocks, the last block is
+    /// some inner merge, not the branch entry. This nuked entire loop bodies.
+    /// Now we set the pending id *before* lowering so the first seal_block picks it up.
     pub(super) fn fixup_block_id_noop(&mut self, target: BlockId) {
         if let Some(old) = self.pending_block_id {
             if old != target {
