@@ -6,6 +6,7 @@ pub struct TypeAnnotation {
     pub type_param: Option<Box<TypeAnnotation>>,
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
+    pub array_size: Option<u64>,
     pub span: Span,
 }
 
@@ -16,6 +17,7 @@ impl TypeAnnotation {
             type_param: None,
             fn_params: None,
             fn_ret: None,
+            array_size: None,
             span,
         }
     }
@@ -26,6 +28,7 @@ impl TypeAnnotation {
             type_param: Some(Box::new(type_param)),
             fn_params: None,
             fn_ret: None,
+            array_size: None,
             span,
         }
     }
@@ -36,6 +39,18 @@ impl TypeAnnotation {
             type_param: None,
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
+            array_size: None,
+            span,
+        }
+    }
+
+    pub fn array_sized(inner: TypeAnnotation, size: u64, span: Span) -> Self {
+        Self {
+            name: "array".to_string(),
+            type_param: Some(Box::new(inner)),
+            fn_params: None,
+            fn_ret: None,
+            array_size: Some(size),
             span,
         }
     }
@@ -166,6 +181,7 @@ pub enum ExprKind {
     ArraySized {
         element_type: Option<TypeAnnotation>, // Array<int>(10) or Array(10) or [; 10]
         size: Box<Expr>,
+        fill_value: Option<Box<Expr>>, // [val; N] syntax
     },
     VecLiteral {
         element_type: Option<TypeAnnotation>,
