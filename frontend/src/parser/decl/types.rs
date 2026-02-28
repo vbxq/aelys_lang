@@ -6,6 +6,31 @@ impl Parser {
     pub fn parse_type_annotation(&mut self) -> Result<TypeAnnotation> {
         let start_span = self.peek().span;
 
+        if self.match_token(&TokenKind::LBracket) {
+            let inner = self.parse_type_annotation()?;
+            self.consume(&TokenKind::Semicolon, ";")?;
+            let size_token = self.advance();
+            let size = match &size_token.kind {
+                TokenKind::Int(n) if *n >= 0 => *n as u64,
+                other => {
+                    let found = other.to_string();
+                    return Err(self.error(
+                        aelys_common::error::CompileErrorKind::UnexpectedToken {
+                            expected: "positive integer for array size".to_string(),
+                            found,
+                        },
+                    ));
+                }
+            };
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(TypeAnnotation::array_sized(
+                inner,
+                size,
+                start_span.merge(end_span),
+            ));
+        }
+
         if self.match_token(&TokenKind::Fn) {
             return self.parse_function_type_annotation(start_span);
         }

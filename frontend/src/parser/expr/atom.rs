@@ -187,9 +187,9 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// Parse array literal: [1, 2, 3] or sized array: [; 10]
+    /// Parse array literal: [1, 2, 3] or sized array: [; 10] or [val; 10]
     fn array_literal(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
-        // Check for sized array syntax: [; size]
+        // Check for sized array syntax: [; size] (zero-initialized)
         if self.match_token(&TokenKind::Semicolon) {
             let size = self.expression()?;
             self.consume(&TokenKind::RBracket, "]")?;
@@ -198,23 +198,47 @@ impl Parser {
                 ExprKind::ArraySized {
                     element_type: None,
                     size: Box::new(size),
+                    fill_value: None,
                 },
                 start_span.merge(end_span),
             ));
         }
 
-        let mut elements = Vec::new();
+        // empty array
+        if self.check(&TokenKind::RBracket) {
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArrayLiteral {
+                    element_type: None,
+                    elements: Vec::new(),
+                },
+                start_span.merge(end_span),
+            ));
+        }
+        let first = self.expression()?;
+        // check for [val; N] syntax
+        if self.match_token(&TokenKind::Semicolon) {
+            let size = self.expression()?;
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArraySized {
+                    element_type: None,
+                    size: Box::new(size),
+                    fill_value: Some(Box::new(first)),
+                },
+                start_span.merge(end_span),
+            ));
+        }
 
-        if !self.check(&TokenKind::RBracket) {
-            loop {
-                elements.push(self.expression()?);
-                if !self.match_token(&TokenKind::Comma) {
-                    break;
-                }
-                if self.check(&TokenKind::RBracket) {
-                    break;
-                }
+        // regular array literal: collect remaining elements
+        let mut elements = vec![first];
+        while self.match_token(&TokenKind::Comma) {
+            if self.check(&TokenKind::RBracket) {
+                break;
             }
+            elements.push(self.expression()?);
         }
 
         self.consume(&TokenKind::RBracket, "]")?;
@@ -231,6 +255,7 @@ impl Parser {
 
     /// Parse typed collection literal: Array<Int>[1, 2, 3] or Vec<Float>[1.0, 2.0]
     /// Also handles sized arrays: Array(10) or Array<int>(10)
+    // FIXME: this is the old VM syntax. consider wipping this out.
     fn typed_collection_literal(
         &mut self,
         collection_name: String,
@@ -255,6 +280,7 @@ impl Parser {
                 ExprKind::ArraySized {
                     element_type,
                     size: Box::new(size),
+                    fill_value: None,
                 },
                 start_span.merge(end_span),
             ));
@@ -271,6 +297,7 @@ impl Parser {
                 ExprKind::ArraySized {
                     element_type,
                     size: Box::new(size),
+                    fill_value: None,
                 },
                 start_span.merge(end_span),
             ));
@@ -437,8 +464,11 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                 remap_expr_spans(el, span);
             }
         }
-        ExprKind::ArraySized { size, .. } => {
+        ExprKind::ArraySized { size, fill_value, .. } => {
             remap_expr_spans(size, span);
+            if let Some(fv) = fill_value {
+                remap_expr_spans(fv, span);
+            }
         }
         ExprKind::Index { object, index } => {
             remap_expr_spans(object, span);
