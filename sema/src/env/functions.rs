@@ -13,6 +13,11 @@ impl TypeEnv {
         self.functions.insert(name, Rc::new(ty));
     }
 
+    /// Check if a function is defined
+    pub fn has_function(&self, name: &str) -> bool {
+        self.functions.contains_key(name)
+    }
+
     /// Look up a function type (returns Rc for cheap cloning)
     pub fn lookup_function(&self, name: &str) -> Option<&Rc<InferType>> {
         self.functions.get(name)

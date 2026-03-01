@@ -4,10 +4,16 @@ use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
 use aelys_syntax::{Source, Span as SyntaxSpan};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use std::process::Command;
 use std::sync::Arc;
+
+/// Built-in functions available in every Aelys program
+/// These are intercepted during codegen and lowered to runtime calls
+// TODO: Find a better way + clean until proper bootstrap
+const BOOTSTRAP_BUILTINS: &[&str] = &["print", "println"];
 
 pub fn lower_file_to_air(
     path: &Path,
@@ -26,13 +32,16 @@ pub fn lower_file_to_air(
         .parse()
         .map_err(|err| err.to_string())?;
 
-    // Single-file compilation only (no module system)
-    let typed_program = aelys_sema::TypeInference::infer_program(stmts, src).map_err(|errors| {
-        errors
-            .first()
-            .map(|e| e.to_string())
-            .unwrap_or_else(|| "Unknown type error".to_string())
-    })?;
+    let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
+
+    let typed_program =
+        aelys_sema::TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known_globals)
+            .map_err(|errors| {
+                errors
+                    .first()
+                    .map(|e| e.to_string())
+                    .unwrap_or_else(|| "Unknown type error".to_string())
+            })?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);

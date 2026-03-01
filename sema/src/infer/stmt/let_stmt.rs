@@ -40,6 +40,9 @@ impl TypeInference {
         };
 
         self.env.define_local(name.to_string(), var_type.clone());
+        if mutable {
+            self.env.mark_mutable(name.to_string());
+        }
 
         TypedStmtKind::Let {
             name: name.to_string(),

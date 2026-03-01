@@ -42,6 +42,7 @@ fn compile_source_expect_error(source: &str) -> String {
     }
 }
 
+// TODO: remove when stdlib bootstrap
 #[test]
 fn llvm_rejects_user_defined_reserved_bootstrap_println() {
     let error = compile_source_expect_error(
@@ -51,8 +52,10 @@ fn println(s: string) {
 }
 "#,
     );
+    // either "reserved builtin" (from AIR lowering) or "duplicate function definition" from sema, since println is registered as a bootstrap builtin
     assert!(
-        error.contains("reserved builtin during bootstrap") && error.contains("println"),
+        (error.contains("reserved builtin during bootstrap") || error.contains("duplicate function definition"))
+            && error.contains("println"),
         "{error}"
     );
 }

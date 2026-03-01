@@ -6,9 +6,14 @@ use aelys_syntax::{Expr, Span};
 
 impl TypeInference {
     pub(super) fn infer_return_stmt(&mut self, span: Span, expr: Option<&Expr>) -> TypedStmtKind {
-        let typed_expr = expr.map(|e| self.infer_expr(e));
+        let mut typed_expr = expr.map(|e| self.infer_expr(e));
 
         if let Some(expected_ret) = self.current_return_type().cloned() {
+            // narrow numeric literals to match the declared return type (same pattern as call-argument narrowing in call.rs)
+            if let Some(ref mut texpr) = typed_expr {
+                self.try_narrow_literal(texpr, &expected_ret);
+            }
+
             let actual_ret = typed_expr
                 .as_ref()
                 .map(|e| e.ty.clone())

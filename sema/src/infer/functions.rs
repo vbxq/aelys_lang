@@ -1,4 +1,5 @@
 use super::TypeInference;
+use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::{TypedFunction, TypedParam};
 use crate::types::InferType;
 use aelys_syntax::Function;
@@ -56,6 +57,9 @@ impl TypeInference {
 
         for param in &typed_params {
             func_env.define_local(param.name.clone(), param.ty.clone());
+            if param.mutable {
+                func_env.mark_mutable(param.name.clone());
+            }
         }
 
         let saved_env = std::mem::replace(&mut self.env, func_env);
@@ -65,6 +69,15 @@ impl TypeInference {
         self.push_return_type(return_type.clone());
 
         let typed_body = if func.body.is_empty() {
+            // empty body implicitly returns null, constrain against the declared return type so fn f()->i64 {} is rejected
+            self.constraints.push(Constraint::equal(
+                InferType::Null,
+                return_type.clone(),
+                func.span,
+                ConstraintReason::Return {
+                    func_name: func.name.clone(),
+                },
+            ));
             vec![]
         } else {
             let mut stmts: Vec<_> = func.body[..func.body.len() - 1]

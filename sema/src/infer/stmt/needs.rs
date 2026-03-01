@@ -12,9 +12,12 @@ impl TypeInference {
                 }
             }
             ImportKind::Module { alias } => {
-                let _module_name = alias
+                let module_name = alias
                     .clone()
                     .unwrap_or_else(|| needs.path.last().cloned().unwrap_or_default());
+                if !module_name.is_empty() {
+                    self.env.define_local(module_name, InferType::Dynamic);
+                }
             }
             ImportKind::Wildcard => {}
         }

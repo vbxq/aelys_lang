@@ -1,7 +1,9 @@
 use super::TypeInference;
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::types::{InferType, StructDef, StructField};
 use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{Stmt, StmtKind};
+use std::collections::HashSet;
 
 impl TypeInference {
     pub(super) fn collect_structs(&mut self, stmts: &[Stmt]) {
@@ -23,11 +25,26 @@ impl TypeInference {
                     continue;
                 }
 
-                for type_param in type_params {
-                    let fresh_var = self.type_gen.fresh();
-                    self.env.define_local(type_param.clone(), fresh_var);
+                // check for duplicate field names
+                let mut seen_fields = HashSet::new();
+                for f in fields {
+                    if !seen_fields.insert(&f.name) {
+                        self.errors.push(TypeError {
+                            kind: TypeErrorKind::Mismatch {
+                                expected: InferType::Dynamic,
+                                found: InferType::Dynamic,
+                            },
+                            span: f.span,
+                            reason: ConstraintReason::Other(format!(
+                                "duplicate field '{}' in struct '{}'",
+                                f.name, name
+                            )),
+                        });
+                    }
                 }
 
+                // important note: type params for generic structs are handled via InferType::from_annotation which maps uppercase names to
+                // Struct("T"), so we *do not* define them in the env here, it would pollute the global scope and leak between structs
                 let struct_fields: Vec<StructField> = fields
                     .iter()
                     .map(|f| {

@@ -91,8 +91,8 @@ fn block_ids_coherent_in_while_loop() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i32 {
-    let total: i32 = 0
-    let i: i32 = 0
+    let mut total: i32 = 0
+    let mut i: i32 = 0
     while i < n {
         total = total + i
         i = i + 1
@@ -143,9 +143,9 @@ fn block_ids_coherent_in_nested_control_flow() {
     let air = lower_source(
         r#"
 fn classify(n: i32) -> i32 {
-    let result: i32 = 0
+    let mut result: i32 = 0
     if n > 0 {
-        let i: i32 = 0
+        let mut i: i32 = 0
         while i < n {
             if i > 5 {
                 result = result + 2
@@ -260,8 +260,8 @@ fn const_prop_does_not_substitute_in_while_condition() {
     let air = lower_optimized(
         r#"
 fn sum(n: i32) -> i32 {
-    let total: i32 = 0
-    let i: i32 = 0
+    let mut total: i32 = 0
+    let mut i: i32 = 0
     while i < n {
         total = total + i
         i = i + 1
@@ -456,8 +456,8 @@ fn sum_loop_block_ids_valid() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i64 {
-    let acc: i64 = 0
-    let i: i32 = 0
+    let mut acc: i64 = 0
+    let mut i: i32 = 0
     while i < n {
         acc = acc + i as i64
         i = i + 1

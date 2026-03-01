@@ -8,6 +8,7 @@ mod scope;
 
 use crate::types::InferType;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 /// Type environment - maps names to types
@@ -25,6 +26,9 @@ pub struct TypeEnv {
 
     /// Current function name (for recursive calls)
     current_function: Option<String>,
+
+    /// Names of variables declared as mutable
+    mutable_vars: HashSet<String>,
 }
 
 impl TypeEnv {
@@ -34,6 +38,7 @@ impl TypeEnv {
             captures: HashMap::new(),
             functions: HashMap::new(),
             current_function: None,
+            mutable_vars: HashSet::new(),
         }
     }
 }

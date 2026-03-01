@@ -52,11 +52,11 @@ fn llvm_uses_expected_alignment_for_mutable_locals() {
     let ir = compile_to_verified_ir_with_opt(
         r#"
 fn int_align(n: i64) -> i64 {
-    let a64: i64 = 0
-    let a32: i32 = 0
-    let a16: i16 = 0
-    let a8: i8 = 0
-    let ab: bool = false
+    let mut a64: i64 = 0
+    let mut a32: i32 = 0
+    let mut a16: i16 = 0
+    let mut a8: i8 = 0
+    let mut ab: bool = false
     while a64 < n {
         a8 = a8 + (1 as i8)
         a16 = a16 + (1 as i16)
@@ -68,9 +68,9 @@ fn int_align(n: i64) -> i64 {
 }
 
 fn float_align(n: i64) -> f64 {
-    let af32: f32 = 0.0 as f32
-    let af64: f64 = 0.0
-    let i: i64 = 0
+    let mut af32: f32 = 0.0 as f32
+    let mut af64: f64 = 0.0
+    let mut i: i64 = 0
     while i < n {
         af32 = af32 + (1.0 as f32)
         af64 = af64 + 1.0
@@ -80,8 +80,8 @@ fn float_align(n: i64) -> f64 {
 }
 
 fn string_align(s: string, n: i64) -> string {
-    let sp: string = s
-    let i: i64 = 0
+    let mut sp: string = s
+    let mut i: i64 = 0
     while i < n {
         sp = s
         i = i + 1
@@ -159,8 +159,8 @@ fn fibonacci(n: i32) -> i64 {
 "#,
         r#"
 fn sum(n: i32) -> i64 {
-    let acc: i64 = 0
-    let i: i32 = 0
+    let mut acc: i64 = 0
+    let mut i: i32 = 0
     while i < n {
         acc = acc + i as i64
         i = i + 1
@@ -206,8 +206,8 @@ fn caller(v: i64) -> i64 {
 fn llvm_o2_eliminates_allocas_via_mem2reg() {
     let source = r#"
 fn sum(n: i64) -> i64 {
-    let acc: i64 = 0
-    let i: i64 = 0
+    let mut acc: i64 = 0
+    let mut i: i64 = 0
     while i < n {
         acc = acc + i
         i = i + 1

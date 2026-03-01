@@ -128,7 +128,7 @@ impl TypeInference {
                 target,
             } => {
                 let typed_inner = self.infer_expr(inner);
-                let target_ty = InferType::from_annotation(target);
+                let target_ty = self.type_from_annotation(target);
                 let src = &typed_inner.ty;
                 let src_is_type_param = matches!(src, InferType::Var(_))
                     || matches!(src, InferType::Struct(name) if self.type_params_in_scope.contains(name));
@@ -228,16 +228,30 @@ impl TypeInference {
     /// Try to narrow a numeric literal to the target type.
     /// Returns true if narrowing succeeded or wasn't needed, false if it failed.
     /// Pushes an error if the literal doesn't fit in the target type.
+    ///
+    /// Also handles array literals: when the target is `Array(elem_ty, _)` each element is narrowed to `elem_ty`
     pub(super) fn try_narrow_literal(
         &mut self,
         expr: &mut TypedExpr,
         target_ty: &InferType,
     ) -> bool {
-        match &expr.kind {
-            TypedExprKind::Int(value) if target_ty.is_integer() && *target_ty != InferType::I64 => {
-                if InferType::int_fits(*value, target_ty) {
+        // Extract values needed for matching before taking mutable borrows.
+        let int_val = if let TypedExprKind::Int(v) = &expr.kind {
+            Some(*v)
+        } else {
+            None
+        };
+        let float_val = if let TypedExprKind::Float(v) = &expr.kind {
+            Some(*v)
+        } else {
+            None
+        };
+
+        if let Some(value) = int_val {
+            if target_ty.is_integer() && *target_ty != InferType::I64 {
+                if InferType::int_fits(value, target_ty) {
                     expr.ty = target_ty.clone();
-                    true
+                    return true;
                 } else {
                     self.errors.push(TypeError {
                         kind: TypeErrorKind::Mismatch {
@@ -246,17 +260,20 @@ impl TypeInference {
                         },
                         span: expr.span,
                         reason: ConstraintReason::IntLiteralOverflow {
-                            value: *value,
+                            value,
                             target: target_ty.clone(),
                         },
                     });
-                    false
+                    return false;
                 }
             }
-            TypedExprKind::Float(value) if target_ty.is_float() && *target_ty != InferType::F64 => {
-                if InferType::float_fits(*value, target_ty) {
+        }
+
+        if let Some(value) = float_val {
+            if target_ty.is_float() && *target_ty != InferType::F64 {
+                if InferType::float_fits(value, target_ty) {
                     expr.ty = target_ty.clone();
-                    true
+                    return true;
                 } else {
                     self.errors.push(TypeError {
                         kind: TypeErrorKind::Mismatch {
@@ -265,15 +282,84 @@ impl TypeInference {
                         },
                         span: expr.span,
                         reason: ConstraintReason::FloatLiteralOverflow {
-                            value: *value,
+                            value,
                             target: target_ty.clone(),
                         },
                     });
-                    false
+                    return false;
                 }
             }
-            // not a narrowable literal, caller should handle constraint
-            _ => true,
         }
+
+        // narrow array literal elements when the target type is Array(elem_ty, _)
+        if let InferType::Array(elem_ty, _) = target_ty {
+            if let TypedExprKind::ArrayLiteral { ref mut elements } = expr.kind {
+                let mut all_narrowed = true;
+                let mut had_error = false;
+                for elem in elements.iter_mut() {
+                    if !self.try_narrow_literal(elem, elem_ty) {
+                        had_error = true;
+                    } else if elem.ty != **elem_ty && !matches!(elem.ty, InferType::Var(_)) {
+                        // e.element type wasn't actually narrowed, concrete mismatch (for eg String vs I64).
+                        // don't set the array type, letting the constraint solver catch it
+                        all_narrowed = false;
+                    }
+                }
+                if all_narrowed && !had_error {
+                    expr.ty = target_ty.clone();
+                }
+                // return false only for real narrowing failures (overflow)
+
+
+                // for non-narrowable elements, return true so the caller can push a constraint
+                return !had_error;
+            }
+        }
+
+        // narrow unary expressions (for eg -1 in an i32 context) recurse into the operand so the whole expression adopts the target type
+        if let TypedExprKind::Unary { operand, .. } = &mut expr.kind {
+            if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
+                if self.try_narrow_literal(operand, target_ty) {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                return false;
+            }
+            if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
+                if self.try_narrow_literal(operand, target_ty) {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // narrow binary expressions of all-literal operands (67 + 69 in an i32 context) recursively narrow both sides so the result type matches the target.
+        if let TypedExprKind::Binary {
+            left, right, ..
+        } = &mut expr.kind
+        {
+            if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
+                let left_ok = self.try_narrow_literal(left, target_ty);
+                let right_ok = self.try_narrow_literal(right, target_ty);
+                if left_ok && right_ok {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                return false;
+            }
+            if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
+                let left_ok = self.try_narrow_literal(left, target_ty);
+                let right_ok = self.try_narrow_literal(right, target_ty);
+                if left_ok && right_ok {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // not a narrowable literal, caller should handle constraint
+        true
     }
 }

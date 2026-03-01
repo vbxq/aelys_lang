@@ -13,7 +13,8 @@ impl TypeInference {
     ) -> TypedStmt {
         match &stmt.kind {
             aelys_syntax::StmtKind::Expression(expr) => {
-                let typed_expr = self.infer_expr(expr);
+                let mut typed_expr = self.infer_expr(expr);
+                self.try_narrow_literal(&mut typed_expr, return_type);
 
                 self.constraints.push(Constraint::equal(
                     typed_expr.ty.clone(),
@@ -29,7 +30,7 @@ impl TypeInference {
                 ));
 
                 TypedStmt {
-                    // happens here. you'll have to manually return 0 without it
+                    // the implicit returns happens here. you'll have to manually return 0 without it
                     kind: TypedStmtKind::Return(Some(typed_expr)),
                     span: stmt.span,
                 }
@@ -82,7 +83,27 @@ impl TypeInference {
                 }
             }
 
-            _ => self.infer_stmt(stmt),
+            _ => {
+                let typed_stmt = self.infer_stmt(stmt);
+                // if the last statement is not an expression or a return the function implicitly returns null
+                //
+                // Constrain this against the declared return type so that example fn f() -> i64 { let x = 5 }`
+                if !matches!(&stmt.kind, aelys_syntax::StmtKind::Return(_)) {
+                    self.constraints.push(Constraint::equal(
+                        InferType::Null,
+                        return_type.clone(),
+                        stmt.span,
+                        ConstraintReason::Return {
+                            func_name: self
+                                .env
+                                .current_function()
+                                .cloned()
+                                .unwrap_or_else(|| "<anonymous>".to_string()),
+                        },
+                    ));
+                }
+                typed_stmt
+            }
         }
     }
 }

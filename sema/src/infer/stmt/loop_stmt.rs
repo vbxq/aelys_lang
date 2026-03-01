@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::TypedStmtKind;
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span, Stmt};
@@ -111,8 +111,19 @@ impl TypeInference {
             InferType::String => InferType::String,
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Array(inner, _) => (**inner).clone(),
-            InferType::Dynamic => InferType::Dynamic,
-            _ => InferType::Dynamic,
+            InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+            other => {
+                self.errors.push(TypeError::mismatch(
+                    InferType::Dynamic, // expected: iterable
+                    other.clone(),
+                    _span,
+                    ConstraintReason::Other(format!(
+                        "for-each requires an iterable (array, vec, or string), got {}",
+                        other
+                    )),
+                ));
+                InferType::Dynamic
+            }
         };
 
         self.env.push_scope();

@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::{InferType, ResolvedType};
 use aelys_syntax::{Expr, Span, TypeAnnotation};
@@ -132,7 +132,13 @@ impl TypeInference {
             InferType::String => InferType::String,
             InferType::Dynamic => InferType::Dynamic,
             InferType::Var(_) => self.type_gen.fresh(),
-            _ => InferType::Dynamic,
+            other => {
+                self.errors.push(TypeError::member_access(
+                    format!("index operation on non-indexable type {}", other),
+                    _span,
+                ));
+                InferType::Dynamic
+            }
         };
 
         (
@@ -153,7 +159,7 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
         let typed_index = self.infer_expr(index);
-        let typed_value = self.infer_expr(value);
+        let mut typed_value = self.infer_expr(value);
 
         self.constraints.push(Constraint::equal(
             typed_index.ty.clone(),
@@ -161,6 +167,20 @@ impl TypeInference {
             index.span,
             ConstraintReason::ArrayIndex,
         ));
+
+        // narrow the assigned value and constrain it to match element type.
+        match &typed_object.ty {
+            InferType::Array(elem_ty, _) | InferType::Vec(elem_ty) => {
+                self.try_narrow_literal(&mut typed_value, elem_ty);
+                self.constraints.push(Constraint::equal(
+                    typed_value.ty.clone(),
+                    (**elem_ty).clone(),
+                    _span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            _ => {}
+        }
 
         (
             TypedExprKind::IndexAssign {
@@ -176,11 +196,24 @@ impl TypeInference {
         &mut self,
         object: &Expr,
         range: &Expr,
-        _span: Span,
+        span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
         let typed_range = self.infer_expr(range);
-        let result_ty = typed_object.ty.clone();
+
+        let result_ty = match &typed_object.ty {
+            InferType::Array(_, _) | InferType::Vec(_) | InferType::String => {
+                typed_object.ty.clone()
+            }
+            InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+            other => {
+                self.errors.push(TypeError::member_access(
+                    format!("slice operation on non-sliceable type {}", other),
+                    span,
+                ));
+                InferType::Dynamic
+            }
+        };
 
         (
             TypedExprKind::Slice {

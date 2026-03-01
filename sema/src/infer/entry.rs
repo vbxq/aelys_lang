@@ -44,6 +44,19 @@ impl TypeInference {
             return;
         }
 
+        // function type annotations: fn(T1, T2) -> R
+        if ann.is_function_type() {
+            if let Some(ref params) = ann.fn_params {
+                for p in params {
+                    self.check_type_annotation(p);
+                }
+            }
+            if let Some(ref ret) = ann.fn_ret {
+                self.check_type_annotation(ret);
+            }
+            return;
+        }
+
         let name_lower = ann.name.to_lowercase();
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
@@ -130,28 +143,31 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        let (fatal_errors, type_warnings): (Vec<_>, Vec<_>) =
-            inf.errors.iter().cloned().partition(|err| {
-                matches!(&err.kind, TypeErrorKind::MemberAccess { .. })
-                    || matches!(
-                        err.reason,
-                        ConstraintReason::BitwiseOp { .. }
-                            | ConstraintReason::TypeAnnotation { .. }
-                            | ConstraintReason::InvalidCast
-                            | ConstraintReason::UnknownType { .. }
-                            | ConstraintReason::IntLiteralOverflow { .. }
-                            | ConstraintReason::FloatLiteralOverflow { .. }
-                    )
-            });
+        // Okay, all type errors are fatal except mismatches involving generic type
+        // parameters (Struct("T") where T is not a real struct).
+        //
+        //
+        // These are expected because the monomorphizer in AIR handles specialization
+        //
+        // but UnknownType errors are ***always*** fatal, they're explicit validation failure (x: nonexistent) not incidental unification failure with generic params.
+        let is_type_param = |ty: &InferType| -> bool {
+            matches!(ty, InferType::Struct(name) if !inf.type_table.has_struct(name))
+        };
+        let fatal_errors: Vec<_> = inf
+            .errors
+            .iter()
+            .filter(|err| match &err.kind {
+                TypeErrorKind::Mismatch { expected, found } => {
+                    matches!(&err.reason, ConstraintReason::UnknownType { .. })
+                        || (!is_type_param(expected) && !is_type_param(found))
+                }
+                _ => true,
+            })
+            .cloned()
+            .collect();
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);
-        }
-
-        if !type_warnings.is_empty() && std::env::var("AELYS_TYPE_WARNINGS").is_ok() {
-            for err in &type_warnings {
-                eprintln!("Type warning: {}", err);
-            }
         }
 
         let type_table = inf.type_table;

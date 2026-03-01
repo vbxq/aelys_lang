@@ -327,7 +327,7 @@ fn array_foreach_known_length() {
         r#"
 fn sum_arr() -> i64 {
     let arr = [1, 2, 3]
-    let total: i64 = 0
+    let mut total: i64 = 0
     for x in arr {
         total = total + x
     }
@@ -407,8 +407,8 @@ fn array_in_loop_body() {
     let ir = compile_to_verified_ir(
         r#"
 fn use_in_loop() -> i64 {
-    let result: i64 = 0
-    let i: i64 = 0
+    let mut result: i64 = 0
+    let mut i: i64 = 0
     while i < 3 {
         let arr = [i, i, i]
         result = result + arr[0]
@@ -421,5 +421,52 @@ fn use_in_loop() -> i64 {
     assert!(
         ir.contains("alloca [3 x i64]"),
         "array in loop should still be stack-allocated:\n{ir}"
+    );
+}
+
+#[test]
+fn array_with_expressions() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn expr_arr(a: i64) -> i64 {
+    let arr = [a + 1, a * 2, a - 3]
+    return arr[1]
+}
+"#,
+    );
+    assert!(
+        ir.contains("alloca [3 x i64]"),
+        "expression array should allocate [3 x i64]:\n{ir}"
+    );
+    assert!(
+        ir.contains("add i64"),
+        "should generate add for a + 1:\n{ir}"
+    );
+    assert!(
+        ir.contains("mul i64"),
+        "should generate mul for a * 2:\n{ir}"
+    );
+    assert!(
+        ir.contains("sub i64"),
+        "should generate sub for a - 3:\n{ir}"
+    );
+}
+
+#[test]
+fn array_struct_elements() {
+    let ir = compile_to_verified_ir(
+        r#"
+struct Pair { x: i64, y: i64 }
+fn make_pairs() -> i64 {
+    let a = Pair { x: 1, y: 2 }
+    let b = Pair { x: 3, y: 4 }
+    return a.x + b.y
+}
+"#,
+    );
+    // just verify the struct-related code compiles; array-of-structs is a stretch goal, so this test validates the struct baseline.
+    assert!(
+        ir.contains("getelementptr"),
+        "struct field access should generate GEP:\n{ir}"
     );
 }

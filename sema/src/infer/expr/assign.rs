@@ -11,9 +11,26 @@ impl TypeInference {
         value: &Expr,
         span: Span,
     ) -> (TypedExprKind, InferType) {
-        let typed_value = self.infer_expr(value);
+        let mut typed_value = self.infer_expr(value);
 
         if let Some(var_type) = self.env.lookup(name).cloned() {
+            // check mutability, reject assignment to immutable variables
+            if !self.env.is_mutable(name) {
+                self.errors.push(TypeError {
+                    kind: crate::constraint::TypeErrorKind::Mismatch {
+                        expected: var_type.clone(),
+                        found: typed_value.ty.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "cannot assign to immutable variable '{}' (use 'let mut' to make it mutable)",
+                        name
+                    )),
+                });
+            }
+
+            self.try_narrow_literal(&mut typed_value, &var_type);
+
             self.constraints.push(Constraint::equal(
                 typed_value.ty.clone(),
                 var_type.clone(),

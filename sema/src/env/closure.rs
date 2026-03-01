@@ -9,6 +9,7 @@ impl TypeEnv {
             captures: HashMap::new(),
             functions: self.functions.clone(),
             current_function: None,
+            mutable_vars: std::collections::HashSet::new(),
         }
     }
 
@@ -31,6 +32,7 @@ impl TypeEnv {
             captures: all_visible,
             functions: self.functions.clone(),
             current_function: None,
+            mutable_vars: self.mutable_vars.clone(),
         }
     }
 }

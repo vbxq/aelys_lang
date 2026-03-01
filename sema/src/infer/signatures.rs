@@ -1,6 +1,8 @@
 use super::TypeInference;
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::types::InferType;
 use aelys_syntax::{Function, Stmt, StmtKind};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 impl TypeInference {
@@ -59,6 +61,41 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
+        // check for duplicate function definitions at the same scope level
+        if self.env.has_function(&full_name) {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Dynamic,
+                },
+                span: func.span,
+                reason: ConstraintReason::Other(format!(
+                    "duplicate function definition '{}'",
+                    func.name
+                )),
+            });
+        }
+
+        // check for duplicate parameter names
+        {
+            let mut seen_params = HashSet::new();
+            for p in &func.params {
+                if !seen_params.insert(&p.name) {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: InferType::Dynamic,
+                            found: InferType::Dynamic,
+                        },
+                        span: p.span,
+                        reason: ConstraintReason::Other(format!(
+                            "duplicate parameter '{}' in function '{}'",
+                            p.name, func.name
+                        )),
+                    });
+                }
+            }
+        }
+
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
 
@@ -83,6 +120,12 @@ impl TypeInference {
             ret: Box::new(ret_type),
         });
 
-        self.env.define_function(full_name, fn_type);
+        self.env.define_function(full_name.clone(), fn_type.clone());
+
+        // Also register with unqualified name so nested functions are
+        // reachable by local lookup (e.g. `inner(41)` inside `outer`).
+        if !prefix.is_empty() {
+            self.env.define_function(func.name.clone(), fn_type);
+        }
     }
 }

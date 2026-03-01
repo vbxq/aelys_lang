@@ -81,17 +81,25 @@ impl TypeInference {
                 type_params,
                 fields,
                 ..
-            } => TypedStmtKind::StructDecl {
-                name: name.clone(),
-                type_params: type_params.clone(),
-                fields: fields
+            } => {
+                // temporarily set type_params_in_scope so that generic struct field types like `T` don't trigger unknown-type errors
+                // TODO: !
+                let saved =
+                    std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
+                let typed_fields = fields
                     .iter()
                     .map(|f| {
-                        let ty = crate::types::InferType::from_annotation(&f.type_annotation);
+                        let ty = self.type_from_annotation(&f.type_annotation);
                         (f.name.clone(), ty)
                     })
-                    .collect(),
-            },
+                    .collect();
+                self.type_params_in_scope = saved;
+                TypedStmtKind::StructDecl {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
+                    fields: typed_fields,
+                }
+            }
         };
 
         TypedStmt {

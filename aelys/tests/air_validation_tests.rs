@@ -493,7 +493,7 @@ fn copy_elim_keeps_reassigned_param_copy() {
     let mut air = lower_source(
         r#"
 fn keep_copy(x: i64) -> i64 {
-    let y: i64 = x
+    let mut y: i64 = x
     y = y + 1
     return y
 }

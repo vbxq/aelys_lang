@@ -67,24 +67,84 @@ impl TypeInference {
         &mut self,
         name: &str,
         fields: &[StructFieldInit],
-        _span: Span,
+        span: Span,
     ) -> (TypedExprKind, InferType) {
+        // check for duplicate fields in the literal
+        {
+            let mut seen = std::collections::HashSet::new();
+            for f in fields {
+                if !seen.insert(&f.name) {
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "duplicate field '{}' in struct literal '{}'",
+                            f.name, name
+                        ),
+                        f.span,
+                    ));
+                }
+            }
+        }
+
+        // validate struct fields: check for unknown and missing fields
+        if let Some(def) = self.type_table.get_struct(name) {
+            let def_field_names: Vec<String> =
+                def.fields.iter().map(|f| f.name.clone()).collect();
+
+            // check for unknown fields
+            for f in fields {
+                if !def_field_names.contains(&f.name) {
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "unknown field '{}' on struct '{}'; known fields: {}",
+                            f.name,
+                            name,
+                            def_field_names.join(", ")
+                        ),
+                        f.span,
+                    ));
+                }
+            }
+
+            // check for missing fields only for non-generic structs because generic structs may have partial  initialization patterns
+            if def.type_params.is_empty() {
+                let provided: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+                for def_field in &def_field_names {
+                    if !provided.contains(&def_field.as_str()) {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "missing field '{}' in struct literal '{}'",
+                                def_field, name
+                            ),
+                            span,
+                        ));
+                    }
+                }
+            }
+        }
+
         let typed_fields: Vec<(String, Box<TypedExpr>)> = fields
             .iter()
             .map(|f| {
-                let typed_value = self.infer_expr(&f.value);
+                let mut typed_value = self.infer_expr(&f.value);
 
-                if let Some(def) = self.type_table.get_struct(name)
-                    && let Some(field_def) = def.fields.iter().find(|df| df.name == f.name)
+                if let Some(field_ty) = self
+                    .type_table
+                    .get_struct(name)
+                    .and_then(|def| def.fields.iter().find(|df| df.name == f.name))
+                    .map(|fd| fd.ty.clone())
                 {
-                    self.constraints.push(Constraint::equal(
-                        typed_value.ty.clone(),
-                        field_def.ty.clone(),
-                        f.span,
-                        ConstraintReason::TypeAnnotation {
-                            var_name: format!("{}.{}", name, f.name),
-                        },
-                    ));
+                    self.try_narrow_literal(&mut typed_value, &field_ty);
+
+                    if typed_value.ty != field_ty {
+                        self.constraints.push(Constraint::equal(
+                            typed_value.ty.clone(),
+                            field_ty,
+                            f.span,
+                            ConstraintReason::TypeAnnotation {
+                                var_name: format!("{}.{}", name, f.name),
+                            },
+                        ));
+                    }
                 }
 
                 (f.name.clone(), Box::new(typed_value))

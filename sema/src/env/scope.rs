@@ -49,4 +49,14 @@ impl TypeEnv {
     pub fn depth(&self) -> usize {
         self.locals.len()
     }
+
+    /// Mark a variable as mutable
+    pub fn mark_mutable(&mut self, name: String) {
+        self.mutable_vars.insert(name);
+    }
+
+    /// Check if a variable is mutable
+    pub fn is_mutable(&self, name: &str) -> bool {
+        self.mutable_vars.contains(name)
+    }
 }
