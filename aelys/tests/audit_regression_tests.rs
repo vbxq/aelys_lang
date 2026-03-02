@@ -737,6 +737,158 @@ fn outer() -> i64 {
 }
 
 #[test]
+fn overflow_through_variable_binop_i8() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = 100
+    return x + 28
+}
+"#
+        ),
+        "100 + 28 = 128 overflows i8, should be rejected"
+    );
+}
+
+#[test]
+fn variable_binop_fits_i8() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = 50
+    return x + 20
+}
+"#
+        ),
+        "50 + 20 = 70 fits i8, should pass"
+    );
+}
+
+#[test]
+fn overflow_variable_on_right_side() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let y = 28
+    return 100 + y
+}
+"#
+        ),
+        "100 + 28 = 128 overflows i8 with variable on right"
+    );
+}
+
+#[test]
+fn overflow_both_variables_binop() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let a = 100
+    let b = 28
+    return a + b
+}
+"#
+        ),
+        "100 + 28 = 128 overflows i8 with both operands as variables"
+    );
+}
+
+#[test]
+fn overflow_through_chained_variable_binop() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = 100
+    let y = x
+    return y + 28
+}
+"#
+        ),
+        "chained copy 100 + 28 = 128 overflows i8"
+    );
+}
+
+#[test]
+fn variable_subtraction_overflow_i8() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = -100
+    return x - 29
+}
+"#
+        ),
+        "-100 - 29 = -129 overflows i8 (min is -128)"
+    );
+}
+
+#[test]
+fn variable_multiplication_overflow_i8() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = 20
+    return x * 7
+}
+"#
+        ),
+        "20 * 7 = 140 overflows i8"
+    );
+}
+
+#[test]
+fn variable_binop_fits_i16() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i16 {
+    let x = 10000
+    return x + 5000
+}
+"#
+        ),
+        "10000 + 5000 = 15000 fits i16, should pass"
+    );
+}
+
+#[test]
+fn variable_binop_overflow_i16() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i16 {
+    let x = 30000
+    return x + 3000
+}
+"#
+        ),
+        "30000 + 3000 = 33000 overflows i16 (max 32767)"
+    );
+}
+
+#[test]
+fn negative_variable_binop_fits_i8() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = -100
+    return x + 10
+}
+"#
+        ),
+        "-100 + 10 = -90 fits i8, should pass"
+    );
+}
+
+#[test]
 fn multiple_errors_do_not_compound_through_rollback() {
     let count = sema_error_count(
         r#"

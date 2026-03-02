@@ -224,7 +224,8 @@ impl TypeInference {
     }
 
     /// Try to extract a constant integer value from a typed expression
-    /// Handles `Int(v)` and `Unary(Neg, Int(v))` (which represents negative literals)
+    /// Handles `Int(v)`, `Unary(Neg, Int(v))` (which represents negative literals),
+    /// and `Identifier(name)` when the variable is tracked in `literal_init_vars`
     fn try_extract_int_value(expr: &TypedExpr) -> Option<i64> {
         match &expr.kind {
             TypedExprKind::Int(v) => Some(*v),
@@ -240,6 +241,21 @@ impl TypeInference {
             }
             _ => None,
         }
+    }
+
+    /// Like `try_extract_int_value` but also resolves identifiers through `literal_init_vars` tracking.
+    /// this allows overflow checks on binary ops, like `x + 28` where `x` was initialized with a known literal
+    // (check for overflow_variable_on_right_side in audit_regression_tests.rs)
+    fn try_extract_int_value_tracked(&self, expr: &TypedExpr) -> Option<i64> {
+        if let Some(v) = Self::try_extract_int_value(expr) {
+            return Some(v);
+        }
+        if let TypedExprKind::Identifier(name) = &expr.kind {
+            if let Some(LiteralInit::Int(v)) = self.literal_init_vars.get(name) {
+                return Some(*v);
+            }
+        }
+        None
     }
 
     /// Compute the result of a binary operation on two known integer values
@@ -390,8 +406,8 @@ impl TypeInference {
                     // each operand individually fitting does not guarantee the result fits
                     // like, 100 + 100 = 200 overflows i8
                     if let (Some(lv), Some(rv)) = (
-                        Self::try_extract_int_value(left),
-                        Self::try_extract_int_value(right),
+                        self.try_extract_int_value_tracked(left),
+                        self.try_extract_int_value_tracked(right),
                     ) {
                         if let Some(result) = Self::compute_binop_int_result(binop, lv, rv) {
                             if !InferType::int_fits(result, target_ty) {
