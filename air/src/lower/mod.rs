@@ -39,6 +39,9 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
     pub(super) block_aliases: Vec<(u32, u32)>,
+    /// collected compile errors from lowering (replaces panic!() calls)
+    /// if non-empty after lowering completes, `finish()` emits a clean diagnostic panic
+    pub(super) lowering_errors: Vec<String>,
 }
 
 pub(super) struct LoopBlocks {
@@ -67,10 +70,25 @@ impl<'a> LoweringContext<'a> {
             type_params_map: Vec::new(),
             pending_block_id: None,
             block_aliases: Vec::new(),
+            lowering_errors: Vec::new(),
         }
     }
 
     fn finish(self) -> AirProgram {
+        if !self.lowering_errors.is_empty() {
+            let joined = self
+                .lowering_errors
+                .iter()
+                .enumerate()
+                .map(|(i, e)| format!("  {}. {}", i + 1, e))
+                .collect::<Vec<_>>()
+                .join("\n");
+            panic!(
+                "AIR lowering failed with {} error(s):\n{}",
+                self.lowering_errors.len(),
+                joined,
+            );
+        }
         AirProgram {
             functions: self.functions,
             structs: self.structs,
@@ -212,6 +230,12 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    /// Report a compile error that would previously have caused a panic
+    /// Lowering continues with a fallback value; all errors are emitted together at the end via `finish()`
+    pub(super) fn report_error(&mut self, message: String) {
+        self.lowering_errors.push(message);
+    }
+
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
         type_params
             .iter()
@@ -238,7 +262,7 @@ impl<'a> LoweringContext<'a> {
             InferType::F64 => AirType::F64,
             InferType::Bool => AirType::Bool,
             InferType::String => AirType::Str,
-            InferType::Null => AirType::Void,
+            InferType::Null => AirType::Ptr(Box::new(AirType::Void)),
             InferType::Function { params, ret } => AirType::FnPtr {
                 params: params
                     .iter()
@@ -254,8 +278,24 @@ impl<'a> LoweringContext<'a> {
                 AirType::Slice(Box::new(self.lower_type_from_infer(inner)))
             }
             InferType::Vec(inner) => AirType::Slice(Box::new(self.lower_type_from_infer(inner))),
-            InferType::Tuple(_) => AirType::Void,
-            InferType::Range => AirType::Void,
+            // TODO: add support for InferType::Tuple in the backend
+            InferType::Tuple(_) => {
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[AIR] warning: InferType::Tuple reached lower_type_from_infer, \
+                     tuples are not yet supported in the LLVM backend"
+                );
+                AirType::Opaque
+            }
+            // TODO: add support for InferType::Range in the backend
+            InferType::Range => {
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[AIR] warning: InferType::Range reached lower_type_from_infer, \
+                     ranges are not yet supported in the LLVM backend"
+                );
+                AirType::Opaque
+            }
             InferType::Struct(name) => {
                 if let Some((_, id)) = self.type_params_map.iter().find(|(n, _)| n == name) {
                     AirType::Param(*id)
@@ -265,30 +305,27 @@ impl<'a> LoweringContext<'a> {
             }
             // unresolved type vars reaching lowering = void (no explicit return annotation)
             InferType::Var(_) => AirType::Void,
-            // TODO: Terrible, terrible, terrible, did I forgot to say terrible ?
-            // Dynamic = sema's "gradual typing" fallback, which we use for generic call results
-            // that monomorphization will fix later. i64 placeholder works because
-            // monomorphization replaces the type before codegen sees it.
-            InferType::Dynamic => AirType::I64,
+            // Dynamic = sema's "gradual typing" fallback. For generic call results, monomorphization patches the type before codegen.
+            // For anything else (error recovery, unresolved inference), Opaque survives past mono and the validation pass rejects it with a clear diagnostic
+            InferType::Dynamic => AirType::Opaque,
         }
     }
 
     /// Check that a stack array doesn't exceed the 1MB stack size threshold.
-    /// Panics at compile time if the array is too large.
-    // TODO: use aelys comptime error handling instead of panic
-    pub(super) fn check_stack_array_size(&self, elem_ty: &AirType, n: u64) {
+    /// Reports a compile error if the array is too large (no longer panics)
+    pub(super) fn check_stack_array_size(&mut self, elem_ty: &AirType, n: u64) {
         const MAX_STACK_BYTES: u64 = 1024 * 1024; // 1 MB
         let elem_size = crate::layout::layout_of(elem_ty).size as u64;
         let total = n.saturating_mul(elem_size);
         if total > MAX_STACK_BYTES {
-            panic!(
+            self.report_error(format!(
                 "stack array too large: [{}; {}] = {} bytes (max {} bytes). \
                  Consider using a smaller size or a heap-allocated collection.",
                 crate::print::fmt_type(elem_ty),
                 n,
                 total,
                 MAX_STACK_BYTES,
-            );
+            ));
         }
     }
 

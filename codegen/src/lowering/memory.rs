@@ -107,6 +107,9 @@ impl<'a> FunctionCodegen<'a> {
                 "unexpected unresolved type parameter {:?}",
                 id
             ))),
+            AirType::Opaque => Err(CodegenError::UnsupportedType(
+                "unresolved Dynamic type reached codegen".to_string(),
+            )),
         }
     }
 }

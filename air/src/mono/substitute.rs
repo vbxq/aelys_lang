@@ -29,6 +29,7 @@ pub(super) fn type_to_string(ty: &AirType) -> String {
             format!("fnptr${}$R{}", params_str, type_to_string(ret))
         }
         AirType::Param(id) => format!("param_{}", id.0),
+        AirType::Opaque => "opaque".to_string(),
         AirType::Void => "void".to_string(),
     }
 }
@@ -144,7 +145,7 @@ pub(super) fn operand_type_from(
             },
             AirConst::Bool(_) => AirType::Bool,
             AirConst::Str(_) => AirType::Str,
-            AirConst::Null => AirType::Void,
+            AirConst::Null => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
         },

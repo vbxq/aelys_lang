@@ -61,6 +61,9 @@ pub fn air_type_to_llvm<'ctx>(
             "unresolved AIR type parameter: {:?}",
             param
         ))),
+        AirType::Opaque => Err(CodegenError::UnsupportedType(
+            "unresolved Dynamic type reached codegen (should have been resolved by monomorphization or rejected by validation)".to_string(),
+        )),
         AirType::Void => Ok(context.void_type().into()),
     }
 }

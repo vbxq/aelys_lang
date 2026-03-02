@@ -26,6 +26,7 @@ pub fn fmt_type(ty: &AirType) -> String {
             format!("fn({}) -> {}", ps.join(", "), fmt_type(ret))
         }
         AirType::Param(id) => format!("T{}", id.0),
+        AirType::Opaque => "opaque".into(),
     }
 }
 
@@ -217,7 +218,6 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
         Rvalue::Cast { operand, to, .. } => {
             format!("cast {} -> {}", fmt_operand(operand, func), fmt_type(to))
         }
-        Rvalue::Discriminant(op) => format!("discriminant {}", fmt_operand(op, func)),
         Rvalue::Index { base, index } => {
             format!(
                 "index {}[{}]",

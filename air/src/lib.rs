@@ -54,6 +54,9 @@ pub enum AirType {
         conv: CallingConv,
     },
     Param(TypeParamId),
+    /// unresolved Dynamic type from sema. must be eliminated by monomorphization before reaching codegen.
+    /// the validation pass rejects any Opaque that survives past the AIR pipeline
+    Opaque,
     Void,
 }
 
@@ -265,7 +268,6 @@ pub enum Rvalue {
         from: AirType,
         to: AirType,
     },
-    Discriminant(Operand),
     Index {
         base: Operand,
         index: Operand,
