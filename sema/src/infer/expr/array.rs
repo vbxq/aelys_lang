@@ -179,7 +179,24 @@ impl TypeInference {
                     ConstraintReason::ArrayElement,
                 ));
             }
-            _ => {}
+            InferType::String => {
+                self.try_narrow_literal(&mut typed_value, &InferType::String);
+                self.constraints.push(Constraint::equal(
+                    typed_value.ty.clone(),
+                    InferType::String,
+                    _span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            InferType::Dynamic | InferType::Var(_) => {
+                // permissive: Dynamic accepts anything, Var may resolve later.
+            }
+            other => {
+                self.errors.push(TypeError::member_access(
+                    format!("index assignment on non-indexable type {}", other),
+                    _span,
+                ));
+            }
         }
 
         (
