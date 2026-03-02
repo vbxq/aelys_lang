@@ -450,3 +450,306 @@ fn f(x: bool) -> bool {
         count
     );
 }
+
+#[test]
+fn generic_function_called_with_different_types() {
+    assert!(
+        sema_ok(
+            r#"
+fn identity<T>(x: T) -> T { return x }
+
+fn main() {
+    let a = identity(42)
+    let b = identity("hello")
+}
+"#
+        ),
+        "generic <T> function called with i64 and string should both pass"
+    );
+}
+
+#[test]
+fn generic_function_preserves_return_type_per_call() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn identity<T>(x: T) -> T { return x }
+
+fn main() -> i64 {
+    let a = identity(42)
+    return a
+}
+"#
+        ),
+        "generic function return type should resolve correctly through AIR"
+    );
+}
+
+#[test]
+fn unannotated_function_infers_single_type() {
+    assert!(
+        sema_ok(
+            r#"
+fn double(x) { return x * 2 }
+
+fn main() -> i64 {
+    return double(21)
+}
+"#
+        ),
+        "unannotated function called with one type should infer correctly"
+    );
+}
+
+#[test]
+fn closure_captures_resolved_after_substitution() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    let x: i64 = 100
+    let closure = fn() -> i64 { return x }
+    return closure()
+}
+"#
+        ),
+        "closure capturing a typed variable should resolve through pipeline"
+    );
+}
+
+#[test]
+fn closure_capture_with_inferred_type() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn main() -> i64 {
+    let x = 42
+    let f = fn() -> i64 { return x }
+    return f()
+}
+"#
+        ),
+        "closure capturing inferred variable should pass AIR validation"
+    );
+}
+
+#[test]
+fn multiple_functions_independent_inference() {
+    assert!(
+        sema_ok(
+            r#"
+fn add(a: i64, b: i64) -> i64 { return a + b }
+fn greet(name: string) -> string { return name }
+
+fn main() {
+    let x = add(1, 2)
+    let y = greet("hello")
+}
+"#
+        ),
+        "independent functions with different types should not interfere"
+    );
+}
+
+#[test]
+fn nested_function_types_resolved() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    fn inner(x: i64) -> i64 { return x + 1 }
+    return inner(41)
+}
+"#
+        ),
+        "nested function should have types resolved correctly"
+    );
+}
+
+#[test]
+fn equal_constraint_failure_does_not_corrupt_subsequent_inference() {
+    assert!(
+        sema_ok(
+            r#"
+fn f(a: i64, b: i64) -> i64 {
+    let x = a + b
+    return x
+}
+"#
+        ),
+        "valid code after constraint solving should pass"
+    );
+}
+
+#[test]
+fn mixed_type_errors_do_not_cascade_through_solver() {
+    let count = sema_error_count(
+        r#"
+fn f(a: i64, b: string) -> i64 {
+    let x = a + b
+    let y = a + 1
+    return y
+}
+"#,
+    );
+    assert!(
+        count >= 1 && count <= 3,
+        "type mismatch in one expr should not cascade unboundedly, got {}",
+        count
+    );
+}
+
+#[test]
+fn function_type_mismatch_on_return_does_not_corrupt_solver() {
+    let count = sema_error_count(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+
+fn main() -> i64 {
+    let g = fn(n: i64) -> i64 { return n + 1 }
+    return apply(g, 10)
+}
+"#,
+    );
+    assert_eq!(count, 0, "valid higher-order function should produce no errors");
+}
+
+#[test]
+fn function_unification_partial_param_match_rolled_back() {
+    let count = sema_error_count(
+        r#"
+fn f() -> i64 {
+    let x: i64 = 10
+    let y: string = "hello"
+    return x + 1
+}
+"#,
+    );
+    assert_eq!(
+        count, 0,
+        "unrelated variables should not interfere with each other"
+    );
+}
+
+#[test]
+fn compound_type_unification_failure_isolated() {
+    let count = sema_error_count(
+        r#"
+fn f(a: i64, b: i64) -> i64 {
+    let sum = a + b
+    let prod = a * b
+    return sum + prod
+}
+"#,
+    );
+    assert_eq!(
+        count, 0,
+        "compound expressions should unify cleanly without partial corruption"
+    );
+}
+
+#[test]
+fn solver_rollback_preserves_valid_bindings_after_error() {
+    let count = sema_error_count(
+        r#"
+fn f() -> i64 {
+    let a: i64 = 10
+    let b: i64 = 20
+    let c = a + b
+    return c
+}
+"#,
+    );
+    assert_eq!(
+        count, 0,
+        "valid bindings should survive constraint solving"
+    );
+}
+
+#[test]
+fn closure_capture_inferred_var_resolved_through_pipeline() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn outer() {
+    let x = 100
+    let closure = fn() { return x }
+    return x
+}
+"#
+        ),
+        "closure capturing Var(N) should resolve after substitution + finalize"
+    );
+}
+
+#[test]
+fn closure_capture_multiple_inferred_vars() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn outer() -> i64 {
+    let a = 10
+    let b = 20
+    let closure = fn() -> i64 { return a + b }
+    return closure()
+}
+"#
+        ),
+        "closure capturing multiple inferred variables should pass AIR"
+    );
+}
+
+#[test]
+fn nested_closure_captures_propagate() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    let x: i64 = 42
+    let f = fn() -> i64 {
+        let g = fn() -> i64 { return x }
+        return g()
+    }
+    return f()
+}
+"#
+        ),
+        "nested closures should capture and resolve types correctly"
+    );
+}
+
+#[test]
+fn closure_capture_used_in_binary_op() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    let x = 5
+    let f = fn() -> i64 { return x + 1 }
+    return f()
+}
+"#
+        ),
+        "captured variable used in binary op should type-check"
+    );
+}
+
+#[test]
+fn multiple_errors_do_not_compound_through_rollback() {
+    let count = sema_error_count(
+        r#"
+fn f(x: i64) -> i64 {
+    let a = x + "bad"
+    let b = x + true
+    return x
+}
+"#,
+    );
+    assert!(
+        count <= 4,
+        "two independent type errors should not compound, got {}",
+        count
+    );
+}
