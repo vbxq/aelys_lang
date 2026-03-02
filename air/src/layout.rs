@@ -17,7 +17,7 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::Str => TypeLayout { size: 16, align: 8 },
         AirType::Void => TypeLayout { size: 0, align: 1 },
         AirType::Slice(_) => TypeLayout { size: 16, align: 8 },
-        AirType::Param(_) => TypeLayout { size: 8, align: 8 },
+        AirType::Param(_) | AirType::Opaque => TypeLayout { size: 8, align: 8 },
         AirType::Array(inner, n) => {
             let el = layout_of(inner);
             TypeLayout {

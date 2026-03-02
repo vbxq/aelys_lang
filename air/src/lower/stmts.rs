@@ -144,6 +144,13 @@ impl<'a> LoweringContext<'a> {
                              Stack arrays are deallocated when the function returns."
                         );
                     }
+                    // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call). 
+                    // lower the expression for side effects only and emit a void return.
+                    if matches!(ret_ty, AirType::Opaque) {
+                        self.lower_expr_discard(e);
+                        self.seal_block(AirTerminator::Return(None));
+                        return;
+                    }
                 }
                 let operand = val.as_ref().map(|e| self.lower_expr(e));
                 self.seal_block(AirTerminator::Return(operand));

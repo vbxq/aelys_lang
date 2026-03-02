@@ -87,7 +87,17 @@ impl<'a> LoweringContext<'a> {
     fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
         let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
-        let ret_ty = self.lower_type_from_infer(&func.return_type);
+        let mut ret_ty = self.lower_type_from_infer(&func.return_type);
+        // a function whose return type resolved to Opaque (from Dynamic) is effectively void.
+        // the return value is not usable by callers.
+        if ret_ty == AirType::Opaque {
+            ret_ty = AirType::Void;
+        }
+        // InferType::Null is used by sema for both the null literal *and* the implicit void return.
+        // In lower_type_from_infer it becomes Ptr(Void) (which is correct for the null literal), but as a return type it means void
+        if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
+            ret_ty = AirType::Void;
+        }
 
         self.lower_body(&func.body);
         self.finalize_function_body();
@@ -158,7 +168,13 @@ impl<'a> LoweringContext<'a> {
         }
 
         let user_params = self.lower_params(&func.params);
-        let ret_ty = self.lower_type_from_infer(&func.return_type);
+        let mut ret_ty = self.lower_type_from_infer(&func.return_type);
+        if ret_ty == AirType::Opaque {
+            ret_ty = AirType::Void;
+        }
+        if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
+            ret_ty = AirType::Void;
+        }
 
         self.lower_body(&func.body);
         self.finalize_function_body();
