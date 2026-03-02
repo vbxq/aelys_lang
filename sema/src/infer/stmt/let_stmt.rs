@@ -20,20 +20,19 @@ impl TypeInference {
             .map(|ann| self.type_from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
-            // try to narrow numeric literal to match declared type
-            if !self.try_narrow_literal(&mut typed_init, decl) {
-                // Narrowing failed (error already pushed), but continue with declared type
-            } else if typed_init.ty != *decl {
-                // not a narrowable literal, add constraint
-                self.constraints.push(Constraint::equal(
-                    typed_init.ty.clone(),
-                    decl.clone(),
-                    span,
-                    ConstraintReason::TypeAnnotation {
-                        var_name: name.to_string(),
-                    },
-                ));
-            }
+            // try to narrow numeric literal to match declared type.
+            // always push a constraint afterwards so the solver validates the narrowing decision.
+            // narrowing alone must never be the sole source of truth for a type
+            self.try_narrow_literal(&mut typed_init, decl);
+
+            self.constraints.push(Constraint::equal(
+                typed_init.ty.clone(),
+                decl.clone(),
+                span,
+                ConstraintReason::TypeAnnotation {
+                    var_name: name.to_string(),
+                },
+            ));
             decl.clone()
         } else {
             typed_init.ty.clone()

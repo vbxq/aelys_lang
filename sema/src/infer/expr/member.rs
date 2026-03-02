@@ -44,7 +44,12 @@ impl TypeInference {
                     InferType::Dynamic
                 }
             }
-            InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+            InferType::Dynamic => InferType::Dynamic,
+            // when the object is an unresolved type variable, return a fresh type variable instead
+            // of Dynamic so that type information can propagate once the Var is resolved by the constraint solver
+            //
+            // if it is never resolved, finalization converts the fresh Var to Dynamic, it's the same end result, but without premature widening
+            InferType::Var(_) => self.type_gen.fresh(),
             other => {
                 self.errors.push(TypeError::member_access(
                     format!("field access on non-struct type {}", other),
@@ -75,10 +80,7 @@ impl TypeInference {
             for f in fields {
                 if !seen.insert(&f.name) {
                     self.errors.push(TypeError::member_access(
-                        format!(
-                            "duplicate field '{}' in struct literal '{}'",
-                            f.name, name
-                        ),
+                        format!("duplicate field '{}' in struct literal '{}'", f.name, name),
                         f.span,
                     ));
                 }
@@ -87,8 +89,7 @@ impl TypeInference {
 
         // validate struct fields: check for unknown and missing fields
         if let Some(def) = self.type_table.get_struct(name) {
-            let def_field_names: Vec<String> =
-                def.fields.iter().map(|f| f.name.clone()).collect();
+            let def_field_names: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
 
             // check for unknown fields
             for f in fields {
@@ -111,10 +112,7 @@ impl TypeInference {
                 for def_field in &def_field_names {
                     if !provided.contains(&def_field.as_str()) {
                         self.errors.push(TypeError::member_access(
-                            format!(
-                                "missing field '{}' in struct literal '{}'",
-                                def_field, name
-                            ),
+                            format!("missing field '{}' in struct literal '{}'", def_field, name),
                             span,
                         ));
                     }
@@ -135,16 +133,16 @@ impl TypeInference {
                 {
                     self.try_narrow_literal(&mut typed_value, &field_ty);
 
-                    if typed_value.ty != field_ty {
-                        self.constraints.push(Constraint::equal(
-                            typed_value.ty.clone(),
-                            field_ty,
-                            f.span,
-                            ConstraintReason::TypeAnnotation {
-                                var_name: format!("{}.{}", name, f.name),
-                            },
-                        ));
-                    }
+                    // always push a constraint so the solver validates the narrowing decision. when narrowing succeeded the
+                    // constraint is trivially satisfied; when it didn't, the solver will catch the mismatch
+                    self.constraints.push(Constraint::equal(
+                        typed_value.ty.clone(),
+                        field_ty,
+                        f.span,
+                        ConstraintReason::TypeAnnotation {
+                            var_name: format!("{}.{}", name, f.name),
+                        },
+                    ));
                 }
 
                 (f.name.clone(), Box::new(typed_value))
