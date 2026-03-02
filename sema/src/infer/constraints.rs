@@ -19,9 +19,13 @@ impl TypeInference {
                 let left_resolved = subst.apply(&left);
                 let right_resolved = subst.apply(&right);
 
+                let saved = subst.snapshot();
                 match unify(&left_resolved, &right_resolved, &mut subst) {
                     Ok(()) => {}
                     Err(e) => {
+                        // roll back any partial bindings from sub-unifications that succeeded before this one failed
+                        subst.restore(saved);
+
                         let err = unify_error_to_type_error(e, span, reason);
                         self.errors.push(err);
 
@@ -43,14 +47,32 @@ impl TypeInference {
                 let resolved = subst.apply(&ty);
 
                 match &resolved {
-                    InferType::Var(_) | InferType::Dynamic => {}
+                    InferType::Dynamic => {}
+                    InferType::Var(id) => {
+                        // if the Var is still unresolved after the Equal pass, bind it to the widest type in the option set
+                        // this lets OneOf constraints participate in inference instead of letting unresolved Vars fall through to Dynamic via finalization
+                        if let Some(default) = Self::pick_widest_type(&options) {
+                            subst.bind(*id, default);
+                        }
+                    }
                     concrete => {
-                        let matches = options.iter().any(|opt| {
+                        // when unification succeeds, merge the temp_subst bindings back into the main substitution so that any Vars resolved during the OneOf check are preserved.
+                        let mut matched = false;
+                        for opt in &options {
                             let mut temp_subst = subst.clone();
-                            unify(concrete, opt, &mut temp_subst).is_ok()
-                        });
+                            if unify(concrete, opt, &mut temp_subst).is_ok() {
+                                // merge new bindings from temp_subst into subst
+                                for (var, bound_ty) in temp_subst.bindings() {
+                                    if !subst.is_bound(*var) {
+                                        subst.bind(*var, bound_ty.clone());
+                                    }
+                                }
+                                matched = true;
+                                break;
+                            }
+                        }
 
-                        if !matches {
+                        if !matched {
                             self.errors.push(TypeError::not_one_of(
                                 concrete.clone(),
                                 options.clone(),
@@ -67,27 +89,30 @@ impl TypeInference {
         subst
     }
 
-    /// Force a type to Dynamic (for error recovery)
+    /// Pick the widest type from a set of options for defaulting an unresolved type variable constrained by OneOf.
+    ///
+    /// returns i64 if the set contains integer types, f64 if it contains only float types.
+    /// returns None for non-numeric sets.
+    fn pick_widest_type(options: &[InferType]) -> Option<InferType> {
+        let has_integers = options.iter().any(|t| t.is_integer());
+        let has_floats = options.iter().any(|t| t.is_float());
+
+        if has_integers {
+            Some(InferType::I64)
+        } else if has_floats {
+            Some(InferType::F64)
+        } else {
+            None
+        }
+    }
+
+    /// force a type to Dynamic (for error recovery)
+    ///
+    /// only binds top-level Vars. i deliberately avoid recursing into compound types (Function, Array, Vec, Tuple) because their inner Vars may
+    /// be shared with unrelated constraints. binding those would silently corrupt types in expressions that had no errors.
     fn force_dynamic(&mut self, ty: &InferType, subst: &mut Substitution) {
-        match ty {
-            InferType::Var(id) => {
-                subst.bind(*id, InferType::Dynamic);
-            }
-            InferType::Function { params, ret } => {
-                for p in params {
-                    self.force_dynamic(p, subst);
-                }
-                self.force_dynamic(ret, subst);
-            }
-            InferType::Array(inner, _) | InferType::Vec(inner) => {
-                self.force_dynamic(inner, subst);
-            }
-            InferType::Tuple(elems) => {
-                for e in elems {
-                    self.force_dynamic(e, subst);
-                }
-            }
-            _ => {}
+        if let InferType::Var(id) = ty {
+            subst.bind(*id, InferType::Dynamic);
         }
     }
 }
