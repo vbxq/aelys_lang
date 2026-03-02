@@ -22,3 +22,7 @@
 *.so binary
 *.dylib binary
 *.exe binary
+
+# exclude from github language detection
+*.inc linguist-vendored
+*.cpp linguist-vendored
