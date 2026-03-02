@@ -2,7 +2,7 @@
 
 mod block;
 mod implicit;
-mod let_stmt;
+pub(crate) mod let_stmt;
 mod loop_stmt;
 mod needs;
 mod return_stmt;

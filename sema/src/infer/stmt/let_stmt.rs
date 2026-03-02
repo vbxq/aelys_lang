@@ -1,7 +1,7 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
-use crate::typed_ast::TypedStmtKind;
-use aelys_syntax::{Expr, Span, TypeAnnotation};
+use crate::typed_ast::{TypedExprKind, TypedStmtKind};
+use aelys_syntax::{Expr, Span, TypeAnnotation, UnaryOp};
 
 impl TypeInference {
     pub(super) fn infer_let_stmt(
@@ -35,6 +35,12 @@ impl TypeInference {
             ));
             decl.clone()
         } else {
+            // track immutable variables initialized with numeric literals so that try_narrow_literal can narrow through variable references at return/call/assign sites.
+            //
+            // mutable variables are not tracked because they can be reassigned to a different value that might not fit in the target type
+            if !mutable {
+                Self::track_literal_init(&mut self.literal_init_vars, name, &typed_init);
+            }
             typed_init.ty.clone()
         };
 
@@ -51,4 +57,52 @@ impl TypeInference {
             is_pub,
         }
     }
+
+    /// Record that a variable was initialized with a numeric literal value.
+    /// That info is used by `try_narrow_literal` to narrow through variable references
+    ///
+    /// we also tracks variable to variable copies, like if `x` is tracked and `let y = x` is encountered, `y` inherits the same literal value
+    fn track_literal_init(
+        literal_init_vars: &mut std::collections::HashMap<String, LiteralInit>,
+        name: &str,
+        init: &crate::typed_ast::TypedExpr,
+    ) {
+        match &init.kind {
+            TypedExprKind::Int(v) => {
+                literal_init_vars.insert(name.to_string(), LiteralInit::Int(*v));
+            }
+            TypedExprKind::Float(v) => {
+                literal_init_vars.insert(name.to_string(), LiteralInit::Float(*v));
+            }
+            TypedExprKind::Unary {
+                op: UnaryOp::Neg,
+                operand,
+            } => match &operand.kind {
+                TypedExprKind::Int(v) => {
+                    if let Some(neg) = v.checked_neg() {
+                        literal_init_vars.insert(name.to_string(), LiteralInit::Int(neg));
+                    }
+                }
+                TypedExprKind::Float(v) => {
+                    literal_init_vars.insert(name.to_string(), LiteralInit::Float(-v));
+                }
+                _ => {}
+            },
+            // propagate literal tracking through variable copies
+            // `let y = x` where x was tracked -> y gets the same literal value
+            TypedExprKind::Identifier(source_name) => {
+                if let Some(lit) = literal_init_vars.get(source_name).cloned() {
+                    literal_init_vars.insert(name.to_string(), lit);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// tracks the literal value a variable was initialized with.
+#[derive(Debug, Clone)]
+pub enum LiteralInit {
+    Int(i64),
+    Float(f64),
 }

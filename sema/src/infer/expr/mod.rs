@@ -7,7 +7,7 @@ mod lambda;
 mod member;
 mod primary;
 
-use super::TypeInference;
+use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
@@ -433,6 +433,63 @@ impl TypeInference {
                     return false;
                 }
                 return true;
+            }
+        }
+
+        // narrow through variable references.
+        //
+        // when the expression is an Identifier whose variable was initialized with a numeric literal (tracked in `literal_init_vars`), treat it
+        // as if the literal appeared directly, this allows code like
+        //
+        //   fn f() -> i8 { let x = 100; return x }
+        //
+        // to narrow correctly because we know x holds the value 100
+        if let TypedExprKind::Identifier(name) = &expr.kind {
+            if let Some(lit) = self.literal_init_vars.get(name).cloned() {
+                match lit {
+                    LiteralInit::Int(value) => {
+                        if target_ty.is_integer() && *target_ty != InferType::I64 {
+                            if InferType::int_fits(value, target_ty) {
+                                expr.ty = target_ty.clone();
+                                return true;
+                            } else {
+                                self.errors.push(TypeError {
+                                    kind: TypeErrorKind::Mismatch {
+                                        expected: target_ty.clone(),
+                                        found: InferType::I64,
+                                    },
+                                    span: expr.span,
+                                    reason: ConstraintReason::IntLiteralOverflow {
+                                        value,
+                                        target: target_ty.clone(),
+                                    },
+                                });
+                                return false;
+                            }
+                        }
+                    }
+                    LiteralInit::Float(value) => {
+                        if target_ty.is_float() && *target_ty != InferType::F64 {
+                            return if InferType::float_fits(value, target_ty) {
+                                expr.ty = target_ty.clone();
+                                true
+                            } else {
+                                self.errors.push(TypeError {
+                                    kind: TypeErrorKind::Mismatch {
+                                        expected: target_ty.clone(),
+                                        found: InferType::F64,
+                                    },
+                                    span: expr.span,
+                                    reason: ConstraintReason::FloatLiteralOverflow {
+                                        value,
+                                        target: target_ty.clone(),
+                                    },
+                                });
+                                false
+                            }
+                        }
+                    }
+                }
             }
         }
 

@@ -15,6 +15,9 @@ use crate::constraint::{Constraint, TypeError};
 use crate::env::TypeEnv;
 use crate::types::{InferType, TypeTable, TypeVarGen};
 use aelys_common::Warning;
+use std::collections::HashMap;
+
+pub(crate) use stmt::let_stmt::LiteralInit;
 
 const MAX_INFERENCE_DEPTH: usize = 200;
 
@@ -34,4 +37,8 @@ pub struct TypeInference {
     warnings: Vec<Warning>,
     pub(crate) type_table: TypeTable,
     type_params_in_scope: Vec<String>,
+    // tracks variables initialized with numeric literal values (without type annotation).
+    //
+    // used by `try_narrow_literal` to narrow Identifier expressions whose original value is a known literal
+    literal_init_vars: HashMap<String, LiteralInit>,
 }

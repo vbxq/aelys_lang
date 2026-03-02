@@ -4,7 +4,7 @@ use crate::typed_ast::TypedProgram;
 use crate::types::{InferType, TypeTable};
 use aelys_common::Warning;
 use aelys_syntax::{Source, Stmt, StmtKind, TypeAnnotation};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 pub struct InferenceResult {
@@ -25,6 +25,7 @@ impl Default for TypeInference {
             warnings: Vec::new(),
             type_table: TypeTable::new(),
             type_params_in_scope: Vec::new(),
+            literal_init_vars: HashMap::new(),
         }
     }
 }
@@ -98,7 +99,7 @@ impl TypeInference {
     pub fn infer_program(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-    ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
+    ) -> Result<TypedProgram, Vec<TypeError>> {
         let result =
             Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
         Ok(result.program)
@@ -109,7 +110,7 @@ impl TypeInference {
         source: Arc<Source>,
         module_aliases: HashSet<String>,
         known_globals: HashSet<String>,
-    ) -> Result<TypedProgram, Vec<crate::constraint::TypeError>> {
+    ) -> Result<TypedProgram, Vec<TypeError>> {
         let result = Self::infer_program_full(stmts, source, module_aliases, known_globals)?;
         Ok(result.program)
     }
@@ -119,7 +120,7 @@ impl TypeInference {
         source: Arc<Source>,
         module_aliases: HashSet<String>,
         known_globals: HashSet<String>,
-    ) -> Result<InferenceResult, Vec<crate::constraint::TypeError>> {
+    ) -> Result<InferenceResult, Vec<TypeError>> {
         let mut inf = TypeInference::new();
 
         for alias in &module_aliases {
