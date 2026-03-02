@@ -303,8 +303,16 @@ impl<'a> LoweringContext<'a> {
                     AirType::Struct(name.clone())
                 }
             }
-            // unresolved type vars reaching lowering = void (no explicit return annotation)
-            InferType::Var(_) => AirType::Void,
+            // A Var reaching lowering is always a compiler bug: finalize should have converted every Var to Dynamic before the AIR stage.
+            // Map to Opaque so the validation pass rejects it with a clear diagnostic.
+            InferType::Var(id) => {
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "[AIR] ICE: InferType::Var({}) leaked past finalization into lower_type_from_infer",
+                    id.0
+                );
+                AirType::Opaque
+            }
             // Dynamic = sema's "gradual typing" fallback. For generic call results, monomorphization patches the type before codegen.
             // For anything else (error recovery, unresolved inference), Opaque survives past mono and the validation pass rejects it with a clear diagnostic
             InferType::Dynamic => AirType::Opaque,

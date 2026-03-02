@@ -1,3 +1,5 @@
+use aelys_air::lower::lower;
+use aelys_air::passes::validate::validate_air;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_sema::TypeInference;
@@ -10,6 +12,20 @@ fn sema_ok(code: &str) -> bool {
         .parse()
         .expect("parse failed");
     TypeInference::infer_program(stmts, src).is_ok()
+}
+
+fn air_pipeline_ok(code: &str) -> bool {
+    let src = Source::new("<test>", code);
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let typed = match TypeInference::infer_program(stmts, src) {
+        Ok(t) => t,
+        Err(_) => return false,
+    };
+    let air = lower(&typed);
+    validate_air(&air).is_ok()
 }
 
 fn sema_error_count(code: &str) -> usize {
@@ -165,5 +181,190 @@ fn f() -> i8 {
 "#
         ),
         ": let x = -1; return x in i8 fn should pass sema"
+    );
+}
+
+#[test]
+fn if_else_narrowing_i32() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i32 {
+    let x = if true { 42 } else { 100 }
+    return x
+}
+"#
+        ),
+        "if-else with i32-fitting literals assigned to var should pass"
+    );
+}
+
+#[test]
+fn if_else_both_literals_i8() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = if true { 10 } else { 20 }
+    return x
+}
+"#
+        ),
+        "if-else with i8-fitting literals should pass"
+    );
+}
+
+#[test]
+fn if_else_direct_return_narrowing() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i32 {
+    return if true { 1 } else { 2 }
+}
+"#
+        ),
+        "direct return of if-else with literals should narrow to i32"
+    );
+}
+
+#[test]
+fn if_else_narrowing_through_variable() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i16 {
+    let x = if true { 300 } else { 500 }
+    return x
+}
+"#
+        ),
+        "if-else literals tracked and narrowed through variable for i16"
+    );
+}
+
+#[test]
+fn if_else_overflow_detected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i8 {
+    let x = if true { 10 } else { 200 }
+    return x
+}
+"#
+        ),
+        "if-else with one branch overflowing i8 should fail"
+    );
+}
+
+#[test]
+fn if_else_same_concrete_type_no_fresh_var() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i64 {
+    let x = if true { 42 } else { 100 }
+    return x
+}
+"#
+        ),
+        "if-else with same concrete type should not create a fresh Var"
+    );
+}
+
+#[test]
+fn if_else_different_types_rejected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f() -> i64 {
+    let x = if true { 42 } else { "hello" }
+    return x
+}
+"#
+        ),
+        "if-else with different types should be rejected"
+    );
+}
+
+#[test]
+fn if_without_else_not_affected() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i64 {
+    let x = 10
+    if x > 5 {
+        return 1
+    }
+    return 0
+}
+"#
+        ),
+        "if without else should still work"
+    );
+}
+
+#[test]
+fn normal_code_compiles_through_air_pipeline() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn add(a: i64, b: i64) -> i64 {
+    return a + b
+}
+
+fn main() -> i64 {
+    let x = 42
+    let y = add(x, 10)
+    return y
+}
+"#
+        ),
+        "basic function calls should pass AIR validation"
+    );
+}
+
+#[test]
+fn function_with_if_else_compiles_through_air() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn f(x: i64) -> i64 {
+    let result = if x > 0 { x } else { 0 }
+    return result
+}
+"#
+        ),
+        "if-else with matching types should pass AIR validation"
+    );
+}
+
+#[test]
+fn multi_function_pipeline_no_var_leak() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn double(n: i64) -> i64 {
+    return n * 2
+}
+
+fn is_positive(n: i64) -> bool {
+    return n > 0
+}
+
+fn main() -> i64 {
+    let a = 5
+    let b = double(a)
+    let flag = is_positive(b)
+    if flag {
+        return b
+    }
+    return 0
+}
+"#
+        ),
+        "multi-function code should not leak type variables into AIR"
     );
 }

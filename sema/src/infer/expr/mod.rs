@@ -436,6 +436,47 @@ impl TypeInference {
             }
         }
 
+        // narrow if-else expressions where both branches are narrowable.
+        // recurse into each branch so that `return if cond { 42 } else { 100 }` narrows in an i32 context.
+        if let TypedExprKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } = &mut expr.kind
+        {
+            if expr.ty == InferType::I64
+                && target_ty.is_integer()
+                && *target_ty != InferType::I64
+            {
+                let then_ok = self.try_narrow_literal(then_branch, target_ty);
+                let else_ok = self.try_narrow_literal(else_branch, target_ty);
+                let then_narrowed = then_branch.ty == *target_ty;
+                let else_narrowed = else_branch.ty == *target_ty;
+                if then_ok && else_ok && then_narrowed && else_narrowed {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                if !then_ok || !else_ok {
+                    return false;
+                }
+                return true;
+            }
+            if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
+                let then_ok = self.try_narrow_literal(then_branch, target_ty);
+                let else_ok = self.try_narrow_literal(else_branch, target_ty);
+                let then_narrowed = then_branch.ty == *target_ty;
+                let else_narrowed = else_branch.ty == *target_ty;
+                if then_ok && else_ok && then_narrowed && else_narrowed {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                if !then_ok || !else_ok {
+                    return false;
+                }
+                return true;
+            }
+        }
+
         // narrow through variable references.
         //
         // when the expression is an Identifier whose variable was initialized with a numeric literal (tracked in `literal_init_vars`), treat it

@@ -95,7 +95,38 @@ impl TypeInference {
                     literal_init_vars.insert(name.to_string(), lit);
                 }
             }
+            // track if-else expressions where both branches are known integer  or float literals. use the branch with the larger absolute value so narrowing checks the worst case.
+            TypedExprKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                if let Some(lit) = Self::extract_if_else_literal(then_branch, else_branch) {
+                    literal_init_vars.insert(name.to_string(), lit);
+                }
+            }
             _ => {}
+        }
+    }
+
+    /// Extract a LiteralInit from an if-else where both branches are known
+    /// integer or float literals.
+    ///
+    /// Returns the branch with the larger absolute value so that narrowing overflow checks are conservative.
+    fn extract_if_else_literal(
+        then_branch: &crate::typed_ast::TypedExpr,
+        else_branch: &crate::typed_ast::TypedExpr,
+    ) -> Option<LiteralInit> {
+        match (&then_branch.kind, &else_branch.kind) {
+            (TypedExprKind::Int(a), TypedExprKind::Int(b)) => {
+                let worst = if a.abs() >= b.abs() { *a } else { *b };
+                Some(LiteralInit::Int(worst))
+            }
+            (TypedExprKind::Float(a), TypedExprKind::Float(b)) => {
+                let worst = if a.abs() >= b.abs() { *a } else { *b };
+                Some(LiteralInit::Float(worst))
+            }
+            _ => None,
         }
     }
 }

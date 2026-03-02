@@ -23,19 +23,26 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
-        let result_type = self.type_gen.fresh();
-        self.constraints.push(Constraint::equal(
-            typed_then.ty.clone(),
-            result_type.clone(),
-            then_branch.span,
-            ConstraintReason::IfBranches,
-        ));
-        self.constraints.push(Constraint::equal(
-            typed_else.ty.clone(),
-            result_type.clone(),
-            else_branch.span,
-            ConstraintReason::IfBranches,
-        ));
+        // when both branches have the same concrete type, use it directly instead of creating a fresh Var. 
+        // this is what infer_binary_op does and allows downstream narrowing to see the real type
+        let result_type = if typed_then.ty == typed_else.ty && typed_then.ty.is_concrete() {
+            typed_then.ty.clone()
+        } else {
+            let fresh = self.type_gen.fresh();
+            self.constraints.push(Constraint::equal(
+                typed_then.ty.clone(),
+                fresh.clone(),
+                then_branch.span,
+                ConstraintReason::IfBranches,
+            ));
+            self.constraints.push(Constraint::equal(
+                typed_else.ty.clone(),
+                fresh.clone(),
+                else_branch.span,
+                ConstraintReason::IfBranches,
+            ));
+            fresh
+        };
 
         (
             TypedExprKind::If {
