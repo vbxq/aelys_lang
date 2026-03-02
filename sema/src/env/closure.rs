@@ -2,29 +2,23 @@ use super::TypeEnv;
 use std::collections::HashMap;
 
 impl TypeEnv {
-    /// Clone with fresh captures (for entering a new function)
-    pub fn for_function(&self) -> TypeEnv {
-        TypeEnv {
-            locals: vec![HashMap::new()],
-            captures: HashMap::new(),
-            functions: self.functions.clone(),
-            current_function: None,
-            mutable_vars: std::collections::HashSet::new(),
-        }
-    }
-
-    /// Clone with inherited captures (for closures)
+    /// Clone with inherited captures (for named functions and lambdas).
+    ///
+    /// In Aelys, named functions use closure semantics: parent-scope captures
+    /// are allowed. That's an intentional design decision (similar to Go/JS).
     pub fn for_closure(&self) -> TypeEnv {
         let mut all_visible = HashMap::new();
+
+        // Insert captures first, then locals overwrite in case of collision
+        // This ensures locals have priority over captures
+        for (name, ty) in &self.captures {
+            all_visible.insert(name.clone(), ty.clone());
+        }
 
         for scope in &self.locals {
             for (name, ty) in scope {
                 all_visible.insert(name.clone(), ty.clone());
             }
-        }
-
-        for (name, ty) in &self.captures {
-            all_visible.insert(name.clone(), ty.clone());
         }
 
         TypeEnv {
