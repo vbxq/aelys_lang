@@ -50,8 +50,13 @@ impl TypeInference {
                     ConstraintReason::IfCondition,
                 ));
 
+                self.env.push_scope();
                 let typed_then = self.infer_stmt_with_implicit_return(then_branch, return_type);
+                self.env.pop_scope();
+
+                self.env.push_scope();
                 let typed_else = self.infer_stmt_with_implicit_return(else_branch, return_type);
+                self.env.pop_scope();
 
                 TypedStmt {
                     kind: TypedStmtKind::If {
