@@ -368,3 +368,85 @@ fn main() -> i64 {
         "multi-function code should not leak type variables into AIR"
     );
 }
+
+#[test]
+fn oneof_no_leak_on_binary_op() {
+    assert!(
+        sema_ok(
+            r#"
+fn f(a: i64, b: i64) -> i64 {
+    let c = a + b
+    let d = c * 2
+    let e = d - a
+    return e
+}
+"#
+        ),
+        "chained binary ops should not corrupt type bindings"
+    );
+}
+
+#[test]
+fn oneof_no_corruption_on_type_mismatch() {
+    let count = sema_error_count(
+        r#"
+fn f(x: string) -> i64 {
+    return x + 1
+}
+"#,
+    );
+    assert!(
+        count >= 1,
+        "string + int should produce at least 1 error, got {}",
+        count
+    );
+}
+
+#[test]
+fn oneof_successful_match_preserves_bindings() {
+    assert!(
+        sema_ok(
+            r#"
+fn f(a: i32, b: i32) -> i32 {
+    let x = a + b
+    let y = x * a
+    return y - b
+}
+"#
+        ),
+        "binary ops on i32 should resolve correctly through OneOf"
+    );
+}
+
+#[test]
+fn oneof_multiple_ops_same_function() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn compute(a: i64, b: i64) -> i64 {
+    let sum = a + b
+    let diff = a - b
+    let prod = sum * diff
+    return prod
+}
+"#
+        ),
+        "multiple binary ops in one function should not leak vars to AIR"
+    );
+}
+
+#[test]
+fn oneof_failed_match_no_pollution() {
+    let count = sema_error_count(
+        r#"
+fn f(x: bool) -> bool {
+    return x + true
+}
+"#,
+    );
+    assert!(
+        count >= 1,
+        "bool + bool should produce at least 1 error, got {}",
+        count
+    );
+}

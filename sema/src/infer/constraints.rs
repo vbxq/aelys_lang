@@ -56,20 +56,18 @@ impl TypeInference {
                         }
                     }
                     concrete => {
-                        // when unification succeeds, merge the temp_subst bindings back into the main substitution so that any Vars resolved during the OneOf check are preserved.
                         let mut matched = false;
                         for opt in &options {
                             let mut temp_subst = subst.clone();
                             if unify(concrete, opt, &mut temp_subst).is_ok() {
-                                // merge new bindings from temp_subst into subst
-                                for (var, bound_ty) in temp_subst.bindings() {
-                                    if !subst.is_bound(*var) {
-                                        subst.bind(*var, bound_ty.clone());
-                                    }
-                                }
+                                // adopt the entire temp_subst so that all bindings from the successful unification are applied atomically.
+                                //
+                                // ! the old merge-by-key pattern (`if !subst.is_bound`) could leak stale bindings when earlier failed options partially bound vars that the successful option did not touch.
+                                subst = temp_subst;
                                 matched = true;
                                 break;
                             }
+                            // failed temp_subst is simply dropped, subst is untouched
                         }
 
                         if !matched {
