@@ -147,10 +147,18 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::ArraySized {
                 size, fill_value, ..
             } => {
-                // exctract le const size
+                // extract the const size (no longer panics on non-constant)
                 let n = match &size.kind {
                     TypedExprKind::Int(v) => *v as u64,
-                    _ => panic!("ArraySized requires a constant integer size"),
+                    _ => {
+                        self.report_error(
+                            "unsupported non-constant array size in AIR lowering: \
+                             ArraySized requires a constant integer size expression"
+                                .to_string(),
+                        );
+                        // Fallback: treat as zero-length array so lowering can continue
+                        0
+                    }
                 };
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
@@ -265,7 +273,11 @@ impl<'a> LoweringContext<'a> {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
                 let func = self.lower_callee(callee);
                 let ret_ty = self.lower_type_from_infer(&expr.ty);
-                if ret_ty == AirType::Void {
+                // Void and Opaque calls in discard position should emit CallVoid.
+                //
+                // Opaque means the return type is unresolved Dynamic. Since the caller is discarding the result anyway,
+                // there's no point creating a temp local with an unresolvable type.
+                if matches!(ret_ty, AirType::Void | AirType::Opaque) {
                     self.emit(
                         AirStmtKind::CallVoid {
                             func,
@@ -309,9 +321,10 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(result_infer_ty);
-        // S5: void-returning calls can't be used as values in LLVM.
-        // Emit CallVoid and return a null placeholder if someone tries.
-        if result_ty == AirType::Void {
+        // Void- and Opaque-returning calls can't be used as values in LLVM.
+        // Opaque means the return type is unresolved Dynamic (bootstrap builtins like print/println). Treating it as void prevents creating temp locals with an unresolvable type.
+        // TODO: !
+        if matches!(result_ty, AirType::Void | AirType::Opaque) {
             self.emit(AirStmtKind::CallVoid { func, args }, sp);
             Operand::Const(AirConst::Null)
         } else {

@@ -157,7 +157,7 @@ impl TypeInference {
                 ..
             } => {
                 // Build a NEW local names set for the inner lambda using its
-                // own parameters, NOT the outer lambda's locals/params.
+                // own parameters, not the outer lambda's locals/params.
                 let mut inner_locals: HashSet<String> =
                     inner_params.iter().map(|p| p.name.clone()).collect();
                 for stmt in stmts {

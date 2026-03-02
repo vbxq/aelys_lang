@@ -34,14 +34,22 @@ pub fn lower_file_to_air(
 
     let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
 
-    let typed_program =
-        aelys_sema::TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known_globals)
-            .map_err(|errors| {
-                errors
-                    .first()
-                    .map(|e| e.to_string())
-                    .unwrap_or_else(|| "Unknown type error".to_string())
-            })?;
+    let typed_program = aelys_sema::TypeInference::infer_program_with_imports(
+        stmts,
+        src,
+        HashSet::new(),
+        known_globals,
+    )
+    .map_err(|errors| {
+        if errors.is_empty() {
+            return "Unknown type error".to_string();
+        }
+        errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    })?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
@@ -51,6 +59,17 @@ pub fn lower_file_to_air(
     let mut air = aelys_air::mono::monomorphize(air);
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
     aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    // Validate AIR invariants before handing off to codegen
+    if let Err(validation_errors) = aelys_air::passes::validate::validate_air(&air) {
+        let message = validation_errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(message);
+    }
+
     Ok(air)
 }
 

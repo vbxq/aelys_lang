@@ -274,7 +274,7 @@ fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenErro
     for param in &function.params {
         if is_abi_unsafe_type(&param.ty) {
             return Err(CodegenError::UnsupportedType(format!(
-                "extern function '{}' has struct parameter '{}' (type {:?}) — \
+                "extern function '{}' has struct parameter '{}' (type {:?}), \
                  struct params must be flattened to scalars for C ABI compatibility",
                 function.name, param.name, param.ty
             )));
@@ -304,6 +304,7 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::Slice(_) => "slice",
         AirType::FnPtr { .. } => "fn",
         AirType::Param(_) => "param",
+        AirType::Opaque => "opaque",
         AirType::Void => "void",
     }
 }
