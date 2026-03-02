@@ -21,7 +21,10 @@ fn rejects_binary_type_mismatch() {
 #[test]
 fn rejects_return_type_mismatch() {
     let result = sema_check(r#"fn f() -> i64 { return "text" }"#);
-    assert!(result.is_err(), "returning string from i64 function should be rejected");
+    assert!(
+        result.is_err(),
+        "returning string from i64 function should be rejected"
+    );
 }
 
 #[test]
@@ -51,5 +54,91 @@ fn rejects_undefined_variable() {
 #[test]
 fn rejects_argument_type_mismatch() {
     let result = sema_check(r#"fn f(x: i64) {} fn g() { f("str") }"#);
-    assert!(result.is_err(), "passing string to i64 param should be rejected");
+    assert!(
+        result.is_err(),
+        "passing string to i64 param should be rejected"
+    );
+}
+
+#[test]
+fn multiple_errors_collected_not_just_first() {
+    // two independent type errors in separate functions. Sema should report both, not just the first one.
+    let result = sema_check(
+        r#"
+fn f() -> i64 { return "bad" }
+fn g() -> string { return 42 }
+"#,
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.len() >= 2,
+        "expected at least 2 errors, got {}",
+        errors.len()
+    );
+}
+
+#[test]
+fn rejects_index_assign_on_i64() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let mut x: i64 = 42
+    x[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_err(),
+        "index assignment on i64 should be rejected"
+    );
+}
+
+#[test]
+fn rejects_index_assign_on_bool() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let mut b: bool = true
+    b[0] = false
+}
+"#,
+    );
+    assert!(
+        result.is_err(),
+        "index assignment on bool should be rejected"
+    );
+}
+
+#[test]
+fn accepts_index_assign_on_array() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let mut arr = [1, 2, 3]
+    arr[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_ok(),
+        "index assignment on array should be accepted, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn accepts_index_assign_on_vec() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let mut v = Vec<i64>[1, 2, 3]
+    v[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_ok(),
+        "index assignment on vec should be accepted, got {:?}",
+        result
+    );
 }

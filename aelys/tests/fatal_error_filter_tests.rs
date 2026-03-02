@@ -1,6 +1,5 @@
 /// Tests that programs which SHOULD compile aren't falsely rejected
 /// by the all-fatal error filter in sema/entry.rs.
-
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_sema::TypeInference;
@@ -22,10 +21,7 @@ fn sema_ok_with_builtins(code: &str) -> bool {
     let stmts = Parser::new(tokens, src.clone())
         .parse()
         .expect("parse failed");
-    let builtins: HashSet<String> = ["print", "println"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let builtins: HashSet<String> = ["print", "println"].iter().map(|s| s.to_string()).collect();
     TypeInference::infer_program_with_imports(stmts, src, Default::default(), builtins).is_ok()
 }
 
@@ -308,5 +304,41 @@ fn explicit_cast_chain() {
     assert!(
         sema_ok("fn f(x: i64) -> i8 { return (x as i32) as i8 }"),
         "chained casts should compile"
+    );
+}
+
+#[test]
+fn generic_with_struct_name_collision() {
+    // a struct named "T" exists and a generic function uses "T" as a type parameter.
+    //
+    // the old negative filter (!has_struct) would incorrectly make the generic mismatch fatal
+    // the positive filter (declared_type_params) correctly recognises "T" as a type parameter
+    assert!(
+        sema_ok(
+            r#"
+struct T { value: i64 }
+fn identity<T>(x: T) -> T { return x }
+fn test() -> i64 { return identity(42) }
+"#
+        ),
+        "generic fn with type param name colliding with struct should compile"
+    );
+}
+
+#[test]
+fn generic_struct_with_type_param_name_collision() {
+    // same collision but for a generic struct declaration.
+    assert!(
+        sema_ok(
+            r#"
+struct T { value: i64 }
+struct Box<T> { inner: T }
+fn test() -> i64 {
+    let b = Box { inner: 42 }
+    return b.inner
+}
+"#
+        ),
+        "generic struct with type param colliding with struct name should compile"
     );
 }
