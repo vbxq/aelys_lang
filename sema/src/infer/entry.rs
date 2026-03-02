@@ -3,7 +3,7 @@ use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::TypedProgram;
 use crate::types::{InferType, TypeTable};
 use aelys_common::Warning;
-use aelys_syntax::{Source, Stmt, TypeAnnotation};
+use aelys_syntax::{Source, Stmt, StmtKind, TypeAnnotation};
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -143,15 +143,18 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        // Okay, all type errors are fatal except mismatches involving generic type
-        // parameters (Struct("T") where T is not a real struct).
+        // collect all declared type parameter names from the program (functions and struct declarations)
         //
+        // This lets us positively identify Struct("T") as a type parameter rather than relying on the fragile negative test
+        // `!has_struct(name)`, which completely breaks when a real struct shares a name with a type parameter.
+        let declared_type_params = collect_declared_type_params(&stmts);
+
+        // all type errors are fatal except mismatches involving generic type parameters (Struct("T") where T is a declared type parameter)
+        // These are expected because the monomorphizer in AIR handles specialization.
         //
-        // These are expected because the monomorphizer in AIR handles specialization
-        //
-        // but UnknownType errors are ***always*** fatal, they're explicit validation failure (x: nonexistent) not incidental unification failure with generic params.
+        // UnknownType errors are ***always*** fatal. They are explicit validation failures (x: nonexistent) not incidental unification with generic params.
         let is_type_param = |ty: &InferType| -> bool {
-            matches!(ty, InferType::Struct(name) if !inf.type_table.has_struct(name))
+            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()))
         };
         let fatal_errors: Vec<_> = inf
             .errors
@@ -181,5 +184,56 @@ impl TypeInference {
             warnings: inf.warnings,
             type_table,
         })
+    }
+}
+
+/// Walk the AST and collect every type parameter name declared by functions
+/// and struct definitions.
+///
+/// Used for the positive `is_type_param` test in the fatal error filter.
+fn collect_declared_type_params(stmts: &[Stmt]) -> HashSet<String> {
+    let mut params = HashSet::new();
+    collect_type_params_recursive(stmts, &mut params);
+    params
+}
+
+fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
+    for stmt in stmts {
+        match &stmt.kind {
+            StmtKind::Function(func) => {
+                for tp in &func.type_params {
+                    params.insert(tp.clone());
+                }
+                collect_type_params_recursive(&func.body, params);
+            }
+            StmtKind::StructDecl { type_params, .. } => {
+                for tp in type_params {
+                    params.insert(tp.clone());
+                }
+            }
+            StmtKind::Block(inner) => {
+                collect_type_params_recursive(inner, params);
+            }
+            StmtKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                collect_type_params_recursive(std::slice::from_ref(then_branch), params);
+                if let Some(eb) = else_branch {
+                    collect_type_params_recursive(std::slice::from_ref(eb), params);
+                }
+            }
+            StmtKind::While { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            StmtKind::For { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            StmtKind::ForEach { body, .. } => {
+                collect_type_params_recursive(std::slice::from_ref(body), params);
+            }
+            _ => {}
+        }
     }
 }
