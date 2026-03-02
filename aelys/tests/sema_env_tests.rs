@@ -79,3 +79,50 @@ fn test_for_closure() {
 
     assert_eq!(closure_env.depth(), 1);
 }
+
+/// regression test: when a local variable shadows a capture with the same name, for_closure() must preserve the local's type (not the capture's)
+/// before that, captures were inserted after locals, overwriting them
+#[test]
+fn test_for_closure_locals_override_captures() {
+    // simulate: outer scope captured x: string, inner function defines local x: i64
+    let mut env = TypeEnv::new();
+    env.define_capture("x".to_string(), InferType::String);
+    env.define_local("x".to_string(), InferType::I64);
+
+    // in the current env, lookup finds local x: i64 (locals searched before captures)
+    assert_eq!(env.lookup("x"), Some(&InferType::I64));
+
+    let closure_env = env.for_closure();
+
+    // nested closure must see x as i64 (the local), not string (the capture)
+    assert_eq!(
+        closure_env.lookup("x"),
+        Some(&InferType::I64),
+        "for_closure() must give locals priority over captures"
+    );
+}
+
+/// nested closures with shadowed captures
+/// 
+/// when multiple levels of nesting each shadow a variable, for_closure() must preserve the innermost type at each level.
+#[test]
+fn test_for_closure_nested_shadowing() {
+    // Level 0: capture x: bool (from grandparent)
+    let mut env = TypeEnv::new();
+    env.define_capture("x".to_string(), InferType::Bool);
+    // Level 0: local x: string shadows the capture
+    env.define_local("x".to_string(), InferType::String);
+    let mut closure_env_1 = env.for_closure();
+    // closure_env_1 should see x: string
+    assert_eq!(closure_env_1.lookup("x"), Some(&InferType::String));
+    // define local x: i64 in the first closure
+    closure_env_1.define_local("x".to_string(), InferType::I64);
+    assert_eq!(closure_env_1.lookup("x"), Some(&InferType::I64));
+    let closure_env_2 = closure_env_1.for_closure();
+    // closure_env_2 should see x: i64 (the local from level 1), not string or bool
+    assert_eq!(
+        closure_env_2.lookup("x"),
+        Some(&InferType::I64),
+        "nested for_closure() must preserve innermost local type through nesting levels"
+    );
+}
