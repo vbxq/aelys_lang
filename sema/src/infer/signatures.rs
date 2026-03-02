@@ -7,6 +7,11 @@ use std::rc::Rc;
 
 impl TypeInference {
     /// Collect function signatures before inference (pre-pass)
+    ///
+    /// only registers functions at the current scope level (top-level statements and blocks).
+    ///
+    /// Does not recurse into if/while/for/for-each bodies, because functions defined inside conditional or loop constructs belong to those inner scopes
+    /// and must not overwrite same-named functions at the outer scope
     pub(super) fn collect_signatures(&mut self, stmts: &[Stmt], prefix: &str) {
         for stmt in stmts {
             match &stmt.kind {
@@ -16,40 +21,12 @@ impl TypeInference {
                 StmtKind::Block(inner_stmts) => {
                     self.collect_signatures(inner_stmts, prefix);
                 }
-                StmtKind::If {
-                    then_branch,
-                    else_branch,
-                    ..
-                } => {
-                    self.collect_signatures_from_stmt(then_branch, prefix);
-                    if let Some(else_branch) = else_branch {
-                        self.collect_signatures_from_stmt(else_branch, prefix);
-                    }
-                }
-                StmtKind::While { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
-                StmtKind::For { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
-                StmtKind::ForEach { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
+                // do not recurse into if/while/for/for-each: functions defined
+                // inside these constructs are scoped to their bodies.
+                //
+                // they're gonna be collected and will be collected when their enclosing function body is inferred.
                 _ => {}
             }
-        }
-    }
-
-    /// Collect signatures from a single statement
-    fn collect_signatures_from_stmt(&mut self, stmt: &Stmt, prefix: &str) {
-        match &stmt.kind {
-            StmtKind::Function(func) => {
-                self.collect_function_signature(func, prefix);
-            }
-            StmtKind::Block(stmts) => {
-                self.collect_signatures(stmts, prefix);
-            }
-            _ => {}
         }
     }
 
