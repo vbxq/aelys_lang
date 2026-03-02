@@ -107,7 +107,7 @@ fn collect_terminator_locals(term: &AirTerminator, out: &mut HashSet<LocalId>) {
 
 fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Discriminant(op) => {
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) => {
             collect_operand_locals(op, out);
         }
         Rvalue::BinaryOp(_, left, right) => {

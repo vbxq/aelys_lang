@@ -19,11 +19,6 @@ impl TypeInference {
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
 
-        for type_param in &func.type_params {
-            let fresh_var = self.type_gen.fresh();
-            self.env.define_local(type_param.clone(), fresh_var);
-        }
-
         let mut typed_params = Vec::with_capacity(func.params.len());
         for (i, p) in func.params.iter().enumerate() {
             let ty = sig_params

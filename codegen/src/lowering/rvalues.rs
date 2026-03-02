@@ -37,10 +37,6 @@ impl<'a> FunctionCodegen<'a> {
                 self.load_value(inner_ty, ptr, "deref")
             }
             Rvalue::Cast { operand, from, to } => self.generate_cast(operand, from, to),
-            Rvalue::Discriminant(_) => Err(self.unsupported_air(
-                "Rvalue::Discriminant",
-                "discriminant extraction is not implemented for LLVM backend",
-            )),
             Rvalue::Index { base, index } => self.generate_index(base, index),
         }
     }
