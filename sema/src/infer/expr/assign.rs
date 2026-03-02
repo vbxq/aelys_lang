@@ -50,6 +50,10 @@ impl TypeInference {
         } else {
             self.errors
                 .push(TypeError::undefined_variable(name.to_string(), span));
+
+            // register the variable with Dynamic type to prevent repeated "undefined variable" errors for each subsequent use
+            self.env.define_local(name.to_string(), InferType::Dynamic);
+
             (
                 TypedExprKind::Assign {
                     name: name.to_string(),

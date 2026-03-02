@@ -18,7 +18,12 @@ impl TypeInference {
             .unwrap_or_else(|| {
                 self.errors
                     .push(TypeError::undefined_variable(name.to_string(), span));
-                InferType::Dynamic
+
+                // register the variable with Dynamic type to prevent repeated "undefined variable" errors for each subsequent use
+                let recovery_ty = InferType::Dynamic;
+                self.env.define_local(name.to_string(), recovery_ty.clone());
+
+                recovery_ty
             });
 
         (TypedExprKind::Identifier(name.to_string()), ty)
