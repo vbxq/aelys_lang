@@ -113,15 +113,24 @@ impl TypeInference {
                     .map(|fv| Box::new(self.apply_substitution_expr(fv, subst))),
             },
             TypedExprKind::VecLiteral {
-                element_type,
+                element_type: _,
                 elements,
-            } => TypedExprKind::VecLiteral {
-                element_type: element_type.clone(),
-                elements: elements
-                    .iter()
-                    .map(|e| self.apply_substitution_expr(e, subst))
-                    .collect(),
-            },
+            } => {
+                let substituted_ty = subst.apply(&expr.ty);
+                let new_elem_type = match &substituted_ty {
+                    crate::types::InferType::Vec(inner) => {
+                        Some(crate::types::ResolvedType::from_infer_type(inner))
+                    }
+                    _ => None,
+                };
+                TypedExprKind::VecLiteral {
+                    element_type: new_elem_type,
+                    elements: elements
+                        .iter()
+                        .map(|e| self.apply_substitution_expr(e, subst))
+                        .collect(),
+                }
+            }
             TypedExprKind::Index { object, index } => TypedExprKind::Index {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 index: Box::new(self.apply_substitution_expr(index, subst)),
