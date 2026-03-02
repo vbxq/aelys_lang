@@ -20,8 +20,16 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
+        self.env.push_scope();
         let typed_then = self.infer_stmt(then_branch);
-        let typed_else = else_branch.map(|e| Box::new(self.infer_stmt(e)));
+        self.env.pop_scope();
+
+        let typed_else = else_branch.map(|e| {
+            self.env.push_scope();
+            let typed = self.infer_stmt(e);
+            self.env.pop_scope();
+            Box::new(typed)
+        });
 
         TypedStmtKind::If {
             condition: typed_cond,
@@ -111,7 +119,11 @@ impl TypeInference {
             InferType::String => InferType::String,
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Array(inner, _) => (**inner).clone(),
-            InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+            InferType::Dynamic => InferType::Dynamic,
+            // when the iterable is an unresolved type variable, return a fresh Var for the element type instead of Dynamic
+            // This preserves the possibility of type propagation when the Var is resolved later by the constraint solver
+            // but if it stays unresolved, finalization converts it to Dynamic anyway
+            InferType::Var(_) => self.type_gen.fresh(),
             other => {
                 self.errors.push(TypeError::mismatch(
                     InferType::Dynamic, // expected: iterable
