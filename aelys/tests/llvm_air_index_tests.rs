@@ -219,7 +219,7 @@ fn string_index_read_calls_runtime_char_at() {
         ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), ptr, i64, i64)"),
         "should declare __aelys_str_char_at with correct signature:\n{ir}"
     );
-    // should NOT do byte-level GEP into string data
+    // should not do byte-level GEP into string data
     assert!(
         !ir.contains("str_idx_ptr"),
         "string index must not use byte-level GEP:\n{ir}"

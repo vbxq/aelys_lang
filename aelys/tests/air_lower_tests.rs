@@ -183,3 +183,111 @@ fn float_literal_defaults_to_f64() {
         Some(AirConst::Float(_, AirFloatSize::F64))
     ));
 }
+
+// regression test: Null -> Ptr(Void)
+
+#[test]
+fn null_literal_lowers_to_ptr_void_not_bare_void() {
+    // InferType::Null was lowered to AirType::Void, causing 0-byte allocations
+    // It should be AirType::Ptr(Box::new(AirType::Void))
+    let air = lower_source(
+        r#"
+fn make_null() {
+    let x = null
+}
+"#,
+    );
+    let f = func(&air, "make_null");
+    let null_local = f
+        .locals
+        .iter()
+        .find(|l| l.name.as_deref() == Some("x"))
+        .expect("local 'x' not found");
+    assert_eq!(
+        null_local.ty,
+        AirType::Ptr(Box::new(AirType::Void)),
+        "null literal should produce Ptr(Void), not bare Void"
+    );
+}
+
+#[test]
+fn null_literal_type_is_not_void() {
+    // ensure the local for a null-typed variable is not AirType::Void
+    let air = lower_source(
+        r#"
+fn test_null() {
+    let y = null
+}
+"#,
+    );
+    let f = func(&air, "test_null");
+    let local = f
+        .locals
+        .iter()
+        .find(|l| l.name.as_deref() == Some("y"))
+        .expect("local 'y' not found");
+    assert_ne!(
+        local.ty,
+        AirType::Void,
+        "null-typed local must not be bare Void (would cause 0-byte alloca)"
+    );
+}
+
+// array size validation
+// verify that invalid user code produces a descriptive compile error via the lowering_errors mechanism instead of a raw Rust panic
+
+#[test]
+#[should_panic(expected = "AIR lowering failed")]
+fn non_constant_array_size_in_expr_produces_error() {
+    // [fill; n] where n is a variable should produce a clean compile error
+    lower_source(
+        r#"
+fn f(n: i64) -> i64 {
+    let arr = [0; n]
+    return 0
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "non-constant array size")]
+fn non_constant_array_size_error_message_is_descriptive() {
+    // verify the error message mentions what went wrong.
+    lower_source(
+        r#"
+fn g(size: i64) -> i64 {
+    let arr = [42; size]
+    return 0
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "stack array too large")]
+fn oversized_stack_array_in_expr_produces_error() {
+    // a very large [fill; N] should produce a clean compile error
+    lower_source(
+        r#"
+fn h() -> i64 {
+    let x = [0; 200000]
+    return x[0]
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "AIR lowering failed")]
+fn oversized_array_error_aggregated_in_finish() {
+    // verify that the error is reported through the aggregated finish() mechanism.
+    lower_source(
+        r#"
+fn big() -> i64 {
+    let huge = [1; 300000]
+    return huge[0]
+}
+"#,
+    );
+}

@@ -1,6 +1,7 @@
 use aelys_air::layout::compute_layouts;
 use aelys_air::lower::{lower, lower_with_gc_mode};
 use aelys_air::mono::monomorphize;
+use aelys_air::passes::validate::{AirValidationDetail, validate_air};
 use aelys_air::*;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
@@ -167,12 +168,12 @@ fn outer() {
     );
     assert!(
         !field_names.contains(&"print"),
-        "closure env should NOT capture global `print`, got: {:?}",
+        "closure env should not capture global `print`, got: {:?}",
         field_names
     );
     assert!(
         !field_names.contains(&"println"),
-        "closure env should NOT capture global `println`, got: {:?}",
+        "closure env should not capture global `println`, got: {:?}",
         field_names
     );
 }
@@ -702,5 +703,682 @@ fn caller() -> i64 {
             .any(|n| n.contains("__mono_identity_i64")),
         "caller should call __mono_identity_i64, found calls: {:?}",
         call_targets
+    );
+}
+
+// AIR validation pass tests
+
+/// helper: build a minimal valid AirProgram with one function
+fn make_valid_program() -> AirProgram {
+    AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "test_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: Some("_ret".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                    0,
+                    AirIntSize::I64,
+                )))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    }
+}
+
+#[test]
+fn validate_rejects_void_local_non_return() {
+    let mut program = make_valid_program();
+    // add a Void-typed local that is not the return position.
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Void,
+        name: Some("bad_local".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Void local"
+    );
+    let errors = result.unwrap_err();
+    assert_eq!(
+        errors.len(),
+        1,
+        "expected exactly 1 error, got {}",
+        errors.len()
+    );
+    assert!(
+        matches!(
+            &errors[0].detail,
+            AirValidationDetail::VoidLocal { local_id: 1, .. }
+        ),
+        "expected VoidLocal error for local %1, got: {:?}",
+        errors[0].detail
+    );
+    assert_eq!(errors[0].function_name, "test_fn");
+}
+
+#[test]
+fn validate_accepts_void_return_local_on_void_function() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "void_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::Void,
+                name: Some("_ret".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(None),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_ok(),
+        "void return local on void function should be valid"
+    );
+}
+
+#[test]
+fn validate_rejects_void_param() {
+    let mut program = make_valid_program();
+    program.functions[0].params.push(AirParam {
+        id: LocalId(10),
+        ty: AirType::Void,
+        name: "bad_param".to_string(),
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Void param"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::VoidLocal { local_id: 10, .. }
+        )),
+        "expected VoidLocal error for param %10, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_undeclared_block_reference() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "bad_block_ref".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                // References block bb99 which does not exist.
+                terminator: AirTerminator::Goto(BlockId(99)),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for undeclared block"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UndeclaredBlock { block_id: 99, .. }
+        )),
+        "expected UndeclaredBlock error for bb99, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_undeclared_local_reference() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "bad_local_ref".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: None,
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                // returns a reference to local %42 which doesn't exist
+                terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(42)))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for undeclared local"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UndeclaredLocal { local_id: 42, .. }
+        )),
+        "expected UndeclaredLocal error for %42, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_accepts_valid_lowered_program() {
+    // real program lowered from source should pass validation.
+    let air = lower_source(
+        r#"
+fn add(a: i64, b: i64) -> i64 {
+    return a + b
+}
+"#,
+    );
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "valid lowered program should pass validation, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_accepts_valid_program_after_full_pipeline() {
+    // full pipeline: lower -> layouts -> mono -> copy_elim -> dead_locals -> validate
+    let mut air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i32 {
+    let v: i32 = 42
+    return identity(v)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "fully-pipelined program should pass validation, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_collects_multiple_errors() {
+    // a program with multiple violations should report all of them
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "multi_bad".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![
+                AirLocal {
+                    id: LocalId(0),
+                    ty: AirType::I64,
+                    name: None,
+                    is_mut: false,
+                    span: None,
+                },
+                AirLocal {
+                    id: LocalId(1),
+                    ty: AirType::Void,
+                    name: Some("void1".to_string()),
+                    is_mut: false,
+                    span: None,
+                },
+                AirLocal {
+                    id: LocalId(2),
+                    ty: AirType::Void,
+                    name: Some("void2".to_string()),
+                    is_mut: false,
+                    span: None,
+                },
+            ],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                    0,
+                    AirIntSize::I64,
+                )))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(result.is_err());
+    let errors = result.unwrap_err();
+    assert_eq!(
+        errors.len(),
+        2,
+        "expected 2 VoidLocal errors (for %1 and %2), got {}",
+        errors.len()
+    );
+}
+
+#[test]
+fn validate_skips_extern_functions() {
+    // Extern functions have no body and should not be validated.
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "extern_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![AirParam {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: "x".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![], // empty body is OK for extern
+            is_extern: true,
+            calling_conv: CallingConv::C,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_ok(),
+        "extern functions should be skipped, errors: {:?}",
+        result.err()
+    );
+}
+
+// opaque type validation tests
+
+#[test]
+fn validate_rejects_opaque_local() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Opaque,
+        name: Some("unresolved_dynamic".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque local"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 1, .. }
+        )),
+        "expected OpaqueType error for local %1, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_param() {
+    let mut program = make_valid_program();
+    program.functions[0].params.push(AirParam {
+        id: LocalId(10),
+        ty: AirType::Opaque,
+        name: "opaque_param".to_string(),
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque param"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 10, .. }
+        )),
+        "expected OpaqueType error for param %10, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_nested_in_array() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(2),
+        ty: AirType::Array(Box::new(AirType::Opaque), 5),
+        name: Some("opaque_array".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque nested in Array"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 2, .. }
+        )),
+        "expected OpaqueType error for local %2, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_struct_field() {
+    let program = AirProgram {
+        functions: vec![],
+        structs: vec![AirStructDef {
+            name: "BadStruct".to_string(),
+            type_params: vec![],
+            fields: vec![AirStructField {
+                name: "unresolved".to_string(),
+                ty: AirType::Opaque,
+                offset: Some(0),
+            }],
+            is_closure_env: false,
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque struct field"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueStructField {
+                struct_name,
+                field_name,
+            } if struct_name == "BadStruct" && field_name == "unresolved"
+        )),
+        "expected OpaqueStructField error, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_opaque_does_not_appear_after_monomorphization() {
+    // a generic function's return type starts as Dynamic -> Opaque in AIR,
+    // but monomorphization should replace it with the concrete type
+    
+    // After the full pipeline, validation should pass
+    let mut air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i64 {
+    return identity(42)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "monomorphized generic call should not have Opaque types, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_print_builtin_does_not_produce_opaque_local() {
+    // print/println returns Dynamic, but AIR lowering should emit CallVoid
+    // for their calls instead of creating an Opaque-typed temp local.
+    let mut air = lower_with_globals(
+        r#"
+fn main() {
+    println("hello world")
+}
+"#,
+        &["print", "println"],
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "println call should not produce Opaque locals, errors: {:?}",
+        result.err()
+    );
+
+    // verify no locals have Opaque type.
+    let f = func(&air, "main");
+    for local in &f.locals {
+        assert_ne!(
+            local.ty,
+            AirType::Opaque,
+            "local %{} should not have Opaque type after pipeline",
+            local.id.0
+        );
+    }
+}
+
+// Tuple/Range -> Opaque (caught by validation)
+
+/// Simulates what happens when a Tuple type survives to AIR: 
+/// 
+/// the lowering now produces Opaque instead of Void. if such a local ever reaches the validation pass, it should be rejected with an OpaqueType error
+/// here we constructs a synthetic AIR program with an Opaque local representing a Tuple or Range that leaked through sema)
+#[test]
+fn validate_rejects_opaque_from_tuple_or_range() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "tuple_leak".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::Opaque,
+                name: Some("leaked_tuple".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(None),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "Opaque local (from Tuple/Range) should be rejected by validation"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType {
+                local_id: 0,
+                local_name: Some(name),
+            } if name == "leaked_tuple"
+        )),
+        "expected OpaqueType error for leaked_tuple, got: {:?}",
+        errors
+    );
+}
+
+/// verifies that null-typed locals pass validation (they are Ptr(Void), not bare Void, so they have a valid non-zero size)
+#[test]
+fn validate_accepts_null_typed_local() {
+    let air = lower_source(
+        r#"
+fn use_null() {
+    let x = null
+}
+"#,
+    );
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "null-typed local (Ptr(Void)) should pass validation, errors: {:?}",
+        result.err()
     );
 }

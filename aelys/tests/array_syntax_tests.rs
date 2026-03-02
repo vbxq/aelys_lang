@@ -61,7 +61,7 @@ fn second() -> i64 {
     // No runtime array calls
     assert!(
         !ir.contains("__aelys_array_new"),
-        "should NOT call __aelys_array_new (stack-allocated):\n{ir}"
+        "should not call __aelys_array_new (stack-allocated):\n{ir}"
     );
 }
 

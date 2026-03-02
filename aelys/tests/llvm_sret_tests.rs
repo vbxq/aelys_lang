@@ -132,10 +132,10 @@ fn extern_c_struct_return_compiles_and_verifies() {
             ir.contains("sret"),
             "sret attribute should be present on Windows: {ir}"
         );
-        // should NOT return %__aelys_string directly
+        // should not return %__aelys_string directly
         assert!(
             !ir.contains("declare %__aelys_string @get_name()"),
-            "sret extern should NOT return struct directly on Windows: {ir}"
+            "sret extern should not return struct directly on Windows: {ir}"
         );
     } else {
         // on non-Windows, struct is returned directly
@@ -259,7 +259,7 @@ fn fastcc_struct_return_does_not_use_sret() {
         ir.contains("define fastcc %__aelys_string @internal_fn()"),
         "fastcc function should return struct directly: {ir}"
     );
-    // sret should NOT appear anywhere for internal functions
+    // sret should not appear anywhere for internal functions
     let sret_on_internal = ir
         .lines()
         .any(|l| l.contains("internal_fn") && l.contains("sret"));

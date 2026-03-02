@@ -136,7 +136,7 @@ fn multi_block_assign_gets_alloca_and_verifies() {
     );
 }
 
-/// Same-block reassignment should NOT force alloca (value_map handles it fine)
+/// Same-block reassignment should not force alloca (value_map handles it fine)
 #[test]
 fn same_block_reassign_stays_ssa() {
     let program = AirProgram {
@@ -211,7 +211,7 @@ fn same_block_reassign_stays_ssa() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Single-block unnamed temps should NOT use alloca
+    // Single-block unnamed temps should not use alloca
     assert!(
         !ir.contains("alloca"),
         "same-block SSA temps must not use alloca:\n{ir}"
