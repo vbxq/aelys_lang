@@ -11,7 +11,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
-use aelys_syntax::{Expr, ExprKind};
+use aelys_syntax::{BinaryOp, Expr, ExprKind};
 
 impl TypeInference {
     /// Infer type for an expression
@@ -98,9 +98,7 @@ impl TypeInference {
             ExprKind::Member { object, member } => {
                 self.infer_member_expr(object, member, expr.span)
             }
-            ExprKind::ArrayLiteral { elements } => {
-                self.infer_array_literal(elements, expr.span)
-            }
+            ExprKind::ArrayLiteral { elements } => self.infer_array_literal(elements, expr.span),
             ExprKind::ArraySized { size, fill_value } => {
                 self.infer_array_sized(size, fill_value.as_deref(), expr.span)
             }
@@ -225,6 +223,36 @@ impl TypeInference {
         )
     }
 
+    /// Try to extract a constant integer value from a typed expression
+    /// Handles `Int(v)` and `Unary(Neg, Int(v))` (which represents negative literals)
+    fn try_extract_int_value(expr: &TypedExpr) -> Option<i64> {
+        match &expr.kind {
+            TypedExprKind::Int(v) => Some(*v),
+            TypedExprKind::Unary {
+                op: aelys_syntax::UnaryOp::Neg,
+                operand,
+            } => {
+                if let TypedExprKind::Int(v) = &operand.kind {
+                    v.checked_neg()
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Compute the result of a binary operation on two known integer values
+    /// uses checked arithmetic to detect rust level overflow on i64
+    fn compute_binop_int_result(op: BinaryOp, left: i64, right: i64) -> Option<i64> {
+        match op {
+            BinaryOp::Add => left.checked_add(right),
+            BinaryOp::Sub => left.checked_sub(right),
+            BinaryOp::Mul => left.checked_mul(right),
+            _ => None, // div, mod, comparisons, shifts: not validated at narrowing time
+        }
+    }
+
     /// Try to narrow a numeric literal to the target type.
     /// Returns true if narrowing succeeded or wasn't needed, false if it failed.
     /// Pushes an error if the literal doesn't fit in the target type.
@@ -310,7 +338,6 @@ impl TypeInference {
                 }
                 // return false only for real narrowing failures (overflow)
 
-
                 // for non-narrowable elements, return true so the caller can push a constraint
                 return !had_error;
             }
@@ -319,43 +346,93 @@ impl TypeInference {
         // narrow unary expressions (for eg -1 in an i32 context) recurse into the operand so the whole expression adopts the target type
         if let TypedExprKind::Unary { operand, .. } = &mut expr.kind {
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
-                if self.try_narrow_literal(operand, target_ty) {
+                let ok = self.try_narrow_literal(operand, target_ty);
+                // verify the operand was actually narrowed (type matches target), not just that no error occurred
+                // non-narrowable expressions return true
+                // but don't change their type, so we must check both conditions
+                if ok && operand.ty == *target_ty {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                return false;
+                // if narrowing pushed an error (ok=false), propagate that
+                // if no error but operand wasn't narrowed, return true so caller pushes a constraint
+                return ok;
             }
             if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
-                if self.try_narrow_literal(operand, target_ty) {
+                let ok = self.try_narrow_literal(operand, target_ty);
+                if ok && operand.ty == *target_ty {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                return false;
+                // If narrowing pushed an error (ok=false), propagate that.
+                // If no error but operand wasn't narrowed, return true so caller pushes a constraint.
+                return ok;
             }
         }
 
         // narrow binary expressions of all-literal operands (67 + 69 in an i32 context) recursively narrow both sides so the result type matches the target.
         if let TypedExprKind::Binary {
-            left, right, ..
+            left, right, op, ..
         } = &mut expr.kind
         {
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
+                let binop = *op;
                 let left_ok = self.try_narrow_literal(left, target_ty);
                 let right_ok = self.try_narrow_literal(right, target_ty);
-                if left_ok && right_ok {
+                // verify that both operands were actually narrowed to the target type.
+                //
+                // non narrowable expressions (identifiers, calls, etc.) return true but don't change their type, so checking only the return value
+                // would incorrectly retype the binary expression. we gotta verify the types match
+                let left_narrowed = left.ty == *target_ty;
+                let right_narrowed = right.ty == *target_ty;
+                if left_ok && right_ok && left_narrowed && right_narrowed {
+                    // when both operands are known integer literals, compute the result and verify it fits in the target type
+                    // each operand individually fitting does not guarantee the result fits
+                    // like, 100 + 100 = 200 overflows i8
+                    if let (Some(lv), Some(rv)) = (
+                        Self::try_extract_int_value(left),
+                        Self::try_extract_int_value(right),
+                    ) {
+                        if let Some(result) = Self::compute_binop_int_result(binop, lv, rv) {
+                            if !InferType::int_fits(result, target_ty) {
+                                self.errors.push(TypeError {
+                                    kind: TypeErrorKind::Mismatch {
+                                        expected: target_ty.clone(),
+                                        found: InferType::I64,
+                                    },
+                                    span: expr.span,
+                                    reason: ConstraintReason::IntLiteralOverflow {
+                                        value: result,
+                                        target: target_ty.clone(),
+                                    },
+                                });
+                                return false;
+                            }
+                        }
+                    }
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                return false;
+                // propagate failure
+                if !left_ok || !right_ok {
+                    return false;
+                }
+                // both returned ok but at least one wasn't narrowed: don't retype the binary expression. return true so caller pushes a constraint instead.
+                return true;
             }
             if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
                 let left_ok = self.try_narrow_literal(left, target_ty);
                 let right_ok = self.try_narrow_literal(right, target_ty);
-                if left_ok && right_ok {
+                let left_narrowed = left.ty == *target_ty;
+                let right_narrowed = right.ty == *target_ty;
+                if left_ok && right_ok && left_narrowed && right_narrowed {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                return false;
+                if !left_ok || !right_ok {
+                    return false;
+                }
+                return true;
             }
         }
 
