@@ -308,28 +308,25 @@ fn explicit_cast_chain() {
 }
 
 #[test]
-fn generic_with_struct_name_collision() {
-    // a struct named "T" exists and a generic function uses "T" as a type parameter.
-    //
-    // the old negative filter (!has_struct) would incorrectly make the generic mismatch fatal
-    // the positive filter (declared_type_params) correctly recognises "T" as a type parameter
+fn generic_with_struct_name_collision_rejected() {
+    // struct T shadows type param T in instantiate_type_params, so identity(42) is a type error
     assert!(
-        sema_ok(
+        !sema_ok(
             r#"
 struct T { value: i64 }
 fn identity<T>(x: T) -> T { return x }
 fn test() -> i64 { return identity(42) }
 "#
         ),
-        "generic fn with type param name colliding with struct should compile"
+        "struct T shadows type param T, so identity(42) should be rejected"
     );
 }
 
 #[test]
-fn generic_struct_with_type_param_name_collision() {
-    // same collision but for a generic struct declaration.
+fn generic_struct_with_type_param_name_collision_rejected() {
+    // struct T shadows type param T in Box<T>, so Box { inner: 42 } is a type error
     assert!(
-        sema_ok(
+        !sema_ok(
             r#"
 struct T { value: i64 }
 struct Box<T> { inner: T }
@@ -339,6 +336,6 @@ fn test() -> i64 {
 }
 "#
         ),
-        "generic struct with type param colliding with struct name should compile"
+        "struct T shadows type param T in generic struct, should be rejected"
     );
 }

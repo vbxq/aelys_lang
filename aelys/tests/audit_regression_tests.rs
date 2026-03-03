@@ -14,6 +14,16 @@ fn sema_ok(code: &str) -> bool {
     TypeInference::infer_program(stmts, src).is_ok()
 }
 
+fn lower_source(code: &str) -> aelys_air::AirProgram {
+    let src = Source::new("<test>", code);
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
+    lower(&typed)
+}
+
 fn air_pipeline_ok(code: &str) -> bool {
     let src = Source::new("<test>", code);
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
@@ -889,6 +899,96 @@ fn f() -> i8 {
 }
 
 #[test]
+fn let_shadowing_function_name_then_call_rejected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn outer() -> i64 {
+    return 42
+}
+
+fn test() {
+    let outer = 99
+    let x = outer()
+}
+"#
+        ),
+        "calling a variable that shadows a function should be a type error"
+    );
+}
+
+#[test]
+fn let_shadowing_function_name_without_call_is_valid() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    return 42
+}
+
+fn test() {
+    let outer = 99
+}
+"#
+        ),
+        "shadowing a function name with a let without calling should be valid"
+    );
+}
+
+#[test]
+fn nested_fn_same_name_in_different_parents_independent() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() {
+    fn inner() -> i64 { return 1 }
+    let x = inner()
+}
+
+fn test() {
+    fn inner() -> i64 { return 2 }
+    let x = inner()
+}
+"#
+        ),
+        "same-named nested functions in different parents should be independent"
+    );
+}
+
+#[test]
+fn nested_fn_not_visible_outside_parent() {
+    assert!(
+        !sema_ok(
+            r#"
+fn outer() {
+    fn inner() -> i64 { return 1 }
+}
+
+fn test() {
+    let x = inner()
+}
+"#
+        ),
+        "nested function should not be visible outside its parent"
+    );
+}
+
+#[test]
+fn nested_fn_callable_from_within_parent() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    fn helper() -> i64 { return 42 }
+    return helper()
+}
+"#
+        ),
+        "nested function should be callable from within its parent"
+    );
+}
+
+#[test]
 fn multiple_errors_do_not_compound_through_rollback() {
     let count = sema_error_count(
         r#"
@@ -903,5 +1003,187 @@ fn f(x: i64) -> i64 {
         count <= 4,
         "two independent type errors should not compound, got {}",
         count
+    );
+}
+
+#[test]
+fn struct_field_unknown_type_rejected() {
+    assert!(
+        !sema_ok(
+            r#"
+struct Foo { x: CompletelyMadeUpType }
+fn main() {
+    let y = 42
+}
+"#
+        ),
+        "struct with nonexistent field type should be rejected even if unused"
+    );
+}
+
+#[test]
+fn struct_field_valid_primitive_types_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+struct Point { x: i64, y: i64 }
+fn main() {
+    let p = Point { x: 1, y: 2 }
+}
+"#
+        ),
+        "struct with valid primitive field types should pass"
+    );
+}
+
+#[test]
+fn struct_field_references_other_struct() {
+    assert!(
+        sema_ok(
+            r#"
+struct Inner { value: i64 }
+struct Outer { child: Inner }
+fn main() {
+    let i = Inner { value: 1 }
+}
+"#
+        ),
+        "struct referencing another struct should pass"
+    );
+}
+
+#[test]
+fn struct_field_forward_reference_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+struct Outer { child: Inner }
+struct Inner { value: i64 }
+fn main() {
+    let i = Inner { value: 1 }
+}
+"#
+        ),
+        "struct forward-referencing a later struct should pass"
+    );
+}
+
+#[test]
+fn generic_struct_field_type_param_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+struct Wrapper<T> { value: T }
+fn main() {
+    let w = Wrapper { value: 42 }
+}
+"#
+        ),
+        "generic struct with type param field should pass"
+    );
+}
+
+#[test]
+fn struct_multiple_invalid_fields_all_reported() {
+    let count = sema_error_count(
+        r#"
+struct Bad { a: FakeTypeA, b: FakeTypeB }
+fn main() {
+    let y = 42
+}
+"#,
+    );
+    assert!(
+        count >= 2,
+        "struct with two invalid field types should produce at least 2 errors, got {}",
+        count
+    );
+}
+
+#[test]
+fn struct_name_collides_with_type_param_mismatch_detected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn unrelated<T>(x: T) -> T { return x }
+struct T { value: i64 }
+fn main() {
+    let x: T = 42
+}
+"#
+        ),
+        "assigning i64 to struct T should be rejected despite T being a type param elsewhere"
+    );
+}
+
+#[test]
+fn struct_name_collides_with_type_param_valid_usage() {
+    assert!(
+        sema_ok(
+            r#"
+fn unrelated<T>(x: T) -> T { return x }
+struct T { value: i64 }
+fn main() {
+    let x = T { value: 42 }
+}
+"#
+        ),
+        "constructing struct T should work despite T being a type param elsewhere"
+    );
+}
+
+#[test]
+fn generic_fn_no_collision_still_works() {
+    assert!(
+        sema_ok(
+            r#"
+fn identity<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    return identity(42)
+}
+"#
+        ),
+        "generic function without struct name collision should work"
+    );
+}
+
+#[test]
+#[should_panic(expected = "AIR lowering failed")]
+fn return_stack_array_produces_clean_error() {
+    lower_source(
+        r#"
+fn bar() -> [i64; 3] {
+    let arr = [1, 2, 3]
+    return arr
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "cannot return stack-allocated array")]
+fn return_stack_array_error_message_is_descriptive() {
+    lower_source(
+        r#"
+fn baz() -> [i64; 2] {
+    let arr = [10, 20]
+    return arr
+}
+"#,
+    );
+}
+
+#[test]
+fn constant_sized_array_in_let_compiles() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn f() -> i64 {
+    let arr = [1, 2, 3]
+    return arr[0]
+}
+"#
+        ),
+        "constant-sized array in let should compile through AIR"
     );
 }
