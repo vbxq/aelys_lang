@@ -6,6 +6,7 @@ impl TypeEnv {
     pub fn push_scope(&mut self) {
         self.locals.push(std::collections::HashMap::new());
         self.mutable_locals.push(std::collections::HashSet::new());
+        self.function_scopes.push(std::collections::HashMap::new());
     }
 
     /// Exit the current scope
@@ -13,6 +14,7 @@ impl TypeEnv {
         if self.locals.len() > 1 {
             self.locals.pop();
             self.mutable_locals.pop();
+            self.function_scopes.pop();
         }
     }
 
@@ -35,8 +37,8 @@ impl TypeEnv {
             return Some(ty);
         }
 
-        if let Some(ty) = self.functions.get(name) {
-            return Some(ty.as_ref());
+        if let Some(ty) = self.lookup_function_ref(name) {
+            return Some(ty);
         }
 
         None

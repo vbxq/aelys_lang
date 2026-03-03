@@ -20,9 +20,9 @@ pub struct TypeEnv {
     /// Captured variables from enclosing scopes (upvalues)
     captures: HashMap<String, InferType>,
 
-    /// Known function signatures (name -> function type)
+    /// Function signatures by lexical scope (name -> function type)
     /// Uses Rc to avoid cloning function types during lookup
-    functions: HashMap<String, Rc<InferType>>,
+    function_scopes: Vec<HashMap<String, Rc<InferType>>>,
 
     /// Current function name (for recursive calls)
     current_function: Option<String>,
@@ -39,7 +39,7 @@ impl TypeEnv {
         Self {
             locals: vec![HashMap::new()],
             captures: HashMap::new(),
-            functions: HashMap::new(),
+            function_scopes: vec![HashMap::new()],
             current_function: None,
             mutable_locals: vec![HashSet::new()],
             mutable_captures: HashSet::new(),
