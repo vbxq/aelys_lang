@@ -150,3 +150,56 @@ let result: i64 = pick(true)
         "implicit return through if/else should have scoped branches"
     );
 }
+
+#[test]
+fn literal_tracking_does_not_leak_between_functions() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() {
+    let x = 200
+}
+
+fn g(x: i8) -> i8 {
+    return x
+}
+"#
+        ),
+        "literal tracking from one function must not pollute another function"
+    );
+}
+
+#[test]
+fn literal_tracking_respects_inner_scope_shadowing() {
+    assert!(
+        sema_ok(
+            r#"
+fn g(x: i8) -> i8 {
+    {
+        let x = 200
+    }
+    return x
+}
+"#
+        ),
+        "inner scoped literal shadow must not affect outer return narrowing"
+    );
+}
+
+#[test]
+fn mutable_shadow_must_not_make_outer_binding_assignable() {
+    assert!(
+        sema_err(
+            r#"
+fn bug() {
+    let x = 1
+    {
+        let mut x = 2
+    }
+    x = 3
+}
+"#
+        ),
+        "inner let mut x must not allow assigning to outer immutable x"
+    );
+}

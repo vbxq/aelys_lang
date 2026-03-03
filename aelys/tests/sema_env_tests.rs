@@ -126,3 +126,40 @@ fn test_for_closure_nested_shadowing() {
         "nested for_closure() must preserve innermost local type through nesting levels"
     );
 }
+
+#[test]
+fn test_mutability_does_not_leak_after_scope_pop() {
+    let mut env = TypeEnv::new();
+    env.define_local("x".to_string(), InferType::I64);
+    assert!(!env.is_mutable("x"));
+
+    env.push_scope();
+    env.define_local("x".to_string(), InferType::I64);
+    env.mark_mutable("x".to_string());
+    assert!(env.is_mutable("x"));
+    env.pop_scope();
+
+    assert!(
+        !env.is_mutable("x"),
+        "inner mutable shadow must not make outer binding mutable"
+    );
+}
+
+#[test]
+fn test_immutable_shadow_hides_mutable_capture() {
+    let mut outer = TypeEnv::new();
+    outer.define_local("x".to_string(), InferType::I64);
+    outer.mark_mutable("x".to_string());
+
+    let mut closure_env = outer.for_closure();
+    assert!(
+        closure_env.is_mutable("x"),
+        "captured mutable x should stay mutable in closure env"
+    );
+
+    closure_env.define_local("x".to_string(), InferType::I64);
+    assert!(
+        !closure_env.is_mutable("x"),
+        "immutable local shadow must hide mutable capture"
+    );
+}

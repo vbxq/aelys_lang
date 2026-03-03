@@ -163,6 +163,20 @@ fn f() {
 }
 
 #[test]
+fn annotated_vec_rejects_incompatible_element_type() {
+    assert!(
+        sema_err(
+            r#"
+fn f() {
+    let v = vec<i64>["hello"]
+}
+"#
+        ),
+        "vec<i64> must reject string element"
+    );
+}
+
+#[test]
 fn closure_capture_type_resolution() {
     assert!(
         sema_ok(
@@ -435,4 +449,3 @@ fn eq(a: string, b: string) -> bool {
         "string equality should return bool"
     );
 }
-
