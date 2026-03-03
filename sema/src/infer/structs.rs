@@ -7,11 +7,11 @@ use std::collections::HashSet;
 
 impl TypeInference {
     pub(super) fn collect_structs(&mut self, stmts: &[Stmt]) {
+        // pass 1: register all struct names so that forward references between structs are valid
         for stmt in stmts {
             if let StmtKind::StructDecl {
                 name,
                 type_params,
-                fields,
                 ..
             } = &stmt.kind
             {
@@ -22,6 +22,29 @@ impl TypeInference {
                         },
                         stmt.span,
                     ));
+                    continue;
+                }
+
+                self.type_table.register_struct(StructDef {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
+                    fields: Vec::new(),
+                });
+            }
+        }
+
+        // pass 2: validate field type annotations and populate fields
+        let mut processed = HashSet::new();
+        for stmt in stmts {
+            if let StmtKind::StructDecl {
+                name,
+                type_params,
+                fields,
+                ..
+            } = &stmt.kind
+            {
+                // skip duplicates (already warned in pass 1)
+                if !processed.insert(name.clone()) {
                     continue;
                 }
 
@@ -43,18 +66,22 @@ impl TypeInference {
                     }
                 }
 
-                // important note: type params for generic structs are handled via InferType::from_annotation which maps uppercase names to
-                // Struct("T"), so we *do not* define them in the env here, it would pollute the global scope and leak between structs
+                // set type params in scope so generic struct fields like `T` are recognized
+                let saved_type_params =
+                    std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
+
                 let struct_fields: Vec<StructField> = fields
                     .iter()
                     .map(|f| {
-                        let ty = InferType::from_annotation(&f.type_annotation);
+                        let ty = self.type_from_annotation(&f.type_annotation);
                         StructField {
                             name: f.name.clone(),
                             ty,
                         }
                     })
                     .collect();
+
+                self.type_params_in_scope = saved_type_params;
 
                 self.type_table.register_struct(StructDef {
                     name: name.clone(),
