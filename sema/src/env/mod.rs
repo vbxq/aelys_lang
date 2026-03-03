@@ -27,8 +27,11 @@ pub struct TypeEnv {
     /// Current function name (for recursive calls)
     current_function: Option<String>,
 
-    /// Names of variables declared as mutable
-    mutable_vars: HashSet<String>,
+    /// Mutable local bindings per lexical scope (parallels `locals`)
+    mutable_locals: Vec<HashSet<String>>,
+
+    /// Mutable names inherited as captures in closure environments
+    mutable_captures: HashSet<String>,
 }
 
 impl TypeEnv {
@@ -38,7 +41,8 @@ impl TypeEnv {
             captures: HashMap::new(),
             functions: HashMap::new(),
             current_function: None,
-            mutable_vars: HashSet::new(),
+            mutable_locals: vec![HashSet::new()],
+            mutable_captures: HashSet::new(),
         }
     }
 }

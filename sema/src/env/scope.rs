@@ -5,12 +5,14 @@ impl TypeEnv {
     /// Enter a new scope
     pub fn push_scope(&mut self) {
         self.locals.push(std::collections::HashMap::new());
+        self.mutable_locals.push(std::collections::HashSet::new());
     }
 
     /// Exit the current scope
     pub fn pop_scope(&mut self) {
         if self.locals.len() > 1 {
             self.locals.pop();
+            self.mutable_locals.pop();
         }
     }
 
@@ -52,11 +54,25 @@ impl TypeEnv {
 
     /// Mark a variable as mutable
     pub fn mark_mutable(&mut self, name: String) {
-        self.mutable_vars.insert(name);
+        if let Some(scope) = self.mutable_locals.last_mut() {
+            scope.insert(name);
+        }
     }
 
     /// Check if a variable is mutable
     pub fn is_mutable(&self, name: &str) -> bool {
-        self.mutable_vars.contains(name)
+        // resolve mutability against the same lexical binding that lookup() would resolve
+        // this prevents an inner `let mut x` from making an outer immutable `x` mutable
+        for (scope, mutable_scope) in self.locals.iter().zip(self.mutable_locals.iter()).rev() {
+            if scope.contains_key(name) {
+                return mutable_scope.contains(name);
+            }
+        }
+
+        if self.captures.contains_key(name) {
+            return self.mutable_captures.contains(name);
+        }
+
+        false
     }
 }
