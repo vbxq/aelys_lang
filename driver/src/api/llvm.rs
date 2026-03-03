@@ -54,7 +54,18 @@ pub fn lower_file_to_air(
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
 
-    let mut air = aelys_air::lower::lower(&typed_program);
+    let mut air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
+        if errors.is_empty() {
+            "AIR lowering failed with an unknown error".to_string()
+        } else {
+            errors
+                .iter()
+                .enumerate()
+                .map(|(i, e)| format!("{}. {}", i + 1, e))
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+    })?;
     aelys_air::layout::compute_layouts(&mut air);
     let mut air = aelys_air::mono::monomorphize(air);
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);

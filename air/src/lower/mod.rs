@@ -8,12 +8,24 @@ use aelys_sema::{InferType, TypedProgram};
 use aelys_syntax::BinaryOp;
 
 pub fn lower(program: &TypedProgram) -> AirProgram {
+    try_lower(program).unwrap_or_else(|errors| panic!("{}", format_lowering_errors(&errors)))
+}
+
+pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, Vec<String>> {
     let mut cx = LoweringContext::new(program);
     cx.lower_program();
     cx.finish()
 }
 
 pub fn lower_with_gc_mode(program: &TypedProgram, file_gc_mode: GcMode) -> AirProgram {
+    try_lower_with_gc_mode(program, file_gc_mode)
+        .unwrap_or_else(|errors| panic!("{}", format_lowering_errors(&errors)))
+}
+
+pub fn try_lower_with_gc_mode(
+    program: &TypedProgram,
+    file_gc_mode: GcMode,
+) -> Result<AirProgram, Vec<String>> {
     let mut cx = LoweringContext::new(program);
     cx.file_gc_mode = file_gc_mode;
     cx.lower_program();
@@ -39,8 +51,8 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
     pub(super) block_aliases: Vec<(u32, u32)>,
-    /// collected compile errors from lowering (replaces panic!() calls)
-    /// if non-empty after lowering completes, `finish()` emits a clean diagnostic panic
+    /// collected compile errors from lowering
+    /// if non-empty after lowering completes, `finish()` returns them to the caller
     pub(super) lowering_errors: Vec<String>,
 }
 
@@ -74,28 +86,17 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn finish(self) -> AirProgram {
+    fn finish(self) -> Result<AirProgram, Vec<String>> {
         if !self.lowering_errors.is_empty() {
-            let joined = self
-                .lowering_errors
-                .iter()
-                .enumerate()
-                .map(|(i, e)| format!("  {}. {}", i + 1, e))
-                .collect::<Vec<_>>()
-                .join("\n");
-            panic!(
-                "AIR lowering failed with {} error(s):\n{}",
-                self.lowering_errors.len(),
-                joined,
-            );
+            return Err(self.lowering_errors);
         }
-        AirProgram {
+        Ok(AirProgram {
             functions: self.functions,
             structs: self.structs,
             globals: self.globals,
             source_files: self.source_files,
             mono_instances: Vec::new(),
-        }
+        })
     }
 
     pub(super) fn alloc_function_id(&mut self) -> FunctionId {
@@ -230,8 +231,8 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// Report a compile error that would previously have caused a panic
-    /// Lowering continues with a fallback value; all errors are emitted together at the end via `finish()`
+    /// Report a compile error and continue lowering with a fallback value.
+    /// All errors are returned together at the end via `finish()`.
     pub(super) fn report_error(&mut self, message: String) {
         self.lowering_errors.push(message);
     }
@@ -344,6 +345,20 @@ impl<'a> LoweringContext<'a> {
             self.file_gc_mode
         }
     }
+}
+
+fn format_lowering_errors(errors: &[String]) -> String {
+    let joined = errors
+        .iter()
+        .enumerate()
+        .map(|(i, e)| format!("  {}. {}", i + 1, e))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!(
+        "AIR lowering failed with {} error(s):\n{}",
+        errors.len(),
+        joined
+    )
 }
 
 pub(crate) fn infer_to_int_size(ty: &InferType) -> AirIntSize {
