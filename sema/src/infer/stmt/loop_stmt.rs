@@ -21,13 +21,17 @@ impl TypeInference {
         ));
 
         self.env.push_scope();
+        let saved_then_literals = self.literal_init_vars.clone();
         let typed_then = self.infer_stmt(then_branch);
         self.env.pop_scope();
+        self.literal_init_vars = saved_then_literals;
 
         let typed_else = else_branch.map(|e| {
             self.env.push_scope();
+            let saved_else_literals = self.literal_init_vars.clone();
             let typed = self.infer_stmt(e);
             self.env.pop_scope();
+            self.literal_init_vars = saved_else_literals;
             Box::new(typed)
         });
 
@@ -92,9 +96,11 @@ impl TypeInference {
         }
 
         self.env.push_scope();
+        let saved_for_literals = self.literal_init_vars.clone();
         self.env.define_local(iterator.to_string(), InferType::I64);
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_for_literals;
 
         TypedStmtKind::For {
             iterator: iterator.to_string(),
@@ -139,10 +145,12 @@ impl TypeInference {
         };
 
         self.env.push_scope();
+        let saved_foreach_literals = self.literal_init_vars.clone();
         self.env
             .define_local(iterator.to_string(), elem_type.clone());
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_foreach_literals;
 
         TypedStmtKind::ForEach {
             iterator: iterator.to_string(),

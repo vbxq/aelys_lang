@@ -14,6 +14,7 @@ impl TypeInference {
         span: Span,
     ) -> TypedExpr {
         let closure_env = self.env.for_closure();
+        let saved_literal_inits = self.literal_init_vars.clone();
 
         let mut typed_params = Vec::with_capacity(params.len());
         for p in params {
@@ -73,6 +74,7 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.literal_init_vars = saved_literal_inits;
 
         let param_types: Vec<InferType> = typed_params.iter().map(|p| p.ty.clone()).collect();
         let fn_type = InferType::Function {

@@ -18,6 +18,7 @@ impl TypeInference {
 
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
+        let saved_literal_inits = self.literal_init_vars.clone();
 
         let mut typed_params = Vec::with_capacity(func.params.len());
         for (i, p) in func.params.iter().enumerate() {
@@ -92,6 +93,7 @@ impl TypeInference {
         self.pop_return_type();
         self.env = saved_env;
         self.type_params_in_scope = saved_type_params;
+        self.literal_init_vars = saved_literal_inits;
 
         TypedFunction {
             name: func.name.clone(),

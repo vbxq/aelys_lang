@@ -51,12 +51,16 @@ impl TypeInference {
                 ));
 
                 self.env.push_scope();
+                let saved_then_literals = self.literal_init_vars.clone();
                 let typed_then = self.infer_stmt_with_implicit_return(then_branch, return_type);
                 self.env.pop_scope();
+                self.literal_init_vars = saved_then_literals;
 
                 self.env.push_scope();
+                let saved_else_literals = self.literal_init_vars.clone();
                 let typed_else = self.infer_stmt_with_implicit_return(else_branch, return_type);
                 self.env.pop_scope();
+                self.literal_init_vars = saved_else_literals;
 
                 TypedStmt {
                     kind: TypedStmtKind::If {
@@ -70,6 +74,7 @@ impl TypeInference {
 
             aelys_syntax::StmtKind::Block(stmts) if !stmts.is_empty() => {
                 self.env.push_scope();
+                let saved_block_literals = self.literal_init_vars.clone();
 
                 let mut typed_stmts: Vec<TypedStmt> = stmts[..stmts.len() - 1]
                     .iter()
@@ -81,6 +86,7 @@ impl TypeInference {
                 typed_stmts.push(typed_last);
 
                 self.env.pop_scope();
+                self.literal_init_vars = saved_block_literals;
 
                 TypedStmt {
                     kind: TypedStmtKind::Block(typed_stmts),
