@@ -146,8 +146,9 @@ impl TypeInference {
 
         // collect all declared type parameter names from the program (functions and struct declarations)
         //
-        // This lets us positively identify Struct("T") as a type parameter rather than relying on the fragile negative test
-        // `!has_struct(name)`, which completely breaks when a real struct shares a name with a type parameter.
+        // a name is only treated as a type parameter if it appears in declared_type_params and is not
+        // also a real struct in the type table, this prevents false-positive filtering when a struct
+        // shares a name with a type parameter from an unrelated generic function.
         let declared_type_params = collect_declared_type_params(&stmts);
 
         // all type errors are fatal except mismatches involving generic type parameters (Struct("T") where T is a declared type parameter)
@@ -155,7 +156,7 @@ impl TypeInference {
         //
         // UnknownType errors are ***always*** fatal. They are explicit validation failures (x: nonexistent) not incidental unification with generic params.
         let is_type_param = |ty: &InferType| -> bool {
-            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()))
+            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
         };
         let fatal_errors: Vec<_> = inf
             .errors
