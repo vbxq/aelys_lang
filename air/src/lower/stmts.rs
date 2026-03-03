@@ -59,7 +59,14 @@ impl<'a> LoweringContext<'a> {
                         } => {
                             let n = match &size.kind {
                                 TypedExprKind::Int(v) => *v as u64,
-                                _ => panic!("ArraySized requires a constant integer size"),
+                                _ => {
+                                    self.report_error(
+                                        "unsupported non-constant array size: \
+                                         ArraySized requires a constant integer size expression"
+                                            .to_string(),
+                                    );
+                                    0
+                                }
                             };
                             // Stack size check
                             let elem_air_ty = match var_type {
@@ -139,10 +146,13 @@ impl<'a> LoweringContext<'a> {
                 if let Some(e) = val {
                     let ret_ty = self.lower_type_from_infer(&e.ty);
                     if matches!(ret_ty, AirType::Array(_, _)) {
-                        panic!(
-                            "cannot return stack-allocated array from function. \
-                             Stack arrays are deallocated when the function returns."
+                        self.report_error(
+                            "cannot return stack-allocated array from function: \
+                             stack arrays are deallocated when the function returns"
+                                .to_string(),
                         );
+                        self.seal_block(AirTerminator::Return(None));
+                        return;
                     }
                     // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call). 
                     // lower the expression for side effects only and emit a void return.
