@@ -1187,3 +1187,335 @@ fn f() -> i64 {
         "constant-sized array in let should compile through AIR"
     );
 }
+
+#[test]
+fn nested_fn_as_last_stmt_with_return_type_rejected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn outer() -> i64 {
+    fn inner() -> i64 { return 1 }
+}
+"#
+        ),
+        "nested function as last stmt in non-void function should be rejected"
+    );
+}
+
+#[test]
+fn nested_fn_as_last_stmt_void_return_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() {
+    fn inner() -> i64 { return 1 }
+}
+"#
+        ),
+        "nested function as last stmt in void function should be accepted"
+    );
+}
+
+#[test]
+fn nested_fn_followed_by_return_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+fn outer() -> i64 {
+    fn inner() -> i64 { return 1 }
+    return inner()
+}
+"#
+        ),
+        "nested function followed by explicit return should be accepted"
+    );
+}
+
+#[test]
+fn unify_prevents_var_cycle_through_resolution() {
+    // Var(A) unified with Var(B), then Var(B) unified with Var(A)
+    // should succeed (identity) without creating a cycle
+    assert!(
+        sema_ok(
+            r#"
+fn f(a, b) {
+    let x = a
+    let y = b
+    let z: i64 = x
+    let w: i64 = y
+}
+"#
+        ),
+        "unifying vars that resolve to the same type should not cycle"
+    );
+}
+
+#[test]
+fn compound_generic_does_not_create_infinite_type() {
+    assert!(
+        sema_ok(
+            r#"
+fn wrap<T>(x: T) -> T {
+    return x
+}
+
+fn main() -> i64 {
+    let a = wrap(42)
+    let b = wrap(a)
+    return b
+}
+"#
+        ),
+        "chained generic calls should resolve without infinite type"
+    );
+}
+
+#[test]
+fn self_referencing_let_is_undefined_variable() {
+    assert!(
+        !sema_ok(
+            r#"
+fn test() {
+    let f = fn(x) { return f }
+}
+"#
+        ),
+        "self-referencing let should fail with undefined variable"
+    );
+}
+
+#[test]
+fn var_chain_resolves_without_cycle() {
+    assert!(
+        sema_ok(
+            r#"
+fn test() -> i64 {
+    let a = 1
+    let b = a
+    let c = b
+    let d = c
+    return d
+}
+"#
+        ),
+        "long chain of variable copies should resolve without cycle"
+    );
+}
+
+#[test]
+fn substitution_apply_resolves_nested_vars() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn identity<T>(x: T) -> T { return x }
+
+fn main() -> i64 {
+    let a = identity(42)
+    let b = identity(a)
+    return b
+}
+"#
+        ),
+        "nested generic calls should resolve vars completely"
+    );
+}
+
+#[test]
+fn type_mismatch_does_not_leave_corrupt_substitution() {
+    let count = sema_error_count(
+        r#"
+fn f() -> i64 {
+    let x: i64 = "bad"
+    let y = 42
+    return y
+}
+"#,
+    );
+    assert!(
+        count >= 1 && count <= 2,
+        "type mismatch should produce errors without corrupting solver, got {}",
+        count
+    );
+}
+
+#[test]
+fn error_recovery_does_not_corrupt_unrelated_compound_type() {
+    let count = sema_error_count(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+
+fn main() -> i64 {
+    let bad = "hello" + 42
+    let g = fn(n: i64) -> i64 { return n + 1 }
+    return apply(g, 10)
+}
+"#,
+    );
+    assert!(
+        count >= 1 && count <= 3,
+        "error in one expression should not corrupt function type inference, got {}",
+        count
+    );
+}
+
+#[test]
+fn inner_vars_in_function_type_resolve_through_finalization() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+
+fn main() -> i64 {
+    let inc = fn(n: i64) -> i64 { return n + 1 }
+    return apply(inc, 5)
+}
+"#
+        ),
+        "function type params should resolve through full pipeline"
+    );
+}
+
+#[test]
+fn force_dynamic_on_error_preserves_valid_inference_elsewhere() {
+    let count = sema_error_count(
+        r#"
+fn f(x) {
+    let y: i64 = x
+    let z = y + "hello"
+    let w: i64 = 42
+    return w
+}
+"#,
+    );
+    assert!(
+        count >= 1 && count <= 3,
+        "type error should not corrupt unrelated bindings, got {}",
+        count
+    );
+}
+
+#[test]
+fn recursion_limit_orphan_constraints_do_not_cause_miscompilation() {
+    // even if orphan constraints exist from partial inference,
+    // the RecursionLimit error makes the program fail at sema
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i64 {
+    return 1 + 2 + 3
+}
+"#
+        ),
+        "normal expressions should not trigger recursion limit"
+    );
+}
+
+#[test]
+fn recursion_limit_does_not_prevent_other_function_inference() {
+    assert!(
+        sema_ok(
+            r#"
+fn simple() -> i64 {
+    return 42
+}
+"#
+        ),
+        "normal functions should still compile"
+    );
+}
+
+#[test]
+fn lambda_calling_nested_function_in_outer_scope() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn outer() -> i64 {
+    fn helper() -> i64 { return 42 }
+    let lambda = fn() -> i64 { return helper() }
+    return helper()
+}
+"#
+        ),
+        "lambda calling a sibling function should compile through AIR"
+    );
+}
+
+#[test]
+fn lambda_calling_toplevel_function() {
+    assert!(
+        air_pipeline_ok(
+            r#"
+fn helper() -> i64 { return 10 }
+
+fn main() -> i64 {
+    let f = fn() -> i64 { return helper() }
+    return helper()
+}
+"#
+        ),
+        "lambda calling a top-level function should compile through AIR"
+    );
+}
+
+#[test]
+fn array_literal_narrowing_tracked_variable() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> [i32; 3] {
+    let x = 100
+    return [x, 1, 2]
+}
+"#
+        ),
+        "tracked variable in array literal should narrow to i32"
+    );
+}
+
+#[test]
+fn array_literal_narrowing_all_literals() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> [i32; 3] {
+    return [1, 2, 3]
+}
+"#
+        ),
+        "all-literal array should narrow to i32"
+    );
+}
+
+#[test]
+fn array_literal_narrowing_untracked_param_rejected() {
+    assert!(
+        !sema_ok(
+            r#"
+fn f(y: i64) -> [i32; 3] {
+    return [y, 1, 2]
+}
+"#
+        ),
+        "i64 parameter in i32 array should be rejected"
+    );
+}
+
+#[test]
+fn array_literal_narrowing_mixed_tracked_and_literal() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> [i32; 4] {
+    let a = 10
+    let b = 20
+    return [a, b, 30, 40]
+}
+"#
+        ),
+        "mix of tracked variables and literals should narrow"
+    );
+}

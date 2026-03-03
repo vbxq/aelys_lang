@@ -66,12 +66,16 @@ impl Substitution {
         }
     }
 
-    /// chase a Var binding chain with cycle detection. If a Var is encountered that was already visited in this chain, return Dynamic to break the loop.
+    /// chase a Var binding chain with cycle detection.
+    ///
+    /// i know cycles are impossible through the normal unify pipeline
+    /// debug_assert fires if this invariant is ever broken by a future change
     fn chase_var(&self, ty: &InferType, visited: &mut HashSet<TypeVarId>) -> InferType {
         match ty {
             InferType::Var(id) => {
                 if let Some(bound) = self.bindings.get(id) {
                     if !visited.insert(*id) {
+                        debug_assert!(false, "Challenge completed: How Did We Get Here ? (substitution cycle detected at Var({}).", id.0);
                         return InferType::Dynamic;
                     }
                     self.chase_var(bound, visited)
@@ -130,25 +134,24 @@ mod tests {
     }
 
     #[test]
-    fn apply_breaks_two_var_cycle() {
+    #[should_panic(expected = "substitution cycle detected")]
+    fn apply_detects_two_var_cycle() {
         let mut subst = Substitution::new();
-        // fo a cycle by manually inserting: Var(0) -> Var(1) -> Var(0)
+        // artificial cycle via direct insert (bypasses unify)
         subst.bindings.insert(vid(0), InferType::Var(vid(1)));
         subst.bindings.insert(vid(1), InferType::Var(vid(0)));
-        // Without cycle detection this would stack overflow, with cycle detection it returns Dynamic.
-        let result = subst.apply(&InferType::Var(vid(0)));
-        assert_eq!(result, InferType::Dynamic);
+        let _ = subst.apply(&InferType::Var(vid(0)));
     }
 
     #[test]
-    fn apply_breaks_three_var_cycle() {
+    #[should_panic(expected = "substitution cycle detected")]
+    fn apply_detects_three_var_cycle() {
         let mut subst = Substitution::new();
-        // Var(0) -> Var(1) -> Var(2) -> Var(0)
+        // artificial cycle via direct insert (bypasses unify)
         subst.bindings.insert(vid(0), InferType::Var(vid(1)));
         subst.bindings.insert(vid(1), InferType::Var(vid(2)));
         subst.bindings.insert(vid(2), InferType::Var(vid(0)));
-        let result = subst.apply(&InferType::Var(vid(0)));
-        assert_eq!(result, InferType::Dynamic);
+        let _ = subst.apply(&InferType::Var(vid(0)));
     }
 
     #[test]
