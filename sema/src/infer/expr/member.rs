@@ -87,6 +87,14 @@ impl TypeInference {
             }
         }
 
+        let struct_exists = self.type_table.has_struct(name);
+        if !struct_exists {
+            self.errors.push(TypeError::member_access(
+                format!("unknown struct '{}'", name),
+                span,
+            ));
+        }
+
         // validate struct fields: check for unknown and missing fields
         if let Some(def) = self.type_table.get_struct(name) {
             let def_field_names: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
@@ -154,7 +162,11 @@ impl TypeInference {
                 name: name.to_string(),
                 fields: typed_fields,
             },
-            InferType::Struct(name.to_string()),
+            if struct_exists {
+                InferType::Struct(name.to_string())
+            } else {
+                InferType::Dynamic
+            },
         )
     }
 }
