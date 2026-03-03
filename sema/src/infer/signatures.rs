@@ -8,23 +8,17 @@ use std::rc::Rc;
 impl TypeInference {
     /// Collect function signatures before inference (pre-pass)
     ///
-    /// only registers functions at the current scope level (top-level statements and blocks).
+    /// only registers functions at the current scope level.
     ///
-    /// Does not recurse into if/while/for/for-each bodies, because functions defined inside conditional or loop constructs belong to those inner scopes
-    /// and must not overwrite same-named functions at the outer scope
+    /// Does not recurse into nested blocks/if/while/for/for-each bodies, because
+    /// functions defined inside those constructs belong to inner lexical scopes.
     pub(super) fn collect_signatures(&mut self, stmts: &[Stmt], prefix: &str) {
         for stmt in stmts {
             match &stmt.kind {
                 StmtKind::Function(func) => {
                     self.collect_function_signature(func, prefix);
                 }
-                StmtKind::Block(inner_stmts) => {
-                    self.collect_signatures(inner_stmts, prefix);
-                }
-                // do not recurse into if/while/for/for-each: functions defined
-                // inside these constructs are scoped to their bodies.
-                //
-                // they're gonna be collected and will be collected when their enclosing function body is inferred.
+                // nested scopes are collected when those scopes are inferred
                 _ => {}
             }
         }

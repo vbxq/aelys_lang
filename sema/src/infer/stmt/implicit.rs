@@ -74,6 +74,11 @@ impl TypeInference {
 
             aelys_syntax::StmtKind::Block(stmts) if !stmts.is_empty() => {
                 self.env.push_scope();
+                let prefix = self
+                    .env
+                    .current_function()
+                    .map_or_else(String::new, Clone::clone);
+                self.collect_signatures(stmts, &prefix);
                 let saved_block_literals = self.literal_init_vars.clone();
 
                 let mut typed_stmts: Vec<TypedStmt> = stmts[..stmts.len() - 1]
