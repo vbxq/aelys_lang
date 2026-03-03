@@ -80,10 +80,24 @@ impl TypeInference {
         elements: &[Expr],
         _span: Span,
     ) -> (TypedExprKind, InferType) {
-        let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
+        let mut typed_elements: Vec<TypedExpr> =
+            elements.iter().map(|e| self.infer_expr(e)).collect();
 
         let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
             let ty = self.type_from_annotation(ann);
+            // verifies elements of vec<T>[...]
+            // TODO: what if the programmer want to mix up data in Vec
+            // we should probably allow that at some point, make it Dynamic ?
+            for elem in &mut typed_elements {
+                self.try_narrow_literal(elem, &ty);
+                self.constraints.push(Constraint::equal(
+                    elem.ty.clone(),
+                    ty.clone(),
+                    elem.span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+
             let resolved = ResolvedType::from_infer_type(&ty);
             (ty, Some(resolved))
         } else if typed_elements.is_empty() {
