@@ -163,3 +163,20 @@ fn test_immutable_shadow_hides_mutable_capture() {
         "immutable local shadow must hide mutable capture"
     );
 }
+
+#[test]
+fn test_for_closure_shadowed_immutable_capture_stays_immutable() {
+    let mut env = TypeEnv::new();
+    env.define_local("x".to_string(), InferType::I64);
+    env.mark_mutable("x".to_string());
+
+    env.push_scope();
+    env.define_local("x".to_string(), InferType::I64);
+
+    let closure_env = env.for_closure();
+    assert_eq!(closure_env.lookup("x"), Some(&InferType::I64));
+    assert!(
+        !closure_env.is_mutable("x"),
+        "closure capture mutability must follow the visible shadowing binding"
+    );
+}

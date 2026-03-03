@@ -203,3 +203,37 @@ fn bug() {
         "inner let mut x must not allow assigning to outer immutable x"
     );
 }
+
+#[test]
+fn function_decl_inside_block_must_not_leak_outside_block_scope() {
+    assert!(
+        sema_err(
+            r#"
+{
+    fn hidden() -> i64 { return 7 }
+}
+fn use_it() -> i64 {
+    return hidden()
+}
+"#
+        ),
+        "function declared in a block must not be callable outside that block"
+    );
+}
+
+#[test]
+fn block_local_function_can_shadow_outer_same_name() {
+    assert!(
+        sema_ok(
+            r#"
+fn f() -> i64 { return 1 }
+{
+    fn f() -> i64 { return 2 }
+    let y: i64 = f()
+}
+let x: i64 = f()
+"#
+        ),
+        "block-local function should be allowed to shadow outer function name"
+    );
+}

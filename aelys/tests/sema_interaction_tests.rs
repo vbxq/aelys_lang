@@ -449,3 +449,17 @@ fn eq(a: string, b: string) -> bool {
         "string equality should return bool"
     );
 }
+
+#[test]
+fn unknown_struct_literal_is_rejected_in_sema() {
+    assert!(
+        sema_err(
+            r#"
+fn main() {
+    let x = Ghost { a: 1 }
+}
+"#
+        ),
+        "unknown struct literal must be rejected during sema"
+    );
+}
