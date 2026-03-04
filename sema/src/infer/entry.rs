@@ -153,7 +153,24 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        let fatal_errors: Vec<_> = inf.errors.clone();
+        let is_type_param = |ty: &InferType| -> bool {
+            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
+        };
+        let fatal_errors: Vec<_> = inf
+            .errors
+            .iter()
+            .filter(|err| match &err.kind {
+                TypeErrorKind::Mismatch { expected, found } => {
+                    let generic_annotation_mismatch = matches!(
+                        &err.reason,
+                        ConstraintReason::TypeAnnotation { .. }
+                    ) && (is_type_param(expected) || is_type_param(found));
+                    !generic_annotation_mismatch
+                }
+                _ => true,
+            })
+            .cloned()
+            .collect();
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);
