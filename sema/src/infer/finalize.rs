@@ -16,9 +16,7 @@ impl TypeInference {
 
     fn finalize_stmt(&self, stmt: TypedStmt) -> TypedStmt {
         let kind = match stmt.kind {
-            TypedStmtKind::Expression(expr) => {
-                TypedStmtKind::Expression(self.finalize_expr(expr))
-            }
+            TypedStmtKind::Expression(expr) => TypedStmtKind::Expression(self.finalize_expr(expr)),
 
             TypedStmtKind::Let {
                 name,
@@ -34,9 +32,7 @@ impl TypeInference {
                 is_pub,
             },
 
-            TypedStmtKind::Block(stmts) => {
-                TypedStmtKind::Block(self.finalize_stmts(stmts))
-            }
+            TypedStmtKind::Block(stmts) => TypedStmtKind::Block(self.finalize_stmts(stmts)),
 
             TypedStmtKind::If {
                 condition,
@@ -88,9 +84,7 @@ impl TypeInference {
             TypedStmtKind::Break => TypedStmtKind::Break,
             TypedStmtKind::Continue => TypedStmtKind::Continue,
 
-            TypedStmtKind::Function(func) => {
-                TypedStmtKind::Function(self.finalize_function(func))
-            }
+            TypedStmtKind::Function(func) => TypedStmtKind::Function(self.finalize_function(func)),
 
             TypedStmtKind::Needs(needs) => TypedStmtKind::Needs(needs),
 

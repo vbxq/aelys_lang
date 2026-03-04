@@ -142,14 +142,16 @@ impl TypeInference {
 
         let resolved_stmts = inf.apply_substitution_stmts(&typed_stmts, &subst);
 
-        let final_stmts = inf.finalize_stmts(resolved_stmts);
-
         // collect all declared type parameter names from the program (functions and struct declarations)
         //
         // a name is only treated as a type parameter if it appears in declared_type_params and is not
         // also a real struct in the type table, this prevents false-positive filtering when a struct
         // shares a name with a type parameter from an unrelated generic function.
         let declared_type_params = collect_declared_type_params(&stmts);
+
+        inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
+
+        let final_stmts = inf.finalize_stmts(resolved_stmts);
 
         // all type errors are fatal except mismatches involving generic type parameters (Struct("T") where T is a declared type parameter)
         // These are expected because the monomorphizer in AIR handles specialization.

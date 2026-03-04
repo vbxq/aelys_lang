@@ -154,7 +154,7 @@ impl<'a> LoweringContext<'a> {
                         self.seal_block(AirTerminator::Return(None));
                         return;
                     }
-                    // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call). 
+                    // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call).
                     // lower the expression for side effects only and emit a void return.
                     if matches!(ret_ty, AirType::Opaque) {
                         self.lower_expr_discard(e);

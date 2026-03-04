@@ -75,7 +75,11 @@ impl Substitution {
             InferType::Var(id) => {
                 if let Some(bound) = self.bindings.get(id) {
                     if !visited.insert(*id) {
-                        debug_assert!(false, "Challenge completed: How Did We Get Here ? (substitution cycle detected at Var({}).", id.0);
+                        debug_assert!(
+                            false,
+                            "Challenge completed: How Did We Get Here ? (substitution cycle detected at Var({}).",
+                            id.0
+                        );
                         return InferType::Dynamic;
                     }
                     self.chase_var(bound, visited)
@@ -110,8 +114,6 @@ impl Substitution {
         self.bindings = saved;
     }
 }
-
-
 
 // TODO: move that to dedicated aelys/tests
 #[cfg(test)]

@@ -10,9 +10,7 @@ impl TypeInference {
         // pass 1: register all struct names so that forward references between structs are valid
         for stmt in stmts {
             if let StmtKind::StructDecl {
-                name,
-                type_params,
-                ..
+                name, type_params, ..
             } = &stmt.kind
             {
                 if self.type_table.has_struct(name) {

@@ -97,14 +97,8 @@ mod tests {
     #[test]
     fn free_type_vars_ignores_concrete_vec() {
         let mut env = TypeEnv::new();
-        env.define_local(
-            "v".to_string(),
-            InferType::Vec(Box::new(InferType::I64)),
-        );
+        env.define_local("v".to_string(), InferType::Vec(Box::new(InferType::I64)));
         let vars = env.free_type_vars();
-        assert!(
-            vars.is_empty(),
-            "Vec(I64) has no free type variables"
-        );
+        assert!(vars.is_empty(), "Vec(I64) has no free type variables");
     }
 }

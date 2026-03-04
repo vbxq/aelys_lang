@@ -10,6 +10,7 @@ mod signatures;
 mod stmt;
 mod structs;
 mod substitute;
+mod validate;
 
 use crate::constraint::{Constraint, TypeError};
 use crate::env::TypeEnv;

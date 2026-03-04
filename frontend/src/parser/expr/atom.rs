@@ -135,9 +135,7 @@ impl Parser {
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
-            TokenKind::Identifier(ref name)
-                if name.eq_ignore_ascii_case("vec") =>
-            {
+            TokenKind::Identifier(ref name) if name.eq_ignore_ascii_case("vec") => {
                 let name = name.clone();
                 return self.vec_literal(name, span);
             }
@@ -242,9 +240,7 @@ impl Parser {
         let end_span = self.previous().span;
 
         Ok(Expr::new(
-            ExprKind::ArrayLiteral {
-                elements,
-            },
+            ExprKind::ArrayLiteral { elements },
             start_span.merge(end_span),
         ))
     }

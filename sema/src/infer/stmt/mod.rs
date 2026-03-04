@@ -84,8 +84,7 @@ impl TypeInference {
             } => {
                 // temporarily set type_params_in_scope so that generic struct field types like `T` don't trigger unknown-type errors
                 // TODO: !
-                let saved =
-                    std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
+                let saved = std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
                 let typed_fields = fields
                     .iter()
                     .map(|f| {

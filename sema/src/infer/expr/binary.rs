@@ -17,28 +17,27 @@ impl TypeInference {
             BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
                 // when both operands have the same concrete type, the result type is already determined, this means no type variable needed.
                 // ysing a concrete type here lets downstream narrowing (for example in return position) see the real type instead of an opaque Var
-                let result_type =
-                    if left.ty == right.ty && left.ty.is_concrete() {
-                        left.ty.clone()
-                    } else {
-                        let fresh = self.type_gen.fresh();
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    let fresh = self.type_gen.fresh();
 
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            right.ty.clone(),
-                            span,
-                            ConstraintReason::BinaryOp { op: op.to_string() },
-                        ));
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        right.ty.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
 
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            fresh.clone(),
-                            span,
-                            ConstraintReason::BinaryOp { op: op.to_string() },
-                        ));
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
 
-                        fresh
-                    };
+                    fresh
+                };
 
                 if op == BinaryOp::Add {
                     let mut options = InferType::all_numeric_types();
@@ -62,28 +61,27 @@ impl TypeInference {
             }
 
             BinaryOp::Mod => {
-                let result_type =
-                    if left.ty == right.ty && left.ty.is_concrete() {
-                        left.ty.clone()
-                    } else {
-                        let fresh = self.type_gen.fresh();
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    let fresh = self.type_gen.fresh();
 
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            right.ty.clone(),
-                            span,
-                            ConstraintReason::BinaryOp { op: op.to_string() },
-                        ));
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        right.ty.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
 
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            fresh.clone(),
-                            span,
-                            ConstraintReason::BinaryOp { op: op.to_string() },
-                        ));
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BinaryOp { op: op.to_string() },
+                    ));
 
-                        fresh
-                    };
+                    fresh
+                };
 
                 self.constraints.push(Constraint::one_of(
                     left.ty.clone(),
@@ -140,27 +138,26 @@ impl TypeInference {
             | BinaryOp::BitAnd
             | BinaryOp::BitOr
             | BinaryOp::BitXor => {
-                let result_type =
-                    if left.ty == right.ty && left.ty.is_concrete() {
-                        left.ty.clone()
-                    } else {
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            right.ty.clone(),
-                            span,
-                            ConstraintReason::BitwiseOp { op: op.to_string() },
-                        ));
+                let result_type = if left.ty == right.ty && left.ty.is_concrete() {
+                    left.ty.clone()
+                } else {
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        right.ty.clone(),
+                        span,
+                        ConstraintReason::BitwiseOp { op: op.to_string() },
+                    ));
 
-                        let fresh = self.type_gen.fresh();
-                        self.constraints.push(Constraint::equal(
-                            left.ty.clone(),
-                            fresh.clone(),
-                            span,
-                            ConstraintReason::BitwiseOp { op: op.to_string() },
-                        ));
+                    let fresh = self.type_gen.fresh();
+                    self.constraints.push(Constraint::equal(
+                        left.ty.clone(),
+                        fresh.clone(),
+                        span,
+                        ConstraintReason::BitwiseOp { op: op.to_string() },
+                    ));
 
-                        fresh
-                    };
+                    fresh
+                };
 
                 self.constraints.push(Constraint::one_of(
                     left.ty.clone(),

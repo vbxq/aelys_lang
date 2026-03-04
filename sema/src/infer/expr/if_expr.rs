@@ -23,7 +23,7 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
-        // when both branches have the same concrete type, use it directly instead of creating a fresh Var. 
+        // when both branches have the same concrete type, use it directly instead of creating a fresh Var.
         // this is what infer_binary_op does and allows downstream narrowing to see the real type
         let result_type = if typed_then.ty == typed_else.ty && typed_then.ty.is_concrete() {
             typed_then.ty.clone()

@@ -460,10 +460,7 @@ impl TypeInference {
             ..
         } = &mut expr.kind
         {
-            if expr.ty == InferType::I64
-                && target_ty.is_integer()
-                && *target_ty != InferType::I64
-            {
+            if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
                 let then_ok = self.try_narrow_literal(then_branch, target_ty);
                 let else_ok = self.try_narrow_literal(else_branch, target_ty);
                 let then_narrowed = then_branch.ty == *target_ty;
@@ -543,7 +540,7 @@ impl TypeInference {
                                     },
                                 });
                                 false
-                            }
+                            };
                         }
                     }
                 }
