@@ -400,6 +400,32 @@ fn caller() -> i32 {
 }
 
 #[test]
+fn generic_struct_decl_only_does_not_introduce_unresolved_air_params() {
+    let mut air = lower_source(
+        r#"
+struct Box<T> { value: T }
+fn main() {
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air);
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "generic struct declaration without instantiation should not produce unresolved AIR params, errors: {:?}",
+        result.err()
+    );
+    assert!(
+        !air.structs.iter().any(|s| s.name == "Box"),
+        "uninstantiated generic struct declarations should not be lowered to AIR structs"
+    );
+}
+
+#[test]
 fn gc_mode_propagation() {
     let air = lower_source(
         r#"

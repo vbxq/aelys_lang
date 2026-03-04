@@ -11,7 +11,9 @@ impl<'a> LoweringContext<'a> {
                 fields,
             } = &stmt.kind
             {
-                self.lower_struct_decl(name, type_params, fields, &stmt.span);
+                if type_params.is_empty() {
+                    self.lower_struct_decl(name, type_params, fields, &stmt.span);
+                }
             }
         }
 

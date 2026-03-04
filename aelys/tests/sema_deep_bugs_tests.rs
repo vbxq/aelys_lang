@@ -355,3 +355,18 @@ fn bad() -> string {
         "direct generic call return must not allow unresolved type parameter escape"
     );
 }
+
+#[test]
+fn rejects_generic_struct_literal_instantiation() {
+    assert!(
+        sema_err(
+            r#"
+struct Box<T> { value: T }
+fn main() {
+    let b = Box { value: 1 }
+}
+"#
+        ),
+        "generic struct literals should be rejected until backend support exists"
+    );
+}
