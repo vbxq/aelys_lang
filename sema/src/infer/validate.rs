@@ -208,9 +208,53 @@ impl TypeInference {
                     self.validate_stmt(stmt, generic_scope, declared_type_params);
                 }
             }
-            TypedExprKind::Member { object, .. } => {
+            TypedExprKind::Member { object, member } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_type(&expr.ty, expr.span, generic_scope, declared_type_params);
+                match &object.ty {
+                    InferType::String => {
+                        if member != "len" {
+                            self.errors.push(TypeError::member_access(
+                                format!("unknown field '{}' on Str; supported: 'len'", member),
+                                expr.span,
+                            ));
+                        }
+                    }
+                    InferType::Struct(name) => {
+                        if let Some(def) = self.type_table.get_struct(name) {
+                            if !def.fields.iter().any(|f| f.name == *member) {
+                                self.errors.push(TypeError::member_access(
+                                    format!("unknown field '{}' on struct '{}'", member, name),
+                                    expr.span,
+                                ));
+                            }
+                        } else if self.is_active_generic_placeholder_type(
+                            &object.ty,
+                            generic_scope,
+                            declared_type_params,
+                        ) {
+                            self.errors.push(TypeError::member_access(
+                                format!(
+                                    "field access on unconstrained generic type parameter '{}'",
+                                    name
+                                ),
+                                expr.span,
+                            ));
+                        } else {
+                            self.errors.push(TypeError::member_access(
+                                format!("field access on unknown struct type {}", name),
+                                expr.span,
+                            ));
+                        }
+                    }
+                    InferType::Dynamic => {}
+                    other => {
+                        self.errors.push(TypeError::member_access(
+                            format!("field access on non-struct type {}", other),
+                            expr.span,
+                        ));
+                    }
+                }
             }
             TypedExprKind::ArrayLiteral { elements }
             | TypedExprKind::VecLiteral { elements, .. } => {

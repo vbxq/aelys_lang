@@ -41,6 +41,20 @@ impl TypeInference {
                             InferType::Dynamic
                         })
                 } else {
+                    if self.type_params_in_scope.iter().any(|tp| tp == name) {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "field access on unconstrained generic type parameter '{}'",
+                                name
+                            ),
+                            span,
+                        ));
+                    } else {
+                        self.errors.push(TypeError::member_access(
+                            format!("field access on unknown struct type {}", name),
+                            span,
+                        ));
+                    }
                     InferType::Dynamic
                 }
             }

@@ -288,6 +288,23 @@ fn main() -> i64 {
 }
 
 #[test]
+fn rejects_member_on_var_that_resolves_to_scalar() {
+    assert!(
+        sema_err(
+            r#"
+fn bad(x) -> i64 {
+    return x.foo
+}
+fn main() -> i64 {
+    return bad(1)
+}
+"#
+        ),
+        "member access must be rejected when an inferred parameter resolves to i64"
+    );
+}
+
+#[test]
 fn rejects_invalid_cast_after_var_resolution() {
     assert!(
         sema_err(
@@ -335,6 +352,24 @@ fn bad() -> string {
 "#
         ),
         "generic type parameters from struct fields must not escape in concrete functions"
+    );
+}
+
+#[test]
+fn rejects_member_access_on_unconstrained_generic_param() {
+    assert!(
+        sema_err(
+            r#"
+fn getfoo<T>(x: T) -> i64 {
+    return x.foo
+}
+
+fn main() -> i64 {
+    return getfoo(1)
+}
+"#
+        ),
+        "member access on unconstrained generic type parameter should be rejected"
     );
 }
 
