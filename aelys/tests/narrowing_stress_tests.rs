@@ -415,10 +415,7 @@ fn f(x: i64) -> i32 {
 fn binary_both_literals_still_narrows() {
     // pure literal binary expressions should still narrow successfully
     let ok = sema_ok("fn f() -> i32 { return 1 + 2 }");
-    assert!(
-        ok,
-        "return (1 + 2) in i32 fn should still pass sema"
-    );
+    assert!(ok, "return (1 + 2) in i32 fn should still pass sema");
 }
 
 #[test]
@@ -578,10 +575,7 @@ fn f() {
 }
 "#,
     );
-    assert!(
-        ok,
-        "let x: i32 = 42 followed by use must pass sema"
-    );
+    assert!(ok, "let x: i32 = 42 followed by use must pass sema");
 }
 
 #[test]
@@ -593,10 +587,7 @@ fn f() {
 }
 "#,
     );
-    assert!(
-        ok,
-        "let x: i8 = 10 must pass sema"
-    );
+    assert!(ok, "let x: i8 = 10 must pass sema");
 }
 
 #[test]

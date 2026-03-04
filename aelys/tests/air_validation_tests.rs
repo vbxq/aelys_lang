@@ -1241,7 +1241,7 @@ fn validate_rejects_opaque_struct_field() {
 fn validate_opaque_does_not_appear_after_monomorphization() {
     // a generic function's return type starts as Dynamic -> Opaque in AIR,
     // but monomorphization should replace it with the concrete type
-    
+
     // After the full pipeline, validation should pass
     let mut air = lower_source(
         r#"
@@ -1304,8 +1304,8 @@ fn main() {
 
 // Tuple/Range -> Opaque (caught by validation)
 
-/// Simulates what happens when a Tuple type survives to AIR: 
-/// 
+/// Simulates what happens when a Tuple type survives to AIR:
+///
 /// the lowering now produces Opaque instead of Void. if such a local ever reaches the validation pass, it should be rejected with an OpaqueType error
 /// here we constructs a synthetic AIR program with an Opaque local representing a Tuple or Range that leaked through sema)
 #[test]

@@ -1,5 +1,4 @@
 /// Tests targeting deep interactions between sema components
-
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_sema::TypeInference;
@@ -21,10 +20,7 @@ fn sema_ok_with_builtins(code: &str) -> bool {
     let stmts = Parser::new(tokens, src.clone())
         .parse()
         .expect("parse failed");
-    let builtins: HashSet<String> = ["print", "println"]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+    let builtins: HashSet<String> = ["print", "println"].iter().map(|s| s.to_string()).collect();
     TypeInference::infer_program_with_imports(stmts, src, Default::default(), builtins).is_ok()
 }
 
@@ -401,7 +397,6 @@ fn f(cond: bool) -> i64 {
         "one return path with wrong type should be rejected"
     );
 }
-
 
 #[test]
 fn for_loop_iterator_is_i64() {

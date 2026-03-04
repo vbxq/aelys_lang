@@ -5,9 +5,9 @@
 /// sub-unifications must be rolled back to avoid corrupting the substitution.
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
-use aelys_sema::types::{InferType, TypeVarId};
-use aelys_sema::unify::{unify, Substitution};
 use aelys_sema::TypeInference;
+use aelys_sema::types::{InferType, TypeVarId};
+use aelys_sema::unify::{Substitution, unify};
 use aelys_syntax::Source;
 
 fn sema_ok(code: &str) -> bool {

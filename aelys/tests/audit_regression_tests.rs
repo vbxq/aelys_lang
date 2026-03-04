@@ -623,7 +623,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert_eq!(count, 0, "valid higher-order function should produce no errors");
+    assert_eq!(
+        count, 0,
+        "valid higher-order function should produce no errors"
+    );
 }
 
 #[test]
@@ -672,10 +675,7 @@ fn f() -> i64 {
 }
 "#,
     );
-    assert_eq!(
-        count, 0,
-        "valid bindings should survive constraint solving"
-    );
+    assert_eq!(count, 0, "valid bindings should survive constraint solving");
 }
 
 #[test]

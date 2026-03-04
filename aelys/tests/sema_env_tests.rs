@@ -103,7 +103,7 @@ fn test_for_closure_locals_override_captures() {
 }
 
 /// nested closures with shadowed captures
-/// 
+///
 /// when multiple levels of nesting each shadow a variable, for_closure() must preserve the innermost type at each level.
 #[test]
 fn test_for_closure_nested_shadowing() {

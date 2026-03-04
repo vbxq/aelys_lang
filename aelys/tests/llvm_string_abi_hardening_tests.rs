@@ -54,7 +54,8 @@ fn println(s: string) {
     );
     // either "reserved builtin" (from AIR lowering) or "duplicate function definition" from sema, since println is registered as a bootstrap builtin
     assert!(
-        (error.contains("reserved builtin during bootstrap") || error.contains("duplicate function definition"))
+        (error.contains("reserved builtin during bootstrap")
+            || error.contains("duplicate function definition"))
             && error.contains("println"),
         "{error}"
     );

@@ -1,5 +1,4 @@
 /// finalization, error recovery, struct validation, for-each validation, and env scoping tests bugs
-
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_sema::TypeInference;
@@ -167,7 +166,6 @@ fn f() {
     );
 }
 
-
 // Var -> Dynamic conversion
 // unresolved type variables should be converted to Dynamic (or at least not left as Var in the final typed AST)
 
@@ -269,5 +267,73 @@ fn f() {
 "#
         ),
         "indexing a bool should be rejected"
+    );
+}
+
+#[test]
+fn rejects_index_on_var_that_resolves_to_scalar() {
+    assert!(
+        sema_err(
+            r#"
+fn bad(x) -> i64 {
+    return x[0]
+}
+fn main() -> i64 {
+    return bad(1)
+}
+"#
+        ),
+        "indexing must be rejected when an inferred parameter resolves to i64"
+    );
+}
+
+#[test]
+fn rejects_invalid_cast_after_var_resolution() {
+    assert!(
+        sema_err(
+            r#"
+fn bad_cast(x) -> i64 {
+    return x as i64
+}
+fn main() -> i64 {
+    return bad_cast("hello")
+}
+"#
+        ),
+        "cast from string to i64 must be rejected even when source starts as Var"
+    );
+}
+
+#[test]
+fn rejects_foreach_on_var_that_resolves_to_scalar() {
+    assert!(
+        sema_err(
+            r#"
+fn bad(iter) {
+    for x in iter {
+    }
+}
+fn main() {
+    bad(1)
+}
+"#
+        ),
+        "for-each must reject inferred iterables that resolve to non-iterable scalars"
+    );
+}
+
+#[test]
+fn rejects_generic_type_param_escape_from_struct_field() {
+    assert!(
+        sema_err(
+            r#"
+struct Box<T> { value: T }
+fn bad() -> string {
+    let b = Box { value: 1 }
+    return b.value
+}
+"#
+        ),
+        "generic type parameters from struct fields must not escape in concrete functions"
     );
 }
