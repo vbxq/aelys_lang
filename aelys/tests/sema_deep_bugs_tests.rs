@@ -370,3 +370,18 @@ fn main() {
         "generic struct literals should be rejected until backend support exists"
     );
 }
+
+#[test]
+fn rejects_string_index_assignment() {
+    assert!(
+        sema_err(
+            r#"
+fn bad() {
+    let mut s = "abc"
+    s[0] = "x"
+}
+"#
+        ),
+        "string index assignment should be rejected in sema"
+    );
+}

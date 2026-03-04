@@ -250,7 +250,7 @@ impl TypeInference {
                 self.validate_expr(index, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
 
-                if !Self::is_indexable_type(&object.ty)
+                if !Self::is_index_assignable_type(&object.ty)
                     && !self.is_active_generic_placeholder_type(
                         &object.ty,
                         generic_scope,
@@ -413,6 +413,13 @@ impl TypeInference {
                 | InferType::String
                 | InferType::Dynamic
                 | InferType::Var(_)
+        )
+    }
+
+    fn is_index_assignable_type(ty: &InferType) -> bool {
+        matches!(
+            ty,
+            InferType::Array(_, _) | InferType::Vec(_) | InferType::Dynamic | InferType::Var(_)
         )
     }
 

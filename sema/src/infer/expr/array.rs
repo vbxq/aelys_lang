@@ -194,12 +194,9 @@ impl TypeInference {
                 ));
             }
             InferType::String => {
-                self.try_narrow_literal(&mut typed_value, &InferType::String);
-                self.constraints.push(Constraint::equal(
-                    typed_value.ty.clone(),
-                    InferType::String,
+                self.errors.push(TypeError::member_access(
+                    "index assignment on non-indexable type string".to_string(),
                     _span,
-                    ConstraintReason::ArrayElement,
                 ));
             }
             InferType::Dynamic | InferType::Var(_) => {
