@@ -153,25 +153,7 @@ impl TypeInference {
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
-        // all type errors are fatal except mismatches involving generic type parameters (Struct("T") where T is a declared type parameter)
-        // These are expected because the monomorphizer in AIR handles specialization.
-        //
-        // UnknownType errors are ***always*** fatal. They are explicit validation failures (x: nonexistent) not incidental unification with generic params.
-        let is_type_param = |ty: &InferType| -> bool {
-            matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
-        };
-        let fatal_errors: Vec<_> = inf
-            .errors
-            .iter()
-            .filter(|err| match &err.kind {
-                TypeErrorKind::Mismatch { expected, found } => {
-                    matches!(&err.reason, ConstraintReason::UnknownType { .. })
-                        || (!is_type_param(expected) && !is_type_param(found))
-                }
-                _ => true,
-            })
-            .cloned()
-            .collect();
+        let fatal_errors: Vec<_> = inf.errors.clone();
 
         if !fatal_errors.is_empty() {
             return Err(fatal_errors);

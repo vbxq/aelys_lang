@@ -386,3 +386,24 @@ fn bad() -> i64 {
         "array slicing should be rejected until backend supports ranges/slices"
     );
 }
+
+#[test]
+fn rejects_generic_if_condition_with_non_bool_instantiation() {
+    assert!(
+        sema_err(
+            r#"
+fn bad<T>(x: T) -> i64 {
+    if x {
+        return 1
+    }
+    return 0
+}
+
+fn main() -> i64 {
+    return bad(1)
+}
+"#
+        ),
+        "generic if condition should reject non-bool concrete instantiations"
+    );
+}
