@@ -228,27 +228,17 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
         let typed_range = self.infer_expr(range);
-
-        let result_ty = match &typed_object.ty {
-            InferType::Array(_, _) | InferType::Vec(_) | InferType::String => {
-                typed_object.ty.clone()
-            }
-            InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
-            other => {
-                self.errors.push(TypeError::member_access(
-                    format!("slice operation on non-sliceable type {}", other),
-                    span,
-                ));
-                InferType::Dynamic
-            }
-        };
+        self.errors.push(TypeError::member_access(
+            "slice expressions are not supported yet".to_string(),
+            span,
+        ));
 
         (
             TypedExprKind::Slice {
                 object: Box::new(typed_object),
                 range: Box::new(typed_range),
             },
-            result_ty,
+            InferType::Dynamic,
         )
     }
 
@@ -278,6 +268,10 @@ impl TypeInference {
                 ConstraintReason::RangeBound,
             ));
         }
+        self.errors.push(TypeError::member_access(
+            "range expressions are not supported yet".to_string(),
+            _span,
+        ));
 
         (
             TypedExprKind::Range {
@@ -285,7 +279,7 @@ impl TypeInference {
                 end: typed_end,
                 inclusive,
             },
-            InferType::Range,
+            InferType::Dynamic,
         )
     }
 }

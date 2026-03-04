@@ -385,3 +385,19 @@ fn bad() {
         "string index assignment should be rejected in sema"
     );
 }
+
+#[test]
+fn rejects_array_slice_expression_until_backend_support() {
+    assert!(
+        sema_err(
+            r#"
+fn bad() -> i64 {
+    let arr = [1, 2, 3]
+    let x = arr[0..1]
+    return x[0]
+}
+"#
+        ),
+        "array slicing should be rejected until backend supports ranges/slices"
+    );
+}
