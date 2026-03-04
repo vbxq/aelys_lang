@@ -337,3 +337,21 @@ fn bad() -> string {
         "generic type parameters from struct fields must not escape in concrete functions"
     );
 }
+
+#[test]
+fn rejects_generic_type_param_escape_from_direct_generic_call() {
+    assert!(
+        sema_err(
+            r#"
+struct Box<T> { value: T }
+fn id<T>(x: T) -> T {
+    return x
+}
+fn bad() -> string {
+    return id(Box { value: 1 }.value)
+}
+"#
+        ),
+        "direct generic call return must not allow unresolved type parameter escape"
+    );
+}

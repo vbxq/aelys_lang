@@ -210,6 +210,7 @@ impl TypeInference {
             }
             TypedExprKind::Member { object, .. } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
+                self.validate_type(&expr.ty, expr.span, generic_scope, declared_type_params);
             }
             TypedExprKind::ArrayLiteral { elements }
             | TypedExprKind::VecLiteral { elements, .. } => {
@@ -466,15 +467,18 @@ impl TypeInference {
                     declared_type_params,
                 )
             }
-            InferType::Array(inner, _) | InferType::Vec(inner) => {
-                self.contains_active_generic_placeholder_type(
+            InferType::Array(inner, _) | InferType::Vec(inner) => self
+                .contains_active_generic_placeholder_type(
                     inner,
                     generic_scope,
                     declared_type_params,
-                )
-            }
+                ),
             InferType::Tuple(elems) => elems.iter().any(|e| {
-                self.contains_active_generic_placeholder_type(e, generic_scope, declared_type_params)
+                self.contains_active_generic_placeholder_type(
+                    e,
+                    generic_scope,
+                    declared_type_params,
+                )
             }),
             _ => false,
         }
@@ -509,14 +513,14 @@ impl TypeInference {
                 if let Some(name) =
                     self.find_leaked_type_param(&expr.ty, generic_scope, declared_type_params)
                 {
-                    let return_is_generic_placeholder = self.contains_active_generic_placeholder_type(
-                        fn_return_type,
-                        generic_scope,
-                        declared_type_params,
-                    );
-                    let is_direct_generic_call = matches!(&expr.kind, TypedExprKind::Call { .. });
+                    let return_is_generic_placeholder = self
+                        .contains_active_generic_placeholder_type(
+                            fn_return_type,
+                            generic_scope,
+                            declared_type_params,
+                        );
 
-                    if !return_is_generic_placeholder && !is_direct_generic_call {
+                    if !return_is_generic_placeholder {
                         self.errors.push(TypeError::member_access(
                             format!(
                                 "unresolved generic type parameter '{}' escaped generic context",
