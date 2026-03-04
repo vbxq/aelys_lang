@@ -94,17 +94,6 @@ impl TypeInference {
                 span,
             ));
         }
-        if let Some(def) = self.type_table.get_struct(name)
-            && !def.type_params.is_empty()
-        {
-            self.errors.push(TypeError::member_access(
-                format!(
-                    "generic struct literal '{}' is not supported yet; generic structs cannot be instantiated directly",
-                    name
-                ),
-                span,
-            ));
-        }
 
         // validate struct fields: check for unknown and missing fields
         if let Some(def) = self.type_table.get_struct(name) {

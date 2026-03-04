@@ -357,21 +357,6 @@ fn bad() -> string {
 }
 
 #[test]
-fn rejects_generic_struct_literal_instantiation() {
-    assert!(
-        sema_err(
-            r#"
-struct Box<T> { value: T }
-fn main() {
-    let b = Box { value: 1 }
-}
-"#
-        ),
-        "generic struct literals should be rejected until backend support exists"
-    );
-}
-
-#[test]
 fn rejects_string_index_assignment() {
     assert!(
         sema_err(
