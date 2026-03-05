@@ -13,3 +13,5 @@ aelys/tests/exploration/*
 main.aelys
 main.ll
 torture/
+audit/**
+audit_tmp/**

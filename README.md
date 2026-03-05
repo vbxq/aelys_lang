@@ -19,14 +19,16 @@ fn add(a: i8, b: i8) -> i8 {
 }
 ```
 
-**Write like Python. Control like Rust. You choose your level**
+**Write like Python, control like Rust. You choose your level.**
 
 Simple syntax, GC by default, easy to learn. When you need C-level performance, add `@no_gc`, explicit types, manual memory.
 
-You decide how close to the metal you want to be, function by function.  
-Aelys scales from beginner-friendly scripts to zero-cost systems code. You control the abstraction level.
+You decide how close to the metal you want to be, function by function.
+
+From beginner-friendly scripts to zero-cost systems code, *you* control the abstraction level.
 
 ---
+
 
 - Arena GC by default, swap allocators with `std.mem`
 - FFI that just works: `needs "gtk.h"`
@@ -34,7 +36,9 @@ Aelys scales from beginner-friendly scripts to zero-cost systems code. You contr
 - Metaprogramming planned for stable releases
 
 > [!WARNING]
-> **Version 0.21.8-alpha**: LLVM backend rewrite in progress. Expect breaking changes. Docs may be outdated.
+> **Version 0.21.8-a**: LLVM backend rewrite in progress, expect breaking changes. Docs may be outdated.
+
+You can see the LLVM implementation roadmap via this pull request: https://github.com/vbxq/aelys_lang/pull/13
 
 ## Documentation
 
