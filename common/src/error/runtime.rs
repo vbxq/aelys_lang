@@ -1,4 +1,5 @@
 use super::stack::StackFrame;
+use crate::diagnostic::{Diagnostic, Severity};
 use aelys_syntax::Source;
 use std::fmt;
 use std::sync::Arc;
@@ -74,6 +75,33 @@ impl RuntimeError {
             source,
         }
     }
+
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        let mut diag = Diagnostic::new(Severity::Error, self.kind.message());
+
+        if let Some(frame) = self.stack_trace.first() {
+            let span = aelys_syntax::Span::new(0, 1, frame.line, frame.column);
+            diag = diag.with_primary_label(self.source.clone(), span, None);
+        }
+
+        if !self.stack_trace.is_empty() {
+            const MAX_FRAMES: usize = 50;
+            diag.add_note("stack trace (most recent call first):");
+            let display_count = self.stack_trace.len().min(MAX_FRAMES);
+            for frame in &self.stack_trace[..display_count] {
+                let name = frame.function_name.as_deref().unwrap_or("<script>");
+                diag.add_note(format!("  {} ({}:{})", name, self.source.name, frame.line));
+            }
+            if self.stack_trace.len() > MAX_FRAMES {
+                diag.add_note(format!(
+                    "  ... {} more frames",
+                    self.stack_trace.len() - MAX_FRAMES
+                ));
+            }
+        }
+
+        diag
+    }
 }
 
 impl RuntimeErrorKind {
@@ -137,46 +165,6 @@ impl RuntimeErrorKind {
 
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "error: {}", self.kind.message())?;
-
-        if let Some(frame) = self.stack_trace.first() {
-            writeln!(
-                f,
-                "  --> {}:{}:{}",
-                self.source.name, frame.line, frame.column
-            )?;
-
-            let line_content = self.source.get_line(frame.line);
-            let line_num_width = frame.line.to_string().len().max(2);
-
-            writeln!(f, "{:width$} |", "", width = line_num_width)?;
-            writeln!(
-                f,
-                "{:>width$} | {}",
-                frame.line,
-                line_content,
-                width = line_num_width
-            )?;
-        }
-
-        if !self.stack_trace.is_empty() {
-            const MAX_FRAMES: usize = 50;
-            writeln!(f)?;
-            writeln!(f, "stack trace (most recent call first):")?;
-            let display_count = self.stack_trace.len().min(MAX_FRAMES);
-            for frame in &self.stack_trace[..display_count] {
-                let name = frame.function_name.as_deref().unwrap_or("<script>");
-                writeln!(f, "  {} ({}:{})", name, self.source.name, frame.line)?;
-            }
-            if self.stack_trace.len() > MAX_FRAMES {
-                writeln!(
-                    f,
-                    "  ... {} more frames",
-                    self.stack_trace.len() - MAX_FRAMES
-                )?;
-            }
-        }
-
-        Ok(())
+        write!(f, "{}", self.to_diagnostic())
     }
 }

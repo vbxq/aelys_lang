@@ -3,6 +3,7 @@ pub mod error;
 pub mod result;
 pub mod warning;
 
+pub use diagnostic::{Diagnostic, Label, Severity};
 pub use error::{
     AelysError, CompileError, CompileErrorKind, RuntimeError, RuntimeErrorKind, StackFrame,
 };

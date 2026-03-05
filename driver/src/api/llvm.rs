@@ -1,4 +1,5 @@
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
+use aelys_common::Warning;
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
@@ -15,18 +16,24 @@ use std::sync::Arc;
 // TODO: Find a better way + clean until proper bootstrap
 const BOOTSTRAP_BUILTINS: &[&str] = &["print", "println"];
 
+struct LoweringArtifacts {
+    air: aelys_air::AirProgram,
+    source: Arc<Source>,
+    warnings: Vec<Warning>,
+}
+
 pub fn lower_file_to_air(
     path: &Path,
     opt_level: OptimizationLevel,
 ) -> Result<aelys_air::AirProgram, String> {
-    let (air, _) = lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
-    Ok(air)
+    let artifacts = lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
+    Ok(artifacts.air)
 }
 
 fn lower_file_to_air_with_source(
     path: &Path,
     opt_level: OptimizationLevel,
-) -> Result<(aelys_air::AirProgram, Arc<Source>), AelysError> {
+) -> Result<LoweringArtifacts, AelysError> {
     let content = std::fs::read_to_string(path)
         .map_err(|err| {
             let source = load_source_for_diagnostics(path);
@@ -48,7 +55,7 @@ fn lower_file_to_air_with_source(
 
     let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
 
-    let typed_program = aelys_sema::TypeInference::infer_program_with_imports(
+    let inference = aelys_sema::TypeInference::infer_program_full(
         stmts,
         src.clone(),
         HashSet::new(),
@@ -57,7 +64,7 @@ fn lower_file_to_air_with_source(
     .map_err(|errors| sema_errors_to_diagnostic(errors, src.clone()))?;
 
     let mut optimizer = Optimizer::new(opt_level);
-    let typed_program = optimizer.optimize(typed_program);
+    let typed_program = optimizer.optimize(inference.program);
 
     let mut air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
         let message = if errors.is_empty() {
@@ -101,7 +108,23 @@ fn lower_file_to_air_with_source(
         ));
     }
 
-    Ok((air, src))
+    let warnings = inference
+        .warnings
+        .into_iter()
+        .map(|warning| {
+            if warning.source.is_none() {
+                warning.with_source(src.clone())
+            } else {
+                warning
+            }
+        })
+        .collect();
+
+    Ok(LoweringArtifacts {
+        air,
+        source: src,
+        warnings,
+    })
 }
 
 pub fn compile_file_with_llvm(
@@ -109,8 +132,30 @@ pub fn compile_file_with_llvm(
     opt_level: OptimizationLevel,
     emit_llvm_ir: bool,
 ) -> Result<(), AelysError> {
-    let (air, source) = lower_file_to_air_with_source(path, opt_level)?;
-    compile_air_with_llvm(path, &air, opt_level, emit_llvm_ir, source)
+    let artifacts = lower_file_to_air_with_source(path, opt_level)?;
+    compile_air_with_llvm(
+        path,
+        &artifacts.air,
+        opt_level,
+        emit_llvm_ir,
+        artifacts.source,
+    )
+}
+
+pub fn compile_file_with_llvm_with_warnings(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    emit_llvm_ir: bool,
+) -> Result<Vec<Warning>, AelysError> {
+    let artifacts = lower_file_to_air_with_source(path, opt_level)?;
+    compile_air_with_llvm(
+        path,
+        &artifacts.air,
+        opt_level,
+        emit_llvm_ir,
+        artifacts.source,
+    )?;
+    Ok(artifacts.warnings)
 }
 
 fn compile_air_with_llvm(

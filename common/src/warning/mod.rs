@@ -7,6 +7,7 @@ mod message;
 pub use format::format_warnings;
 pub use kind::WarningKind;
 
+use crate::diagnostic::{Diagnostic, Severity};
 use aelys_syntax::{Source, Span};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -41,6 +42,33 @@ impl Warning {
 
     pub fn code(&self) -> u16 {
         self.kind.code()
+    }
+
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        let mut diag = Diagnostic::new(
+            Severity::Warning,
+            self.kind.message(self.context.as_deref()),
+        )
+        .with_code(format!("W{:04}", self.code()));
+
+        if let Some(source) = &self.source {
+            let annotation = self.kind.annotation().trim();
+            let label = if annotation.is_empty() {
+                None
+            } else {
+                Some(annotation.to_string())
+            };
+            diag = diag.with_primary_label(source.clone(), self.span, label);
+        }
+
+        if let Some(note) = self.kind.note() {
+            diag.add_note(note);
+        }
+        if let Some(help) = self.kind.hint() {
+            diag.add_help(help);
+        }
+
+        diag
     }
 }
 

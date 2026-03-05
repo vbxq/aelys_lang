@@ -4,6 +4,8 @@ pub mod compile;
 pub mod runtime;
 pub mod stack;
 
+use crate::diagnostic::Diagnostic;
+
 pub use compile::{CompileError, CompileErrorKind};
 pub use runtime::{RuntimeError, RuntimeErrorKind};
 pub use stack::StackFrame;
@@ -28,11 +30,17 @@ impl From<RuntimeError> for AelysError {
 
 impl fmt::Display for AelysError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AelysError::Compile(e) => write!(f, "{}", e),
-            AelysError::Runtime(e) => write!(f, "{}", e),
-        }
+        write!(f, "{}", self.to_diagnostic())
     }
 }
 
 impl std::error::Error for AelysError {}
+
+impl AelysError {
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        match self {
+            AelysError::Compile(e) => e.to_diagnostic(),
+            AelysError::Runtime(e) => e.to_diagnostic(),
+        }
+    }
+}
