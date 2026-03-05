@@ -15,7 +15,7 @@ Flags:
 Warning flags:
   -Wall                      Enable all warnings
   -Werror                    Treat warnings as errors
-  -W<category>               Enable specific category (inline, unused, deprecated, shadow)
+  -W<category>               Enable specific category (inline, unused, deprecated, shadow, type)
   -Wno-<category>            Disable specific category
 
 Examples:
