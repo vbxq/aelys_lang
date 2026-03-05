@@ -1,11 +1,20 @@
+pub mod color;
+pub mod registry;
+pub mod render;
+
 use aelys_syntax::{Source, Span};
 use std::fmt;
 use std::sync::Arc;
+
+use self::color::ColorConfig;
+use self::render::render_diagnostic;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Error,
     Warning,
+    Note,
+    Help,
 }
 
 impl Severity {
@@ -13,6 +22,8 @@ impl Severity {
         match self {
             Severity::Error => "error",
             Severity::Warning => "warning",
+            Severity::Note => "note",
+            Severity::Help => "help",
         }
     }
 }
@@ -46,6 +57,19 @@ impl Label {
 }
 
 #[derive(Debug, Clone)]
+pub struct Suggestion {
+    pub message: String,
+    pub replacements: Vec<Replacement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Replacement {
+    pub span: Span,
+    pub new_text: String,
+    pub source: Arc<Source>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub severity: Severity,
     pub code: Option<String>,
@@ -53,6 +77,8 @@ pub struct Diagnostic {
     pub labels: Vec<Label>,
     pub notes: Vec<String>,
     pub helps: Vec<String>,
+    pub suggestions: Vec<Suggestion>,
+    pub is_fatal: bool,
 }
 
 impl Diagnostic {
@@ -64,6 +90,8 @@ impl Diagnostic {
             labels: Vec::new(),
             notes: Vec::new(),
             helps: Vec::new(),
+            suggestions: Vec::new(),
+            is_fatal: matches!(severity, Severity::Error),
         }
     }
 
@@ -99,88 +127,27 @@ impl Diagnostic {
         self.helps.push(help.into());
     }
 
-    fn main_label(&self) -> Option<&Label> {
+    pub fn add_suggestion(&mut self, suggestion: Suggestion) {
+        self.suggestions.push(suggestion);
+    }
+
+    pub fn main_label(&self) -> Option<&Label> {
         self.labels
             .iter()
             .find(|label| label.is_primary)
             .or_else(|| self.labels.first())
     }
+
+    /// Render with explicit color configuration.
+    pub fn render(&self, color: &ColorConfig) -> String {
+        render_diagnostic(self, color)
+    }
 }
 
 impl fmt::Display for Diagnostic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(code) = &self.code {
-            writeln!(f, "{}[{}]: {}", self.severity.as_str(), code, self.message)?;
-        } else {
-            writeln!(f, "{}: {}", self.severity.as_str(), self.message)?;
-        }
-
-        if let Some(label) = self.main_label() {
-            render_label_snippet(f, label)?;
-        }
-
-        for label in self.labels.iter().filter(|label| !label.is_primary) {
-            let msg = label
-                .message
-                .as_deref()
-                .unwrap_or("related location")
-                .trim();
-            writeln!(
-                f,
-                "   = note: {}:{}:{}: {}",
-                label.source.name, label.span.line, label.span.column, msg
-            )?;
-        }
-
-        for note in &self.notes {
-            writeln!(f, "   = note: {}", note)?;
-        }
-        for help in &self.helps {
-            writeln!(f, "   = help: {}", help)?;
-        }
-
-        Ok(())
+        // Display always renders without colors. ANSI colors are a
+        // presentation concern handled by the CLI via render().
+        write!(f, "{}", render_diagnostic(self, &ColorConfig::never()))
     }
-}
-
-fn render_label_snippet(f: &mut fmt::Formatter<'_>, label: &Label) -> fmt::Result {
-    writeln!(
-        f,
-        "  --> {}:{}:{}",
-        label.source.name, label.span.line, label.span.column
-    )?;
-
-    let line_number = label.span.line.max(1);
-    let line_content = label.source.get_line(line_number);
-    let width = line_number.to_string().len().max(2);
-    writeln!(f, "{:width$} |", "", width = width)?;
-    writeln!(f, "{:>width$} | {}", line_number, line_content, width = width)?;
-
-    let caret_start = label.span.column.saturating_sub(1) as usize;
-    let caret_len = (label.span.end.saturating_sub(label.span.start)).max(1);
-    let label_message = label.message.as_deref().unwrap_or("").trim();
-    if label_message.is_empty() {
-        writeln!(
-            f,
-            "{:width$} | {:>start$}{}",
-            "",
-            "",
-            "^".repeat(caret_len),
-            width = width,
-            start = caret_start
-        )?;
-    } else {
-        writeln!(
-            f,
-            "{:width$} | {:>start$}{} {}",
-            "",
-            "",
-            "^".repeat(caret_len),
-            label_message,
-            width = width,
-            start = caret_start
-        )?;
-    }
-
-    Ok(())
 }

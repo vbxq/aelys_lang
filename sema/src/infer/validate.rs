@@ -376,19 +376,7 @@ impl TypeInference {
             TypedExprKind::Slice { object, range } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(range, generic_scope, declared_type_params);
-
-                if !Self::is_sliceable_type(&object.ty)
-                    && !self.is_active_generic_placeholder_type(
-                        &object.ty,
-                        generic_scope,
-                        declared_type_params,
-                    )
-                {
-                    self.errors.push(TypeError::member_access(
-                        format!("slice operation on non-sliceable type {}", object.ty),
-                        expr.span,
-                    ));
-                }
+                // TODO: slice error/validation, they're reported eargly in inference (array.rs) sincec slices are just not supported right now.
             }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
@@ -492,17 +480,6 @@ impl TypeInference {
     }
 
     fn is_indexable_type(ty: &InferType) -> bool {
-        matches!(
-            ty,
-            InferType::Array(_, _)
-                | InferType::Vec(_)
-                | InferType::String
-                | InferType::Dynamic
-                | InferType::Var(_)
-        )
-    }
-
-    fn is_sliceable_type(ty: &InferType) -> bool {
         matches!(
             ty,
             InferType::Array(_, _)

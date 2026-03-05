@@ -50,5 +50,5 @@ fn probe() -> i64 {
 
     let rendered = format_warnings(&warnings);
     assert!(rendered.contains("warning[W"), "{rendered}");
-    assert!(rendered.contains("  --> "), "{rendered}");
+    assert!(rendered.contains(" --> "), "{rendered}");
 }

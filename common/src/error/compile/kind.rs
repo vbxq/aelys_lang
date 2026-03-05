@@ -23,25 +23,62 @@ pub enum CompileErrorKind {
         max: usize,
     },
 
-    // Compiler errors
+    // Name resolution errors
     UndefinedVariable(String),
     VariableAlreadyDefined(String),
+    UndefinedFunction(String),
+
+    // Type errors (individual variants, replacing TypeInferenceError catch-all)
+    TypeMismatch {
+        expected: String,
+        found: String,
+        reason: String,
+    },
+    ArityMismatch {
+        expected: usize,
+        found: usize,
+        func_name: String,
+    },
+    NotCallable {
+        ty: String,
+    },
+    MemberAccess {
+        message: String,
+    },
+    InfiniteType {
+        message: String,
+    },
+    UnknownType {
+        name: String,
+    },
+    InvalidCast {
+        from: String,
+        to: String,
+    },
+    RecursionLimitExceeded,
+
+    // Mutability errors
     AssignToImmutable(String),
-    TooManyConstants,
-    TooManyRegisters,
-    TooManyArguments,
-    TooManyUpvalues,
+    AssignToLoopVariable(String),
+
+    // Control flow errors
     BreakOutsideLoop,
     ContinueOutsideLoop,
     ReturnOutsideFunction,
-    AssignToLoopVariable(String),
 
     // 48-bit signed range for NaN-boxed ints
+    // Legacy VM code
     IntegerOverflow {
         value: String,
         min: i64,
         max: i64,
     },
+
+    // Legacy VM codes
+    TooManyConstants,
+    TooManyRegisters,
+    TooManyArguments,
+    TooManyUpvalues,
 
     // Module errors
     ModuleNotFound {
@@ -86,7 +123,9 @@ pub enum CompileErrorKind {
         modules: Vec<String>,
     },
 
+    /// Legacy catch-all for sema type errors (being phased out in favor of individual variants)
     TypeInferenceError(String),
+
     BackendDiagnostic {
         backend: String,
         message: String,

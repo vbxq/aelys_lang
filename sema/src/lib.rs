@@ -5,7 +5,7 @@ pub mod typed_ast;
 pub mod types;
 pub mod unify;
 
-pub use constraint::{Constraint, ConstraintReason, TypeError};
+pub use constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind, TypeErrorSuggestion};
 pub use env::TypeEnv;
 pub use infer::{TypeInference, entry::InferenceResult};
 pub use typed_ast::{

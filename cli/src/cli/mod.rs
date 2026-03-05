@@ -2,6 +2,7 @@ pub mod args;
 
 pub mod commands {
     pub mod compile;
+    pub mod explain;
 }
 
 use aelys_common::WarningConfig;
@@ -46,12 +47,26 @@ fn parse_warning_config(flags: &[String]) -> Result<WarningConfig, String> {
     Ok(config)
 }
 
+fn color_config_from_choice(choice: &args::ColorChoice) -> aelys_common::ColorConfig {
+    match choice {
+        args::ColorChoice::Auto => aelys_common::ColorConfig::auto(),
+        args::ColorChoice::Always => aelys_common::ColorConfig::always(),
+        args::ColorChoice::Never => aelys_common::ColorConfig::never(),
+    }
+}
+
 fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
     let warn_config = parse_warning_config(&parsed.warning_flags)?;
+    let color = color_config_from_choice(&parsed.color);
 
     match parsed.command {
         args::Command::Help => Ok(0),
         args::Command::Version => Ok(0),
+
+        args::Command::Explain { code } => {
+            commands::explain::run_explain(&code);
+            Ok(0)
+        }
 
         args::Command::Compile {
             path,
@@ -65,6 +80,7 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
             warn_config,
             emit_air,
             emit_llvm_ir,
+            &color,
         ),
     }
 }

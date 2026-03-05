@@ -140,19 +140,14 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
+        // determine element type for error recovery, but actual error reporting happens post-substitution in validate.rs to avoid duplicate diagnostics
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
             InferType::String => InferType::String,
             InferType::Dynamic => InferType::Dynamic,
             InferType::Var(_) => self.type_gen.fresh(),
-            other => {
-                self.errors.push(TypeError::member_access(
-                    format!("index operation on non-indexable type {}", other),
-                    _span,
-                ));
-                InferType::Dynamic
-            }
+            _other => InferType::Dynamic,
         };
 
         (
@@ -182,7 +177,7 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-        // narrow the assigned value and constrain it to match element type.
+        // actual error reporting non-assignable types happens post-substitution in validate.rs to avoid duplicate diagnostics.
         match &typed_object.ty {
             InferType::Array(elem_ty, _) | InferType::Vec(elem_ty) => {
                 self.try_narrow_literal(&mut typed_value, elem_ty);
@@ -193,20 +188,9 @@ impl TypeInference {
                     ConstraintReason::ArrayElement,
                 ));
             }
-            InferType::String => {
-                self.errors.push(TypeError::member_access(
-                    "index assignment on non-indexable type string".to_string(),
-                    _span,
-                ));
-            }
-            InferType::Dynamic | InferType::Var(_) => {
-                // permissive: Dynamic accepts anything, Var may resolve later.
-            }
-            other => {
-                self.errors.push(TypeError::member_access(
-                    format!("index assignment on non-indexable type {}", other),
-                    _span,
-                ));
+            InferType::String | InferType::Dynamic | InferType::Var(_) | _ => {
+                // String, Dynamic, Var: permissive during inference
+                // other non-indexable types caught by validate.rs
             }
         }
 

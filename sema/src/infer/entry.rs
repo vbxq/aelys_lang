@@ -80,6 +80,9 @@ impl TypeInference {
                 reason: ConstraintReason::UnknownType {
                     name: ann.name.clone(),
                 },
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
             });
             return;
         }
@@ -93,6 +96,9 @@ impl TypeInference {
             reason: ConstraintReason::UnknownType {
                 name: ann.name.clone(),
             },
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
         });
     }
 

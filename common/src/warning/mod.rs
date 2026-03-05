@@ -1,3 +1,8 @@
+
+// TODO: warning system!
+// once the backend is stable enough, we can track which variable is unused for example, and trigger the appropriate warning for this.
+// most of these are legacy VM code kept for the sake of re-using it later
+// this currently isn't connected to the aelys pipeline
 mod annotation;
 mod code;
 mod format;

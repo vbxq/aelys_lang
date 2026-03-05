@@ -7,6 +7,7 @@ mod functions;
 mod scope;
 
 use crate::types::InferType;
+use aelys_syntax::Span;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -32,6 +33,9 @@ pub struct TypeEnv {
 
     /// Mutable names inherited as captures in closure environments
     mutable_captures: HashSet<String>,
+
+    /// Binding spans per lexical scope (parallels `locals`): where each variable was first defined
+    binding_spans: Vec<HashMap<String, Span>>,
 }
 
 impl TypeEnv {
@@ -43,6 +47,7 @@ impl TypeEnv {
             current_function: None,
             mutable_locals: vec![HashSet::new()],
             mutable_captures: HashSet::new(),
+            binding_spans: vec![HashMap::new()],
         }
     }
 }

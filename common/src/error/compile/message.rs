@@ -1,3 +1,5 @@
+// TODO: clean up the legacy VM error codes
+
 use super::CompileErrorKind;
 
 impl CompileErrorKind {
@@ -23,48 +25,79 @@ impl CompileErrorKind {
             Self::CommentNestingTooDeep { max } => {
                 format!("block comment nesting too deep (max {} levels)", max)
             }
-            Self::UndefinedVariable(name) => format!("undefined variable '{}'", name),
+            Self::UndefinedVariable(name) => format!("undefined variable `{}`", name),
             Self::VariableAlreadyDefined(name) => {
-                format!("variable '{}' already defined in this scope", name)
+                format!("variable `{}` already defined in this scope", name)
             }
+            Self::UndefinedFunction(name) => format!("undefined function `{}`", name),
+            Self::TypeMismatch {
+                expected,
+                found,
+                reason,
+            } => {
+                if reason.is_empty() {
+                    format!("expected `{}`, found `{}`", expected, found)
+                } else {
+                    format!("expected `{}`, found `{}` ({})", expected, found, reason)
+                }
+            }
+            Self::ArityMismatch {
+                expected,
+                found,
+                func_name,
+            } => format!(
+                "function `{}` takes {} argument{} but {} {} supplied",
+                func_name,
+                expected,
+                if *expected == 1 { "" } else { "s" },
+                found,
+                if *found == 1 { "was" } else { "were" },
+            ),
+            Self::NotCallable { ty } => format!("type `{}` is not callable", ty),
+            Self::MemberAccess { message } => message.clone(),
+            Self::InfiniteType { message } => format!("infinite type: {}", message),
+            Self::UnknownType { name } => format!("unknown type `{}`", name),
+            Self::InvalidCast { from, to } => {
+                format!("cannot cast `{}` to `{}`", from, to)
+            }
+            Self::RecursionLimitExceeded => "type inference recursion limit exceeded".to_string(),
             Self::AssignToImmutable(name) => {
-                format!("cannot assign to immutable variable '{}'", name)
+                format!("cannot assign to immutable variable `{}`", name)
             }
+            Self::AssignToLoopVariable(name) => {
+                format!("cannot assign to loop variable `{}`", name)
+            }
+            Self::BreakOutsideLoop => "'break' outside of loop".to_string(),
+            Self::ContinueOutsideLoop => "'continue' outside of loop".to_string(),
+            Self::ReturnOutsideFunction => "'return' outside of function".to_string(),
+            Self::IntegerOverflow { value, min, max } => format!(
+                "integer literal `{}` exceeds range ({} to {})",
+                value, min, max
+            ),
             Self::TooManyConstants => "too many constants in function".to_string(),
             Self::TooManyRegisters => "too many local variables in function".to_string(),
             Self::TooManyArguments => "too many arguments in function call".to_string(),
             Self::TooManyUpvalues => "too many captured variables (max 255)".to_string(),
-            Self::BreakOutsideLoop => "'break' outside of loop".to_string(),
-            Self::ContinueOutsideLoop => "'continue' outside of loop".to_string(),
-            Self::ReturnOutsideFunction => "'return' outside of function".to_string(),
-            Self::AssignToLoopVariable(name) => {
-                format!("cannot assign to loop variable '{}'", name)
-            }
-            Self::IntegerOverflow { value, min, max } => format!(
-                "integer literal '{}' exceeds 48-bit signed range ({} to {})",
-                value, min, max
-            ),
             Self::ModuleNotFound {
-                module_path,
-                searched_paths,
+                module_path, ..
             } => {
                 format!(
-                    "module not found: '{}'\n   = note: searched in: {}",
+                    "module not found: '{}'",
                     module_path,
-                    searched_paths.join(", ")
                 )
             }
             Self::CircularDependency { chain } => {
                 format!("circular dependency detected: {}", chain.join(" -> "))
             }
-            Self::SymbolNotPublic { symbol, module } => format!(
-                "'{}' is not public in module '{}'\n   = help: add 'pub' before the declaration in {}.aelys",
-                symbol, module, module
-            ),
-            Self::StdlibNotAvailable { module } => format!(
-                "standard library module '{}' is not yet implemented\n   = note: standard library will be available in a future version",
-                module
-            ),
+            Self::SymbolNotPublic { symbol, module } => {
+                format!("'{}' is not public in module '{}'", symbol, module)
+            }
+            Self::StdlibNotAvailable { module } => {
+                format!(
+                    "standard library module '{}' is not yet implemented",
+                    module
+                )
+            }
             Self::SymbolNotFound { symbol, module } => {
                 format!("symbol '{}' not found in module '{}'", symbol, module)
             }
@@ -74,27 +107,16 @@ impl CompileErrorKind {
             Self::NativeCapabilityDenied {
                 module,
                 capability,
-                required,
+                ..
             } => {
-                let caps_str = required.join(", ");
                 format!(
-                    "native module '{}' requires capability '{}' which is not allowed\n   \
-                     = required capabilities: [{}]\n   \
-                     = hint: use --allow-caps={} or -ae.trusted=true to allow",
-                    module, capability, caps_str, capability
+                    "native module '{}' requires capability '{}' which is not allowed",
+                    module, capability
                 )
             }
-            Self::NativeChecksumMismatch {
-                module,
-                expected,
-                actual,
-            } => format!(
-                "native module '{}' checksum mismatch\n   \
-                 = expected: {}\n   \
-                 = actual:   {}\n   \
-                 = hint: the module file may have been modified or corrupted",
-                module, expected, actual
-            ),
+            Self::NativeChecksumMismatch { module, .. } => {
+                format!("native module '{}' checksum mismatch", module)
+            }
             Self::NativeVersionMismatch {
                 module,
                 required,
@@ -102,10 +124,15 @@ impl CompileErrorKind {
             } => {
                 let found_str = found.as_deref().unwrap_or("(none)");
                 format!(
-                    "native module '{}' version constraint not satisfied\n   \
-                     = required: {}\n   \
-                     = found:    {}",
+                    "native module '{}' version constraint not satisfied (required: {}, found: {})",
                     module, required, found_str
+                )
+            }
+            Self::SymbolConflict { symbol, modules } => {
+                format!(
+                    "symbol '{}' is exported by multiple modules: {}",
+                    symbol,
+                    modules.join(", ")
                 )
             }
             Self::TypeInferenceError(msg) => {
@@ -115,13 +142,6 @@ impl CompileErrorKind {
                     .unwrap_or("type inference failed")
                     .trim();
                 format!("type error: {}", headline)
-            }
-            Self::SymbolConflict { symbol, modules } => {
-                format!(
-                    "symbol '{}' is exported by multiple modules: {}\n   = hint: use 'as' alias to disambiguate",
-                    symbol,
-                    modules.join(", ")
-                )
             }
             Self::BackendDiagnostic {
                 backend, message, ..

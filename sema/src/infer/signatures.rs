@@ -44,6 +44,9 @@ impl TypeInference {
                     "duplicate function definition '{}'",
                     func.name
                 )),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
             });
         }
 
@@ -62,6 +65,9 @@ impl TypeInference {
                             "duplicate parameter '{}' in function '{}'",
                             p.name, func.name
                         )),
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
                     });
                 }
             }

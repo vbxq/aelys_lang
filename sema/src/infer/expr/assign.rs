@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
 use crate::typed_ast::TypedExprKind;
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span};
@@ -16,17 +16,23 @@ impl TypeInference {
         if let Some(var_type) = self.env.lookup(name).cloned() {
             // check mutability, reject assignment to immutable variables
             if !self.env.is_mutable(name) {
-                self.errors.push(TypeError {
-                    kind: crate::constraint::TypeErrorKind::Mismatch {
-                        expected: var_type.clone(),
-                        found: typed_value.ty.clone(),
-                    },
-                    span,
-                    reason: ConstraintReason::Other(format!(
-                        "cannot assign to immutable variable '{}' (use 'let mut' to make it mutable)",
-                        name
-                    )),
+                let binding_span = self.env.lookup_binding_span(name);
+                let suggestion = binding_span.map(|bs| {
+                    // create a zero-width insertion span right after `let `, the binding_span starts at `let`, so column + 4 is where the variable name begins, we insert `mut ` there
+                    let insert_offset = bs.start + 4; // skip "let "
+                    let insert_span = Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
+                    TypeErrorSuggestion {
+                        message: "make the binding mutable".to_string(),
+                        span: insert_span,
+                        new_text: "mut ".to_string(),
+                    }
                 });
+                self.errors.push(TypeError::assign_to_immutable(
+                    name.to_string(),
+                    span,
+                    binding_span,
+                    suggestion,
+                ));
             }
 
             self.try_narrow_literal(&mut typed_value, &var_type);

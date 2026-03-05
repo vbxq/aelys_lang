@@ -1,5 +1,6 @@
 use super::TypeEnv;
 use crate::types::InferType;
+use aelys_syntax::Span;
 
 impl TypeEnv {
     /// Enter a new scope
@@ -7,6 +8,7 @@ impl TypeEnv {
         self.locals.push(std::collections::HashMap::new());
         self.mutable_locals.push(std::collections::HashSet::new());
         self.function_scopes.push(std::collections::HashMap::new());
+        self.binding_spans.push(std::collections::HashMap::new());
     }
 
     /// Exit the current scope
@@ -15,6 +17,7 @@ impl TypeEnv {
             self.locals.pop();
             self.mutable_locals.pop();
             self.function_scopes.pop();
+            self.binding_spans.pop();
         }
     }
 
@@ -23,6 +26,26 @@ impl TypeEnv {
         if let Some(scope) = self.locals.last_mut() {
             scope.insert(name, ty);
         }
+    }
+
+    /// Define a local variable and record the span where it was first bound
+    pub fn define_local_with_span(&mut self, name: String, ty: InferType, span: Span) {
+        if let Some(scope) = self.locals.last_mut() {
+            scope.insert(name.clone(), ty);
+        }
+        if let Some(spans) = self.binding_spans.last_mut() {
+            spans.insert(name, span);
+        }
+    }
+
+    /// Look up the span where a variable was first bound
+    pub fn lookup_binding_span(&self, name: &str) -> Option<Span> {
+        for scope in self.binding_spans.iter().rev() {
+            if let Some(span) = scope.get(name) {
+                return Some(*span);
+            }
+        }
+        None
     }
 
     /// Look up a variable (searches from innermost to outermost scope)

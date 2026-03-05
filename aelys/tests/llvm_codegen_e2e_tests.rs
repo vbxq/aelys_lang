@@ -388,7 +388,7 @@ fn foo() -> i64 {
         .expect_err("compilation should fail at sema stage");
     let rendered = err.to_string();
     assert!(
-        rendered.contains("type mismatch: expected i64, found null"),
+        rendered.contains("expected `i64`, found `null`"),
         "{rendered}"
     );
     assert!(
@@ -402,7 +402,7 @@ fn foo() -> i64 {
 }
 
 #[test]
-fn llvm_sema_diagnostic_reports_additional_errors_as_notes() {
+fn llvm_sema_diagnostic_reports_multiple_errors_separately() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -421,13 +421,20 @@ fn second() -> i64 {
     let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
         .expect_err("compilation should fail at sema stage");
     let rendered = err.to_string();
+    // each error should be a separate diagnostic with its own error code
+    let error_count = rendered.matches("error[E0301]").count();
     assert!(
-        rendered.contains("additional type error(s): 1"),
-        "{rendered}"
+        error_count >= 2,
+        "should have at least 2 separate error diagnostics, got {}: {rendered}",
+        error_count
     );
     assert!(
-        rendered.contains("= note:"),
-        "additional errors should be rendered as diagnostic notes: {rendered}"
+        rendered.contains("first"),
+        "should mention function 'first': {rendered}"
+    );
+    assert!(
+        rendered.contains("second"),
+        "should mention function 'second': {rendered}"
     );
 }
 

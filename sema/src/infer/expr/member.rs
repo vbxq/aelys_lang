@@ -9,21 +9,16 @@ impl TypeInference {
         &mut self,
         object: &Expr,
         member: &str,
-        span: Span,
+        _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
 
+        // determine the result type for error recovery; actual error reporting happens post-substitution in validate.rs to avoid duplicate diagnostics
         let ty = match &typed_object.ty {
-            // `Str` field access is a byte-length view over UTF-8 payload
-            // future char/other views should be separate APIs
             InferType::String => {
                 if member == "len" {
                     InferType::I64
                 } else {
-                    self.errors.push(TypeError::member_access(
-                        format!("unknown field '{}' on Str; supported: 'len'", member),
-                        span,
-                    ));
                     InferType::Dynamic
                 }
             }
@@ -33,28 +28,8 @@ impl TypeInference {
                         .iter()
                         .find(|f| f.name == member)
                         .map(|f| f.ty.clone())
-                        .unwrap_or_else(|| {
-                            self.errors.push(TypeError::member_access(
-                                format!("unknown field '{}' on struct '{}'", member, name),
-                                span,
-                            ));
-                            InferType::Dynamic
-                        })
+                        .unwrap_or(InferType::Dynamic)
                 } else {
-                    if self.type_params_in_scope.iter().any(|tp| tp == name) {
-                        self.errors.push(TypeError::member_access(
-                            format!(
-                                "field access on unconstrained generic type parameter '{}'",
-                                name
-                            ),
-                            span,
-                        ));
-                    } else {
-                        self.errors.push(TypeError::member_access(
-                            format!("field access on unknown struct type {}", name),
-                            span,
-                        ));
-                    }
                     InferType::Dynamic
                 }
             }
@@ -64,13 +39,7 @@ impl TypeInference {
             //
             // if it is never resolved, finalization converts the fresh Var to Dynamic, it's the same end result, but without premature widening
             InferType::Var(_) => self.type_gen.fresh(),
-            other => {
-                self.errors.push(TypeError::member_access(
-                    format!("field access on non-struct type {}", other),
-                    span,
-                ));
-                InferType::Dynamic
-            }
+            _other => InferType::Dynamic,
         };
 
         (

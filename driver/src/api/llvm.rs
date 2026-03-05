@@ -1,9 +1,12 @@
+// FIXME: this is slowly turning into a god object
+
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
-use aelys_common::Warning;
+use aelys_common::{Diagnostic, Severity, Suggestion, Replacement, Warning};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
+use aelys_sema::{TypeError, TypeErrorKind};
 use aelys_syntax::{Source, Span as SyntaxSpan};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -61,7 +64,7 @@ fn lower_file_to_air_with_source(
         HashSet::new(),
         known_globals,
     )
-    .map_err(|errors| sema_errors_to_diagnostic(errors, src.clone()))?;
+    .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(inference.program);
@@ -238,43 +241,150 @@ fn backend_diagnostic_error(
     ))
 }
 
-fn sema_errors_to_diagnostic(errors: Vec<aelys_sema::TypeError>, source: Arc<Source>) -> AelysError {
-    let mut entries: Vec<(SyntaxSpan, String)> = errors
-        .into_iter()
-        .map(|error| (error.span, error.to_string()))
-        .collect();
-    entries.sort_by(|a, b| {
-        let left = (a.0.start, a.0.end, a.0.line, a.0.column);
-        let right = (b.0.start, b.0.end, b.0.line, b.0.column);
-        left.cmp(&right).then_with(|| a.1.cmp(&b.1))
+fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> AelysError {
+    let mut sorted_errors = errors;
+    sorted_errors.sort_by(|a, b| {
+        let left = (a.span.start, a.span.end, a.span.line, a.span.column);
+        let right = (b.span.start, b.span.end, b.span.line, b.span.column);
+        left.cmp(&right).then_with(|| a.to_string().cmp(&b.to_string()))
     });
-    entries.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+    sorted_errors.dedup_by(|a, b| a.span == b.span && a.to_string() == b.to_string());
 
-    let span = entries
-        .first()
-        .map(|(span, _)| *span)
-        .unwrap_or_else(|| fallback_source_span(source.as_ref()));
-    let message = if entries.is_empty() {
-        "unknown type error".to_string()
+    let diagnostics: Vec<Diagnostic> = sorted_errors
+        .into_iter()
+        .map(|err| type_error_to_diagnostic(&err, &source))
+        .collect();
+
+    if diagnostics.is_empty() {
+        AelysError::Compile(CompileError::new(
+            CompileErrorKind::TypeInferenceError("unknown type error".to_string()),
+            fallback_source_span(source.as_ref()),
+            source,
+        ))
     } else {
-        let mut message = entries[0].1.clone();
-        if entries.len() > 1 {
-            message.push_str(&format!("\nadditional type error(s): {}", entries.len() - 1));
-            for (span, detail) in entries.iter().skip(1).take(4) {
-                message.push_str(&format!("\n{}:{}: {}", span.line, span.column, detail));
-            }
-            let remaining = entries.len().saturating_sub(5);
-            if remaining > 0 {
-                message.push_str(&format!("\n... and {} more", remaining));
+        AelysError::Multiple(diagnostics)
+    }
+}
+
+fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnostic {
+    let (code, message, annotation) = match &error.kind {
+        TypeErrorKind::Mismatch { expected, found } => (
+            "E0301",
+            format!("expected `{}`, found `{}`", expected, found),
+            format!("expected `{}`, found `{}`", expected, found),
+        ),
+        TypeErrorKind::InfiniteType { var, ty } => (
+            "E0305",
+            format!("infinite type: {} = {}", var, ty),
+            "infinite type".to_string(),
+        ),
+        TypeErrorKind::NotOneOf { ty, options } => {
+            let opts: Vec<_> = options.iter().map(|o| format!("`{}`", o)).collect();
+            (
+                "E0301",
+                format!("type `{}` is not one of [{}]", ty, opts.join(", ")),
+                "type mismatch".to_string(),
+            )
+        }
+        TypeErrorKind::ArityMismatch { expected, found } => {
+            let reason_str = error.reason.to_string();
+            (
+                "E0302",
+                format!(
+                    "this function takes {} argument{} but {} {} supplied ({})",
+                    expected,
+                    if *expected == 1 { "" } else { "s" },
+                    found,
+                    if *found == 1 { "was" } else { "were" },
+                    reason_str,
+                ),
+                "wrong number of arguments".to_string(),
+            )
+        }
+        TypeErrorKind::NotCallable { ty } => (
+            "E0303",
+            format!("type `{}` is not callable", ty),
+            "not callable".to_string(),
+        ),
+        TypeErrorKind::UndefinedVariable { name } => (
+            "E0201",
+            format!("undefined variable `{}`", name),
+            "not found in this scope".to_string(),
+        ),
+        TypeErrorKind::UndefinedFunction { name } => (
+            "E0203",
+            format!("undefined function `{}`", name),
+            "not found in this scope".to_string(),
+        ),
+        TypeErrorKind::MemberAccess { message } => (
+            "E0304",
+            message.clone(),
+            "invalid member access".to_string(),
+        ),
+        TypeErrorKind::RecursionLimit => (
+            "E0309",
+            "type inference recursion limit exceeded".to_string(),
+            "recursion limit".to_string(),
+        ),
+        TypeErrorKind::AssignToImmutable { name, .. } => (
+            "E0401",
+            format!("cannot assign to immutable variable `{}`", name),
+            "assignment to immutable variable".to_string(),
+        ),
+        TypeErrorKind::AssignToLoopVariable { name } => (
+            "E0402",
+            format!("cannot assign to loop variable `{}`", name),
+            "controlled by the for loop".to_string(),
+        ),
+    };
+
+    let mut diag = Diagnostic::new(Severity::Error, &message)
+        .with_code(code)
+        .with_primary_label(source.clone(), error.span, Some(annotation));
+
+    // add secondary labels for binding spans
+    if let TypeErrorKind::AssignToImmutable {
+        name, binding_span, ..
+    } = &error.kind
+    {
+        if let Some(bs) = binding_span {
+            diag.add_secondary_label(
+                source.clone(),
+                *bs,
+                Some(format!("`{}` first bound here", name)),
+            );
+        }
+    }
+
+    // add reason as a note for context (for type mismatches)
+    match &error.kind {
+        TypeErrorKind::Mismatch { .. } => {
+            let reason_str = error.reason.to_string();
+            if !reason_str.is_empty() {
+                diag.add_note(reason_str);
             }
         }
-        message
-    };
-    AelysError::Compile(CompileError::new(
-        CompileErrorKind::TypeInferenceError(message),
-        span,
-        source,
-    ))
+        _ => {}
+    }
+
+    // add help text from TypeError
+    if let Some(help) = &error.help {
+        diag.add_help(help.clone());
+    }
+
+    // add structured suggestion
+    if let Some(suggestion) = &error.suggestion {
+        diag.add_suggestion(Suggestion {
+            message: suggestion.message.clone(),
+            replacements: vec![Replacement {
+                span: suggestion.span,
+                new_text: suggestion.new_text.clone(),
+                source: source.clone(),
+            }],
+        });
+    }
+
+    diag
 }
 
 fn fallback_source_span(source: &Source) -> SyntaxSpan {
@@ -314,25 +424,8 @@ fn air_span_to_syntax_span(span: aelys_air::Span, source: &Source) -> SyntaxSpan
         end += 1;
     }
 
-    let (line, column) = line_col_for_offset(&source.content, start);
+    let (line, column) = source.line_col_at_offset(start);
     SyntaxSpan::new(start, end, line, column)
-}
-
-fn line_col_for_offset(content: &str, offset: usize) -> (u32, u32) {
-    let bytes = content.as_bytes();
-    let clamped = offset.min(bytes.len());
-    let mut line = 1u32;
-    let mut line_start = 0usize;
-
-    for (index, byte) in bytes.iter().enumerate().take(clamped) {
-        if *byte == b'\n' {
-            line = line.saturating_add(1);
-            line_start = index + 1;
-        }
-    }
-
-    let column = clamped.saturating_sub(line_start).saturating_add(1) as u32;
-    (line, column)
 }
 
 fn llvm_backend_error_to_diagnostic(

@@ -1,11 +1,12 @@
 // hand-rolled recursive descent, clap felt overkill for this
 
-use super::{Command, ParsedArgs};
+use super::{ColorChoice, Command, ParsedArgs};
 use aelys_opt::OptimizationLevel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommandName {
     Compile,
+    Explain,
     Help,
     Version,
 }
@@ -25,6 +26,8 @@ struct Parser<'a> {
     emit_air: bool,
     emit_llvm_ir: bool,
     warning_flags: Vec<String>,
+    color: ColorChoice,
+    explain_code: Option<String>,
 }
 
 impl<'a> Parser<'a> {
@@ -40,6 +43,8 @@ impl<'a> Parser<'a> {
             emit_air: false,
             emit_llvm_ir: false,
             warning_flags: Vec::new(),
+            color: ColorChoice::Auto,
+            explain_code: None,
         }
     }
 
@@ -87,6 +92,45 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if token_str == "--no-color" {
+                self.color = ColorChoice::Never;
+                self.advance();
+                continue;
+            }
+
+            if let Some(rest) = token_str.strip_prefix("--color=") {
+                self.color = match rest {
+                    "auto" => ColorChoice::Auto,
+                    "always" => ColorChoice::Always,
+                    "never" => ColorChoice::Never,
+                    _ => return Err(format!("invalid --color value: {} (expected auto, always, or never)", rest)),
+                };
+                self.advance();
+                continue;
+            }
+
+            if token_str == "--color" {
+                let next = self.peek_next().ok_or_else(|| "--color requires a value (auto, always, or never)".to_string())?;
+                self.color = match next {
+                    "auto" => ColorChoice::Auto,
+                    "always" => ColorChoice::Always,
+                    "never" => ColorChoice::Never,
+                    _ => return Err(format!("invalid --color value: {} (expected auto, always, or never)", next)),
+                };
+                self.advance();
+                self.advance();
+                continue;
+            }
+
+            if token_str == "--explain" {
+                let next = self.peek_next().ok_or_else(|| "--explain requires an error code (e.g., E0401)".to_string())?;
+                self.explain_code = Some(next.to_string());
+                self.command = Some(CommandName::Explain);
+                self.advance();
+                self.advance();
+                continue;
+            }
+
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
                 self.advance();
@@ -120,6 +164,12 @@ impl<'a> Parser<'a> {
             None => Command::Help,
             Some(CommandName::Help) => Command::Help,
             Some(CommandName::Version) => Command::Version,
+            Some(CommandName::Explain) => {
+                let code = self
+                    .explain_code
+                    .ok_or_else(|| "--explain requires an error code".to_string())?;
+                Command::Explain { code }
+            }
             Some(CommandName::Compile) => {
                 let path = self
                     .path
@@ -140,6 +190,7 @@ impl<'a> Parser<'a> {
             command,
             opt_level: self.opt_level,
             warning_flags: self.warning_flags,
+            color: self.color,
         })
     }
 
@@ -148,6 +199,7 @@ impl<'a> Parser<'a> {
             command: Command::Help,
             opt_level: OptimizationLevel::Standard,
             warning_flags: Vec::new(),
+            color: self.color,
         }
     }
 
@@ -156,6 +208,7 @@ impl<'a> Parser<'a> {
             command: Command::Version,
             opt_level: OptimizationLevel::Standard,
             warning_flags: Vec::new(),
+            color: self.color,
         }
     }
 
@@ -174,6 +227,13 @@ impl<'a> Parser<'a> {
                     return Err(format!("unexpected argument for compile: {}", token));
                 }
             }
+            Some(CommandName::Explain) => {
+                if self.explain_code.is_none() {
+                    self.explain_code = Some(token.to_string());
+                } else {
+                    return Err(format!("unexpected argument for explain: {}", token));
+                }
+            }
             Some(CommandName::Version) => {
                 return Err(format!("unexpected argument for version: {}", token));
             }
@@ -185,6 +245,7 @@ impl<'a> Parser<'a> {
     fn parse_command(&self, token: &str) -> Option<CommandName> {
         match token {
             "compile" => Some(CommandName::Compile),
+            "explain" => Some(CommandName::Explain),
             "help" => Some(CommandName::Help),
             "version" => Some(CommandName::Version),
             _ => None,

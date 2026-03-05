@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::TypedStmtKind;
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span, Stmt};
@@ -130,18 +130,9 @@ impl TypeInference {
             // This preserves the possibility of type propagation when the Var is resolved later by the constraint solver
             // but if it stays unresolved, finalization converts it to Dynamic anyway
             InferType::Var(_) => self.type_gen.fresh(),
-            other => {
-                self.errors.push(TypeError::mismatch(
-                    InferType::Dynamic, // expected: iterable
-                    other.clone(),
-                    _span,
-                    ConstraintReason::Other(format!(
-                        "for-each requires an iterable (array, vec, or string), got {}",
-                        other
-                    )),
-                ));
-                InferType::Dynamic
-            }
+            // non-iterable types: return Dynamic for error recovery
+            // the actual error is reported post-substitution in validate.rs
+            _other => InferType::Dynamic,
         };
 
         self.env.push_scope();

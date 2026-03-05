@@ -5,7 +5,8 @@ mod expr;
 mod stmt;
 
 use aelys_common::Result;
-use aelys_common::error::{CompileError, CompileErrorKind};
+use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
+use aelys_common::Diagnostic;
 use aelys_syntax::Source;
 use aelys_syntax::{Stmt, Token, TokenKind};
 use std::sync::Arc;
@@ -17,6 +18,7 @@ pub struct Parser {
     current: usize,
     pub(crate) source: Arc<Source>,
     recursion_depth: usize,
+    errors: Vec<Diagnostic>,
 }
 
 impl Parser {
@@ -26,6 +28,7 @@ impl Parser {
             current: 0,
             source,
             recursion_depth: 0,
+            errors: Vec::new(),
         }
     }
 
@@ -37,10 +40,60 @@ impl Parser {
                 continue;
             }
 
-            statements.push(self.declaration()?);
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
+                Err(err) => {
+                    // Convert error to diagnostic and accumulate
+                    let diag = match &err {
+                        AelysError::Compile(e) => e.to_diagnostic(),
+                        AelysError::Multiple(diags) => {
+                            // Take first diagnostic
+                            if let Some(d) = diags.first() {
+                                d.clone()
+                            } else {
+                                continue;
+                            }
+                        }
+                        AelysError::Runtime(e) => e.to_diagnostic(),
+                    };
+                    self.errors.push(diag);
+                    self.synchronize();
+                }
+            }
         }
 
-        Ok(statements)
+        if self.errors.is_empty() {
+            Ok(statements)
+        } else {
+            Err(AelysError::Multiple(self.errors))
+        }
+    }
+
+    /// Skip tokens until we find a statement boundary for error recovery.
+    fn synchronize(&mut self) {
+        while !self.is_at_end() {
+            // Consume semicolons as statement boundaries
+            if self.peek().kind == TokenKind::Semicolon {
+                self.advance();
+                return;
+            }
+
+            // These tokens typically start a new statement
+            match &self.peek().kind {
+                TokenKind::Let
+                | TokenKind::Fn
+                | TokenKind::If
+                | TokenKind::While
+                | TokenKind::For
+                | TokenKind::Return
+                | TokenKind::Struct
+                | TokenKind::Pub => return,
+                TokenKind::Eof => return,
+                _ => {}
+            }
+
+            self.advance();
+        }
     }
 
     pub fn error(&self, kind: CompileErrorKind) -> aelys_common::error::AelysError {

@@ -44,7 +44,7 @@ impl TypeInference {
             typed_init.ty.clone()
         };
 
-        self.env.define_local(name.to_string(), var_type.clone());
+        self.env.define_local_with_span(name.to_string(), var_type.clone(), span);
         if mutable {
             self.env.mark_mutable(name.to_string());
         }

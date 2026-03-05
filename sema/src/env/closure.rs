@@ -43,6 +43,7 @@ impl TypeEnv {
             current_function: None,
             mutable_locals: vec![HashSet::new()],
             mutable_captures: all_mutable,
+            binding_spans: vec![HashMap::new()],
         }
     }
 }

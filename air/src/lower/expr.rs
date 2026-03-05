@@ -323,7 +323,7 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(result_infer_ty);
-        // Void- and Opaque-returning calls can't be used as values in LLVM.
+        // Void, and Opaque-returning calls can't be used as values in LLVM
         // Opaque means the return type is unresolved Dynamic (bootstrap builtins like print/println). Treating it as void prevents creating temp locals with an unresolvable type.
         // TODO: !
         if matches!(result_ty, AirType::Void | AirType::Opaque) {

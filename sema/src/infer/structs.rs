@@ -60,6 +60,9 @@ impl TypeInference {
                                 "duplicate field '{}' in struct '{}'",
                                 f.name, name
                             )),
+                            secondary_spans: Vec::new(),
+                            help: None,
+                            suggestion: None,
                         });
                     }
                 }

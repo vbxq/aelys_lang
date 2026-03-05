@@ -7,6 +7,13 @@ pub use parse::parse_args;
 pub use usage::usage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ColorChoice {
+    Auto,
+    Always,
+    Never,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
     Help,
     Compile {
@@ -14,6 +21,9 @@ pub enum Command {
         output: Option<String>,
         emit_air: bool,
         emit_llvm_ir: bool,
+    },
+    Explain {
+        code: String,
     },
     Version,
 }
@@ -23,4 +33,5 @@ pub struct ParsedArgs {
     pub command: Command,
     pub opt_level: OptimizationLevel,
     pub warning_flags: Vec<String>,
+    pub color: ColorChoice,
 }

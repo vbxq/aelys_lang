@@ -127,23 +127,8 @@ impl TypeInference {
             } => {
                 let typed_inner = self.infer_expr(inner);
                 let target_ty = self.type_from_annotation(target);
-                let src = &typed_inner.ty;
-                let src_is_type_param = matches!(src, InferType::Var(_));
-                let allowed = src_is_type_param
-                    || ((src.is_numeric()
-                        || *src == InferType::Bool
-                        || *src == InferType::Dynamic)
-                        && (target_ty.is_numeric() || target_ty == InferType::Bool));
-                if !allowed {
-                    self.errors.push(TypeError {
-                        kind: TypeErrorKind::Mismatch {
-                            expected: target_ty.clone(),
-                            found: src.clone(),
-                        },
-                        span: inner.span,
-                        reason: ConstraintReason::InvalidCast,
-                    });
-                }
+                // Cast validity is checked post-substitution in validate.rs
+                // to avoid duplicate errors and to work on resolved types.
                 (
                     TypedExprKind::Cast {
                         expr: Box::new(typed_inner),
@@ -306,6 +291,9 @@ impl TypeInference {
                             value,
                             target: target_ty.clone(),
                         },
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
                     });
                     return false;
                 }
@@ -328,6 +316,9 @@ impl TypeInference {
                             value,
                             target: target_ty.clone(),
                         },
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
                     });
                     return false;
                 }
@@ -420,6 +411,9 @@ impl TypeInference {
                                         value: result,
                                         target: target_ty.clone(),
                                     },
+                                    secondary_spans: Vec::new(),
+                                    help: None,
+                                    suggestion: None,
                                 });
                                 return false;
                             }
@@ -516,6 +510,9 @@ impl TypeInference {
                                         value,
                                         target: target_ty.clone(),
                                     },
+                                    secondary_spans: Vec::new(),
+                                    help: None,
+                                    suggestion: None,
                                 });
                                 return false;
                             }
@@ -537,6 +534,9 @@ impl TypeInference {
                                         value,
                                         target: target_ty.clone(),
                                     },
+                                    secondary_spans: Vec::new(),
+                                    help: None,
+                                    suggestion: None,
                                 });
                                 false
                             };
