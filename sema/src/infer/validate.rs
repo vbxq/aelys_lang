@@ -239,6 +239,29 @@ impl TypeInference {
                 for (_, capture_ty) in captures {
                     self.validate_type(capture_ty, expr.span, generic_scope, declared_type_params);
                 }
+                let has_generic_placeholder = self.contains_active_generic_placeholder_type(
+                    return_type,
+                    generic_scope,
+                    declared_type_params,
+                ) || params.iter().any(|p| {
+                    self.contains_active_generic_placeholder_type(
+                        &p.ty,
+                        generic_scope,
+                        declared_type_params,
+                    )
+                }) || captures.iter().any(|(_, ty)| {
+                    self.contains_active_generic_placeholder_type(
+                        ty,
+                        generic_scope,
+                        declared_type_params,
+                    )
+                });
+                if has_generic_placeholder {
+                    self.errors.push(TypeError::member_access(
+                        "lambda cannot use active generic type parameters".to_string(),
+                        expr.span,
+                    ));
+                }
                 for stmt in body {
                     self.validate_stmt(stmt, generic_scope, declared_type_params);
                 }

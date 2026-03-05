@@ -427,6 +427,27 @@ fn bad() -> string {
 }
 
 #[test]
+fn rejects_lambda_with_active_generic_type_param() {
+    assert!(
+        sema_err(
+            r#"
+fn outer<T>(x: T) -> T {
+    let f = fn() -> T {
+        return x
+    }
+    return f()
+}
+
+fn main() -> i64 {
+    return outer(1)
+}
+"#
+        ),
+        "lambda using active generic type parameters should be rejected"
+    );
+}
+
+#[test]
 fn rejects_string_index_assignment() {
     assert!(
         sema_err(
