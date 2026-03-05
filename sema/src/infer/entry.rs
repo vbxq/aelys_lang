@@ -161,10 +161,9 @@ impl TypeInference {
             .iter()
             .filter(|err| match &err.kind {
                 TypeErrorKind::Mismatch { expected, found } => {
-                    let generic_annotation_mismatch = matches!(
-                        &err.reason,
-                        ConstraintReason::TypeAnnotation { .. }
-                    ) && (is_type_param(expected) || is_type_param(found));
+                    let generic_annotation_mismatch =
+                        matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
+                            && (is_type_param(expected) || is_type_param(found));
                     !generic_annotation_mismatch
                 }
                 _ => true,

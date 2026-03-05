@@ -187,11 +187,13 @@ impl TypeInference {
                         }
                     }
                     InferType::Dynamic => {}
-                    other if self.is_active_generic_placeholder_type(
-                        other,
-                        generic_scope,
-                        declared_type_params,
-                    ) => {
+                    other
+                        if self.is_active_generic_placeholder_type(
+                            other,
+                            generic_scope,
+                            declared_type_params,
+                        ) =>
+                    {
                         self.errors.push(TypeError::not_callable(
                             other.clone(),
                             expr.span,
@@ -384,10 +386,7 @@ impl TypeInference {
                 self.validate_expr(inner, generic_scope, declared_type_params);
                 self.validate_type(target, expr.span, generic_scope, declared_type_params);
 
-                if !self.is_cast_allowed_resolved(
-                    &inner.ty,
-                    target,
-                ) {
+                if !self.is_cast_allowed_resolved(&inner.ty, target) {
                     self.errors.push(TypeError::mismatch(
                         target.clone(),
                         inner.ty.clone(),
@@ -509,11 +508,7 @@ impl TypeInference {
         )
     }
 
-    fn is_cast_allowed_resolved(
-        &self,
-        src: &InferType,
-        target: &InferType,
-    ) -> bool {
+    fn is_cast_allowed_resolved(&self, src: &InferType, target: &InferType) -> bool {
         (src.is_numeric() || *src == InferType::Bool || *src == InferType::Dynamic)
             && (target.is_numeric() || *target == InferType::Bool)
     }
