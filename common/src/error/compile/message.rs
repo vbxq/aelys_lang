@@ -78,13 +78,8 @@ impl CompileErrorKind {
             Self::TooManyRegisters => "too many local variables in function".to_string(),
             Self::TooManyArguments => "too many arguments in function call".to_string(),
             Self::TooManyUpvalues => "too many captured variables (max 255)".to_string(),
-            Self::ModuleNotFound {
-                module_path, ..
-            } => {
-                format!(
-                    "module not found: '{}'",
-                    module_path,
-                )
+            Self::ModuleNotFound { module_path, .. } => {
+                format!("module not found: '{}'", module_path,)
             }
             Self::CircularDependency { chain } => {
                 format!("circular dependency detected: {}", chain.join(" -> "))
@@ -105,9 +100,7 @@ impl CompileErrorKind {
                 format!("invalid native module '{}': {}", module, reason)
             }
             Self::NativeCapabilityDenied {
-                module,
-                capability,
-                ..
+                module, capability, ..
             } => {
                 format!(
                     "native module '{}' requires capability '{}' which is not allowed",

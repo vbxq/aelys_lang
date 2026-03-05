@@ -897,7 +897,10 @@ fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
             matches!(
                 &s.kind,
                 AirStmtKind::Assign {
-                    rvalue: Rvalue::Call { func: Callee::FnPtr(_), .. },
+                    rvalue: Rvalue::Call {
+                        func: Callee::FnPtr(_),
+                        ..
+                    },
                     ..
                 }
             )

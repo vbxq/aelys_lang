@@ -30,9 +30,8 @@ fn probe() -> i64 {
 "#,
     );
 
-    let warnings =
-        compile_file_with_llvm_with_warnings(&path, OptimizationLevel::None, false)
-            .expect("program should compile and only emit a warning");
+    let warnings = compile_file_with_llvm_with_warnings(&path, OptimizationLevel::None, false)
+        .expect("program should compile and only emit a warning");
     let _ = fs::remove_file(&path);
     let _ = fs::remove_file(path.with_extension("obj"));
     let _ = fs::remove_file(path.with_extension("o"));

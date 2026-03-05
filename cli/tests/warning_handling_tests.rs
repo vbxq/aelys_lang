@@ -71,5 +71,8 @@ fn probe() -> i64 {
     let _ = fs::remove_file(path.with_extension("obj"));
     let _ = fs::remove_file(path.with_extension("o"));
 
-    assert!(result.is_ok(), "type warnings were disabled, got {result:?}");
+    assert!(
+        result.is_ok(),
+        "type warnings were disabled, got {result:?}"
+    );
 }

@@ -244,9 +244,7 @@ impl TypeError {
                 binding_span,
             },
             span,
-            reason: ConstraintReason::Assignment {
-                var_name: name,
-            },
+            reason: ConstraintReason::Assignment { var_name: name },
             secondary_spans: Vec::new(),
             help: Some("make the binding mutable: `let mut`".to_string()),
             suggestion,
@@ -255,13 +253,9 @@ impl TypeError {
 
     pub fn assign_to_loop_variable(name: String, span: Span) -> Self {
         TypeError {
-            kind: TypeErrorKind::AssignToLoopVariable {
-                name: name.clone(),
-            },
+            kind: TypeErrorKind::AssignToLoopVariable { name: name.clone() },
             span,
-            reason: ConstraintReason::Assignment {
-                var_name: name,
-            },
+            reason: ConstraintReason::Assignment { var_name: name },
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,

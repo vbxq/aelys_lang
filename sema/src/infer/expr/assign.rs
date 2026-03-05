@@ -20,7 +20,8 @@ impl TypeInference {
                 let suggestion = binding_span.map(|bs| {
                     // create a zero-width insertion span right after `let `, the binding_span starts at `let`, so column + 4 is where the variable name begins, we insert `mut ` there
                     let insert_offset = bs.start + 4; // skip "let "
-                    let insert_span = Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
+                    let insert_span =
+                        Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
                     TypeErrorSuggestion {
                         message: "make the binding mutable".to_string(),
                         span: insert_span,

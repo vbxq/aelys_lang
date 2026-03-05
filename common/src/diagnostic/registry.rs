@@ -22,7 +22,6 @@ pub struct DiagnosticInfo {
 
 static REGISTRY: &[DiagnosticInfo] = &[
     // Lexer (E00xx)
-
     DiagnosticInfo {
         code: "E0001",
         title: "unterminated string literal",
@@ -85,9 +84,7 @@ A lone `}` appeared in a string without an opening `{`.
 To write a literal `}`, double it: `}}`.",
         severity: Severity::Error,
     },
-
     // Parser (E01xx)
-
     DiagnosticInfo {
         code: "E0101",
         title: "unexpected token",
@@ -134,9 +131,7 @@ stack-overflow guard. The expression needs to be simplified or broken
 into intermediate variables.",
         severity: Severity::Error,
     },
-
     // Name resolution (E02xx)
-
     DiagnosticInfo {
         code: "E0201",
         title: "undefined variable",
@@ -165,9 +160,7 @@ No function with this name exists. Functions must be defined before the
 call site (there is no hoisting).",
         severity: Severity::Error,
     },
-
     // Types (E03xx)
-
     DiagnosticInfo {
         code: "E0301",
         title: "type mismatch",
@@ -257,9 +250,7 @@ or extremely deep type dependency that the inference engine can't
 untangle. Simplify the involved types or add explicit annotations.",
         severity: Severity::Error,
     },
-
     // Mutability (E04xx)
-
     DiagnosticInfo {
         code: "E0401",
         title: "cannot assign to immutable variable",
@@ -288,9 +279,7 @@ and can't be overwritten inside the body.
     }",
         severity: Severity::Error,
     },
-
     // Control flow (E05xx)
-
     DiagnosticInfo {
         code: "E0501",
         title: "`break` outside of loop",
@@ -315,9 +304,7 @@ outside `for` or `while`.",
 nowhere to return to.",
         severity: Severity::Error,
     },
-
     // Backend / internal (E09xx)
-
     DiagnosticInfo {
         code: "E0901",
         title: "backend error",

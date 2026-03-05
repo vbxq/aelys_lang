@@ -16,5 +16,12 @@ pub fn unify_error_to_type_error(
         }
     };
 
-    TypeError { kind, span, reason, secondary_spans: Vec::new(), help: None, suggestion: None }
+    TypeError {
+        kind,
+        span,
+        reason,
+        secondary_spans: Vec::new(),
+        help: None,
+        suggestion: None,
+    }
 }

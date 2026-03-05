@@ -8,4 +8,4 @@ cmd /c ('"' + $vc + '" >nul 2>&1 && set') | ForEach-Object {
 $env:LLVM_SYS_181_PREFIX = 'C:\llvm'
 $env:PATH = "C:\llvm\bin;$env:PATH"
 Set-Location 'C:\Users\admin\RustroverProjects\aelys_lang'
-.\target\debug\aelys-cli.exe compile audit_tmp/repro_lambda_capture.aelys
+.\target\debug\aelys-cli.exe compile test.aelys

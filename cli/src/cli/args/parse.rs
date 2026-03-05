@@ -103,19 +103,31 @@ impl<'a> Parser<'a> {
                     "auto" => ColorChoice::Auto,
                     "always" => ColorChoice::Always,
                     "never" => ColorChoice::Never,
-                    _ => return Err(format!("invalid --color value: {} (expected auto, always, or never)", rest)),
+                    _ => {
+                        return Err(format!(
+                            "invalid --color value: {} (expected auto, always, or never)",
+                            rest
+                        ));
+                    }
                 };
                 self.advance();
                 continue;
             }
 
             if token_str == "--color" {
-                let next = self.peek_next().ok_or_else(|| "--color requires a value (auto, always, or never)".to_string())?;
+                let next = self.peek_next().ok_or_else(|| {
+                    "--color requires a value (auto, always, or never)".to_string()
+                })?;
                 self.color = match next {
                     "auto" => ColorChoice::Auto,
                     "always" => ColorChoice::Always,
                     "never" => ColorChoice::Never,
-                    _ => return Err(format!("invalid --color value: {} (expected auto, always, or never)", next)),
+                    _ => {
+                        return Err(format!(
+                            "invalid --color value: {} (expected auto, always, or never)",
+                            next
+                        ));
+                    }
                 };
                 self.advance();
                 self.advance();
@@ -123,7 +135,9 @@ impl<'a> Parser<'a> {
             }
 
             if token_str == "--explain" {
-                let next = self.peek_next().ok_or_else(|| "--explain requires an error code (e.g., E0401)".to_string())?;
+                let next = self
+                    .peek_next()
+                    .ok_or_else(|| "--explain requires an error code (e.g., E0401)".to_string())?;
                 self.explain_code = Some(next.to_string());
                 self.command = Some(CommandName::Explain);
                 self.advance();

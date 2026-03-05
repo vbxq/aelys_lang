@@ -46,11 +46,7 @@ pub fn render_diagnostic(diag: &Diagnostic, color: &ColorConfig) -> String {
         out.push_str(&format!(
             "   {} {}\n",
             color.blue("="),
-            format!(
-                "{}: {}",
-                color.severity(Severity::Help, "help"),
-                help
-            ),
+            format!("{}: {}", color.severity(Severity::Help, "help"), help),
         ));
     }
 
@@ -150,7 +146,9 @@ fn render_labels_block(
             continue;
         }
         let start_line = label.span.line;
-        let (end_line, _) = label.source.line_col_at_offset(label.span.end.saturating_sub(1).max(label.span.start));
+        let (end_line, _) = label
+            .source
+            .line_col_at_offset(label.span.end.saturating_sub(1).max(label.span.start));
         for line in start_line..=end_line {
             if !needed_lines.contains(&line) {
                 needed_lines.push(line);
@@ -172,10 +170,7 @@ fn render_labels_block(
         // if gap show ellipsis
         if let Some(prev) = last_line {
             if line_num > prev + 1 {
-                out.push_str(&format!(
-                    "{}\n",
-                    color.blue("..."),
-                ));
+                out.push_str(&format!("{}\n", color.blue("..."),));
             }
         }
 
@@ -193,8 +188,9 @@ fn render_labels_block(
             .iter()
             .filter(|l| {
                 l.source.name == source.name && l.span.line <= line_num && {
-                    let (end_line, _) =
-                        l.source.line_col_at_offset(l.span.end.saturating_sub(1).max(l.span.start));
+                    let (end_line, _) = l
+                        .source
+                        .line_col_at_offset(l.span.end.saturating_sub(1).max(l.span.start));
                     end_line >= line_num
                 }
             })
@@ -212,9 +208,9 @@ fn render_labels_block(
                     0
                 };
 
-                let (end_line, end_col) = label.source.line_col_at_offset(
-                    label.span.end.saturating_sub(1).max(label.span.start),
-                );
+                let (end_line, end_col) = label
+                    .source
+                    .line_col_at_offset(label.span.end.saturating_sub(1).max(label.span.start));
                 let col_end = if end_line == line_num {
                     end_col as usize
                 } else {
@@ -222,12 +218,7 @@ fn render_labels_block(
                 };
 
                 let len = col_end.saturating_sub(col_start).max(1);
-                annotations.push((
-                    col_start,
-                    len,
-                    label.is_primary,
-                    label.message.as_deref(),
-                ));
+                annotations.push((col_start, len, label.is_primary, label.message.as_deref()));
             }
 
             annotations.sort_by_key(|a| a.0);
@@ -240,11 +231,7 @@ fn render_labels_block(
 
                 let msg_text = message.map(|m| m.trim()).unwrap_or("");
 
-                let line_prefix = format!(
-                    "{} {} ",
-                    " ".repeat(gutter_width),
-                    color.blue("|"),
-                );
+                let line_prefix = format!("{} {} ", " ".repeat(gutter_width), color.blue("|"),);
 
                 if msg_text.is_empty() {
                     let caret_str = if *is_primary {
@@ -312,10 +299,7 @@ fn render_suggestion(out: &mut String, suggestion: &Suggestion, color: &ColorCon
         let new_text_len = replacement.new_text.len();
         if new_text_len > 0 {
             let padding = " ".repeat(col_start);
-            let markers = color.severity(
-                Severity::Help,
-                &"+".repeat(new_text_len),
-            );
+            let markers = color.severity(Severity::Help, &"+".repeat(new_text_len));
             out.push_str(&format!(
                 "{} {} {}{}\n",
                 " ".repeat(gutter_width),

@@ -53,10 +53,9 @@ impl AelysError {
             AelysError::Runtime(e) => e.to_diagnostic(),
             AelysError::Multiple(diagnostics) => {
                 // return first diagnostic; callers should use to_diagnostics() instead
-                diagnostics
-                    .first()
-                    .cloned()
-                    .unwrap_or_else(|| Diagnostic::new(crate::diagnostic::Severity::Error, "unknown error"))
+                diagnostics.first().cloned().unwrap_or_else(|| {
+                    Diagnostic::new(crate::diagnostic::Severity::Error, "unknown error")
+                })
             }
         }
     }

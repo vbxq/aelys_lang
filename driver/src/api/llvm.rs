@@ -1,8 +1,8 @@
 // FIXME: this is slowly turning into a god object
 
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
-use aelys_common::{Diagnostic, Severity, Suggestion, Replacement, Warning};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
+use aelys_common::{Diagnostic, Replacement, Severity, Suggestion, Warning};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
@@ -29,7 +29,8 @@ pub fn lower_file_to_air(
     path: &Path,
     opt_level: OptimizationLevel,
 ) -> Result<aelys_air::AirProgram, String> {
-    let artifacts = lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
+    let artifacts =
+        lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
     Ok(artifacts.air)
 }
 
@@ -37,18 +38,17 @@ fn lower_file_to_air_with_source(
     path: &Path,
     opt_level: OptimizationLevel,
 ) -> Result<LoweringArtifacts, AelysError> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|err| {
-            let source = load_source_for_diagnostics(path);
-            backend_diagnostic_error(
-                source.clone(),
-                fallback_source_span(source.as_ref()),
-                "driver",
-                format!("failed to read {}: {}", path.display(), err),
-                None,
-                None,
-            )
-        })?;
+    let content = std::fs::read_to_string(path).map_err(|err| {
+        let source = load_source_for_diagnostics(path);
+        backend_diagnostic_error(
+            source.clone(),
+            fallback_source_span(source.as_ref()),
+            "driver",
+            format!("failed to read {}: {}", path.display(), err),
+            None,
+            None,
+        )
+    })?;
 
     let name = path.display().to_string();
     let src = Source::new(&name, &content);
@@ -246,7 +246,8 @@ fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> Ae
     sorted_errors.sort_by(|a, b| {
         let left = (a.span.start, a.span.end, a.span.line, a.span.column);
         let right = (b.span.start, b.span.end, b.span.line, b.span.column);
-        left.cmp(&right).then_with(|| a.to_string().cmp(&b.to_string()))
+        left.cmp(&right)
+            .then_with(|| a.to_string().cmp(&b.to_string()))
     });
     sorted_errors.dedup_by(|a, b| a.span == b.span && a.to_string() == b.to_string());
 

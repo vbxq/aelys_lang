@@ -85,13 +85,13 @@ impl CompileError {
             }
             CompileErrorKind::NativeChecksumMismatch {
                 // FIXME: legacy VM code, clean up
-                expected, actual, ..
+                expected,
+                actual,
+                ..
             } => {
                 diag.add_note(format!("expected: {}", expected));
                 diag.add_note(format!("actual:   {}", actual));
-                diag.add_help(
-                    "the module file may have been modified or corrupted".to_string(),
-                );
+                diag.add_help("the module file may have been modified or corrupted".to_string());
             }
             CompileErrorKind::SymbolConflict { .. } => {
                 diag.add_help("use 'as' alias to disambiguate".to_string());

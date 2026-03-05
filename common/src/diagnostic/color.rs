@@ -7,8 +7,8 @@ pub struct ColorConfig {
 
 impl ColorConfig {
     pub fn auto() -> Self {
-        let use_color = !std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty())
-            && is_terminal_stderr();
+        let use_color =
+            !std::env::var("NO_COLOR").is_ok_and(|v| !v.is_empty()) && is_terminal_stderr();
         Self { use_color }
     }
 
@@ -70,7 +70,10 @@ fn is_terminal_stderr() -> bool {
 }
 
 #[cfg(windows)]
-unsafe fn windows_sys_get_console_mode(handle: std::os::windows::io::RawHandle, mode: &mut u32) -> bool {
+unsafe fn windows_sys_get_console_mode(
+    handle: std::os::windows::io::RawHandle,
+    mode: &mut u32,
+) -> bool {
     unsafe extern "system" {
         fn GetConsoleMode(hConsoleHandle: *mut std::ffi::c_void, lpMode: *mut u32) -> i32;
     }

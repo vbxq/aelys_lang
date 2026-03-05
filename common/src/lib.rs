@@ -3,10 +3,10 @@ pub mod error;
 pub mod result;
 pub mod warning;
 
-pub use diagnostic::{Diagnostic, Label, Severity, Suggestion, Replacement};
 pub use diagnostic::color::ColorConfig;
 pub use diagnostic::registry;
 pub use diagnostic::render::render_summary;
+pub use diagnostic::{Diagnostic, Label, Replacement, Severity, Suggestion};
 pub use error::{
     AelysError, CompileError, CompileErrorKind, RuntimeError, RuntimeErrorKind, StackFrame,
 };

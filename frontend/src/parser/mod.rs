@@ -4,9 +4,9 @@ mod decl;
 mod expr;
 mod stmt;
 
+use aelys_common::Diagnostic;
 use aelys_common::Result;
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
-use aelys_common::Diagnostic;
 use aelys_syntax::Source;
 use aelys_syntax::{Stmt, Token, TokenKind};
 use std::sync::Arc;
