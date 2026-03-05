@@ -194,18 +194,36 @@ fn backend_diagnostic_error(
 }
 
 fn sema_errors_to_diagnostic(errors: Vec<aelys_sema::TypeError>, source: Arc<Source>) -> AelysError {
-    let span = errors
+    let mut entries: Vec<(SyntaxSpan, String)> = errors
+        .into_iter()
+        .map(|error| (error.span, error.to_string()))
+        .collect();
+    entries.sort_by(|a, b| {
+        let left = (a.0.start, a.0.end, a.0.line, a.0.column);
+        let right = (b.0.start, b.0.end, b.0.line, b.0.column);
+        left.cmp(&right).then_with(|| a.1.cmp(&b.1))
+    });
+    entries.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+
+    let span = entries
         .first()
-        .map(|error| error.span)
+        .map(|(span, _)| *span)
         .unwrap_or_else(|| fallback_source_span(source.as_ref()));
-    let message = if errors.is_empty() {
+    let message = if entries.is_empty() {
         "unknown type error".to_string()
     } else {
-        errors
-            .iter()
-            .map(|error| error.to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
+        let mut message = entries[0].1.clone();
+        if entries.len() > 1 {
+            message.push_str(&format!("\nadditional type error(s): {}", entries.len() - 1));
+            for (span, detail) in entries.iter().skip(1).take(4) {
+                message.push_str(&format!("\n{}:{}: {}", span.line, span.column, detail));
+            }
+            let remaining = entries.len().saturating_sub(5);
+            if remaining > 0 {
+                message.push_str(&format!("\n... and {} more", remaining));
+            }
+        }
+        message
     };
     AelysError::Compile(CompileError::new(
         CompileErrorKind::TypeInferenceError(message),

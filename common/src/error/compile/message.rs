@@ -108,7 +108,14 @@ impl CompileErrorKind {
                     module, required, found_str
                 )
             }
-            Self::TypeInferenceError(msg) => format!("type error: {}", msg),
+            Self::TypeInferenceError(msg) => {
+                let headline = msg
+                    .lines()
+                    .find(|line| !line.trim().is_empty())
+                    .unwrap_or("type inference failed")
+                    .trim();
+                format!("type error: {}", headline)
+            }
             Self::SymbolConflict { symbol, modules } => {
                 format!(
                     "symbol '{}' is exported by multiple modules: {}\n   = hint: use 'as' alias to disambiguate",
@@ -117,22 +124,8 @@ impl CompileErrorKind {
                 )
             }
             Self::BackendDiagnostic {
-                backend,
-                message,
-                note,
-                help,
-            } => {
-                let mut rendered = format!("[{}] {}", backend, message);
-                if let Some(note) = note {
-                    rendered.push_str("\n   = note: ");
-                    rendered.push_str(note);
-                }
-                if let Some(help) = help {
-                    rendered.push_str("\n   = help: ");
-                    rendered.push_str(help);
-                }
-                rendered
-            }
+                backend, message, ..
+            } => format!("[{}] {}", backend, message),
         }
     }
 }

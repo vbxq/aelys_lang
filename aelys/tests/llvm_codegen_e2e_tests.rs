@@ -402,6 +402,36 @@ fn foo() -> i64 {
 }
 
 #[test]
+fn llvm_sema_diagnostic_reports_additional_errors_as_notes() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn first() -> i64 {
+    return null
+}
+
+fn second() -> i64 {
+    return null
+}
+"#,
+    )
+    .expect("source should be written");
+    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect_err("compilation should fail at sema stage");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("additional type error(s): 1"),
+        "{rendered}"
+    );
+    assert!(
+        rendered.contains("= note:"),
+        "additional errors should be rendered as diagnostic notes: {rendered}"
+    );
+}
+
+#[test]
 fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
