@@ -129,8 +129,14 @@ impl TypeInference {
         }
 
         for global in &known_globals {
-            inf.env
-                .define_function_owned(global.clone(), InferType::Dynamic);
+            let ty = match global.as_str() {
+                "print" | "println" => InferType::Function {
+                    params: vec![InferType::Dynamic],
+                    ret: Box::new(InferType::Null),
+                },
+                _ => InferType::Dynamic,
+            };
+            inf.env.define_function_owned(global.clone(), ty);
         }
 
         inf.collect_structs(&stmts);

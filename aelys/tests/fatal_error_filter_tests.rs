@@ -292,6 +292,20 @@ fn test() { println("hello") }
 }
 
 #[test]
+fn println_does_not_satisfy_non_void_return() {
+    assert!(
+        !sema_ok_with_builtins(
+            r#"
+fn main() -> i64 {
+    println("hello")
+}
+"#
+        ),
+        "println should not be accepted as implicit i64 return value"
+    );
+}
+
+#[test]
 fn explicit_cast_i32_to_f64() {
     assert!(
         sema_ok("fn f(x: i32) -> f64 { return x as f64 }"),
