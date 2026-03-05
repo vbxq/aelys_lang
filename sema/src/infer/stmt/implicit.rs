@@ -2,7 +2,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::{TypedStmt, TypedStmtKind};
 use crate::types::InferType;
-use aelys_syntax::Stmt;
+use aelys_syntax::{Expr, ExprKind, Stmt, StmtKind, UnaryOp};
 
 impl TypeInference {
     /// Infer statement with implicit return handling
@@ -30,7 +30,6 @@ impl TypeInference {
                 ));
 
                 TypedStmt {
-                    // the implicit returns happens here. you'll have to manually return 0 without it
                     kind: TypedStmtKind::Return(Some(typed_expr)),
                     span: stmt.span,
                 }
@@ -101,10 +100,7 @@ impl TypeInference {
 
             _ => {
                 let typed_stmt = self.infer_stmt(stmt);
-                // if the last statement is not an expression or a return the function implicitly returns null
-                //
-                // Constrain this against the declared return type so that example fn f() -> i64 { let x = 5 }`
-                if !matches!(&stmt.kind, aelys_syntax::StmtKind::Return(_)) {
+                if !stmt_guarantees_return(stmt) {
                     self.constraints.push(Constraint::equal(
                         return_type.clone(),
                         InferType::Null,
@@ -121,5 +117,81 @@ impl TypeInference {
                 typed_stmt
             }
         }
+    }
+}
+
+fn stmt_guarantees_return(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Return(_) => true,
+        StmtKind::Block(stmts) => stmts.iter().any(stmt_guarantees_return),
+        StmtKind::If {
+            then_branch,
+            else_branch: Some(else_branch),
+            ..
+        } => stmt_guarantees_return(then_branch) && stmt_guarantees_return(else_branch),
+        StmtKind::For {
+            start,
+            end,
+            inclusive,
+            step,
+            body,
+            ..
+        } => {
+            for_loop_executes_at_least_once(start, end, *inclusive, step.as_ref().as_ref())
+                && stmt_guarantees_return(body)
+        }
+        _ => false,
+    }
+}
+
+fn for_loop_executes_at_least_once(
+    start: &Expr,
+    end: &Expr,
+    inclusive: bool,
+    step: Option<&Expr>,
+) -> bool {
+    let Some(start_value) = int_literal_value(start) else {
+        return false;
+    };
+    let Some(end_value) = int_literal_value(end) else {
+        return false;
+    };
+
+    if let Some(step_expr) = step {
+        let Some(step_value) = int_literal_value(step_expr) else {
+            return false;
+        };
+        if step_value == 0 {
+            return false;
+        }
+        return if step_value > 0 {
+            if inclusive {
+                start_value <= end_value
+            } else {
+                start_value < end_value
+            }
+        } else if inclusive {
+            start_value >= end_value
+        } else {
+            start_value > end_value
+        };
+    }
+
+    if inclusive {
+        start_value <= end_value
+    } else {
+        start_value < end_value
+    }
+}
+
+fn int_literal_value(expr: &Expr) -> Option<i64> {
+    match &expr.kind {
+        ExprKind::Int(value) => Some(*value),
+        ExprKind::Grouping(inner) => int_literal_value(inner),
+        ExprKind::Unary {
+            op: UnaryOp::Neg,
+            operand,
+        } => int_literal_value(operand).and_then(|value| value.checked_neg()),
+        _ => None,
     }
 }

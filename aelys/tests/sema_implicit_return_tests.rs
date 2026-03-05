@@ -120,18 +120,31 @@ fn foo() -> i64 {
 // old bug: for as last statement doesn't constrain return type
 
 #[test]
-fn for_as_last_stmt_with_return_type_is_rejected() {
-    assert!(
-        should_fail(
-            r#"
+fn for_as_last_stmt_with_known_non_empty_range_is_accepted() {
+    should_pass(
+        r#"
 fn foo() -> i64 {
     for i in 0..10 {
         return 42
     }
 }
+"#,
+    );
+}
+
+#[test]
+fn for_as_last_stmt_with_known_empty_range_is_rejected() {
+    assert!(
+        should_fail(
+            r#"
+fn foo() -> i64 {
+    for i in 10..10 {
+        return 42
+    }
+}
 "#
         ),
-        "for as last stmt with i64 return should be rejected"
+        "for as last stmt with known empty range should be rejected"
     );
 }
 // bug : if without else doesn't constrain return type
