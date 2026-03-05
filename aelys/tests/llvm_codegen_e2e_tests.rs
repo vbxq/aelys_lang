@@ -370,6 +370,38 @@ fn main() -> i32 {
 }
 
 #[test]
+fn llvm_preserves_sema_diagnostic_for_return_null_in_i64_function() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn foo() -> i64 {
+    for i in 0..10 {
+        return null
+    }
+}
+"#,
+    )
+    .expect("source should be written");
+    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect_err("compilation should fail at sema stage");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("type mismatch: expected i64, found null"),
+        "{rendered}"
+    );
+    assert!(
+        !rendered.contains("[llvm-backend]"),
+        "sema error must not be re-labeled as llvm backend: {rendered}"
+    );
+    assert!(
+        !rendered.contains(":1:1"),
+        "sema error should keep its original source span: {rendered}"
+    );
+}
+
+#[test]
 fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");

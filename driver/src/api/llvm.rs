@@ -19,43 +19,48 @@ pub fn lower_file_to_air(
     path: &Path,
     opt_level: OptimizationLevel,
 ) -> Result<aelys_air::AirProgram, String> {
+    let (air, _) = lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
+    Ok(air)
+}
+
+fn lower_file_to_air_with_source(
+    path: &Path,
+    opt_level: OptimizationLevel,
+) -> Result<(aelys_air::AirProgram, Arc<Source>), AelysError> {
     let content = std::fs::read_to_string(path)
-        .map_err(|err| format!("failed to read {}: {}", path.display(), err))?;
+        .map_err(|err| {
+            let source = load_source_for_diagnostics(path);
+            backend_diagnostic_error(
+                source.clone(),
+                fallback_source_span(source.as_ref()),
+                "driver",
+                format!("failed to read {}: {}", path.display(), err),
+                None,
+                None,
+            )
+        })?;
 
     let name = path.display().to_string();
     let src = Source::new(&name, &content);
 
-    let tokens = Lexer::with_source(src.clone())
-        .scan()
-        .map_err(|err| err.to_string())?;
-    let stmts = Parser::new(tokens, src.clone())
-        .parse()
-        .map_err(|err| err.to_string())?;
+    let tokens = Lexer::with_source(src.clone()).scan()?;
+    let stmts = Parser::new(tokens, src.clone()).parse()?;
 
     let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
 
     let typed_program = aelys_sema::TypeInference::infer_program_with_imports(
         stmts,
-        src,
+        src.clone(),
         HashSet::new(),
         known_globals,
     )
-    .map_err(|errors| {
-        if errors.is_empty() {
-            return "Unknown type error".to_string();
-        }
-        errors
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    })?;
+    .map_err(|errors| sema_errors_to_diagnostic(errors, src.clone()))?;
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(typed_program);
 
     let mut air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
-        if errors.is_empty() {
+        let message = if errors.is_empty() {
             "AIR lowering failed with an unknown error".to_string()
         } else {
             errors
@@ -64,7 +69,15 @@ pub fn lower_file_to_air(
                 .map(|(i, e)| format!("{}. {}", i + 1, e))
                 .collect::<Vec<_>>()
                 .join("\n")
-        }
+        };
+        backend_diagnostic_error(
+            src.clone(),
+            fallback_source_span(src.as_ref()),
+            "air-lowering",
+            message,
+            None,
+            None,
+        )
     })?;
     aelys_air::layout::compute_layouts(&mut air);
     let mut air = aelys_air::mono::monomorphize(air);
@@ -78,10 +91,17 @@ pub fn lower_file_to_air(
             .map(|e| e.to_string())
             .collect::<Vec<_>>()
             .join("\n");
-        return Err(message);
+        return Err(backend_diagnostic_error(
+            src.clone(),
+            program_anchor_span(&air, src.as_ref()),
+            "air-validation",
+            message,
+            None,
+            None,
+        ));
     }
 
-    Ok(air)
+    Ok((air, src))
 }
 
 pub fn compile_file_with_llvm(
@@ -89,17 +109,7 @@ pub fn compile_file_with_llvm(
     opt_level: OptimizationLevel,
     emit_llvm_ir: bool,
 ) -> Result<(), AelysError> {
-    let source = load_source_for_diagnostics(path);
-    let air = lower_file_to_air(path, opt_level).map_err(|message| {
-        backend_diagnostic_error(
-            source.clone(),
-            fallback_source_span(source.as_ref()),
-            "llvm-backend",
-            message,
-            None,
-            None,
-        )
-    })?;
+    let (air, source) = lower_file_to_air_with_source(path, opt_level)?;
     compile_air_with_llvm(path, &air, opt_level, emit_llvm_ir, source)
 }
 
@@ -178,6 +188,27 @@ fn backend_diagnostic_error(
             note,
             help,
         },
+        span,
+        source,
+    ))
+}
+
+fn sema_errors_to_diagnostic(errors: Vec<aelys_sema::TypeError>, source: Arc<Source>) -> AelysError {
+    let span = errors
+        .first()
+        .map(|error| error.span)
+        .unwrap_or_else(|| fallback_source_span(source.as_ref()));
+    let message = if errors.is_empty() {
+        "unknown type error".to_string()
+    } else {
+        errors
+            .iter()
+            .map(|error| error.to_string())
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    AelysError::Compile(CompileError::new(
+        CompileErrorKind::TypeInferenceError(message),
         span,
         source,
     ))
