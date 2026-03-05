@@ -175,6 +175,39 @@ impl TypeInference {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
+                match &callee.ty {
+                    InferType::Function { params, .. } => {
+                        if params.len() != args.len() {
+                            self.errors.push(TypeError::arity_mismatch(
+                                params.len(),
+                                args.len(),
+                                expr.span,
+                                ConstraintReason::Other("function call".to_string()),
+                            ));
+                        }
+                    }
+                    InferType::Dynamic => {}
+                    other if self.is_active_generic_placeholder_type(
+                        other,
+                        generic_scope,
+                        declared_type_params,
+                    ) => {
+                        self.errors.push(TypeError::not_callable(
+                            other.clone(),
+                            expr.span,
+                            ConstraintReason::Other(
+                                "function call on unconstrained generic type parameter".to_string(),
+                            ),
+                        ));
+                    }
+                    other => {
+                        self.errors.push(TypeError::not_callable(
+                            other.clone(),
+                            expr.span,
+                            ConstraintReason::Other("function call".to_string()),
+                        ));
+                    }
+                }
             }
             TypedExprKind::Assign { value, .. } => {
                 self.validate_expr(value, generic_scope, declared_type_params);

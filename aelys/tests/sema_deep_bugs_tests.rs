@@ -391,6 +391,24 @@ fn main() -> i64 {
 }
 
 #[test]
+fn rejects_call_on_unconstrained_generic_param() {
+    assert!(
+        sema_err(
+            r#"
+fn bad<T>(x: T) -> i64 {
+    return x()
+}
+
+fn main() -> i64 {
+    return bad(1)
+}
+"#
+        ),
+        "calling an unconstrained generic type parameter should be rejected"
+    );
+}
+
+#[test]
 fn rejects_generic_type_param_escape_from_direct_generic_call() {
     assert!(
         sema_err(
