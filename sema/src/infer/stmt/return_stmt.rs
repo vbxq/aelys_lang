@@ -20,8 +20,8 @@ impl TypeInference {
                 .unwrap_or(InferType::Null);
 
             self.constraints.push(Constraint::equal(
-                actual_ret,
                 expected_ret,
+                actual_ret,
                 span,
                 ConstraintReason::Return {
                     func_name: self

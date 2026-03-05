@@ -17,8 +17,8 @@ impl TypeInference {
                 self.try_narrow_literal(&mut typed_expr, return_type);
 
                 self.constraints.push(Constraint::equal(
-                    typed_expr.ty.clone(),
                     return_type.clone(),
+                    typed_expr.ty.clone(),
                     expr.span,
                     ConstraintReason::Return {
                         func_name: self
@@ -106,8 +106,8 @@ impl TypeInference {
                 // Constrain this against the declared return type so that example fn f() -> i64 { let x = 5 }`
                 if !matches!(&stmt.kind, aelys_syntax::StmtKind::Return(_)) {
                     self.constraints.push(Constraint::equal(
-                        InferType::Null,
                         return_type.clone(),
+                        InferType::Null,
                         stmt.span,
                         ConstraintReason::Return {
                             func_name: self
