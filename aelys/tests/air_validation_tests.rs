@@ -883,6 +883,66 @@ fn validate_rejects_void_param() {
 }
 
 #[test]
+fn function_param_call_lowers_to_indirect_call() {
+    let air = lower_source(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+"#,
+    );
+    let f = func(&air, "apply");
+    let has_indirect = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call { func: Callee::FnPtr(_), .. },
+                    ..
+                }
+            )
+        })
+    });
+    assert!(
+        has_indirect,
+        "expected call through function parameter to lower as Callee::FnPtr"
+    );
+}
+
+#[test]
+fn function_identifier_as_value_lowers_to_fnref() {
+    let air = lower_source(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+fn main() -> i64 {
+    return apply(inc, 5)
+}
+"#,
+    );
+    let f = func(&air, "main");
+    let has_fnref = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call { args, .. },
+                    ..
+                } if args.iter().any(|a| matches!(a, Operand::Const(AirConst::FnRef(name)) if name == "inc"))
+            )
+        })
+    });
+    assert!(
+        has_fnref,
+        "expected passing function identifier as value to lower as FnRef(\"inc\")"
+    );
+}
+
+#[test]
 fn validate_rejects_undeclared_block_reference() {
     let program = AirProgram {
         functions: vec![AirFunction {

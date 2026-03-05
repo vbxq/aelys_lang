@@ -28,6 +28,8 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
                     Operand::Copy(id)
+                } else if matches!(expr.ty, InferType::Function { .. }) {
+                    Operand::Const(AirConst::FnRef(name.clone()))
                 } else {
                     self.emit_rvalue_to_temp(
                         self.lower_type_from_infer(&expr.ty),
@@ -381,7 +383,13 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_callee(&mut self, callee: &TypedExpr) -> Callee {
         match &callee.kind {
-            TypedExprKind::Identifier(name) => Callee::Named(name.clone()),
+            TypedExprKind::Identifier(name) => {
+                if let Some(id) = self.lookup_local(name) {
+                    Callee::FnPtr(id)
+                } else {
+                    Callee::Named(name.clone())
+                }
+            }
             TypedExprKind::Member { object, member } => {
                 if let TypedExprKind::Identifier(mod_name) = &object.kind {
                     Callee::Named(format!("{}.{}", mod_name, member))
