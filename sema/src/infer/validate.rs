@@ -354,8 +354,6 @@ impl TypeInference {
                 if !self.is_cast_allowed_resolved(
                     &inner.ty,
                     target,
-                    generic_scope,
-                    declared_type_params,
                 ) {
                     self.errors.push(TypeError::mismatch(
                         target.clone(),
@@ -482,13 +480,7 @@ impl TypeInference {
         &self,
         src: &InferType,
         target: &InferType,
-        generic_scope: &HashSet<String>,
-        declared_type_params: &HashSet<String>,
     ) -> bool {
-        if self.is_active_generic_placeholder_type(src, generic_scope, declared_type_params) {
-            return true;
-        }
-
         (src.is_numeric() || *src == InferType::Bool || *src == InferType::Dynamic)
             && (target.is_numeric() || *target == InferType::Bool)
     }

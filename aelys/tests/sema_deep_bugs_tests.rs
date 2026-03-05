@@ -322,6 +322,23 @@ fn main() -> i64 {
 }
 
 #[test]
+fn rejects_generic_cast_with_invalid_instantiation() {
+    assert!(
+        sema_err(
+            r#"
+fn bad<T>(x: T) -> i64 {
+    return x as i64
+}
+fn main() -> i64 {
+    return bad("hello")
+}
+"#
+        ),
+        "cast from unconstrained generic type parameter should be rejected"
+    );
+}
+
+#[test]
 fn rejects_foreach_on_var_that_resolves_to_scalar() {
     assert!(
         sema_err(

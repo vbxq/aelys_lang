@@ -364,7 +364,7 @@ fn apply(f: fn(i32) -> i32, x: i32) -> i32 {
 // bug fix: Cast from generic type parameter
 
 #[test]
-fn generic_cast_does_not_error_at_sema() {
+fn generic_cast_from_unconstrained_type_param_is_rejected() {
     let src = Source::new(
         "<test>",
         r#"
@@ -379,22 +379,22 @@ fn to_float<T>(x: T) -> f64 {
         .expect("parse failed");
     let result = TypeInference::infer_program(stmts, src);
     assert!(
-        result.is_ok(),
-        "casting generic T to f64 should not produce a sema error, got: {:?}",
+        result.is_err(),
+        "casting unconstrained generic T to f64 should be rejected, got: {:?}",
         result.err()
     );
 }
 
 #[test]
-fn generic_cast_monomorphizes_correctly() {
+fn generic_identity_still_monomorphizes() {
     let air = lower_source(
         r#"
-fn to_float<T>(x: T) -> f64 {
-    return x as f64
+fn id<T>(x: T) -> T {
+    return x
 }
-fn caller() -> f64 {
+fn caller() -> i32 {
     let v: i32 = 42
-    return to_float(v)
+    return id(v)
 }
 "#,
     );
@@ -404,10 +404,10 @@ fn caller() -> f64 {
     let mono_fn = program
         .functions
         .iter()
-        .find(|f| f.name.contains("__mono_to_float"));
+        .find(|f| f.name.contains("__mono_id"));
     assert!(
         mono_fn.is_some(),
-        "to_float should be monomorphized, found: {:?}",
+        "id should be monomorphized, found: {:?}",
         program
             .functions
             .iter()
