@@ -38,6 +38,15 @@ fn func<'a>(air: &'a AirProgram, name: &str) -> &'a AirFunction {
         .unwrap_or_else(|| panic!("function `{}` not found in AIR", name))
 }
 
+fn default_attribs() -> FunctionAttribs {
+    FunctionAttribs {
+        inline: InlineHint::Default,
+        no_gc: false,
+        no_unwind: false,
+        cold: false,
+    }
+}
+
 #[test]
 fn stdlib_call_print() {
     let air = lower_with_globals(
@@ -937,15 +946,15 @@ fn main() -> i64 {
             matches!(
                 &s.kind,
                 AirStmtKind::Assign {
-                    rvalue: Rvalue::Call { args, .. },
+                    rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(name))),
                     ..
-                } if args.iter().any(|a| matches!(a, Operand::Const(AirConst::FnRef(name)) if name == "inc"))
+                } if name == "inc"
             )
         })
     });
     assert!(
         has_fnref,
-        "expected passing function identifier as value to lower as FnRef(\"inc\")"
+        "expected function identifier value to materialize from FnRef(\"inc\")"
     );
 }
 
@@ -1485,5 +1494,374 @@ fn use_null() {
         result.is_ok(),
         "null-typed local (Ptr(Void)) should pass validation, errors: {:?}",
         result.err()
+    );
+}
+
+#[test]
+fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
+    let option_enum = AirEnumDef {
+        name: "Option".to_string(),
+        type_params: vec![TypeParamId(0)],
+        variants: vec![
+            AirEnumVariant {
+                name: "Some".to_string(),
+                tag: 0,
+                payload: vec![AirType::Param(TypeParamId(0))],
+            },
+            AirEnumVariant {
+                name: "None".to_string(),
+                tag: 1,
+                payload: vec![],
+            },
+        ],
+        span: None,
+    };
+
+    let seed_i64 = AirFunction {
+        id: FunctionId(0),
+        name: "seed_i64".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Enum("__mono_Option_i64".to_string()),
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: AirType::Enum("__mono_Option_i64".to_string()),
+                name: Some("ret".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::Enum("__mono_Option_i64".to_string()),
+                name: Some("value".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        tag: 0,
+                        payload: vec![Operand::Const(AirConst::Int(1, AirIntSize::I64))],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let seed_str = AirFunction {
+        id: FunctionId(1),
+        name: "seed_str".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Enum("__mono_Option_str".to_string()),
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: AirType::Enum("__mono_Option_str".to_string()),
+                name: Some("ret".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::Enum("__mono_Option_str".to_string()),
+                name: Some("value".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_name: "Option".to_string(),
+                        variant: "Some".to_string(),
+                        tag: 0,
+                        payload: vec![Operand::Const(AirConst::Str("hello".to_string()))],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let ambiguous_none = AirFunction {
+        id: FunctionId(2),
+        name: "ambiguous_none".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Void,
+        locals: vec![AirLocal {
+            id: LocalId(0),
+            ty: AirType::Enum("Option".to_string()),
+            name: Some("ambiguous".to_string()),
+            is_mut: false,
+            span: None,
+        }],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(0)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_name: "Option".to_string(),
+                        variant: "None".to_string(),
+                        tag: 1,
+                        payload: vec![],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(None),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let program = AirProgram {
+        functions: vec![seed_i64, seed_str, ambiguous_none],
+        structs: vec![],
+        enums: vec![option_enum],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+    };
+
+    let air = monomorphize(program);
+    let result = validate_air(&air);
+    assert!(
+        result.is_err(),
+        "ambiguous generic unit variant should be rejected after monomorphization"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UnknownEnumType {
+                local_name: Some(name),
+                enum_name,
+                ..
+            } if name == "ambiguous" && enum_name == "Option"
+        )),
+        "expected unknown enum type error for unresolved local, got: {:?}",
+        errors
+    );
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UnknownEnumReference { enum_name, .. } if enum_name == "Option"
+        )),
+        "expected unknown enum reference error for unresolved enum_init, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
+    let program = AirProgram {
+        functions: vec![
+            AirFunction {
+                id: FunctionId(0),
+                name: "fast_fn".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(1),
+                name: "c_fn".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::C,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(2),
+                name: "seed".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::Void,
+                locals: vec![
+                    AirLocal {
+                        id: LocalId(0),
+                        ty: AirType::FnPtr {
+                            params: vec![],
+                            ret: Box::new(AirType::I64),
+                            conv: CallingConv::Aelys,
+                        },
+                        name: Some("fast".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(1),
+                        ty: AirType::FnPtr {
+                            params: vec![],
+                            ret: Box::new(AirType::I64),
+                            conv: CallingConv::C,
+                        },
+                        name: Some("c".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(2),
+                        ty: AirType::Enum("Holder".to_string()),
+                        name: Some("aelys_holder".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(3),
+                        ty: AirType::Enum("Holder".to_string()),
+                        name: Some("c_holder".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                ],
+                blocks: vec![AirBlock {
+                    id: BlockId(0),
+                    stmts: vec![
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(0)),
+                                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(
+                                    "fast_fn".to_string(),
+                                ))),
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(1)),
+                                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(
+                                    "c_fn".to_string(),
+                                ))),
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(2)),
+                                rvalue: Rvalue::EnumInit {
+                                    enum_name: "Holder".to_string(),
+                                    variant: "Value".to_string(),
+                                    tag: 0,
+                                    payload: vec![Operand::Copy(LocalId(0))],
+                                },
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(3)),
+                                rvalue: Rvalue::EnumInit {
+                                    enum_name: "Holder".to_string(),
+                                    variant: "Value".to_string(),
+                                    tag: 0,
+                                    payload: vec![Operand::Copy(LocalId(1))],
+                                },
+                            },
+                            span: None,
+                        },
+                    ],
+                    terminator: AirTerminator::Return(None),
+                }],
+                is_extern: false,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+        ],
+        structs: vec![],
+        enums: vec![AirEnumDef {
+            name: "Holder".to_string(),
+            type_params: vec![TypeParamId(0)],
+            variants: vec![
+                AirEnumVariant {
+                    name: "Value".to_string(),
+                    tag: 0,
+                    payload: vec![AirType::Param(TypeParamId(0))],
+                },
+                AirEnumVariant {
+                    name: "Empty".to_string(),
+                    tag: 1,
+                    payload: vec![],
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+    };
+
+    let air = monomorphize(program);
+    let holder_defs: Vec<_> = air
+        .enums
+        .iter()
+        .filter(|def| def.name.starts_with("__mono_Holder_"))
+        .collect();
+    assert_eq!(
+        holder_defs.len(),
+        2,
+        "distinct fnptr calling conventions must produce distinct Holder monos"
+    );
+    assert!(
+        holder_defs.iter().any(|def| matches!(
+            &def.variants[0].payload[..],
+            [AirType::FnPtr { conv: CallingConv::Aelys, .. }]
+        )),
+        "missing Aelys fnptr instantiation: {:?}",
+        holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
+    );
+    assert!(
+        holder_defs.iter().any(|def| matches!(
+            &def.variants[0].payload[..],
+            [AirType::FnPtr { conv: CallingConv::C, .. }]
+        )),
+        "missing C fnptr instantiation: {:?}",
+        holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
     );
 }

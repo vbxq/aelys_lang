@@ -21,13 +21,20 @@ pub(crate) fn type_to_string(ty: &AirType) -> String {
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
         // was using _ as separator everywhere, so fn(i32, f64)->bool and
         // fn(i32)->f64 with a bool from somewhere else both gave "fnptr_i32_f64_bool"
-        AirType::FnPtr { params, ret, .. } => {
+        AirType::FnPtr { params, ret, conv } => {
             let params_str = params
                 .iter()
                 .map(type_to_string)
                 .collect::<Vec<_>>()
                 .join("$");
-            format!("fnptr${}$R{}", params_str, type_to_string(ret))
+            // Calling convention is part of the fnptr type; omitting it aliases
+            // distinct ABI shapes onto the same monomorphized enum/function name.
+            let prefix = match conv {
+                CallingConv::Aelys => "fnptr",
+                CallingConv::C => "fnptrC",
+                CallingConv::Rust => "fnptrRust",
+            };
+            format!("{prefix}${}$R{}", params_str, type_to_string(ret))
         }
         AirType::Param(id) => format!("param_{}", id.0),
         AirType::Opaque => "opaque".to_string(),

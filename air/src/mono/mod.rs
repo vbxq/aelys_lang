@@ -74,45 +74,28 @@ fn monomorphize_enums(program: &mut AirProgram) {
     // When sema preserves type args (e.g., Option<i64>), the lowering pass pre-computes
     // the mangled name. We need to ensure the corresponding enum definition exists.
     for func in &program.functions {
-        let mut collect_premangled = |name: &str| {
-            if !name.starts_with("__mono_") {
-                return;
-            }
-            // Parse "__mono_{enum_name}_{type_suffix}" to find the original enum
-            for (enum_name, &enum_idx) in &generic_enums {
-                let prefix = format!("__mono_{}_", enum_name);
-                if let Some(type_suffix) = name.strip_prefix(&prefix) {
-                    // Check if we already have a request for this
-                    let key_strs: Vec<String> =
-                        type_suffix.split('$').map(|s| s.to_string()).collect();
-                    let key = (enum_name.clone(), key_strs.clone());
-                    if !enum_mono_requests.contains_key(&key) {
-                        // Try to resolve type_args from the type suffix strings
-                        let enum_def = &program.enums[enum_idx];
-                        if let Some(type_args) =
-                            resolve_type_args_from_suffix(&key_strs, enum_def)
-                        {
-                            enum_mono_requests.insert(key, type_args);
-                        }
-                    }
-                    break;
-                }
-            }
-        };
-
         for local in &func.locals {
-            if let AirType::Enum(ref name) = local.ty {
-                collect_premangled(name);
-            }
+            collect_premangled_enum_requests_from_type(
+                &local.ty,
+                &generic_enums,
+                &program.enums,
+                &mut enum_mono_requests,
+            );
         }
         for param in &func.params {
-            if let AirType::Enum(ref name) = param.ty {
-                collect_premangled(name);
-            }
+            collect_premangled_enum_requests_from_type(
+                &param.ty,
+                &generic_enums,
+                &program.enums,
+                &mut enum_mono_requests,
+            );
         }
-        if let AirType::Enum(ref name) = func.ret_ty {
-            collect_premangled(name);
-        }
+        collect_premangled_enum_requests_from_type(
+            &func.ret_ty,
+            &generic_enums,
+            &program.enums,
+            &mut enum_mono_requests,
+        );
     }
 
     if enum_mono_requests.is_empty() {
@@ -489,6 +472,56 @@ fn collect_enum_mono_from_rvalue(
     }
 }
 
+fn collect_premangled_enum_requests_from_type(
+    ty: &AirType,
+    generic_enums: &HashMap<String, usize>,
+    enum_defs: &[AirEnumDef],
+    requests: &mut HashMap<(String, Vec<String>), Vec<AirType>>,
+) {
+    match ty {
+        AirType::Enum(name) => {
+            if !name.starts_with("__mono_") {
+                return;
+            }
+            for (enum_name, &enum_idx) in generic_enums {
+                let prefix = format!("__mono_{}_", enum_name);
+                if let Some(type_suffix) = name.strip_prefix(&prefix) {
+                    let enum_def = &enum_defs[enum_idx];
+                    if let Some(type_args) = resolve_type_args_from_suffix(type_suffix, enum_def) {
+                        let key_strs: Vec<String> =
+                            type_args.iter().map(substitute::type_to_string).collect();
+                        let key = (enum_name.clone(), key_strs);
+                        let inserted =
+                            requests.entry(key).or_insert_with(|| type_args.clone()).clone();
+                        for nested in &inserted {
+                            collect_premangled_enum_requests_from_type(
+                                nested,
+                                generic_enums,
+                                enum_defs,
+                                requests,
+                            );
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        AirType::Ptr(inner) | AirType::Slice(inner) => {
+            collect_premangled_enum_requests_from_type(inner, generic_enums, enum_defs, requests);
+        }
+        AirType::Array(inner, _) => {
+            collect_premangled_enum_requests_from_type(inner, generic_enums, enum_defs, requests);
+        }
+        AirType::FnPtr { params, ret, .. } => {
+            for param in params {
+                collect_premangled_enum_requests_from_type(param, generic_enums, enum_defs, requests);
+            }
+            collect_premangled_enum_requests_from_type(ret, generic_enums, enum_defs, requests);
+        }
+        _ => {}
+    }
+}
+
 fn infer_enum_type_args(
     enum_def: &AirEnumDef,
     rvalue: &Rvalue,
@@ -602,14 +635,15 @@ fn rewrite_enum_refs_in_stmt(
                                 if mono_names.len() == 1 {
                                     *enum_name = mono_names[0].clone();
                                 } else if mono_names.len() > 1 {
+                                    // Picking an arbitrary mono here silently miscompiles the
+                                    // unit variant. Leave the generic name in place so AIR
+                                    // validation can reject the unresolved enum deterministically.
                                     eprintln!(
                                         "[AIR] warning: ambiguous unit variant {}::{} with {} \
                                          monomorphizations; cannot determine which to use \
-                                         (type annotation info lost during sema). \
-                                         Using first available.",
+                                         (type annotation info lost during sema).",
                                         enum_name, variant, mono_names.len()
                                     );
-                                    *enum_name = mono_names[0].clone();
                                 }
                             }
                         }
@@ -681,36 +715,137 @@ fn resolve_operand_mono(
 ///
 /// Each string in `key_strs` is a single type arg (split by `$` separator).
 /// Handles primitives, enum types (prefixed with "enum_"), and struct types.
-fn resolve_type_args_from_suffix(
-    key_strs: &[String],
-    _enum_def: &AirEnumDef,
-) -> Option<Vec<AirType>> {
-    let mut type_args = Vec::new();
-    for s in key_strs {
-        let ty = match s.as_str() {
-            "i8" => AirType::I8,
-            "i16" => AirType::I16,
-            "i32" => AirType::I32,
-            "i64" => AirType::I64,
-            "u8" => AirType::U8,
-            "u16" => AirType::U16,
-            "u32" => AirType::U32,
-            "u64" => AirType::U64,
-            "f32" => AirType::F32,
-            "f64" => AirType::F64,
-            "bool" => AirType::Bool,
-            "str" => AirType::Str,
-            other => {
-                if let Some(enum_name) = other.strip_prefix("enum_") {
-                    AirType::Enum(enum_name.to_string())
-                } else {
-                    AirType::Struct(other.to_string())
-                }
-            }
-        };
-        type_args.push(ty);
+fn resolve_type_args_from_suffix(type_suffix: &str, enum_def: &AirEnumDef) -> Option<Vec<AirType>> {
+    let arity = enum_def.type_params.len();
+    if arity == 0 {
+        return Some(Vec::new());
     }
-    Some(type_args)
+    let segments: Vec<&str> = type_suffix.split('$').collect();
+    resolve_type_args_from_segments(&segments, arity)
+}
+
+fn resolve_type_args_from_segments(segments: &[&str], remaining: usize) -> Option<Vec<AirType>> {
+    if remaining == 0 {
+        return segments.is_empty().then_some(Vec::new());
+    }
+    if segments.len() < remaining {
+        return None;
+    }
+
+    let max_take = segments.len() - remaining + 1;
+    for take in (1..=max_take).rev() {
+        let candidate = segments[..take].join("$");
+        if let Some(ty) = resolve_single_type_arg(&candidate)
+            && let Some(mut rest) =
+                resolve_type_args_from_segments(&segments[take..], remaining - 1)
+        {
+            let mut type_args = vec![ty];
+            type_args.append(&mut rest);
+            return Some(type_args);
+        }
+    }
+
+    None
+}
+
+fn resolve_type_list_from_segments(segments: &[&str]) -> Option<Vec<AirType>> {
+    if segments.is_empty() {
+        return Some(Vec::new());
+    }
+
+    for take in (1..=segments.len()).rev() {
+        let candidate = segments[..take].join("$");
+        if let Some(ty) = resolve_single_type_arg(&candidate)
+            && let Some(mut rest) = resolve_type_list_from_segments(&segments[take..])
+        {
+            let mut items = vec![ty];
+            items.append(&mut rest);
+            return Some(items);
+        }
+    }
+
+    None
+}
+
+fn resolve_single_type_arg(s: &str) -> Option<AirType> {
+    let ty = match s {
+        "i8" => AirType::I8,
+        "i16" => AirType::I16,
+        "i32" => AirType::I32,
+        "i64" => AirType::I64,
+        "u8" => AirType::U8,
+        "u16" => AirType::U16,
+        "u32" => AirType::U32,
+        "u64" => AirType::U64,
+        "f32" => AirType::F32,
+        "f64" => AirType::F64,
+        "bool" => AirType::Bool,
+        "str" => AirType::Str,
+        "opaque" => AirType::Opaque,
+        "void" => AirType::Void,
+        other => {
+            if let Some(rest) = other.strip_prefix("ptr_") {
+                AirType::Ptr(Box::new(resolve_single_type_arg(rest)?))
+            } else if let Some(rest) = other.strip_prefix("slice_") {
+                AirType::Slice(Box::new(resolve_single_type_arg(rest)?))
+            } else if let Some(rest) = other.strip_prefix("array_") {
+                let split = rest.rfind('_')?;
+                let inner = &rest[..split];
+                let n = rest[split + 1..].parse().ok()?;
+                AirType::Array(Box::new(resolve_single_type_arg(inner)?), n)
+            } else if let Some((rest, conv)) = other
+                .strip_prefix("fnptrRust$")
+                .map(|rest| (rest, CallingConv::Rust))
+                .or_else(|| other.strip_prefix("fnptrC$").map(|rest| (rest, CallingConv::C)))
+                .or_else(|| {
+                    other
+                        .strip_prefix("fnptr$")
+                        .map(|rest| (rest, CallingConv::Aelys))
+                })
+            {
+                let (params, ret) = if let Some(ret) = rest.strip_prefix("$R") {
+                    (Vec::new(), resolve_single_type_arg(ret)?)
+                } else {
+                    let segments: Vec<&str> = rest.split('$').collect();
+                    let mut parsed: Option<(Vec<AirType>, AirType)> = None;
+                    for ret_start in 1..segments.len() {
+                        let ret_head = match segments[ret_start].strip_prefix('R') {
+                            Some(head) => head,
+                            None => continue,
+                        };
+                        let mut ret_segments = Vec::with_capacity(segments.len() - ret_start);
+                        ret_segments.push(ret_head);
+                        ret_segments.extend_from_slice(&segments[ret_start + 1..]);
+                        let Some(params) = resolve_type_list_from_segments(&segments[..ret_start])
+                        else {
+                            continue;
+                        };
+                        let Some(ret) = resolve_single_type_arg(&ret_segments.join("$")) else {
+                            continue;
+                        };
+                        parsed = Some((params, ret));
+                        break;
+                    }
+                    parsed?
+                };
+                AirType::FnPtr {
+                    params,
+                    ret: Box::new(ret),
+                    conv,
+                }
+            } else if let Some(rest) = other.strip_prefix("enum_") {
+                AirType::Enum(rest.to_string())
+            } else if let Some(rest) = other.strip_prefix("param_") {
+                AirType::Param(TypeParamId(rest.parse().ok()?))
+            } else {
+                if other.contains('$') && !other.starts_with("__mono_") {
+                    return None;
+                }
+                AirType::Struct(other.to_string())
+            }
+        }
+    };
+    Some(ty)
 }
 
 pub(super) struct MonoContext {
