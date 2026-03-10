@@ -23,6 +23,7 @@ pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
         | InferType::Null
         | InferType::Range
         | InferType::Struct(_)
+        | InferType::Enum(_)
         | InferType::Dynamic => false,
     }
 }

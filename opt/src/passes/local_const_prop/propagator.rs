@@ -133,7 +133,8 @@ impl LocalConstantPropagator {
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
-            | TypedStmtKind::StructDecl { .. } => {}
+            | TypedStmtKind::StructDecl { .. }
+            | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 
@@ -406,7 +407,8 @@ impl LocalConstantPropagator {
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::Null => {}
+            | TypedExprKind::Null
+            | TypedExprKind::EnumVariant { .. } => {}
         }
     }
 }

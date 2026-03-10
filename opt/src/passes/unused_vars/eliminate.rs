@@ -129,6 +129,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
         | TypedExprKind::String(_)
-        | TypedExprKind::Null => false,
+        | TypedExprKind::Null
+        | TypedExprKind::EnumVariant { .. } => false,
     }
 }

@@ -5,5 +5,5 @@ mod type_var;
 
 pub use infer_type::InferType;
 pub use resolved_type::ResolvedType;
-pub use type_table::{StructDef, StructField, TypeTable};
+pub use type_table::{EnumDef, EnumVariant, StructDef, StructField, TypeTable};
 pub use type_var::{TypeVarGen, TypeVarId};

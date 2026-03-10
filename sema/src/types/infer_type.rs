@@ -28,6 +28,7 @@ pub enum InferType {
     Range,
 
     Struct(std::string::String),
+    Enum(std::string::String),
 
     Var(TypeVarId),
 
@@ -90,6 +91,7 @@ impl InferType {
                 | InferType::String
                 | InferType::Null
                 | InferType::Struct(_)
+                | InferType::Enum(_)
         )
     }
 
@@ -348,6 +350,7 @@ impl fmt::Display for InferType {
             }
             InferType::Range => write!(f, "range"),
             InferType::Struct(name) => write!(f, "{}", name),
+            InferType::Enum(name) => write!(f, "{}", name),
             InferType::Var(id) => write!(f, "{}", id),
             InferType::Dynamic => write!(f, "dynamic"),
         }

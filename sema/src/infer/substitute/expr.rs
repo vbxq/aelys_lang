@@ -172,6 +172,20 @@ impl TypeInference {
                 expr: Box::new(self.apply_substitution_expr(expr, subst)),
                 target: subst.apply(target),
             },
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            } => TypedExprKind::EnumVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+                tag: *tag,
+                args: args
+                    .iter()
+                    .map(|a| self.apply_substitution_expr(a, subst))
+                    .collect(),
+            },
         };
 
         TypedExpr {

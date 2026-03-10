@@ -23,6 +23,7 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         | (InferType::Null, InferType::Null) => Ok(()),
 
         (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
+        (InferType::Enum(a), InferType::Enum(b)) if a == b => Ok(()),
 
         (InferType::Dynamic, _) | (_, InferType::Dynamic) => Ok(()),
 

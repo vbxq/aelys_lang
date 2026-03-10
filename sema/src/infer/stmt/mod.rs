@@ -99,6 +99,31 @@ impl TypeInference {
                     fields: typed_fields,
                 }
             }
+            StmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+                ..
+            } => {
+                // Look up the data types from the type table (populated by collect_enums)
+                let enum_def = self.type_table.get_enum(name).cloned();
+                TypedStmtKind::EnumDecl {
+                    name: name.clone(),
+                    type_params: type_params.clone(),
+                    variants: variants
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| {
+                            let data = enum_def
+                                .as_ref()
+                                .and_then(|def| def.variants.iter().find(|ev| ev.name == v.name))
+                                .map(|ev| ev.data.clone())
+                                .unwrap_or_default();
+                            (v.name.clone(), i as u32, data)
+                        })
+                        .collect(),
+                }
+            }
         };
 
         TypedStmt {

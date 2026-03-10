@@ -72,7 +72,8 @@ impl InlineExpander {
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::Null => true,
+            | TypedExprKind::Null
+            | TypedExprKind::EnumVariant { .. } => true,
 
             TypedExprKind::Identifier(name) => params.contains_key(name),
 
@@ -291,6 +292,20 @@ impl InlineExpander {
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
             TypedExprKind::Null => TypedExprKind::Null,
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            } => TypedExprKind::EnumVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+                tag: *tag,
+                args: args
+                    .iter()
+                    .map(|a| self.substitute_expr(a, params, span))
+                    .collect(),
+            },
         };
 
         TypedExpr::new(kind, expr.ty.clone(), span)

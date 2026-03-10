@@ -100,6 +100,16 @@ impl TypeInference {
                     .map(|(n, ty)| (n, Self::finalize_type(ty)))
                     .collect(),
             },
+
+            TypedStmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+            } => TypedStmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+            },
         };
 
         TypedStmt {
@@ -279,6 +289,18 @@ impl TypeInference {
             TypedExprKind::Cast { expr, target } => TypedExprKind::Cast {
                 expr: Box::new(self.finalize_expr(*expr)),
                 target: Self::finalize_type(target),
+            },
+
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            } => TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args: args.into_iter().map(|a| self.finalize_expr(a)).collect(),
             },
         };
 

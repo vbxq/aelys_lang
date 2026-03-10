@@ -102,7 +102,8 @@ impl DeadCodeEliminator {
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
-            | TypedExprKind::Identifier(_) => {}
+            | TypedExprKind::Identifier(_)
+            | TypedExprKind::EnumVariant { .. } => {}
         }
     }
 }

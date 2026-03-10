@@ -137,6 +137,11 @@ impl TypeInference {
                     target_ty,
                 )
             }
+            ExprKind::EnumVariant {
+                enum_name,
+                variant,
+                args,
+            } => self.infer_enum_variant(enum_name, variant, args, expr.span),
         };
 
         self.depth -= 1;

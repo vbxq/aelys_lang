@@ -127,7 +127,8 @@ impl ConstantFolder {
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
-            | TypedExprKind::Identifier(_) => {}
+            | TypedExprKind::Identifier(_)
+            | TypedExprKind::EnumVariant { .. } => {}
         }
 
         if let Some(folded) = self.try_fold(expr) {

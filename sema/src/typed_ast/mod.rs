@@ -79,6 +79,12 @@ pub enum TypedStmtKind {
         type_params: Vec<String>,
         fields: Vec<(String, InferType)>,
     },
+
+    EnumDecl {
+        name: String,
+        type_params: Vec<String>,
+        variants: Vec<(String, u32, Vec<InferType>)>, // (variant_name, tag, data_types)
+    },
 }
 
 /// A typed function
@@ -231,6 +237,13 @@ pub enum TypedExprKind {
     Cast {
         expr: Box<TypedExpr>,
         target: InferType,
+    },
+
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        tag: u32,
+        args: Vec<TypedExpr>, // empty for unit variants
     },
 }
 

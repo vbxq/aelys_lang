@@ -96,6 +96,15 @@ impl TypeInference {
                     .map(|(n, ty)| (n.clone(), subst.apply(ty)))
                     .collect(),
             },
+            TypedStmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+            } => TypedStmtKind::EnumDecl {
+                name: name.clone(),
+                type_params: type_params.clone(),
+                variants: variants.clone(),
+            },
         };
 
         TypedStmt {

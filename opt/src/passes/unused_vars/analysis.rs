@@ -74,7 +74,8 @@ fn collect_uses_in_stmt(stmt: &TypedStmt, used: &mut HashSet<String>) {
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
         | TypedStmtKind::Needs(_)
-        | TypedStmtKind::StructDecl { .. } => {}
+        | TypedStmtKind::StructDecl { .. }
+        | TypedStmtKind::EnumDecl { .. } => {}
     }
 }
 
@@ -189,6 +190,7 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
         | TypedExprKind::String(_)
-        | TypedExprKind::Null => {}
+        | TypedExprKind::Null
+        | TypedExprKind::EnumVariant { .. } => {}
     }
 }

@@ -115,6 +115,7 @@ impl TypeInference {
                     self.validate_type(ty, stmt.span, &struct_scope, declared_type_params);
                 }
             }
+            TypedStmtKind::EnumDecl { .. } => {}
             TypedStmtKind::Return(None)
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
@@ -406,6 +407,11 @@ impl TypeInference {
                     ));
                 }
             }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.validate_expr(arg, generic_scope, declared_type_params);
+                }
+            }
             TypedExprKind::Identifier(_)
             | TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
@@ -645,7 +651,8 @@ impl TypeInference {
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
-            | TypedStmtKind::StructDecl { .. } => {}
+            | TypedStmtKind::StructDecl { .. }
+            | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 }

@@ -95,7 +95,7 @@ impl TypeInference {
             TypedStmtKind::Return(None) | TypedStmtKind::Break | TypedStmtKind::Continue => {}
             TypedStmtKind::Function(_) => {}
             TypedStmtKind::Needs(_) => {}
-            TypedStmtKind::StructDecl { .. } => {}
+            TypedStmtKind::StructDecl { .. } | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 
@@ -220,6 +220,11 @@ impl TypeInference {
             }
             TypedExprKind::Cast { expr, .. } => {
                 self.collect_captures_inner(expr, locals, captures, seen);
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.collect_captures_inner(arg, locals, captures, seen);
+                }
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

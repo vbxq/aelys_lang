@@ -37,7 +37,14 @@ impl TypeInference {
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
         self.check_type_annotation(ann);
-        InferType::from_annotation(ann)
+        let ty = InferType::from_annotation(ann);
+        // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
+        if let InferType::Struct(ref name) = ty {
+            if self.type_table.has_enum(name) {
+                return InferType::Enum(name.clone());
+            }
+        }
+        ty
     }
 
     fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
@@ -68,7 +75,10 @@ impl TypeInference {
         }
 
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
-            if self.type_table.has_struct(&ann.name) || self.env.contains(&ann.name) {
+            if self.type_table.has_struct(&ann.name)
+                || self.type_table.has_enum(&ann.name)
+                || self.env.contains(&ann.name)
+            {
                 return;
             }
             self.errors.push(TypeError {
@@ -146,6 +156,7 @@ impl TypeInference {
         }
 
         inf.collect_structs(&stmts);
+        inf.collect_enums(&stmts);
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);
@@ -220,7 +231,8 @@ fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
                 }
                 collect_type_params_recursive(&func.body, params);
             }
-            StmtKind::StructDecl { type_params, .. } => {
+            StmtKind::StructDecl { type_params, .. }
+            | StmtKind::EnumDecl { type_params, .. } => {
                 for tp in type_params {
                     params.insert(tp.clone());
                 }

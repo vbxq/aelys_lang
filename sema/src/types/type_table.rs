@@ -14,9 +14,24 @@ pub struct StructDef {
     pub fields: Vec<StructField>,
 }
 
+#[derive(Debug, Clone)]
+pub struct EnumVariant {
+    pub name: String,
+    pub tag: u32,
+    pub data: Vec<InferType>, // empty = unit variant, non-empty = tuple variant
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumDef {
+    pub name: String,
+    pub type_params: Vec<String>,
+    pub variants: Vec<EnumVariant>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TypeTable {
     structs: HashMap<String, StructDef>,
+    enums: HashMap<String, EnumDef>,
 }
 
 impl TypeTable {
@@ -34,5 +49,17 @@ impl TypeTable {
 
     pub fn has_struct(&self, name: &str) -> bool {
         self.structs.contains_key(name)
+    }
+
+    pub fn register_enum(&mut self, def: EnumDef) {
+        self.enums.insert(def.name.clone(), def);
+    }
+
+    pub fn get_enum(&self, name: &str) -> Option<&EnumDef> {
+        self.enums.get(name)
+    }
+
+    pub fn has_enum(&self, name: &str) -> bool {
+        self.enums.contains_key(name)
     }
 }
