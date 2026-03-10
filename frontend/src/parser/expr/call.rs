@@ -1,5 +1,6 @@
 use super::Parser;
 use aelys_common::Result;
+use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{BinaryOp, Expr, ExprKind, TokenKind};
 
 impl Parser {
@@ -41,6 +42,54 @@ impl Parser {
                     },
                     span,
                 );
+            } else if self.match_token(&TokenKind::ColonColon) {
+                let variant = self.consume_identifier("variant name")?;
+                let span = expr.span.merge(self.previous().span);
+
+                match &expr.kind {
+                    ExprKind::Identifier(enum_name) => {
+                        // Parse optional construction args: EnumName::Variant(arg1, arg2, ...)
+                        let args = if self.check(&TokenKind::LParen) {
+                            self.advance(); // consume '('
+                            let mut args = Vec::new();
+                            if !self.check(&TokenKind::RParen) {
+                                loop {
+                                    args.push(self.expression()?);
+                                    if !self.match_token(&TokenKind::Comma) {
+                                        break;
+                                    }
+                                }
+                            }
+                            self.consume(&TokenKind::RParen, ")")?;
+                            let new_span = expr.span.merge(self.previous().span);
+                            expr = Expr::new(
+                                ExprKind::EnumVariant {
+                                    enum_name: enum_name.clone(),
+                                    variant,
+                                    args,
+                                },
+                                new_span,
+                            );
+                            continue; // re-enter the loop for possible chaining
+                        } else {
+                            Vec::new()
+                        };
+                        expr = Expr::new(
+                            ExprKind::EnumVariant {
+                                enum_name: enum_name.clone(),
+                                variant,
+                                args,
+                            },
+                            span,
+                        );
+                    }
+                    _ => {
+                        return Err(self.error(CompileErrorKind::UnexpectedToken {
+                            expected: "enum name before ::".to_string(),
+                            found: format!("{:?}", expr.kind),
+                        }));
+                    }
+                }
             } else if self.match_token(&TokenKind::LBracket) {
                 let index_or_range = self.parse_index_or_range()?;
                 self.consume(&TokenKind::RBracket, "]")?;

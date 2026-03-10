@@ -87,6 +87,8 @@ impl Parser {
                 | TokenKind::For
                 | TokenKind::Return
                 | TokenKind::Struct
+                | TokenKind::Enum
+                | TokenKind::Match
                 | TokenKind::Pub => return,
                 TokenKind::Eof => return,
                 _ => {}

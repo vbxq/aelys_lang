@@ -85,7 +85,13 @@ impl Lexer {
                     self.add_token(TokenKind::Percent);
                 }
             }
-            ':' => self.add_token(TokenKind::Colon),
+            ':' => {
+                if self.match_char(':') {
+                    self.add_token(TokenKind::ColonColon);
+                } else {
+                    self.add_token(TokenKind::Colon);
+                }
+            }
 
             '/' => {
                 if self.match_char('/') {
