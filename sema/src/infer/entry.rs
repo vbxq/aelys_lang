@@ -37,6 +37,28 @@ impl TypeInference {
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
         self.check_type_annotation(ann);
+
+        // Handle function types specially: use enum-aware type_from_annotation
+        // recursively for params and return type, instead of raw from_annotation
+        // which doesn't know about enums and would produce Struct("Option")
+        // instead of Enum("Option", [...]) for types like fn(i64) -> Option<i64>.
+        if ann.is_function_type() {
+            let params = ann
+                .fn_params
+                .as_ref()
+                .map(|ps| ps.iter().map(|p| self.type_from_annotation(p)).collect())
+                .unwrap_or_default();
+            let ret = ann
+                .fn_ret
+                .as_ref()
+                .map(|r| self.type_from_annotation(r))
+                .unwrap_or(InferType::Null);
+            return InferType::Function {
+                params,
+                ret: Box::new(ret),
+            };
+        }
+
         let ty = InferType::from_annotation(ann);
         // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
         if let InferType::Struct(ref name) = ty {

@@ -100,7 +100,15 @@ impl TypeInference {
                 }
             }
 
-            let ret = self.type_gen.fresh();
+            // When the callee has a known function type, extract the return type
+            // directly so that downstream expressions (e.g., match) can inspect
+            // it before constraint solving runs. For unknown callee types, fall
+            // back to a fresh type variable resolved via constraints.
+            let ret = if let InferType::Function { ret: fn_ret, .. } = &callee_ty {
+                *fn_ret.clone()
+            } else {
+                self.type_gen.fresh()
+            };
 
             let arg_types: Vec<InferType> = typed_args.iter().map(|a| a.ty.clone()).collect();
             let expected_fn_type = InferType::Function {
