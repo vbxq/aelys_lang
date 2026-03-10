@@ -257,12 +257,19 @@ fn resolve_local_enum_monos(
 ) -> HashMap<LocalId, String> {
     let mut local_mono: HashMap<LocalId, String> = HashMap::new();
 
-    // Pass 0: If a local's type was pre-mangled by the lowering pass (sema had concrete
-    // type args in the annotation), use that directly.
+    // Pass 0: If a local's or param's type was pre-mangled by the lowering pass
+    // (sema had concrete type args in the annotation), use that directly.
     for local in &func.locals {
         if let AirType::Enum(ref name) = local.ty {
             if name.starts_with("__mono_") {
                 local_mono.insert(local.id, name.clone());
+            }
+        }
+    }
+    for param in &func.params {
+        if let AirType::Enum(ref name) = param.ty {
+            if name.starts_with("__mono_") {
+                local_mono.insert(param.id, name.clone());
             }
         }
     }

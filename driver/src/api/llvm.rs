@@ -87,7 +87,7 @@ fn lower_file_to_air_with_source(
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(inference.program);
 
-    let mut air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
+    let air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
         let message = if errors.is_empty() {
             "AIR lowering failed with an unknown error".to_string()
         } else {
@@ -107,8 +107,8 @@ fn lower_file_to_air_with_source(
             None,
         )
     })?;
-    aelys_air::layout::compute_layouts(&mut air);
     let mut air = aelys_air::mono::monomorphize(air);
+    aelys_air::layout::compute_layouts(&mut air);
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
     aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air);
 

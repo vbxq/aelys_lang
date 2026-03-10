@@ -161,11 +161,25 @@ impl TypeInference {
                         typed_args.push(typed_arg);
                     }
 
-                    // For generic enums, the result type is Enum("Option") but we need
-                    // to also create a fresh type var for the overall enum type so that
-                    // it unifies with type annotations like `Option<i64>`.
-                    // The enum type itself is always Enum(enum_name).
-                    let result_ty = InferType::Enum(enum_name.to_string(), Vec::new());
+                    // Build the result type with resolved type args so that AIR
+                    // lowering can pre-mangle the enum name for monomorphization.
+                    // For generic enums, this uses the fresh type vars from the
+                    // mapping (populated during arg inference above). For
+                    // non-generic enums, type_args stays empty.
+                    let type_args: Vec<InferType> = if is_generic {
+                        def.type_params
+                            .iter()
+                            .map(|param| {
+                                type_param_mapping
+                                    .get(param)
+                                    .cloned()
+                                    .unwrap_or_else(|| self.type_gen.fresh())
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
+                    let result_ty = InferType::Enum(enum_name.to_string(), type_args);
 
                     (
                         TypedExprKind::EnumVariant {
