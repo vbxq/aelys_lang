@@ -180,7 +180,9 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Function(func) => {
                 self.lower_function(func);
             }
-            TypedStmtKind::Needs(_) | TypedStmtKind::StructDecl { .. } => {}
+            TypedStmtKind::Needs(_)
+            | TypedStmtKind::StructDecl { .. }
+            | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 

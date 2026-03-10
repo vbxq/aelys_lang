@@ -16,6 +16,7 @@ pub(super) fn type_to_string(ty: &AirType) -> String {
         AirType::Str => "str".to_string(),
         AirType::Ptr(inner) => format!("ptr_{}", type_to_string(inner)),
         AirType::Struct(name) => name.clone(),
+        AirType::Enum(name) => format!("enum_{}", name),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
         // was using _ as separator everywhere, so fn(i32, f64)->bool and
@@ -106,6 +107,16 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
                     .collect::<Vec<_>>()
                     .join("_");
                 *name = format!("__mono_{}_{}", name, suffix);
+            }
+        }
+        Rvalue::EnumInit { enum_name, .. } => {
+            if !enum_name.contains("__mono_") && !type_args.is_empty() {
+                let suffix = type_args
+                    .iter()
+                    .map(type_to_string)
+                    .collect::<Vec<_>>()
+                    .join("_");
+                *enum_name = format!("__mono_{}_{}", enum_name, suffix);
             }
         }
         _ => {}

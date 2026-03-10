@@ -36,6 +36,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) program: &'a TypedProgram,
     pub(super) functions: Vec<AirFunction>,
     pub(super) structs: Vec<AirStructDef>,
+    pub(super) enums: Vec<AirEnumDef>,
     pub(super) globals: Vec<AirGlobal>,
     pub(super) source_files: Vec<String>,
     pub(super) next_function_id: u32,
@@ -67,6 +68,7 @@ impl<'a> LoweringContext<'a> {
             program,
             functions: Vec::new(),
             structs: Vec::new(),
+            enums: Vec::new(),
             globals: Vec::new(),
             source_files: vec![program.source.name.clone()],
             next_function_id: 0,
@@ -93,6 +95,7 @@ impl<'a> LoweringContext<'a> {
         Ok(AirProgram {
             functions: self.functions,
             structs: self.structs,
+            enums: self.enums,
             globals: self.globals,
             source_files: self.source_files,
             mono_instances: Vec::new(),
@@ -304,6 +307,7 @@ impl<'a> LoweringContext<'a> {
                     AirType::Struct(name.clone())
                 }
             }
+            InferType::Enum(name) => AirType::Enum(name.clone()),
             // A Var reaching lowering is always a compiler bug: finalize should have converted every Var to Dynamic before the AIR stage.
             // Map to Opaque so the validation pass rejects it with a clear diagnostic.
             InferType::Var(id) => {

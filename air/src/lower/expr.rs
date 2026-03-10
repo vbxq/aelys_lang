@@ -265,6 +265,19 @@ impl<'a> LoweringContext<'a> {
                 let to = self.lower_type_from_infer(target);
                 self.emit_rvalue_to_temp(to.clone(), Rvalue::Cast { operand, from, to }, sp)
             }
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+            } => self.emit_rvalue_to_temp(
+                self.lower_type_from_infer(&expr.ty),
+                Rvalue::EnumInit {
+                    enum_name: enum_name.clone(),
+                    variant: variant.clone(),
+                    tag: *tag,
+                },
+                sp,
+            ),
         }
     }
 

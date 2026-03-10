@@ -25,6 +25,7 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
                 align: el.align,
             }
         }
+        AirType::Enum(_) => TypeLayout { size: 4, align: 4 },
         AirType::Struct(name) => {
             panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
         }

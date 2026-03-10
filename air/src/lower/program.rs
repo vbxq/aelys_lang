@@ -17,11 +17,23 @@ impl<'a> LoweringContext<'a> {
             }
         }
 
+        // Collect enum definitions
+        for stmt in &self.program.stmts {
+            if let TypedStmtKind::EnumDecl {
+                name,
+                type_params,
+                variants,
+            } = &stmt.kind
+            {
+                self.lower_enum_decl(name, type_params, variants, &stmt.span);
+            }
+        }
+
         let stmts: Vec<_> = self.program.stmts.clone();
         for stmt in &stmts {
             match &stmt.kind {
                 TypedStmtKind::Function(func) => self.lower_function(func),
-                TypedStmtKind::StructDecl { .. } => {}
+                TypedStmtKind::StructDecl { .. } | TypedStmtKind::EnumDecl { .. } => {}
                 _ => self.lower_toplevel_stmt(stmt),
             }
         }
@@ -48,6 +60,30 @@ impl<'a> LoweringContext<'a> {
             type_params: air_type_params,
             fields: air_fields,
             is_closure_env: false,
+            span: Some(self.span(span)),
+        });
+        self.type_params_map.clear();
+    }
+
+    fn lower_enum_decl(
+        &mut self,
+        name: &str,
+        type_params: &[String],
+        variants: &[(String, u32)],
+        span: &aelys_syntax::Span,
+    ) {
+        let air_type_params = self.lower_type_params(type_params);
+        let air_variants = variants
+            .iter()
+            .map(|(vname, vtag)| AirEnumVariant {
+                name: vname.clone(),
+                tag: *vtag,
+            })
+            .collect();
+        self.enums.push(AirEnumDef {
+            name: name.to_string(),
+            type_params: air_type_params,
+            variants: air_variants,
             span: Some(self.span(span)),
         });
         self.type_params_map.clear();

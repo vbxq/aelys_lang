@@ -5,6 +5,7 @@ fn empty_program() -> AirProgram {
     AirProgram {
         functions: vec![],
         structs: vec![],
+        enums: vec![],
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],

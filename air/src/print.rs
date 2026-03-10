@@ -19,6 +19,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
         AirType::Struct(name) => name.clone(),
+        AirType::Enum(name) => format!("enum {}", name),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
         AirType::Slice(inner) => format!("[{}]", fmt_type(inner)),
         AirType::FnPtr { params, ret, .. } => {
@@ -224,6 +225,13 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
                 fmt_operand(base, func),
                 fmt_operand(index, func)
             )
+        }
+        Rvalue::EnumInit {
+            enum_name,
+            variant,
+            tag,
+        } => {
+            format!("enum_init {}::{} (tag={})", enum_name, variant, tag)
         }
     }
 }

@@ -46,6 +46,7 @@ pub enum AirType {
     Str,
     Ptr(Box<AirType>),
     Struct(String),
+    Enum(String),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
     FnPtr {
@@ -111,9 +112,24 @@ pub struct AirStructField {
 }
 
 #[derive(Clone)]
+pub struct AirEnumVariant {
+    pub name: String,
+    pub tag: u32,
+}
+
+#[derive(Clone)]
+pub struct AirEnumDef {
+    pub name: String,
+    pub type_params: Vec<TypeParamId>,
+    pub variants: Vec<AirEnumVariant>,
+    pub span: Option<Span>,
+}
+
+#[derive(Clone)]
 pub struct AirProgram {
     pub functions: Vec<AirFunction>,
     pub structs: Vec<AirStructDef>,
+    pub enums: Vec<AirEnumDef>,
     pub globals: Vec<AirGlobal>,
     pub source_files: Vec<String>,
     pub mono_instances: Vec<MonoInstance>,
@@ -271,6 +287,11 @@ pub enum Rvalue {
     Index {
         base: Operand,
         index: Operand,
+    },
+    EnumInit {
+        enum_name: String,
+        variant: String,
+        tag: u32,
     },
 }
 

@@ -25,6 +25,7 @@ fn program(structs: Vec<AirStructDef>) -> AirProgram {
     AirProgram {
         functions: vec![],
         structs,
+        enums: vec![],
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
