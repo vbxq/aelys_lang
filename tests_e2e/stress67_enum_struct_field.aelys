@@ -1,0 +1,25 @@
+struct Container {
+    value: Option<i64>,
+    label: str,
+}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn main() {
+    let c1 = Container { value: Option::Some(42), label: "first" }
+    match c1.value {
+        Option::Some(v) => println(v)
+        Option::None => println(0)
+    }
+    println(c1.label)
+
+    let c2 = Container { value: Option::None, label: "empty" }
+    match c2.value {
+        Option::Some(v) => println(v)
+        Option::None => println(0)
+    }
+    println(c2.label)
+}

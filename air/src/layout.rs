@@ -47,16 +47,10 @@ pub fn compute_layouts(program: &mut AirProgram) {
 
     let mut resolved: HashMap<String, TypeLayout> = HashMap::new();
 
-    for idx in order {
-        let (total, offsets) = struct_layout(&program.structs[idx], &resolved);
-        resolved.insert(program.structs[idx].name.clone(), total);
-        for (i, off) in offsets.into_iter().enumerate() {
-            program.structs[idx].fields[i].offset = Some(off);
-        }
-    }
-
-    // Compute enum sizes using a fixed-point loop so that nested enums
+    // Compute enum sizes FIRST using a fixed-point loop so that nested enums
     // (e.g., Option<Option<i64>>) are resolved in dependency order.
+    // Enums must be computed before structs because struct fields may reference
+    // enum types, and struct_layout needs correct enum sizes.
     let mut remaining: Vec<usize> = (0..program.enums.len()).collect();
     let max_iterations = remaining.len() + 1;
     for _ in 0..max_iterations {
@@ -101,6 +95,58 @@ pub fn compute_layouts(program: &mut AirProgram) {
             }
         }
         remaining = next_remaining;
+    }
+
+    // Now compute struct layouts — enum sizes are available for field resolution
+    for idx in order {
+        let (total, offsets) = struct_layout(&program.structs[idx], &resolved);
+        resolved.insert(program.structs[idx].name.clone(), total);
+        for (i, off) in offsets.into_iter().enumerate() {
+            program.structs[idx].fields[i].offset = Some(off);
+        }
+    }
+
+    // Second pass for enums that depend on structs (e.g., enum Shape { Rect(Point) })
+    if !remaining.is_empty() {
+        let max_iterations = remaining.len() + 1;
+        for _ in 0..max_iterations {
+            if remaining.is_empty() {
+                break;
+            }
+            let mut next_remaining = Vec::new();
+            for &idx in &remaining {
+                let def = &program.enums[idx];
+                let all_resolved = def.variants.iter().all(|v| {
+                    v.payload.iter().all(|ty| match ty {
+                        AirType::Enum(name) | AirType::Struct(name) => {
+                            resolved.contains_key(name.as_str())
+                        }
+                        _ => true,
+                    })
+                });
+                if !all_resolved {
+                    next_remaining.push(idx);
+                    continue;
+                }
+                let payload_size = enum_max_payload_size(def, &resolved);
+                if payload_size == 0 {
+                    resolved.insert(def.name.clone(), TypeLayout { size: 4, align: 4 });
+                } else {
+                    let payload_align = enum_max_payload_align(def, &resolved);
+                    let total_align = 4u32.max(payload_align);
+                    let payload_offset = align_to(4, payload_align);
+                    let total_size = align_to(payload_offset + payload_size, total_align);
+                    resolved.insert(
+                        def.name.clone(),
+                        TypeLayout {
+                            size: total_size,
+                            align: total_align,
+                        },
+                    );
+                }
+            }
+            remaining = next_remaining;
+        }
     }
 
     program.struct_sizes = resolved;

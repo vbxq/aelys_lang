@@ -69,7 +69,16 @@ impl<'a> FunctionCodegen<'a> {
                 let (size, align) = self.type_size_align(inner)?;
                 Ok((size.saturating_mul(*n as u32), align))
             }
-            AirType::Enum(_) => Ok((4, 4)),
+            AirType::Enum(name) => {
+                // Look up pre-computed enum size from AIR layout pass.
+                // Data enums are larger than 4 bytes (tag + payload).
+                if let Some(layout) = self.program.struct_sizes.get(name.as_str()) {
+                    Ok((layout.size, layout.align))
+                } else {
+                    // Simple enum (no data variants): just the i32 tag
+                    Ok((4, 4))
+                }
+            }
             AirType::Struct(name) => {
                 let def = self
                     .program
