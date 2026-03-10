@@ -295,6 +295,18 @@ pub enum Rvalue {
         tag: u32,
         payload: Vec<Operand>, // empty for unit variants
     },
+    /// Extract the i32 tag from an enum value.
+    EnumTag {
+        enum_name: String,
+        operand: Operand,
+    },
+    /// Extract a payload field from an enum value by variant tag and field index.
+    EnumPayload {
+        enum_name: String,
+        tag: u32,
+        operand: Operand,
+        field_index: u32,
+    },
 }
 
 #[derive(Clone)]

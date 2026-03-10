@@ -140,6 +140,12 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
                 collect_operand_locals(operand, out);
             }
         }
+        Rvalue::EnumTag { operand, .. } => {
+            collect_operand_locals(operand, out);
+        }
+        Rvalue::EnumPayload { operand, .. } => {
+            collect_operand_locals(operand, out);
+        }
     }
 }
 

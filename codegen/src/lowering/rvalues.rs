@@ -45,6 +45,13 @@ impl<'a> FunctionCodegen<'a> {
                 payload,
                 ..
             } => self.generate_enum_init(enum_name, *tag, payload),
+            Rvalue::EnumTag { enum_name, operand } => self.generate_enum_tag(enum_name, operand),
+            Rvalue::EnumPayload {
+                enum_name,
+                tag,
+                operand,
+                field_index,
+            } => self.generate_enum_payload(enum_name, *tag, operand, *field_index),
         }
     }
 
@@ -126,11 +133,7 @@ impl<'a> FunctionCodegen<'a> {
         payload: &[Operand],
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         // Look up the enum def to decide simple vs data
-        let enum_def = self
-            .program
-            .enums
-            .iter()
-            .find(|e| e.name == enum_name);
+        let enum_def = self.program.enums.iter().find(|e| e.name == enum_name);
 
         let is_data_enum = enum_def.is_some_and(|d| enum_has_data(d));
 
@@ -228,19 +231,17 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
             // Find the variant definition to get the field types
-            let variant_def = def
-                .variants
-                .iter()
-                .find(|v| v.tag == tag)
-                .ok_or_else(|| {
-                    CodegenError::LlvmError(format!(
-                        "unknown variant tag {} for enum {}",
-                        tag, enum_name
-                    ))
-                })?;
+            let variant_def = def.variants.iter().find(|v| v.tag == tag).ok_or_else(|| {
+                CodegenError::LlvmError(format!(
+                    "unknown variant tag {} for enum {}",
+                    tag, enum_name
+                ))
+            })?;
 
             let mut byte_offset: u32 = 0;
-            for (i, (operand, field_air_ty)) in payload.iter().zip(variant_def.payload.iter()).enumerate() {
+            for (i, (operand, field_air_ty)) in
+                payload.iter().zip(variant_def.payload.iter()).enumerate()
+            {
                 let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
                 let field_layout = aelys_air::layout::layout_of(field_air_ty);
 
@@ -267,12 +268,155 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_store(field_ptr, value)
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                store.set_alignment(field_align).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                store
+                    .set_alignment(field_align)
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
                 byte_offset += field_layout.size;
             }
 
             self.load_value(enum_ty.into(), tmp, "enum_value")
         }
+    }
+
+    fn generate_enum_tag(
+        &mut self,
+        enum_name: &str,
+        operand: &Operand,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let enum_def = self.program.enums.iter().find(|e| e.name == enum_name);
+
+        let is_data_enum = enum_def.is_some_and(|d| enum_has_data(d));
+
+        if is_data_enum {
+            // Data enum: { i32 tag, [N x i8] payload } -- extract field 0
+            let enum_struct_name = format!("__aelys_enum_{}", enum_name);
+            let enum_ty = self
+                .context
+                .get_struct_type(&enum_struct_name)
+                .ok_or_else(|| {
+                    CodegenError::UnsupportedType(format!(
+                        "unknown enum struct type: {}",
+                        enum_struct_name
+                    ))
+                })?;
+
+            // The operand is a struct value. We need it on the stack to GEP into it.
+            let val = self.generate_operand(operand)?;
+            let tmp = self
+                .builder
+                .build_alloca(enum_ty, "match_enum_tmp")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.align_alloca(tmp, enum_ty.into())?;
+            self.store_value(tmp, val)?;
+
+            let tag_ptr = self
+                .builder
+                .build_struct_gep(enum_ty, tmp, 0, "match_tag_ptr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.load_value(self.context.i32_type().into(), tag_ptr, "match_tag")
+        } else {
+            // Simple enum: the value IS the i32 tag
+            self.generate_operand(operand)
+        }
+    }
+
+    fn generate_enum_payload(
+        &mut self,
+        enum_name: &str,
+        tag: u32,
+        operand: &Operand,
+        field_index: u32,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let def = self
+            .program
+            .enums
+            .iter()
+            .find(|e| e.name == enum_name)
+            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown enum: {}", enum_name)))?;
+
+        let variant_def = def.variants.iter().find(|v| v.tag == tag).ok_or_else(|| {
+            CodegenError::LlvmError(format!(
+                "unknown variant tag {} for enum {}",
+                tag, enum_name
+            ))
+        })?;
+
+        if field_index as usize >= variant_def.payload.len() {
+            return Err(CodegenError::LlvmError(format!(
+                "field index {} out of range for variant (has {} fields)",
+                field_index,
+                variant_def.payload.len()
+            )));
+        }
+
+        let field_air_ty = &variant_def.payload[field_index as usize];
+        let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
+
+        let enum_struct_name = format!("__aelys_enum_{}", enum_name);
+        let enum_ty = self
+            .context
+            .get_struct_type(&enum_struct_name)
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!(
+                    "unknown enum struct type: {}",
+                    enum_struct_name
+                ))
+            })?;
+
+        // Store the operand on the stack so we can GEP into it
+        let val = self.generate_operand(operand)?;
+        let tmp = self
+            .builder
+            .build_alloca(enum_ty, "match_payload_tmp")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.align_alloca(tmp, enum_ty.into())?;
+        self.store_value(tmp, val)?;
+
+        // GEP to the payload byte array (field 1 of the enum struct)
+        let payload_base_ptr = self
+            .builder
+            .build_struct_gep(enum_ty, tmp, 1, "match_payload_base")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // Calculate the byte offset of the requested field, matching the layout used in EnumInit
+        let mut byte_offset: u32 = 0;
+        for i in 0..=field_index {
+            let ty = &variant_def.payload[i as usize];
+            let layout = aelys_air::layout::layout_of(ty);
+            // Align before this field
+            byte_offset = (byte_offset + layout.align - 1) & !(layout.align - 1);
+            if i < field_index {
+                byte_offset += layout.size;
+            }
+        }
+
+        // GEP into the byte array at the computed offset
+        let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
+        let field_ptr = unsafe {
+            self.builder.build_in_bounds_gep(
+                self.context.i8_type(),
+                payload_base_ptr,
+                &[offset_val],
+                &format!("match_field_{}_ptr", field_index),
+            )
+        }
+        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // Load the field value with proper alignment
+        let field_align = alignment_of(field_llvm_ty);
+        let load = self
+            .builder
+            .build_load(
+                field_llvm_ty,
+                field_ptr,
+                &format!("match_field_{}", field_index),
+            )
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        load.as_instruction_value()
+            .unwrap()
+            .set_alignment(field_align)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        Ok(load)
     }
 }

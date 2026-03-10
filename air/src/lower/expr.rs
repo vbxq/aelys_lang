@@ -1,6 +1,9 @@
 use super::{LoweringContext, infer_to_int_size, lower_binop, lower_unop};
 use crate::*;
-use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedStmt};
+use aelys_sema::{
+    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedMatchArm, TypedParam,
+    TypedPattern, TypedStmt,
+};
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
@@ -283,6 +286,9 @@ impl<'a> LoweringContext<'a> {
                     sp,
                 )
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.lower_match_expr(scrutinee, arms, expr)
+            }
         }
     }
 
@@ -552,6 +558,134 @@ impl<'a> LoweringContext<'a> {
             Rvalue::Use(Operand::Const(AirConst::FnRef(lambda_name))),
             Some(self.span(&parent.span)),
         )
+    }
+
+    fn lower_match_expr(
+        &mut self,
+        scrutinee: &TypedExpr,
+        arms: &[TypedMatchArm],
+        parent: &TypedExpr,
+    ) -> Operand {
+        let sp = Some(self.span(&parent.span));
+        let result_ty = self.lower_type_from_infer(&parent.ty);
+        let result = self.alloc_temp_mut(result_ty);
+
+        // Lower the scrutinee
+        let scrutinee_op = self.lower_expr(scrutinee);
+
+        // Get the enum name from the scrutinee type
+        let enum_name = match &scrutinee.ty {
+            InferType::Enum(name) => name.clone(),
+            _ => {
+                self.report_error(format!(
+                    "match scrutinee is not an enum type: {:?}",
+                    scrutinee.ty
+                ));
+                return Operand::Const(AirConst::Null);
+            }
+        };
+
+        // Extract the tag
+        let tag_op = self.emit_rvalue_to_temp(
+            AirType::I32,
+            Rvalue::EnumTag {
+                enum_name: enum_name.clone(),
+                operand: scrutinee_op.clone(),
+            },
+            sp,
+        );
+
+        // Allocate blocks: one per arm + merge block
+        let merge_id = self.alloc_block_id();
+
+        // Separate variant arms from wildcard
+        let mut switch_targets: Vec<(AirConst, BlockId)> = Vec::new();
+        let mut wildcard_arm: Option<&TypedMatchArm> = None;
+        let mut arm_blocks: Vec<(BlockId, &TypedMatchArm)> = Vec::new();
+
+        for arm in arms {
+            match &arm.pattern {
+                TypedPattern::Variant { tag, .. } => {
+                    let block_id = self.alloc_block_id();
+                    switch_targets.push((AirConst::Int(*tag as i64, AirIntSize::I32), block_id));
+                    arm_blocks.push((block_id, arm));
+                }
+                TypedPattern::Wildcard => {
+                    wildcard_arm = Some(arm);
+                }
+            }
+        }
+
+        // Allocate a default block for the wildcard (or unreachable if exhaustive)
+        let default_id = self.alloc_block_id();
+
+        // Seal current block with Switch terminator
+        self.seal_block(AirTerminator::Switch {
+            discr: tag_op,
+            targets: switch_targets,
+            default: default_id,
+        });
+
+        // Lower each variant arm
+        for (block_id, arm) in arm_blocks {
+            self.fixup_block_id_noop(block_id);
+
+            // Bind payload fields if the pattern has bindings
+            if let TypedPattern::Variant {
+                enum_name: arm_enum_name,
+                tag,
+                bindings,
+                ..
+            } = &arm.pattern
+            {
+                for (field_index, (name, ty)) in bindings.iter().enumerate() {
+                    let field_ty = self.lower_type_from_infer(ty);
+                    let field_local = self.alloc_named_local(name, field_ty.clone(), false, sp);
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Local(field_local),
+                            rvalue: Rvalue::EnumPayload {
+                                enum_name: arm_enum_name.clone(),
+                                tag: *tag,
+                                operand: scrutinee_op.clone(),
+                                field_index: field_index as u32,
+                            },
+                        },
+                        sp,
+                    );
+                }
+            }
+
+            let arm_val = self.lower_expr(&arm.body);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(result),
+                    rvalue: Rvalue::Use(arm_val),
+                },
+                None,
+            );
+            self.seal_block(AirTerminator::Goto(merge_id));
+        }
+
+        // Lower the default block (wildcard or unreachable)
+        self.fixup_block_id_noop(default_id);
+        if let Some(wildcard) = wildcard_arm {
+            let wc_val = self.lower_expr(&wildcard.body);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(result),
+                    rvalue: Rvalue::Use(wc_val),
+                },
+                None,
+            );
+            self.seal_block(AirTerminator::Goto(merge_id));
+        } else {
+            // Exhaustive match without wildcard -- all variants covered, default is unreachable
+            self.seal_block(AirTerminator::Unreachable);
+        }
+
+        self.fixup_block_id_noop(merge_id);
+        Operand::Copy(result)
     }
 
     // format string -> __aelys_str_concat / __aelys_to_string

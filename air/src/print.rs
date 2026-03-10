@@ -245,6 +245,23 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
                 )
             }
         }
+        Rvalue::EnumTag { enum_name, operand } => {
+            format!("enum_tag {} {}", enum_name, fmt_operand(operand, func))
+        }
+        Rvalue::EnumPayload {
+            enum_name,
+            tag,
+            operand,
+            field_index,
+        } => {
+            format!(
+                "enum_payload {} (tag={}, field={}) {}",
+                enum_name,
+                tag,
+                field_index,
+                fmt_operand(operand, func)
+            )
+        }
     }
 }
 

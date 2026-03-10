@@ -97,6 +97,12 @@ impl DeadCodeEliminator {
             TypedExprKind::Cast { expr, .. } => {
                 self.eliminate_in_expr(expr);
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.eliminate_in_expr(scrutinee);
+                for arm in arms {
+                    self.eliminate_in_expr(&mut arm.body);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

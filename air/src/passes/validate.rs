@@ -377,6 +377,12 @@ fn check_rvalue_locals(
                 check_operand_locals(operand, declared, func_name, ctx, errors);
             }
         }
+        Rvalue::EnumTag { operand, .. } => {
+            check_operand_locals(operand, declared, func_name, ctx, errors);
+        }
+        Rvalue::EnumPayload { operand, .. } => {
+            check_operand_locals(operand, declared, func_name, ctx, errors);
+        }
     }
 }
 

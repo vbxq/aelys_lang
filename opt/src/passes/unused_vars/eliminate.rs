@@ -124,6 +124,9 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             fields.iter().any(|(_, v)| has_side_effects(v))
         }
         TypedExprKind::Cast { expr, .. } => has_side_effects(expr),
+        TypedExprKind::Match { scrutinee, arms } => {
+            has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
+        }
         TypedExprKind::Identifier(_)
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

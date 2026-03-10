@@ -186,6 +186,12 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         TypedExprKind::Cast { expr, .. } => {
             collect_uses_in_expr(expr, used);
         }
+        TypedExprKind::Match { scrutinee, arms } => {
+            collect_uses_in_expr(scrutinee, used);
+            for arm in arms {
+                collect_uses_in_expr(&arm.body, used);
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)

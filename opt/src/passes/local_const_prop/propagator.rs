@@ -260,6 +260,12 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars(s, out);
                 }
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                Self::collect_assigned_vars_expr(scrutinee, out);
+                for arm in arms {
+                    Self::collect_assigned_vars_expr(&arm.body, out);
+                }
+            }
             _ => {}
         }
     }
@@ -402,6 +408,12 @@ impl LocalConstantPropagator {
             }
             TypedExprKind::Cast { expr, .. } => {
                 self.propagate_expr(expr);
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.propagate_expr(scrutinee);
+                for arm in arms {
+                    self.propagate_expr(&mut arm.body);
+                }
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

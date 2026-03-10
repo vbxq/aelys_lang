@@ -102,6 +102,12 @@ impl GlobalConstantPropagator {
             TypedExprKind::Cast { expr, .. } => {
                 self.substitute_constants(expr);
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.substitute_constants(scrutinee);
+                for arm in arms {
+                    self.substitute_constants(&mut arm.body);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

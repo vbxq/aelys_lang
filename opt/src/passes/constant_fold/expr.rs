@@ -122,6 +122,12 @@ impl ConstantFolder {
             TypedExprKind::Cast { expr, .. } => {
                 self.optimize_expr(expr);
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.optimize_expr(scrutinee);
+                for arm in arms {
+                    self.optimize_expr(&mut arm.body);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

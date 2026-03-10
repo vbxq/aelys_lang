@@ -198,6 +198,12 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
                 rewrite_operand(operand, replacements);
             }
         }
+        Rvalue::EnumTag { operand, .. } => {
+            rewrite_operand(operand, replacements);
+        }
+        Rvalue::EnumPayload { operand, .. } => {
+            rewrite_operand(operand, replacements);
+        }
     }
 }
 

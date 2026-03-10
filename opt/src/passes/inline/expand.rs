@@ -306,6 +306,16 @@ impl InlineExpander {
                     .map(|a| self.substitute_expr(a, params, span))
                     .collect(),
             },
+            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+                scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
+                arms: arms
+                    .iter()
+                    .map(|arm| aelys_sema::TypedMatchArm {
+                        pattern: arm.pattern.clone(),
+                        body: Box::new(self.substitute_expr(&arm.body, params, span)),
+                    })
+                    .collect(),
+            },
         };
 
         TypedExpr::new(kind, expr.ty.clone(), span)
