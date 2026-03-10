@@ -343,16 +343,24 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Bool(v) => Some(AirConst::Bool(*v)),
             TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
             TypedExprKind::Null => Some(AirConst::Null),
-            TypedExprKind::EnumVariant { tag, args, .. }
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            }
                 if args.is_empty()
-                    && matches!(&expr.ty, InferType::Enum(name, _) if self
+                    && self
                         .program
                         .type_table
-                        .get_enum(name)
-                        .is_some_and(|def| def.variants.iter().all(|variant| variant.data.is_empty()))) =>
+                        .get_enum(enum_name)
+                        .is_some_and(|def| def
+                            .variants
+                            .iter()
+                            .any(|candidate| candidate.name == *variant && candidate.data.is_empty())) =>
             {
-                // Simple enums are plain i32 tags in AIR/LLVM, so unit variants
-                // can be materialized as compile-time integer globals.
+                // Unit variants are constant at AIR level. Simple enums stay bare
+                // i32 tags; data enums rebuild the aggregate from the tag later.
                 Some(AirConst::Int(*tag as i64, AirIntSize::I32))
             }
             _ => None,

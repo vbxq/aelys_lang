@@ -179,6 +179,64 @@ fn read_color() -> i64 {
 }
 
 #[test]
+fn llvm_lowers_data_enum_unit_global_to_const_aggregate() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+
+fn read_option() -> i64 {
+    return match g {
+        Option::Some(v) => v
+        Option::None => 33
+    }
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        "{ir}"
+    );
+    assert!(ir.contains("zeroinitializer"), "{ir}");
+}
+
+#[test]
+fn driver_compiles_data_enum_unit_global_initializer() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+
+fn read_option() -> i64 {
+    return match g {
+        Option::Some(v) => v
+        Option::None => 33
+    }
+}
+"#,
+    )
+    .expect("source should be written");
+
+    compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect("driver should compile unit data-enum globals");
+
+    let ir_path = source_path.with_extension("ll");
+    let ir = fs::read_to_string(ir_path).expect("llvm ir should be emitted");
+    assert!(ir.contains("ret i64 33"), "{ir}");
+}
+
+#[test]
 fn llvm_rejects_non_constant_enum_global_initializer_cleanly() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
