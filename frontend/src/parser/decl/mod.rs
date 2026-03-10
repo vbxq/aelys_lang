@@ -4,11 +4,11 @@ use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{Stmt, TokenKind};
 
 mod decorators;
+mod enum_decl;
 mod function;
 mod let_decl;
 mod needs;
 mod struct_decl;
-mod enum_decl;
 mod types;
 
 impl Parser {

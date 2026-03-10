@@ -25,9 +25,7 @@ struct LoweringArtifacts {
     warnings: Vec<Warning>,
 }
 
-pub fn compile_to_typed_ast(
-    source_code: &str,
-) -> Result<aelys_sema::TypedProgram, AelysError> {
+pub fn compile_to_typed_ast(source_code: &str) -> Result<aelys_sema::TypedProgram, AelysError> {
     let src = Source::new("<inline>", source_code);
     let tokens = Lexer::with_source(src.clone()).scan()?;
     let stmts = Parser::new(tokens, src.clone()).parse()?;

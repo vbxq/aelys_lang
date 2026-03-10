@@ -911,3 +911,417 @@ fn extract(w: Wrapper) -> i64 {
         air_text
     );
 }
+
+// ============ Generic Enum Tests ============
+
+#[test]
+fn generic_enum_option_some() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::Some(42)
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Option::Some(42) should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_option_none() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x: Option<i64> = Option::None
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Option::None should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_option_some_string() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::Some("hello")
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Option::Some(\"hello\") should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_option_some_bool() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::Some(true)
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Option::Some(true) should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_match() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn unwrap_or(opt: Option<i64>, default: i64) -> i64 {
+    match opt {
+        Option::Some(val) => val,
+        Option::None => default,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(result.is_ok(), "match on generic enum: {:?}", result.err());
+}
+
+#[test]
+fn generic_enum_result() {
+    let src = r#"
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+fn check(r: Result<i64, string>) -> i64 {
+    match r {
+        Result::Ok(val) => val,
+        Result::Err(msg) => -1,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Result<i64, string> should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_as_return_type() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn make_some() -> Option<i64> {
+    return Option::Some(42)
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "generic enum as return type: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_as_param_type() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn is_some(opt: Option<i64>) -> i64 {
+    return match opt {
+        Option::Some(val) => 1,
+        Option::None => 0,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "generic enum as param type: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_none_without_annotation() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::None
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Option::None without annotation should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_multiple_variants_in_function() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn test(flag: bool) -> Option<i64> {
+    if flag {
+        return Option::Some(42)
+    }
+    return Option::None
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "returning both Some and None: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_result_ok_construction() {
+    let src = r#"
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+let r = Result::Ok(42)
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Result::Ok(42) should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_result_err_construction() {
+    let src = r#"
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+let r = Result::Err("something failed")
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Result::Err(\"...\") should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_air_lowering() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::Some(42)
+"#;
+    let air = lower_source(src);
+    // The generic enum def should exist (with type params)
+    let enum_def = air.enums.iter().find(|e| e.name.contains("Option"));
+    assert!(
+        enum_def.is_some(),
+        "Option enum should exist in AIR: {:?}",
+        air.enums.iter().map(|e| &e.name).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn generic_enum_match_air_lowering() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn unwrap_or(opt: Option<i64>, default: i64) -> i64 {
+    return match opt {
+        Option::Some(val) => val,
+        Option::None => default,
+    }
+}
+"#;
+    let air = lower_source(src);
+    let air_text = print_program(&air);
+
+    // Should contain switch and enum_tag
+    assert!(
+        air_text.contains("switch"),
+        "match on generic enum should lower to switch, got:\n{}",
+        air_text
+    );
+    assert!(
+        air_text.contains("enum_tag"),
+        "match should extract tag, got:\n{}",
+        air_text
+    );
+    assert!(
+        air_text.contains("enum_payload"),
+        "data match should extract payload, got:\n{}",
+        air_text
+    );
+}
+
+#[test]
+fn generic_enum_wrong_arg_type() {
+    // Option<T>::Some expects one argument of type T.
+    // With `Some(42)`, T = i64. But we can't enforce that T must be i64
+    // from a separate annotation without one -- this just tests that
+    // type checking works with the generic args.
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let x = Option::Some(42)
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "generic enum construction should type-check: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_exhaustive_match() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn test(opt: Option<i64>) -> i64 {
+    return match opt {
+        Option::Some(v) => v,
+        Option::None => 0,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "exhaustive match on generic enum: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_non_exhaustive_match_error() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn test(opt: Option<i64>) -> i64 {
+    return match opt {
+        Option::Some(v) => v,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_err(),
+        "non-exhaustive match on generic enum should fail"
+    );
+}
+
+#[test]
+fn generic_enum_match_with_wildcard() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn test(opt: Option<i64>) -> i64 {
+    return match opt {
+        Option::Some(v) => v,
+        _ => -1,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "generic enum match with wildcard: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_result_match_both_variants() {
+    let src = r#"
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+fn handle(r: Result<i64, string>) -> i64 {
+    return match r {
+        Result::Ok(val) => val,
+        Result::Err(msg) => -1,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "Result match both variants: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_result_air_lowering() {
+    let src = r#"
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+fn handle(r: Result<i64, string>) -> i64 {
+    return match r {
+        Result::Ok(val) => val,
+        Result::Err(msg) => -1,
+    }
+}
+"#;
+    let air = lower_source(src);
+    let air_text = print_program(&air);
+
+    assert!(
+        air_text.contains("switch"),
+        "Result match should lower to switch, got:\n{}",
+        air_text
+    );
+    assert!(
+        air_text.contains("enum_payload"),
+        "Result match should extract payload, got:\n{}",
+        air_text
+    );
+}

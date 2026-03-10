@@ -38,14 +38,26 @@ impl Parser {
         let name = self.consume_identifier("type name")?;
 
         if self.match_token(&TokenKind::Lt) {
-            let type_param = self.parse_type_annotation()?;
+            let mut type_params = Vec::new();
+            type_params.push(self.parse_type_annotation()?);
+            while self.match_token(&TokenKind::Comma) {
+                type_params.push(self.parse_type_annotation()?);
+            }
             self.consume(&TokenKind::Gt, ">")?;
             let end_span = self.previous().span;
-            Ok(TypeAnnotation::with_param(
-                name,
-                type_param,
-                start_span.merge(end_span),
-            ))
+            if type_params.len() == 1 {
+                Ok(TypeAnnotation::with_param(
+                    name,
+                    type_params.into_iter().next().unwrap(),
+                    start_span.merge(end_span),
+                ))
+            } else {
+                Ok(TypeAnnotation::with_params(
+                    name,
+                    type_params,
+                    start_span.merge(end_span),
+                ))
+            }
         } else {
             Ok(TypeAnnotation::new(name, start_span))
         }

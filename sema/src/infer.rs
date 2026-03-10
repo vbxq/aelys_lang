@@ -1,7 +1,7 @@
 mod captures;
 mod constraints;
-mod enums;
 pub mod entry;
+mod enums;
 mod expr;
 mod finalize;
 mod functions;

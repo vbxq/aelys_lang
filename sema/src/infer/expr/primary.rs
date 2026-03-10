@@ -3,6 +3,7 @@ use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span};
+use std::collections::HashMap;
 
 impl TypeInference {
     pub(super) fn infer_identifier_expr(
@@ -27,6 +28,53 @@ impl TypeInference {
             });
 
         (TypedExprKind::Identifier(name.to_string()), ty)
+    }
+
+    /// Instantiate type parameter placeholders in an InferType.
+    ///
+    /// Replaces `Struct("T")` (where T is a known type param name) with fresh type vars.
+    /// Uses a shared mapping so the same param name maps to the same fresh var within
+    /// a single instantiation context.
+    pub(super) fn instantiate_enum_type_param(
+        &mut self,
+        ty: &InferType,
+        type_param_names: &[String],
+        mapping: &mut HashMap<String, InferType>,
+    ) -> InferType {
+        match ty {
+            InferType::Struct(name) if type_param_names.contains(name) => mapping
+                .entry(name.clone())
+                .or_insert_with(|| self.type_gen.fresh())
+                .clone(),
+            InferType::Function { params, ret } => {
+                let new_params = params
+                    .iter()
+                    .map(|p| self.instantiate_enum_type_param(p, type_param_names, mapping))
+                    .collect();
+                let new_ret =
+                    Box::new(self.instantiate_enum_type_param(ret, type_param_names, mapping));
+                InferType::Function {
+                    params: new_params,
+                    ret: new_ret,
+                }
+            }
+            InferType::Array(inner, len) => InferType::Array(
+                Box::new(self.instantiate_enum_type_param(inner, type_param_names, mapping)),
+                *len,
+            ),
+            InferType::Vec(inner) => InferType::Vec(Box::new(self.instantiate_enum_type_param(
+                inner,
+                type_param_names,
+                mapping,
+            ))),
+            InferType::Tuple(elems) => InferType::Tuple(
+                elems
+                    .iter()
+                    .map(|e| self.instantiate_enum_type_param(e, type_param_names, mapping))
+                    .collect(),
+            ),
+            other => other.clone(),
+        }
     }
 
     pub(super) fn infer_enum_variant(
@@ -76,19 +124,33 @@ impl TypeInference {
                         );
                     }
 
+                    // For generic enums, instantiate type params with fresh type vars
+                    let is_generic = !def.type_params.is_empty();
+                    let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
+
                     // Type-check each argument against the expected data type
                     let mut typed_args = Vec::with_capacity(args.len());
                     for (i, arg_expr) in args.iter().enumerate() {
                         let mut typed_arg = self.infer_expr(arg_expr);
-                        let expected_ty = &v.data[i];
+
+                        // Instantiate type params in the expected type if this is a generic enum
+                        let expected_ty = if is_generic {
+                            self.instantiate_enum_type_param(
+                                &v.data[i],
+                                &def.type_params,
+                                &mut type_param_mapping,
+                            )
+                        } else {
+                            v.data[i].clone()
+                        };
 
                         // Try literal narrowing first
-                        self.try_narrow_literal(&mut typed_arg, expected_ty);
+                        self.try_narrow_literal(&mut typed_arg, &expected_ty);
 
                         // Push a constraint: arg type == expected field type
                         self.constraints.push(Constraint::equal(
                             typed_arg.ty.clone(),
-                            expected_ty.clone(),
+                            expected_ty,
                             arg_expr.span,
                             ConstraintReason::Other(format!(
                                 "argument {} of enum variant '{}::{}'",
@@ -99,6 +161,12 @@ impl TypeInference {
                         typed_args.push(typed_arg);
                     }
 
+                    // For generic enums, the result type is Enum("Option") but we need
+                    // to also create a fresh type var for the overall enum type so that
+                    // it unifies with type annotations like `Option<i64>`.
+                    // The enum type itself is always Enum(enum_name).
+                    let result_ty = InferType::Enum(enum_name.to_string());
+
                     (
                         TypedExprKind::EnumVariant {
                             enum_name: enum_name.to_string(),
@@ -106,7 +174,7 @@ impl TypeInference {
                             tag: v.tag,
                             args: typed_args,
                         },
-                        InferType::Enum(enum_name.to_string()),
+                        result_ty,
                     )
                 } else {
                     let variant_names: Vec<_> =

@@ -4,6 +4,9 @@ use crate::Span;
 pub struct TypeAnnotation {
     pub name: String,
     pub type_param: Option<Box<TypeAnnotation>>,
+    /// Multiple type parameters for generic types like `Result<i64, string>`.
+    /// When present, takes precedence over `type_param`.
+    pub type_params: Vec<TypeAnnotation>,
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
     pub array_size: Option<u64>,
@@ -15,6 +18,7 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: None,
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
             array_size: None,
@@ -26,6 +30,24 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: Some(Box::new(type_param)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            span,
+        }
+    }
+
+    pub fn with_params(name: String, type_params: Vec<TypeAnnotation>, span: Span) -> Self {
+        let single = if type_params.len() == 1 {
+            Some(Box::new(type_params[0].clone()))
+        } else {
+            None
+        };
+        Self {
+            name,
+            type_param: single,
+            type_params,
             fn_params: None,
             fn_ret: None,
             array_size: None,
@@ -37,6 +59,7 @@ impl TypeAnnotation {
         Self {
             name: "fn".to_string(),
             type_param: None,
+            type_params: Vec::new(),
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
             array_size: None,
@@ -48,6 +71,7 @@ impl TypeAnnotation {
         Self {
             name: "array".to_string(),
             type_param: Some(Box::new(inner)),
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
             array_size: Some(size),

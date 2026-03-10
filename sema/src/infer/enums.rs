@@ -23,6 +23,10 @@ impl TypeInference {
                     continue;
                 }
 
+                // set type params in scope so generic enum fields like `T` are recognized
+                let saved_type_params =
+                    std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
+
                 let enum_variants: Vec<EnumVariant> = variants
                     .iter()
                     .enumerate()
@@ -39,6 +43,8 @@ impl TypeInference {
                         }
                     })
                     .collect();
+
+                self.type_params_in_scope = saved_type_params;
 
                 self.type_table.register_enum(EnumDef {
                     name: name.clone(),

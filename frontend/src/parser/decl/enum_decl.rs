@@ -38,7 +38,11 @@ impl Parser {
             let variant_span = self.peek().span;
             let variant_name = self.consume_identifier("variant name")?;
 
-            if variant_name.chars().next().is_none_or(|c| !c.is_uppercase()) {
+            if variant_name
+                .chars()
+                .next()
+                .is_none_or(|c| !c.is_uppercase())
+            {
                 return Err(self.error(CompileErrorKind::UnexpectedToken {
                     expected: "capitalized variant name".to_string(),
                     found: variant_name,

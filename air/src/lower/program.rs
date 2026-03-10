@@ -78,7 +78,10 @@ impl<'a> LoweringContext<'a> {
             .map(|(vname, vtag, data)| AirEnumVariant {
                 name: vname.clone(),
                 tag: *vtag,
-                payload: data.iter().map(|ty| self.lower_type_from_infer(ty)).collect(),
+                payload: data
+                    .iter()
+                    .map(|ty| self.lower_type_from_infer(ty))
+                    .collect(),
             })
             .collect();
         self.enums.push(AirEnumDef {

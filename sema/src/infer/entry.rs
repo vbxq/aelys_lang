@@ -231,8 +231,7 @@ fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
                 }
                 collect_type_params_recursive(&func.body, params);
             }
-            StmtKind::StructDecl { type_params, .. }
-            | StmtKind::EnumDecl { type_params, .. } => {
+            StmtKind::StructDecl { type_params, .. } | StmtKind::EnumDecl { type_params, .. } => {
                 for tp in type_params {
                     params.insert(tp.clone());
                 }

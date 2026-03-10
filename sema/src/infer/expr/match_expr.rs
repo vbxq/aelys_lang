@@ -3,7 +3,7 @@ use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExprKind, TypedMatchArm, TypedPattern};
 use crate::types::InferType;
 use aelys_syntax::{Expr, MatchArm, Pattern, Span};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 impl TypeInference {
     pub(super) fn infer_match_expr(
@@ -79,6 +79,11 @@ impl TypeInference {
 
         // Create a fresh type variable for the result type
         let result_type = self.type_gen.fresh();
+
+        // For generic enums, create a shared type param mapping across all arms
+        // so the same type param resolves to the same type var in all arms.
+        let is_generic = !enum_def.type_params.is_empty();
+        let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
 
         for arm in arms {
             match &arm.pattern {
@@ -178,19 +183,26 @@ impl TypeInference {
                         });
                     }
 
-                    // Introduce bindings as locals and infer the arm body
-                    let typed_bindings: Vec<(String, InferType)> = bindings
-                        .iter()
-                        .enumerate()
-                        .map(|(i, name)| {
-                            let ty = if i < variant_def.data.len() {
-                                variant_def.data[i].clone()
+                    // Introduce bindings as locals and infer the arm body.
+                    // For generic enums, instantiate type params with fresh type vars.
+                    let mut typed_bindings: Vec<(String, InferType)> =
+                        Vec::with_capacity(bindings.len());
+                    for (i, name) in bindings.iter().enumerate() {
+                        let ty = if i < variant_def.data.len() {
+                            if is_generic {
+                                self.instantiate_enum_type_param(
+                                    &variant_def.data[i],
+                                    &enum_def.type_params,
+                                    &mut type_param_mapping,
+                                )
                             } else {
-                                InferType::Dynamic
-                            };
-                            (name.clone(), ty)
-                        })
-                        .collect();
+                                variant_def.data[i].clone()
+                            }
+                        } else {
+                            InferType::Dynamic
+                        };
+                        typed_bindings.push((name.clone(), ty));
+                    }
 
                     // Push scope for bindings
                     self.env.push_scope();
