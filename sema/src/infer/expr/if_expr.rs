@@ -27,6 +27,35 @@ impl TypeInference {
         // this is what infer_binary_op does and allows downstream narrowing to see the real type
         let result_type = if typed_then.ty == typed_else.ty && typed_then.ty.is_concrete() {
             typed_then.ty.clone()
+        } else if let (InferType::Enum(a, _), InferType::Enum(b, _)) =
+            (&typed_then.ty, &typed_else.ty)
+        {
+            if a == b {
+                // same enum name but different type var args (e.g. Enum("Option", [Var(1)]) vs Enum("Option", [Var(2)])).
+                // use the then-branch type and constrain both to unify.
+                self.constraints.push(Constraint::equal(
+                    typed_then.ty.clone(),
+                    typed_else.ty.clone(),
+                    else_branch.span,
+                    ConstraintReason::IfBranches,
+                ));
+                typed_then.ty.clone()
+            } else {
+                let fresh = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_then.ty.clone(),
+                    fresh.clone(),
+                    then_branch.span,
+                    ConstraintReason::IfBranches,
+                ));
+                self.constraints.push(Constraint::equal(
+                    typed_else.ty.clone(),
+                    fresh.clone(),
+                    else_branch.span,
+                    ConstraintReason::IfBranches,
+                ));
+                fresh
+            }
         } else {
             let fresh = self.type_gen.fresh();
             self.constraints.push(Constraint::equal(
