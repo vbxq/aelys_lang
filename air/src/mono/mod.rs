@@ -1,5 +1,5 @@
 mod rewrite;
-mod substitute;
+pub(crate) mod substitute;
 
 use crate::*;
 use std::collections::{HashMap, HashSet};
@@ -23,6 +23,20 @@ pub fn monomorphize(mut program: AirProgram) -> AirProgram {
 /// Scans all functions for `EnumInit`, `EnumTag`, and `EnumPayload` that reference
 /// generic enums. Creates monomorphized copies of the enum definitions with concrete
 /// types substituted in, and rewrites the enum_name references.
+///
+/// The algorithm has three phases:
+///
+/// 1. **Collection**: Scan all `EnumInit` sites with non-empty payload to infer
+///    `(enum_name, type_args)` pairs. Unit variants cannot contribute type args here.
+///
+/// 2. **Local resolution**: Build a per-local mapping `LocalId -> mangled_name` by:
+///    - Looking at non-unit `EnumInit` assignments to each local.
+///    - Propagating from the function return type (for return statements).
+///    - Propagating from already-resolved locals (for `Rvalue::Use(Copy(id))`).
+///    - Falling back to a unique match when only one monomorphization exists.
+///
+/// 3. **Rewriting**: Use the local mapping to rewrite unit variant `EnumInit`,
+///    `EnumTag`, `EnumPayload`, and local types.
 fn monomorphize_enums(program: &mut AirProgram) {
     // Collect generic enum indices
     let generic_enums: HashMap<String, usize> = program
@@ -37,7 +51,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
         return;
     }
 
-    // Collect all (enum_name, type_args) pairs from EnumInit sites
+    // Phase 1: Collect all (enum_name, type_args) pairs from EnumInit sites
     let mut enum_mono_requests: HashMap<(String, Vec<String>), Vec<AirType>> = HashMap::new();
 
     for func in &program.functions {
@@ -53,6 +67,51 @@ fn monomorphize_enums(program: &mut AirProgram) {
                     );
                 }
             }
+        }
+    }
+
+    // Also collect mono requests from pre-mangled local/param/return types.
+    // When sema preserves type args (e.g., Option<i64>), the lowering pass pre-computes
+    // the mangled name. We need to ensure the corresponding enum definition exists.
+    for func in &program.functions {
+        let mut collect_premangled = |name: &str| {
+            if !name.starts_with("__mono_") {
+                return;
+            }
+            // Parse "__mono_{enum_name}_{type_suffix}" to find the original enum
+            for (enum_name, &enum_idx) in &generic_enums {
+                let prefix = format!("__mono_{}_", enum_name);
+                if let Some(type_suffix) = name.strip_prefix(&prefix) {
+                    // Check if we already have a request for this
+                    let key_strs: Vec<String> =
+                        type_suffix.split('_').map(|s| s.to_string()).collect();
+                    let key = (enum_name.clone(), key_strs.clone());
+                    if !enum_mono_requests.contains_key(&key) {
+                        // Try to resolve type_args from the type suffix strings
+                        let enum_def = &program.enums[enum_idx];
+                        if let Some(type_args) =
+                            resolve_type_args_from_suffix(&key_strs, enum_def)
+                        {
+                            enum_mono_requests.insert(key, type_args);
+                        }
+                    }
+                    break;
+                }
+            }
+        };
+
+        for local in &func.locals {
+            if let AirType::Enum(ref name) = local.ty {
+                collect_premangled(name);
+            }
+        }
+        for param in &func.params {
+            if let AirType::Enum(ref name) = param.ty {
+                collect_premangled(name);
+            }
+        }
+        if let AirType::Enum(ref name) = func.ret_ty {
+            collect_premangled(name);
         }
     }
 
@@ -104,8 +163,16 @@ fn monomorphize_enums(program: &mut AirProgram) {
         mono_enum_names.insert(key.clone(), mangled_name);
     }
 
-    // Rewrite enum_name references in all functions
+    // Phase 2: Build per-local mono resolution map for each function
+    // Phase 3: Rewrite enum_name references in all functions
     for func in &mut program.functions {
+        let local_mono_map = resolve_local_enum_monos(
+            func,
+            &generic_enums,
+            &program.enums,
+            &mono_enum_names,
+        );
+
         for block in &mut func.blocks {
             for stmt in &mut block.stmts {
                 rewrite_enum_refs_in_stmt(
@@ -115,22 +182,56 @@ fn monomorphize_enums(program: &mut AirProgram) {
                     &mono_enum_names,
                     &func.params.clone(),
                     &func.locals.clone(),
+                    &local_mono_map,
                 );
             }
         }
-        // Also rewrite local types that reference generic enums
+        // Rewrite local types that reference generic enums
         for local in &mut func.locals {
             if let AirType::Enum(ref name) = local.ty {
                 if generic_enums.contains_key(name) {
-                    // Try to find a mono'd version; if there's only one, use it
+                    // First try the resolved map from assignments
+                    if let Some(mangled) = local_mono_map.get(&local.id) {
+                        local.ty = AirType::Enum(mangled.clone());
+                    } else {
+                        // Fall back to unique match
+                        let mono_names: Vec<_> = mono_enum_names
+                            .iter()
+                            .filter(|((en, _), _)| en == name)
+                            .map(|(_, mn)| mn.clone())
+                            .collect();
+                        if mono_names.len() == 1 {
+                            local.ty = AirType::Enum(mono_names[0].clone());
+                        }
+                    }
+                }
+            }
+        }
+        // Also rewrite param types
+        for param in &mut func.params {
+            if let AirType::Enum(ref name) = param.ty {
+                if generic_enums.contains_key(name) {
                     let mono_names: Vec<_> = mono_enum_names
                         .iter()
                         .filter(|((en, _), _)| en == name)
                         .map(|(_, mn)| mn.clone())
                         .collect();
                     if mono_names.len() == 1 {
-                        local.ty = AirType::Enum(mono_names[0].clone());
+                        param.ty = AirType::Enum(mono_names[0].clone());
                     }
+                }
+            }
+        }
+        // Rewrite function return type
+        if let AirType::Enum(ref name) = func.ret_ty {
+            if generic_enums.contains_key(name) {
+                let mono_names: Vec<_> = mono_enum_names
+                    .iter()
+                    .filter(|((en, _), _)| en == name)
+                    .map(|(_, mn)| mn.clone())
+                    .collect();
+                if mono_names.len() == 1 {
+                    func.ret_ty = AirType::Enum(mono_names[0].clone());
                 }
             }
         }
@@ -138,6 +239,152 @@ fn monomorphize_enums(program: &mut AirProgram) {
 
     // Remove generic enum definitions (they've been replaced by mono'd versions)
     program.enums.retain(|e| e.type_params.is_empty());
+}
+
+/// Build a per-local mapping from `LocalId` to monomorphized enum name.
+///
+/// For each local that holds a generic enum type, try to determine which specific
+/// monomorphization it should use by examining:
+/// 1. Non-unit `EnumInit` assignments to the local (payload types give us type args)
+/// 2. `Rvalue::Use(Copy(other_local))` assignments (propagate from already-resolved locals)
+/// 3. Function return type context (for locals used in return statements)
+/// 4. Unique-match fallback (when only one monomorphization exists)
+fn resolve_local_enum_monos(
+    func: &AirFunction,
+    generic_enums: &HashMap<String, usize>,
+    enum_defs: &[AirEnumDef],
+    mono_enum_names: &HashMap<(String, Vec<String>), String>,
+) -> HashMap<LocalId, String> {
+    let mut local_mono: HashMap<LocalId, String> = HashMap::new();
+
+    // Pass 0: If a local's type was pre-mangled by the lowering pass (sema had concrete
+    // type args in the annotation), use that directly.
+    for local in &func.locals {
+        if let AirType::Enum(ref name) = local.ty {
+            if name.starts_with("__mono_") {
+                local_mono.insert(local.id, name.clone());
+            }
+        }
+    }
+
+    // Pass 1: Resolve locals that have non-unit EnumInit assignments
+    for block in &func.blocks {
+        for stmt in &block.stmts {
+            if let AirStmtKind::Assign {
+                place: Place::Local(local_id),
+                rvalue,
+            } = &stmt.kind
+            {
+                if let Rvalue::EnumInit {
+                    enum_name,
+                    payload,
+                    ..
+                } = rvalue
+                {
+                    if payload.is_empty() {
+                        continue; // unit variant, skip for now
+                    }
+                    if let Some(&enum_idx) = generic_enums.get(enum_name.as_str()) {
+                        let enum_def = &enum_defs[enum_idx];
+                        if let Some(type_args) =
+                            infer_enum_type_args(enum_def, rvalue, func)
+                        {
+                            let key_strs: Vec<String> =
+                                type_args.iter().map(substitute::type_to_string).collect();
+                            let key = (enum_name.clone(), key_strs);
+                            if let Some(mangled) = mono_enum_names.get(&key) {
+                                local_mono.insert(*local_id, mangled.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 2: Propagate through Use(Copy(other)) assignments and return type context
+    // Also check function return type for locals that appear in return terminators
+    let ret_ty_mono = if let AirType::Enum(ref name) = func.ret_ty {
+        if name.starts_with("__mono_") {
+            // Already monomorphized (e.g., from function monomorphization)
+            Some(name.clone())
+        } else if generic_enums.contains_key(name) {
+            // Try unique match for the return type
+            let mono_names: Vec<_> = mono_enum_names
+                .iter()
+                .filter(|((en, _), _)| en == name)
+                .map(|(_, mn)| mn.clone())
+                .collect();
+            if mono_names.len() == 1 {
+                Some(mono_names[0].clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Propagate from return terminators: if a local is returned and the function
+    // return type is a known mono enum, that local should use the same mono name.
+    if let Some(ref ret_mono) = ret_ty_mono {
+        for block in &func.blocks {
+            if let AirTerminator::Return(Some(Operand::Copy(local_id))) = &block.terminator {
+                let local_ty = func.locals.iter().find(|l| l.id == *local_id).map(|l| &l.ty);
+                if let Some(AirType::Enum(name)) = local_ty {
+                    if generic_enums.contains_key(name) {
+                        local_mono.entry(*local_id).or_insert_with(|| ret_mono.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Propagate from Use(Copy(source)) assignments
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for block in &func.blocks {
+            for stmt in &block.stmts {
+                if let AirStmtKind::Assign {
+                    place: Place::Local(target_id),
+                    rvalue: Rvalue::Use(Operand::Copy(source_id)),
+                } = &stmt.kind
+                {
+                    if !local_mono.contains_key(target_id) {
+                        if let Some(mangled) = local_mono.get(source_id).cloned() {
+                            local_mono.insert(*target_id, mangled);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Pass 3: For remaining unresolved locals with generic enum types,
+    // try unique-match fallback
+    for local in &func.locals {
+        if local_mono.contains_key(&local.id) {
+            continue;
+        }
+        if let AirType::Enum(ref name) = local.ty {
+            if generic_enums.contains_key(name) {
+                let mono_names: Vec<_> = mono_enum_names
+                    .iter()
+                    .filter(|((en, _), _)| en == name)
+                    .map(|(_, mn)| mn.clone())
+                    .collect();
+                if mono_names.len() == 1 {
+                    local_mono.insert(local.id, mono_names[0].clone());
+                }
+            }
+        }
+    }
+
+    local_mono
 }
 
 fn substitute_enum_type(
@@ -276,8 +523,9 @@ fn rewrite_enum_refs_in_stmt(
     mono_enum_names: &HashMap<(String, Vec<String>), String>,
     func_params: &[AirParam],
     func_locals: &[AirLocal],
+    local_mono_map: &HashMap<LocalId, String>,
 ) {
-    if let AirStmtKind::Assign { rvalue, .. } = &mut stmt.kind {
+    if let AirStmtKind::Assign { place, rvalue } = &mut stmt.kind {
         match rvalue {
             Rvalue::EnumInit {
                 enum_name,
@@ -287,65 +535,149 @@ fn rewrite_enum_refs_in_stmt(
             } => {
                 if let Some(&enum_idx) = generic_enums.get(enum_name.as_str()) {
                     let enum_def = &enum_defs[enum_idx];
-                    let variant_def = enum_def.variants.iter().find(|v| v.name == *variant);
-                    if let Some(vd) = variant_def {
-                        let mut resolved: HashMap<u32, AirType> = HashMap::new();
-                        for (param_ty, operand) in vd.payload.iter().zip(payload.iter()) {
-                            let arg_ty = operand_type_from(operand, func_params, func_locals);
-                            unify_enum_param(param_ty, &arg_ty, &mut resolved);
-                        }
-                        let type_args: Option<Vec<AirType>> = enum_def
-                            .type_params
-                            .iter()
-                            .map(|tp| resolved.get(&tp.0).cloned())
-                            .collect();
-                        if let Some(type_args) = type_args {
-                            let key_strs: Vec<String> =
-                                type_args.iter().map(substitute::type_to_string).collect();
-                            let key = (enum_name.clone(), key_strs);
-                            if let Some(mangled) = mono_enum_names.get(&key) {
-                                *enum_name = mangled.clone();
+                    if !payload.is_empty() {
+                        // Non-unit variant: infer type args from payload
+                        let variant_def = enum_def.variants.iter().find(|v| v.name == *variant);
+                        if let Some(vd) = variant_def {
+                            let mut resolved: HashMap<u32, AirType> = HashMap::new();
+                            for (param_ty, operand) in vd.payload.iter().zip(payload.iter()) {
+                                let arg_ty =
+                                    operand_type_from(operand, func_params, func_locals);
+                                unify_enum_param(param_ty, &arg_ty, &mut resolved);
+                            }
+                            let type_args: Option<Vec<AirType>> = enum_def
+                                .type_params
+                                .iter()
+                                .map(|tp| resolved.get(&tp.0).cloned())
+                                .collect();
+                            if let Some(type_args) = type_args {
+                                let key_strs: Vec<String> =
+                                    type_args.iter().map(substitute::type_to_string).collect();
+                                let key = (enum_name.clone(), key_strs);
+                                if let Some(mangled) = mono_enum_names.get(&key) {
+                                    *enum_name = mangled.clone();
+                                }
                             }
                         }
-                    } else if payload.is_empty() {
-                        // Unit variant -- try to find mono'd version from context.
-                        // Look for any mono'd version of this enum (there should be one).
+                    } else {
+                        // Unit variant: use the target local's resolved mono name
+                        if let Place::Local(target_id) = place {
+                            if let Some(mangled) = local_mono_map.get(target_id) {
+                                *enum_name = mangled.clone();
+                            } else {
+                                // Fallback: unique match
+                                let mono_names: Vec<_> = mono_enum_names
+                                    .iter()
+                                    .filter(|((en, _), _)| en == enum_name.as_str())
+                                    .map(|(_, mn)| mn.clone())
+                                    .collect();
+                                if mono_names.len() == 1 {
+                                    *enum_name = mono_names[0].clone();
+                                } else if mono_names.len() > 1 {
+                                    eprintln!(
+                                        "[AIR] warning: ambiguous unit variant {}::{} with {} \
+                                         monomorphizations; cannot determine which to use \
+                                         (type annotation info lost during sema). \
+                                         Using first available.",
+                                        enum_name, variant, mono_names.len()
+                                    );
+                                    *enum_name = mono_names[0].clone();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Rvalue::EnumTag {
+                enum_name,
+                operand,
+                ..
+            } => {
+                if generic_enums.contains_key(enum_name.as_str()) {
+                    // Resolve from the operand's local
+                    if let Some(mangled) = resolve_operand_mono(operand, local_mono_map) {
+                        *enum_name = mangled;
+                    } else {
+                        // Fallback: unique match
                         let mono_names: Vec<_> = mono_enum_names
                             .iter()
                             .filter(|((en, _), _)| en == enum_name.as_str())
+                            .map(|(_, mn)| mn.clone())
                             .collect();
                         if mono_names.len() == 1 {
-                            *enum_name = mono_names[0].1.clone();
+                            *enum_name = mono_names[0].clone();
                         }
                     }
                 }
             }
-            Rvalue::EnumTag { enum_name, .. } => {
+            Rvalue::EnumPayload {
+                enum_name,
+                operand,
+                ..
+            } => {
                 if generic_enums.contains_key(enum_name.as_str()) {
-                    // Find the mono'd name from any available mono'd version
-                    let mono_names: Vec<_> = mono_enum_names
-                        .iter()
-                        .filter(|((en, _), _)| en == enum_name.as_str())
-                        .collect();
-                    if mono_names.len() == 1 {
-                        *enum_name = mono_names[0].1.clone();
-                    }
-                }
-            }
-            Rvalue::EnumPayload { enum_name, .. } => {
-                if generic_enums.contains_key(enum_name.as_str()) {
-                    let mono_names: Vec<_> = mono_enum_names
-                        .iter()
-                        .filter(|((en, _), _)| en == enum_name.as_str())
-                        .collect();
-                    if mono_names.len() == 1 {
-                        *enum_name = mono_names[0].1.clone();
+                    // Resolve from the operand's local
+                    if let Some(mangled) = resolve_operand_mono(operand, local_mono_map) {
+                        *enum_name = mangled;
+                    } else {
+                        // Fallback: unique match
+                        let mono_names: Vec<_> = mono_enum_names
+                            .iter()
+                            .filter(|((en, _), _)| en == enum_name.as_str())
+                            .map(|(_, mn)| mn.clone())
+                            .collect();
+                        if mono_names.len() == 1 {
+                            *enum_name = mono_names[0].clone();
+                        }
                     }
                 }
             }
             _ => {}
         }
     }
+}
+
+/// Resolve the monomorphized enum name from an operand by looking up the local in
+/// the local_mono_map.
+fn resolve_operand_mono(
+    operand: &Operand,
+    local_mono_map: &HashMap<LocalId, String>,
+) -> Option<String> {
+    match operand {
+        Operand::Copy(id) | Operand::Move(id) => local_mono_map.get(id).cloned(),
+        Operand::Const(_) => None,
+    }
+}
+
+/// Resolve AirType values from suffix strings produced by `type_to_string`.
+///
+/// Handles the common primitive cases that appear in generic enum type args.
+/// Complex types (pointers, arrays, etc.) are not currently supported here
+/// because they don't appear in typical enum type parameters.
+fn resolve_type_args_from_suffix(
+    key_strs: &[String],
+    _enum_def: &AirEnumDef,
+) -> Option<Vec<AirType>> {
+    let mut type_args = Vec::new();
+    for s in key_strs {
+        let ty = match s.as_str() {
+            "i8" => AirType::I8,
+            "i16" => AirType::I16,
+            "i32" => AirType::I32,
+            "i64" => AirType::I64,
+            "u8" => AirType::U8,
+            "u16" => AirType::U16,
+            "u32" => AirType::U32,
+            "u64" => AirType::U64,
+            "f32" => AirType::F32,
+            "f64" => AirType::F64,
+            "bool" => AirType::Bool,
+            "str" => AirType::Str,
+            other => AirType::Struct(other.to_string()),
+        };
+        type_args.push(ty);
+    }
+    Some(type_args)
 }
 
 pub(super) struct MonoContext {

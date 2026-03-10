@@ -1,6 +1,6 @@
 use crate::*;
 
-pub(super) fn type_to_string(ty: &AirType) -> String {
+pub(crate) fn type_to_string(ty: &AirType) -> String {
     match ty {
         AirType::I8 => "i8".to_string(),
         AirType::I16 => "i16".to_string(),

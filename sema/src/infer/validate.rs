@@ -471,6 +471,9 @@ impl TypeInference {
             InferType::Tuple(elems) => elems
                 .iter()
                 .find_map(|e| self.find_leaked_type_param(e, generic_scope, declared_type_params)),
+            InferType::Enum(_, type_args) => type_args
+                .iter()
+                .find_map(|a| self.find_leaked_type_param(a, generic_scope, declared_type_params)),
             _ => None,
         }
     }
@@ -559,6 +562,13 @@ impl TypeInference {
             InferType::Tuple(elems) => elems.iter().any(|e| {
                 self.contains_active_generic_placeholder_type(
                     e,
+                    generic_scope,
+                    declared_type_params,
+                )
+            }),
+            InferType::Enum(_, type_args) => type_args.iter().any(|a| {
+                self.contains_active_generic_placeholder_type(
+                    a,
                     generic_scope,
                     declared_type_params,
                 )

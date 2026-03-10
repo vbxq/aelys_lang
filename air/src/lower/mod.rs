@@ -307,7 +307,35 @@ impl<'a> LoweringContext<'a> {
                     AirType::Struct(name.clone())
                 }
             }
-            InferType::Enum(name) => AirType::Enum(name.clone()),
+            InferType::Enum(name, type_args) => {
+                if type_args.is_empty() {
+                    AirType::Enum(name.clone())
+                } else {
+                    // When sema preserves concrete type args (e.g., Enum("Option", [I64])),
+                    // pre-compute the mangled name so that the mono pass can use the local's
+                    // type to disambiguate unit variant assignments.
+                    let lowered_args: Vec<AirType> = type_args
+                        .iter()
+                        .map(|a| self.lower_type_from_infer(a))
+                        .collect();
+                    // Only pre-mangle if all type args are concrete (not Opaque/Void).
+                    // Opaque args come from unresolved inference and would produce
+                    // nonsensical mangled names.
+                    let all_concrete = lowered_args
+                        .iter()
+                        .all(|t| !matches!(t, AirType::Opaque | AirType::Void));
+                    if all_concrete {
+                        let suffix = lowered_args
+                            .iter()
+                            .map(|t| crate::mono::substitute::type_to_string(t))
+                            .collect::<Vec<_>>()
+                            .join("_");
+                        AirType::Enum(format!("__mono_{}_{}", name, suffix))
+                    } else {
+                        AirType::Enum(name.clone())
+                    }
+                }
+            }
             // A Var reaching lowering is always a compiler bug: finalize should have converted every Var to Dynamic before the AIR stage.
             // Map to Opaque so the validation pass rejects it with a clear diagnostic.
             InferType::Var(id) => {

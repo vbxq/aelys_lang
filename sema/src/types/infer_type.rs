@@ -28,7 +28,9 @@ pub enum InferType {
     Range,
 
     Struct(std::string::String),
-    Enum(std::string::String),
+    /// Enum type with optional type arguments for generic enums.
+    /// Non-generic enums have an empty Vec.
+    Enum(std::string::String, Vec<InferType>),
 
     Var(TypeVarId),
 
@@ -91,7 +93,7 @@ impl InferType {
                 | InferType::String
                 | InferType::Null
                 | InferType::Struct(_)
-                | InferType::Enum(_)
+                | InferType::Enum(_, _)
         )
     }
 
@@ -350,7 +352,20 @@ impl fmt::Display for InferType {
             }
             InferType::Range => write!(f, "range"),
             InferType::Struct(name) => write!(f, "{}", name),
-            InferType::Enum(name) => write!(f, "{}", name),
+            InferType::Enum(name, type_args) => {
+                write!(f, "{}", name)?;
+                if !type_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in type_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", arg)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
             InferType::Var(id) => write!(f, "{}", id),
             InferType::Dynamic => write!(f, "dynamic"),
         }

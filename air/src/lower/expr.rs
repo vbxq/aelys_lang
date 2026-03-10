@@ -575,7 +575,7 @@ impl<'a> LoweringContext<'a> {
 
         // Get the enum name from the scrutinee type
         let enum_name = match &scrutinee.ty {
-            InferType::Enum(name) => name.clone(),
+            InferType::Enum(name, _) => name.clone(),
             _ => {
                 self.report_error(format!(
                     "match scrutinee is not an enum type: {:?}",

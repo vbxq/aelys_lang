@@ -62,8 +62,17 @@ impl Substitution {
             | InferType::Null
             | InferType::Range
             | InferType::Struct(_)
-            | InferType::Enum(_)
             | InferType::Dynamic => ty.clone(),
+            InferType::Enum(name, type_args) => {
+                if type_args.is_empty() {
+                    ty.clone()
+                } else {
+                    InferType::Enum(
+                        name.clone(),
+                        type_args.iter().map(|a| self.apply(a)).collect(),
+                    )
+                }
+            }
         }
     }
 

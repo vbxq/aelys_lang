@@ -41,10 +41,32 @@ impl TypeInference {
         // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
         if let InferType::Struct(ref name) = ty {
             if self.type_table.has_enum(name) {
-                return InferType::Enum(name.clone());
+                // Extract type args from the annotation's type_param/type_params fields
+                let type_args = self.collect_enum_type_args(ann);
+                return InferType::Enum(name.clone(), type_args);
             }
         }
         ty
+    }
+
+    /// Extract resolved type arguments from a type annotation for generic enums.
+    /// For `Option<i64>`, returns `[InferType::I64]`.
+    /// For `Result<i64, string>`, returns `[InferType::I64, InferType::String]`.
+    /// For non-generic `Color`, returns `[]`.
+    fn collect_enum_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
+        // type_params takes precedence (multi-param case like Result<T, E>)
+        if !ann.type_params.is_empty() {
+            return ann
+                .type_params
+                .iter()
+                .map(|p| self.type_from_annotation(p))
+                .collect();
+        }
+        // single type_param case (Option<T>)
+        if let Some(ref param) = ann.type_param {
+            return vec![self.type_from_annotation(param)];
+        }
+        Vec::new()
     }
 
     fn check_type_annotation(&mut self, ann: &TypeAnnotation) {

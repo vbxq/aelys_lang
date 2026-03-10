@@ -165,7 +165,7 @@ impl TypeInference {
                     // to also create a fresh type var for the overall enum type so that
                     // it unifies with type annotations like `Option<i64>`.
                     // The enum type itself is always Enum(enum_name).
-                    let result_ty = InferType::Enum(enum_name.to_string());
+                    let result_ty = InferType::Enum(enum_name.to_string(), Vec::new());
 
                     (
                         TypedExprKind::EnumVariant {
@@ -181,7 +181,7 @@ impl TypeInference {
                         def.variants.iter().map(|v| v.name.as_str()).collect();
                     self.errors.push(TypeError {
                         kind: TypeErrorKind::Mismatch {
-                            expected: InferType::Enum(enum_name.to_string()),
+                            expected: InferType::Enum(enum_name.to_string(), Vec::new()),
                             found: InferType::Dynamic,
                         },
                         span,

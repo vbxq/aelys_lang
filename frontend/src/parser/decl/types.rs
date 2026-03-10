@@ -46,9 +46,11 @@ impl Parser {
             self.consume(&TokenKind::Gt, ">")?;
             let end_span = self.previous().span;
             if type_params.len() == 1 {
+                // SAFETY: length was just checked to be exactly 1.
+                let single = type_params.into_iter().next().expect("len == 1");
                 Ok(TypeAnnotation::with_param(
                     name,
-                    type_params.into_iter().next().unwrap(),
+                    single,
                     start_span.merge(end_span),
                 ))
             } else {

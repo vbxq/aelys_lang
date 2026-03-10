@@ -1325,3 +1325,88 @@ fn handle(r: Result<i64, string>) -> i64 {
         air_text
     );
 }
+
+// ============ Multiple Instantiation Tests ============
+
+#[test]
+fn generic_enum_none_with_multiple_monos() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+let a = Option::Some(42)
+let b = Option::Some("hello")
+let c: Option<i64> = Option::None
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "None with multiple monos should work: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn generic_enum_none_with_multiple_monos_air() {
+    // Uses functions instead of top-level lets because top-level lets become
+    // globals (which don't emit EnumInit to AIR).
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn make_int() -> Option<i64> {
+    return Option::Some(42)
+}
+fn make_str() -> Option<string> {
+    return Option::Some("hello")
+}
+fn make_none_int() -> Option<i64> {
+    return Option::None
+}
+"#;
+    let air = lower_source(src);
+    let air = aelys_air::mono::monomorphize(air);
+    let air_text = print_program(&air);
+
+    // After monomorphization, no generic enum definitions should remain
+    let remaining_generic = air.enums.iter().any(|e| !e.type_params.is_empty());
+    assert!(
+        !remaining_generic,
+        "no generic enum defs should remain after mono, got:\n{}",
+        air_text
+    );
+
+    // The enum_init for None variant should reference a monomorphized name
+    // (not the raw "Option")
+    assert!(
+        !air_text.contains("enum_init Option::"),
+        "unit variant Option::None should be monomorphized, got:\n{}",
+        air_text
+    );
+}
+
+#[test]
+fn generic_enum_unit_variant_multiple_monos_in_function() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+fn test() -> Option<i64> {
+    return Option::None
+}
+fn test2() -> Option<string> {
+    return Option::None
+}
+let a = test()
+let b = test2()
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(
+        result.is_ok(),
+        "None in different typed functions should work: {:?}",
+        result.err()
+    );
+}

@@ -16,7 +16,7 @@ impl TypeInference {
 
         // The scrutinee must be an enum type
         let enum_name = match &typed_scrutinee.ty {
-            InferType::Enum(name) => name.clone(),
+            InferType::Enum(name, _) => name.clone(),
             InferType::Dynamic => {
                 // Error recovery: type-check arms but don't validate patterns
                 let typed_arms = self.infer_match_arms_dynamic(arms);
@@ -97,8 +97,8 @@ impl TypeInference {
                     if *pat_enum != enum_name {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Enum(enum_name.clone()),
-                                found: InferType::Enum(pat_enum.clone()),
+                                expected: InferType::Enum(enum_name.clone(), Vec::new()),
+                                found: InferType::Enum(pat_enum.clone(), Vec::new()),
                             },
                             span: *pat_span,
                             reason: ConstraintReason::Other(format!(
@@ -121,7 +121,7 @@ impl TypeInference {
                                 enum_def.variants.iter().map(|v| v.name.as_str()).collect();
                             self.errors.push(TypeError {
                                 kind: TypeErrorKind::Mismatch {
-                                    expected: InferType::Enum(enum_name.clone()),
+                                    expected: InferType::Enum(enum_name.clone(), Vec::new()),
                                     found: InferType::Dynamic,
                                 },
                                 span: *pat_span,
@@ -143,7 +143,7 @@ impl TypeInference {
                     if covered_variants.contains(variant) {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Enum(enum_name.clone()),
+                                expected: InferType::Enum(enum_name.clone(), Vec::new()),
                                 found: InferType::Dynamic,
                             },
                             span: *pat_span,
@@ -278,7 +278,7 @@ impl TypeInference {
             if !missing.is_empty() {
                 self.errors.push(TypeError {
                     kind: TypeErrorKind::Mismatch {
-                        expected: InferType::Enum(enum_name.clone()),
+                        expected: InferType::Enum(enum_name.clone(), Vec::new()),
                         found: InferType::Dynamic,
                     },
                     span,

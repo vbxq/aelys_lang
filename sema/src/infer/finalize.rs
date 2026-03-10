@@ -377,6 +377,10 @@ impl TypeInference {
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.into_iter().map(Self::finalize_type).collect())
             }
+            InferType::Enum(name, type_args) if !type_args.is_empty() => InferType::Enum(
+                name,
+                type_args.into_iter().map(Self::finalize_type).collect(),
+            ),
             // concrete types pass through unchanged
             other => other,
         }
