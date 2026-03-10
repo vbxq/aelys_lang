@@ -99,6 +99,7 @@ impl<'a> LoweringContext<'a> {
             globals: self.globals,
             source_files: self.source_files,
             mono_instances: Vec::new(),
+            struct_sizes: std::collections::HashMap::new(),
         })
     }
 

@@ -54,9 +54,11 @@ pub fn compute_layouts(program: &mut AirProgram) {
             program.structs[idx].fields[i].offset = Some(off);
         }
     }
+
+    program.struct_sizes = resolved;
 }
 
-fn resolved_layout(ty: &AirType, structs: &HashMap<String, TypeLayout>) -> TypeLayout {
+pub fn resolved_layout(ty: &AirType, structs: &HashMap<String, TypeLayout>) -> TypeLayout {
     match ty {
         AirType::Struct(name) => *structs
             .get(name.as_str())
@@ -181,13 +183,19 @@ pub fn enum_has_data(def: &AirEnumDef) -> bool {
 /// Compute the max payload size in bytes across all variants of a data enum.
 /// Each variant's payload is laid out with proper alignment padding between fields,
 /// matching the aligned offsets that codegen uses when storing fields.
-pub fn enum_max_payload_size(def: &AirEnumDef) -> u32 {
+///
+/// `struct_sizes` must contain computed sizes for any struct types that appear
+/// in enum variant payloads. Pass `&program.struct_sizes` after `compute_layouts`.
+pub fn enum_max_payload_size(
+    def: &AirEnumDef,
+    struct_sizes: &HashMap<String, TypeLayout>,
+) -> u32 {
     def.variants
         .iter()
         .map(|v| {
             let mut offset = 0u32;
             for ty in &v.payload {
-                let layout = layout_of(ty);
+                let layout = resolved_layout(ty, struct_sizes);
                 offset = (offset + layout.align - 1) & !(layout.align - 1);
                 offset += layout.size;
             }

@@ -115,6 +115,7 @@ fn array_index_read_generates_gep_and_bounds_check() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -207,6 +208,7 @@ fn string_index_read_calls_runtime_char_at() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -296,6 +298,7 @@ fn array_index_write_generates_gep_and_store() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -389,6 +392,7 @@ fn bounds_check_structure_has_unreachable_after_panic() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

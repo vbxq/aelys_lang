@@ -9,6 +9,7 @@ fn empty_program() -> AirProgram {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     }
 }
 

@@ -774,6 +774,7 @@ fn make_valid_program() -> AirProgram {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     }
 }
 
@@ -849,6 +850,7 @@ fn validate_accepts_void_return_local_on_void_function() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -979,6 +981,7 @@ fn validate_rejects_undeclared_block_reference() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -1035,6 +1038,7 @@ fn validate_rejects_undeclared_local_reference() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -1155,6 +1159,7 @@ fn validate_collects_multiple_errors() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -1201,6 +1206,7 @@ fn validate_skips_extern_functions() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -1312,6 +1318,7 @@ fn validate_rejects_opaque_struct_field() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);
@@ -1441,6 +1448,7 @@ fn validate_rejects_opaque_from_tuple_or_range() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let result = validate_air(&program);

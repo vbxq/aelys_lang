@@ -75,6 +75,7 @@ fn llvm_panic_uses_ptr_len_signature() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -130,6 +131,7 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -251,6 +253,7 @@ fn ssa_params_use_llvm_args_directly() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -333,6 +336,7 @@ fn mutable_locals_use_alloca_with_correct_alignment() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

@@ -142,7 +142,7 @@ impl<'a> FunctionCodegen<'a> {
             // the right type. For data enums, we must produce a { i32, [N x i8] } value.
             if is_data_enum {
                 let def = enum_def.unwrap();
-                let max_payload = enum_max_payload_size(def);
+                let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
                 let enum_struct_name = format!("__aelys_enum_{}", enum_name);
                 let enum_ty = self
                     .context
@@ -187,7 +187,7 @@ impl<'a> FunctionCodegen<'a> {
         } else {
             // Data variant construction: build { i32 tag, [N x i8] payload }
             let def = enum_def.unwrap();
-            let max_payload = enum_max_payload_size(def);
+            let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
             let enum_ty = self
                 .context
@@ -243,7 +243,7 @@ impl<'a> FunctionCodegen<'a> {
                 payload.iter().zip(variant_def.payload.iter()).enumerate()
             {
                 let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
-                let field_layout = aelys_air::layout::layout_of(field_air_ty);
+                let field_layout = aelys_air::layout::resolved_layout(field_air_ty, &self.program.struct_sizes);
 
                 // Align the offset
                 byte_offset = (byte_offset + field_layout.align - 1) & !(field_layout.align - 1);
@@ -383,7 +383,7 @@ impl<'a> FunctionCodegen<'a> {
         let mut byte_offset: u32 = 0;
         for i in 0..=field_index {
             let ty = &variant_def.payload[i as usize];
-            let layout = aelys_air::layout::layout_of(ty);
+            let layout = aelys_air::layout::resolved_layout(ty, &self.program.struct_sizes);
             // Align before this field
             byte_offset = (byte_offset + layout.align - 1) & !(layout.align - 1);
             if i < field_index {

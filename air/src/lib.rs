@@ -134,6 +134,8 @@ pub struct AirProgram {
     pub globals: Vec<AirGlobal>,
     pub source_files: Vec<String>,
     pub mono_instances: Vec<MonoInstance>,
+    /// Computed struct sizes (populated by `compute_layouts`).
+    pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
 }
 
 #[derive(Clone)]

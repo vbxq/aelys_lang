@@ -38,7 +38,7 @@ impl CodegenContext {
         // Declare named struct types for data enums: { i32, [N x i8] }
         for enum_def in &program.enums {
             if enum_has_data(enum_def) {
-                let max_payload = enum_max_payload_size(enum_def);
+                let max_payload = enum_max_payload_size(enum_def, &program.struct_sizes);
                 let enum_struct_name = format!("__aelys_enum_{}", enum_def.name);
                 let enum_ty = self.context.opaque_struct_type(&enum_struct_name);
                 let tag_ty = self.context.i32_type().into();

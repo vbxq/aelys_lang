@@ -119,6 +119,7 @@ fn extern_c_struct_return_compiles_and_verifies() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -186,6 +187,7 @@ fn c_convention_aelys_fn_returning_struct_uses_sret() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -253,6 +255,7 @@ fn fastcc_struct_return_does_not_use_sret() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

@@ -177,8 +177,9 @@ impl TypeInference {
             inf.env.define_function_owned(global.clone(), ty);
         }
 
-        inf.collect_structs(&stmts);
+        inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
+        inf.resolve_struct_fields(&stmts);
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);

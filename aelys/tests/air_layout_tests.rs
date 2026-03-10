@@ -29,6 +29,7 @@ fn program(structs: Vec<AirStructDef>) -> AirProgram {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     }
 }
 

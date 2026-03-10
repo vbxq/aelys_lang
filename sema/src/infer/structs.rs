@@ -6,8 +6,10 @@ use aelys_syntax::{Stmt, StmtKind};
 use std::collections::HashSet;
 
 impl TypeInference {
-    pub(super) fn collect_structs(&mut self, stmts: &[Stmt]) {
-        // pass 1: register all struct names so that forward references between structs are valid
+    /// Register all struct names (without fields) so that forward references
+    /// between structs and enums are valid. Must be called before collect_enums
+    /// so that enum variant fields can reference struct types.
+    pub(super) fn register_struct_names(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
             if let StmtKind::StructDecl {
                 name, type_params, ..
@@ -30,8 +32,12 @@ impl TypeInference {
                 });
             }
         }
+    }
 
-        // pass 2: validate field type annotations and populate fields
+    /// Validate field type annotations and populate struct fields.
+    /// Must be called after collect_enums so that struct fields can reference
+    /// enum types.
+    pub(super) fn resolve_struct_fields(&mut self, stmts: &[Stmt]) {
         let mut processed = HashSet::new();
         for stmt in stmts {
             if let StmtKind::StructDecl {

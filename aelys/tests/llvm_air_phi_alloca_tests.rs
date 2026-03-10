@@ -115,6 +115,7 @@ fn multi_block_assign_gets_alloca_and_verifies() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -209,6 +210,7 @@ fn same_block_reassign_stays_ssa() {
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
