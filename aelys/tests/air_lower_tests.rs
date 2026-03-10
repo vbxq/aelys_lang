@@ -208,6 +208,27 @@ fn main() -> i64 {
     );
 }
 
+#[test]
+fn top_level_simple_enum_global_lowers_to_const_tag() {
+    let air = lower_source(
+        r#"
+enum Color {
+    Red,
+    Green,
+}
+
+let c: Color = Color::Green
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "c")
+        .expect("global 'c' not found");
+    assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
+}
+
 // regression test: Null -> Ptr(Void)
 
 #[test]

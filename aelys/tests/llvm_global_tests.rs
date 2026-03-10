@@ -13,6 +13,7 @@ use aelys_sema::TypeInference;
 use aelys_syntax::Source;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
+use std::collections::HashSet;
 use std::fs;
 use tempfile::tempdir;
 
@@ -55,6 +56,24 @@ fn compile_source_to_verified_ir_without_link(source: &str) -> String {
     ir
 }
 
+fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
+    let src = Source::new("<test>", source);
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let inference = TypeInference::infer_program_full(
+        stmts,
+        src,
+        HashSet::new(),
+        HashSet::from(["print".to_string(), "println".to_string()]),
+    )
+    .expect("sema failed");
+    let mut opt = aelys_opt::Optimizer::new(OptimizationLevel::Standard);
+    let typed = opt.optimize(inference.program);
+    lower(&typed)
+}
+
 #[test]
 fn llvm_lowers_const_global_reads_to_real_global_storage() {
     let ir = compile_source_to_verified_ir_without_link(
@@ -70,6 +89,93 @@ fn main() -> i64 {
     assert!(ir.contains("define fastcc i64 @__aelys_main()"), "{ir}");
     assert!(ir.contains("load i64, ptr @__aelys_global_g"), "{ir}");
     assert!(!ir.contains("define i64 @__aelys_main(ptr"), "{ir}");
+}
+
+#[test]
+fn llvm_lowers_simple_enum_global_to_i32_storage() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Color {
+    Red,
+    Green,
+}
+
+let c: Color = Color::Green
+
+fn read_color() -> i64 {
+    return match c {
+        Color::Red => 1
+        Color::Green => 2
+    }
+}
+"#,
+    );
+    assert!(ir.contains("@__aelys_global_c = internal global i32 1"), "{ir}");
+    assert!(ir.contains("load i32, ptr @__aelys_global_c"), "{ir}");
+}
+
+#[test]
+fn lowering_keeps_const_initializer_for_simple_enum_globals_after_optimizer() {
+    let air = lower_optimized_full(
+        r#"
+enum Color {
+    Red,
+    Green,
+}
+
+let c: Color = Color::Green
+
+fn read_color() -> i64 {
+    return match c {
+        Color::Red => 1
+        Color::Green => 2
+    }
+}
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|global| global.name == "c")
+        .expect("global c should exist");
+    assert!(matches!(
+        global.init,
+        Some(aelys_air::AirConst::Int(1, aelys_air::AirIntSize::I32))
+    ));
+}
+
+#[test]
+fn driver_compiles_simple_enum_global_initializer() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+enum Color {
+    Red,
+    Green,
+}
+
+let c: Color = Color::Green
+
+fn read_color() -> i64 {
+    return match c {
+        Color::Red => 1
+        Color::Green => 2
+    }
+}
+"#,
+    )
+    .expect("source should be written");
+
+    compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
+        .expect("driver should compile simple enum globals");
+
+    let ir_path = source_path.with_extension("ll");
+    let ir = fs::read_to_string(ir_path).expect("llvm ir should be emitted");
+    assert!(ir.contains("define fastcc"), "{ir}");
+    assert!(ir.contains("ret i64 2"), "{ir}");
 }
 
 #[test]

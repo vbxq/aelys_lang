@@ -100,6 +100,16 @@ impl CodegenContext {
             AirType::U16 => self.context.i16_type().const_int(value as u64, false).into(),
             AirType::U32 => self.context.i32_type().const_int(value as u64, false).into(),
             AirType::U64 => self.context.i64_type().const_int(value as u64, false).into(),
+            // Simple enums lower to bare i32 tags. Data enums already register a
+            // named struct type and stay on the non-constant path for now.
+            AirType::Enum(name)
+                if self
+                    .context
+                    .get_struct_type(&format!("__aelys_enum_{}", name))
+                    .is_none() =>
+            {
+                self.context.i32_type().const_int(value as u64, false).into()
+            }
             other => {
                 return Err(CodegenError::UnsupportedType(format!(
                     "integer global initializer is not supported for {:?}",
