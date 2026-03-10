@@ -54,6 +54,8 @@ pub enum TokenKind {
     In,
     Step,
     Struct,
+    Enum,
+    Match,
 
     // operators
     Plus,
@@ -70,6 +72,7 @@ pub enum TokenKind {
     GtEq,
     Arrow,      // ->
     Colon,      // :
+    ColonColon, // ::
     PlusEq,     // +=
     MinusEq,    // -=
     StarEq,     // *=
@@ -175,6 +178,8 @@ impl std::fmt::Display for TokenKind {
             Self::In => write!(f, "in"),
             Self::Step => write!(f, "step"),
             Self::Struct => write!(f, "struct"),
+            Self::Enum => write!(f, "enum"),
+            Self::Match => write!(f, "match"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),
@@ -189,6 +194,7 @@ impl std::fmt::Display for TokenKind {
             Self::GtEq => write!(f, ">="),
             Self::Arrow => write!(f, "->"),
             Self::Colon => write!(f, ":"),
+            Self::ColonColon => write!(f, "::"),
             Self::PlusEq => write!(f, "+="),
             Self::MinusEq => write!(f, "-="),
             Self::StarEq => write!(f, "*="),

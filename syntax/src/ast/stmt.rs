@@ -66,12 +66,26 @@ pub enum StmtKind {
         fields: Vec<StructFieldDecl>,
         is_pub: bool,
     },
+
+    EnumDecl {
+        name: String,
+        type_params: Vec<String>,
+        variants: Vec<EnumVariantDecl>,
+        is_pub: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct StructFieldDecl {
     pub name: String,
     pub type_annotation: TypeAnnotation,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub struct EnumVariantDecl {
+    pub name: String,
+    pub fields: Vec<TypeAnnotation>, // empty = unit variant, non-empty = tuple variant
     pub span: Span,
 }
 

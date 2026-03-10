@@ -209,6 +209,12 @@ pub enum ExprKind {
         fields: Vec<StructFieldInit>,
     },
 
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expr>, // empty for unit variants
+    },
+
     Cast {
         expr: Box<Expr>,
         target: TypeAnnotation,
