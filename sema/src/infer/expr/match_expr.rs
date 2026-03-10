@@ -15,8 +15,8 @@ impl TypeInference {
         let typed_scrutinee = self.infer_expr(scrutinee);
 
         // The scrutinee must be an enum type
-        let enum_name = match &typed_scrutinee.ty {
-            InferType::Enum(name, _) => name.clone(),
+        let (enum_name, scrutinee_type_args) = match &typed_scrutinee.ty {
+            InferType::Enum(name, args) => (name.clone(), args.clone()),
             InferType::Dynamic => {
                 // Error recovery: type-check arms but don't validate patterns
                 let typed_arms = self.infer_match_arms_dynamic(arms);
@@ -84,6 +84,16 @@ impl TypeInference {
         // so the same type param resolves to the same type var in all arms.
         let is_generic = !enum_def.type_params.is_empty();
         let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
+
+        // If the scrutinee already has concrete type args (e.g., from a parameter
+        // annotation like `r: Result<i64, string>`), pre-populate the mapping
+        // so bindings get concrete types instead of fresh unresolved vars.
+        if is_generic && scrutinee_type_args.len() == enum_def.type_params.len() {
+            for (param_name, arg_ty) in enum_def.type_params.iter().zip(scrutinee_type_args.iter())
+            {
+                type_param_mapping.insert(param_name.clone(), arg_ty.clone());
+            }
+        }
 
         for arm in arms {
             match &arm.pattern {

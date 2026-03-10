@@ -3,7 +3,7 @@ use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::{llvm_calling_convention, needs_sret};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
-use aelys_air::{AirConst, AirType, Callee, LocalId, Operand};
+use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_data};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
@@ -209,6 +209,9 @@ impl<'a> FunctionCodegen<'a> {
                     ));
                 }
             },
+            AirType::Enum(ref enum_name) => {
+                return self.generate_enum_print(enum_name, &args[0], value, newline, expected_ret);
+            }
             _ => {
                 return Err(CodegenError::UnsupportedType(format!(
                     "print/println does not support type {:?}",
@@ -294,6 +297,134 @@ impl<'a> FunctionCodegen<'a> {
                 "local {} is not fn ptr: {:?}",
                 local.0, other
             ))),
+        }
+    }
+
+    fn generate_enum_print(
+        &mut self,
+        enum_name: &str,
+        _arg: &Operand,
+        value: BasicValueEnum<'static>,
+        newline: bool,
+        expected_ret: Option<&AirType>,
+    ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        let enum_def = self
+            .program
+            .enums
+            .iter()
+            .find(|e| e.name == enum_name)
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!("unknown enum for print: {}", enum_name))
+            })?
+            .clone();
+
+        // Use the original enum name for display (strip __mono_ prefix)
+        let display_name = if let Some(rest) = enum_name.strip_prefix("__mono_") {
+            rest.split('_').next().unwrap_or(rest)
+        } else {
+            enum_name
+        };
+
+        let is_data = enum_has_data(&enum_def);
+
+        // Save the entry block (where the tag computation happens)
+        let entry_bb = self.builder.get_insert_block().ok_or_else(|| {
+            CodegenError::LlvmError("no current block".to_string())
+        })?;
+
+        // Extract the i32 tag
+        let tag_val = if is_data {
+            let enum_struct_name = format!("__aelys_enum_{}", enum_name);
+            let enum_ty =
+                self.context
+                    .get_struct_type(&enum_struct_name)
+                    .ok_or_else(|| {
+                        CodegenError::UnsupportedType(format!(
+                            "unknown enum struct type: {}",
+                            enum_struct_name
+                        ))
+                    })?;
+            let tmp = self
+                .builder
+                .build_alloca(enum_ty, "print_enum_tmp")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.align_alloca(tmp, enum_ty.into())?;
+            self.store_value(tmp, value)?;
+            let tag_ptr = self
+                .builder
+                .build_struct_gep(enum_ty, tmp, 0, "print_tag_ptr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.load_value(self.context.i32_type().into(), tag_ptr, "print_tag")?
+                .into_int_value()
+        } else {
+            value.into_int_value()
+        };
+
+        let current_fn = self.function;
+        let write_fn = self.ensure_write_function();
+
+        // Create blocks: one per variant + default + merge
+        let merge_bb = self
+            .context
+            .append_basic_block(current_fn, "print_enum_merge");
+        let default_bb = self
+            .context
+            .append_basic_block(current_fn, "print_enum_default");
+
+        let mut variant_blocks = Vec::new();
+        for variant in &enum_def.variants {
+            let bb = self
+                .context
+                .append_basic_block(current_fn, &format!("print_{}", variant.name));
+            variant_blocks.push((variant.tag, variant.name.clone(), bb));
+        }
+
+        // Build default block (fallthrough to merge)
+        self.builder.position_at_end(default_bb);
+        self.builder
+            .build_unconditional_branch(merge_bb)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // Build each variant block: write "EnumName::VariantName", branch to merge
+        for &(_, ref name, bb) in &variant_blocks {
+            self.builder.position_at_end(bb);
+            let text = format!("{}::{}", display_name, name);
+            let (ptr, str_len) = self.global_string_ptr_len(&text)?;
+            let len_val = self.context.i64_type().const_int(str_len, false);
+            self.builder
+                .build_call(write_fn, &[ptr.into(), len_val.into()], "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.builder
+                .build_unconditional_branch(merge_bb)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+
+        // Go back to entry block and build the switch terminator
+        self.builder.position_at_end(entry_bb);
+        let cases: Vec<_> = variant_blocks
+            .iter()
+            .map(|&(tag, _, bb)| (self.context.i32_type().const_int(tag as u64, false), bb))
+            .collect();
+        self.builder
+            .build_switch(tag_val, default_bb, &cases)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        // Continue in merge block
+        self.builder.position_at_end(merge_bb);
+
+        if newline {
+            let (nl_ptr, nl_len) = self.global_string_ptr_len("\n")?;
+            let nl_len = self.context.i64_type().const_int(nl_len, false);
+            self.builder
+                .build_call(write_fn, &[nl_ptr.into(), nl_len.into()], "")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+
+        match expected_ret {
+            None | Some(AirType::Void) => Ok(None),
+            Some(ret) => Ok(Some(
+                air_basic_type_to_llvm(ret, self.context)?.const_zero(),
+            )),
         }
     }
 }

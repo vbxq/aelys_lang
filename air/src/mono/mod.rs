@@ -535,6 +535,7 @@ fn rewrite_enum_refs_in_stmt(
             } => {
                 if let Some(&enum_idx) = generic_enums.get(enum_name.as_str()) {
                     let enum_def = &enum_defs[enum_idx];
+                    let mut resolved_from_payload = false;
                     if !payload.is_empty() {
                         // Non-unit variant: infer type args from payload
                         let variant_def = enum_def.variants.iter().find(|v| v.name == *variant);
@@ -556,10 +557,12 @@ fn rewrite_enum_refs_in_stmt(
                                 let key = (enum_name.clone(), key_strs);
                                 if let Some(mangled) = mono_enum_names.get(&key) {
                                     *enum_name = mangled.clone();
+                                    resolved_from_payload = true;
                                 }
                             }
                         }
-                    } else {
+                    }
+                    if !resolved_from_payload {
                         // Unit variant: use the target local's resolved mono name
                         if let Place::Local(target_id) = place {
                             if let Some(mangled) = local_mono_map.get(target_id) {
