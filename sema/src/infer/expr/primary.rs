@@ -73,6 +73,13 @@ impl TypeInference {
                     .map(|e| self.instantiate_enum_type_param(e, type_param_names, mapping))
                     .collect(),
             ),
+            InferType::Enum(name, args) => {
+                let new_args = args
+                    .iter()
+                    .map(|a| self.instantiate_enum_type_param(a, type_param_names, mapping))
+                    .collect();
+                InferType::Enum(name.clone(), new_args)
+            }
             other => other.clone(),
         }
     }

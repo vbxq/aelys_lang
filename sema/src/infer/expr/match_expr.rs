@@ -14,9 +14,49 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_scrutinee = self.infer_expr(scrutinee);
 
-        // The scrutinee must be an enum type
+        // The scrutinee must be an enum type.
+        // It may be a Var if it comes from a match/if-else whose result type
+        // hasn't been solved yet. In that case, extract the enum name from the
+        // first variant pattern and add a constraint.
         let (enum_name, scrutinee_type_args) = match &typed_scrutinee.ty {
             InferType::Enum(name, args) => (name.clone(), args.clone()),
+            InferType::Var(_) => {
+                // Try to determine the enum name from the first variant pattern
+                let first_enum = arms.iter().find_map(|arm| match &arm.pattern {
+                    Pattern::Variant { enum_name, .. } => Some(enum_name.clone()),
+                    _ => None,
+                });
+                match first_enum {
+                    Some(name) => {
+                        // Add a constraint so the Var will unify with this enum type
+                        self.constraints.push(Constraint::equal(
+                            typed_scrutinee.ty.clone(),
+                            InferType::Enum(name.clone(), Vec::new()),
+                            scrutinee.span,
+                            ConstraintReason::Other(
+                                "match scrutinee inferred as enum from patterns".to_string(),
+                            ),
+                        ));
+                        (name, Vec::new())
+                    }
+                    None => {
+                        self.errors.push(TypeError {
+                            kind: TypeErrorKind::Mismatch {
+                                expected: InferType::Dynamic,
+                                found: typed_scrutinee.ty.clone(),
+                            },
+                            span: scrutinee.span,
+                            reason: ConstraintReason::Other(
+                                "match scrutinee type is ambiguous and no variant patterns to infer from".to_string(),
+                            ),
+                            secondary_spans: Vec::new(),
+                            help: None,
+                            suggestion: None,
+                        });
+                        return (TypedExprKind::Null, InferType::Dynamic);
+                    }
+                }
+            }
             InferType::Dynamic => {
                 // Error recovery: type-check arms but don't validate patterns
                 let typed_arms = self.infer_match_arms_dynamic(arms);

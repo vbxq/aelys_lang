@@ -430,6 +430,24 @@ fn substitute_enum_type(
             ret: Box::new(substitute_enum_type(ret, type_params, type_args)),
             conv: *conv,
         },
+        AirType::Enum(name) => {
+            // The enum name may contain pre-mangled param references (e.g.
+            // "__mono_Option_param_0") when a generic enum definition has a
+            // variant whose payload is another generic enum parameterized by a
+            // type param. Replace each "param_N" segment with the concrete
+            // type arg so the name resolves to the correct monomorphized def.
+            let mut new_name = name.clone();
+            for (i, param) in type_params.iter().enumerate() {
+                if let Some(replacement) = type_args.get(i) {
+                    let param_str = substitute::type_to_string(&AirType::Param(*param));
+                    let replacement_str = substitute::type_to_string(replacement);
+                    if param_str != replacement_str {
+                        new_name = new_name.replace(&param_str, &replacement_str);
+                    }
+                }
+            }
+            AirType::Enum(new_name)
+        }
         other => other.clone(),
     }
 }
