@@ -122,6 +122,12 @@ impl ConstantFolder {
             TypedExprKind::Cast { expr, .. } => {
                 self.optimize_expr(expr);
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for stmt in stmts {
+                    self.optimize_stmt(stmt);
+                }
+                self.optimize_expr(tail);
+            }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.optimize_expr(scrutinee);
                 for arm in arms {

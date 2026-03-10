@@ -146,6 +146,18 @@ impl TypeInference {
             ExprKind::Match { scrutinee, arms } => {
                 self.infer_match_expr(scrutinee, arms, expr.span)
             }
+            ExprKind::Block { stmts, tail } => {
+                let typed_stmts = self.infer_stmts(stmts);
+                let typed_tail = self.infer_expr(tail);
+                let ty = typed_tail.ty.clone();
+                (
+                    TypedExprKind::Block {
+                        stmts: typed_stmts,
+                        tail: Box::new(typed_tail),
+                    },
+                    ty,
+                )
+            }
         };
 
         self.depth -= 1;

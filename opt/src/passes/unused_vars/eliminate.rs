@@ -124,6 +124,15 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             fields.iter().any(|(_, v)| has_side_effects(v))
         }
         TypedExprKind::Cast { expr, .. } => has_side_effects(expr),
+        TypedExprKind::Block { stmts, tail } => {
+            stmts.iter().any(|s| {
+                if let aelys_sema::TypedStmtKind::Expression(e) = &s.kind {
+                    has_side_effects(e)
+                } else {
+                    true // let/return/etc. have side effects
+                }
+            }) || has_side_effects(tail)
+        }
         TypedExprKind::Match { scrutinee, arms } => {
             has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
         }

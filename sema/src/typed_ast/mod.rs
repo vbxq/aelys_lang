@@ -250,6 +250,12 @@ pub enum TypedExprKind {
         scrutinee: Box<TypedExpr>,
         arms: Vec<TypedMatchArm>,
     },
+
+    /// Block expression: `{ stmts...; tail_expr }`
+    Block {
+        stmts: Vec<TypedStmt>,
+        tail: Box<TypedExpr>,
+    },
 }
 
 #[derive(Debug, Clone)]

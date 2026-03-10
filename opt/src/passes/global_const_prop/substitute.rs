@@ -102,6 +102,12 @@ impl GlobalConstantPropagator {
             TypedExprKind::Cast { expr, .. } => {
                 self.substitute_constants(expr);
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for stmt in stmts {
+                    self.substitute_in_stmt(stmt);
+                }
+                self.substitute_constants(tail);
+            }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.substitute_constants(scrutinee);
                 for arm in arms {

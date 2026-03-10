@@ -303,6 +303,11 @@ impl TypeInference {
                 args: args.into_iter().map(|a| self.finalize_expr(a)).collect(),
             },
 
+            TypedExprKind::Block { stmts, tail } => TypedExprKind::Block {
+                stmts: self.finalize_stmts(stmts),
+                tail: Box::new(self.finalize_expr(*tail)),
+            },
+
             TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
                 scrutinee: Box::new(self.finalize_expr(*scrutinee)),
                 arms: arms

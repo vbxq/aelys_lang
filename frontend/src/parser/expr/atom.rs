@@ -152,6 +152,7 @@ impl Parser {
 
     // block expr: last expr is the value (like Rust)
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
+        let block_start = self.previous().span;
         let mut stmts = Vec::new();
 
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
@@ -160,8 +161,18 @@ impl Parser {
 
                 if self.check(&TokenKind::RBrace) {
                     self.consume(&TokenKind::RBrace, "}")?;
+                    let end_span = self.previous().span;
 
-                    return Ok(expr);
+                    if stmts.is_empty() {
+                        return Ok(expr);
+                    }
+                    return Ok(Expr::new(
+                        ExprKind::Block {
+                            stmts,
+                            tail: Box::new(expr),
+                        },
+                        block_start.merge(end_span),
+                    ));
                 }
 
                 self.consume_semicolon()?;
@@ -176,8 +187,38 @@ impl Parser {
         }
 
         self.consume(&TokenKind::RBrace, "}")?;
+        let end_span = self.previous().span;
 
-        Ok(Expr::new(ExprKind::Null, self.previous().span))
+        // If the last stmt is an expression statement, promote it to the tail
+        // expression (Rust-style block value). This handles auto-semicolon
+        // insertion: `w * h\n}` gets a `;` inserted by the lexer, but the
+        // user intent is for it to be the block's return value.
+        let tail = if let Some(last) = stmts.last() {
+            if matches!(&last.kind, StmtKind::Expression(_)) {
+                let last = stmts.pop().unwrap();
+                if let StmtKind::Expression(expr) = last.kind {
+                    expr
+                } else {
+                    unreachable!()
+                }
+            } else {
+                Expr::new(ExprKind::Null, end_span)
+            }
+        } else {
+            Expr::new(ExprKind::Null, end_span)
+        };
+
+        if stmts.is_empty() {
+            Ok(tail)
+        } else {
+            Ok(Expr::new(
+                ExprKind::Block {
+                    stmts,
+                    tail: Box::new(tail),
+                },
+                block_start.merge(end_span),
+            ))
+        }
     }
 
     pub(super) fn is_expression_start(&self) -> bool {
@@ -193,6 +234,7 @@ impl Parser {
                 | TokenKind::Identifier(_)
                 | TokenKind::LParen
                 | TokenKind::LBracket
+                | TokenKind::LBrace
                 | TokenKind::Minus
                 | TokenKind::Not
                 | TokenKind::If
@@ -255,6 +297,10 @@ impl Parser {
 
             TokenKind::Fn => {
                 return self.lambda_expression(span);
+            }
+
+            TokenKind::LBrace => {
+                return self.block_expression();
             }
 
             _ => {

@@ -248,6 +248,12 @@ pub enum ExprKind {
         scrutinee: Box<Expr>,
         arms: Vec<MatchArm>,
     },
+
+    /// Block expression: `{ stmts...; tail_expr }`
+    Block {
+        stmts: Vec<crate::ast::Stmt>,
+        tail: Box<Expr>,
+    },
 }
 
 #[derive(Debug, Clone)]

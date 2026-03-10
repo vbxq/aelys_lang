@@ -286,6 +286,12 @@ impl<'a> LoweringContext<'a> {
                     sp,
                 )
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for stmt in stmts {
+                    self.lower_stmt(stmt);
+                }
+                self.lower_expr(tail)
+            }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.lower_match_expr(scrutinee, arms, expr)
             }

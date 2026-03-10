@@ -226,6 +226,13 @@ impl TypeInference {
                     self.collect_captures_inner(arg, locals, captures, seen);
                 }
             }
+            TypedExprKind::Block { stmts, tail } => {
+                let mut block_locals = locals.clone();
+                for stmt in stmts {
+                    self.collect_captures_from_stmt(stmt, &mut block_locals, captures, seen);
+                }
+                self.collect_captures_inner(tail, &block_locals, captures, seen);
+            }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.collect_captures_inner(scrutinee, locals, captures, seen);
                 for arm in arms {

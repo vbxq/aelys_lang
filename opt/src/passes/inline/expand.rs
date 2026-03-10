@@ -306,6 +306,13 @@ impl InlineExpander {
                     .map(|a| self.substitute_expr(a, params, span))
                     .collect(),
             },
+            TypedExprKind::Block { stmts, tail } => TypedExprKind::Block {
+                stmts: stmts
+                    .iter()
+                    .map(|s| self.substitute_stmt(s, params, span))
+                    .collect(),
+                tail: Box::new(self.substitute_expr(tail, params, span)),
+            },
             TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
                 scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
                 arms: arms

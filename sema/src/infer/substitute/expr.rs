@@ -186,6 +186,13 @@ impl TypeInference {
                     .map(|a| self.apply_substitution_expr(a, subst))
                     .collect(),
             },
+            TypedExprKind::Block { stmts, tail } => TypedExprKind::Block {
+                stmts: stmts
+                    .iter()
+                    .map(|s| self.apply_substitution_stmt(s, subst))
+                    .collect(),
+                tail: Box::new(self.apply_substitution_expr(tail, subst)),
+            },
             TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
                 scrutinee: Box::new(self.apply_substitution_expr(scrutinee, subst)),
                 arms: arms
