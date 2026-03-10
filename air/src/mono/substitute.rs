@@ -105,7 +105,7 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
                     .iter()
                     .map(type_to_string)
                     .collect::<Vec<_>>()
-                    .join("_");
+                    .join("$");
                 *name = format!("__mono_{}_{}", name, suffix);
             }
         }
@@ -115,7 +115,7 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
                     .iter()
                     .map(type_to_string)
                     .collect::<Vec<_>>()
-                    .join("_");
+                    .join("$");
                 *enum_name = format!("__mono_{}_{}", enum_name, suffix);
             }
         }

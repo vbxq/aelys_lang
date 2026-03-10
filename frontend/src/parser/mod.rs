@@ -128,6 +128,41 @@ impl Parser {
         }
     }
 
+    /// Consume a `>` token, splitting `>>` (Shr) into two `>` (Gt) tokens if needed.
+    /// This is required for nested generic type annotations like `Option<Option<i64>>`.
+    fn consume_gt(&mut self) -> Result<()> {
+        if self.check(&TokenKind::Gt) {
+            self.advance();
+            Ok(())
+        } else if self.check(&TokenKind::Shr) {
+            // Split >> into > + >: replace Shr with Gt (for the second >),
+            // then insert a Gt before it (for the first >) so advance works normally.
+            let span = self.tokens[self.current].span;
+            let first_gt_span = aelys_syntax::Span {
+                start: span.start,
+                end: span.start + 1,
+                line: span.line,
+                column: span.column,
+            };
+            let second_gt_span = aelys_syntax::Span {
+                start: span.start + 1,
+                end: span.end,
+                line: span.line,
+                column: span.column + 1,
+            };
+            self.tokens[self.current] = Token::new(TokenKind::Gt, second_gt_span);
+            self.tokens
+                .insert(self.current, Token::new(TokenKind::Gt, first_gt_span));
+            self.advance();
+            Ok(())
+        } else {
+            Err(self.error(CompileErrorKind::UnexpectedToken {
+                expected: ">".to_string(),
+                found: self.peek().kind.to_string(),
+            }))
+        }
+    }
+
     fn consume_identifier(&mut self, expected: &str) -> Result<String> {
         match &self.peek().kind {
             TokenKind::Identifier(name) => {

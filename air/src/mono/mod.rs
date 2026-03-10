@@ -84,7 +84,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
                 if let Some(type_suffix) = name.strip_prefix(&prefix) {
                     // Check if we already have a request for this
                     let key_strs: Vec<String> =
-                        type_suffix.split('_').map(|s| s.to_string()).collect();
+                        type_suffix.split('$').map(|s| s.to_string()).collect();
                     let key = (enum_name.clone(), key_strs.clone());
                     if !enum_mono_requests.contains_key(&key) {
                         // Try to resolve type_args from the type suffix strings
@@ -131,7 +131,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
             .iter()
             .map(substitute::type_to_string)
             .collect::<Vec<_>>()
-            .join("_");
+            .join("$");
         let mangled_name = format!("__mono_{}_{}", enum_name, type_str);
 
         // Substitute type params in variant payload types
@@ -654,9 +654,8 @@ fn resolve_operand_mono(
 
 /// Resolve AirType values from suffix strings produced by `type_to_string`.
 ///
-/// Handles the common primitive cases that appear in generic enum type args.
-/// Complex types (pointers, arrays, etc.) are not currently supported here
-/// because they don't appear in typical enum type parameters.
+/// Each string in `key_strs` is a single type arg (split by `$` separator).
+/// Handles primitives, enum types (prefixed with "enum_"), and struct types.
 fn resolve_type_args_from_suffix(
     key_strs: &[String],
     _enum_def: &AirEnumDef,
@@ -676,7 +675,13 @@ fn resolve_type_args_from_suffix(
             "f64" => AirType::F64,
             "bool" => AirType::Bool,
             "str" => AirType::Str,
-            other => AirType::Struct(other.to_string()),
+            other => {
+                if let Some(enum_name) = other.strip_prefix("enum_") {
+                    AirType::Enum(enum_name.to_string())
+                } else {
+                    AirType::Struct(other.to_string())
+                }
+            }
         };
         type_args.push(ty);
     }
@@ -874,7 +879,7 @@ impl MonoContext {
             .iter()
             .map(substitute::type_to_string)
             .collect::<Vec<_>>()
-            .join("_");
+            .join("$");
         format!("__mono_{}_{}", name, type_str)
     }
 

@@ -43,7 +43,7 @@ impl Parser {
             while self.match_token(&TokenKind::Comma) {
                 type_params.push(self.parse_type_annotation()?);
             }
-            self.consume(&TokenKind::Gt, ">")?;
+            self.consume_gt()?;
             let end_span = self.previous().span;
             if type_params.len() == 1 {
                 // SAFETY: length was just checked to be exactly 1.

@@ -330,7 +330,7 @@ impl<'a> LoweringContext<'a> {
                             .iter()
                             .map(|t| crate::mono::substitute::type_to_string(t))
                             .collect::<Vec<_>>()
-                            .join("_");
+                            .join("$");
                         AirType::Enum(format!("__mono_{}_{}", name, suffix))
                     } else {
                         AirType::Enum(name.clone())
