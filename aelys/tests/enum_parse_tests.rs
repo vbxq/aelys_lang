@@ -1065,6 +1065,8 @@ fn is_some(opt: Option<i64>) -> i64 {
 
 #[test]
 fn generic_enum_none_without_annotation() {
+    // Unit variant of a generic enum without type annotation should produce
+    // a clear "type annotations needed" error, not a confusing AIR-level Opaque error.
     let src = r#"
 enum Option<T> {
     Some(T),
@@ -1074,9 +1076,15 @@ let x = Option::None
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
-        result.is_ok(),
-        "Option::None without annotation should work: {:?}",
-        result.err()
+        result.is_err(),
+        "Option::None without annotation should require type annotation"
+    );
+    let errors = result.unwrap_err();
+    let msg = format!("{:?}", errors);
+    assert!(
+        msg.contains("type annotations needed") || msg.contains("cannot infer"),
+        "error should mention type annotations: {}",
+        msg
     );
 }
 

@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{ConstraintReason, TypeError};
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::Span;
@@ -407,9 +407,56 @@ impl TypeInference {
                     ));
                 }
             }
-            TypedExprKind::EnumVariant { args, .. } => {
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
+                }
+                // For generic enum UNIT variants (no payload) where type
+                // parameters could not be resolved (remained as Dynamic after
+                // substitution), emit a clear error suggesting a type annotation.
+                // Data variants (with args) have at least partial type info from
+                // their arguments, so we only flag unit variants where there is
+                // truly no information to determine the type params.
+                if args.is_empty() {
+                if let InferType::Enum(name, type_args) = &expr.ty {
+                    if let Some(def) = self.type_table.get_enum(name) {
+                        if !def.type_params.is_empty() && type_args.len() == def.type_params.len() {
+                            let has_unresolved = type_args
+                                .iter()
+                                .any(|a| matches!(a, InferType::Dynamic | InferType::Var(_)));
+                            if has_unresolved {
+                                let params_str = def.type_params.join(", ");
+                                self.errors.push(TypeError {
+                                    kind: TypeErrorKind::MemberAccess {
+                                        message: format!(
+                                            "type annotations needed: cannot infer type parameter{} \
+                                             <{}> for `{}::{}`",
+                                            if def.type_params.len() > 1 { "s" } else { "" },
+                                            params_str,
+                                            enum_name,
+                                            variant,
+                                        ),
+                                    },
+                                    span: expr.span,
+                                    reason: ConstraintReason::Other(
+                                        "generic enum type parameter inference".to_string(),
+                                    ),
+                                    secondary_spans: Vec::new(),
+                                    help: Some(format!(
+                                        "add a type annotation: `let x: {}<...> = {}::{}`",
+                                        name, enum_name, variant,
+                                    )),
+                                    suggestion: None,
+                                });
+                            }
+                        }
+                    }
+                }
                 }
             }
             TypedExprKind::Block { stmts, tail } => {
