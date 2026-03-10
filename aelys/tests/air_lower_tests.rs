@@ -184,6 +184,30 @@ fn float_literal_defaults_to_f64() {
     ));
 }
 
+#[test]
+fn top_level_global_read_uses_global_get_instead_of_closure_env() {
+    let air = lower_source(
+        r#"
+let g = 7
+
+fn main() -> i64 {
+    return g
+}
+"#,
+    );
+
+    let main = func(&air, "main");
+    assert!(main.params.is_empty(), "main should not get a hidden env param");
+    assert!(
+        !air.structs.iter().any(|s| s.name == "__closure_env_main"),
+        "top-level globals must not synthesize a closure env"
+    );
+    assert!(
+        has_named_call(main, "__aelys_global_get_g"),
+        "global reads should lower to the synthetic global getter call"
+    );
+}
+
 // regression test: Null -> Ptr(Void)
 
 #[test]

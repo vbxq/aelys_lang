@@ -1,6 +1,7 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::{llvm_calling_convention, needs_sret};
+use crate::lowering::globals::{GLOBAL_GET_PREFIX, GLOBAL_SET_PREFIX};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_data};
@@ -19,25 +20,34 @@ impl<'a> FunctionCodegen<'a> {
             arg_values.push(self.generate_operand(arg)?);
         }
 
-        // print/println are reserved bootstrap names lowered to __aelys_write
-        if let Callee::Named(name) = callee
-            && is_reserved_bootstrap_builtin(name)
-        {
-            debug_assert!(
-                self.module.get_function(name).is_none(),
-                "reserved builtin must be rejected during declaration phase"
-            );
-            if self.module.get_function(name).is_some() {
-                return Err(CodegenError::UnsupportedInstruction(
-                    reserved_bootstrap_builtin_message(name),
-                ));
+        // AIR still models globals as synthetic get/set calls until it grows
+        // first-class global operands, so lower them directly here.
+        if let Callee::Named(name) = callee {
+            if let Some(global_name) = name.strip_prefix(GLOBAL_GET_PREFIX) {
+                return self.generate_global_get(global_name, args);
             }
-            return self.generate_bootstrap_print_call(
-                name == "println",
-                args,
-                &arg_values,
-                expected_ret,
-            );
+            if let Some(global_name) = name.strip_prefix(GLOBAL_SET_PREFIX) {
+                return self.generate_global_set(global_name, args);
+            }
+
+            // print/println are reserved bootstrap names lowered to __aelys_write
+            if is_reserved_bootstrap_builtin(name) {
+                debug_assert!(
+                    self.module.get_function(name).is_none(),
+                    "reserved builtin must be rejected during declaration phase"
+                );
+                if self.module.get_function(name).is_some() {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        reserved_bootstrap_builtin_message(name),
+                    ));
+                }
+                return self.generate_bootstrap_print_call(
+                    name == "println",
+                    args,
+                    &arg_values,
+                    expected_ret,
+                );
+            }
         }
 
         let metadata_args: Vec<BasicMetadataValueEnum<'static>> =
@@ -263,13 +273,17 @@ impl<'a> FunctionCodegen<'a> {
                 .functions
                 .iter()
                 .find(|f| f.id == *id)
-                .map_or(false, |f| needs_sret(&f.ret_ty, f.calling_conv, is_windows)),
+                .map_or(false, |f| {
+                    needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
+                }),
             Callee::Extern(name, _) => self
                 .program
                 .functions
                 .iter()
                 .find(|f| f.name == *name && f.is_extern)
-                .map_or(false, |f| needs_sret(&f.ret_ty, f.calling_conv, is_windows)),
+                .map_or(false, |f| {
+                    needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
+                }),
             _ => false,
         }
     }

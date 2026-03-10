@@ -32,9 +32,16 @@ impl<'a> LoweringContext<'a> {
         let stmts: Vec<_> = self.program.stmts.clone();
         for stmt in &stmts {
             match &stmt.kind {
-                TypedStmtKind::Function(func) => self.lower_function(func),
-                TypedStmtKind::StructDecl { .. } | TypedStmtKind::EnumDecl { .. } => {}
+                TypedStmtKind::StructDecl { .. }
+                | TypedStmtKind::EnumDecl { .. }
+                | TypedStmtKind::Function(_) => {}
                 _ => self.lower_toplevel_stmt(stmt),
+            }
+        }
+
+        for stmt in &stmts {
+            if let TypedStmtKind::Function(func) = &stmt.kind {
+                self.lower_function(func);
             }
         }
     }
@@ -108,9 +115,10 @@ impl<'a> LoweringContext<'a> {
 
         let func_id = self.alloc_function_id();
         let gc_mode = self.gc_mode_for_function(func);
+        let captures = self.runtime_captures(&func.captures);
 
-        if !func.captures.is_empty() {
-            self.lower_closure(func, func_id, gc_mode);
+        if !captures.is_empty() {
+            self.lower_closure(func, &captures, func_id, gc_mode);
         } else {
             self.lower_plain_function(func, func_id, gc_mode);
         }
@@ -163,12 +171,17 @@ impl<'a> LoweringContext<'a> {
         self.type_params_map.clear();
     }
 
-    fn lower_closure(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+    fn lower_closure(
+        &mut self,
+        func: &TypedFunction,
+        captures: &[(String, InferType)],
+        func_id: FunctionId,
+        gc_mode: GcMode,
+    ) {
         let type_params = self.lower_type_params(&func.type_params);
 
         let env_name = format!("__closure_env_{}", func.name);
-        let env_fields: Vec<AirStructField> = func
-            .captures
+        let env_fields: Vec<AirStructField> = captures
             .iter()
             .map(|(name, ty)| AirStructField {
                 name: name.clone(),
@@ -194,7 +207,7 @@ impl<'a> LoweringContext<'a> {
             span: Some(self.span(&func.span)),
         });
 
-        for (cap_name, cap_ty) in &func.captures {
+        for (cap_name, cap_ty) in captures {
             let local_id =
                 self.alloc_named_local(cap_name, self.lower_type_from_infer(cap_ty), false, None);
             self.emit(
@@ -241,6 +254,15 @@ impl<'a> LoweringContext<'a> {
         };
         self.functions.push(air_func);
         self.type_params_map.clear();
+    }
+
+    fn runtime_captures(&self, captures: &[(String, InferType)]) -> Vec<(String, InferType)> {
+        // File-scope lets live in global storage, not in closure environments.
+        captures
+            .iter()
+            .filter(|(name, _)| !self.globals.iter().any(|global| global.name == *name))
+            .cloned()
+            .collect()
     }
 
     pub(super) fn lower_params(&mut self, params: &[TypedParam]) -> Vec<AirParam> {
