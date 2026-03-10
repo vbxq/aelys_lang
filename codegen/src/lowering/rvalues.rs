@@ -38,6 +38,9 @@ impl<'a> FunctionCodegen<'a> {
             }
             Rvalue::Cast { operand, from, to } => self.generate_cast(operand, from, to),
             Rvalue::Index { base, index } => self.generate_index(base, index),
+            Rvalue::EnumInit { tag, .. } => {
+                Ok(self.context.i32_type().const_int(*tag as u64, false).into())
+            }
         }
     }
 

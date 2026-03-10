@@ -21,6 +21,7 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::Bool => Ok(context.bool_type().into()),
         AirType::Str => Ok(aelys_string_type(context).into()),
         AirType::Ptr(inner) => Ok(pointer_to_air_type(inner, context)?.into()),
+        AirType::Enum(_) => Ok(context.i32_type().into()),
         AirType::Struct(name) => context
             .get_struct_type(name)
             .map(Into::into)

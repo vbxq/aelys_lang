@@ -300,6 +300,7 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::Str => "string",
         AirType::Ptr(_) => "ptr",
         AirType::Struct(_) => "struct",
+        AirType::Enum(_) => "enum",
         AirType::Array(_, _) => "array",
         AirType::Slice(_) => "slice",
         AirType::FnPtr { .. } => "fn",

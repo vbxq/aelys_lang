@@ -69,6 +69,7 @@ impl<'a> FunctionCodegen<'a> {
                 let (size, align) = self.type_size_align(inner)?;
                 Ok((size.saturating_mul(*n as u32), align))
             }
+            AirType::Enum(_) => Ok((4, 4)),
             AirType::Struct(name) => {
                 let def = self
                     .program
