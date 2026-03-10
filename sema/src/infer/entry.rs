@@ -59,11 +59,32 @@ impl TypeInference {
             };
         }
 
+        // Handle array/vec annotations specially: use enum-aware type_from_annotation
+        // for the inner type. raw from_annotation uses Self::from_annotation which
+        // doesn't know about enums, so [Color; 3] would produce Array(Struct("Color"))
+        // instead of Array(Enum("Color", [])).
+        let name_lower = ann.name.to_lowercase();
+        if name_lower == "array" {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| self.type_from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Array(Box::new(inner), ann.array_size);
+        }
+        if name_lower == "vec" {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| self.type_from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Vec(Box::new(inner));
+        }
+
         let ty = InferType::from_annotation(ann);
         // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
         if let InferType::Struct(ref name) = ty {
             if self.type_table.has_enum(name) {
-                // Extract type args from the annotation's type_param/type_params fields
                 let type_args = self.collect_enum_type_args(ann);
                 return InferType::Enum(name.clone(), type_args);
             }
