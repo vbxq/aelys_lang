@@ -136,12 +136,14 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Match { scrutinee, arms } => {
             has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
         }
+        TypedExprKind::EnumVariant { args, .. } => {
+            args.iter().any(|a| has_side_effects(a))
+        }
         TypedExprKind::Identifier(_)
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
         | TypedExprKind::String(_)
-        | TypedExprKind::Null
-        | TypedExprKind::EnumVariant { .. } => false,
+        | TypedExprKind::Null => false,
     }
 }

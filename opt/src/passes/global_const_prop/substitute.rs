@@ -114,12 +114,16 @@ impl GlobalConstantPropagator {
                     self.substitute_constants(&mut arm.body);
                 }
             }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.substitute_constants(arg);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::Null
-            | TypedExprKind::EnumVariant { .. } => {}
+            | TypedExprKind::Null => {}
         }
     }
 

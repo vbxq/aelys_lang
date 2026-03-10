@@ -72,8 +72,10 @@ impl InlineExpander {
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::Null
-            | TypedExprKind::EnumVariant { .. } => true,
+            | TypedExprKind::Null => true,
+            TypedExprKind::EnumVariant { args, .. } => args
+                .iter()
+                .all(|a| self.expr_has_only_params_and_literals(a, params)),
 
             TypedExprKind::Identifier(name) => params.contains_key(name),
 

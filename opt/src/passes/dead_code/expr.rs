@@ -107,13 +107,17 @@ impl DeadCodeEliminator {
                     self.eliminate_in_expr(&mut arm.body);
                 }
             }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.eliminate_in_expr(arg);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
-            | TypedExprKind::Identifier(_)
-            | TypedExprKind::EnumVariant { .. } => {}
+            | TypedExprKind::Identifier(_) => {}
         }
     }
 }

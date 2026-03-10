@@ -198,11 +198,15 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 collect_uses_in_expr(&arm.body, used);
             }
         }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                collect_uses_in_expr(arg, used);
+            }
+        }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
         | TypedExprKind::String(_)
-        | TypedExprKind::Null
-        | TypedExprKind::EnumVariant { .. } => {}
+        | TypedExprKind::Null => {}
     }
 }

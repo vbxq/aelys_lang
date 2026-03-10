@@ -272,6 +272,11 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars_expr(&arm.body, out);
                 }
             }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    Self::collect_assigned_vars_expr(arg, out);
+                }
+            }
             _ => {}
         }
     }
@@ -429,12 +434,16 @@ impl LocalConstantPropagator {
                     self.propagate_expr(&mut arm.body);
                 }
             }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.propagate_expr(arg);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::Null
-            | TypedExprKind::EnumVariant { .. } => {}
+            | TypedExprKind::Null => {}
         }
     }
 }
