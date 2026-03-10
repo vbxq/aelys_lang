@@ -1,5 +1,16 @@
+use aelys_air::layout::compute_layouts;
+use aelys_air::lower::lower;
+use aelys_air::mono::monomorphize;
+use aelys_air::passes::copy_elim::eliminate_copies;
+use aelys_air::passes::dead_locals::eliminate_dead_locals;
+use aelys_air::passes::validate::validate_air;
+use aelys_codegen::CodegenContext;
 use aelys_driver::compile_file_with_llvm;
+use aelys_frontend::lexer::Lexer;
+use aelys_frontend::parser::Parser;
 use aelys_opt::OptimizationLevel;
+use aelys_sema::TypeInference;
+use aelys_syntax::Source;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use std::fs;
@@ -17,6 +28,45 @@ fn compile_to_verified_ir_with_opt(source: &str, opt: OptimizationLevel) -> Stri
     compile_file_with_llvm(&source_path, opt, true)
         .expect("llvm backend compilation should succeed");
     let ll_path = source_path.with_extension("ll");
+    let ir = fs::read_to_string(&ll_path).expect("llvm ir file should be generated");
+
+    let context = Context::create();
+    let buffer = MemoryBuffer::create_from_file(&ll_path).expect("llvm ir should be readable");
+    let module = context
+        .create_module_from_ir(buffer)
+        .expect("llvm ir should parse into a module");
+    module
+        .verify()
+        .expect("module.verify() should succeed for generated ir");
+    ir
+}
+
+fn compile_source_to_verified_ir_without_link(source: &str) -> String {
+    let src = Source::new("<test>", source);
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
+    let mut air = lower(&typed);
+    air = monomorphize(air);
+    compute_layouts(&mut air);
+    eliminate_copies(&mut air);
+    eliminate_dead_locals(&mut air);
+    validate_air(&air).expect("AIR should validate");
+
+    let dir = tempdir().expect("tempdir should be created");
+    let ll_path = dir.path().join("module.ll");
+    let ll_path_str = ll_path.to_string_lossy().to_string();
+
+    let mut codegen = CodegenContext::new("e2e_no_link");
+    codegen
+        .compile(&air)
+        .expect("codegen compilation should succeed");
+    codegen
+        .emit_ir(&ll_path_str)
+        .expect("llvm ir should be emitted");
+
     let ir = fs::read_to_string(&ll_path).expect("llvm ir file should be generated");
 
     let context = Context::create();
@@ -325,6 +375,33 @@ fn main() -> i64 {
 }
 
 #[test]
+fn llvm_main_fn_value_uses_backend_symbol_mapping() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+fn bounce(h: Holder<fn() -> i64>) -> Holder<fn() -> i64> {
+    return h
+}
+
+fn main() -> i64 {
+    let h: Holder<fn() -> i64> = Holder::Value(main)
+    let out = bounce(h)
+    return match out {
+        Holder::Value(_) => 42
+        Holder::Empty => 0
+    }
+}
+"#,
+    );
+    assert!(ir.contains("@__aelys_main"), "{ir}");
+    assert!(ir.contains("ptr @__aelys_main") || ir.contains("@__aelys_main"), "{ir}");
+}
+
+#[test]
 fn llvm_rejects_main_with_parameters_for_native_entry() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
@@ -498,6 +575,122 @@ fn main() -> void {
         .output()
         .expect("compiled executable should run");
     assert_eq!(output.status.code().unwrap_or(-1), 0);
+}
+
+#[test]
+fn llvm_nested_generic_enum_type_arg_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+enum Pair<A, B> {
+    Both(A, B),
+    Neither,
+}
+
+enum Boxed<T> {
+    Value(T),
+    Empty,
+}
+
+fn first_from_box(b: Boxed<Pair<i64, string>>) -> i64 {
+    return match b {
+        Boxed::Value(p) => match p {
+            Pair::Both(x, _) => x,
+            Pair::Neither => -1,
+        },
+        Boxed::Empty => -2,
+    }
+}
+"#,
+    );
+    assert!(
+        ir.contains("__mono_Boxed_enum___mono_Pair_i64$str"),
+        "nested generic enum monomorphization should survive into IR:\n{ir}"
+    );
+}
+
+#[test]
+fn llvm_nested_generic_enum_unit_variant_only_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+enum Pair<A, B> {
+    Both(A, B),
+    Neither,
+}
+
+enum Boxed<T> {
+    Value(T),
+    Empty,
+}
+
+fn get_empty() -> Boxed<Pair<i64, string>> {
+    return Boxed::Empty
+}
+"#,
+    );
+    assert!(
+        ir.contains("__mono_Boxed_enum___mono_Pair_i64$str"),
+        "unit-only nested generic enum should still monomorphize parent enum:\n{ir}"
+    );
+    assert!(
+        ir.contains("__mono_Pair_i64$str"),
+        "unit-only nested generic enum should also synthesize nested enum def:\n{ir}"
+    );
+}
+
+#[test]
+fn llvm_generic_enum_unit_variant_with_fnptr_type_arg_compiles() {
+    let ir = compile_to_verified_ir(
+        r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+fn apply_default() -> Holder<fn(i64) -> i64> {
+    return Holder::Empty
+}
+"#,
+    );
+    assert!(
+        ir.contains("__mono_Holder_fnptr$i64$Ri64"),
+        "fnptr-instantiated generic enum should survive into IR:\n{ir}"
+    );
+}
+
+#[test]
+fn llvm_generic_enum_named_fn_payload_uses_fnptr_mono() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+
+fn call_holder(h: Holder<fn(i64) -> i64>) -> i64 {
+    return match h {
+        Holder::Value(f) => f(41)
+        Holder::Empty => 0
+    }
+}
+
+fn main() -> i64 {
+    let h: Holder<fn(i64) -> i64> = Holder::Value(inc)
+    return call_holder(h)
+}
+"#,
+    );
+    assert!(
+        ir.contains("__mono_Holder_fnptr$i64$Ri64"),
+        "named function payload enum should use fnptr mono in IR:\n{ir}"
+    );
+    assert!(
+        !ir.contains("__mono_Holder_ptr_void"),
+        "named function payload enum must not use ptr_void mono in IR:\n{ir}"
+    );
 }
 
 #[test]

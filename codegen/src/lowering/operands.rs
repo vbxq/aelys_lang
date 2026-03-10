@@ -1,5 +1,6 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
+use crate::lowering::functions::function_symbol_name;
 use crate::types::air_basic_type_to_llvm;
 use aelys_air::{AirConst, AirFloatSize, AirIntSize, AirType, Operand};
 use inkwell::AddressSpace;
@@ -49,9 +50,17 @@ impl<'a> FunctionCodegen<'a> {
                 .ptr_type(AddressSpace::default())
                 .const_null()
                 .into()),
-            // was emitting Null here for lambdas, now we actually reference the function.
             AirConst::FnRef(name) => {
-                let func = self.module.get_function(name).ok_or_else(|| {
+                // FnRef keeps the source-level function name, so resolve it through
+                // the same symbol mapping as direct calls before touching LLVM.
+                let symbol_name = self
+                    .program
+                    .functions
+                    .iter()
+                    .find(|function| function.name == *name)
+                    .map(function_symbol_name)
+                    .unwrap_or_else(|| name.clone());
+                let func = self.module.get_function(&symbol_name).ok_or_else(|| {
                     CodegenError::LlvmError(format!("fnref: unknown function '{}'", name))
                 })?;
                 Ok(func.as_global_value().as_pointer_value().into())
