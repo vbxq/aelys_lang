@@ -68,6 +68,7 @@ impl InferType {
             }
             InferType::Array(inner, _) | InferType::Vec(inner) => inner.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
+            InferType::Enum(_, args) => args.iter().any(|a| a.has_vars()),
             _ => false,
         }
     }
