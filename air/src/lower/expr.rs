@@ -31,8 +31,23 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
                     Operand::Copy(id)
+                } else if self.globals.iter().any(|global| global.name == *name) {
+                    self.emit_rvalue_to_temp(
+                        self.lower_type_from_infer(&expr.ty),
+                        Rvalue::Call {
+                            func: Callee::Named(format!("__aelys_global_get_{}", name)),
+                            args: Vec::new(),
+                        },
+                        sp,
+                    )
                 } else if matches!(expr.ty, InferType::Function { .. }) {
-                    Operand::Const(AirConst::FnRef(name.clone()))
+                    // Keep named functions in a typed temp when they are used as values.
+                    // A raw FnRef constant looks like ptr<void> to later mono passes.
+                    self.emit_rvalue_to_temp(
+                        self.lower_type_from_infer(&expr.ty),
+                        Rvalue::Use(Operand::Const(AirConst::FnRef(name.clone()))),
+                        sp,
+                    )
                 } else {
                     self.emit_rvalue_to_temp(
                         self.lower_type_from_infer(&expr.ty),
@@ -416,6 +431,12 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
                     Callee::FnPtr(id)
+                } else if self.globals.iter().any(|global| global.name == *name) {
+                    // A callable file-scope let is still data in global storage; lower the
+                    // callee through the global getter so calls stay indirect.
+                    let op = self.lower_expr(callee);
+                    let ty = self.lower_type_from_infer(&callee.ty);
+                    Callee::FnPtr(self.operand_to_local(op, &ty))
                 } else {
                     Callee::Named(name.clone())
                 }

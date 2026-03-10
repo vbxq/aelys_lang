@@ -343,6 +343,9 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Bool(v) => Some(AirConst::Bool(*v)),
             TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
             TypedExprKind::Null => Some(AirConst::Null),
+            TypedExprKind::Identifier(name) if matches!(expr.ty, InferType::Function { .. }) => {
+                Some(AirConst::FnRef(name.clone()))
+            }
             TypedExprKind::EnumVariant {
                 enum_name,
                 variant,

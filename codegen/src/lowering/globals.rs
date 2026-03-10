@@ -1,6 +1,7 @@
 use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
+use crate::lowering::functions::function_symbol_name;
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use aelys_air::{
     AirConst, AirGlobal, AirProgram, AirType, Operand,
@@ -78,6 +79,7 @@ impl CodegenContext {
                     global.name, global.ty
                 ))),
             },
+            AirConst::FnRef(name) => self.fnref_initializer(&global.name, &global.ty, name, program),
             AirConst::ZeroInit(ty) if *ty == global.ty => {
                 Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero())
             }
@@ -245,6 +247,36 @@ impl CodegenContext {
         Ok(aelys_string_type(self.context)
             .const_named_struct(&[ptr.into(), len.into()])
             .into())
+    }
+
+    fn fnref_initializer(
+        &self,
+        global_name: &str,
+        ty: &AirType,
+        function_name: &str,
+        program: &AirProgram,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        if !matches!(ty, AirType::FnPtr { .. }) {
+            return Err(CodegenError::UnsupportedType(format!(
+                "global '{}' uses fnref initializer with non-fn type {:?}",
+                global_name, ty
+            )));
+        }
+
+        let symbol_name = program
+            .functions
+            .iter()
+            .find(|function| function.name == function_name)
+            .map(function_symbol_name)
+            .unwrap_or_else(|| function_name.to_string());
+        // Globals are emitted before bodies, so they need the declared LLVM symbol.
+        let func = self.module.get_function(&symbol_name).ok_or_else(|| {
+            CodegenError::LlvmError(format!(
+                "global '{}' references unknown function '{}'",
+                global_name, function_name
+            ))
+        })?;
+        Ok(func.as_global_value().as_pointer_value().into())
     }
 }
 

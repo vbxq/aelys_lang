@@ -55,8 +55,8 @@ impl CodegenContext {
     pub fn compile(&mut self, program: &AirProgram) -> Result<(), CodegenError> {
         let _ = self.builder.get_insert_block();
         self.declare_struct_types(program)?;
-        self.declare_globals(program)?;
         self.declare_functions(program)?;
+        self.declare_globals(program)?;
         self.define_function_bodies(program)?;
         self.emit_entry_wrapper(program)?;
         self.module
