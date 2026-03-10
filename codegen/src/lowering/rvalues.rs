@@ -262,8 +262,11 @@ impl<'a> FunctionCodegen<'a> {
 
                 let value = self.generate_operand(operand)?;
 
-                // For struct types, we need to use aligned stores
-                let field_align = alignment_of(field_llvm_ty);
+                // The payload byte array sits at struct offset 4 (after the i32
+                // tag) inside the non-packed struct { i32, [N x i8] }.  The struct
+                // alignment is 4, so the payload base is 4-byte aligned.  We must
+                // not claim a higher alignment than the address actually has.
+                let field_align = alignment_of(field_llvm_ty).min(4);
                 let store = self
                     .builder
                     .build_store(field_ptr, value)
@@ -403,8 +406,9 @@ impl<'a> FunctionCodegen<'a> {
         }
         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        // Load the field value with proper alignment
-        let field_align = alignment_of(field_llvm_ty);
+        // The payload byte array sits at struct offset 4 — see comment in
+        // generate_enum_init for why alignment is capped at 4.
+        let field_align = alignment_of(field_llvm_ty).min(4);
         let load = self
             .builder
             .build_load(
