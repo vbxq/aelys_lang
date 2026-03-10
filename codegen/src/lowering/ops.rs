@@ -44,6 +44,13 @@ impl<'a> FunctionCodegen<'a> {
             }
         }
 
+        let left_ty = self.operand_type(left)?;
+        if matches!(left_ty, AirType::Enum(_)) {
+            return Err(CodegenError::UnsupportedInstruction(format!(
+                "comparison on data enum type `{:?}` is not supported; use `match` instead",
+                left_ty
+            )));
+        }
         Err(CodegenError::UnsupportedInstruction(
             "binary op with non int/float operands".to_string(),
         ))

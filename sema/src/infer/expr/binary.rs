@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::TypedExpr;
 use crate::types::InferType;
 use aelys_common::{Warning, WarningKind};
@@ -112,6 +112,26 @@ impl TypeInference {
             }
 
             BinaryOp::Eq | BinaryOp::Ne => {
+                // Reject comparison on data enums (enums with payload fields).
+                // Simple enums (all unit variants) are fine — they're just i32 tags.
+                for operand_ty in [&left.ty, &right.ty] {
+                    if let InferType::Enum(name, _) = operand_ty {
+                        if let Some(def) = self.type_table.get_enum(name) {
+                            if def.variants.iter().any(|v| !v.data.is_empty()) {
+                                self.errors.push(TypeError::member_access(
+                                    format!(
+                                        "comparison (`{}`) is not supported for enum `{}` \
+                                         because it has data variants; use `match` instead",
+                                        op, name
+                                    ),
+                                    span,
+                                ));
+                                return InferType::Bool;
+                            }
+                        }
+                    }
+                }
+
                 if left.ty.is_concrete() && right.ty.is_concrete() && left.ty != right.ty {
                     self.warnings.push(Warning::new(
                         WarningKind::IncompatibleComparison {
