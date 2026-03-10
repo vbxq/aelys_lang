@@ -230,8 +230,20 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
             enum_name,
             variant,
             tag,
+            payload,
         } => {
-            format!("enum_init {}::{} (tag={})", enum_name, variant, tag)
+            if payload.is_empty() {
+                format!("enum_init {}::{} (tag={})", enum_name, variant, tag)
+            } else {
+                let args: Vec<_> = payload.iter().map(|p| fmt_operand(p, func)).collect();
+                format!(
+                    "enum_init {}::{} (tag={}, payload=[{}])",
+                    enum_name,
+                    variant,
+                    tag,
+                    args.join(", ")
+                )
+            }
         }
     }
 }

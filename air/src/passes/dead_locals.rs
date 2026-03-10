@@ -135,7 +135,11 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
         Rvalue::AddressOf(local) => {
             out.insert(*local);
         }
-        Rvalue::EnumInit { .. } => {}
+        Rvalue::EnumInit { payload, .. } => {
+            for operand in payload {
+                collect_operand_locals(operand, out);
+            }
+        }
     }
 }
 

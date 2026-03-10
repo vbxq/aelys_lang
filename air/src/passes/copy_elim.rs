@@ -193,7 +193,11 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
         Rvalue::AddressOf(local) => {
             *local = rewrite_local(*local, replacements);
         }
-        Rvalue::EnumInit { .. } => {}
+        Rvalue::EnumInit { payload, .. } => {
+            for operand in payload {
+                rewrite_operand(operand, replacements);
+            }
+        }
     }
 }
 

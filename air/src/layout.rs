@@ -1,4 +1,4 @@
-use crate::{AirProgram, AirStructDef, AirType};
+use crate::{AirEnumDef, AirProgram, AirStructDef, AirType};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy)]
@@ -169,4 +169,24 @@ fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usi
     }
 
     order
+}
+
+/// Returns true if the enum has any data variants (non-empty payload).
+pub fn enum_has_data(def: &AirEnumDef) -> bool {
+    def.variants.iter().any(|v| !v.payload.is_empty())
+}
+
+/// Compute the max payload size in bytes across all variants of a data enum.
+/// Each variant's payload is laid out as a packed sequence of fields.
+pub fn enum_max_payload_size(def: &AirEnumDef) -> u32 {
+    def.variants
+        .iter()
+        .map(|v| {
+            v.payload
+                .iter()
+                .map(|ty| layout_of(ty).size)
+                .sum::<u32>()
+        })
+        .max()
+        .unwrap_or(0)
 }

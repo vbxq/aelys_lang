@@ -372,7 +372,11 @@ fn check_rvalue_locals(
         Rvalue::AddressOf(local) => {
             check_local(*local, declared, func_name, ctx, errors);
         }
-        Rvalue::EnumInit { .. } => {}
+        Rvalue::EnumInit { payload, .. } => {
+            for operand in payload {
+                check_operand_locals(operand, declared, func_name, ctx, errors);
+            }
+        }
     }
 }
 

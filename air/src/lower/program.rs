@@ -69,15 +69,16 @@ impl<'a> LoweringContext<'a> {
         &mut self,
         name: &str,
         type_params: &[String],
-        variants: &[(String, u32)],
+        variants: &[(String, u32, Vec<InferType>)],
         span: &aelys_syntax::Span,
     ) {
         let air_type_params = self.lower_type_params(type_params);
         let air_variants = variants
             .iter()
-            .map(|(vname, vtag)| AirEnumVariant {
+            .map(|(vname, vtag, data)| AirEnumVariant {
                 name: vname.clone(),
                 tag: *vtag,
+                payload: data.iter().map(|ty| self.lower_type_from_infer(ty)).collect(),
             })
             .collect();
         self.enums.push(AirEnumDef {

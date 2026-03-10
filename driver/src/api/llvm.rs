@@ -25,6 +25,26 @@ struct LoweringArtifacts {
     warnings: Vec<Warning>,
 }
 
+pub fn compile_to_typed_ast(
+    source_code: &str,
+) -> Result<aelys_sema::TypedProgram, AelysError> {
+    let src = Source::new("<inline>", source_code);
+    let tokens = Lexer::with_source(src.clone()).scan()?;
+    let stmts = Parser::new(tokens, src.clone()).parse()?;
+
+    let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
+
+    let inference = aelys_sema::TypeInference::infer_program_full(
+        stmts,
+        src.clone(),
+        HashSet::new(),
+        known_globals,
+    )
+    .map_err(|errors| sema_errors_to_diagnostics(errors, src))?;
+
+    Ok(inference.program)
+}
+
 pub fn lower_file_to_air(
     path: &Path,
     opt_level: OptimizationLevel,

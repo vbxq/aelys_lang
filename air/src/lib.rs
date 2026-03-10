@@ -115,6 +115,7 @@ pub struct AirStructField {
 pub struct AirEnumVariant {
     pub name: String,
     pub tag: u32,
+    pub payload: Vec<AirType>, // empty = unit variant, non-empty = data variant
 }
 
 #[derive(Clone)]
@@ -292,6 +293,7 @@ pub enum Rvalue {
         enum_name: String,
         variant: String,
         tag: u32,
+        payload: Vec<Operand>, // empty for unit variants
     },
 }
 

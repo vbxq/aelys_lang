@@ -1,6 +1,7 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::types::air_basic_type_to_llvm;
+use crate::types::{air_basic_type_to_llvm, alignment_of};
+use aelys_air::layout::{enum_has_data, enum_max_payload_size};
 use aelys_air::{AirType, Operand, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};
 
@@ -38,9 +39,12 @@ impl<'a> FunctionCodegen<'a> {
             }
             Rvalue::Cast { operand, from, to } => self.generate_cast(operand, from, to),
             Rvalue::Index { base, index } => self.generate_index(base, index),
-            Rvalue::EnumInit { tag, .. } => {
-                Ok(self.context.i32_type().const_int(*tag as u64, false).into())
-            }
+            Rvalue::EnumInit {
+                enum_name,
+                tag,
+                payload,
+                ..
+            } => self.generate_enum_init(enum_name, *tag, payload),
         }
     }
 
@@ -112,6 +116,163 @@ impl<'a> FunctionCodegen<'a> {
                 "cannot index into {:?}",
                 other
             ))),
+        }
+    }
+
+    fn generate_enum_init(
+        &mut self,
+        enum_name: &str,
+        tag: u32,
+        payload: &[Operand],
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        // Look up the enum def to decide simple vs data
+        let enum_def = self
+            .program
+            .enums
+            .iter()
+            .find(|e| e.name == enum_name);
+
+        let is_data_enum = enum_def.is_some_and(|d| enum_has_data(d));
+
+        if !is_data_enum || payload.is_empty() {
+            // Simple enum or unit variant of a data enum: still need to produce
+            // the right type. For data enums, we must produce a { i32, [N x i8] } value.
+            if is_data_enum {
+                let def = enum_def.unwrap();
+                let max_payload = enum_max_payload_size(def);
+                let enum_struct_name = format!("__aelys_enum_{}", enum_name);
+                let enum_ty = self
+                    .context
+                    .get_struct_type(&enum_struct_name)
+                    .ok_or_else(|| {
+                        CodegenError::UnsupportedType(format!(
+                            "unknown enum struct type: {}",
+                            enum_struct_name
+                        ))
+                    })?;
+
+                let tmp = self
+                    .builder
+                    .build_alloca(enum_ty, "enum_tmp")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.align_alloca(tmp, enum_ty.into())?;
+
+                // Store the tag
+                let tag_ptr = self
+                    .builder
+                    .build_struct_gep(enum_ty, tmp, 0, "enum_tag_ptr")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let tag_val = self.context.i32_type().const_int(tag as u64, false);
+                self.store_value(tag_ptr, tag_val.into())?;
+
+                // Zero-init the payload area
+                if max_payload > 0 {
+                    let payload_ptr = self
+                        .builder
+                        .build_struct_gep(enum_ty, tmp, 1, "enum_payload_ptr")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    let payload_arr_ty = self.context.i8_type().array_type(max_payload);
+                    let zero = payload_arr_ty.const_zero();
+                    self.store_value(payload_ptr, zero.into())?;
+                }
+
+                self.load_value(enum_ty.into(), tmp, "enum_value")
+            } else {
+                // Pure simple enum: just an i32 tag
+                Ok(self.context.i32_type().const_int(tag as u64, false).into())
+            }
+        } else {
+            // Data variant construction: build { i32 tag, [N x i8] payload }
+            let def = enum_def.unwrap();
+            let max_payload = enum_max_payload_size(def);
+            let enum_struct_name = format!("__aelys_enum_{}", enum_name);
+            let enum_ty = self
+                .context
+                .get_struct_type(&enum_struct_name)
+                .ok_or_else(|| {
+                    CodegenError::UnsupportedType(format!(
+                        "unknown enum struct type: {}",
+                        enum_struct_name
+                    ))
+                })?;
+
+            let tmp = self
+                .builder
+                .build_alloca(enum_ty, "enum_tmp")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.align_alloca(tmp, enum_ty.into())?;
+
+            // Store the tag at index 0
+            let tag_ptr = self
+                .builder
+                .build_struct_gep(enum_ty, tmp, 0, "enum_tag_ptr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            let tag_val = self.context.i32_type().const_int(tag as u64, false);
+            self.store_value(tag_ptr, tag_val.into())?;
+
+            // Zero-init the full payload area first so trailing bytes are clean
+            if max_payload > 0 {
+                let payload_ptr = self
+                    .builder
+                    .build_struct_gep(enum_ty, tmp, 1, "enum_payload_ptr")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let payload_arr_ty = self.context.i8_type().array_type(max_payload);
+                let zero = payload_arr_ty.const_zero();
+                self.store_value(payload_ptr, zero.into())?;
+            }
+
+            // Store each payload field at the right offset within the byte array
+            let payload_base_ptr = self
+                .builder
+                .build_struct_gep(enum_ty, tmp, 1, "enum_payload_base")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+            // Find the variant definition to get the field types
+            let variant_def = def
+                .variants
+                .iter()
+                .find(|v| v.tag == tag)
+                .ok_or_else(|| {
+                    CodegenError::LlvmError(format!(
+                        "unknown variant tag {} for enum {}",
+                        tag, enum_name
+                    ))
+                })?;
+
+            let mut byte_offset: u32 = 0;
+            for (i, (operand, field_air_ty)) in payload.iter().zip(variant_def.payload.iter()).enumerate() {
+                let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
+                let field_layout = aelys_air::layout::layout_of(field_air_ty);
+
+                // Align the offset
+                byte_offset = (byte_offset + field_layout.align - 1) & !(field_layout.align - 1);
+
+                // GEP into the byte array at the current offset, then bitcast to field type pointer
+                let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
+                let field_ptr = unsafe {
+                    self.builder.build_in_bounds_gep(
+                        self.context.i8_type(),
+                        payload_base_ptr,
+                        &[offset_val],
+                        &format!("enum_field_{}_ptr", i),
+                    )
+                }
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+                let value = self.generate_operand(operand)?;
+
+                // For struct types, we need to use aligned stores
+                let field_align = alignment_of(field_llvm_ty);
+                let store = self
+                    .builder
+                    .build_store(field_ptr, value)
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                store.set_alignment(field_align).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+                byte_offset += field_layout.size;
+            }
+
+            self.load_value(enum_ty.into(), tmp, "enum_value")
         }
     }
 }

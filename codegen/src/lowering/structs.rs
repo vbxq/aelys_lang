@@ -2,6 +2,7 @@ use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::air_basic_type_to_llvm;
+use aelys_air::layout::{enum_has_data, enum_max_payload_size};
 use aelys_air::{AirProgram, AirType, Operand};
 use inkwell::types::StructType;
 use inkwell::values::{BasicValueEnum, PointerValue};
@@ -31,6 +32,18 @@ impl CodegenContext {
                     field_types.push(air_basic_type_to_llvm(&field.ty, self.context)?);
                 }
                 llvm_struct.set_body(&field_types, false);
+            }
+        }
+
+        // Declare named struct types for data enums: { i32, [N x i8] }
+        for enum_def in &program.enums {
+            if enum_has_data(enum_def) {
+                let max_payload = enum_max_payload_size(enum_def);
+                let enum_struct_name = format!("__aelys_enum_{}", enum_def.name);
+                let enum_ty = self.context.opaque_struct_type(&enum_struct_name);
+                let tag_ty = self.context.i32_type().into();
+                let payload_ty = self.context.i8_type().array_type(max_payload).into();
+                enum_ty.set_body(&[tag_ty, payload_ty], false);
             }
         }
 

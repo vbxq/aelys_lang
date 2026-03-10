@@ -269,15 +269,20 @@ impl<'a> LoweringContext<'a> {
                 enum_name,
                 variant,
                 tag,
-            } => self.emit_rvalue_to_temp(
-                self.lower_type_from_infer(&expr.ty),
-                Rvalue::EnumInit {
-                    enum_name: enum_name.clone(),
-                    variant: variant.clone(),
-                    tag: *tag,
-                },
-                sp,
-            ),
+                args,
+            } => {
+                let payload: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
+                self.emit_rvalue_to_temp(
+                    self.lower_type_from_infer(&expr.ty),
+                    Rvalue::EnumInit {
+                        enum_name: enum_name.clone(),
+                        variant: variant.clone(),
+                        tag: *tag,
+                        payload,
+                    },
+                    sp,
+                )
+            }
         }
     }
 
