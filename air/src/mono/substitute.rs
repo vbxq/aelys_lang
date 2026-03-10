@@ -109,7 +109,9 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
                 *name = format!("__mono_{}_{}", name, suffix);
             }
         }
-        Rvalue::EnumInit { enum_name, .. } => {
+        Rvalue::EnumInit { enum_name, .. }
+        | Rvalue::EnumTag { enum_name, .. }
+        | Rvalue::EnumPayload { enum_name, .. } => {
             if !enum_name.contains("__mono_") && !type_args.is_empty() {
                 let suffix = type_args
                     .iter()

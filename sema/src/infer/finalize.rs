@@ -108,7 +108,16 @@ impl TypeInference {
             } => TypedStmtKind::EnumDecl {
                 name,
                 type_params,
-                variants,
+                variants: variants
+                    .into_iter()
+                    .map(|(vname, tag, data)| {
+                        (
+                            vname,
+                            tag,
+                            data.into_iter().map(Self::finalize_type).collect(),
+                        )
+                    })
+                    .collect(),
             },
         };
 
