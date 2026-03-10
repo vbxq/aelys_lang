@@ -271,3 +271,323 @@ fn fastcc_struct_return_does_not_use_sret() {
         .any(|l| l.contains("internal_fn") && l.contains("sret"));
     assert!(!sret_on_internal, "fastcc function must not use sret: {ir}");
 }
+
+#[test]
+fn extern_c_data_enum_return_uses_sret() {
+    let program = AirProgram {
+        functions: vec![
+            AirFunction {
+                id: FunctionId(0),
+                name: "get_opt".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::Enum("Opt".to_string()),
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::C,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(1),
+                name: "caller".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![
+                    AirLocal {
+                        id: LocalId(0),
+                        ty: AirType::Enum("Opt".to_string()),
+                        name: None,
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(1),
+                        ty: AirType::I32,
+                        name: None,
+                        is_mut: false,
+                        span: None,
+                    },
+                ],
+                blocks: vec![AirBlock {
+                    id: BlockId(0),
+                    stmts: vec![
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(0)),
+                                rvalue: Rvalue::Call {
+                                    func: Callee::Extern("get_opt".to_string(), CallingConv::C),
+                                    args: vec![],
+                                },
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(1)),
+                                rvalue: Rvalue::EnumTag {
+                                    enum_name: "Opt".to_string(),
+                                    operand: Operand::Copy(LocalId(0)),
+                                },
+                            },
+                            span: None,
+                        },
+                    ],
+                    terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                        0,
+                        aelys_air::AirIntSize::I64,
+                    )))),
+                }],
+                is_extern: false,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+        ],
+        structs: vec![],
+        enums: vec![aelys_air::AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![
+                aelys_air::AirEnumVariant {
+                    name: "Some".to_string(),
+                    payload: vec![AirType::I64],
+                    tag: 0,
+                },
+                aelys_air::AirEnumVariant {
+                    name: "None".to_string(),
+                    payload: vec![],
+                    tag: 1,
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::from([(
+            "Opt".to_string(),
+            aelys_air::layout::TypeLayout { size: 16, align: 8 },
+        )]),
+    };
+
+    let ir = compile_air_to_verified_ir(&program);
+
+    if cfg!(target_os = "windows") {
+        assert!(
+            ir.contains("declare void @get_opt(ptr"),
+            "data enum extern should use sret on Windows: {ir}"
+        );
+        assert!(
+            ir.contains("sret"),
+            "data enum extern should carry sret attribute on Windows: {ir}"
+        );
+        assert!(
+            !ir.contains("declare %__aelys_enum_Opt @get_opt()"),
+            "data enum extern must not return aggregate directly on Windows: {ir}"
+        );
+    }
+}
+
+#[test]
+fn extern_c_data_enum_param_is_rejected() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "consume_opt".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![aelys_air::AirParam {
+                id: LocalId(0),
+                ty: AirType::Enum("Opt".to_string()),
+                name: "opt".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![],
+            is_extern: true,
+            calling_conv: CallingConv::C,
+            attributes: default_attribs(),
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![aelys_air::AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![
+                aelys_air::AirEnumVariant {
+                    name: "Some".to_string(),
+                    payload: vec![AirType::I64],
+                    tag: 0,
+                },
+                aelys_air::AirEnumVariant {
+                    name: "None".to_string(),
+                    payload: vec![],
+                    tag: 1,
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::from([(
+            "Opt".to_string(),
+            aelys_air::layout::TypeLayout { size: 16, align: 8 },
+        )]),
+    };
+
+    let mut codegen = CodegenContext::new("enum_param_reject");
+    let err = codegen
+        .compile(&program)
+        .expect_err("extern C data enum param should be rejected");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("enum parameter"),
+        "unexpected error for extern C data enum param: {rendered}"
+    );
+}
+
+#[test]
+fn indirect_c_fnptr_data_enum_return_uses_sret() {
+    let program = AirProgram {
+        functions: vec![
+            AirFunction {
+                id: FunctionId(0),
+                name: "get_opt".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::Enum("Opt".to_string()),
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::C,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(1),
+                name: "caller".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![
+                    AirLocal {
+                        id: LocalId(0),
+                        ty: AirType::FnPtr {
+                            params: vec![],
+                            ret: Box::new(AirType::Enum("Opt".to_string())),
+                            conv: CallingConv::C,
+                        },
+                        name: None,
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(1),
+                        ty: AirType::Enum("Opt".to_string()),
+                        name: None,
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(2),
+                        ty: AirType::I32,
+                        name: None,
+                        is_mut: false,
+                        span: None,
+                    },
+                ],
+                blocks: vec![AirBlock {
+                    id: BlockId(0),
+                    stmts: vec![
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(0)),
+                                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(
+                                    "get_opt".to_string(),
+                                ))),
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(1)),
+                                rvalue: Rvalue::Call {
+                                    func: Callee::FnPtr(LocalId(0)),
+                                    args: vec![],
+                                },
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(2)),
+                                rvalue: Rvalue::EnumTag {
+                                    enum_name: "Opt".to_string(),
+                                    operand: Operand::Copy(LocalId(1)),
+                                },
+                            },
+                            span: None,
+                        },
+                    ],
+                    terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                        0,
+                        aelys_air::AirIntSize::I64,
+                    )))),
+                }],
+                is_extern: false,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+        ],
+        structs: vec![],
+        enums: vec![aelys_air::AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![
+                aelys_air::AirEnumVariant {
+                    name: "Some".to_string(),
+                    payload: vec![AirType::I64],
+                    tag: 0,
+                },
+                aelys_air::AirEnumVariant {
+                    name: "None".to_string(),
+                    payload: vec![],
+                    tag: 1,
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::from([(
+            "Opt".to_string(),
+            aelys_air::layout::TypeLayout { size: 16, align: 8 },
+        )]),
+    };
+
+    let ir = compile_air_to_verified_ir(&program);
+
+    if cfg!(target_os = "windows") {
+        assert!(
+            ir.contains("call void @get_opt(ptr %sret_slot)")
+                || ir.contains("call void %"),
+            "indirect c fnptr should lower to an sret call on Windows: {ir}"
+        );
+        assert!(ir.contains("sret_slot"), "{ir}");
+        assert!(
+            !ir.contains("call %__aelys_enum_Opt @get_opt()"),
+            "indirect c fnptr must not return the aggregate directly on Windows: {ir}"
+        );
+    }
+}

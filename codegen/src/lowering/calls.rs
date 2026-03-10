@@ -58,13 +58,37 @@ impl<'a> FunctionCodegen<'a> {
         match callee {
             Callee::FnPtr(local) => {
                 let fn_ptr = self.load_local(*local)?.into_pointer_value();
-                let (fn_ty, call_conv) = self.fn_ptr_signature_for_local(*local)?;
-                let call = self
-                    .builder
-                    .build_indirect_call(fn_ty, fn_ptr, &metadata_args, "call_indirect")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                call.set_call_convention(call_conv);
-                Ok(call.try_as_basic_value().basic())
+                let (fn_ty, call_conv, sret_ret) = self.fn_ptr_signature_for_local(*local)?;
+                if let Some(ret_air_ty) = sret_ret {
+                    let ret_ty = air_basic_type_to_llvm(&ret_air_ty, self.context)?;
+                    let result_ptr = self
+                        .builder
+                        .build_alloca(ret_ty, "sret_slot")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    self.align_alloca(result_ptr, ret_ty)?;
+                    let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
+                        vec![result_ptr.into()];
+                    all_args.extend(metadata_args.iter().copied());
+                    // Indirect C fnptr calls need the same hidden sret pointer as
+                    // direct calls, or LLVM will call a mismatched signature.
+                    let call = self
+                        .builder
+                        .build_indirect_call(fn_ty, fn_ptr, &all_args, "call_indirect")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    call.set_call_convention(call_conv);
+                    Ok(Some(
+                        self.builder
+                            .build_load(ret_ty, result_ptr, "call_indirect_sret")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?,
+                    ))
+                } else {
+                    let call = self
+                        .builder
+                        .build_indirect_call(fn_ty, fn_ptr, &metadata_args, "call_indirect")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    call.set_call_convention(call_conv);
+                    Ok(call.try_as_basic_value().basic())
+                }
             }
             _ => {
                 let fn_value = self.resolve_callee(callee, &arg_types, expected_ret)?;
@@ -291,10 +315,14 @@ impl<'a> FunctionCodegen<'a> {
     fn fn_ptr_signature_for_local(
         &self,
         local: LocalId,
-    ) -> Result<(FunctionType<'static>, u32), CodegenError> {
+    ) -> Result<(FunctionType<'static>, u32, Option<AirType>), CodegenError> {
         match self.local_air_type(local)? {
             AirType::FnPtr { params, ret, conv } => {
-                let mut param_types = Vec::with_capacity(params.len());
+                let use_sret = needs_sret(ret.as_ref(), *conv, self.target_is_windows(), self.program);
+                let mut param_types = Vec::with_capacity(params.len() + usize::from(use_sret));
+                if use_sret {
+                    param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
+                }
                 for param in params {
                     param_types.push(air_basic_type_to_llvm(param, self.context)?.into());
                 }
@@ -302,10 +330,18 @@ impl<'a> FunctionCodegen<'a> {
                 let fn_ty = match ret.as_ref() {
                     AirType::Void => self.context.void_type().fn_type(&param_types, false),
                     other => {
-                        air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false)
+                        if use_sret {
+                            self.context.void_type().fn_type(&param_types, false)
+                        } else {
+                            air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false)
+                        }
                     }
                 };
-                Ok((fn_ty, llvm_calling_convention(*conv)))
+                Ok((
+                    fn_ty,
+                    llvm_calling_convention(*conv),
+                    use_sret.then(|| ret.as_ref().clone()),
+                ))
             }
             other => Err(CodegenError::UnsupportedType(format!(
                 "local {} is not fn ptr: {:?}",
