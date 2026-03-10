@@ -103,7 +103,16 @@ impl TypeInference {
             } => TypedStmtKind::EnumDecl {
                 name: name.clone(),
                 type_params: type_params.clone(),
-                variants: variants.clone(),
+                variants: variants
+                    .iter()
+                    .map(|(vname, tag, data)| {
+                        (
+                            vname.clone(),
+                            *tag,
+                            data.iter().map(|ty| subst.apply(ty)).collect(),
+                        )
+                    })
+                    .collect(),
             },
         };
 
