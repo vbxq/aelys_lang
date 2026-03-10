@@ -245,6 +245,28 @@ pub enum TypedExprKind {
         tag: u32,
         args: Vec<TypedExpr>, // empty for unit variants
     },
+
+    Match {
+        scrutinee: Box<TypedExpr>,
+        arms: Vec<TypedMatchArm>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct TypedMatchArm {
+    pub pattern: TypedPattern,
+    pub body: Box<TypedExpr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum TypedPattern {
+    Variant {
+        enum_name: String,
+        variant: String,
+        tag: u32,
+        bindings: Vec<(String, InferType)>,
+    },
+    Wildcard,
 }
 
 impl TypedExpr {

@@ -302,6 +302,35 @@ impl TypeInference {
                 tag,
                 args: args.into_iter().map(|a| self.finalize_expr(a)).collect(),
             },
+
+            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+                scrutinee: Box::new(self.finalize_expr(*scrutinee)),
+                arms: arms
+                    .into_iter()
+                    .map(|arm| crate::typed_ast::TypedMatchArm {
+                        pattern: match arm.pattern {
+                            crate::typed_ast::TypedPattern::Variant {
+                                enum_name,
+                                variant,
+                                tag,
+                                bindings,
+                            } => crate::typed_ast::TypedPattern::Variant {
+                                enum_name,
+                                variant,
+                                tag,
+                                bindings: bindings
+                                    .into_iter()
+                                    .map(|(n, ty)| (n, Self::finalize_type(ty)))
+                                    .collect(),
+                            },
+                            crate::typed_ast::TypedPattern::Wildcard => {
+                                crate::typed_ast::TypedPattern::Wildcard
+                            }
+                        },
+                        body: Box::new(self.finalize_expr(*arm.body)),
+                    })
+                    .collect(),
+            },
         };
 
         TypedExpr {

@@ -226,6 +226,19 @@ impl TypeInference {
                     self.collect_captures_inner(arg, locals, captures, seen);
                 }
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.collect_captures_inner(scrutinee, locals, captures, seen);
+                for arm in arms {
+                    // Bindings in pattern introduce local names
+                    let mut arm_locals = locals.clone();
+                    if let crate::typed_ast::TypedPattern::Variant { bindings, .. } = &arm.pattern {
+                        for (name, _) in bindings {
+                            arm_locals.insert(name.clone());
+                        }
+                    }
+                    self.collect_captures_inner(&arm.body, &arm_locals, captures, seen);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)

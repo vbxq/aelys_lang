@@ -3,7 +3,8 @@ use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{
-    Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, StructFieldInit, TokenKind,
+    Expr, ExprKind, FmtPart, FmtStringPart, MatchArm, Pattern, Source, Stmt, StmtKind,
+    StructFieldInit, TokenKind,
 };
 use std::sync::Arc;
 
@@ -70,6 +71,85 @@ impl Parser {
         ))
     }
 
+    pub(super) fn match_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
+        let scrutinee = self.expression()?;
+        self.consume(&TokenKind::LBrace, "{")?;
+
+        let mut arms = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            // Skip any stray semicolons between arms
+            if self.match_token(&TokenKind::Semicolon) {
+                continue;
+            }
+            let arm_start = self.peek().span;
+            let pattern = self.parse_pattern()?;
+            self.consume(&TokenKind::FatArrow, "=>")?;
+            let body = self.expression()?;
+            let arm_end = self.previous().span;
+            arms.push(MatchArm {
+                pattern,
+                body: Box::new(body),
+                span: arm_start.merge(arm_end),
+            });
+            // Arms are separated by commas or semicolons (auto-inserted)
+            if !self.match_token(&TokenKind::Comma) {
+                // Allow semicolons as arm separators too (from auto-semicolon insertion)
+                self.match_token(&TokenKind::Semicolon);
+            }
+        }
+        self.consume(&TokenKind::RBrace, "}")?;
+        let end_span = self.previous().span;
+
+        Ok(Expr::new(
+            ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms,
+            },
+            start_span.merge(end_span),
+        ))
+    }
+
+    fn parse_pattern(&mut self) -> Result<Pattern> {
+        let span = self.peek().span;
+
+        // Check for wildcard `_`
+        if let TokenKind::Identifier(name) = &self.peek().kind {
+            if name == "_" {
+                self.advance();
+                return Ok(Pattern::Wildcard(span));
+            }
+        }
+
+        // Enum variant pattern: EnumName::Variant or EnumName::Variant(x, y)
+        let enum_name = self.consume_identifier("enum name or _")?;
+        self.consume(&TokenKind::ColonColon, "::")?;
+        let variant = self.consume_identifier("variant name")?;
+        let variant_end_span = self.previous().span;
+
+        let mut bindings = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    let binding = self.consume_identifier("binding name")?;
+                    bindings.push(binding);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.consume(&TokenKind::RParen, ")")?;
+        }
+
+        let end_span = self.previous().span;
+
+        Ok(Pattern::Variant {
+            enum_name,
+            variant,
+            bindings,
+            span: span.merge(end_span.merge(variant_end_span)),
+        })
+    }
+
     // block expr: last expr is the value (like Rust)
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
         let mut stmts = Vec::new();
@@ -116,6 +196,7 @@ impl Parser {
                 | TokenKind::Minus
                 | TokenKind::Not
                 | TokenKind::If
+                | TokenKind::Match
                 | TokenKind::Fn
         )
     }
@@ -166,6 +247,10 @@ impl Parser {
 
             TokenKind::If => {
                 return self.if_expression(span);
+            }
+
+            TokenKind::Match => {
+                return self.match_expression(span);
             }
 
             TokenKind::Fn => {
@@ -463,6 +548,13 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
         }
         ExprKind::Cast { expr, .. } => {
             remap_expr_spans(expr, span);
+        }
+        ExprKind::Match { scrutinee, arms } => {
+            remap_expr_spans(scrutinee, span);
+            for arm in arms {
+                arm.span = span;
+                remap_expr_spans(&mut arm.body, span);
+            }
         }
         // Leaf nodes: Int, Float, String, Bool, Null, Identifier
         _ => {}

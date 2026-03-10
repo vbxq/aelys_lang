@@ -412,6 +412,12 @@ impl TypeInference {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.validate_expr(scrutinee, generic_scope, declared_type_params);
+                for arm in arms {
+                    self.validate_expr(&arm.body, generic_scope, declared_type_params);
+                }
+            }
             TypedExprKind::Identifier(_)
             | TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

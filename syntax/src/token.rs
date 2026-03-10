@@ -71,6 +71,7 @@ pub enum TokenKind {
     Gt,
     GtEq,
     Arrow,      // ->
+    FatArrow,   // =>
     Colon,      // :
     ColonColon, // ::
     PlusEq,     // +=
@@ -193,6 +194,7 @@ impl std::fmt::Display for TokenKind {
             Self::Gt => write!(f, ">"),
             Self::GtEq => write!(f, ">="),
             Self::Arrow => write!(f, "->"),
+            Self::FatArrow => write!(f, "=>"),
             Self::Colon => write!(f, ":"),
             Self::ColonColon => write!(f, "::"),
             Self::PlusEq => write!(f, "+="),

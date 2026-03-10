@@ -219,6 +219,31 @@ pub enum ExprKind {
         expr: Box<Expr>,
         target: TypeAnnotation,
     },
+
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<MatchArm>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    /// `EnumName::Variant` or `EnumName::Variant(x, y)`
+    Variant {
+        enum_name: String,
+        variant: String,
+        bindings: Vec<String>,
+        span: Span,
+    },
+    /// `_` wildcard
+    Wildcard(Span),
 }
 
 #[derive(Debug, Clone)]

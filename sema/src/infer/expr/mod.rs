@@ -4,6 +4,7 @@ mod binary;
 mod call;
 mod if_expr;
 mod lambda;
+mod match_expr;
 mod member;
 mod primary;
 
@@ -142,6 +143,9 @@ impl TypeInference {
                 variant,
                 args,
             } => self.infer_enum_variant(enum_name, variant, args, expr.span),
+            ExprKind::Match { scrutinee, arms } => {
+                self.infer_match_expr(scrutinee, arms, expr.span)
+            }
         };
 
         self.depth -= 1;
