@@ -25,6 +25,8 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
                 align: el.align,
             }
         }
+        // Simple enum layout (tag only). Data enums use their registered LLVM struct
+        // type in codegen, so this is only used for simple enums without data variants.
         AirType::Enum(_) => TypeLayout { size: 4, align: 4 },
         AirType::Struct(name) => {
             panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
@@ -177,15 +179,19 @@ pub fn enum_has_data(def: &AirEnumDef) -> bool {
 }
 
 /// Compute the max payload size in bytes across all variants of a data enum.
-/// Each variant's payload is laid out as a packed sequence of fields.
+/// Each variant's payload is laid out with proper alignment padding between fields,
+/// matching the aligned offsets that codegen uses when storing fields.
 pub fn enum_max_payload_size(def: &AirEnumDef) -> u32 {
     def.variants
         .iter()
         .map(|v| {
-            v.payload
-                .iter()
-                .map(|ty| layout_of(ty).size)
-                .sum::<u32>()
+            let mut offset = 0u32;
+            for ty in &v.payload {
+                let layout = layout_of(ty);
+                offset = (offset + layout.align - 1) & !(layout.align - 1);
+                offset += layout.size;
+            }
+            offset
         })
         .max()
         .unwrap_or(0)

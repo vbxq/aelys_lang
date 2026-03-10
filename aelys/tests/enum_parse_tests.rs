@@ -376,6 +376,19 @@ let e = Event::Toggle(true)
 }
 
 #[test]
+fn data_variant_with_mixed_alignment_fields() {
+    let src = r#"
+enum Message {
+    Quit,
+    Mixed(i64, bool, i64),
+}
+let msg = Message::Mixed(1, true, 3)
+"#;
+    let result = compile_to_typed_ast(src);
+    assert!(result.is_ok(), "data variant with mixed alignment should type-check: {:?}", result.err());
+}
+
+#[test]
 fn data_variant_mixed_types() {
     let src = r#"
 enum Data {
