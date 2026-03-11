@@ -74,3 +74,93 @@ fn big() -> i64 {
 "#;
     assert_lowering_error(src, "stack array too large: [i64; 200000]");
 }
+
+#[test]
+fn oversized_stack_data_enum_array_is_reported_without_panic() {
+    let src = r#"
+enum Big {
+    A(string),
+    B(i64),
+}
+
+fn main() {
+    let arr = [Big::B(0); 50000];
+    println(0);
+}
+"#;
+    assert_lowering_error(src, "stack array too large: [enum Big; 50000]");
+}
+
+#[test]
+fn recursive_struct_via_enum_is_reported_without_panic() {
+    let src = r#"
+enum OptionNode {
+    Some(Node),
+    None,
+}
+
+struct Node {
+    next: OptionNode,
+}
+
+fn main() {
+    let n = Node { next: OptionNode::None };
+    n;
+}
+"#;
+    assert_lowering_error(
+        src,
+        "recursive type cycle involving by-value enums/structs",
+    );
+}
+
+#[test]
+fn non_constant_file_scope_let_is_reported_without_panic() {
+    let src = r#"
+fn make() -> i64 {
+    return 7
+}
+
+let g: i64 = make()
+"#;
+    assert_lowering_error(
+        src,
+        "file-scope let 'g' requires a compile-time constant initializer",
+    );
+}
+
+#[test]
+fn file_scope_data_enum_string_payload_is_reported_without_panic() {
+    let src = r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let gs: Option<string> = Option::Some("hi")
+"#;
+    assert_lowering_error(
+        src,
+        "file-scope let 'gs' uses enum payload values with runtime-backed storage",
+    );
+}
+
+#[test]
+fn file_scope_data_enum_fnptr_payload_is_reported_without_panic() {
+    let src = r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+let gf: Holder<fn() -> i64> = Holder::Value(main)
+
+fn main() -> i64 {
+    return 0
+}
+"#;
+    assert_lowering_error(
+        src,
+        "file-scope let 'gf' uses enum payload values with runtime-backed storage",
+    );
+}

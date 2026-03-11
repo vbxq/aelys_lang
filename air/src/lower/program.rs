@@ -312,6 +312,9 @@ impl<'a> LoweringContext<'a> {
         {
             let ty = self.lower_type_from_infer(var_type);
             let init = self.try_const_expr(initializer);
+            if let Some(message) = self.global_initializer_error(name, &ty, init.as_ref()) {
+                self.report_error(message);
+            }
             self.globals.push(AirGlobal {
                 name: name.clone(),
                 ty,
@@ -319,6 +322,38 @@ impl<'a> LoweringContext<'a> {
                 gc_mode: self.file_gc_mode,
                 span: Some(self.span(&stmt.span)),
             });
+        }
+    }
+
+    fn global_initializer_error(
+        &self,
+        name: &str,
+        ty: &AirType,
+        init: Option<&AirConst>,
+    ) -> Option<String> {
+        let Some(init) = init else {
+            return Some(format!(
+                "file-scope let '{name}' requires a compile-time constant initializer"
+            ));
+        };
+        if matches!(ty, AirType::Enum(_)) && Self::enum_payload_needs_runtime_storage(init) {
+            // Data enum globals are serialized as raw constant bytes today.
+            // Payloads that smuggle runtime addresses (string/fnptr) must fail here
+            // instead of drifting into a later backend-only error.
+            return Some(format!(
+                "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
+            ));
+        }
+        None
+    }
+
+    fn enum_payload_needs_runtime_storage(init: &AirConst) -> bool {
+        match init {
+            AirConst::Str(_) | AirConst::FnRef(_) => true,
+            AirConst::Enum { payload, .. } => payload
+                .iter()
+                .any(Self::enum_payload_needs_runtime_storage),
+            _ => false,
         }
     }
 
