@@ -272,6 +272,36 @@ fn read_option() -> i64 {
 }
 
 #[test]
+fn llvm_lowers_data_enum_payload_global_to_const_aggregate() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::Some(42)
+
+fn read_option() -> i64 {
+    return match g {
+        Option::Some(v) => v
+        Option::None => 0
+    }
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 0"),
+        "{ir}"
+    );
+    assert!(
+        ir.contains("[8 x i8] c\"*\\00\\00\\00\\00\\00\\00\\00\"")
+            || ir.contains("[8 x i8] [i8 42, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0]"),
+        "{ir}"
+    );
+}
+
+#[test]
 fn driver_compiles_data_enum_unit_global_initializer() {
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
@@ -304,11 +334,8 @@ fn read_option() -> i64 {
 }
 
 #[test]
-fn llvm_rejects_non_constant_enum_global_initializer_cleanly() {
-    let dir = tempdir().expect("tempdir should be created");
-    let source_path = dir.path().join("module.aelys");
-    fs::write(
-        &source_path,
+fn lowering_keeps_const_initializer_for_payload_enum_globals_after_optimizer() {
+    let air = lower_optimized_full(
         r#"
 enum Option<T> {
     Some(T),
@@ -317,21 +344,28 @@ enum Option<T> {
 
 let g: Option<i64> = Option::Some(7)
 
-fn main() -> i64 {
+fn read_option() -> i64 {
     return match g {
         Option::Some(v) => v
         Option::None => 0
     }
 }
-"#,
-    )
-    .expect("source should be written");
 
-    let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
-        .expect_err("llvm backend compilation should fail");
-    let rendered = err.to_string();
-    assert!(
-        rendered.contains("global 'g' requires a compile-time constant initializer"),
-        "{rendered}"
+"#,
     );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|global| global.name == "g")
+        .expect("global g should exist");
+    assert!(matches!(
+        global.init,
+        Some(aelys_air::AirConst::Enum { ref enum_name, tag: 0, ref payload })
+            if enum_name == "__mono_Option_i64"
+                && matches!(
+                    payload.as_slice(),
+                    [aelys_air::AirConst::Int(7, aelys_air::AirIntSize::I64)]
+                )
+    ));
 }

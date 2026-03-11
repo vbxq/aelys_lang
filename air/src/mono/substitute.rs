@@ -167,6 +167,7 @@ pub(super) fn operand_type_from(
             AirConst::Str(_) => AirType::Str,
             AirConst::Null => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
+            AirConst::Enum { enum_name, .. } => AirType::Enum(enum_name.clone()),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
         },
         Operand::Copy(id) | Operand::Move(id) => params

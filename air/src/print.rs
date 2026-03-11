@@ -66,6 +66,14 @@ pub fn fmt_const(c: &AirConst) -> String {
         AirConst::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
         AirConst::Null => "null".into(),
         AirConst::FnRef(name) => format!("fnref @{}", name),
+        AirConst::Enum {
+            enum_name,
+            tag,
+            payload,
+        } => {
+            let payload = payload.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
+            format!("enumconst {}#{}({})", enum_name, tag, payload)
+        }
         AirConst::ZeroInit(ty) => format!("zeroinit {}", fmt_type(ty)),
         AirConst::Undef(ty) => format!("undef {}", fmt_type(ty)),
     }

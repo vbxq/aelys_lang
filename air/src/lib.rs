@@ -336,6 +336,11 @@ pub enum AirConst {
     Null,
     /// Reference to a named function as a pointer value (for lambdas / first-class functions).
     FnRef(String),
+    Enum {
+        enum_name: String,
+        tag: u32,
+        payload: Vec<AirConst>,
+    },
     ZeroInit(AirType),
     Undef(AirType),
 }

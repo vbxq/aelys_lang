@@ -393,6 +393,22 @@ impl<'a> LoweringContext<'a> {
                 // i32 tags; data enums rebuild the aggregate from the tag later.
                 Some(AirConst::Int(*tag as i64, AirIntSize::I32))
             }
+            TypedExprKind::EnumVariant { tag, args, .. } => {
+                let payload = args
+                    .iter()
+                    .map(|arg| self.try_const_expr(arg))
+                    .collect::<Option<Vec<_>>>()?;
+                // Globals skip EnumInit AIR, so payload-bearing enum constants need
+                // to carry the concrete monomorphized enum name here.
+                let AirType::Enum(enum_name) = self.lower_type_from_infer(&expr.ty) else {
+                    return None;
+                };
+                Some(AirConst::Enum {
+                    enum_name,
+                    tag: *tag,
+                    payload,
+                })
+            }
             _ => None,
         }
     }

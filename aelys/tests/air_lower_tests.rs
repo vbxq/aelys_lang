@@ -251,6 +251,32 @@ let g: Option<i64> = Option::None
 }
 
 #[test]
+fn top_level_data_enum_payload_global_lowers_to_const_enum() {
+    let air = lower_source(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::Some(42)
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "g")
+        .expect("global 'g' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Enum { ref enum_name, tag: 0, ref payload })
+            if enum_name == "__mono_Option_i64"
+                && matches!(payload.as_slice(), [AirConst::Int(42, AirIntSize::I64)])
+    ));
+}
+
+#[test]
 fn top_level_fnptr_global_alias_lowers_to_target_fnref() {
     let air = lower_source(
         r#"

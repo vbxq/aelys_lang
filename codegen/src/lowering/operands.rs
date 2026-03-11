@@ -65,6 +65,9 @@ impl<'a> FunctionCodegen<'a> {
                 })?;
                 Ok(func.as_global_value().as_pointer_value().into())
             }
+            AirConst::Enum { .. } => Err(CodegenError::UnsupportedInstruction(
+                "enum constants are only supported in global initializers".to_string(),
+            )),
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
             AirConst::Undef(ty) => {
                 let llvm_ty = air_basic_type_to_llvm(ty, self.context)?;
@@ -92,6 +95,7 @@ impl<'a> FunctionCodegen<'a> {
             Operand::Const(AirConst::Str(_)) => Ok(AirType::Str),
             Operand::Const(AirConst::Null) => Ok(AirType::Ptr(Box::new(AirType::Void))),
             Operand::Const(AirConst::FnRef(_)) => Ok(AirType::Ptr(Box::new(AirType::Void))),
+            Operand::Const(AirConst::Enum { enum_name, .. }) => Ok(AirType::Enum(enum_name.clone())),
             Operand::Const(AirConst::ZeroInit(ty)) | Operand::Const(AirConst::Undef(ty)) => {
                 Ok(ty.clone())
             }
@@ -137,6 +141,7 @@ pub(crate) fn constant_kind_name(c: &AirConst) -> &'static str {
         AirConst::Str(_) => "Str",
         AirConst::Null => "Null",
         AirConst::FnRef(_) => "FnRef",
+        AirConst::Enum { .. } => "Enum",
         AirConst::ZeroInit(_) => "ZeroInit",
         AirConst::Undef(_) => "Undef",
     }
