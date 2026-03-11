@@ -322,7 +322,7 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn resolve_const_fnref_alias(&self, name: &str) -> Option<String> {
+    fn resolve_const_global_alias(&self, name: &str) -> Option<AirConst> {
         let mut current = name.to_string();
         let mut seen = std::collections::HashSet::new();
 
@@ -332,17 +332,13 @@ impl<'a> LoweringContext<'a> {
             }
 
             let global = self.globals.iter().find(|global| global.name == current)?;
-            match global.init.as_ref()? {
-                // Top-level fnptr aliases should fold down to the real function symbol,
-                // not to another global name that codegen cannot call directly.
-                AirConst::FnRef(target) => {
-                    if self.globals.iter().any(|global| global.name == *target) {
-                        current = target.clone();
-                    } else {
-                        return Some(target.clone());
-                    }
+            let init = global.init.as_ref()?.clone();
+            match init {
+                // Follow fnptr aliases through prior globals until we reach the real symbol.
+                AirConst::FnRef(target) if self.globals.iter().any(|global| global.name == target) => {
+                    current = target;
                 }
-                _ => return None,
+                other => return Some(other),
             }
         }
     }
@@ -368,11 +364,13 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Bool(v) => Some(AirConst::Bool(*v)),
             TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
             TypedExprKind::Null => Some(AirConst::Null),
-            TypedExprKind::Identifier(name) if matches!(expr.ty, InferType::Function { .. }) => {
-                if self.globals.iter().any(|global| global.name == *name) {
-                    self.resolve_const_fnref_alias(name).map(AirConst::FnRef)
-                } else {
+            TypedExprKind::Identifier(name) => {
+                if let Some(existing) = self.resolve_const_global_alias(name) {
+                    Some(existing)
+                } else if matches!(expr.ty, InferType::Function { .. }) {
                     Some(AirConst::FnRef(name.clone()))
+                } else {
+                    None
                 }
             }
             TypedExprKind::EnumVariant {

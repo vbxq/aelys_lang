@@ -274,6 +274,28 @@ fn main() -> i64 {
     ));
 }
 
+#[test]
+fn top_level_data_enum_global_alias_clones_const_initializer() {
+    let air = lower_source(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+let h: Option<i64> = g
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "h")
+        .expect("global 'h' not found");
+    assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
+}
+
 // regression test: Null -> Ptr(Void)
 
 #[test]

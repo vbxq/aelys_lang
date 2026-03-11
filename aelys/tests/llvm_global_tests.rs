@@ -128,6 +128,37 @@ fn main() -> i64 {
 }
 
 #[test]
+fn llvm_lowers_data_enum_global_alias_to_same_const_aggregate() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+let h: Option<i64> = g
+
+fn main() -> i64 {
+    return match h {
+        Option::Some(v) => v
+        Option::None => 9
+    }
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        "{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_global_h = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        "{ir}"
+    );
+    assert!(ir.contains("load %__aelys_enum___mono_Option_i64, ptr @__aelys_global_h"), "{ir}");
+}
+
+#[test]
 fn llvm_lowers_simple_enum_global_to_i32_storage() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
