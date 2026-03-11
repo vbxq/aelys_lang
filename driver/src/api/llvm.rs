@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use std::process::Command;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 /// Built-in functions available in every Aelys program
 /// These are intercepted during codegen and lowered to runtime calls
@@ -108,7 +108,19 @@ fn lower_file_to_air_with_source(
         )
     })?;
     let mut air = aelys_air::mono::monomorphize(air);
-    aelys_air::layout::compute_layouts(&mut air);
+    let layout_result = catch_unwind_silent(std::panic::AssertUnwindSafe(|| {
+        aelys_air::layout::compute_layouts(&mut air);
+    }));
+    if let Err(payload) = layout_result {
+        return Err(backend_diagnostic_error(
+            src.clone(),
+            program_anchor_span(&air, src.as_ref()),
+            "air-layout",
+            panic_payload_to_string(payload),
+            None,
+            None,
+        ));
+    }
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
     aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -198,11 +210,6 @@ fn compile_air_with_llvm(
     codegen
         .optimize(opt_level.llvm_pass_pipeline(), opt_level.numeric())
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
-    let object_path = object_path_for(path);
-    let object_path_str = object_path.to_string_lossy().to_string();
-    codegen
-        .emit_object(&object_path_str, opt_level.numeric())
-        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     if emit_llvm_ir {
         let mut ir_path = PathBuf::from(path);
@@ -211,7 +218,15 @@ fn compile_air_with_llvm(
         codegen
             .emit_ir(&ir_path_str)
             .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
+        // `--emit-llvm-ir` is a no-link inspection mode; stop before object/link.
+        return Ok(());
     }
+
+    let object_path = object_path_for(path);
+    let object_path_str = object_path.to_string_lossy().to_string();
+    codegen
+        .emit_object(&object_path_str, opt_level.numeric())
+        .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
     let has_main_entry = air
         .functions
@@ -257,6 +272,34 @@ fn backend_diagnostic_error(
         span,
         source,
     ))
+}
+
+fn catch_unwind_silent<F, R>(f: F) -> std::thread::Result<R>
+where
+    F: FnOnce() -> R + std::panic::UnwindSafe,
+{
+    static PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+
+    let _guard = PANIC_HOOK_LOCK
+        .get_or_init(|| Mutex::new(()))
+        .lock()
+        .expect("panic hook lock poisoned");
+
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let result = std::panic::catch_unwind(f);
+    std::panic::set_hook(hook);
+    result
+}
+
+fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        return (*message).to_string();
+    }
+    if let Some(message) = payload.downcast_ref::<String>() {
+        return message.clone();
+    }
+    "internal compiler error during AIR layout".to_string()
 }
 
 fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> AelysError {
