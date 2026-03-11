@@ -322,6 +322,31 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    fn resolve_const_fnref_alias(&self, name: &str) -> Option<String> {
+        let mut current = name.to_string();
+        let mut seen = std::collections::HashSet::new();
+
+        loop {
+            if !seen.insert(current.clone()) {
+                return None;
+            }
+
+            let global = self.globals.iter().find(|global| global.name == current)?;
+            match global.init.as_ref()? {
+                // Top-level fnptr aliases should fold down to the real function symbol,
+                // not to another global name that codegen cannot call directly.
+                AirConst::FnRef(target) => {
+                    if self.globals.iter().any(|global| global.name == *target) {
+                        current = target.clone();
+                    } else {
+                        return Some(target.clone());
+                    }
+                }
+                _ => return None,
+            }
+        }
+    }
+
     pub(super) fn try_const_expr(&self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
         use aelys_sema::TypedExprKind;
         match &expr.kind {
@@ -344,7 +369,11 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
             TypedExprKind::Null => Some(AirConst::Null),
             TypedExprKind::Identifier(name) if matches!(expr.ty, InferType::Function { .. }) => {
-                Some(AirConst::FnRef(name.clone()))
+                if self.globals.iter().any(|global| global.name == *name) {
+                    self.resolve_const_fnref_alias(name).map(AirConst::FnRef)
+                } else {
+                    Some(AirConst::FnRef(name.clone()))
+                }
             }
             TypedExprKind::EnumVariant {
                 enum_name,

@@ -109,6 +109,25 @@ fn main() -> i64 {
 }
 
 #[test]
+fn llvm_lowers_fnptr_global_alias_to_same_function_symbol() {
+    let ir = compile_source_to_verified_ir_without_link(
+        r#"
+let g: fn() -> i64 = main
+let h: fn() -> i64 = g
+
+fn main() -> i64 {
+    return h()
+}
+"#,
+    );
+    assert!(ir.contains("@__aelys_global_g = internal global ptr @__aelys_main"), "{ir}");
+    assert!(ir.contains("@__aelys_global_h = internal global ptr @__aelys_main"), "{ir}");
+    assert!(ir.contains("load ptr, ptr @__aelys_global_h"), "{ir}");
+    assert!(!ir.contains("unknown function 'g'"), "{ir}");
+    assert!(!ir.contains("declare i64 @g()"), "{ir}");
+}
+
+#[test]
 fn llvm_lowers_simple_enum_global_to_i32_storage() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"

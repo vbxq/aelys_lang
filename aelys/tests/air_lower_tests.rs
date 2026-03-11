@@ -250,6 +250,30 @@ let g: Option<i64> = Option::None
     assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
 }
 
+#[test]
+fn top_level_fnptr_global_alias_lowers_to_target_fnref() {
+    let air = lower_source(
+        r#"
+let g: fn() -> i64 = main
+let h: fn() -> i64 = g
+
+fn main() -> i64 {
+    return h()
+}
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "h")
+        .expect("global 'h' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::FnRef(ref name)) if name == "main"
+    ));
+}
+
 // regression test: Null -> Ptr(Void)
 
 #[test]
