@@ -926,6 +926,63 @@ fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
 }
 
 #[test]
+fn struct_fnptr_field_call_lowers_to_indirect_call() {
+    let air = lower_source(
+        r#"
+struct Holder {
+    f: fn(i64) -> i64,
+}
+
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+
+fn main() -> i64 {
+    let h = Holder { f: inc }
+    return h.f(41)
+}
+"#,
+    );
+    let f = func(&air, "main");
+    let has_bad_named_call = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        func: Callee::Named(name),
+                        ..
+                    },
+                    ..
+                } if name == "h.f"
+            )
+        })
+    });
+    let has_indirect = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        func: Callee::FnPtr(_),
+                        ..
+                    },
+                    ..
+                }
+            )
+        })
+    });
+    assert!(
+        !has_bad_named_call,
+        "struct fnptr field call must not lower as direct named call"
+    );
+    assert!(
+        has_indirect,
+        "expected struct fnptr field call to lower as Callee::FnPtr"
+    );
+}
+
+#[test]
 fn function_identifier_as_value_lowers_to_fnref() {
     let air = lower_source(
         r#"

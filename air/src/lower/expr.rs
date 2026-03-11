@@ -443,7 +443,16 @@ impl<'a> LoweringContext<'a> {
             }
             TypedExprKind::Member { object, member } => {
                 if let TypedExprKind::Identifier(mod_name) = &object.kind {
-                    Callee::Named(format!("{}.{}", mod_name, member))
+                    let is_runtime_value = self.lookup_local(mod_name).is_some()
+                        || self.globals.iter().any(|global| global.name == *mod_name);
+                    if !is_runtime_value {
+                        Callee::Named(format!("{}.{}", mod_name, member))
+                    } else {
+                        // `value.field()` on a struct/global fnptr field must stay indirect.
+                        let op = self.lower_expr(callee);
+                        let ty = self.lower_type_from_infer(&callee.ty);
+                        Callee::FnPtr(self.operand_to_local(op, &ty))
+                    }
                 } else {
                     let op = self.lower_expr(callee);
                     let ty = self.lower_type_from_infer(&callee.ty);
