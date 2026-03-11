@@ -4,6 +4,7 @@ use crate::lowering::body::FunctionCodegen;
 use crate::types::{air_basic_type_to_llvm, air_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
+    layout::enum_has_data,
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
 };
 use inkwell::AddressSpace;
@@ -21,14 +22,14 @@ impl CodegenContext {
         self.ensure_no_reserved_bootstrap_builtins(program)?;
 
         for function in &program.functions {
-            // SAFETY! we need to reject struct-like params/returns on extern C functions.
-            // The LLVM/MSVC ABI mismatch for >8-byte structs causes silent crashes that are.. insane to debug.
-            if function.is_extern && matches!(function.calling_conv, AirCallingConv::C) {
-                reject_struct_abi_on_extern(function)?;
+            // Any C-convention entry point crosses the platform ABI boundary, even when
+            // the function body lives in this module and is called via a fnptr later.
+            if matches!(function.calling_conv, AirCallingConv::C) {
+                reject_struct_abi_on_c_function(function, program)?;
             }
 
             let symbol_name = function_symbol_name(function);
-            let fn_type = self.function_type(function)?;
+            let fn_type = self.function_type(function, program)?;
             let fn_value = if let Some(existing) = self.module.get_function(&symbol_name) {
                 existing
             } else {
@@ -42,6 +43,7 @@ impl CodegenContext {
                 &function.ret_ty,
                 function.calling_conv,
                 self.target_is_windows(),
+                program,
             ) {
                 let ret_any_ty = air_type_to_llvm(&function.ret_ty, self.context)?;
                 let sret_attr = self
@@ -174,11 +176,16 @@ impl CodegenContext {
         Ok(())
     }
 
-    fn function_type(&self, function: &AirFunction) -> Result<FunctionType<'static>, CodegenError> {
+    fn function_type(
+        &self,
+        function: &AirFunction,
+        program: &AirProgram,
+    ) -> Result<FunctionType<'static>, CodegenError> {
         let use_sret = needs_sret(
             &function.ret_ty,
             function.calling_conv,
             self.target_is_windows(),
+            program,
         );
         let mut params = Vec::with_capacity(function.params.len() + usize::from(use_sret));
         if use_sret {
@@ -254,27 +261,52 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
     }
 }
 
-/// Returns true if the AirType is a struct-like type that would be >8 bytes
-/// and therefore unsafe to pass by value across the LLVM -> C ABI boundary
-pub(crate) fn is_abi_unsafe_type(ty: &AirType) -> bool {
+/// Returns true if the type lowers to an aggregate that we must not pass
+/// by value across the C ABI on Windows/MSVC.
+/// Data enums count here because LLVM sees them as structs, not i32 tags.
+pub(crate) fn is_abi_unsafe_type(ty: &AirType, program: &AirProgram) -> bool {
     matches!(
         ty,
         AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _)
-    )
+    ) || matches!(ty, AirType::Enum(name) if program
+        .enums
+        .iter()
+        .find(|def| def.name == *name)
+        .is_some_and(enum_has_data))
 }
 
 /// True when a function with this return type + calling convention needs sret
 /// on the current target. Only C-convention functions need sret because
 /// fastcc (Aelys-internal) is handled consistently by LLVM itself
-pub(crate) fn needs_sret(ret_ty: &AirType, conv: AirCallingConv, is_windows: bool) -> bool {
-    is_windows && matches!(conv, AirCallingConv::C) && is_abi_unsafe_type(ret_ty)
+pub(crate) fn needs_sret(
+    ret_ty: &AirType,
+    conv: AirCallingConv,
+    is_windows: bool,
+    program: &AirProgram,
+) -> bool {
+    is_windows && matches!(conv, AirCallingConv::C) && is_abi_unsafe_type(ret_ty, program)
 }
 
-fn reject_struct_abi_on_extern(function: &AirFunction) -> Result<(), CodegenError> {
+fn reject_struct_abi_on_c_function(
+    function: &AirFunction,
+    program: &AirProgram,
+) -> Result<(), CodegenError> {
     for param in &function.params {
-        if is_abi_unsafe_type(&param.ty) {
+        if matches!(&param.ty, AirType::Enum(name) if program
+            .enums
+            .iter()
+            .find(|def| def.name == *name)
+            .is_some_and(enum_has_data))
+        {
             return Err(CodegenError::UnsupportedType(format!(
-                "extern function '{}' has struct parameter '{}' (type {:?}), \
+                "C-convention function '{}' has enum parameter '{}' (type {:?}), \
+                 data enums must not cross the C ABI by value",
+                function.name, param.name, param.ty
+            )));
+        }
+        if is_abi_unsafe_type(&param.ty, program) {
+            return Err(CodegenError::UnsupportedType(format!(
+                "C-convention function '{}' has struct parameter '{}' (type {:?}), \
                  struct params must be flattened to scalars for C ABI compatibility",
                 function.name, param.name, param.ty
             )));

@@ -599,3 +599,67 @@ fn indirect_c_fnptr_data_enum_return_uses_sret() {
         );
     }
 }
+
+#[test]
+fn c_convention_defined_data_enum_param_is_rejected() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "consume_opt".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![aelys_air::AirParam {
+                id: LocalId(0),
+                ty: AirType::Enum("Opt".to_string()),
+                name: "opt".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(None),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::C,
+            attributes: default_attribs(),
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![aelys_air::AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![
+                aelys_air::AirEnumVariant {
+                    name: "Some".to_string(),
+                    payload: vec![AirType::I64],
+                    tag: 0,
+                },
+                aelys_air::AirEnumVariant {
+                    name: "None".to_string(),
+                    payload: vec![],
+                    tag: 1,
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::from([(
+            "Opt".to_string(),
+            aelys_air::layout::TypeLayout { size: 16, align: 8 },
+        )]),
+    };
+
+    let mut codegen = CodegenContext::new("c_param_reject");
+    let err = codegen
+        .compile(&program)
+        .expect_err("C-convention data enum param should be rejected");
+    let rendered = err.to_string();
+    assert!(
+        rendered.contains("enum parameter"),
+        "unexpected error for C-convention data enum param: {rendered}"
+    );
+}
