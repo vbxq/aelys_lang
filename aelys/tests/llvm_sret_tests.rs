@@ -579,10 +579,18 @@ fn indirect_c_fnptr_data_enum_return_uses_sret() {
     let ir = compile_air_to_verified_ir(&program);
 
     if cfg!(target_os = "windows") {
+        let indirect_call_line = ir
+            .lines()
+            .find(|line| line.contains("call") && line.contains("sret_slot"))
+            .expect("expected indirect call using the hidden sret slot");
         assert!(
-            ir.contains("call void @get_opt(ptr %sret_slot)")
-                || ir.contains("call void %"),
-            "indirect c fnptr should lower to an sret call on Windows: {ir}"
+            indirect_call_line.contains("call void @get_opt(")
+                || indirect_call_line.contains("call void %"),
+            "indirect c fnptr should lower through a call instruction: {indirect_call_line}\n{ir}"
+        );
+        assert!(
+            indirect_call_line.contains("sret("),
+            "indirect c fnptr callsite must carry the sret attribute: {indirect_call_line}\n{ir}"
         );
         assert!(ir.contains("sret_slot"), "{ir}");
         assert!(

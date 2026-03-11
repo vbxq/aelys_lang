@@ -1,13 +1,29 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::aelys_string_type;
+use inkwell::attributes::{Attribute, AttributeLoc};
 use inkwell::module::Linkage;
-use inkwell::types::BasicTypeEnum;
+use inkwell::types::{AnyType, BasicTypeEnum};
 use inkwell::values::{
-    BasicMetadataValueEnum, BasicValueEnum, FunctionValue, IntValue, PointerValue, StructValue,
+    BasicMetadataValueEnum, BasicValueEnum, CallSiteValue, FunctionValue, IntValue, PointerValue,
+    StructValue,
 };
 
 impl<'a> FunctionCodegen<'a> {
+    pub(crate) fn add_sret_callsite_attr(
+        &self,
+        call: CallSiteValue<'static>,
+        ret_ty: BasicTypeEnum<'static>,
+    ) {
+        // Indirect calls do not inherit parameter attributes from a declaration,
+        // so stamp sret on the callsite itself whenever we materialize the hidden slot.
+        let sret_attr = self.context.create_type_attribute(
+            Attribute::get_named_enum_kind_id("sret"),
+            ret_ty.as_any_type_enum(),
+        );
+        call.add_attribute(AttributeLoc::Param(0), sret_attr);
+    }
+
     pub(crate) fn global_string_ptr_len(
         &mut self,
         text: &str,
@@ -122,6 +138,7 @@ impl<'a> FunctionCodegen<'a> {
                 .build_call(fn_val, &all_args, "")
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             call.set_call_convention(fn_val.get_call_conventions());
+            self.add_sret_callsite_attr(call, ret_ty);
             self.builder
                 .build_load(ret_ty, result_ptr, name)
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))

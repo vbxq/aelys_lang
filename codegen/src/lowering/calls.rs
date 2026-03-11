@@ -76,6 +76,7 @@ impl<'a> FunctionCodegen<'a> {
                         .build_indirect_call(fn_ty, fn_ptr, &all_args, "call_indirect")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                     call.set_call_convention(call_conv);
+                    self.add_sret_callsite_attr(call, ret_ty);
                     Ok(Some(
                         self.builder
                             .build_load(ret_ty, result_ptr, "call_indirect_sret")
@@ -318,7 +319,8 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<(FunctionType<'static>, u32, Option<AirType>), CodegenError> {
         match self.local_air_type(local)? {
             AirType::FnPtr { params, ret, conv } => {
-                let use_sret = needs_sret(ret.as_ref(), *conv, self.target_is_windows(), self.program);
+                let use_sret =
+                    needs_sret(ret.as_ref(), *conv, self.target_is_windows(), self.program);
                 let mut param_types = Vec::with_capacity(params.len() + usize::from(use_sret));
                 if use_sret {
                     param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
