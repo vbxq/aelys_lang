@@ -115,6 +115,12 @@ impl InferType {
                 ret: Box::new(ret),
             };
         }
+        // Uppercase-starting names are always user-defined types (structs/enums).
+        // Check this first so that names like "Void", "String", etc. are not
+        // shadowed by the case-insensitive built-in type matching below.
+        if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
+            return InferType::Struct(ann.name.clone());
+        }
         let name_lower = ann.name.to_lowercase();
         match name_lower.as_str() {
             "int" | "i64" | "int64" => InferType::I64,
@@ -146,13 +152,7 @@ impl InferType {
                     .unwrap_or(InferType::Dynamic);
                 InferType::Vec(Box::new(inner))
             }
-            _ => {
-                if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    InferType::Struct(ann.name.clone())
-                } else {
-                    InferType::Dynamic
-                }
-            }
+            _ => InferType::Dynamic,
         }
     }
 
