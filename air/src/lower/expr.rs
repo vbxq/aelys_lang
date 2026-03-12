@@ -6,6 +6,13 @@ use aelys_sema::{
 };
 
 impl<'a> LoweringContext<'a> {
+    /// Returns true for types that have no runtime representation (void, null,
+    /// opaque).  Used to skip result assignments in match/if-else branches.
+    fn is_void_like(ty: &AirType) -> bool {
+        matches!(ty, AirType::Void | AirType::Opaque)
+            || matches!(ty, AirType::Ptr(inner) if matches!(inner.as_ref(), AirType::Void))
+    }
+
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
         let sp = Some(self.span(&expr.span));
         match &expr.kind {
@@ -320,11 +327,8 @@ impl<'a> LoweringContext<'a> {
                 let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
                 let func = self.lower_callee(callee);
                 let ret_ty = self.lower_type_from_infer(&expr.ty);
-                // Void and Opaque calls in discard position should emit CallVoid.
-                //
-                // Opaque means the return type is unresolved Dynamic. Since the caller is discarding the result anyway,
-                // there's no point creating a temp local with an unresolvable type.
-                if matches!(ret_ty, AirType::Void | AirType::Opaque) {
+                // Void, Opaque, and Ptr(Void) calls in discard position should emit CallVoid.
+                if Self::is_void_like(&ret_ty) {
                     self.emit(
                         AirStmtKind::CallVoid {
                             func,
@@ -368,10 +372,10 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(result_infer_ty);
-        // Void, and Opaque-returning calls can't be used as values in LLVM
-        // Opaque means the return type is unresolved Dynamic (bootstrap builtins like print/println). Treating it as void prevents creating temp locals with an unresolvable type.
-        // TODO: !
-        if matches!(result_ty, AirType::Void | AirType::Opaque) {
+        // Void, Opaque, and Ptr(Void) (the null type from InferType::Null,
+        // used by builtins like print/println) can't be used as values in
+        // LLVM.  Emit CallVoid so codegen never tries to capture the result.
+        if Self::is_void_like(&result_ty) {
             self.emit(AirStmtKind::CallVoid { func, args }, sp);
             Operand::Const(AirConst::Null)
         } else {
@@ -525,7 +529,8 @@ impl<'a> LoweringContext<'a> {
         parent: &TypedExpr,
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(&parent.ty);
-        let result = self.alloc_temp_mut(result_ty);
+        let is_void = Self::is_void_like(&result_ty);
+        let result = if is_void { None } else { Some(self.alloc_temp_mut(result_ty)) };
 
         let cond = self.lower_expr(condition);
         let then_id = self.alloc_block_id();
@@ -539,29 +544,37 @@ impl<'a> LoweringContext<'a> {
         });
 
         self.fixup_block_id_noop(then_id);
-        let then_val = self.lower_expr(then_branch);
-        self.emit(
-            AirStmtKind::Assign {
-                place: Place::Local(result),
-                rvalue: Rvalue::Use(then_val),
-            },
-            None,
-        );
+        if let Some(result) = result {
+            let then_val = self.lower_expr(then_branch);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(result),
+                    rvalue: Rvalue::Use(then_val),
+                },
+                None,
+            );
+        } else {
+            self.lower_expr_discard(then_branch);
+        }
         self.seal_block(AirTerminator::Goto(merge_id));
 
         self.fixup_block_id_noop(else_id);
-        let else_val = self.lower_expr(else_branch);
-        self.emit(
-            AirStmtKind::Assign {
-                place: Place::Local(result),
-                rvalue: Rvalue::Use(else_val),
-            },
-            None,
-        );
+        if let Some(result) = result {
+            let else_val = self.lower_expr(else_branch);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(result),
+                    rvalue: Rvalue::Use(else_val),
+                },
+                None,
+            );
+        } else {
+            self.lower_expr_discard(else_branch);
+        }
         self.seal_block(AirTerminator::Goto(merge_id));
 
         self.fixup_block_id_noop(merge_id);
-        Operand::Copy(result)
+        result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
     // lambda lowering (desugared to closure env struct + function)
@@ -604,7 +617,9 @@ impl<'a> LoweringContext<'a> {
     ) -> Operand {
         let sp = Some(self.span(&parent.span));
         let result_ty = self.lower_type_from_infer(&parent.ty);
-        let result = self.alloc_temp_mut(result_ty);
+        let is_void = Self::is_void_like(&result_ty);
+        // Only allocate a result local when the match produces a value.
+        let result = if is_void { None } else { Some(self.alloc_temp_mut(result_ty)) };
 
         // Lower the scrutinee
         let scrutinee_op = self.lower_expr(scrutinee);
@@ -692,28 +707,36 @@ impl<'a> LoweringContext<'a> {
                 }
             }
 
-            let arm_val = self.lower_expr(&arm.body);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(result),
-                    rvalue: Rvalue::Use(arm_val),
-                },
-                None,
-            );
+            if let Some(result) = result {
+                let arm_val = self.lower_expr(&arm.body);
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(result),
+                        rvalue: Rvalue::Use(arm_val),
+                    },
+                    None,
+                );
+            } else {
+                self.lower_expr_discard(&arm.body);
+            }
             self.seal_block(AirTerminator::Goto(merge_id));
         }
 
         // Lower the default block (wildcard or unreachable)
         self.fixup_block_id_noop(default_id);
         if let Some(wildcard) = wildcard_arm {
-            let wc_val = self.lower_expr(&wildcard.body);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(result),
-                    rvalue: Rvalue::Use(wc_val),
-                },
-                None,
-            );
+            if let Some(result) = result {
+                let wc_val = self.lower_expr(&wildcard.body);
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(result),
+                        rvalue: Rvalue::Use(wc_val),
+                    },
+                    None,
+                );
+            } else {
+                self.lower_expr_discard(&wildcard.body);
+            }
             self.seal_block(AirTerminator::Goto(merge_id));
         } else {
             // Exhaustive match without wildcard -- all variants covered, default is unreachable
@@ -721,7 +744,7 @@ impl<'a> LoweringContext<'a> {
         }
 
         self.fixup_block_id_noop(merge_id);
-        Operand::Copy(result)
+        result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
     // format string -> __aelys_str_concat / __aelys_to_string
