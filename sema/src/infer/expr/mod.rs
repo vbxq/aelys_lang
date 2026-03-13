@@ -54,6 +54,7 @@ impl TypeInference {
                 let mut typed_left = self.infer_expr(left);
                 let mut typed_right = self.infer_expr(right);
                 Self::narrow_binop_int_literals(&mut typed_left, &mut typed_right);
+                Self::narrow_binop_float_literals(&mut typed_left, &mut typed_right);
                 let result_type = self.infer_binary_op(*op, &typed_left, &typed_right, expr.span);
 
                 (
@@ -181,6 +182,23 @@ impl TypeInference {
         if matches!(&left.kind, TypedExprKind::Int(_)) && right.ty.is_integer() {
             narrow(left, &right.ty.clone());
         } else if matches!(&right.kind, TypedExprKind::Int(_)) && left.ty.is_integer() {
+            narrow(right, &left.ty.clone());
+        }
+    }
+
+    fn narrow_binop_float_literals(left: &mut TypedExpr, right: &mut TypedExpr) {
+        let narrow = |lit: &mut TypedExpr, target: &InferType| {
+            if let TypedExprKind::Float(v) = &lit.kind
+                && target.is_float()
+                && *target != InferType::F64
+                && InferType::float_fits(*v, target)
+            {
+                lit.ty = target.clone();
+            }
+        };
+        if matches!(&left.kind, TypedExprKind::Float(_)) && right.ty.is_float() {
+            narrow(left, &right.ty.clone());
+        } else if matches!(&right.kind, TypedExprKind::Float(_)) && left.ty.is_float() {
             narrow(right, &left.ty.clone());
         }
     }

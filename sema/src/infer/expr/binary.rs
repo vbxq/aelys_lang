@@ -114,6 +114,7 @@ impl TypeInference {
             BinaryOp::Eq | BinaryOp::Ne => {
                 // Reject comparison on data enums (enums with payload fields).
                 // Simple enums (all unit variants) are fine — they're just i32 tags.
+                // Also reject comparison on structs — no codegen support for deep equality.
                 for operand_ty in [&left.ty, &right.ty] {
                     if let InferType::Enum(name, _) = operand_ty {
                         if let Some(def) = self.type_table.get_enum(name) {
@@ -129,6 +130,16 @@ impl TypeInference {
                                 return InferType::Bool;
                             }
                         }
+                    }
+                    if let InferType::Struct(name) = operand_ty {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "comparison (`{}`) is not supported for struct `{}`",
+                                op, name
+                            ),
+                            span,
+                        ));
+                        return InferType::Bool;
                     }
                 }
 
