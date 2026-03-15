@@ -88,6 +88,7 @@ impl LocalConstantPropagator {
             }
 
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -105,11 +106,17 @@ impl LocalConstantPropagator {
                     self.scopes.invalidate(name);
                 }
                 self.scopes.push();
+                self.scopes.block(iterator);
                 self.propagate_stmt(body);
                 self.scopes.pop();
             }
 
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.propagate_expr(iterable);
                 let mut assigned = Vec::new();
                 Self::collect_assigned_vars(body, &mut assigned);
@@ -117,6 +124,7 @@ impl LocalConstantPropagator {
                     self.scopes.invalidate(name);
                 }
                 self.scopes.push();
+                self.scopes.block(iterator);
                 self.propagate_stmt(body);
                 self.scopes.pop();
             }
