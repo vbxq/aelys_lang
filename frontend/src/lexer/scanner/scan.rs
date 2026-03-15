@@ -26,8 +26,15 @@ impl Lexer {
                 self.nesting_depth = self.nesting_depth.saturating_sub(1);
                 self.add_token(TokenKind::RParen);
             }
-            '{' => self.add_token(TokenKind::LBrace),
-            '}' => self.add_token(TokenKind::RBrace),
+            '{' => {
+                self.brace_saved_depths.push(self.nesting_depth);
+                self.nesting_depth = 0;
+                self.add_token(TokenKind::LBrace);
+            }
+            '}' => {
+                self.nesting_depth = self.brace_saved_depths.pop().unwrap_or(0);
+                self.add_token(TokenKind::RBrace);
+            }
             '[' => {
                 self.nesting_depth += 1;
                 self.add_token(TokenKind::LBracket);

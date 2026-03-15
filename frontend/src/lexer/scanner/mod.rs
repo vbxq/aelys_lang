@@ -27,6 +27,10 @@ pub struct Lexer {
     start_column: u32,
     pending_semicolon: bool,
     nesting_depth: u32,
+    /// Stack of saved nesting depths. When entering `{`, the current paren/bracket
+    /// nesting depth is saved and reset to 0 so that auto-semicolons work inside
+    /// brace-delimited blocks even when those blocks appear inside `()` or `[]`.
+    brace_saved_depths: Vec<u32>,
 }
 
 impl Lexer {
@@ -42,6 +46,7 @@ impl Lexer {
             start_column: 1,
             pending_semicolon: false,
             nesting_depth: 0,
+            brace_saved_depths: Vec::new(),
         }
     }
 
@@ -58,6 +63,7 @@ impl Lexer {
             start_column: 1,
             pending_semicolon: false,
             nesting_depth: 0,
+            brace_saved_depths: Vec::new(),
         }
     }
 
