@@ -472,24 +472,35 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         let val = self.lower_expr(value);
-        let obj_ty = self.lower_type_from_infer(&object.ty);
 
-        // arr[i].field = value needs read-modify-write:
-        // the element must be copied out, field modified, then written back.
-        if let TypedExprKind::Index {
-            object: arr_expr,
-            index: idx_expr,
-        } = &object.kind
-        {
+        // Peel off Member layers to collect the path from root → immediate parent.
+        // e.g. `a.b.c.field = val` → root=a, segments=[("b",ty_b),("c",ty_c)], field="field"
+        let mut segments: Vec<(String, AirType)> = Vec::new();
+        let mut current = object;
+        loop {
+            match &current.kind {
+                TypedExprKind::Member { object: inner, member } => {
+                    let field_ty = self.lower_type_from_infer(&current.ty);
+                    segments.push((member.clone(), field_ty));
+                    current = inner;
+                }
+                _ => break,
+            }
+        }
+        segments.reverse(); // shallowest → deepest
+
+        // Handle the root: Index needs read + write-back; everything else just finds the local.
+        if let TypedExprKind::Index { object: arr_expr, index: idx_expr } = &current.kind {
             let arr_op = self.lower_expr(arr_expr);
             let arr_ty = self.lower_type_from_infer(&arr_expr.ty);
             let arr_local = self.operand_to_local(arr_op, &arr_ty);
             let idx_op = self.lower_expr(idx_expr);
 
-            let elem_local = self.alloc_temp_mut(obj_ty);
+            let elem_ty = self.lower_type_from_infer(&current.ty);
+            let root_local = self.alloc_temp_mut(elem_ty);
             self.emit(
                 AirStmtKind::Assign {
-                    place: Place::Local(elem_local),
+                    place: Place::Local(root_local),
                     rvalue: Rvalue::Index {
                         base: Operand::Copy(arr_local),
                         index: idx_op.clone(),
@@ -497,68 +508,88 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Field(elem_local, field.to_string()),
-                    rvalue: Rvalue::Use(val),
-                },
-                sp,
-            );
+            self.emit_field_chain(root_local, &segments, field, val, sp);
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Index(arr_local, idx_op),
-                    rvalue: Rvalue::Use(Operand::Copy(elem_local)),
-                },
-                sp,
-            );
-        } else if let TypedExprKind::Member {
-            object: parent_expr,
-            member: parent_field,
-        } = &object.kind
-        {
-            // obj.nested.field = value: read-modify-write on the parent struct.
-            let parent_op = self.lower_expr(parent_expr);
-            let parent_ty = self.lower_type_from_infer(&parent_expr.ty);
-            let parent_local = self.operand_to_local(parent_op, &parent_ty);
-
-            let nested_local = self.alloc_temp_mut(obj_ty);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(nested_local),
-                    rvalue: Rvalue::FieldAccess {
-                        base: Operand::Copy(parent_local),
-                        field: parent_field.clone(),
-                    },
-                },
-                sp,
-            );
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Field(nested_local, field.to_string()),
-                    rvalue: Rvalue::Use(val),
-                },
-                sp,
-            );
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Field(parent_local, parent_field.clone()),
-                    rvalue: Rvalue::Use(Operand::Copy(nested_local)),
+                    rvalue: Rvalue::Use(Operand::Copy(root_local)),
                 },
                 sp,
             );
         } else {
-            let obj = self.lower_expr(object);
-            let base_local = self.operand_to_local(obj, &obj_ty);
+            let root_op = self.lower_expr(current);
+            let root_ty = self.lower_type_from_infer(&current.ty);
+            let root_local = self.operand_to_local(root_op, &root_ty);
+            self.emit_field_chain(root_local, &segments, field, val, sp);
+        }
+
+        Operand::Const(AirConst::Null)
+    }
+
+    /// Emit a read-modify-write chain for `root.seg0.seg1...segN.final_field = val`.
+    ///
+    /// `segments` are in order from shallowest (first field off root) to deepest.
+    /// With zero segments this is a direct `Place::Field(root, final_field) = val`.
+    fn emit_field_chain(
+        &mut self,
+        root_local: LocalId,
+        segments: &[(String, AirType)],
+        final_field: &str,
+        val: Operand,
+        sp: Option<Span>,
+    ) {
+        if segments.is_empty() {
             self.emit(
                 AirStmtKind::Assign {
-                    place: Place::Field(base_local, field.to_string()),
+                    place: Place::Field(root_local, final_field.to_string()),
                     rvalue: Rvalue::Use(val),
                 },
                 sp,
             );
+            return;
         }
 
-        Operand::Const(AirConst::Null)
+        // Read each intermediate into a mutable temp.
+        let mut temps: Vec<LocalId> = Vec::new();
+        let mut current_local = root_local;
+        for (field_name, field_ty) in segments {
+            let tmp = self.alloc_temp_mut(field_ty.clone());
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(tmp),
+                    rvalue: Rvalue::FieldAccess {
+                        base: Operand::Copy(current_local),
+                        field: field_name.clone(),
+                    },
+                },
+                sp,
+            );
+            temps.push(tmp);
+            current_local = tmp;
+        }
+
+        // Assign the value to the deepest temp's final field.
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Field(current_local, final_field.to_string()),
+                rvalue: Rvalue::Use(val),
+            },
+            sp,
+        );
+
+        // Write back bottom-up: deepest → shallowest.
+        for i in (0..segments.len()).rev() {
+            let tmp = temps[i];
+            let (field_name, _) = &segments[i];
+            let parent = if i == 0 { root_local } else { temps[i - 1] };
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(parent, field_name.clone()),
+                    rvalue: Rvalue::Use(Operand::Copy(tmp)),
+                },
+                sp,
+            );
+        }
     }
 
     fn lower_callee(&mut self, callee: &TypedExpr) -> Callee {
