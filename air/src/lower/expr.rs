@@ -505,13 +505,27 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
-            // Write the mutated array back to the closure env if it's a capture.
-            if let (Some(name), Some(env_id)) = (root_name, self.closure_env_param) {
-                if self.closure_captures.contains(&name) {
+            // Write the mutated array back to the closure env if it's a capture,
+            // or back to the global store if the root is a global variable.
+            if let Some(ref name) = root_name {
+                if let Some(env_id) = self.closure_env_param {
+                    if self.closure_captures.contains(name) {
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Field(env_id, name.clone()),
+                                rvalue: Rvalue::Use(Operand::Copy(base_local)),
+                            },
+                            sp,
+                        );
+                    }
+                }
+                if self.lookup_local(name).is_none()
+                    && self.globals.iter().any(|g| g.name == *name)
+                {
                     self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(env_id, name),
-                            rvalue: Rvalue::Use(Operand::Copy(base_local)),
+                        AirStmtKind::CallVoid {
+                            func: Callee::Named(format!("__aelys_global_set_{}", name)),
+                            args: vec![Operand::Copy(base_local)],
                         },
                         sp,
                     );
@@ -631,13 +645,27 @@ impl<'a> LoweringContext<'a> {
             let root_ty = self.lower_type_from_infer(&current.ty);
             let root_local = self.operand_to_local(root_op, &root_ty);
             self.emit_field_chain(root_local, &segments, field, val, sp);
-            // Write back to closure env if the root variable is a captured var.
-            if let (Some(name), Some(env_id)) = (root_name, self.closure_env_param) {
-                if self.closure_captures.contains(&name) {
+            // Write back to closure env if the root variable is a captured var,
+            // or back to the global store if the root is a global variable.
+            if let Some(ref name) = root_name {
+                if let Some(env_id) = self.closure_env_param {
+                    if self.closure_captures.contains(name) {
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Field(env_id, name.clone()),
+                                rvalue: Rvalue::Use(Operand::Copy(root_local)),
+                            },
+                            sp,
+                        );
+                    }
+                }
+                if self.lookup_local(name).is_none()
+                    && self.globals.iter().any(|g| g.name == *name)
+                {
                     self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(env_id, name),
-                            rvalue: Rvalue::Use(Operand::Copy(root_local)),
+                        AirStmtKind::CallVoid {
+                            func: Callee::Named(format!("__aelys_global_set_{}", name)),
+                            args: vec![Operand::Copy(root_local)],
                         },
                         sp,
                     );
