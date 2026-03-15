@@ -442,6 +442,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     /// Shared logic for IndexAssign expressions.
+    ///
+    /// Handles `obj[i] = val` where `obj` may be a chain of field accesses
+    /// (e.g. `buf.data[i] = val`). In that case a read-modify-write is needed:
+    /// load the array from the parent struct(s), assign into the element, then
+    /// store the array back up the chain.
     fn lower_index_assign(
         &mut self,
         object: &TypedExpr,
@@ -449,18 +454,85 @@ impl<'a> LoweringContext<'a> {
         value: &TypedExpr,
         sp: Option<Span>,
     ) -> Operand {
-        let obj = self.lower_expr(object);
         let idx = self.lower_expr(index);
         let val = self.lower_expr(value);
-        let obj_ty = self.lower_type_from_infer(&object.ty);
-        let base_local = self.operand_to_local(obj, &obj_ty);
-        self.emit(
-            AirStmtKind::Assign {
-                place: Place::Index(base_local, idx),
-                rvalue: Rvalue::Use(val),
-            },
-            sp,
-        );
+
+        // Peel Member layers to find the root (the actual array/collection) and path.
+        let mut segments: Vec<(String, AirType)> = Vec::new();
+        let mut current = object;
+        loop {
+            match &current.kind {
+                TypedExprKind::Member { object: inner, member } => {
+                    let field_ty = self.lower_type_from_infer(&current.ty);
+                    segments.push((member.clone(), field_ty));
+                    current = inner;
+                }
+                _ => break,
+            }
+        }
+        segments.reverse(); // shallowest → deepest
+
+        if segments.is_empty() {
+            // Simple case: the object is directly accessible.
+            let obj = self.lower_expr(current);
+            let obj_ty = self.lower_type_from_infer(&current.ty);
+            let base_local = self.operand_to_local(obj, &obj_ty);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Index(base_local, idx),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+        } else {
+            // Nested case: e.g. `buf.data[i] = val` or `a.b.arr[i] = val`.
+            let root_op = self.lower_expr(current);
+            let root_ty = self.lower_type_from_infer(&current.ty);
+            let root_local = self.operand_to_local(root_op, &root_ty);
+
+            // Load each intermediate into a mutable temp.
+            let mut temps: Vec<LocalId> = Vec::new();
+            let mut cur_local = root_local;
+            for (field_name, field_ty) in &segments {
+                let tmp = self.alloc_temp_mut(field_ty.clone());
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(tmp),
+                        rvalue: Rvalue::FieldAccess {
+                            base: Operand::Copy(cur_local),
+                            field: field_name.clone(),
+                        },
+                    },
+                    sp,
+                );
+                temps.push(tmp);
+                cur_local = tmp;
+            }
+
+            // Index-assign on the deepest temp (the array).
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Index(cur_local, idx),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+
+            // Write back bottom-up.
+            for i in (0..segments.len()).rev() {
+                let tmp = temps[i];
+                let (field_name, _) = &segments[i];
+                let parent = if i == 0 { root_local } else { temps[i - 1] };
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Field(parent, field_name.clone()),
+                        rvalue: Rvalue::Use(Operand::Copy(tmp)),
+                    },
+                    sp,
+                );
+            }
+        }
+
         Operand::Const(AirConst::Null)
     }
 
