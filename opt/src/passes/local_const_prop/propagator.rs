@@ -44,6 +44,12 @@ impl LocalConstantPropagator {
 
                 if !*mutable && Self::is_simple_constant(initializer) {
                     self.scopes.insert(name.clone(), initializer.clone());
+                } else {
+                    // Even when the initializer isn't a propagatable constant,
+                    // block the name so that an outer constant binding with the
+                    // same name (i.e. shadowed by this `let`) is not visible to
+                    // uses that follow in the current scope.
+                    self.scopes.block(name);
                 }
             }
 
