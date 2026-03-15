@@ -489,44 +489,97 @@ impl<'a> LoweringContext<'a> {
         segments.reverse(); // shallowest → deepest
 
         if segments.is_empty() {
-            // Detect nested index chain: `arr[i][j] = val`, `cube[i][j][k] = val`, etc.
-            // Collect all Index layers from the object to find the root, then perform
-            // a read-modify-write at every level: load each sub-array into a temp,
-            // write the value at the leaf, then write back all the way up.
+            // Collect the full access path (mix of Member and Index layers) from the
+            // object back to the root variable.  This handles patterns like:
+            //   arr[i][j] = val           (Index chain)
+            //   s.arr[i] = val            (Member then Index)
+            //   s.arr[i][j] = val         (Member then nested Index)
+            //   a.b.arr[i] = val          (multiple Members then Index)
+            //   arr2d[i].arr[j] = val     (Index then Member then Index)
             {
-                let mut chain_info: Vec<(&TypedExpr, AirType)> = Vec::new();
-                let mut index_root = current;
-                while let TypedExprKind::Index { object, index: nested_idx } = &index_root.kind {
-                    let elem_ty = self.lower_type_from_infer(&index_root.ty);
-                    chain_info.push((nested_idx, elem_ty));
-                    index_root = object;
+                enum PathStep<'a> {
+                    Field { name: String, result_ty: AirType },
+                    Index { idx_expr: &'a TypedExpr, result_ty: AirType },
                 }
 
-                if !chain_info.is_empty() {
-                    chain_info.reverse(); // root → outermost
+                let mut steps: Vec<PathStep<'_>> = Vec::new();
+                let mut walk = current;
+                loop {
+                    match &walk.kind {
+                        TypedExprKind::Index { object, index: nested_idx } => {
+                            let result_ty = self.lower_type_from_infer(&walk.ty);
+                            steps.push(PathStep::Index { idx_expr: nested_idx, result_ty });
+                            walk = object;
+                        }
+                        TypedExprKind::Member { object, member } => {
+                            let result_ty = self.lower_type_from_infer(&walk.ty);
+                            steps.push(PathStep::Field { name: member.clone(), result_ty });
+                            walk = object;
+                        }
+                        _ => break,
+                    }
+                }
 
-                    let root_op = self.lower_expr(index_root);
-                    let root_ty = self.lower_type_from_infer(&index_root.ty);
+                if !steps.is_empty() {
+                    steps.reverse(); // root → outermost
+
+                    let root_name = if let TypedExprKind::Identifier(name) = &walk.kind {
+                        Some(name.clone())
+                    } else {
+                        None
+                    };
+                    let root_op = self.lower_expr(walk);
+                    let root_ty = self.lower_type_from_infer(&walk.ty);
                     let root_local = self.operand_to_local(root_op, &root_ty);
 
-                    // Read chain: load each intermediate sub-array into a mutable temp.
-                    let mut chain: Vec<(LocalId, Operand)> = Vec::new(); // (parent, index_op)
+                    // Read phase: load each intermediate into a mutable temp.
+                    enum WriteBack {
+                        Field(String),
+                        Index(Operand),
+                    }
+                    struct TempInfo {
+                        local: LocalId,
+                        parent: LocalId,
+                        wb: WriteBack,
+                    }
+
+                    let mut temps: Vec<TempInfo> = Vec::new();
                     let mut cur_local = root_local;
-                    for (idx_expr, elem_ty) in &chain_info {
-                        let index_op = self.lower_expr(idx_expr);
-                        let tmp = self.alloc_temp_mut(elem_ty.clone());
-                        self.emit(
-                            AirStmtKind::Assign {
-                                place: Place::Local(tmp),
-                                rvalue: Rvalue::Index {
-                                    base: Operand::Copy(cur_local),
-                                    index: index_op.clone(),
-                                },
-                            },
-                            sp,
-                        );
-                        chain.push((cur_local, index_op));
-                        cur_local = tmp;
+
+                    for step in &steps {
+                        match step {
+                            PathStep::Field { name, result_ty } => {
+                                let tmp = self.alloc_temp_mut(result_ty.clone());
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Local(tmp),
+                                        rvalue: Rvalue::FieldAccess {
+                                            base: Operand::Copy(cur_local),
+                                            field: name.clone(),
+                                        },
+                                    },
+                                    sp,
+                                );
+                                temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Field(name.clone()) });
+                                cur_local = tmp;
+                            }
+                            PathStep::Index { idx_expr, result_ty } => {
+                                let index_op = self.lower_expr(idx_expr);
+                                let tmp = self.alloc_temp_mut(result_ty.clone());
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Local(tmp),
+                                        rvalue: Rvalue::Index {
+                                            base: Operand::Copy(cur_local),
+                                            index: index_op.clone(),
+                                        },
+                                    },
+                                    sp,
+                                );
+                                temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Index(index_op) });
+                                cur_local = tmp;
+                            }
+                        }
                     }
 
                     // Write the value at the innermost level.
@@ -538,16 +591,54 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
 
-                    // Write back chain: propagate the modified sub-arrays back up to the root.
-                    for (parent_local, index_op) in chain.into_iter().rev() {
-                        self.emit(
-                            AirStmtKind::Assign {
-                                place: Place::Index(parent_local, index_op),
-                                rvalue: Rvalue::Use(Operand::Copy(cur_local)),
-                            },
-                            sp,
-                        );
-                        cur_local = parent_local;
+                    // Write-back phase: propagate modifications back up to the root.
+                    for info in temps.iter().rev() {
+                        match &info.wb {
+                            WriteBack::Field(name) => {
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Field(info.parent, name.clone()),
+                                        rvalue: Rvalue::Use(Operand::Copy(info.local)),
+                                    },
+                                    sp,
+                                );
+                            }
+                            WriteBack::Index(index_op) => {
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Index(info.parent, index_op.clone()),
+                                        rvalue: Rvalue::Use(Operand::Copy(info.local)),
+                                    },
+                                    sp,
+                                );
+                            }
+                        }
+                    }
+
+                    // Closure env / global write-back for root.
+                    if let Some(ref name) = root_name {
+                        if let Some(env_id) = self.closure_env_param {
+                            if self.closure_captures.contains(name) {
+                                self.emit(
+                                    AirStmtKind::Assign {
+                                        place: Place::Field(env_id, name.clone()),
+                                        rvalue: Rvalue::Use(Operand::Copy(root_local)),
+                                    },
+                                    sp,
+                                );
+                            }
+                        }
+                        if self.lookup_local(name).is_none()
+                            && self.globals.iter().any(|g| g.name == *name)
+                        {
+                            self.emit(
+                                AirStmtKind::CallVoid {
+                                    func: Callee::Named(format!("__aelys_global_set_{}", name)),
+                                    args: vec![Operand::Copy(root_local)],
+                                },
+                                sp,
+                            );
+                        }
                     }
 
                     return Operand::Const(AirConst::Null);
