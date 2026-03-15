@@ -84,7 +84,11 @@ impl Parser {
             let arm_start = self.peek().span;
             let pattern = self.parse_pattern()?;
             self.consume(&TokenKind::FatArrow, "=>")?;
-            let body = self.expression()?;
+            let body = if self.check(&TokenKind::Return) {
+                self.match_arm_return()?
+            } else {
+                self.expression()?
+            };
             let arm_end = self.previous().span;
             arms.push(MatchArm {
                 pattern,
@@ -106,6 +110,36 @@ impl Parser {
                 arms,
             },
             start_span.merge(end_span),
+        ))
+    }
+
+    /// Parse `return <expr>` in match arm position.
+    /// Wraps the return in a Block so it fits the Expr slot the arm expects.
+    fn match_arm_return(&mut self) -> Result<Expr> {
+        let ret_span = self.peek().span;
+        self.advance(); // consume `return`
+
+        // Bare `return` (no value) or `return <expr>`
+        let value = if self.check(&TokenKind::Comma)
+            || self.check(&TokenKind::Semicolon)
+            || self.check(&TokenKind::RBrace)
+        {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        let end_span = self.previous().span;
+        let stmt = Stmt::new(
+            StmtKind::Return(value),
+            ret_span.merge(end_span),
+        );
+        Ok(Expr::new(
+            ExprKind::Block {
+                stmts: vec![stmt],
+                tail: Box::new(Expr::new(ExprKind::Null, end_span)),
+            },
+            ret_span.merge(end_span),
         ))
     }
 
@@ -156,6 +190,40 @@ impl Parser {
         let mut stmts = Vec::new();
 
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            // `if` without `else` is a valid statement but not a valid
+            // expression (if-expression requires else).  Try as expression
+            // first (handles if-else in tail position); on failure backtrack
+            // and parse as statement so that guard-style `if cond { return }` works.
+            if self.check(&TokenKind::If) {
+                let saved = self.current;
+                match self.expression() {
+                    Ok(expr) => {
+                        if self.check(&TokenKind::RBrace) {
+                            self.consume(&TokenKind::RBrace, "}")?;
+                            let end_span = self.previous().span;
+                            if stmts.is_empty() {
+                                return Ok(expr);
+                            }
+                            return Ok(Expr::new(
+                                ExprKind::Block {
+                                    stmts,
+                                    tail: Box::new(expr),
+                                },
+                                block_start.merge(end_span),
+                            ));
+                        }
+                        self.consume_semicolon()?;
+                        let span = expr.span;
+                        stmts.push(Stmt::new(StmtKind::Expression(expr), span));
+                    }
+                    Err(_) => {
+                        self.current = saved;
+                        stmts.push(self.declaration()?);
+                    }
+                }
+                continue;
+            }
+
             if self.is_expression_start() {
                 let expr = self.expression()?;
 
@@ -566,6 +634,14 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
         } => {
             remap_expr_spans(object, span);
             remap_expr_spans(index, span);
+            remap_expr_spans(value, span);
+        }
+        ExprKind::FieldAssign {
+            object,
+            field: _,
+            value,
+        } => {
+            remap_expr_spans(object, span);
             remap_expr_spans(value, span);
         }
         ExprKind::Range { start, end, .. } => {
