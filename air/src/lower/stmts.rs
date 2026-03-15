@@ -41,9 +41,12 @@ impl<'a> LoweringContext<'a> {
                 if matches!(ty, AirType::Array(_, _)) {
                     match &initializer.kind {
                         TypedExprKind::ArrayLiteral { elements, .. } => {
+                            // Evaluate all elements before registering the name so that
+                            // `let arr = [arr[0], 1, 2]` reads the *outer* arr, not itself.
+                            let elem_ops: Vec<Operand> =
+                                elements.iter().map(|e| self.lower_expr(e)).collect();
                             let local = self.alloc_named_local(name, ty, true, sp);
-                            for (i, elem) in elements.iter().enumerate() {
-                                let elem_op = self.lower_expr(elem);
+                            for (i, elem_op) in elem_ops.into_iter().enumerate() {
                                 self.emit(
                                     AirStmtKind::Assign {
                                         place: Place::Index(
@@ -71,13 +74,12 @@ impl<'a> LoweringContext<'a> {
                                     0
                                 }
                             };
-                            // Stack size check
                             let elem_air_ty = match var_type {
                                 InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                                 _ => AirType::I64,
                             };
                             self.check_stack_array_size(&elem_air_ty, n);
-                            let local = self.alloc_named_local(name, ty, true, sp);
+                            // Evaluate fill value before registering the name.
                             let fill_op = if let Some(fv) = fill_value {
                                 self.lower_expr(fv)
                             } else {
@@ -87,6 +89,7 @@ impl<'a> LoweringContext<'a> {
                                 };
                                 Operand::Const(AirConst::ZeroInit(elem_ty))
                             };
+                            let local = self.alloc_named_local(name, ty, true, sp);
                             for i in 0..n {
                                 self.emit(
                                     AirStmtKind::Assign {
@@ -104,8 +107,10 @@ impl<'a> LoweringContext<'a> {
                         _ => {}
                     }
                 }
-                let local = self.alloc_named_local(name, ty, *mutable, sp);
+                // Evaluate the initializer before registering the name so that
+                // `let x = x + 1` reads the *outer* x, not the new binding.
                 let operand = self.lower_expr(initializer);
+                let local = self.alloc_named_local(name, ty, *mutable, sp);
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Local(local),
