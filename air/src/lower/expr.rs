@@ -48,11 +48,14 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     )
                 } else if matches!(expr.ty, InferType::Function { .. }) {
-                    // Keep named functions in a typed temp when they are used as values.
-                    // A raw FnRef constant looks like ptr<void> to later mono passes.
+                    // Named function used as a value: wrap in a fat pointer with
+                    // null env. Same representation as a closure; see lower_lambda.
                     self.emit_rvalue_to_temp(
                         self.lower_type_from_infer(&expr.ty),
-                        Rvalue::Use(Operand::Const(AirConst::FnRef(name.clone()))),
+                        Rvalue::ClosureCreate {
+                            fn_name: name.clone(),
+                            env: Operand::Const(AirConst::Null),
+                        },
                         sp,
                     )
                 } else {
@@ -152,7 +155,13 @@ impl<'a> LoweringContext<'a> {
                 // extract element type from the array type
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
-                    _ => AirType::I64,
+                    other => {
+                        self.report_error(format!(
+                            "ICE: array literal has non-array type `{}` at AIR lowering",
+                            other
+                        ));
+                        AirType::I64
+                    }
                 };
                 let arr_ty = AirType::Array(Box::new(elem_ty), n);
                 let arr_local = self.alloc_temp_mut(arr_ty);
@@ -189,7 +198,13 @@ impl<'a> LoweringContext<'a> {
                 };
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
-                    _ => AirType::I64,
+                    other => {
+                        self.report_error(format!(
+                            "ICE: ArraySized has non-array type `{}` at AIR lowering",
+                            other
+                        ));
+                        AirType::I64
+                    }
                 };
                 self.check_stack_array_size(&elem_ty, n);
                 let arr_ty = AirType::Array(Box::new(elem_ty), n);
@@ -200,7 +215,13 @@ impl<'a> LoweringContext<'a> {
                 } else {
                     let elem_ty_for_zero = match &expr.ty {
                         InferType::Array(inner, _) => self.lower_type_from_infer(inner),
-                        _ => AirType::I64,
+                        other => {
+                            self.report_error(format!(
+                                "ICE: ArraySized zero-init has non-array type `{}` at AIR lowering",
+                                other
+                            ));
+                            AirType::I64
+                        }
                     };
                     Operand::Const(AirConst::ZeroInit(elem_ty_for_zero))
                 };
@@ -249,6 +270,12 @@ impl<'a> LoweringContext<'a> {
                 index,
                 value,
             } => self.lower_index_assign(object, index, value, sp),
+
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => self.lower_field_assign(object, field, value, sp),
 
             TypedExprKind::Range { start, end, .. } => {
                 let mut args = Vec::new();
@@ -357,6 +384,13 @@ impl<'a> LoweringContext<'a> {
             } => {
                 self.lower_index_assign(object, index, value, sp);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => {
+                self.lower_field_assign(object, field, value, sp);
+            }
             _ => {
                 self.lower_expr(expr);
             }
@@ -427,6 +461,68 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
+        Operand::Const(AirConst::Null)
+    }
+
+    fn lower_field_assign(
+        &mut self,
+        object: &TypedExpr,
+        field: &str,
+        value: &TypedExpr,
+        sp: Option<Span>,
+    ) -> Operand {
+        let val = self.lower_expr(value);
+        let obj_ty = self.lower_type_from_infer(&object.ty);
+
+        // arr[i].field = value needs read-modify-write:
+        // the element must be copied out, field modified, then written back.
+        if let TypedExprKind::Index {
+            object: arr_expr,
+            index: idx_expr,
+        } = &object.kind
+        {
+            let arr_op = self.lower_expr(arr_expr);
+            let arr_ty = self.lower_type_from_infer(&arr_expr.ty);
+            let arr_local = self.operand_to_local(arr_op, &arr_ty);
+            let idx_op = self.lower_expr(idx_expr);
+
+            let elem_local = self.alloc_temp_mut(obj_ty);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(elem_local),
+                    rvalue: Rvalue::Index {
+                        base: Operand::Copy(arr_local),
+                        index: idx_op.clone(),
+                    },
+                },
+                sp,
+            );
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(elem_local, field.to_string()),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Index(arr_local, idx_op),
+                    rvalue: Rvalue::Use(Operand::Copy(elem_local)),
+                },
+                sp,
+            );
+        } else {
+            let obj = self.lower_expr(object);
+            let base_local = self.operand_to_local(obj, &obj_ty);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(base_local, field.to_string()),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+        }
+
         Operand::Const(AirConst::Null)
     }
 
@@ -577,7 +673,29 @@ impl<'a> LoweringContext<'a> {
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
-    // lambda lowering (desugared to closure env struct + function)
+    // Lambda lowering: closures and function values in Aelys
+    //
+    // Every lambda, capturing or not, is lowered as a closure with an __env
+    // parameter and wrapped in a fat pointer { fn_ptr, env_ptr }. Named functions
+    // used as values also get wrapped in a fat pointer (with env_ptr = null).
+    //
+    // This uniformity is load-bearing: a call site receiving `fn(i64) -> i64`
+    // cannot know whether it got a named function, a non-capturing lambda, or a
+    // capturing closure. If these had different representations, indirect calls
+    // would need two codepaths and the type system would need to track the
+    // distinction. The alternative (generating thunks per named function, like
+    // OCaml) was rejected for the same reason: more AIR, more generated code,
+    // more surface for bugs.
+    //
+    // For capturing closures, the env struct is heap-allocated via Alloc (malloc).
+    // Stack allocation would be unsound: closures can escape their creation scope
+    // (returned from functions, stored in structs), and the env would dangle.
+    // Escape analysis to decide stack vs heap is not implemented. The env is
+    // intentionally leaked; the GC (@no_gc is the opt-out) will trace these
+    // allocations once it exists. The representation won't need to change.
+    //
+    // Captures are by value at creation time. Mutating the original variable after
+    // closure creation does not affect what the closure sees.
     fn lower_lambda(
         &mut self,
         params: &[TypedParam],
@@ -600,13 +718,65 @@ impl<'a> LoweringContext<'a> {
             span: parent.span,
             captures: captures.to_vec(),
         };
-        self.lower_function(&fake_func);
+        // Always go through the closure path so every lambda gets an __env
+        // parameter, ensuring a uniform calling convention for all function values.
+        self.lower_function_as_closure(&fake_func);
 
-        self.emit_rvalue_to_temp(
-            self.lower_type_from_infer(&parent.ty),
-            Rvalue::Use(Operand::Const(AirConst::FnRef(lambda_name))),
-            Some(self.span(&parent.span)),
-        )
+        let sp = Some(self.span(&parent.span));
+        let result_ty = self.lower_type_from_infer(&parent.ty);
+        let runtime_caps = self.runtime_captures(captures);
+
+        if runtime_caps.is_empty() {
+            // Non-capturing: fat pointer with null env
+            self.emit_rvalue_to_temp(
+                result_ty,
+                Rvalue::ClosureCreate {
+                    fn_name: lambda_name,
+                    env: Operand::Const(AirConst::Null),
+                },
+                sp,
+            )
+        } else {
+            // Capturing: heap-allocate env, store captures, build fat pointer
+            let env_name = format!("__closure_env_{}", lambda_name);
+            let env_ptr_ty = AirType::Ptr(Box::new(AirType::Struct(env_name.clone())));
+            let env_ptr = self.alloc_temp(env_ptr_ty.clone());
+            self.emit(
+                AirStmtKind::Alloc {
+                    local: env_ptr,
+                    ty: AirType::Struct(env_name.clone()),
+                },
+                sp,
+            );
+            // Store each captured value into the env struct
+            for (cap_name, _cap_ty) in &runtime_caps {
+                let cap_val = if let Some(id) = self.lookup_local(cap_name) {
+                    Operand::Copy(id)
+                } else {
+                    self.report_error(format!(
+                        "ICE: captured variable `{}` not found in scope during closure lowering",
+                        cap_name
+                    ));
+                    continue;
+                };
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Field(env_ptr, cap_name.clone()),
+                        rvalue: Rvalue::Use(cap_val),
+                    },
+                    sp,
+                );
+            }
+            // Build fat pointer { fn_ptr, env_ptr }
+            self.emit_rvalue_to_temp(
+                result_ty,
+                Rvalue::ClosureCreate {
+                    fn_name: lambda_name,
+                    env: Operand::Copy(env_ptr),
+                },
+                sp,
+            )
+        }
     }
 
     fn lower_match_expr(
