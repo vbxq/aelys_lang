@@ -489,6 +489,46 @@ impl<'a> LoweringContext<'a> {
         segments.reverse(); // shallowest → deepest
 
         if segments.is_empty() {
+            // Detect nested index: `arr[i][j] = val` where `current` is `arr[i]`.
+            // A read-modify-write is needed: load arr[i] into a temp, assign temp[j] = val,
+            // then store the temp back to arr[i].
+            if let TypedExprKind::Index { object: parent_arr, index: parent_idx_expr } =
+                &current.kind
+            {
+                let parent_arr_op = self.lower_expr(parent_arr);
+                let parent_arr_ty = self.lower_type_from_infer(&parent_arr.ty);
+                let parent_arr_local = self.operand_to_local(parent_arr_op, &parent_arr_ty);
+                let parent_idx = self.lower_expr(parent_idx_expr);
+
+                let elem_ty = self.lower_type_from_infer(&current.ty);
+                let elem_local = self.alloc_temp_mut(elem_ty);
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(elem_local),
+                        rvalue: Rvalue::Index {
+                            base: Operand::Copy(parent_arr_local),
+                            index: parent_idx.clone(),
+                        },
+                    },
+                    sp,
+                );
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Index(elem_local, idx),
+                        rvalue: Rvalue::Use(val),
+                    },
+                    sp,
+                );
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Index(parent_arr_local, parent_idx),
+                        rvalue: Rvalue::Use(Operand::Copy(elem_local)),
+                    },
+                    sp,
+                );
+                return Operand::Const(AirConst::Null);
+            }
+
             // Simple case: the object is directly accessible.
             let root_name = if let TypedExprKind::Identifier(name) = &current.kind {
                 Some(name.clone())
