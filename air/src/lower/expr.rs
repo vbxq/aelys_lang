@@ -489,44 +489,69 @@ impl<'a> LoweringContext<'a> {
         segments.reverse(); // shallowest → deepest
 
         if segments.is_empty() {
-            // Detect nested index: `arr[i][j] = val` where `current` is `arr[i]`.
-            // A read-modify-write is needed: load arr[i] into a temp, assign temp[j] = val,
-            // then store the temp back to arr[i].
-            if let TypedExprKind::Index { object: parent_arr, index: parent_idx_expr } =
-                &current.kind
+            // Detect nested index chain: `arr[i][j] = val`, `cube[i][j][k] = val`, etc.
+            // Collect all Index layers from the object to find the root, then perform
+            // a read-modify-write at every level: load each sub-array into a temp,
+            // write the value at the leaf, then write back all the way up.
             {
-                let parent_arr_op = self.lower_expr(parent_arr);
-                let parent_arr_ty = self.lower_type_from_infer(&parent_arr.ty);
-                let parent_arr_local = self.operand_to_local(parent_arr_op, &parent_arr_ty);
-                let parent_idx = self.lower_expr(parent_idx_expr);
+                let mut chain_info: Vec<(&TypedExpr, AirType)> = Vec::new();
+                let mut index_root = current;
+                while let TypedExprKind::Index { object, index: nested_idx } = &index_root.kind {
+                    let elem_ty = self.lower_type_from_infer(&index_root.ty);
+                    chain_info.push((nested_idx, elem_ty));
+                    index_root = object;
+                }
 
-                let elem_ty = self.lower_type_from_infer(&current.ty);
-                let elem_local = self.alloc_temp_mut(elem_ty);
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Local(elem_local),
-                        rvalue: Rvalue::Index {
-                            base: Operand::Copy(parent_arr_local),
-                            index: parent_idx.clone(),
+                if !chain_info.is_empty() {
+                    chain_info.reverse(); // root → outermost
+
+                    let root_op = self.lower_expr(index_root);
+                    let root_ty = self.lower_type_from_infer(&index_root.ty);
+                    let root_local = self.operand_to_local(root_op, &root_ty);
+
+                    // Read chain: load each intermediate sub-array into a mutable temp.
+                    let mut chain: Vec<(LocalId, Operand)> = Vec::new(); // (parent, index_op)
+                    let mut cur_local = root_local;
+                    for (idx_expr, elem_ty) in &chain_info {
+                        let index_op = self.lower_expr(idx_expr);
+                        let tmp = self.alloc_temp_mut(elem_ty.clone());
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Local(tmp),
+                                rvalue: Rvalue::Index {
+                                    base: Operand::Copy(cur_local),
+                                    index: index_op.clone(),
+                                },
+                            },
+                            sp,
+                        );
+                        chain.push((cur_local, index_op));
+                        cur_local = tmp;
+                    }
+
+                    // Write the value at the innermost level.
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Index(cur_local, idx),
+                            rvalue: Rvalue::Use(val),
                         },
-                    },
-                    sp,
-                );
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Index(elem_local, idx),
-                        rvalue: Rvalue::Use(val),
-                    },
-                    sp,
-                );
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Index(parent_arr_local, parent_idx),
-                        rvalue: Rvalue::Use(Operand::Copy(elem_local)),
-                    },
-                    sp,
-                );
-                return Operand::Const(AirConst::Null);
+                        sp,
+                    );
+
+                    // Write back chain: propagate the modified sub-arrays back up to the root.
+                    for (parent_local, index_op) in chain.into_iter().rev() {
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Index(parent_local, index_op),
+                                rvalue: Rvalue::Use(Operand::Copy(cur_local)),
+                            },
+                            sp,
+                        );
+                        cur_local = parent_local;
+                    }
+
+                    return Operand::Const(AirConst::Null);
+                }
             }
 
             // Simple case: the object is directly accessible.
