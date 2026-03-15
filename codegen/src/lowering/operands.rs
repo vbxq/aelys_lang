@@ -65,9 +65,12 @@ impl<'a> FunctionCodegen<'a> {
                 })?;
                 Ok(func.as_global_value().as_pointer_value().into())
             }
-            AirConst::Enum { .. } | AirConst::Array(_) => Err(CodegenError::UnsupportedInstruction(
-                "enum/array constants are only supported in global initializers".to_string(),
-            )),
+            AirConst::Enum { .. } | AirConst::Array(_) | AirConst::Struct { .. } => {
+                Err(CodegenError::UnsupportedInstruction(
+                    "enum/array/struct constants are only supported in global initializers"
+                        .to_string(),
+                ))
+            }
             AirConst::ZeroInit(ty) => Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero()),
             AirConst::Undef(ty) => {
                 let llvm_ty = air_basic_type_to_llvm(ty, self.context)?;
@@ -100,6 +103,7 @@ impl<'a> FunctionCodegen<'a> {
                 Ok(ty.clone())
             }
             Operand::Const(AirConst::Array(_)) => Ok(AirType::Opaque),
+            Operand::Const(AirConst::Struct { name, .. }) => Ok(AirType::Struct(name.clone())),
         }
     }
 }
@@ -146,5 +150,6 @@ pub(crate) fn constant_kind_name(c: &AirConst) -> &'static str {
         AirConst::ZeroInit(_) => "ZeroInit",
         AirConst::Undef(_) => "Undef",
         AirConst::Array(_) => "Array",
+        AirConst::Struct { .. } => "Struct",
     }
 }

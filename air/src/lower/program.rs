@@ -504,6 +504,15 @@ impl<'a> LoweringContext<'a> {
                     elements.iter().map(|e| self.try_const_expr(e)).collect();
                 consts.map(AirConst::Array)
             }
+            TypedExprKind::StructLiteral { name, fields } => {
+                let field_consts: Option<Vec<(String, AirConst)>> = fields
+                    .iter()
+                    .map(|(fname, fexpr)| {
+                        self.try_const_expr(fexpr).map(|c| (fname.clone(), c))
+                    })
+                    .collect();
+                field_consts.map(|fields| AirConst::Struct { name: name.clone(), fields })
+            }
             _ => None,
         }
     }

@@ -171,6 +171,7 @@ pub(super) fn operand_type_from(
             AirConst::Enum { enum_name, .. } => AirType::Enum(enum_name.clone()),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
             AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
+            AirConst::Struct { name, .. } => AirType::Struct(name.clone()),
         },
         Operand::Copy(id) | Operand::Move(id) => params
             .iter()

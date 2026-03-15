@@ -351,6 +351,11 @@ pub enum AirConst {
     Undef(AirType),
     /// Compile-time constant array (all elements must also be constants).
     Array(Vec<AirConst>),
+    /// Compile-time constant struct literal (fields in canonical declaration order).
+    Struct {
+        name: String,
+        fields: Vec<(String, AirConst)>,
+    },
 }
 
 #[derive(Clone)]

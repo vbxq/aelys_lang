@@ -80,6 +80,14 @@ pub fn fmt_const(c: &AirConst) -> String {
             let elems = elems.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
             format!("[{}]", elems)
         }
+        AirConst::Struct { name, fields } => {
+            let fields = fields
+                .iter()
+                .map(|(f, c)| format!("{}: {}", f, fmt_const(c)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} {{ {} }}", name, fields)
+        }
     }
 }
 

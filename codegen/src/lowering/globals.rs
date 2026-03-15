@@ -93,6 +93,9 @@ impl CodegenContext {
                 global.name, ty, global.ty
             ))),
             AirConst::Array(elems) => self.array_initializer(&global.name, &global.ty, elems, program),
+            AirConst::Struct { name: struct_name, fields } => {
+                self.struct_initializer(&global.name, &global.ty, struct_name, fields, program)
+            }
             other => Err(CodegenError::UnsupportedInstruction(format!(
                 "global '{}' has unsupported initializer kind {}",
                 global.name,
@@ -177,6 +180,61 @@ impl CodegenContext {
             }
         };
         Ok(const_arr)
+    }
+
+    fn struct_initializer(
+        &self,
+        global_name: &str,
+        ty: &AirType,
+        struct_name: &str,
+        fields: &[(String, AirConst)],
+        program: &AirProgram,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let AirType::Struct(_) = ty else {
+            return Err(CodegenError::UnsupportedType(format!(
+                "global '{}' has Struct initializer but type is {:?}",
+                global_name, ty
+            )));
+        };
+        let llvm_struct_ty = self.context.get_struct_type(struct_name).ok_or_else(|| {
+            CodegenError::UnsupportedType(format!(
+                "global '{}': struct type '{}' not declared",
+                global_name, struct_name
+            ))
+        })?;
+        // Look up the canonical field order from the AIR program.
+        let struct_def = program
+            .structs
+            .iter()
+            .find(|s| s.name == struct_name)
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!(
+                    "global '{}': struct def '{}' not found in program",
+                    global_name, struct_name
+                ))
+            })?;
+        // Build field values in canonical order.
+        let mut field_values: Vec<BasicValueEnum<'static>> = Vec::with_capacity(struct_def.fields.len());
+        for struct_field in &struct_def.fields {
+            let (_, field_const) = fields
+                .iter()
+                .find(|(fname, _)| fname == &struct_field.name)
+                .ok_or_else(|| {
+                    CodegenError::UnsupportedInstruction(format!(
+                        "global '{}': missing field '{}' in struct initializer",
+                        global_name, struct_field.name
+                    ))
+                })?;
+            let field_global = AirGlobal {
+                name: format!("{}_{}", global_name, struct_field.name),
+                ty: struct_field.ty.clone(),
+                init: Some(field_const.clone()),
+                gc_mode: aelys_air::GcMode::Manual,
+                span: None,
+            };
+            field_values.push(self.global_initializer(&field_global, program)?);
+        }
+        Ok(llvm_struct_ty.const_named_struct(&field_values).into())
     }
 
     fn int_initializer(
