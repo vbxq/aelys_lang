@@ -18,6 +18,22 @@ fn is_in_vm_range(value: i64) -> bool {
     (INT_MIN..=INT_MAX).contains(&value)
 }
 
+/// Truncate an i64 constant to the bit width of a narrower integer type so
+/// that subsequent folds (comparisons, further arithmetic) operate on the
+/// same bit pattern the target hardware would produce at runtime.
+pub(super) fn truncate_to_type(value: i64, ty: &aelys_sema::InferType) -> i64 {
+    use aelys_sema::InferType;
+    match ty {
+        InferType::I8 => (value as i8) as i64,
+        InferType::I16 => (value as i16) as i64,
+        InferType::I32 => (value as i32) as i64,
+        InferType::U8 => (value as u8) as i64,
+        InferType::U16 => (value as u16) as i64,
+        InferType::U32 => (value as u32) as i64,
+        _ => value,
+    }
+}
+
 pub struct ConstantFolder {
     stats: OptimizationStats,
 }
