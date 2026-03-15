@@ -2,7 +2,7 @@ use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::function_symbol_name;
-use crate::types::{aelys_string_type, air_basic_type_to_llvm};
+use crate::types::{aelys_string_type, air_basic_type_to_llvm, closure_fat_ptr_type};
 use aelys_air::{
     AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, Operand,
     layout::{enum_has_data, enum_max_payload_size, resolved_layout},
@@ -92,12 +92,91 @@ impl CodegenContext {
                 "global '{}' has mismatched zeroinit type {:?} for {:?}",
                 global.name, ty, global.ty
             ))),
+            AirConst::Array(elems) => self.array_initializer(&global.name, &global.ty, elems, program),
             other => Err(CodegenError::UnsupportedInstruction(format!(
                 "global '{}' has unsupported initializer kind {}",
                 global.name,
                 crate::lowering::operands::constant_kind_name(other)
             ))),
         }
+    }
+
+    fn array_initializer(
+        &self,
+        global_name: &str,
+        ty: &AirType,
+        elems: &[AirConst],
+        program: &AirProgram,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let AirType::Array(elem_ty, _) = ty else {
+            return Err(CodegenError::UnsupportedType(format!(
+                "global '{}' has Array initializer but non-array type {:?}",
+                global_name, ty
+            )));
+        };
+        let elem_llvm_ty = air_basic_type_to_llvm(elem_ty, self.context)?;
+        // Build a temporary AirGlobal for each element so we can reuse
+        // the existing scalar initializer paths.
+        let elem_consts: Result<Vec<BasicValueEnum<'static>>, _> = elems
+            .iter()
+            .map(|c| {
+                let elem_global = AirGlobal {
+                    name: global_name.to_string(),
+                    ty: (**elem_ty).clone(),
+                    init: Some(c.clone()),
+                    gc_mode: aelys_air::GcMode::Manual,
+                    span: None,
+                };
+                self.global_initializer(&elem_global, program)
+            })
+            .collect();
+        let elem_values = elem_consts?;
+
+        // Build the LLVM const array for the element type.
+        let const_arr: BasicValueEnum<'static> = match elem_llvm_ty {
+            inkwell::types::BasicTypeEnum::IntType(t) => {
+                let vals: Vec<_> = elem_values
+                    .iter()
+                    .map(|v| v.into_int_value())
+                    .collect();
+                t.const_array(&vals).into()
+            }
+            inkwell::types::BasicTypeEnum::FloatType(t) => {
+                let vals: Vec<_> = elem_values
+                    .iter()
+                    .map(|v| v.into_float_value())
+                    .collect();
+                t.const_array(&vals).into()
+            }
+            inkwell::types::BasicTypeEnum::PointerType(t) => {
+                let vals: Vec<_> = elem_values
+                    .iter()
+                    .map(|v| v.into_pointer_value())
+                    .collect();
+                t.const_array(&vals).into()
+            }
+            inkwell::types::BasicTypeEnum::StructType(t) => {
+                let vals: Vec<_> = elem_values
+                    .iter()
+                    .map(|v| v.into_struct_value())
+                    .collect();
+                t.const_array(&vals).into()
+            }
+            inkwell::types::BasicTypeEnum::ArrayType(t) => {
+                let vals: Vec<_> = elem_values
+                    .iter()
+                    .map(|v| v.into_array_value())
+                    .collect();
+                t.const_array(&vals).into()
+            }
+            other => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "global array '{}' has unsupported element type {:?}",
+                    global_name, other
+                )));
+            }
+        };
+        Ok(const_arr)
     }
 
     fn int_initializer(
@@ -337,12 +416,15 @@ impl CodegenContext {
         function_name: &str,
         program: &AirProgram,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        if !matches!(ty, AirType::FnPtr { .. }) {
-            return Err(CodegenError::UnsupportedType(format!(
-                "global '{}' uses fnref initializer with non-fn type {:?}",
-                global_name, ty
-            )));
-        }
+        let conv = match ty {
+            AirType::FnPtr { conv, .. } => *conv,
+            _ => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "global '{}' uses fnref initializer with non-fn type {:?}",
+                    global_name, ty
+                )));
+            }
+        };
 
         let symbol_name = program
             .functions
@@ -357,7 +439,21 @@ impl CodegenContext {
                 global_name, function_name
             ))
         })?;
-        Ok(func.as_global_value().as_pointer_value().into())
+        let fn_ptr = func.as_global_value().as_pointer_value();
+
+        if matches!(conv, aelys_air::CallingConv::Aelys) {
+            // Aelys-convention function values are fat pointers { fn_ptr, env_ptr }.
+            // Named functions have no captures, so env_ptr is null.
+            let null_env = self
+                .context
+                .ptr_type(AddressSpace::default())
+                .const_null();
+            let fat = closure_fat_ptr_type(self.context)
+                .const_named_struct(&[fn_ptr.into(), null_env.into()]);
+            Ok(fat.into())
+        } else {
+            Ok(fn_ptr.into())
+        }
     }
 
     fn enum_payload_initializer_bytes(

@@ -499,6 +499,11 @@ impl<'a> LoweringContext<'a> {
                     payload,
                 })
             }
+            TypedExprKind::ArrayLiteral { elements } => {
+                let consts: Option<Vec<AirConst>> =
+                    elements.iter().map(|e| self.try_const_expr(e)).collect();
+                consts.map(AirConst::Array)
+            }
             _ => None,
         }
     }

@@ -128,6 +128,7 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
                 *enum_name = format!("__mono_{}_{}", enum_name, suffix);
             }
         }
+        Rvalue::ClosureCreate { .. } => {}
         _ => {}
     }
 }
@@ -169,6 +170,7 @@ pub(super) fn operand_type_from(
             AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::Enum { enum_name, .. } => AirType::Enum(enum_name.clone()),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
+            AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
         },
         Operand::Copy(id) | Operand::Move(id) => params
             .iter()

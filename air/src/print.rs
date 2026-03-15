@@ -76,6 +76,10 @@ pub fn fmt_const(c: &AirConst) -> String {
         }
         AirConst::ZeroInit(ty) => format!("zeroinit {}", fmt_type(ty)),
         AirConst::Undef(ty) => format!("undef {}", fmt_type(ty)),
+        AirConst::Array(elems) => {
+            let elems = elems.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
+            format!("[{}]", elems)
+        }
     }
 }
 
@@ -268,6 +272,13 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
                 tag,
                 field_index,
                 fmt_operand(operand, func)
+            )
+        }
+        Rvalue::ClosureCreate { fn_name, env } => {
+            format!(
+                "closure_create @{} env={}",
+                fn_name,
+                fmt_operand(env, func)
             )
         }
     }

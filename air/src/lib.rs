@@ -309,6 +309,12 @@ pub enum Rvalue {
         operand: Operand,
         field_index: u32,
     },
+    /// Build a fat pointer `{ fn_ptr, env_ptr }` from a function name and
+    /// an environment pointer (or Null for non-capturing closures / named fns).
+    ClosureCreate {
+        fn_name: String,
+        env: Operand,
+    },
 }
 
 #[derive(Clone)]
@@ -343,6 +349,8 @@ pub enum AirConst {
     },
     ZeroInit(AirType),
     Undef(AirType),
+    /// Compile-time constant array (all elements must also be constants).
+    Array(Vec<AirConst>),
 }
 
 #[derive(Clone)]
