@@ -56,8 +56,14 @@ impl Parser {
         let then_branch = self.block_expression()?;
 
         self.consume(&TokenKind::Else, "else")?;
-        self.consume(&TokenKind::LBrace, "{")?;
-        let else_branch = self.block_expression()?;
+        let else_branch = if self.check(&TokenKind::If) {
+            let if_span = self.peek().span;
+            self.advance(); // consume `if`
+            self.if_expression(if_span)?
+        } else {
+            self.consume(&TokenKind::LBrace, "{")?;
+            self.block_expression()?
+        };
 
         let end_span = self.previous().span;
 
