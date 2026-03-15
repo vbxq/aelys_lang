@@ -1,0 +1,15 @@
+fn add(a: i64, b: i64) -> i64 {
+    return a + b
+}
+
+fn apply(f: fn(i64, i64) -> i64, x: i64, y: i64) -> i64 {
+    return f(x, y)
+}
+
+fn main() -> i64 {
+    let result = apply(add, 3, 4)
+    if result == 7 {
+        return 1
+    }
+    return 0
+}

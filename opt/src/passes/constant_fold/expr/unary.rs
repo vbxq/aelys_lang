@@ -17,14 +17,20 @@ impl ConstantFolder {
                 if !super::super::is_in_vm_range(*n) {
                     return None;
                 }
-                let result = n.checked_neg()?;
+                let result = n.wrapping_neg();
+                let result_ty = if original.ty.is_integer() {
+                    original.ty.clone()
+                } else {
+                    operand_val.ty.clone()
+                };
+                let result = super::super::truncate_to_type(result, &result_ty);
                 if !super::super::is_in_vm_range(result) {
                     return None;
                 }
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Int(result),
-                    InferType::I64,
+                    result_ty,
                     original.span,
                 ))
             }
@@ -32,7 +38,7 @@ impl ConstantFolder {
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Float(-f),
-                    InferType::F64,
+                    original.ty.clone(),
                     original.span,
                 ))
             }
@@ -48,10 +54,16 @@ impl ConstantFolder {
                 if !super::super::is_in_vm_range(*n) {
                     return None;
                 }
+                let result_ty = if original.ty.is_integer() {
+                    original.ty.clone()
+                } else {
+                    operand_val.ty.clone()
+                };
+                let result = super::super::truncate_to_type(!*n, &result_ty);
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
-                    TypedExprKind::Int(!*n),
-                    InferType::I64,
+                    TypedExprKind::Int(result),
+                    result_ty,
                     original.span,
                 ))
             }

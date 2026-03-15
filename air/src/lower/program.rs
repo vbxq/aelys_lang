@@ -138,9 +138,12 @@ impl<'a> LoweringContext<'a> {
         let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
-        // a function whose return type resolved to Opaque (from Dynamic) is effectively void.
-        // the return value is not usable by callers.
         if ret_ty == AirType::Opaque {
+            self.report_error(format!(
+                "function `{}` has unresolved return type (Opaque); \
+                 treating as void — this indicates a type inference failure",
+                func.name
+            ));
             ret_ty = AirType::Void;
         }
         // InferType::Null is used by sema for both the null literal *and* the implicit void return.
@@ -222,9 +225,21 @@ impl<'a> LoweringContext<'a> {
             );
         }
 
+        // Track env param and captured names so assignments to captures write back
+        let saved_env_param = self.closure_env_param.replace(env_param_id);
+        let saved_captures = std::mem::replace(
+            &mut self.closure_captures,
+            captures.iter().map(|(n, _)| n.clone()).collect(),
+        );
+
         let user_params = self.lower_params(&func.params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
+            self.report_error(format!(
+                "closure `{}` has unresolved return type (Opaque); \
+                 treating as void — this indicates a type inference failure",
+                func.name
+            ));
             ret_ty = AirType::Void;
         }
         if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
@@ -234,6 +249,10 @@ impl<'a> LoweringContext<'a> {
         self.lower_body(&func.body);
         self.finalize_function_body();
         self.resolve_block_aliases();
+
+        // Restore outer closure context (supports nested closures)
+        self.closure_env_param = saved_env_param;
+        self.closure_captures = saved_captures;
 
         let mut all_params = vec![self.current_params.remove(0)];
         all_params.extend(user_params);
@@ -256,7 +275,43 @@ impl<'a> LoweringContext<'a> {
         self.type_params_map.clear();
     }
 
-    fn runtime_captures(&self, captures: &[(String, InferType)]) -> Vec<(String, InferType)> {
+    /// Lower a function always taking the closure path (with __env param),
+    /// regardless of whether it has captures. This ensures every lambda gets an
+    /// __env parameter, so the calling convention is uniform: a call site that
+    /// receives `fn(i64) -> i64` can always pass env as the first argument
+    /// without caring whether it's a capturing closure or a bare lambda.
+    pub(super) fn lower_function_as_closure(&mut self, func: &TypedFunction) {
+        let saved_locals = std::mem::take(&mut self.current_locals);
+        let saved_params = std::mem::take(&mut self.current_params);
+        let saved_blocks = std::mem::take(&mut self.current_blocks);
+        let saved_stmts = std::mem::take(&mut self.current_stmts);
+        let saved_names = std::mem::take(&mut self.locals_by_name);
+        let saved_aliases = std::mem::take(&mut self.block_aliases);
+        let saved_pending = self.pending_block_id.take();
+        let saved_next_local = self.next_local_id;
+        let saved_next_block = self.next_block_id;
+        self.next_local_id = 0;
+        self.next_block_id = 0;
+
+        let func_id = self.alloc_function_id();
+        let gc_mode = self.gc_mode_for_function(func);
+        let captures = self.runtime_captures(&func.captures);
+
+        // Always take the closure path
+        self.lower_closure(func, &captures, func_id, gc_mode);
+
+        self.current_locals = saved_locals;
+        self.current_params = saved_params;
+        self.current_blocks = saved_blocks;
+        self.current_stmts = saved_stmts;
+        self.locals_by_name = saved_names;
+        self.block_aliases = saved_aliases;
+        self.pending_block_id = saved_pending;
+        self.next_local_id = saved_next_local;
+        self.next_block_id = saved_next_block;
+    }
+
+    pub(super) fn runtime_captures(&self, captures: &[(String, InferType)]) -> Vec<(String, InferType)> {
         // File-scope lets live in global storage, not in closure environments.
         captures
             .iter()

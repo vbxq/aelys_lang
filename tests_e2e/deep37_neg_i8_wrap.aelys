@@ -1,0 +1,11 @@
+fn check(v: i8) -> i64 {
+    let n: i8 = -v
+    if n == -128 {
+        return 1
+    }
+    return 0
+}
+
+fn main() -> i64 {
+    return check(-128)
+}

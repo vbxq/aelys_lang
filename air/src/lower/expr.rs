@@ -431,6 +431,19 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            // If this variable is a closure capture, write the new value back
+            // to the env struct so future calls see the updated value.
+            if let Some(env_id) = self.closure_env_param {
+                if self.closure_captures.contains(name) {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Field(env_id, name.to_string()),
+                            rvalue: Rvalue::Use(Operand::Copy(id)),
+                        },
+                        sp,
+                    );
+                }
+            }
             Operand::Copy(id)
         } else {
             self.emit(

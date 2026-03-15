@@ -1,0 +1,16 @@
+fn sum_evens(n: i64) -> i64 {
+    let mut total = 0
+    for i in 0..n step 2 {
+        total = total + i
+    }
+    return total
+}
+
+fn main() -> i64 {
+    // sum of 0, 2, 4, 6, 8 = 20
+    let s = sum_evens(10)
+    if s == 20 {
+        return 1
+    }
+    return 0
+}

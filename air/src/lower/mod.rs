@@ -52,6 +52,11 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
     pub(super) block_aliases: Vec<(u32, u32)>,
+    /// When inside a closure body, the local holding the env pointer (__env param).
+    /// Used to write back mutations to captured variables.
+    pub(super) closure_env_param: Option<LocalId>,
+    /// Names of variables captured from the enclosing scope (keys of the env struct).
+    pub(super) closure_captures: std::collections::HashSet<String>,
     /// collected compile errors from lowering
     /// if non-empty after lowering completes, `finish()` returns them to the caller
     pub(super) lowering_errors: Vec<String>,
@@ -84,6 +89,8 @@ impl<'a> LoweringContext<'a> {
             type_params_map: Vec::new(),
             pending_block_id: None,
             block_aliases: Vec::new(),
+            closure_env_param: None,
+            closure_captures: std::collections::HashSet::new(),
             lowering_errors: Vec::new(),
         }
     }
@@ -347,6 +354,8 @@ impl<'a> LoweringContext<'a> {
                 );
                 AirType::Opaque
             }
+            // Never (bottom type) represents unreachable code; map to Void.
+            InferType::Never => AirType::Void,
             // Dynamic = sema's "gradual typing" fallback. For generic call results, monomorphization patches the type before codegen.
             // For anything else (error recovery, unresolved inference), Opaque survives past mono and the validation pass rejects it with a clear diagnostic
             InferType::Dynamic => AirType::Opaque,
@@ -357,7 +366,7 @@ impl<'a> LoweringContext<'a> {
     /// Reports a compile error if the array is too large (no longer panics)
     pub(super) fn check_stack_array_size(&mut self, elem_ty: &AirType, n: u64) {
         const MAX_STACK_BYTES: u64 = 1024 * 1024; // 1 MB
-        let elem_size = crate::layout::layout_of(elem_ty).size as u64;
+        let elem_size = self.stack_array_elem_size(elem_ty) as u64;
         let total = n.saturating_mul(elem_size);
         if total > MAX_STACK_BYTES {
             self.report_error(format!(
@@ -369,6 +378,48 @@ impl<'a> LoweringContext<'a> {
                 MAX_STACK_BYTES,
             ));
         }
+    }
+
+    fn stack_array_elem_size(&self, elem_ty: &AirType) -> u32 {
+        let mut probe = AirProgram {
+            functions: vec![AirFunction {
+                id: FunctionId(0),
+                name: "__stack_size_probe".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::Void,
+                locals: vec![AirLocal {
+                    id: LocalId(0),
+                    ty: elem_ty.clone(),
+                    name: Some("__probe".to_string()),
+                    is_mut: false,
+                    span: None,
+                }],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::Aelys,
+                attributes: FunctionAttribs {
+                    inline: InlineHint::Default,
+                    no_gc: false,
+                    no_unwind: false,
+                    cold: false,
+                },
+                span: None,
+            }],
+            structs: self.structs.clone(),
+            enums: self.enums.clone(),
+            globals: vec![],
+            source_files: vec![],
+            mono_instances: vec![],
+            struct_sizes: std::collections::HashMap::new(),
+        };
+
+        // `layout_of` is context-free and underestimates data enums as 4 bytes.
+        // Build a tiny AIR probe so mono + layout can recover the real aggregate size.
+        probe = crate::mono::monomorphize(probe).unwrap();
+        crate::layout::compute_layouts(&mut probe);
+        crate::layout::resolved_layout(elem_ty, &probe.struct_sizes).size
     }
 
     pub(super) fn gc_mode_for_function(&self, func: &aelys_sema::TypedFunction) -> GcMode {
