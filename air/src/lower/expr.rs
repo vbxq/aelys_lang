@@ -490,6 +490,11 @@ impl<'a> LoweringContext<'a> {
 
         if segments.is_empty() {
             // Simple case: the object is directly accessible.
+            let root_name = if let TypedExprKind::Identifier(name) = &current.kind {
+                Some(name.clone())
+            } else {
+                None
+            };
             let obj = self.lower_expr(current);
             let obj_ty = self.lower_type_from_infer(&current.ty);
             let base_local = self.operand_to_local(obj, &obj_ty);
@@ -500,6 +505,18 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            // Write the mutated array back to the closure env if it's a capture.
+            if let (Some(name), Some(env_id)) = (root_name, self.closure_env_param) {
+                if self.closure_captures.contains(&name) {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Field(env_id, name),
+                            rvalue: Rvalue::Use(Operand::Copy(base_local)),
+                        },
+                        sp,
+                    );
+                }
+            }
         } else {
             // Nested case: e.g. `buf.data[i] = val` or `a.b.arr[i] = val`.
             let root_op = self.lower_expr(current);
