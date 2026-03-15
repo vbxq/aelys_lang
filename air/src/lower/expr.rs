@@ -605,10 +605,27 @@ impl<'a> LoweringContext<'a> {
                 sp,
             );
         } else {
+            let root_name = if let TypedExprKind::Identifier(name) = &current.kind {
+                Some(name.clone())
+            } else {
+                None
+            };
             let root_op = self.lower_expr(current);
             let root_ty = self.lower_type_from_infer(&current.ty);
             let root_local = self.operand_to_local(root_op, &root_ty);
             self.emit_field_chain(root_local, &segments, field, val, sp);
+            // Write back to closure env if the root variable is a captured var.
+            if let (Some(name), Some(env_id)) = (root_name, self.closure_env_param) {
+                if self.closure_captures.contains(&name) {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Field(env_id, name),
+                            rvalue: Rvalue::Use(Operand::Copy(root_local)),
+                        },
+                        sp,
+                    );
+                }
+            }
         }
 
         Operand::Const(AirConst::Null)
