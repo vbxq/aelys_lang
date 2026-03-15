@@ -1,5 +1,5 @@
 use aelys_air::{
-    AirProgram, AirStructDef, AirStructField, AirType, CallingConv,
+    AirEnumDef, AirEnumVariant, AirProgram, AirStructDef, AirStructField, AirType, CallingConv,
     layout::{compute_layouts, layout_of},
 };
 
@@ -33,6 +33,35 @@ fn program(structs: Vec<AirStructDef>) -> AirProgram {
     }
 }
 
+fn enum_def(name: &str, variants: Vec<AirEnumVariant>) -> AirEnumDef {
+    AirEnumDef {
+        name: name.to_string(),
+        type_params: vec![],
+        variants,
+        span: None,
+    }
+}
+
+fn variant(name: &str, tag: u32, payload: Vec<AirType>) -> AirEnumVariant {
+    AirEnumVariant {
+        name: name.to_string(),
+        tag,
+        payload,
+    }
+}
+
+fn program_with_enums(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> AirProgram {
+    AirProgram {
+        functions: vec![],
+        structs,
+        enums,
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+    }
+}
+
 #[test]
 fn primitives() {
     assert_eq!(layout_of(&AirType::I8).size, 1);
@@ -51,7 +80,8 @@ fn primitives() {
         ret: Box::new(AirType::Void),
         conv: CallingConv::Aelys,
     };
-    assert_eq!(layout_of(&fnptr).size, 8);
+    // Aelys closure values are fat pointers { fn_ptr, env_ptr } = 16 bytes.
+    assert_eq!(layout_of(&fnptr).size, 16);
 }
 
 #[test]
@@ -208,6 +238,33 @@ fn array_of_struct_field() {
     assert_eq!(prog.structs[1].fields[1].offset, Some(4));
 }
 
+#[test]
+fn enum_struct_dependency_chain_resolves() {
+    let mut prog = program_with_enums(
+        vec![
+            sdef("Payload", vec![field("x", AirType::I64)]),
+            sdef(
+                "Wrapper",
+                vec![
+                    field("e", AirType::Enum("Message".into())),
+                    field("flag", AirType::I8),
+                ],
+            ),
+        ],
+        vec![enum_def(
+            "Message",
+            vec![
+                variant("None", 0, vec![]),
+                variant("Some", 1, vec![AirType::Struct("Payload".into())]),
+            ],
+        )],
+    );
+    compute_layouts(&mut prog);
+    assert_eq!(prog.structs[0].fields[0].offset, Some(0));
+    assert_eq!(prog.structs[1].fields[0].offset, Some(0));
+    assert_eq!(prog.structs[1].fields[1].offset, Some(16));
+}
+
 // Closure env with mixed captures: i64@0, bool@8, str@16
 #[test]
 fn closure_env() {
@@ -245,5 +302,24 @@ fn mutual_cycle_panics() {
         sdef("A", vec![field("b", AirType::Struct("B".into()))]),
         sdef("B", vec![field("a", AirType::Struct("A".into()))]),
     ]);
+    compute_layouts(&mut prog);
+}
+
+#[test]
+#[should_panic(expected = "recursive type cycle involving by-value enums/structs")]
+fn struct_enum_cycle_panics() {
+    let mut prog = program_with_enums(
+        vec![sdef(
+            "Node",
+            vec![field("next", AirType::Enum("OptionNode".into()))],
+        )],
+        vec![enum_def(
+            "OptionNode",
+            vec![
+                variant("Some", 0, vec![AirType::Struct("Node".into())]),
+                variant("None", 1, vec![]),
+            ],
+        )],
+    );
     compute_layouts(&mut prog);
 }
