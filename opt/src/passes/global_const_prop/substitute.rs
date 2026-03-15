@@ -1,5 +1,5 @@
 use super::GlobalConstantPropagator;
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
+use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedPattern, TypedStmt, TypedStmtKind};
 
 impl GlobalConstantPropagator {
     pub(super) fn substitute_constants(&mut self, expr: &mut TypedExpr) {
@@ -75,6 +75,14 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(index);
                 self.substitute_constants(value);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                self.substitute_constants(object);
+                self.substitute_constants(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.substitute_constants(s);
@@ -111,7 +119,21 @@ impl GlobalConstantPropagator {
             TypedExprKind::Match { scrutinee, arms } => {
                 self.substitute_constants(scrutinee);
                 for arm in arms {
+                    let shadowed: Vec<(String, aelys_sema::TypedExpr)> =
+                        if let TypedPattern::Variant { bindings, .. } = &arm.pattern {
+                            bindings
+                                .iter()
+                                .filter_map(|(name, _)| {
+                                    self.constants.remove(name).map(|v| (name.clone(), v))
+                                })
+                                .collect()
+                        } else {
+                            Vec::new()
+                        };
                     self.substitute_constants(&mut arm.body);
+                    for (name, val) in shadowed {
+                        self.constants.insert(name, val);
+                    }
                 }
             }
             TypedExprKind::EnumVariant { args, .. } => {
