@@ -511,6 +511,41 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+        } else if let TypedExprKind::Member {
+            object: parent_expr,
+            member: parent_field,
+        } = &object.kind
+        {
+            // obj.nested.field = value: read-modify-write on the parent struct.
+            let parent_op = self.lower_expr(parent_expr);
+            let parent_ty = self.lower_type_from_infer(&parent_expr.ty);
+            let parent_local = self.operand_to_local(parent_op, &parent_ty);
+
+            let nested_local = self.alloc_temp_mut(obj_ty);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(nested_local),
+                    rvalue: Rvalue::FieldAccess {
+                        base: Operand::Copy(parent_local),
+                        field: parent_field.clone(),
+                    },
+                },
+                sp,
+            );
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(nested_local, field.to_string()),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(parent_local, parent_field.clone()),
+                    rvalue: Rvalue::Use(Operand::Copy(nested_local)),
+                },
+                sp,
+            );
         } else {
             let obj = self.lower_expr(object);
             let base_local = self.operand_to_local(obj, &obj_ty);
