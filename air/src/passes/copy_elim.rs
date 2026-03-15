@@ -68,7 +68,13 @@ fn collect_direct_aliases(
             if dst == src {
                 continue;
             }
-            if writes.get(&dst).copied().unwrap_or(0) == 1 {
+            // Only safe to alias when dst is written exactly once (the copy itself)
+            // AND src is never written in the body (it's immutable). If src is
+            // modified later (e.g. a param reassigned in a loop), the alias would
+            // replace dst with a stale/wrong value.
+            if writes.get(&dst).copied().unwrap_or(0) == 1
+                && writes.get(&src).copied().unwrap_or(0) == 0
+            {
                 aliases.insert(dst, src);
             }
         }
@@ -203,6 +209,9 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
         }
         Rvalue::EnumPayload { operand, .. } => {
             rewrite_operand(operand, replacements);
+        }
+        Rvalue::ClosureCreate { env, .. } => {
+            rewrite_operand(env, replacements);
         }
     }
 }

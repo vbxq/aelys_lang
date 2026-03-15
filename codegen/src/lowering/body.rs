@@ -1,4 +1,4 @@
-use crate::lowering::functions::needs_sret;
+use crate::lowering::functions::{function_has_implicit_env, needs_sret};
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{
@@ -70,13 +70,21 @@ impl<'a> FunctionCodegen<'a> {
             for stmt in &block.stmts {
                 if let AirStmtKind::Assign { place, rvalue } = &stmt.kind {
                     if let Place::Local(local) = place {
-                        match first_assign_block.entry(*local) {
-                            std::collections::hash_map::Entry::Vacant(e) => {
-                                e.insert(block.id);
-                            }
-                            std::collections::hash_map::Entry::Occupied(e) => {
-                                if *e.get() != block.id {
-                                    alloca_locals.insert(*local);
+                        // A param already has an SSA value from copy_params (the
+                        // function entry), so any subsequent assignment in a block
+                        // creates a second "definition site" — force alloca so
+                        // dominance requirements are met across basic blocks.
+                        if param_ids.contains(local) {
+                            alloca_locals.insert(*local);
+                        } else {
+                            match first_assign_block.entry(*local) {
+                                std::collections::hash_map::Entry::Vacant(e) => {
+                                    e.insert(block.id);
+                                }
+                                std::collections::hash_map::Entry::Occupied(e) => {
+                                    if *e.get() != block.id {
+                                        alloca_locals.insert(*local);
+                                    }
                                 }
                             }
                         }
@@ -104,7 +112,12 @@ impl<'a> FunctionCodegen<'a> {
         let entry_block_id = find_entry_block(air_function);
 
         let is_windows = crate::module_targets_windows(module);
-        let sret_ptr = if needs_sret(&air_function.ret_ty, air_function.calling_conv, is_windows) {
+        let sret_ptr = if needs_sret(
+            &air_function.ret_ty,
+            air_function.calling_conv,
+            is_windows,
+            program,
+        ) {
             Some(
                 function
                     .get_nth_param(0)
@@ -187,8 +200,11 @@ impl<'a> FunctionCodegen<'a> {
 
     fn copy_params(&mut self) -> Result<(), CodegenError> {
         let params = self.air_function.params.clone();
-        // sret pointer occupies LLVM param 0, so real params start at 1
-        let offset = if self.sret_ptr.is_some() { 1u32 } else { 0 };
+        // sret pointer occupies LLVM param 0, implicit env occupies the next slot
+        let mut offset = if self.sret_ptr.is_some() { 1u32 } else { 0 };
+        if function_has_implicit_env(self.air_function) {
+            offset += 1; // skip implicit env param
+        }
         for (index, param) in params.iter().enumerate() {
             let value = self
                 .function
