@@ -170,6 +170,14 @@ impl FunctionInliner {
                 self.inline_in_expr(index, analysis);
                 self.inline_in_expr(value, analysis);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                self.inline_in_expr(object, analysis);
+                self.inline_in_expr(value, analysis);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.inline_in_expr(s, analysis);
@@ -187,6 +195,29 @@ impl FunctionInliner {
                     self.inline_in_stmt(s, analysis);
                 }
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.inline_in_expr(scrutinee, analysis);
+                for arm in arms.iter_mut() {
+                    self.inline_in_expr(&mut arm.body, analysis);
+                }
+            }
+            TypedExprKind::Block { stmts, tail } => {
+                for s in stmts.iter_mut() {
+                    self.inline_in_stmt(s, analysis);
+                }
+                self.inline_in_expr(tail, analysis);
+            }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, val) in fields.iter_mut() {
+                    self.inline_in_expr(val, analysis);
+                }
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args.iter_mut() {
+                    self.inline_in_expr(arg, analysis);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
             _ => {}
         }
 

@@ -261,6 +261,14 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(index, calls);
             collect_calls_in_expr(value, calls);
         }
+        TypedExprKind::FieldAssign {
+            object,
+            value,
+            ..
+        } => {
+            collect_calls_in_expr(object, calls);
+            collect_calls_in_expr(value, calls);
+        }
         TypedExprKind::Range { start, end, .. } => {
             if let Some(s) = start {
                 collect_calls_in_expr(s, calls);
@@ -273,6 +281,29 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(range, calls);
         }
+        TypedExprKind::Match { scrutinee, arms } => {
+            collect_calls_in_expr(scrutinee, calls);
+            for arm in arms {
+                collect_calls_in_expr(&arm.body, calls);
+            }
+        }
+        TypedExprKind::Block { stmts, tail } => {
+            for s in stmts {
+                collect_calls_in_stmt(s, calls);
+            }
+            collect_calls_in_expr(tail, calls);
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, val) in fields {
+                collect_calls_in_expr(val, calls);
+            }
+        }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                collect_calls_in_expr(arg, calls);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => collect_calls_in_expr(expr, calls),
         _ => {}
     }
 }
@@ -395,6 +426,14 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(index, counts);
             count_calls_in_expr(value, counts);
         }
+        TypedExprKind::FieldAssign {
+            object,
+            value,
+            ..
+        } => {
+            count_calls_in_expr(object, counts);
+            count_calls_in_expr(value, counts);
+        }
         TypedExprKind::Range { start, end, .. } => {
             if let Some(s) = start {
                 count_calls_in_expr(s, counts);
@@ -407,6 +446,29 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(range, counts);
         }
+        TypedExprKind::Match { scrutinee, arms } => {
+            count_calls_in_expr(scrutinee, counts);
+            for arm in arms {
+                count_calls_in_expr(&arm.body, counts);
+            }
+        }
+        TypedExprKind::Block { stmts, tail } => {
+            for s in stmts {
+                count_calls_in_stmt(s, counts);
+            }
+            count_calls_in_expr(tail, counts);
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, val) in fields {
+                count_calls_in_expr(val, counts);
+            }
+        }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                count_calls_in_expr(arg, counts);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => count_calls_in_expr(expr, counts),
         _ => {}
     }
 }
