@@ -473,263 +473,147 @@ impl<'a> LoweringContext<'a> {
         let idx = self.lower_expr(index);
         let val = self.lower_expr(value);
 
-        // Peel Member layers to find the root (the actual array/collection) and path.
-        let mut segments: Vec<(String, AirType)> = Vec::new();
-        let mut current = object;
+        // Collect the full access path (mix of Member and Index layers) from
+        // `object` back to the root variable.  Handles all patterns:
+        //   arr[i] = val, arr[i][j] = val, s.arr[i] = val,
+        //   s.arr[i][j] = val, rows[i].cells[j] = val, etc.
+        enum PathStep<'a> {
+            Field { name: String, result_ty: AirType },
+            Index { idx_expr: &'a TypedExpr, result_ty: AirType },
+        }
+
+        let mut steps: Vec<PathStep<'_>> = Vec::new();
+        let mut walk = object;
         loop {
-            match &current.kind {
-                TypedExprKind::Member { object: inner, member } => {
-                    let field_ty = self.lower_type_from_infer(&current.ty);
-                    segments.push((member.clone(), field_ty));
-                    current = inner;
+            match &walk.kind {
+                TypedExprKind::Index { object, index: nested_idx } => {
+                    let result_ty = self.lower_type_from_infer(&walk.ty);
+                    steps.push(PathStep::Index { idx_expr: nested_idx, result_ty });
+                    walk = object;
+                }
+                TypedExprKind::Member { object, member } => {
+                    let result_ty = self.lower_type_from_infer(&walk.ty);
+                    steps.push(PathStep::Field { name: member.clone(), result_ty });
+                    walk = object;
                 }
                 _ => break,
             }
         }
-        segments.reverse(); // shallowest → deepest
+        steps.reverse(); // root → outermost
 
-        if segments.is_empty() {
-            // Collect the full access path (mix of Member and Index layers) from the
-            // object back to the root variable.  This handles patterns like:
-            //   arr[i][j] = val           (Index chain)
-            //   s.arr[i] = val            (Member then Index)
-            //   s.arr[i][j] = val         (Member then nested Index)
-            //   a.b.arr[i] = val          (multiple Members then Index)
-            //   arr2d[i].arr[j] = val     (Index then Member then Index)
-            {
-                enum PathStep<'a> {
-                    Field { name: String, result_ty: AirType },
-                    Index { idx_expr: &'a TypedExpr, result_ty: AirType },
-                }
+        // `walk` is now the root expression (usually an Identifier).
+        let root_name = if let TypedExprKind::Identifier(name) = &walk.kind {
+            Some(name.clone())
+        } else {
+            None
+        };
+        let root_op = self.lower_expr(walk);
+        let root_ty = self.lower_type_from_infer(&walk.ty);
+        let root_local = self.operand_to_local(root_op, &root_ty);
 
-                let mut steps: Vec<PathStep<'_>> = Vec::new();
-                let mut walk = current;
-                loop {
-                    match &walk.kind {
-                        TypedExprKind::Index { object, index: nested_idx } => {
-                            let result_ty = self.lower_type_from_infer(&walk.ty);
-                            steps.push(PathStep::Index { idx_expr: nested_idx, result_ty });
-                            walk = object;
-                        }
-                        TypedExprKind::Member { object, member } => {
-                            let result_ty = self.lower_type_from_infer(&walk.ty);
-                            steps.push(PathStep::Field { name: member.clone(), result_ty });
-                            walk = object;
-                        }
-                        _ => break,
-                    }
-                }
+        // Read phase: load each intermediate into a mutable temp.
+        enum WriteBack {
+            Field(String),
+            Index(Operand),
+        }
+        struct TempInfo {
+            local: LocalId,
+            parent: LocalId,
+            wb: WriteBack,
+        }
 
-                if !steps.is_empty() {
-                    steps.reverse(); // root → outermost
+        let mut temps: Vec<TempInfo> = Vec::new();
+        let mut cur_local = root_local;
 
-                    let root_name = if let TypedExprKind::Identifier(name) = &walk.kind {
-                        Some(name.clone())
-                    } else {
-                        None
-                    };
-                    let root_op = self.lower_expr(walk);
-                    let root_ty = self.lower_type_from_infer(&walk.ty);
-                    let root_local = self.operand_to_local(root_op, &root_ty);
-
-                    // Read phase: load each intermediate into a mutable temp.
-                    enum WriteBack {
-                        Field(String),
-                        Index(Operand),
-                    }
-                    struct TempInfo {
-                        local: LocalId,
-                        parent: LocalId,
-                        wb: WriteBack,
-                    }
-
-                    let mut temps: Vec<TempInfo> = Vec::new();
-                    let mut cur_local = root_local;
-
-                    for step in &steps {
-                        match step {
-                            PathStep::Field { name, result_ty } => {
-                                let tmp = self.alloc_temp_mut(result_ty.clone());
-                                self.emit(
-                                    AirStmtKind::Assign {
-                                        place: Place::Local(tmp),
-                                        rvalue: Rvalue::FieldAccess {
-                                            base: Operand::Copy(cur_local),
-                                            field: name.clone(),
-                                        },
-                                    },
-                                    sp,
-                                );
-                                temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Field(name.clone()) });
-                                cur_local = tmp;
-                            }
-                            PathStep::Index { idx_expr, result_ty } => {
-                                let index_op = self.lower_expr(idx_expr);
-                                let tmp = self.alloc_temp_mut(result_ty.clone());
-                                self.emit(
-                                    AirStmtKind::Assign {
-                                        place: Place::Local(tmp),
-                                        rvalue: Rvalue::Index {
-                                            base: Operand::Copy(cur_local),
-                                            index: index_op.clone(),
-                                        },
-                                    },
-                                    sp,
-                                );
-                                temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Index(index_op) });
-                                cur_local = tmp;
-                            }
-                        }
-                    }
-
-                    // Write the value at the innermost level.
+        for step in &steps {
+            match step {
+                PathStep::Field { name, result_ty } => {
+                    let tmp = self.alloc_temp_mut(result_ty.clone());
                     self.emit(
                         AirStmtKind::Assign {
-                            place: Place::Index(cur_local, idx),
-                            rvalue: Rvalue::Use(val),
-                        },
-                        sp,
-                    );
-
-                    // Write-back phase: propagate modifications back up to the root.
-                    for info in temps.iter().rev() {
-                        match &info.wb {
-                            WriteBack::Field(name) => {
-                                self.emit(
-                                    AirStmtKind::Assign {
-                                        place: Place::Field(info.parent, name.clone()),
-                                        rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                                    },
-                                    sp,
-                                );
-                            }
-                            WriteBack::Index(index_op) => {
-                                self.emit(
-                                    AirStmtKind::Assign {
-                                        place: Place::Index(info.parent, index_op.clone()),
-                                        rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                                    },
-                                    sp,
-                                );
-                            }
-                        }
-                    }
-
-                    // Closure env / global write-back for root.
-                    if let Some(ref name) = root_name {
-                        if let Some(env_id) = self.closure_env_param {
-                            if self.closure_captures.contains(name) {
-                                self.emit(
-                                    AirStmtKind::Assign {
-                                        place: Place::Field(env_id, name.clone()),
-                                        rvalue: Rvalue::Use(Operand::Copy(root_local)),
-                                    },
-                                    sp,
-                                );
-                            }
-                        }
-                        if self.lookup_local(name).is_none()
-                            && self.globals.iter().any(|g| g.name == *name)
-                        {
-                            self.emit(
-                                AirStmtKind::CallVoid {
-                                    func: Callee::Named(format!("__aelys_global_set_{}", name)),
-                                    args: vec![Operand::Copy(root_local)],
-                                },
-                                sp,
-                            );
-                        }
-                    }
-
-                    return Operand::Const(AirConst::Null);
-                }
-            }
-
-            // Simple case: the object is directly accessible.
-            let root_name = if let TypedExprKind::Identifier(name) = &current.kind {
-                Some(name.clone())
-            } else {
-                None
-            };
-            let obj = self.lower_expr(current);
-            let obj_ty = self.lower_type_from_infer(&current.ty);
-            let base_local = self.operand_to_local(obj, &obj_ty);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Index(base_local, idx),
-                    rvalue: Rvalue::Use(val),
-                },
-                sp,
-            );
-            // Write the mutated array back to the closure env if it's a capture,
-            // or back to the global store if the root is a global variable.
-            if let Some(ref name) = root_name {
-                if let Some(env_id) = self.closure_env_param {
-                    if self.closure_captures.contains(name) {
-                        self.emit(
-                            AirStmtKind::Assign {
-                                place: Place::Field(env_id, name.clone()),
-                                rvalue: Rvalue::Use(Operand::Copy(base_local)),
+                            place: Place::Local(tmp),
+                            rvalue: Rvalue::FieldAccess {
+                                base: Operand::Copy(cur_local),
+                                field: name.clone(),
                             },
-                            sp,
-                        );
-                    }
+                        },
+                        sp,
+                    );
+                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Field(name.clone()) });
+                    cur_local = tmp;
                 }
-                if self.lookup_local(name).is_none()
-                    && self.globals.iter().any(|g| g.name == *name)
-                {
+                PathStep::Index { idx_expr, result_ty } => {
+                    let index_op = self.lower_expr(idx_expr);
+                    let tmp = self.alloc_temp_mut(result_ty.clone());
                     self.emit(
-                        AirStmtKind::CallVoid {
-                            func: Callee::Named(format!("__aelys_global_set_{}", name)),
-                            args: vec![Operand::Copy(base_local)],
+                        AirStmtKind::Assign {
+                            place: Place::Local(tmp),
+                            rvalue: Rvalue::Index {
+                                base: Operand::Copy(cur_local),
+                                index: index_op.clone(),
+                            },
+                        },
+                        sp,
+                    );
+                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Index(index_op) });
+                    cur_local = tmp;
+                }
+            }
+        }
+
+        // Write the value at the innermost level.
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Index(cur_local, idx),
+                rvalue: Rvalue::Use(val),
+            },
+            sp,
+        );
+
+        // Write-back phase: propagate modifications back up to the root.
+        for info in temps.iter().rev() {
+            match &info.wb {
+                WriteBack::Field(name) => {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Field(info.parent, name.clone()),
+                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
+                        },
+                        sp,
+                    );
+                }
+                WriteBack::Index(index_op) => {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Index(info.parent, index_op.clone()),
+                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
                         },
                         sp,
                     );
                 }
             }
-        } else {
-            // Nested case: e.g. `buf.data[i] = val` or `a.b.arr[i] = val`.
-            let root_op = self.lower_expr(current);
-            let root_ty = self.lower_type_from_infer(&current.ty);
-            let root_local = self.operand_to_local(root_op, &root_ty);
+        }
 
-            // Load each intermediate into a mutable temp.
-            let mut temps: Vec<LocalId> = Vec::new();
-            let mut cur_local = root_local;
-            for (field_name, field_ty) in &segments {
-                let tmp = self.alloc_temp_mut(field_ty.clone());
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Local(tmp),
-                        rvalue: Rvalue::FieldAccess {
-                            base: Operand::Copy(cur_local),
-                            field: field_name.clone(),
+        // Closure env / global write-back for root.
+        if let Some(ref name) = root_name {
+            if let Some(env_id) = self.closure_env_param {
+                if self.closure_captures.contains(name) {
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Field(env_id, name.clone()),
+                            rvalue: Rvalue::Use(Operand::Copy(root_local)),
                         },
-                    },
-                    sp,
-                );
-                temps.push(tmp);
-                cur_local = tmp;
+                        sp,
+                    );
+                }
             }
-
-            // Index-assign on the deepest temp (the array).
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Index(cur_local, idx),
-                    rvalue: Rvalue::Use(val),
-                },
-                sp,
-            );
-
-            // Write back bottom-up.
-            for i in (0..segments.len()).rev() {
-                let tmp = temps[i];
-                let (field_name, _) = &segments[i];
-                let parent = if i == 0 { root_local } else { temps[i - 1] };
+            if self.lookup_local(name).is_none()
+                && self.globals.iter().any(|g| g.name == *name)
+            {
                 self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Field(parent, field_name.clone()),
-                        rvalue: Rvalue::Use(Operand::Copy(tmp)),
+                    AirStmtKind::CallVoid {
+                        func: Callee::Named(format!("__aelys_global_set_{}", name)),
+                        args: vec![Operand::Copy(root_local)],
                     },
                     sp,
                 );
