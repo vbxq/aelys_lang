@@ -154,9 +154,7 @@ impl GlobalConstantPropagator {
             TypedStmtKind::Expression(expr) => self.substitute_constants(expr),
             TypedStmtKind::Let { initializer, .. } => self.substitute_constants(initializer),
             TypedStmtKind::Block(stmts) => {
-                for s in stmts {
-                    self.substitute_in_stmt(s);
-                }
+                self.substitute_in_scoped_stmts(stmts);
             }
             TypedStmtKind::If {
                 condition,
@@ -217,8 +215,24 @@ impl GlobalConstantPropagator {
     }
 
     fn substitute_in_function(&mut self, func: &mut TypedFunction) {
-        for stmt in &mut func.body {
+        self.substitute_in_scoped_stmts(&mut func.body);
+    }
+
+    /// Process a statement list, removing any global constant whose name is
+    /// shadowed by a local `let` so that subsequent statements in the same
+    /// scope see the local binding rather than the global one.
+    fn substitute_in_scoped_stmts(&mut self, stmts: &mut Vec<TypedStmt>) {
+        let mut shadowed: Vec<(String, aelys_sema::TypedExpr)> = Vec::new();
+        for stmt in stmts.iter_mut() {
             self.substitute_in_stmt(stmt);
+            if let TypedStmtKind::Let { name, .. } = &stmt.kind {
+                if let Some(val) = self.constants.remove(name) {
+                    shadowed.push((name.clone(), val));
+                }
+            }
+        }
+        for (name, val) in shadowed {
+            self.constants.insert(name, val);
         }
     }
 }
