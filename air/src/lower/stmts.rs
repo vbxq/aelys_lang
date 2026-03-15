@@ -321,6 +321,14 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn last_block_is_terminated(&self) -> bool {
+        // A pending (unsealed) block is never "terminated" — even if the last
+        // *sealed* block happens to have a definitive terminator (e.g. the
+        // default arm of a match has `unreachable`).  Returning true here
+        // would cause the while-loop continuation to skip the `Goto(header)`
+        // seal, leaving the pending merge block aliased to the loop exit.
+        if self.pending_block_id.is_some() {
+            return false;
+        }
         // a block is terminated if it has a terminator than Goto
         // Goto is a fallthrough to a merge block, not a definitive exit
         // other terminator return, unreachable, branch etc are definitive exits.
