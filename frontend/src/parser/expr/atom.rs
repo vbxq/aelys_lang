@@ -502,11 +502,24 @@ impl Parser {
                 span: field_span.merge(end_span),
             });
 
+            // Accept comma or semicolon (injected by lexer after newlines) as
+            // a field separator. A multi-line struct literal like:
+            //   Foo {
+            //       field: lambda_with_block_body,   <- '}' sets pending_semi
+            //       other: val                        <- \n injects ';' here
+            //   }
+            // produces a ';' token between fields that we must accept.
             if !self.match_token(&TokenKind::Comma) {
+                // Consume any injected semicolons before the closing brace.
+                while self.match_token(&TokenKind::Semicolon) {}
                 break;
             }
+            // Skip any semicolons injected by newlines after the comma.
+            while self.match_token(&TokenKind::Semicolon) {}
         }
 
+        // Also discard any trailing semicolons before '}'.
+        while self.match_token(&TokenKind::Semicolon) {}
         self.consume(&TokenKind::RBrace, "}")?;
         let end_span = self.previous().span;
 
