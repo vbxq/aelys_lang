@@ -174,6 +174,7 @@ impl GlobalConstantPropagator {
                 self.substitute_in_stmt(body);
             }
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -185,11 +186,24 @@ impl GlobalConstantPropagator {
                 if let Some(s) = &mut **step {
                     self.substitute_constants(s);
                 }
+                let shadowed = self.constants.remove(iterator);
                 self.substitute_in_stmt(body);
+                if let Some(val) = shadowed {
+                    self.constants.insert(iterator.clone(), val);
+                }
             }
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.substitute_constants(iterable);
+                let shadowed = self.constants.remove(iterator);
                 self.substitute_in_stmt(body);
+                if let Some(val) = shadowed {
+                    self.constants.insert(iterator.clone(), val);
+                }
             }
             TypedStmtKind::Return(Some(expr)) => self.substitute_constants(expr),
             TypedStmtKind::Function(func) => self.substitute_in_function(func),
