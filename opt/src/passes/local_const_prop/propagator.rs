@@ -1,8 +1,8 @@
 use super::scope::ScopeStack;
 use crate::passes::{ConstantFolder, OptimizationPass, OptimizationStats};
 use aelys_sema::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedProgram, TypedStmt,
-    TypedStmtKind,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedPattern, TypedProgram,
+    TypedStmt, TypedStmtKind,
 };
 
 pub struct LocalConstantPropagator {
@@ -218,6 +218,14 @@ impl LocalConstantPropagator {
                 Self::collect_assigned_vars_expr(index, out);
                 Self::collect_assigned_vars_expr(value, out);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                Self::collect_assigned_vars_expr(object, out);
+                Self::collect_assigned_vars_expr(value, out);
+            }
             TypedExprKind::Member { object, .. } => {
                 Self::collect_assigned_vars_expr(object, out);
             }
@@ -390,6 +398,15 @@ impl LocalConstantPropagator {
                 self.propagate_expr(value);
             }
 
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                self.propagate_expr(object);
+                self.propagate_expr(value);
+            }
+
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.propagate_expr(s);
@@ -431,7 +448,14 @@ impl LocalConstantPropagator {
             TypedExprKind::Match { scrutinee, arms } => {
                 self.propagate_expr(scrutinee);
                 for arm in arms {
+                    self.scopes.push();
+                    if let TypedPattern::Variant { bindings, .. } = &arm.pattern {
+                        for (name, _) in bindings {
+                            self.scopes.block(name);
+                        }
+                    }
                     self.propagate_expr(&mut arm.body);
+                    self.scopes.pop();
                 }
             }
             TypedExprKind::EnumVariant { args, .. } => {
