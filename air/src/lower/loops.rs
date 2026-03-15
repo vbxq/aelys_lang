@@ -1,6 +1,7 @@
 use super::LoweringContext;
 use crate::*;
-use aelys_sema::{InferType, TypedExpr, TypedStmt};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedStmt};
+use aelys_syntax::UnaryOp;
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_for(
@@ -47,7 +48,15 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
-        let cmp_op = if inclusive { BinOp::Le } else { BinOp::Lt };
+        // For negative steps, the iteration condition is reversed:
+        // positive step: iter < end (or <= for inclusive)
+        // negative step: iter > end (or >= for inclusive)
+        let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
+        let cmp_op = if step_is_negative {
+            if inclusive { BinOp::Ge } else { BinOp::Gt }
+        } else {
+            if inclusive { BinOp::Le } else { BinOp::Lt }
+        };
         let cond_local = self.alloc_temp(AirType::Bool);
         self.emit(
             AirStmtKind::Assign {
@@ -216,5 +225,18 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+    }
+}
+
+/// Returns true if the step expression is a compile-time negative constant.
+/// This determines whether the loop comparison should be reversed (> instead of <).
+fn step_expr_is_negative(step: &TypedExpr) -> bool {
+    match &step.kind {
+        TypedExprKind::Int(v) => *v < 0,
+        TypedExprKind::Unary { op: UnaryOp::Neg, operand } => match &operand.kind {
+            TypedExprKind::Int(v) => *v > 0,
+            _ => false,
+        },
+        _ => false,
     }
 }
