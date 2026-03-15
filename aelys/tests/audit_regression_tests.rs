@@ -1148,29 +1148,29 @@ fn main() -> i64 {
 }
 
 #[test]
-#[should_panic(expected = "AIR lowering failed")]
-fn return_stack_array_produces_clean_error() {
-    lower_source(
+fn return_stack_array_lowers_successfully() {
+    // Arrays are returned by value and should lower without errors.
+    assert!(air_pipeline_ok(
         r#"
 fn bar() -> [i64; 3] {
     let arr = [1, 2, 3]
     return arr
 }
 "#,
-    );
+    ));
 }
 
 #[test]
-#[should_panic(expected = "cannot return stack-allocated array")]
-fn return_stack_array_error_message_is_descriptive() {
-    lower_source(
+fn return_stack_array_compiles() {
+    // Arrays can be returned by value; this should lower successfully.
+    assert!(air_pipeline_ok(
         r#"
 fn baz() -> [i64; 2] {
     let arr = [10, 20]
     return arr
 }
 "#,
-    );
+    ));
 }
 
 #[test]

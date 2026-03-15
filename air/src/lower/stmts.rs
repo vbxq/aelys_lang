@@ -145,15 +145,6 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Return(val) => {
                 if let Some(e) = val {
                     let ret_ty = self.lower_type_from_infer(&e.ty);
-                    if matches!(ret_ty, AirType::Array(_, _)) {
-                        self.report_error(
-                            "cannot return stack-allocated array from function: \
-                             stack arrays are deallocated when the function returns"
-                                .to_string(),
-                        );
-                        self.seal_block(AirTerminator::Return(None));
-                        return;
-                    }
                     // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call).
                     // lower the expression for side effects only and emit a void return.
                     if matches!(ret_ty, AirType::Opaque) {

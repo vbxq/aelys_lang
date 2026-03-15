@@ -237,16 +237,16 @@ fn process(data: [i64; 3]) -> i64 {
 }
 
 #[test]
-#[should_panic(expected = "cannot return stack-allocated array")]
-fn array_return_forbidden() {
-    compile_to_verified_ir(
+fn array_return_compiles() {
+    let ir = compile_to_verified_ir(
         r#"
-fn bad() -> [i64; 3] {
+fn make() -> [i64; 3] {
     let arr = [1, 2, 3]
     return arr
 }
 "#,
     );
+    assert!(ir.contains("ret"), "should emit a return: {ir}");
 }
 
 #[test]
@@ -305,7 +305,7 @@ fn array_index_write() {
     let ir = compile_to_verified_ir(
         r#"
 fn mutate() -> i64 {
-    let arr = [10, 20, 30]
+    let mut arr = [10, 20, 30]
     arr[1] = 99
     return arr[1]
 }

@@ -51,17 +51,18 @@ fn test(n: i64) -> i64 {
 }
 
 #[test]
-fn returning_stack_array_is_reported_without_panic() {
+fn returning_array_compiles_successfully() {
+    // Arrays can be returned by value — this should not produce a lowering error.
     let src = r#"
 fn f() -> [i64; 3] {
     let arr = [1, 2, 3];
     return arr;
 }
 "#;
-    assert_lowering_error(
-        src,
-        "cannot return stack-allocated array from function: stack arrays are deallocated when the function returns",
-    );
+    let path = write_temp_source("arr_ret", src);
+    let result = lower_file_to_air(&path, OptimizationLevel::None);
+    let _ = fs::remove_file(&path);
+    assert!(result.is_ok(), "array return should compile, got: {:?}", result.err());
 }
 
 #[test]
