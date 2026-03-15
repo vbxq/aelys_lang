@@ -1,0 +1,27 @@
+struct Point {
+    x: i64,
+    y: i64,
+}
+
+enum Shape {
+    Circle(i64),
+    Rect(Point, Point),
+}
+
+fn area_approx(s: Shape) -> i64 {
+    return match s {
+        Shape::Circle(r) => r * r,  // pi ~ 1 here
+        Shape::Rect(tl, br) => (br.x - tl.x) * (br.y - tl.y),
+    }
+}
+
+fn main() -> i64 {
+    let c = Shape::Circle(5)
+    let r = Shape::Rect(Point { x: 0, y: 0 }, Point { x: 4, y: 6 })
+    let ca = area_approx(c)
+    let ra = area_approx(r)
+    if ca == 25 && ra == 24 {
+        return 1
+    }
+    return 0
+}

@@ -1,0 +1,16 @@
+enum Pair {
+    Two(i64, i64),
+}
+
+fn main() -> i64 {
+    let p = Pair::Two(10, 20)
+    let sum = match p {
+        Pair::Two(a, b) => a + b,
+    }
+    // 'a' and 'b' should not be accessible here
+    // This just tests that the sum is correct
+    if sum == 30 {
+        return 1
+    }
+    return 0
+}

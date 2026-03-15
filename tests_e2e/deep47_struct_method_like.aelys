@@ -1,0 +1,29 @@
+struct Counter {
+    value: i64,
+    delta: i64,
+}
+
+fn counter_new(d: i64) -> Counter {
+    return Counter { value: 0, delta: d }
+}
+
+fn counter_tick(mut c: Counter) -> Counter {
+    c.value = c.value + c.delta
+    return c
+}
+
+fn counter_get(c: Counter) -> i64 {
+    return c.value
+}
+
+fn main() -> i64 {
+    let mut c = counter_new(3)
+    c = counter_tick(c)
+    c = counter_tick(c)
+    c = counter_tick(c)
+    let v = counter_get(c)
+    if v == 9 {
+        return 1
+    }
+    return 0
+}

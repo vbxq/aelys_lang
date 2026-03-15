@@ -1,0 +1,28 @@
+let LIMIT = 100
+
+fn check(x: i64) -> i64 {
+    // LIMIT here is the global one = 100
+    if x > LIMIT {
+        return 1
+    }
+    return 0
+}
+
+fn check_local(x: i64) -> i64 {
+    let LIMIT = 50  // local shadows global
+    if x > LIMIT {
+        return 1
+    }
+    return 0
+}
+
+fn main() -> i64 {
+    let a = check(101)    // 101 > 100, should be 1
+    let b = check(99)     // 99 > 100, should be 0
+    let c = check_local(60)  // 60 > 50, should be 1
+    let d = check_local(40)  // 40 > 50, should be 0
+    if a == 1 && b == 0 && c == 1 && d == 0 {
+        return 1
+    }
+    return 0
+}

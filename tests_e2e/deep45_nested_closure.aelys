@@ -1,0 +1,16 @@
+fn make_adder(base: i64) -> fn(i64) -> i64 {
+    return fn(x: i64) -> i64 {
+        return base + x
+    }
+}
+
+fn main() -> i64 {
+    let add5 = make_adder(5)
+    let add10 = make_adder(10)
+    let r1 = add5(3)
+    let r2 = add10(7)
+    if r1 == 8 && r2 == 17 {
+        return 1
+    }
+    return 0
+}

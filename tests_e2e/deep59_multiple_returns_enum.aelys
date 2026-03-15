@@ -1,0 +1,22 @@
+enum Tree {
+    Leaf(i64),
+    Node(i64, i64),
+}
+
+fn tree_sum(t: Tree) -> i64 {
+    return match t {
+        Tree::Leaf(v) => v,
+        Tree::Node(l, r) => l + r,
+    }
+}
+
+fn main() -> i64 {
+    let t1 = Tree::Leaf(42)
+    let t2 = Tree::Node(10, 20)
+    let s1 = tree_sum(t1)
+    let s2 = tree_sum(t2)
+    if s1 == 42 && s2 == 30 {
+        return 1
+    }
+    return 0
+}

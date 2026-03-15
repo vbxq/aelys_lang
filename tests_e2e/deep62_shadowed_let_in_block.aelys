@@ -1,0 +1,12 @@
+fn main() -> i64 {
+    let x = 5
+    let y = {
+        let x = 10  // shadows outer x
+        x * 2
+    }
+    // x should still be 5 here (inner x was scoped to block)
+    if x == 5 && y == 20 {
+        return 1
+    }
+    return 0
+}

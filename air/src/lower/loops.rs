@@ -14,8 +14,14 @@ impl<'a> LoweringContext<'a> {
     ) {
         let start_span = Some(self.span(&start.span));
         let iter_ty = self.lower_type_from_infer(&start.ty);
-        let iter_local = self.alloc_named_local(iterator, iter_ty.clone(), true, start_span);
+
+        // Evaluate range bounds BEFORE allocating the iterator local so that
+        // any reference to `iterator` in the bounds resolves to the outer
+        // binding (e.g. `for n in 0..n` where the bound `n` is a param).
         let start_op = self.lower_expr(start);
+        let end_op = self.lower_expr(end);
+
+        let iter_local = self.alloc_named_local(iterator, iter_ty.clone(), true, start_span);
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(iter_local),
@@ -25,7 +31,6 @@ impl<'a> LoweringContext<'a> {
         );
 
         let end_local = self.alloc_temp(iter_ty.clone());
-        let end_op = self.lower_expr(end);
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(end_local),

@@ -1,0 +1,23 @@
+enum Color {
+    Red,
+    Green,
+    Blue,
+    Other(i64),
+}
+
+fn color_value(c: Color) -> i64 {
+    return match c {
+        Color::Red => 1,
+        Color::Green => 2,
+        Color::Blue => 3,
+        Color::Other(n) => n,
+    }
+}
+
+fn main() -> i64 {
+    let sum = color_value(Color::Red) + color_value(Color::Green) + color_value(Color::Blue) + color_value(Color::Other(42))
+    if sum == 48 {
+        return 1
+    }
+    return 0
+}
