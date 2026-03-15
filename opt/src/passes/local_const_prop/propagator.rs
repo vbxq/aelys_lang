@@ -299,6 +299,9 @@ impl LocalConstantPropagator {
 
     fn propagate_function(&mut self, func: &mut TypedFunction) {
         self.scopes.push();
+        for param in &func.params {
+            self.scopes.block(&param.name);
+        }
         for stmt in func.body.iter_mut() {
             self.propagate_stmt(stmt);
         }
@@ -363,8 +366,15 @@ impl LocalConstantPropagator {
                 self.propagate_expr(inner);
             }
 
-            TypedExprKind::LambdaInner { body, .. } => {
+            TypedExprKind::LambdaInner {
+                params: lparams,
+                body,
+                ..
+            } => {
                 self.scopes.push();
+                for param in lparams {
+                    self.scopes.block(&param.name);
+                }
                 for stmt in body.iter_mut() {
                     self.propagate_stmt(stmt);
                 }

@@ -215,7 +215,15 @@ impl GlobalConstantPropagator {
     }
 
     fn substitute_in_function(&mut self, func: &mut TypedFunction) {
+        let shadowed_by_params: Vec<(String, aelys_sema::TypedExpr)> = func
+            .params
+            .iter()
+            .filter_map(|p| self.constants.remove(&p.name).map(|v| (p.name.clone(), v)))
+            .collect();
         self.substitute_in_scoped_stmts(&mut func.body);
+        for (name, val) in shadowed_by_params {
+            self.constants.insert(name, val);
+        }
     }
 
     /// Process a statement list, removing any global constant whose name is
