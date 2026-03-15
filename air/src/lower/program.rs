@@ -366,7 +366,7 @@ impl<'a> LoweringContext<'a> {
         } = &stmt.kind
         {
             let ty = self.lower_type_from_infer(var_type);
-            let init = self.try_const_expr(initializer);
+            let init = self.try_global_const_expr(initializer);
             if let Some(message) = self.global_initializer_error(name, &ty, init.as_ref()) {
                 self.report_error(message);
             }
@@ -377,6 +377,61 @@ impl<'a> LoweringContext<'a> {
                 gc_mode: self.file_gc_mode,
                 span: Some(self.span(&stmt.span)),
             });
+        }
+    }
+
+    /// Try to evaluate an expression as a compile-time constant for a global initializer.
+    ///
+    /// Extends `try_const_expr` (which is `&self`) to also handle:
+    /// - Non-capturing lambdas: emitted as closure-convention functions, returned as `FnRef`
+    /// - Compound types (Array, Struct) whose elements may themselves be lambdas
+    pub(super) fn try_global_const_expr(&mut self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
+        use aelys_sema::TypedExprKind;
+        match &expr.kind {
+            // Peel Lambda wrapper
+            TypedExprKind::Lambda(inner) => self.try_global_const_expr(inner),
+            // Non-capturing lambda → emit as a named closure-convention function
+            TypedExprKind::LambdaInner { params, return_type, body, captures } => {
+                let runtime_caps = self.runtime_captures(captures);
+                if !runtime_caps.is_empty() {
+                    return None; // capturing lambdas cannot be global constants
+                }
+                let lambda_name = format!("__lambda_{}", self.next_function_id);
+                let fake_func = TypedFunction {
+                    name: lambda_name.clone(),
+                    type_params: Vec::new(),
+                    params: params.clone(),
+                    return_type: return_type.clone(),
+                    body: body.clone(),
+                    decorators: Vec::new(),
+                    is_pub: false,
+                    span: expr.span,
+                    captures: Vec::new(),
+                };
+                self.lower_function_as_closure(&fake_func);
+                Some(AirConst::FnRef(lambda_name))
+            }
+            // Array literals may contain lambdas as elements
+            TypedExprKind::ArrayLiteral { elements } => {
+                let elements = elements.clone();
+                let mut consts = Vec::with_capacity(elements.len());
+                for e in &elements {
+                    consts.push(self.try_global_const_expr(e)?);
+                }
+                Some(AirConst::Array(consts))
+            }
+            // Struct literals may contain lambdas as field values
+            TypedExprKind::StructLiteral { name, fields } => {
+                let name = name.clone();
+                let fields = fields.clone();
+                let mut field_consts = Vec::with_capacity(fields.len());
+                for (fname, fexpr) in &fields {
+                    field_consts.push((fname.clone(), self.try_global_const_expr(fexpr)?));
+                }
+                Some(AirConst::Struct { name, fields: field_consts })
+            }
+            // Everything else delegates to the immutable version
+            _ => self.try_const_expr(expr),
         }
     }
 
