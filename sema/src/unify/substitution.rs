@@ -60,6 +60,7 @@ impl Substitution {
             | InferType::Bool
             | InferType::String
             | InferType::Null
+            | InferType::Never
             | InferType::Range
             | InferType::Struct(_)
             | InferType::Dynamic => ty.clone(),
@@ -146,24 +147,25 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "substitution cycle detected")]
     fn apply_detects_two_var_cycle() {
+        // debug_assert fires in debug builds; in release the cycle is broken
+        // by returning Dynamic. Either way the call must terminate and not loop.
         let mut subst = Substitution::new();
-        // artificial cycle via direct insert (bypasses unify)
         subst.bindings.insert(vid(0), InferType::Var(vid(1)));
         subst.bindings.insert(vid(1), InferType::Var(vid(0)));
-        let _ = subst.apply(&InferType::Var(vid(0)));
+        let result = subst.apply(&InferType::Var(vid(0)));
+        // In release: Dynamic. In debug: unreachable (panics before here).
+        assert_eq!(result, InferType::Dynamic);
     }
 
     #[test]
-    #[should_panic(expected = "substitution cycle detected")]
     fn apply_detects_three_var_cycle() {
         let mut subst = Substitution::new();
-        // artificial cycle via direct insert (bypasses unify)
         subst.bindings.insert(vid(0), InferType::Var(vid(1)));
         subst.bindings.insert(vid(1), InferType::Var(vid(2)));
         subst.bindings.insert(vid(2), InferType::Var(vid(0)));
-        let _ = subst.apply(&InferType::Var(vid(0)));
+        let result = subst.apply(&InferType::Var(vid(0)));
+        assert_eq!(result, InferType::Dynamic);
     }
 
     #[test]
