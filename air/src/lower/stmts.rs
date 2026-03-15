@@ -4,9 +4,12 @@ use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_body(&mut self, stmts: &[TypedStmt]) {
+        // Save the current scope depth so inner `let` bindings don't leak out.
+        let scope_depth = self.locals_by_name.len();
         for stmt in stmts {
             self.lower_stmt(stmt);
         }
+        self.locals_by_name.truncate(scope_depth);
     }
 
     pub(super) fn finalize_function_body(&mut self) {

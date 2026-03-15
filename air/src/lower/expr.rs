@@ -336,10 +336,13 @@ impl<'a> LoweringContext<'a> {
                 )
             }
             TypedExprKind::Block { stmts, tail } => {
+                let scope_depth = self.locals_by_name.len();
                 for stmt in stmts {
                     self.lower_stmt(stmt);
                 }
-                self.lower_expr(tail)
+                let result = self.lower_expr(tail);
+                self.locals_by_name.truncate(scope_depth);
+                result
             }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.lower_match_expr(scrutinee, arms, expr)
