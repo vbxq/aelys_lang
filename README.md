@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/aelys_banner.png?v=2" alt="aelys" width="1000">
+  <img src="docs/aelys_banner.png?v=3" alt="aelys" width="1000">
 </p>
 
 # Aelys
