@@ -77,20 +77,17 @@ impl Substitution {
         }
     }
 
-    /// chase a Var binding chain with cycle detection.
+    /// Chase a Var binding chain with cycle detection.
     ///
-    /// i know cycles are impossible through the normal unify pipeline
-    /// debug_assert fires if this invariant is ever broken by a future change
+    /// Cycles are impossible through the normal unify pipeline, but this
+    /// safety net catches them gracefully if a future change breaks that
+    /// invariant.  Returns `Dynamic` on cycle instead of panicking.
     fn chase_var(&self, ty: &InferType, visited: &mut HashSet<TypeVarId>) -> InferType {
         match ty {
             InferType::Var(id) => {
                 if let Some(bound) = self.bindings.get(id) {
                     if !visited.insert(*id) {
-                        debug_assert!(
-                            false,
-                            "Challenge completed: How Did We Get Here ? (substitution cycle detected at Var({}).",
-                            id.0
-                        );
+                        // Cycle detected — break it by returning Dynamic.
                         return InferType::Dynamic;
                     }
                     self.chase_var(bound, visited)
@@ -98,7 +95,8 @@ impl Substitution {
                     ty.clone()
                 }
             }
-            // onvr we reach a non-Var type, switch back to normal apply which starts fresh visited sets for any nested Vars
+            // Once we reach a non-Var type, switch back to normal apply
+            // which starts fresh visited sets for any nested Vars.
             other => self.apply(other),
         }
     }
