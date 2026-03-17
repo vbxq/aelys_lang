@@ -10,7 +10,7 @@ mod primary;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{BinaryOp, Expr, ExprKind};
 
@@ -114,6 +114,11 @@ impl TypeInference {
                 index,
                 value,
             } => self.infer_index_assign_expr(object, index, value, expr.span),
+            ExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => self.infer_field_assign_expr(object, field, value, expr.span),
             ExprKind::Range {
                 start,
                 end,
@@ -150,7 +155,16 @@ impl TypeInference {
             ExprKind::Block { stmts, tail } => {
                 let typed_stmts = self.infer_stmts(stmts);
                 let typed_tail = self.infer_expr(tail);
-                let ty = typed_tail.ty.clone();
+                // If the block contains a return statement, execution never
+                // reaches the tail — the block diverges and its type is Never.
+                let ty = if typed_stmts
+                    .iter()
+                    .any(|s| matches!(s.kind, TypedStmtKind::Return(_)))
+                {
+                    InferType::Never
+                } else {
+                    typed_tail.ty.clone()
+                };
                 (
                     TypedExprKind::Block {
                         stmts: typed_stmts,
@@ -516,6 +530,53 @@ impl TypeInference {
                     return true;
                 }
                 if !then_ok || !else_ok {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        // narrow match expressions: recurse into every arm body.
+        // Match result types are often Var(_) (unresolved type variable) rather
+        // than concrete I64/F64, so also attempt narrowing when the type is a Var.
+        if let TypedExprKind::Match { arms, .. } = &mut expr.kind {
+            let is_narrowable = (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
+                || (expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64)
+                || (matches!(expr.ty, InferType::Var(_)) && (target_ty.is_integer() || target_ty.is_float()));
+            if is_narrowable {
+                let mut all_ok = true;
+                let mut all_narrowed = true;
+                for arm in arms.iter_mut() {
+                    let ok = self.try_narrow_literal(&mut arm.body, target_ty);
+                    if !ok {
+                        all_ok = false;
+                    }
+                    if arm.body.ty != *target_ty {
+                        all_narrowed = false;
+                    }
+                }
+                if all_ok && all_narrowed {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                if !all_ok {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        // narrow block expressions: recurse into the tail expression.
+        if let TypedExprKind::Block { tail, .. } = &mut expr.kind {
+            if (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
+                || (expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64)
+            {
+                let ok = self.try_narrow_literal(tail, target_ty);
+                if ok && tail.ty == *target_ty {
+                    expr.ty = target_ty.clone();
+                    return true;
+                }
+                if !ok {
                     return false;
                 }
                 return true;
