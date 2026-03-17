@@ -559,6 +559,16 @@ impl<'a> LoweringContext<'a> {
                     elements.iter().map(|e| self.try_const_expr(e)).collect();
                 consts.map(AirConst::Array)
             }
+            TypedExprKind::ArraySized { size, fill_value } => {
+                // [val; N] is constant if val is constant and N is a literal
+                let n = if let TypedExprKind::Int(n) = &size.kind {
+                    Some(*n as usize)
+                } else {
+                    None
+                }?;
+                let fill = fill_value.as_ref().and_then(|fv| self.try_const_expr(fv))?;
+                Some(AirConst::Array(vec![fill; n]))
+            }
             TypedExprKind::StructLiteral { name, fields } => {
                 let field_consts: Option<Vec<(String, AirConst)>> = fields
                     .iter()
