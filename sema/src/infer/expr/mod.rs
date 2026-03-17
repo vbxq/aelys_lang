@@ -446,9 +446,24 @@ impl TypeInference {
                     if !self.try_narrow_literal(elem, elem_ty) {
                         had_error = true;
                     } else if elem.ty != **elem_ty && !matches!(elem.ty, InferType::Var(_)) {
-                        // e.element type wasn't actually narrowed, concrete mismatch (for eg String vs I64).
-                        // don't set the array type, letting the constraint solver catch it
-                        all_narrowed = false;
+                        // Try implicit widening for non-literal elements
+                        if elem.ty.can_implicit_widen_to(elem_ty) {
+                            let vspan = elem.span;
+                            let original = std::mem::replace(
+                                elem,
+                                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                            );
+                            *elem = TypedExpr {
+                                kind: TypedExprKind::Cast {
+                                    expr: Box::new(original),
+                                    target: (**elem_ty).clone(),
+                                },
+                                ty: (**elem_ty).clone(),
+                                span: vspan,
+                            };
+                        } else {
+                            all_narrowed = false;
+                        }
                     }
                 }
                 if all_narrowed && !had_error {
