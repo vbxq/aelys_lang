@@ -54,7 +54,8 @@ impl ScopeStack {
 
     pub fn invalidate(&mut self, name: &str) {
         for scope in self.scopes.iter_mut().rev() {
-            if scope.remove(name).is_some() {
+            if scope.contains_key(name) {
+                scope.insert(name.to_string(), ScopeEntry::Blocked);
                 return;
             }
         }
