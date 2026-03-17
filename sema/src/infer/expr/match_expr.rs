@@ -1,6 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
-use crate::typed_ast::{TypedExprKind, TypedMatchArm, TypedPattern};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedMatchArm, TypedPattern};
 use crate::types::InferType;
 use aelys_syntax::{Expr, MatchArm, Pattern, Span};
 use std::collections::{HashMap, HashSet};
@@ -357,6 +357,44 @@ impl TypeInference {
                                 self.try_narrow_literal(&mut arm.body, target);
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        // Implicit numeric widening between match arms: when arms have
+        // different integer or float sizes, widen narrower arms to the widest.
+        // Find the widest type that all other numeric arms can widen to.
+        if typed_arms.len() > 1 {
+            let widest = typed_arms.iter()
+                .map(|a| &a.body.ty)
+                .find(|t| {
+                    (t.is_integer() || t.is_float())
+                        && typed_arms.iter().all(|other| {
+                            other.body.ty == **t
+                                || other.body.ty.can_implicit_widen_to(t)
+                                || !other.body.ty.is_integer() && !other.body.ty.is_float()
+                        })
+                })
+                .cloned();
+            if let Some(ref target) = widest {
+                for arm in &mut typed_arms {
+                    if arm.body.ty != *target
+                        && arm.body.ty.can_implicit_widen_to(target)
+                    {
+                        let vspan = arm.body.span;
+                        let old_body = std::mem::replace(
+                            &mut arm.body,
+                            Box::new(TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan }),
+                        );
+                        arm.body = Box::new(TypedExpr {
+                            kind: TypedExprKind::Cast {
+                                expr: old_body,
+                                target: target.clone(),
+                            },
+                            ty: target.clone(),
+                            span: vspan,
+                        });
                     }
                 }
             }
