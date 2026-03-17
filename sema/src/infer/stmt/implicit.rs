@@ -140,6 +140,65 @@ fn stmt_guarantees_return(stmt: &Stmt) -> bool {
             for_loop_executes_at_least_once(start, end, *inclusive, step.as_ref().as_ref())
                 && stmt_guarantees_return(body)
         }
+        // `while true { ... return ... }` is an infinite loop that can only
+        // exit via `return` (or loop forever).  If the condition is `true`
+        // and the body contains at least one `return` and no `break`, the
+        // loop never falls through to the next statement.
+        StmtKind::While { condition, body } => {
+            is_const_true(condition)
+                && stmt_contains_return(body)
+                && !stmt_contains_break(body)
+        }
+        _ => false,
+    }
+}
+
+fn is_const_true(expr: &Expr) -> bool {
+    match &expr.kind {
+        ExprKind::Bool(true) => true,
+        ExprKind::Grouping(inner) => is_const_true(inner),
+        _ => false,
+    }
+}
+
+/// Check if a statement contains a `return` anywhere (recursively).
+fn stmt_contains_return(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Return(_) => true,
+        StmtKind::Block(stmts) => stmts.iter().any(stmt_contains_return),
+        StmtKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            stmt_contains_return(then_branch)
+                || else_branch.as_ref().is_some_and(|e| stmt_contains_return(e))
+        }
+        StmtKind::While { body, .. }
+        | StmtKind::For { body, .. }
+        | StmtKind::ForEach { body, .. } => stmt_contains_return(body),
+        _ => false,
+    }
+}
+
+/// Check if a statement contains a `break` at the current loop level
+/// (does NOT recurse into nested loops, since break only affects the
+/// innermost loop).
+fn stmt_contains_break(stmt: &Stmt) -> bool {
+    match &stmt.kind {
+        StmtKind::Break => true,
+        StmtKind::Block(stmts) => stmts.iter().any(stmt_contains_break),
+        StmtKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            stmt_contains_break(then_branch)
+                || else_branch.as_ref().is_some_and(|e| stmt_contains_break(e))
+        }
+        // Don't recurse into nested loops — break in a nested loop
+        // doesn't affect the outer while-true.
+        StmtKind::While { .. } | StmtKind::For { .. } | StmtKind::ForEach { .. } => false,
         _ => false,
     }
 }
