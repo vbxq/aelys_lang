@@ -118,7 +118,7 @@ impl TypeInference {
         let mut has_wildcard = false;
 
         // Create a fresh type variable for the result type
-        let result_type = self.type_gen.fresh();
+        let mut result_type = self.type_gen.fresh();
 
         // For generic enums, create a shared type param mapping across all arms
         // so the same type param resolves to the same type var in all arms.
@@ -135,7 +135,7 @@ impl TypeInference {
             }
         }
 
-        for arm in arms {
+        for (arm_index, arm) in arms.iter().enumerate() {
             match &arm.pattern {
                 Pattern::Variant {
                     enum_name: pat_enum,
@@ -264,13 +264,8 @@ impl TypeInference {
 
                     self.env.pop_scope();
 
-                    // Unify arm body type with result type
-                    self.constraints.push(Constraint::equal(
-                        typed_body.ty.clone(),
-                        result_type.clone(),
-                        arm.body.span,
-                        ConstraintReason::Other("match arm body".to_string()),
-                    ));
+                    // Arm body constraints are deferred to after the loop so
+                    // literal arms can be narrowed to match non-literal arms first.
 
                     typed_arms.push(TypedMatchArm {
                         pattern: TypedPattern::Variant {
@@ -298,16 +293,15 @@ impl TypeInference {
                             suggestion: None,
                         });
                     }
+                    if arm_index + 1 != arms.len() {
+                        self.errors.push(TypeError::member_access(
+                            "wildcard pattern must be the last match arm".to_string(),
+                            *pat_span,
+                        ));
+                    }
                     has_wildcard = true;
 
                     let typed_body = self.infer_expr(&arm.body);
-
-                    self.constraints.push(Constraint::equal(
-                        typed_body.ty.clone(),
-                        result_type.clone(),
-                        arm.body.span,
-                        ConstraintReason::Other("match arm body".to_string()),
-                    ));
 
                     typed_arms.push(TypedMatchArm {
                         pattern: TypedPattern::Wildcard,
@@ -315,6 +309,56 @@ impl TypeInference {
                     });
                 }
             }
+        }
+
+        // Harmonize arm types before pushing constraints. When some arms have
+        // a concrete non-default type (e.g. i32 from an enum field) and others
+        // have i64 literals, narrow the literals to match. This avoids stale
+        // constraints that would conflict with later narrowing.
+        if typed_arms.len() > 1 {
+            // Find a concrete non-default integer or float type from any arm.
+            let concrete_int = typed_arms.iter()
+                .map(|a| &a.body.ty)
+                .find(|t| t.is_integer() && **t != InferType::I64)
+                .cloned();
+            let concrete_float = typed_arms.iter()
+                .map(|a| &a.body.ty)
+                .find(|t| t.is_float() && **t != InferType::F64)
+                .cloned();
+            if let Some(ref target) = concrete_int {
+                for arm in &mut typed_arms {
+                    if arm.body.ty == InferType::I64 {
+                        self.try_narrow_literal(&mut arm.body, target);
+                    }
+                }
+            }
+            if let Some(ref target) = concrete_float {
+                for arm in &mut typed_arms {
+                    if arm.body.ty == InferType::F64 {
+                        self.try_narrow_literal(&mut arm.body, target);
+                    }
+                }
+            }
+        }
+
+        // Now resolve result_type: if all arms agree, use the concrete type directly.
+        if !typed_arms.is_empty() {
+            let first_ty = &typed_arms[0].body.ty;
+            let all_same_concrete = first_ty.is_concrete()
+                && typed_arms.iter().all(|a| a.body.ty == *first_ty);
+            if all_same_concrete {
+                result_type = first_ty.clone();
+            }
+        }
+
+        // Push arm body constraints (deferred from the loop above).
+        for arm in &typed_arms {
+            self.constraints.push(Constraint::equal(
+                arm.body.ty.clone(),
+                result_type.clone(),
+                arm.body.span,
+                ConstraintReason::Other("match arm body".to_string()),
+            ));
         }
 
         // Exhaustiveness check: all variants must be covered, OR wildcard must be present

@@ -55,6 +55,27 @@ impl TypeInference {
                 let mut typed_right = self.infer_expr(right);
                 Self::narrow_binop_int_literals(&mut typed_left, &mut typed_right);
                 Self::narrow_binop_float_literals(&mut typed_left, &mut typed_right);
+                // When one operand has a concrete non-default type and the other
+                // is still i64/f64/Var (e.g. a match/if/block containing literals),
+                // narrow the unresolved operand to match. This handles patterns
+                // like `total_i32 + match m { ... => 0 }`.
+                if typed_left.ty.is_integer() && typed_left.ty != InferType::I64
+                    && (typed_right.ty == InferType::I64 || matches!(typed_right.ty, InferType::Var(_)))
+                {
+                    self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
+                } else if typed_right.ty.is_integer() && typed_right.ty != InferType::I64
+                    && (typed_left.ty == InferType::I64 || matches!(typed_left.ty, InferType::Var(_)))
+                {
+                    self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
+                } else if typed_left.ty.is_float() && typed_left.ty != InferType::F64
+                    && (typed_right.ty == InferType::F64 || matches!(typed_right.ty, InferType::Var(_)))
+                {
+                    self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
+                } else if typed_right.ty.is_float() && typed_right.ty != InferType::F64
+                    && (typed_left.ty == InferType::F64 || matches!(typed_left.ty, InferType::Var(_)))
+                {
+                    self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
+                }
                 let result_type = self.infer_binary_op(*op, &typed_left, &typed_right, expr.span);
 
                 (
