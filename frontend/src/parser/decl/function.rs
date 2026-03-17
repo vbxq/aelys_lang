@@ -36,6 +36,9 @@ impl Parser {
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
+                if self.check(&TokenKind::RParen) {
+                    break;
+                }
             }
         }
 
