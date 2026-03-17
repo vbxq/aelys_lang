@@ -42,9 +42,13 @@ impl TypeInference {
                 local_names.insert(name.clone());
             }
             TypedStmtKind::Block(stmts) => {
+                // Save/restore so let bindings inside the block don't
+                // leak into the enclosing scope's capture analysis.
+                let saved = local_names.clone();
                 for s in stmts {
                     self.collect_captures_from_stmt(s, local_names, captures, seen);
                 }
+                *local_names = saved;
             }
             TypedStmtKind::If {
                 condition,
@@ -52,14 +56,19 @@ impl TypeInference {
                 else_branch,
             } => {
                 self.collect_captures_inner(condition, local_names, captures, seen);
+                let saved = local_names.clone();
                 self.collect_captures_from_stmt(then_branch, local_names, captures, seen);
+                *local_names = saved.clone();
                 if let Some(els) = else_branch {
                     self.collect_captures_from_stmt(els, local_names, captures, seen);
+                    *local_names = saved;
                 }
             }
             TypedStmtKind::While { condition, body } => {
                 self.collect_captures_inner(condition, local_names, captures, seen);
+                let saved = local_names.clone();
                 self.collect_captures_from_stmt(body, local_names, captures, seen);
+                *local_names = saved;
             }
             TypedStmtKind::For {
                 iterator,
@@ -74,9 +83,10 @@ impl TypeInference {
                 if let Some(step_expr) = step.as_ref().as_ref() {
                     self.collect_captures_inner(step_expr, local_names, captures, seen);
                 }
-                // The for-loop iterator is a local binding.
+                let saved = local_names.clone();
                 local_names.insert(iterator.clone());
                 self.collect_captures_from_stmt(body, local_names, captures, seen);
+                *local_names = saved;
             }
             TypedStmtKind::ForEach {
                 iterator,
@@ -85,9 +95,10 @@ impl TypeInference {
                 ..
             } => {
                 self.collect_captures_inner(iterable, local_names, captures, seen);
-                // The for-each iterator is a local binding.
+                let saved = local_names.clone();
                 local_names.insert(iterator.clone());
                 self.collect_captures_from_stmt(body, local_names, captures, seen);
+                *local_names = saved;
             }
             TypedStmtKind::Return(Some(expr)) => {
                 self.collect_captures_inner(expr, local_names, captures, seen);
@@ -192,6 +203,14 @@ impl TypeInference {
             } => {
                 self.collect_captures_inner(object, locals, captures, seen);
                 self.collect_captures_inner(index, locals, captures, seen);
+                self.collect_captures_inner(value, locals, captures, seen);
+            }
+            TypedExprKind::FieldAssign {
+                object,
+                field: _,
+                value,
+            } => {
+                self.collect_captures_inner(object, locals, captures, seen);
                 self.collect_captures_inner(value, locals, captures, seen);
             }
             TypedExprKind::Range { start, end, .. } => {
