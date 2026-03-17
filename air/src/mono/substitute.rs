@@ -82,6 +82,14 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
             }
             substitute_type(ret, type_params, type_args);
         }
+        AirType::Enum(name) if !name.contains("__mono_") && !type_args.is_empty() => {
+            let suffix = type_args
+                .iter()
+                .map(type_to_string)
+                .collect::<Vec<_>>()
+                .join("$");
+            *ty = AirType::Enum(format!("__mono_{}_{}", name, suffix));
+        }
         _ => {}
     }
 }
