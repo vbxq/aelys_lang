@@ -474,37 +474,23 @@ impl<'a> LoweringContext<'a> {
 
         // Detect compound index assignment pattern from parser desugaring:
         //   arr[idx] += rhs  →  arr[idx] = arr[idx] + rhs
-        // The parser clones the index expression, so arr[idx] on the RHS would
-        // re-evaluate idx (wrong if idx has side effects).  Instead, reuse the
-        // already-lowered `idx` operand: load the current value, apply the op,
-        // and use the result as `val`.
-        let val = if let TypedExprKind::Binary { left, op, right } = &value.kind {
+        // The parser clones index/object expressions, so they'd be re-evaluated
+        // on the RHS (wrong if they have side effects).  Defer value computation
+        // to after the path is established so we can reuse the path locals.
+        let compound_info = if let TypedExprKind::Binary { left, op, right } = &value.kind {
             if let TypedExprKind::Index { .. } = &left.kind {
-                // Compound pattern: compute `object[idx] op rhs` using the
-                // already-lowered idx instead of re-evaluating the left side.
-                let obj_op = self.lower_expr(object);
-                let obj_ty = self.lower_type_from_infer(&object.ty);
-                let obj_local = self.operand_to_local(obj_op, &obj_ty);
-                let current = self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&left.ty),
-                    Rvalue::Index {
-                        base: Operand::Copy(obj_local),
-                        index: idx.clone(),
-                    },
-                    sp,
-                );
-                let rhs = self.lower_expr(right);
-                let air_op = super::lower_binop(op);
-                self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&value.ty),
-                    Rvalue::BinaryOp(air_op, current, rhs),
-                    sp,
-                )
+                Some((*op, right.as_ref()))
             } else {
-                self.lower_expr(value)
+                None
             }
         } else {
+            None
+        };
+
+        let val = if compound_info.is_none() {
             self.lower_expr(value)
+        } else {
+            Operand::Const(AirConst::Null) // placeholder, computed below
         };
 
         // Collect the full access path (mix of Member and Index layers) from
@@ -595,11 +581,34 @@ impl<'a> LoweringContext<'a> {
             }
         }
 
+        // For compound index assigns, compute the value now using the path-loaded
+        // cur_local instead of re-evaluating the object path.
+        let final_val = if let Some((op, rhs_expr)) = compound_info {
+            let elem_ty = self.lower_type_from_infer(&value.ty);
+            let current = self.emit_rvalue_to_temp(
+                elem_ty.clone(),
+                Rvalue::Index {
+                    base: Operand::Copy(cur_local),
+                    index: idx.clone(),
+                },
+                sp,
+            );
+            let rhs = self.lower_expr(rhs_expr);
+            let air_op = super::lower_binop(&op);
+            self.emit_rvalue_to_temp(
+                elem_ty,
+                Rvalue::BinaryOp(air_op, current, rhs),
+                sp,
+            )
+        } else {
+            val
+        };
+
         // Write the value at the innermost level.
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Index(cur_local, idx),
-                rvalue: Rvalue::Use(val),
+                rvalue: Rvalue::Use(final_val),
             },
             sp,
         );
