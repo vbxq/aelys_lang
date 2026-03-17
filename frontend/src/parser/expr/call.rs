@@ -129,8 +129,51 @@ impl Parser {
                 };
                 let span = expr.span.merge(self.previous().span);
 
+                let one = Expr::new(ExprKind::Int(1), self.previous().span);
                 if let ExprKind::Identifier(ref name) = expr.kind {
-                    let one = Expr::new(ExprKind::Int(1), self.previous().span);
+                    let binary = Expr::new(
+                        ExprKind::Binary {
+                            left: Box::new(expr.clone()),
+                            op,
+                            right: Box::new(one.clone()),
+                        },
+                        span,
+                    );
+                    expr = Expr::new(
+                        ExprKind::Assign {
+                            name: name.clone(),
+                            value: Box::new(binary),
+                        },
+                        span,
+                    );
+                } else if let ExprKind::Index {
+                    ref object,
+                    ref index,
+                } = expr.kind
+                {
+                    // arr[i]++ → arr[i] = arr[i] + 1
+                    let binary = Expr::new(
+                        ExprKind::Binary {
+                            left: Box::new(expr.clone()),
+                            op,
+                            right: Box::new(one.clone()),
+                        },
+                        span,
+                    );
+                    expr = Expr::new(
+                        ExprKind::IndexAssign {
+                            object: object.clone(),
+                            index: index.clone(),
+                            value: Box::new(binary),
+                        },
+                        span,
+                    );
+                } else if let ExprKind::Member {
+                    ref object,
+                    ref member,
+                } = expr.kind
+                {
+                    // s.field++ → s.field = s.field + 1
                     let binary = Expr::new(
                         ExprKind::Binary {
                             left: Box::new(expr.clone()),
@@ -140,8 +183,9 @@ impl Parser {
                         span,
                     );
                     expr = Expr::new(
-                        ExprKind::Assign {
-                            name: name.clone(),
+                        ExprKind::FieldAssign {
+                            object: object.clone(),
+                            field: member.clone(),
                             value: Box::new(binary),
                         },
                         span,
