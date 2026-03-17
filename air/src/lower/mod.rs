@@ -346,11 +346,11 @@ impl<'a> LoweringContext<'a> {
             }
             // A Var reaching lowering is always a compiler bug: finalize should have converted every Var to Dynamic before the AIR stage.
             // Map to Opaque so the validation pass rejects it with a clear diagnostic.
-            InferType::Var(id) => {
+            InferType::Var(_id) => {
                 #[cfg(debug_assertions)]
                 eprintln!(
                     "[AIR] ICE: InferType::Var({}) leaked past finalization into lower_type_from_infer",
-                    id.0
+                    _id.0
                 );
                 AirType::Opaque
             }
