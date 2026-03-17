@@ -617,6 +617,43 @@ impl TypeInference {
             }
         }
 
+        // narrow enum variant args when the target is the same enum with concrete type params.
+        // e.g. `Maybe::Just(2.5)` with target `Maybe<f32>` → narrow 2.5 to f32.
+        if let TypedExprKind::EnumVariant { args, enum_name, .. } = &mut expr.kind {
+            if let InferType::Enum(target_name, target_type_args) = target_ty {
+                if let InferType::Enum(expr_name, expr_type_args) = &expr.ty {
+                    if enum_name == target_name && expr_name == target_name
+                        && target_type_args.len() == expr_type_args.len()
+                    {
+                        // For each type arg that is Var in expr but concrete in target,
+                        // narrow the corresponding variant args.
+                        let mut narrowed_any = false;
+                        for (i, (expr_ta, target_ta)) in expr_type_args.clone().iter()
+                            .zip(target_type_args.iter()).enumerate()
+                        {
+                            if matches!(expr_ta, InferType::Var(_)) && target_ta.is_concrete() {
+                                // Narrow all args whose type matches this Var
+                                for arg in args.iter_mut() {
+                                    if arg.ty == *expr_ta || (arg.ty == InferType::I64 && target_ta.is_integer())
+                                        || (arg.ty == InferType::F64 && target_ta.is_float())
+                                    {
+                                        self.try_narrow_literal(arg, target_ta);
+                                        if arg.ty == *target_ta {
+                                            narrowed_any = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if narrowed_any {
+                            expr.ty = target_ty.clone();
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
         // narrow through variable references.
         //
         // when the expression is an Identifier whose variable was initialized with a numeric literal (tracked in `literal_init_vars`), treat it
