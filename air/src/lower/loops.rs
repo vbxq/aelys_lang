@@ -47,28 +47,126 @@ impl<'a> LoweringContext<'a> {
 
         self.seal_block(AirTerminator::Goto(header_id));
 
-        self.fixup_block_id_noop(header_id);
-        // For negative steps, the iteration condition is reversed:
-        // positive step: iter < end (or <= for inclusive)
-        // negative step: iter > end (or >= for inclusive)
-        let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
-        let cmp_op = if step_is_negative {
-            if inclusive { BinOp::Ge } else { BinOp::Gt }
+        // Evaluate the step operand BEFORE the header so we can branch on its
+        // sign at runtime.  For compile-time constant steps the optimizer will
+        // fold the branch away.
+        let step_operand = if let Some(step_expr) = step {
+            self.lower_expr(step_expr)
         } else {
-            if inclusive { BinOp::Le } else { BinOp::Lt }
+            let step_c = iter_ty
+                .int_size()
+                .map(|s| AirConst::Int(1, s))
+                .unwrap_or(AirConst::IntLiteral(1));
+            Operand::Const(step_c)
         };
-        let cond_local = self.alloc_temp(AirType::Bool);
+        let step_local = self.alloc_temp(iter_ty.clone());
         self.emit(
             AirStmtKind::Assign {
-                place: Place::Local(cond_local),
-                rvalue: Rvalue::BinaryOp(
-                    cmp_op,
-                    Operand::Copy(iter_local),
-                    Operand::Copy(end_local),
-                ),
+                place: Place::Local(step_local),
+                rvalue: Rvalue::Use(step_operand),
             },
             None,
         );
+
+        self.fixup_block_id_noop(header_id);
+        // For negative steps the iteration condition is reversed:
+        //   positive step: iter < end (or <= for inclusive)
+        //   negative step: iter > end (or >= for inclusive)
+        //
+        // If the step is a compile-time constant we pick the direction
+        // statically.  Otherwise we emit a runtime sign check.
+        let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
+        let step_is_const = step.as_ref().map_or(true, |s| step_expr_is_negative(s) || step_expr_is_positive(s));
+
+        let cond_local = self.alloc_temp(AirType::Bool);
+        if step_is_const {
+            // Static direction — single comparison.
+            let cmp_op = if step_is_negative {
+                if inclusive { BinOp::Ge } else { BinOp::Gt }
+            } else {
+                if inclusive { BinOp::Le } else { BinOp::Lt }
+            };
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(cond_local),
+                    rvalue: Rvalue::BinaryOp(
+                        cmp_op,
+                        Operand::Copy(iter_local),
+                        Operand::Copy(end_local),
+                    ),
+                },
+                None,
+            );
+        } else {
+            // Dynamic step: emit runtime sign check.
+            //   step_neg = step < 0
+            //   fwd_cmp  = iter < end  (or <=)
+            //   bwd_cmp  = iter > end  (or >=)
+            //   cond     = step_neg ? bwd_cmp : fwd_cmp
+            let zero = Operand::Const(iter_ty
+                .int_size()
+                .map(|s| AirConst::Int(0, s))
+                .unwrap_or(AirConst::IntLiteral(0)));
+            let step_neg_local = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(step_neg_local),
+                    rvalue: Rvalue::BinaryOp(BinOp::Lt, Operand::Copy(step_local), zero),
+                },
+                None,
+            );
+            let fwd_op = if inclusive { BinOp::Le } else { BinOp::Lt };
+            let bwd_op = if inclusive { BinOp::Ge } else { BinOp::Gt };
+            let fwd_local = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(fwd_local),
+                    rvalue: Rvalue::BinaryOp(fwd_op, Operand::Copy(iter_local), Operand::Copy(end_local)),
+                },
+                None,
+            );
+            let bwd_local = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(bwd_local),
+                    rvalue: Rvalue::BinaryOp(bwd_op, Operand::Copy(iter_local), Operand::Copy(end_local)),
+                },
+                None,
+            );
+            // cond = if step_neg { bwd } else { fwd }
+            // Lowered as: cond = (step_neg & bwd) | (!step_neg & fwd)
+            let neg_and_bwd = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(neg_and_bwd),
+                    rvalue: Rvalue::BinaryOp(BinOp::And, Operand::Copy(step_neg_local), Operand::Copy(bwd_local)),
+                },
+                None,
+            );
+            let not_neg = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(not_neg),
+                    rvalue: Rvalue::UnaryOp(UnOp::Not, Operand::Copy(step_neg_local)),
+                },
+                None,
+            );
+            let pos_and_fwd = self.alloc_temp(AirType::Bool);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(pos_and_fwd),
+                    rvalue: Rvalue::BinaryOp(BinOp::And, Operand::Copy(not_neg), Operand::Copy(fwd_local)),
+                },
+                None,
+            );
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(cond_local),
+                    rvalue: Rvalue::BinaryOp(BinOp::Or, Operand::Copy(neg_and_bwd), Operand::Copy(pos_and_fwd)),
+                },
+                None,
+            );
+        }
         self.seal_block(AirTerminator::Branch {
             cond: Operand::Copy(cond_local),
             then_block: body_id,
@@ -87,20 +185,10 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.pop();
 
         self.fixup_block_id_noop(incr_id);
-        // S1: was always IntLiteral(1) aka i64. Blows up on i32/i16/i8 iterators.
-        let step_operand = if let Some(step_expr) = step {
-            self.lower_expr(step_expr)
-        } else {
-            let step = iter_ty
-                .int_size()
-                .map(|s| AirConst::Int(1, s))
-                .unwrap_or(AirConst::IntLiteral(1));
-            Operand::Const(step)
-        };
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(iter_local),
-                rvalue: Rvalue::BinaryOp(BinOp::Add, Operand::Copy(iter_local), step_operand),
+                rvalue: Rvalue::BinaryOp(BinOp::Add, Operand::Copy(iter_local), Operand::Copy(step_local)),
             },
             None,
         );
@@ -229,12 +317,23 @@ impl<'a> LoweringContext<'a> {
 }
 
 /// Returns true if the step expression is a compile-time negative constant.
-/// This determines whether the loop comparison should be reversed (> instead of <).
 fn step_expr_is_negative(step: &TypedExpr) -> bool {
     match &step.kind {
         TypedExprKind::Int(v) => *v < 0,
         TypedExprKind::Unary { op: UnaryOp::Neg, operand } => match &operand.kind {
             TypedExprKind::Int(v) => *v > 0,
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+/// Returns true if the step expression is a compile-time positive constant.
+fn step_expr_is_positive(step: &TypedExpr) -> bool {
+    match &step.kind {
+        TypedExprKind::Int(v) => *v > 0,
+        TypedExprKind::Unary { op: UnaryOp::Neg, operand } => match &operand.kind {
+            TypedExprKind::Int(v) => *v < 0,
             _ => false,
         },
         _ => false,
