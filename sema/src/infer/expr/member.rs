@@ -211,8 +211,25 @@ impl TypeInference {
                 {
                     self.try_narrow_literal(&mut typed_value, &field_ty);
 
-                    // always push a constraint so the solver validates the narrowing decision. when narrowing succeeded the
-                    // constraint is trivially satisfied; when it didn't, the solver will catch the mismatch
+                    // Implicit numeric widening for struct field initialization
+                    if typed_value.ty != field_ty
+                        && typed_value.ty.can_implicit_widen_to(&field_ty)
+                    {
+                        let vspan = typed_value.span;
+                        let original = std::mem::replace(
+                            &mut typed_value,
+                            TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                        );
+                        typed_value = TypedExpr {
+                            kind: TypedExprKind::Cast {
+                                expr: Box::new(original),
+                                target: field_ty.clone(),
+                            },
+                            ty: field_ty.clone(),
+                            span: vspan,
+                        };
+                    }
+
                     self.constraints.push(Constraint::equal(
                         typed_value.ty.clone(),
                         field_ty,
