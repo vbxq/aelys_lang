@@ -1,6 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
-use crate::typed_ast::TypedExprKind;
+use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span};
 
@@ -37,6 +37,25 @@ impl TypeInference {
             }
 
             self.try_narrow_literal(&mut typed_value, &var_type);
+
+            // Implicit numeric widening (e.g. x: i64 = val: i32)
+            if typed_value.ty != var_type
+                && typed_value.ty.can_implicit_widen_to(&var_type)
+            {
+                let vspan = typed_value.span;
+                let original = std::mem::replace(
+                    &mut typed_value,
+                    TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                );
+                typed_value = TypedExpr {
+                    kind: TypedExprKind::Cast {
+                        expr: Box::new(original),
+                        target: var_type.clone(),
+                    },
+                    ty: var_type.clone(),
+                    span: vspan,
+                };
+            }
 
             self.constraints.push(Constraint::equal(
                 typed_value.ty.clone(),

@@ -16,6 +16,29 @@ impl TypeInference {
                 let mut typed_expr = self.infer_expr(expr);
                 self.try_narrow_literal(&mut typed_expr, return_type);
 
+                // Implicit numeric widening for tail expressions
+                if typed_expr.ty != *return_type
+                    && typed_expr.ty.can_implicit_widen_to(return_type)
+                {
+                    let vspan = typed_expr.span;
+                    let original = std::mem::replace(
+                        &mut typed_expr,
+                        crate::typed_ast::TypedExpr {
+                            kind: crate::typed_ast::TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
+                    );
+                    typed_expr = crate::typed_ast::TypedExpr {
+                        kind: crate::typed_ast::TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: return_type.clone(),
+                        },
+                        ty: return_type.clone(),
+                        span: vspan,
+                    };
+                }
+
                 self.constraints.push(Constraint::equal(
                     return_type.clone(),
                     typed_expr.ty.clone(),
