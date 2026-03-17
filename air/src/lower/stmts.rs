@@ -168,12 +168,20 @@ impl<'a> LoweringContext<'a> {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let exit = loop_ctx.exit;
                     self.seal_block(AirTerminator::Goto(exit));
+                } else {
+                    // break outside loop: sema should have rejected this, but
+                    // seal the block to prevent malformed AIR during error recovery.
+                    self.report_error("break statement outside of loop".to_string());
+                    self.seal_block(AirTerminator::Unreachable);
                 }
             }
             TypedStmtKind::Continue => {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let header = loop_ctx.header;
                     self.seal_block(AirTerminator::Goto(header));
+                } else {
+                    self.report_error("continue statement outside of loop".to_string());
+                    self.seal_block(AirTerminator::Unreachable);
                 }
             }
             TypedStmtKind::Function(func) => {
