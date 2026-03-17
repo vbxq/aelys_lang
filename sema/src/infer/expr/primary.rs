@@ -154,6 +154,25 @@ impl TypeInference {
                         // Try literal narrowing first
                         self.try_narrow_literal(&mut typed_arg, &expected_ty);
 
+                        // Implicit numeric widening for enum variant args
+                        if typed_arg.ty != expected_ty
+                            && typed_arg.ty.can_implicit_widen_to(&expected_ty)
+                        {
+                            let vspan = typed_arg.span;
+                            let original = std::mem::replace(
+                                &mut typed_arg,
+                                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                            );
+                            typed_arg = TypedExpr {
+                                kind: TypedExprKind::Cast {
+                                    expr: Box::new(original),
+                                    target: expected_ty.clone(),
+                                },
+                                ty: expected_ty.clone(),
+                                span: vspan,
+                            };
+                        }
+
                         // Push a constraint: arg type == expected field type
                         self.constraints.push(Constraint::equal(
                             typed_arg.ty.clone(),
