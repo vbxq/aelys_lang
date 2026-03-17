@@ -402,6 +402,19 @@ impl TypeInference {
             }
         }
 
+        // narrow ArraySized fill values: `[0; 3]` in an `[i32; 3]` context.
+        if let InferType::Array(elem_ty, _) = target_ty {
+            if let TypedExprKind::ArraySized { fill_value, .. } = &mut expr.kind {
+                if let Some(fv) = fill_value {
+                    if self.try_narrow_literal(fv, elem_ty) && fv.ty == **elem_ty {
+                        expr.ty = target_ty.clone();
+                        return true;
+                    }
+                }
+                return true;
+            }
+        }
+
         // narrow unary expressions (for eg -1 in an i32 context) recurse into the operand so the whole expression adopts the target type
         if let TypedExprKind::Unary { operand, .. } = &mut expr.kind {
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
