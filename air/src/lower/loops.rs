@@ -40,16 +40,9 @@ impl<'a> LoweringContext<'a> {
             Some(self.span(&end.span)),
         );
 
-        let header_id = self.alloc_block_id();
-        let body_id = self.alloc_block_id();
-        let incr_id = self.alloc_block_id();
-        let exit_id = self.alloc_block_id();
-
-        self.seal_block(AirTerminator::Goto(header_id));
-
-        // Evaluate the step operand BEFORE the header so we can branch on its
-        // sign at runtime.  For compile-time constant steps the optimizer will
-        // fold the branch away.
+        // Evaluate the step operand ONCE in the entry block so it is not
+        // re-read on every iteration (the variable might be mutated in the
+        // loop body).
         let step_operand = if let Some(step_expr) = step {
             self.lower_expr(step_expr)
         } else {
@@ -67,6 +60,13 @@ impl<'a> LoweringContext<'a> {
             },
             None,
         );
+
+        let header_id = self.alloc_block_id();
+        let body_id = self.alloc_block_id();
+        let incr_id = self.alloc_block_id();
+        let exit_id = self.alloc_block_id();
+
+        self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
         // For negative steps the iteration condition is reversed:
