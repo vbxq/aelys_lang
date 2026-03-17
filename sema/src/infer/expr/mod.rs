@@ -540,6 +540,21 @@ impl TypeInference {
             ..
         } = &mut expr.kind
         {
+            // Narrow if-else when the target is a generic enum (e.g. Option<i32>).
+            // Recurse into both branches to narrow enum variant constructions.
+            if let InferType::Enum(..) = target_ty {
+                if matches!(expr.ty, InferType::Var(_)) || matches!(expr.ty, InferType::Enum(..)) {
+                    let then_ok = self.try_narrow_literal(then_branch, target_ty);
+                    let else_ok = self.try_narrow_literal(else_branch, target_ty);
+                    if then_ok && else_ok
+                        && then_branch.ty == *target_ty && else_branch.ty == *target_ty
+                    {
+                        expr.ty = target_ty.clone();
+                        return true;
+                    }
+                    return then_ok && else_ok;
+                }
+            }
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
                 let then_ok = self.try_narrow_literal(then_branch, target_ty);
                 let else_ok = self.try_narrow_literal(else_branch, target_ty);
