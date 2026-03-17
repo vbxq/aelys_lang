@@ -17,6 +17,12 @@ pub enum InferType {
     String,
     Null,
 
+    /// The bottom type: represents diverging control flow (return, break, etc.).
+    /// Never is a subtype of every type — `unify(Never, T)` always succeeds
+    /// without constraining T. This is safe because a Never-typed expression
+    /// never produces a value, so any expected type is vacuously compatible.
+    Never,
+
     Function {
         params: Vec<InferType>,
         ret: Box<InferType>,
@@ -78,24 +84,25 @@ impl InferType {
     }
 
     pub fn is_concrete(&self) -> bool {
-        matches!(
-            self,
+        match self {
             InferType::I8
-                | InferType::I16
-                | InferType::I32
-                | InferType::I64
-                | InferType::U8
-                | InferType::U16
-                | InferType::U32
-                | InferType::U64
-                | InferType::F32
-                | InferType::F64
-                | InferType::Bool
-                | InferType::String
-                | InferType::Null
-                | InferType::Struct(_)
-                | InferType::Enum(_, _)
-        )
+            | InferType::I16
+            | InferType::I32
+            | InferType::I64
+            | InferType::U8
+            | InferType::U16
+            | InferType::U32
+            | InferType::U64
+            | InferType::F32
+            | InferType::F64
+            | InferType::Bool
+            | InferType::String
+            | InferType::Null
+            | InferType::Struct(_) => true,
+            // An Enum is only concrete if all its type args are also concrete.
+            InferType::Enum(_, args) => args.iter().all(|a| a.is_concrete()),
+            _ => false,
+        }
     }
 
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
@@ -136,7 +143,7 @@ impl InferType {
             "bool" => InferType::Bool,
             "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
-            "array" => {
+            "array" if ann.array_size.is_some() => {
                 let inner = ann
                     .type_param
                     .as_ref()
@@ -328,6 +335,7 @@ impl fmt::Display for InferType {
             InferType::Bool => write!(f, "bool"),
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
+            InferType::Never => write!(f, "!"),
             InferType::Function { params, ret } => {
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {

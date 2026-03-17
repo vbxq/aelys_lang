@@ -652,16 +652,13 @@ impl TypeInference {
                             .all(|t| t.is_concrete());
 
                         if all_expr_var && all_target_concrete {
-                            // Try to narrow data variant args to match target type params
-                            for (expr_ta, target_ta) in expr_type_args.clone().iter()
-                                .zip(target_type_args.iter())
-                            {
+                            // Try to narrow data variant args to match target type params.
+                            // Call try_narrow_literal on each arg unconditionally —
+                            // it handles all narrowable cases including nested enums
+                            // (e.g. Result::Ok(Option::None) with target Result<Option<i64>>).
+                            for target_ta in target_type_args.iter() {
                                 for arg in args.iter_mut() {
-                                    if arg.ty == *expr_ta || (arg.ty == InferType::I64 && target_ta.is_integer())
-                                        || (arg.ty == InferType::F64 && target_ta.is_float())
-                                    {
-                                        self.try_narrow_literal(arg, target_ta);
-                                    }
+                                    self.try_narrow_literal(arg, target_ta);
                                 }
                             }
                             expr.ty = target_ty.clone();
