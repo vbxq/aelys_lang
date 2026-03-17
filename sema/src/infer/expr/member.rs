@@ -1,8 +1,8 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, Span, StructFieldInit};
+use aelys_syntax::{Expr, ExprKind, Span, StructFieldInit};
 
 impl TypeInference {
     pub(super) fn infer_member_expr(
@@ -48,6 +48,93 @@ impl TypeInference {
                 member: member.to_string(),
             },
             ty,
+        )
+    }
+
+    pub(super) fn infer_field_assign_expr(
+        &mut self,
+        object: &Expr,
+        field: &str,
+        value: &Expr,
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let typed_object = self.infer_expr(object);
+        let mut typed_value = self.infer_expr(value);
+
+        // Check mutability: the object variable must be declared `let mut`
+        if let ExprKind::Identifier(ref name) = object.kind {
+            if !self.env.is_mutable(name) {
+                let binding_span = self.env.lookup_binding_span(name);
+                let suggestion = binding_span.map(|bs| {
+                    let insert_offset = bs.start + 4;
+                    let insert_span =
+                        Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
+                    TypeErrorSuggestion {
+                        message: "make the binding mutable".to_string(),
+                        span: insert_span,
+                        new_text: "mut ".to_string(),
+                    }
+                });
+                self.errors.push(TypeError::assign_to_immutable(
+                    name.to_string(),
+                    span,
+                    binding_span,
+                    suggestion,
+                ));
+            }
+        }
+
+        // Validate the field exists and constrain the value type
+        if let InferType::Struct(ref struct_name) = typed_object.ty {
+            if let Some(def) = self.type_table.get_struct(struct_name) {
+                if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
+                    let field_ty = field_def.ty.clone();
+                    self.try_narrow_literal(&mut typed_value, &field_ty);
+                    // Implicit numeric widening for field assignment
+                    if typed_value.ty != field_ty
+                        && typed_value.ty.can_implicit_widen_to(&field_ty)
+                    {
+                        let vspan = typed_value.span;
+                        let original = std::mem::replace(
+                            &mut typed_value,
+                            TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                        );
+                        typed_value = TypedExpr {
+                            kind: TypedExprKind::Cast {
+                                expr: Box::new(original),
+                                target: field_ty.clone(),
+                            },
+                            ty: field_ty.clone(),
+                            span: vspan,
+                        };
+                    }
+                    self.constraints.push(Constraint::equal(
+                        typed_value.ty.clone(),
+                        field_ty,
+                        span,
+                        ConstraintReason::Assignment {
+                            var_name: format!("{}", field),
+                        },
+                    ));
+                } else {
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "struct '{}' has no field '{}'",
+                            struct_name, field
+                        ),
+                        span,
+                    ));
+                }
+            }
+        }
+
+        (
+            TypedExprKind::FieldAssign {
+                object: Box::new(typed_object),
+                field: field.to_string(),
+                value: Box::new(typed_value),
+            },
+            InferType::Null,
         )
     }
 

@@ -25,6 +25,29 @@ impl TypeInference {
             // narrowing alone must never be the sole source of truth for a type
             self.try_narrow_literal(&mut typed_init, decl);
 
+            // Implicit numeric widening for let initializer
+            if typed_init.ty != *decl
+                && typed_init.ty.can_implicit_widen_to(decl)
+            {
+                let vspan = typed_init.span;
+                let original = std::mem::replace(
+                    &mut typed_init,
+                    crate::typed_ast::TypedExpr {
+                        kind: crate::typed_ast::TypedExprKind::Null,
+                        ty: crate::types::InferType::Null,
+                        span: vspan,
+                    },
+                );
+                typed_init = crate::typed_ast::TypedExpr {
+                    kind: crate::typed_ast::TypedExprKind::Cast {
+                        expr: Box::new(original),
+                        target: decl.clone(),
+                    },
+                    ty: decl.clone(),
+                    span: vspan,
+                };
+            }
+
             self.constraints.push(Constraint::equal(
                 typed_init.ty.clone(),
                 decl.clone(),

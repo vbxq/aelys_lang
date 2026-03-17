@@ -1,8 +1,8 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::{InferType, ResolvedType};
-use aelys_syntax::{Expr, Span, TypeAnnotation};
+use aelys_syntax::{Expr, ExprKind, Span, TypeAnnotation};
 
 impl TypeInference {
     pub(super) fn infer_array_literal(
@@ -166,6 +166,29 @@ impl TypeInference {
         value: &Expr,
         _span: Span,
     ) -> (TypedExprKind, InferType) {
+        // Check mutability: the object variable must be declared `let mut`
+        if let ExprKind::Identifier(ref name) = object.kind {
+            if !self.env.is_mutable(name) {
+                let binding_span = self.env.lookup_binding_span(name);
+                let suggestion = binding_span.map(|bs| {
+                    let insert_offset = bs.start + 4;
+                    let insert_span =
+                        Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
+                    TypeErrorSuggestion {
+                        message: "make the binding mutable".to_string(),
+                        span: insert_span,
+                        new_text: "mut ".to_string(),
+                    }
+                });
+                self.errors.push(TypeError::assign_to_immutable(
+                    name.to_string(),
+                    _span,
+                    binding_span,
+                    suggestion,
+                ));
+            }
+        }
+
         let typed_object = self.infer_expr(object);
         let typed_index = self.infer_expr(index);
         let mut typed_value = self.infer_expr(value);
@@ -181,6 +204,24 @@ impl TypeInference {
         match &typed_object.ty {
             InferType::Array(elem_ty, _) | InferType::Vec(elem_ty) => {
                 self.try_narrow_literal(&mut typed_value, elem_ty);
+                // Implicit numeric widening for index assignment
+                if typed_value.ty != **elem_ty
+                    && typed_value.ty.can_implicit_widen_to(elem_ty)
+                {
+                    let vspan = typed_value.span;
+                    let original = std::mem::replace(
+                        &mut typed_value,
+                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                    );
+                    typed_value = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: (**elem_ty).clone(),
+                        },
+                        ty: (**elem_ty).clone(),
+                        span: vspan,
+                    };
+                }
                 self.constraints.push(Constraint::equal(
                     typed_value.ty.clone(),
                     (**elem_ty).clone(),
