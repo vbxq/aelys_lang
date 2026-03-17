@@ -7,6 +7,7 @@ pub struct FunctionInfo {
     pub call_count: usize,
     pub calls: HashSet<String>,
     pub has_captures: bool,
+    pub has_type_params: bool,
     pub is_recursive: bool,
     pub has_inline: bool,
     pub has_inline_always: bool,
@@ -82,6 +83,10 @@ impl ProgramAnalysis {
             return InlineDecision::Blocked(BlockReason::HasCaptures);
         }
 
+        if info.has_type_params {
+            return InlineDecision::Blocked(BlockReason::HasTypeParams);
+        }
+
         // @inline decorator
         if info.has_inline {
             return InlineDecision::Inline;
@@ -121,6 +126,7 @@ pub enum BlockReason {
     Recursive,
     MutualRecursion(Vec<String>),
     HasCaptures,
+    HasTypeParams,
 }
 
 fn analyze_function(func: &TypedFunction) -> FunctionInfo {
@@ -137,6 +143,7 @@ fn analyze_function(func: &TypedFunction) -> FunctionInfo {
         call_count: 0,
         calls,
         has_captures: !func.captures.is_empty(),
+        has_type_params: !func.type_params.is_empty(),
         is_recursive: false,
         has_inline,
         has_inline_always,

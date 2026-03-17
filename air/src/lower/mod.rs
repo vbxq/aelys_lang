@@ -326,12 +326,13 @@ impl<'a> LoweringContext<'a> {
                         .iter()
                         .map(|a| self.lower_type_from_infer(a))
                         .collect();
-                    // Only pre-mangle if all type args are concrete (not Opaque/Void).
-                    // Opaque args come from unresolved inference and would produce
-                    // nonsensical mangled names.
+                    // Only pre-mangle if all type args are fully concrete.
+                    // Opaque/Void come from unresolved inference, and Param comes
+                    // from generic function bodies — both would produce nonsensical
+                    // mangled names that function monomorphization can't rewrite.
                     let all_concrete = lowered_args
                         .iter()
-                        .all(|t| !matches!(t, AirType::Opaque | AirType::Void));
+                        .all(|t| !matches!(t, AirType::Opaque | AirType::Void | AirType::Param(_)));
                     if all_concrete {
                         let suffix = lowered_args
                             .iter()

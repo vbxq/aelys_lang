@@ -49,6 +49,13 @@ impl TypeInference {
                     .map(|e| self.instantiate_inner(e, mapping))
                     .collect(),
             ),
+            InferType::Enum(name, type_args) if !type_args.is_empty() => InferType::Enum(
+                name.clone(),
+                type_args
+                    .iter()
+                    .map(|a| self.instantiate_inner(a, mapping))
+                    .collect(),
+            ),
             other => other.clone(),
         }
     }
