@@ -78,9 +78,15 @@ impl Parser {
             }
         }
         self.consume(&TokenKind::RParen, ")")?;
-        self.consume(&TokenKind::Arrow, "->")?;
-        let ret = self.parse_type_annotation()?;
-        let end_span = self.previous().span;
+        // `fn(args) -> RetType` has an explicit return type.
+        // `fn(args)` without `->` is a void function type.
+        let (ret, end_span) = if self.match_token(&TokenKind::Arrow) {
+            let ret = self.parse_type_annotation()?;
+            (ret, self.previous().span)
+        } else {
+            let end = self.previous().span;
+            (TypeAnnotation::new("null".to_string(), end), end)
+        };
         Ok(TypeAnnotation::function_type(
             params,
             ret,
