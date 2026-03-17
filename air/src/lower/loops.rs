@@ -22,6 +22,11 @@ impl<'a> LoweringContext<'a> {
         let start_op = self.lower_expr(start);
         let end_op = self.lower_expr(end);
 
+        // Save scope so the iterator variable doesn't leak into the enclosing
+        // scope after the loop (e.g. `let i = 999; for i in 0..5 { ... }; use(i)`
+        // should still see i=999 after the loop).
+        let scope_depth = self.locals_by_name.len();
+
         let iter_local = self.alloc_named_local(iterator, iter_ty.clone(), true, start_span);
         self.emit(
             AirStmtKind::Assign {
@@ -195,6 +200,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        self.locals_by_name.truncate(scope_depth);
     }
 
     pub(super) fn lower_foreach(
@@ -246,6 +252,9 @@ impl<'a> LoweringContext<'a> {
             },
             None,
         );
+
+        // Save scope so the iterator variable doesn't leak after the loop.
+        let scope_depth = self.locals_by_name.len();
 
         let elem_air_ty = self.lower_type_from_infer(elem_type);
         let elem_local = self.alloc_named_local(iterator, elem_air_ty, false, sp);
@@ -313,6 +322,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        self.locals_by_name.truncate(scope_depth);
     }
 }
 
