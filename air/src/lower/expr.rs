@@ -471,7 +471,41 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         let idx = self.lower_expr(index);
-        let val = self.lower_expr(value);
+
+        // Detect compound index assignment pattern from parser desugaring:
+        //   arr[idx] += rhs  →  arr[idx] = arr[idx] + rhs
+        // The parser clones the index expression, so arr[idx] on the RHS would
+        // re-evaluate idx (wrong if idx has side effects).  Instead, reuse the
+        // already-lowered `idx` operand: load the current value, apply the op,
+        // and use the result as `val`.
+        let val = if let TypedExprKind::Binary { left, op, right } = &value.kind {
+            if let TypedExprKind::Index { .. } = &left.kind {
+                // Compound pattern: compute `object[idx] op rhs` using the
+                // already-lowered idx instead of re-evaluating the left side.
+                let obj_op = self.lower_expr(object);
+                let obj_ty = self.lower_type_from_infer(&object.ty);
+                let obj_local = self.operand_to_local(obj_op, &obj_ty);
+                let current = self.emit_rvalue_to_temp(
+                    self.lower_type_from_infer(&left.ty),
+                    Rvalue::Index {
+                        base: Operand::Copy(obj_local),
+                        index: idx.clone(),
+                    },
+                    sp,
+                );
+                let rhs = self.lower_expr(right);
+                let air_op = super::lower_binop(op);
+                self.emit_rvalue_to_temp(
+                    self.lower_type_from_infer(&value.ty),
+                    Rvalue::BinaryOp(air_op, current, rhs),
+                    sp,
+                )
+            } else {
+                self.lower_expr(value)
+            }
+        } else {
+            self.lower_expr(value)
+        };
 
         // Collect the full access path (mix of Member and Index layers) from
         // `object` back to the root variable.  Handles all patterns:
