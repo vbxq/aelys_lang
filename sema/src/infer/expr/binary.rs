@@ -2,7 +2,6 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::TypedExpr;
 use crate::types::InferType;
-use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{BinaryOp, Span, UnaryOp};
 
 impl TypeInference {
@@ -144,12 +143,15 @@ impl TypeInference {
                 }
 
                 if left.ty.is_concrete() && right.ty.is_concrete() && left.ty != right.ty {
-                    self.warnings.push(Warning::new(
-                        WarningKind::IncompatibleComparison {
-                            left: left.ty.to_string(),
-                            right: right.ty.to_string(),
-                            op: op.to_string(),
-                        },
+                    // Incompatible concrete types (e.g., bool == i64) cannot be
+                    // compared — LLVM requires same-type operands for icmp.
+                    // Emit an error instead of just a warning.
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "comparison (`{}`) requires operands of the same type, \
+                             found `{}` and `{}`",
+                            op, left.ty, right.ty
+                        ),
                         span,
                     ));
                 } else {
