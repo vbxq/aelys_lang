@@ -12,7 +12,7 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use std::process::Command;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::Arc;
 
 /// Built-in functions available in every Aelys program
 /// These are intercepted during codegen and lowered to runtime calls
@@ -107,16 +107,29 @@ fn lower_file_to_air_with_source(
             None,
         )
     })?;
-    let mut air = aelys_air::mono::monomorphize(air);
-    let layout_result = catch_unwind_silent(std::panic::AssertUnwindSafe(|| {
-        aelys_air::layout::compute_layouts(&mut air);
-    }));
-    if let Err(payload) = layout_result {
+    let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
+        let message = errors
+            .iter()
+            .enumerate()
+            .map(|(i, e)| format!("{}. {}", i + 1, e))
+            .collect::<Vec<_>>()
+            .join("\n");
+        backend_diagnostic_error(
+            src.clone(),
+            fallback_source_span(src.as_ref()),
+            "monomorphization",
+            message,
+            None,
+            None,
+        )
+    })?;
+    let layout_errors = aelys_air::layout::compute_layouts(&mut air);
+    if !layout_errors.is_empty() {
         return Err(backend_diagnostic_error(
             src.clone(),
             program_anchor_span(&air, src.as_ref()),
             "air-layout",
-            panic_payload_to_string(payload),
+            layout_errors.join("; "),
             None,
             None,
         ));
@@ -272,34 +285,6 @@ fn backend_diagnostic_error(
         span,
         source,
     ))
-}
-
-fn catch_unwind_silent<F, R>(f: F) -> std::thread::Result<R>
-where
-    F: FnOnce() -> R + std::panic::UnwindSafe,
-{
-    static PANIC_HOOK_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-
-    let _guard = PANIC_HOOK_LOCK
-        .get_or_init(|| Mutex::new(()))
-        .lock()
-        .expect("panic hook lock poisoned");
-
-    let hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(|_| {}));
-    let result = std::panic::catch_unwind(f);
-    std::panic::set_hook(hook);
-    result
-}
-
-fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
-    if let Some(message) = payload.downcast_ref::<&str>() {
-        return (*message).to_string();
-    }
-    if let Some(message) = payload.downcast_ref::<String>() {
-        return message.clone();
-    }
-    "internal compiler error during AIR layout".to_string()
 }
 
 fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> AelysError {

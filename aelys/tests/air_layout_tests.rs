@@ -286,28 +286,28 @@ fn closure_env() {
 }
 
 #[test]
-#[should_panic(expected = "infinite size")]
-fn self_reference_panics() {
+fn self_reference_reports_error() {
     let mut prog = program(vec![sdef(
         "Bad",
         vec![field("inner", AirType::Struct("Bad".into()))],
     )]);
-    compute_layouts(&mut prog);
+    let errors = compute_layouts(&mut prog);
+    assert!(!errors.is_empty(), "expected error for self-referencing struct");
+    assert!(errors[0].contains("infinite size"));
 }
 
 #[test]
-#[should_panic(expected = "recursive struct cycle")]
-fn mutual_cycle_panics() {
+fn mutual_cycle_reports_error() {
     let mut prog = program(vec![
         sdef("A", vec![field("b", AirType::Struct("B".into()))]),
         sdef("B", vec![field("a", AirType::Struct("A".into()))]),
     ]);
-    compute_layouts(&mut prog);
+    let errors = compute_layouts(&mut prog);
+    assert!(!errors.is_empty(), "expected error for mutual cycle");
 }
 
 #[test]
-#[should_panic(expected = "recursive type cycle involving by-value enums/structs")]
-fn struct_enum_cycle_panics() {
+fn struct_enum_cycle_reports_error() {
     let mut prog = program_with_enums(
         vec![sdef(
             "Node",
@@ -321,5 +321,6 @@ fn struct_enum_cycle_panics() {
             ],
         )],
     );
-    compute_layouts(&mut prog);
+    let errors = compute_layouts(&mut prog);
+    assert!(!errors.is_empty(), "expected error for struct-enum cycle");
 }

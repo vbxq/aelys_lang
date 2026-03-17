@@ -418,7 +418,7 @@ impl<'a> LoweringContext<'a> {
         // `layout_of` is context-free and underestimates data enums as 4 bytes.
         // Build a tiny AIR probe so mono + layout can recover the real aggregate size.
         probe = crate::mono::monomorphize(probe).unwrap();
-        crate::layout::compute_layouts(&mut probe);
+        let _ = crate::layout::compute_layouts(&mut probe);
         crate::layout::resolved_layout(elem_ty, &probe.struct_sizes).size
     }
 

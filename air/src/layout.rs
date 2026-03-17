@@ -36,7 +36,7 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
     }
 }
 
-pub fn compute_layouts(program: &mut AirProgram) {
+pub fn compute_layouts(program: &mut AirProgram) -> Vec<String> {
     let name_to_idx: HashMap<String, usize> = program
         .structs
         .iter()
@@ -44,8 +44,14 @@ pub fn compute_layouts(program: &mut AirProgram) {
         .map(|(i, s)| (s.name.clone(), i))
         .collect();
 
-    detect_self_references(&program.structs);
-    let order = topological_order(&program.structs, &name_to_idx);
+    let errors = detect_self_references(&program.structs);
+    if !errors.is_empty() {
+        return errors;
+    }
+    let order = match topological_order(&program.structs, &name_to_idx) {
+        Ok(o) => o,
+        Err(e) => return vec![e],
+    };
 
     let mut resolved: HashMap<String, TypeLayout> = HashMap::new();
     let mut remaining_enums: Vec<usize> = (0..program.enums.len()).collect();
@@ -123,13 +129,14 @@ pub fn compute_layouts(program: &mut AirProgram) {
                 .iter()
                 .map(|&idx| format!("enum {}", program.enums[idx].name)),
         );
-        panic!(
+        return vec![format!(
             "recursive type cycle involving by-value enums/structs: {}",
             names.join(" <-> ")
-        );
+        )];
     }
 
     program.struct_sizes = resolved;
+    Vec::new()
 }
 
 fn types_resolved<'a, I>(types: I, resolved: &HashMap<String, TypeLayout>) -> bool
@@ -215,17 +222,19 @@ fn align_to(offset: u32, align: u32) -> u32 {
     (offset + align - 1) & !(align - 1)
 }
 
-fn detect_self_references(structs: &[AirStructDef]) {
+fn detect_self_references(structs: &[AirStructDef]) -> Vec<String> {
+    let mut errors = Vec::new();
     for def in structs {
         for field in &def.fields {
             if references_by_value(&field.ty, &def.name) {
-                panic!(
+                errors.push(format!(
                     "struct `{}` has infinite size: field `{}` contains `{}` by value",
                     def.name, field.name, def.name
-                );
+                ));
             }
         }
     }
+    errors
 }
 
 fn references_by_value(ty: &AirType, target: &str) -> bool {
@@ -246,7 +255,7 @@ fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
     }
 }
 
-fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usize>) -> Vec<usize> {
+fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usize>) -> Result<Vec<usize>, String> {
     let n = structs.len();
     let mut in_degree = vec![0u32; n];
     let mut dependents: Vec<Vec<usize>> = vec![vec![]; n];
@@ -283,10 +292,10 @@ fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usi
             .filter(|&i| in_degree[i] > 0)
             .map(|i| structs[i].name.as_str())
             .collect();
-        panic!("recursive struct cycle: {}", cycle.join(" <-> "));
+        return Err(format!("recursive struct cycle: {}", cycle.join(" <-> ")));
     }
 
-    order
+    Ok(order)
 }
 
 /// Returns true if the enum has any data variants (non-empty payload).
