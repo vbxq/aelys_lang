@@ -339,6 +339,27 @@ impl TypeInference {
                     }
                 }
             }
+
+            // Harmonize enum types: when one arm has a concrete enum type
+            // (e.g. Option<i32>) and others have unresolved Var type args,
+            // narrow the unresolved arms to match.
+            let concrete_enum = typed_arms.iter()
+                .map(|a| &a.body.ty)
+                .find(|t| matches!(t, InferType::Enum(_, args) if args.iter().all(|a| a.is_concrete())))
+                .cloned();
+            if let Some(ref target) = concrete_enum {
+                if let InferType::Enum(target_name, _) = target {
+                    for arm in &mut typed_arms {
+                        if let InferType::Enum(arm_name, arm_args) = &arm.body.ty {
+                            if arm_name == target_name
+                                && arm_args.iter().any(|a| matches!(a, InferType::Var(_)))
+                            {
+                                self.try_narrow_literal(&mut arm.body, target);
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // Now resolve result_type: if all arms agree, use the concrete type directly.
