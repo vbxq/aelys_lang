@@ -82,6 +82,7 @@ impl<'a> FunctionCodegen<'a> {
                 .build_int_mul(left, right, "imul")
                 .map(Into::into),
             BinOp::Div => {
+                self.emit_div_zero_check(right)?;
                 if is_unsigned {
                     self.builder
                         .build_int_unsigned_div(left, right, "iudiv")
@@ -93,6 +94,7 @@ impl<'a> FunctionCodegen<'a> {
                 }
             }
             BinOp::Rem => {
+                self.emit_div_zero_check(right)?;
                 if is_unsigned {
                     self.builder
                         .build_int_unsigned_rem(left, right, "iurem")
@@ -168,14 +170,25 @@ impl<'a> FunctionCodegen<'a> {
             }
             BinOp::Or | BinOp::BitOr => self.builder.build_or(left, right, "ior").map(Into::into),
             BinOp::BitXor => self.builder.build_xor(left, right, "ixor").map(Into::into),
-            BinOp::Shl => self
-                .builder
-                .build_left_shift(left, right, "ishl")
-                .map(Into::into),
-            BinOp::Shr => self
-                .builder
-                .build_right_shift(left, right, !is_unsigned, "ishr")
-                .map(Into::into),
+            BinOp::Shl => {
+                // Mask shift amount to prevent LLVM UB (like Rust: amount % bitwidth)
+                let bitwidth = left.get_type().get_bit_width();
+                let mask = left.get_type().const_int((bitwidth - 1) as u64, false);
+                let masked = self.builder.build_and(right, mask, "shl_mask")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.builder
+                    .build_left_shift(left, masked, "ishl")
+                    .map(Into::into)
+            }
+            BinOp::Shr => {
+                let bitwidth = left.get_type().get_bit_width();
+                let mask = left.get_type().const_int((bitwidth - 1) as u64, false);
+                let masked = self.builder.build_and(right, mask, "shr_mask")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.builder
+                    .build_right_shift(left, masked, !is_unsigned, "ishr")
+                    .map(Into::into)
+            }
             BinOp::CheckedAdd => {
                 return Err(self.unsupported_air(
                     "BinOp::CheckedAdd",
