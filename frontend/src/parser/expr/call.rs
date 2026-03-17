@@ -18,6 +18,10 @@ impl Parser {
                         if !self.match_token(&TokenKind::Comma) {
                             break;
                         }
+                        // Allow trailing comma: `f(a, b,)`
+                        if self.check(&TokenKind::RParen) {
+                            break;
+                        }
                     }
                 }
 
@@ -56,6 +60,9 @@ impl Parser {
                                 loop {
                                     args.push(self.expression()?);
                                     if !self.match_token(&TokenKind::Comma) {
+                                        break;
+                                    }
+                                    if self.check(&TokenKind::RParen) {
                                         break;
                                     }
                                 }

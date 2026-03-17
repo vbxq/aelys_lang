@@ -339,8 +339,9 @@ impl Parser {
             TokenKind::Identifier(ref name)
                 if name.chars().next().is_some_and(|c| c.is_uppercase())
                     && self.check(&TokenKind::LBrace)
-                    && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
-                    && matches!(self.peek_at(2).kind, TokenKind::Colon) =>
+                    && (matches!(self.peek_at(1).kind, TokenKind::RBrace)
+                        || (matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+                            && matches!(self.peek_at(2).kind, TokenKind::Colon))) =>
             {
                 let name = name.clone();
                 return self.struct_literal(name, span);
