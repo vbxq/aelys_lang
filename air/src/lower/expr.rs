@@ -664,7 +664,30 @@ impl<'a> LoweringContext<'a> {
         value: &TypedExpr,
         sp: Option<Span>,
     ) -> Operand {
-        let val = self.lower_expr(value);
+        // Detect compound field assignment from parser desugaring:
+        //   obj.field += rhs  →  obj.field = obj.field + rhs
+        // When the object path contains side-effecting expressions (e.g.
+        // arr[f()].field += rhs), the desugared form evaluates them twice.
+        // Detect the pattern and defer value computation to after the path
+        // is established, so we can reuse the already-loaded current value.
+        let compound_info = if let TypedExprKind::Binary { left, op, right } = &value.kind {
+            if let TypedExprKind::Member { .. } = &left.kind {
+                Some((*op, right.as_ref()))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        // For non-compound assigns, lower the value normally.
+        // For compound assigns, we'll compute val later using the path locals.
+        let val = if compound_info.is_none() {
+            self.lower_expr(value)
+        } else {
+            // Placeholder — will be replaced below
+            Operand::Const(AirConst::Null)
+        };
 
         // Collect the full access path from root → immediate parent of the
         // assigned field.  Each step is either a `.field` or `[idx]` access.
@@ -753,11 +776,35 @@ impl<'a> LoweringContext<'a> {
             }
         }
 
+        // For compound field assigns, compute the value now using the path-loaded
+        // intermediates instead of the pre-lowered val (which would re-evaluate
+        // side-effecting path expressions).
+        let final_val = if let Some((op, rhs_expr)) = compound_info {
+            let field_ty = self.lower_type_from_infer(&value.ty);
+            let current = self.emit_rvalue_to_temp(
+                field_ty.clone(),
+                Rvalue::FieldAccess {
+                    base: Operand::Copy(cur_local),
+                    field: field.to_string(),
+                },
+                sp,
+            );
+            let rhs = self.lower_expr(rhs_expr);
+            let air_op = super::lower_binop(&op);
+            self.emit_rvalue_to_temp(
+                field_ty,
+                Rvalue::BinaryOp(air_op, current, rhs),
+                sp,
+            )
+        } else {
+            val
+        };
+
         // Write the final field on the deepest temp.
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Field(cur_local, field.to_string()),
-                rvalue: Rvalue::Use(val),
+                rvalue: Rvalue::Use(final_val),
             },
             sp,
         );
