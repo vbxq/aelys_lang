@@ -76,6 +76,44 @@ impl TypeInference {
                 {
                     self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
                 }
+                // Implicit numeric widening for binary operations: when both
+                // operands are concrete numeric types of different widths
+                // (e.g. i32 + i64), widen the narrower operand.  This mirrors
+                // the implicit widening already done for function call args.
+                if typed_left.ty != typed_right.ty
+                    && typed_left.ty.can_implicit_widen_to(&typed_right.ty)
+                {
+                    let span = typed_left.span;
+                    let original = std::mem::replace(
+                        &mut typed_left,
+                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                    );
+                    typed_left = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: typed_right.ty.clone(),
+                        },
+                        ty: typed_right.ty.clone(),
+                        span,
+                    };
+                } else if typed_left.ty != typed_right.ty
+                    && typed_right.ty.can_implicit_widen_to(&typed_left.ty)
+                {
+                    let span = typed_right.span;
+                    let original = std::mem::replace(
+                        &mut typed_right,
+                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                    );
+                    typed_right = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: typed_left.ty.clone(),
+                        },
+                        ty: typed_left.ty.clone(),
+                        span,
+                    };
+                }
+
                 let result_type = self.infer_binary_op(*op, &typed_left, &typed_right, expr.span);
 
                 (
