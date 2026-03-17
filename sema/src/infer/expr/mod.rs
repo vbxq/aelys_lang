@@ -627,25 +627,28 @@ impl TypeInference {
                     {
                         // For each type arg that is Var in expr but concrete in target,
                         // narrow the corresponding variant args.
-                        let mut narrowed_any = false;
-                        for (i, (expr_ta, target_ta)) in expr_type_args.clone().iter()
-                            .zip(target_type_args.iter()).enumerate()
-                        {
-                            if matches!(expr_ta, InferType::Var(_)) && target_ta.is_concrete() {
-                                // Narrow all args whose type matches this Var
+                        // Check if all expr type args are Var (unresolved) and
+                        // all target type args are concrete — if so, we can adopt
+                        // the target type. For unit variants (no args), this is the
+                        // only way to narrow.
+                        let all_expr_var = expr_type_args.iter()
+                            .all(|t| matches!(t, InferType::Var(_)));
+                        let all_target_concrete = target_type_args.iter()
+                            .all(|t| t.is_concrete());
+
+                        if all_expr_var && all_target_concrete {
+                            // Try to narrow data variant args to match target type params
+                            for (expr_ta, target_ta) in expr_type_args.clone().iter()
+                                .zip(target_type_args.iter())
+                            {
                                 for arg in args.iter_mut() {
                                     if arg.ty == *expr_ta || (arg.ty == InferType::I64 && target_ta.is_integer())
                                         || (arg.ty == InferType::F64 && target_ta.is_float())
                                     {
                                         self.try_narrow_literal(arg, target_ta);
-                                        if arg.ty == *target_ta {
-                                            narrowed_any = true;
-                                        }
                                     }
                                 }
                             }
-                        }
-                        if narrowed_any {
                             expr.ty = target_ty.clone();
                             return true;
                         }
