@@ -144,7 +144,16 @@ impl TypeInference {
                     self.collect_captures_inner(arg, locals, captures, seen);
                 }
             }
-            TypedExprKind::Assign { value, .. } => {
+            TypedExprKind::Assign { name, value } => {
+                // The assignment target name may itself need to be captured
+                // (write-only capture: `x = 42` where x is from outer scope).
+                if !locals.contains(name)
+                    && !seen.contains(name)
+                    && let Some(ty) = self.env.captures().get(name)
+                {
+                    captures.push((name.clone(), ty.clone()));
+                    seen.insert(name.clone());
+                }
                 self.collect_captures_inner(value, locals, captures, seen);
             }
             TypedExprKind::Grouping(inner) => {
