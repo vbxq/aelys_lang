@@ -80,7 +80,7 @@ fn test() {}
 fn struct_field_array_of_known_type_accepted() {
     should_pass(
         r#"
-struct Matrix { data: Array<i64> }
+struct Matrix { data: [i64; 3] }
 fn test() {}
 "#,
     );

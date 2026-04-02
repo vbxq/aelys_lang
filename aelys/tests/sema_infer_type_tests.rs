@@ -49,9 +49,11 @@ fn test_from_annotation() {
 
 #[test]
 fn test_from_annotation_generic_types() {
+    // "array" (lowercase) is no longer a recognized builtin type annotation.
+    // The canonical syntax is [T; N] for fixed-size arrays.
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("array", "int")),
-        InferType::Array(Box::new(InferType::I64), None)
+        InferType::Dynamic
     );
 
     assert_eq!(
@@ -59,10 +61,11 @@ fn test_from_annotation_generic_types() {
         InferType::Vec(Box::new(InferType::String))
     );
 
-    // Array<Int> (PascalCase should also work)
+    // PascalCase names are always user-defined types, never builtins.
+    // "Array" with a capital A is treated as Struct("Array"), not the builtin array.
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("Array", "Int")),
-        InferType::Array(Box::new(InferType::I64), None)
+        InferType::Struct("Array".to_string())
     );
 }
 

@@ -70,6 +70,14 @@ impl DeadCodeEliminator {
                 self.eliminate_in_expr(index);
                 self.eliminate_in_expr(value);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                self.eliminate_in_expr(object);
+                self.eliminate_in_expr(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.eliminate_in_expr(s);

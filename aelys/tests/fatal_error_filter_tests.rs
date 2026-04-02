@@ -231,7 +231,7 @@ fn while_with_early_return() {
     assert!(
         sema_ok(
             r#"
-fn find(arr: Array<i64>, n: i64, target: i64) -> i64 {
+fn find(arr: [i64; 10], n: i64, target: i64) -> i64 {
     let mut i: i64 = 0
     while i < n {
         if arr[i] == target {

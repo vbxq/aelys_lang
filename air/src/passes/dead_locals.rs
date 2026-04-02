@@ -146,6 +146,9 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
         Rvalue::EnumPayload { operand, .. } => {
             collect_operand_locals(operand, out);
         }
+        Rvalue::ClosureCreate { env, .. } => {
+            collect_operand_locals(env, out);
+        }
     }
 }
 

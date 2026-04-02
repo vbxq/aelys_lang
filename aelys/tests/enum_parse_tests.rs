@@ -1,4 +1,5 @@
 use aelys::api::compile_to_typed_ast;
+use aelys_air::AirType;
 use aelys_air::lower::lower;
 use aelys_air::print::print_program;
 use aelys_frontend::lexer::Lexer;
@@ -12,6 +13,11 @@ fn lower_source(code: &str) -> aelys_air::AirProgram {
     let ast = Parser::new(tokens, src.clone()).parse().unwrap();
     let typed = TypeInference::infer_program(ast, src).unwrap();
     lower(&typed)
+}
+
+fn lower_and_monomorphize(code: &str) -> aelys_air::AirProgram {
+    let air = lower_source(code);
+    aelys_air::mono::monomorphize(air).unwrap()
 }
 
 #[test]
@@ -296,7 +302,9 @@ enum Message {
     Move(i64, i64),
     Write(string),
 }
-let msg = Message::Write("hello")
+fn use_write() -> Message {
+    return Message::Write("hello")
+}
 "#;
     let air = lower_source(src);
     // Verify the enum def exists in the AIR program
@@ -474,6 +482,27 @@ fn name(c: Color) -> i64 {
         result.is_ok(),
         "match with wildcard should type-check: {:?}",
         result.err()
+    );
+}
+
+#[test]
+fn match_wildcard_must_be_last() {
+    let src = r#"
+enum Color { Red, Green, Blue }
+
+fn name(c: Color) -> i64 {
+    return match c {
+        _ => 0,
+        Color::Red => 1,
+    }
+}
+"#;
+    let result = compile_to_typed_ast(src);
+    let errors = result.expect_err("wildcard before specific arms should fail");
+    let rendered = format!("{:?}", errors);
+    assert!(
+        rendered.contains("wildcard pattern must be the last match arm"),
+        "unexpected diagnostics: {rendered}"
     );
 }
 
@@ -1306,6 +1335,115 @@ fn handle(r: Result<i64, string>) -> i64 {
 }
 
 #[test]
+fn nested_generic_enum_unit_variant_monomorphizes_nested_enum_def() {
+    let src = r#"
+enum Pair<A, B> {
+    Both(A, B),
+    Neither,
+}
+
+enum Boxed<T> {
+    Value(T),
+    Empty,
+}
+
+fn get_empty() -> Boxed<Pair<i64, string>> {
+    return Boxed::Empty
+}
+
+fn main() {
+    let e = get_empty()
+}
+"#;
+    let air = lower_and_monomorphize(src);
+    let pair = air
+        .enums
+        .iter()
+        .find(|e| e.name == "__mono_Pair_i64$str")
+        .expect("nested Pair mono enum should exist");
+    assert_eq!(pair.variants[0].payload.len(), 2);
+
+    let boxed = air
+        .enums
+        .iter()
+        .find(|e| e.name == "__mono_Boxed_enum___mono_Pair_i64$str")
+        .expect("Boxed<Pair<...>> mono enum should exist");
+    let value_variant = boxed
+        .variants
+        .iter()
+        .find(|v| v.name == "Value")
+        .expect("Value variant should exist");
+    assert_eq!(
+        value_variant.payload,
+        vec![AirType::Enum("__mono_Pair_i64$str".to_string())]
+    );
+}
+
+#[test]
+fn generic_enum_unit_variant_with_fnptr_type_arg_monomorphizes() {
+    let src = r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+fn apply_default() -> Holder<fn(i64) -> i64> {
+    return Holder::Empty
+}
+"#;
+    let air = lower_and_monomorphize(src);
+    let air_text = print_program(&air);
+
+    let holder = air
+        .enums
+        .iter()
+        .find(|e| e.name == "__mono_Holder_fnptr$i64$Ri64")
+        .expect("fnptr-instantiated Holder enum should exist");
+    assert_eq!(holder.variants.len(), 2);
+    assert!(
+        !air_text.contains("enum_init Holder::"),
+        "fnptr generic unit variant should be rewritten to mono enum:\n{air_text}"
+    );
+}
+
+#[test]
+fn generic_enum_named_fn_payload_uses_fnptr_monomorphization() {
+    let src = r#"
+enum Holder<T> {
+    Value(T),
+    Empty,
+}
+
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+
+fn call_holder(h: Holder<fn(i64) -> i64>) -> i64 {
+    return match h {
+        Holder::Value(f) => f(41)
+        Holder::Empty => 0
+    }
+}
+
+fn main() {
+    let h: Holder<fn(i64) -> i64> = Holder::Value(inc)
+    call_holder(h)
+}
+"#;
+    let air = lower_and_monomorphize(src);
+    let air_text = print_program(&air);
+
+    assert!(
+        air_text.contains("enum_init __mono_Holder_fnptr$i64$Ri64::Value"),
+        "named function payload should monomorphize to fnptr enum, got:\n{air_text}"
+    );
+    assert!(
+        !air_text.contains("__mono_Holder_ptr_void"),
+        "named function payload must not degrade to ptr_void mono, got:\n{air_text}"
+    );
+}
+
+#[test]
 fn generic_enum_result_air_lowering() {
     let src = r#"
 enum Result<T, E> {
@@ -1375,7 +1513,7 @@ fn make_none_int() -> Option<i64> {
 }
 "#;
     let air = lower_source(src);
-    let air = aelys_air::mono::monomorphize(air);
+    let air = aelys_air::mono::monomorphize(air).unwrap();
     let air_text = print_program(&air);
 
     // After monomorphization, no generic enum definitions should remain

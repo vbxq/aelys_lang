@@ -5,7 +5,7 @@ use crate::*;
 use std::collections::{HashMap, HashSet};
 use substitute::operand_type_from;
 
-pub fn monomorphize(mut program: AirProgram) -> AirProgram {
+pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<String>> {
     let mut ctx = MonoContext::new(&program);
     ctx.collect_mono_requests(&program);
     ctx.instantiate(&mut program);
@@ -13,9 +13,12 @@ pub fn monomorphize(mut program: AirProgram) -> AirProgram {
     program.functions.retain(|f| f.type_params.is_empty());
 
     // Monomorphize generic enums
-    monomorphize_enums(&mut program);
+    let errors = monomorphize_enums(&mut program);
+    if !errors.is_empty() {
+        return Err(errors);
+    }
 
-    program
+    Ok(program)
 }
 
 /// Monomorphize generic enum definitions.
@@ -26,8 +29,7 @@ pub fn monomorphize(mut program: AirProgram) -> AirProgram {
 ///
 /// The algorithm has three phases:
 ///
-/// 1. **Collection**: Scan all `EnumInit` sites with non-empty payload to infer
-///    `(enum_name, type_args)` pairs. Unit variants cannot contribute type args here.
+/// 1. **Collection**: Scan all `EnumInit` sites with non-empty payload to infer `(enum_name, type_args)` pairs. Unit variants cannot contribute type args here.
 ///
 /// 2. **Local resolution**: Build a per-local mapping `LocalId -> mangled_name` by:
 ///    - Looking at non-unit `EnumInit` assignments to each local.
@@ -37,7 +39,8 @@ pub fn monomorphize(mut program: AirProgram) -> AirProgram {
 ///
 /// 3. **Rewriting**: Use the local mapping to rewrite unit variant `EnumInit`,
 ///    `EnumTag`, `EnumPayload`, and local types.
-fn monomorphize_enums(program: &mut AirProgram) {
+fn monomorphize_enums(program: &mut AirProgram) -> Vec<String> {
+    let mut errors: Vec<String> = Vec::new();
     // Collect generic enum indices
     let generic_enums: HashMap<String, usize> = program
         .enums
@@ -48,7 +51,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
         .collect();
 
     if generic_enums.is_empty() {
-        return;
+        return errors;
     }
 
     // Phase 1: Collect all (enum_name, type_args) pairs from EnumInit sites
@@ -99,7 +102,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
     }
 
     if enum_mono_requests.is_empty() {
-        return;
+        return errors;
     }
 
     // Create monomorphized enum definitions
@@ -166,6 +169,7 @@ fn monomorphize_enums(program: &mut AirProgram) {
                     &func.params.clone(),
                     &func.locals.clone(),
                     &local_mono_map,
+                    &mut errors,
                 );
             }
         }
@@ -222,6 +226,8 @@ fn monomorphize_enums(program: &mut AirProgram) {
 
     // Remove generic enum definitions (they've been replaced by mono'd versions)
     program.enums.retain(|e| e.type_params.is_empty());
+
+    errors
 }
 
 /// Build a per-local mapping from `LocalId` to monomorphized enum name.
@@ -582,6 +588,7 @@ fn rewrite_enum_refs_in_stmt(
     func_params: &[AirParam],
     func_locals: &[AirLocal],
     local_mono_map: &HashMap<LocalId, String>,
+    errors: &mut Vec<String>,
 ) {
     if let AirStmtKind::Assign { place, rvalue } = &mut stmt.kind {
         match rvalue {
@@ -635,15 +642,12 @@ fn rewrite_enum_refs_in_stmt(
                                 if mono_names.len() == 1 {
                                     *enum_name = mono_names[0].clone();
                                 } else if mono_names.len() > 1 {
-                                    // Picking an arbitrary mono here silently miscompiles the
-                                    // unit variant. Leave the generic name in place so AIR
-                                    // validation can reject the unresolved enum deterministically.
-                                    eprintln!(
-                                        "[AIR] warning: ambiguous unit variant {}::{} with {} \
+                                    errors.push(format!(
+                                        "ambiguous unit variant {}::{} with {} \
                                          monomorphizations; cannot determine which to use \
-                                         (type annotation info lost during sema).",
+                                         (type annotation info lost during sema)",
                                         enum_name, variant, mono_names.len()
-                                    );
+                                    ));
                                 }
                             }
                         }
@@ -712,7 +716,6 @@ fn resolve_operand_mono(
 }
 
 /// Resolve AirType values from suffix strings produced by `type_to_string`.
-///
 /// Each string in `key_strs` is a single type arg (split by `$` separator).
 /// Handles primitives, enum types (prefixed with "enum_"), and struct types.
 fn resolve_type_args_from_suffix(type_suffix: &str, enum_def: &AirEnumDef) -> Option<Vec<AirType>> {

@@ -50,20 +50,30 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::FnPtr {
             params,
             ret,
-            conv: _,
+            conv,
         } => {
-            let mut llvm_params: Vec<BasicMetadataTypeEnum<'ctx>> =
-                Vec::with_capacity(params.len());
-            for param in params {
-                llvm_params.push(air_basic_type_to_llvm(param, context)?.into());
-            }
-            let fn_ty = match ret.as_ref() {
-                AirType::Void => context.void_type().fn_type(&llvm_params, false),
-                _ => air_basic_type_to_llvm(ret, context)?.fn_type(&llvm_params, false),
-            };
-            #[allow(deprecated)]
-            {
-                Ok(fn_ty.ptr_type(AddressSpace::default()).into())
+            if matches!(conv, aelys_air::CallingConv::Aelys) {
+                // Aelys function values are fat pointers { fn_ptr, env_ptr },
+                // regardless of whether they capture anything.
+                //
+                // This makes the representation uniform at call sites.
+                // See the comment block in codegen/src/lowering/functions.rs if you wanna see everything
+                Ok(closure_fat_ptr_type(context).into())
+            } else {
+                // C/Rust convention: bare function pointer
+                let mut llvm_params: Vec<BasicMetadataTypeEnum<'ctx>> =
+                    Vec::with_capacity(params.len());
+                for param in params {
+                    llvm_params.push(air_basic_type_to_llvm(param, context)?.into());
+                }
+                let fn_ty = match ret.as_ref() {
+                    AirType::Void => context.void_type().fn_type(&llvm_params, false),
+                    _ => air_basic_type_to_llvm(ret, context)?.fn_type(&llvm_params, false),
+                };
+                #[allow(deprecated)]
+                {
+                    Ok(fn_ty.ptr_type(AddressSpace::default()).into())
+                }
             }
         }
         AirType::Param(param) => Err(CodegenError::UnsupportedType(format!(
@@ -139,6 +149,14 @@ fn struct_alignment(ty: inkwell::types::StructType<'_>) -> u32 {
         .map(alignment_of)
         .max()
         .unwrap_or(1)
+}
+
+/// Fat pointer type for Aelys closures: `{ ptr fn_ptr, ptr env_ptr }`.
+pub fn closure_fat_ptr_type(
+    context: &'_ inkwell::context::Context,
+) -> StructType<'_> {
+    let ptr_ty = context.ptr_type(AddressSpace::default());
+    context.struct_type(&[ptr_ty.into(), ptr_ty.into()], false)
 }
 
 fn pointer_to_i8<'ctx>(context: &'ctx inkwell::context::Context) -> PointerType<'ctx> {

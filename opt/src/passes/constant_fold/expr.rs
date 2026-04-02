@@ -95,6 +95,14 @@ impl ConstantFolder {
                 self.optimize_expr(index);
                 self.optimize_expr(value);
             }
+            TypedExprKind::FieldAssign {
+                object,
+                value,
+                ..
+            } => {
+                self.optimize_expr(object);
+                self.optimize_expr(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.optimize_expr(s);

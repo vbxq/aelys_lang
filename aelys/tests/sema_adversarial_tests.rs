@@ -252,11 +252,11 @@ fn empty_array_with_wrong_type_annotation() {
         should_fail(
             r#"
 fn test() {
-    let x: Array<i64> = ["hello"]
+    let x: [i64; 1] = ["hello"]
 }
 "#
         ),
-        "string array assigned to Array<i64> should fail"
+        "string array assigned to [i64; 1] should fail"
     );
 }
 
@@ -265,13 +265,13 @@ fn array_element_type_mismatch_in_function_call() {
     assert!(
         should_fail(
             r#"
-fn sum(arr: Array<i64>) -> i64 { return arr[0] }
+fn sum(arr: [i64; 2]) -> i64 { return arr[0] }
 fn test() {
     let x = sum(["hello", "world"])
 }
 "#
         ),
-        "passing Array<string> to Array<i64> parameter should fail"
+        "passing [string; 2] to [i64; 2] parameter should fail"
     );
 }
 

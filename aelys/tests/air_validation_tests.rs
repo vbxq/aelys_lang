@@ -334,7 +334,7 @@ fn caller() -> i32 {
 
     let mut program = air;
     compute_layouts(&mut program);
-    let program = monomorphize(program);
+    let program = monomorphize(program).unwrap();
 
     let mono_fn = program
         .functions
@@ -418,7 +418,7 @@ fn main() {
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
     passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -501,7 +501,7 @@ fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
 
     let f = func(&air, "align_probe");
@@ -536,7 +536,7 @@ fn keep_copy(x: i64) -> i64 {
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
 
     let f = func(&air, "keep_copy");
@@ -626,7 +626,7 @@ fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
     passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -658,7 +658,7 @@ fn caller() -> i64 {
 
     let mut program = air;
     compute_layouts(&mut program);
-    let program = monomorphize(program);
+    let program = monomorphize(program).unwrap();
 
     // Both instantiations should exist
     let mono_i32 = program
@@ -998,20 +998,20 @@ fn main() -> i64 {
 "#,
     );
     let f = func(&air, "main");
-    let has_fnref = f.blocks.iter().any(|b| {
+    let has_closure_create = f.blocks.iter().any(|b| {
         b.stmts.iter().any(|s| {
             matches!(
                 &s.kind,
                 AirStmtKind::Assign {
-                    rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(name))),
+                    rvalue: Rvalue::ClosureCreate { fn_name, .. },
                     ..
-                } if name == "inc"
+                } if fn_name == "inc"
             )
         })
     });
     assert!(
-        has_fnref,
-        "expected function identifier value to materialize from FnRef(\"inc\")"
+        has_closure_create,
+        "expected function identifier value to materialize from ClosureCreate(\"inc\")"
     );
 }
 
@@ -1156,7 +1156,7 @@ fn caller() -> i32 {
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
     passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -1423,7 +1423,7 @@ fn caller() -> i64 {
 "#,
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
     passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -1448,7 +1448,7 @@ fn main() {
         &["print", "println"],
     );
     compute_layouts(&mut air);
-    let mut air = monomorphize(air);
+    let mut air = monomorphize(air).unwrap();
     passes::copy_elim::eliminate_copies(&mut air);
     passes::dead_locals::eliminate_dead_locals(&mut air);
 
@@ -1710,31 +1710,13 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
         struct_sizes: std::collections::HashMap::new(),
     };
 
-    let air = monomorphize(program);
-    let result = validate_air(&air);
+    let errors = match monomorphize(program) {
+        Err(e) => e,
+        Ok(_) => panic!("ambiguous generic unit variant should be rejected during monomorphization"),
+    };
     assert!(
-        result.is_err(),
-        "ambiguous generic unit variant should be rejected after monomorphization"
-    );
-    let errors = result.unwrap_err();
-    assert!(
-        errors.iter().any(|e| matches!(
-            &e.detail,
-            AirValidationDetail::UnknownEnumType {
-                local_name: Some(name),
-                enum_name,
-                ..
-            } if name == "ambiguous" && enum_name == "Option"
-        )),
-        "expected unknown enum type error for unresolved local, got: {:?}",
-        errors
-    );
-    assert!(
-        errors.iter().any(|e| matches!(
-            &e.detail,
-            AirValidationDetail::UnknownEnumReference { enum_name, .. } if enum_name == "Option"
-        )),
-        "expected unknown enum reference error for unresolved enum_init, got: {:?}",
+        errors.iter().any(|e| e.contains("ambiguous unit variant")),
+        "expected ambiguous unit variant error, got: {:?}",
         errors
     );
 }
@@ -1894,7 +1876,7 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
         struct_sizes: std::collections::HashMap::new(),
     };
 
-    let air = monomorphize(program);
+    let air = monomorphize(program).unwrap();
     let holder_defs: Vec<_> = air
         .enums
         .iter()

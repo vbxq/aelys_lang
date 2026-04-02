@@ -1,12 +1,35 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::lowering::functions::{llvm_calling_convention, needs_sret};
+use crate::lowering::functions::{function_has_implicit_env, llvm_calling_convention, needs_sret};
 use crate::lowering::globals::{GLOBAL_GET_PREFIX, GLOBAL_SET_PREFIX};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_data};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
+
+// Call generation for Aelys closures and function values
+//
+// Indirect calls (Callee::FnPtr) split into two paths based on calling
+// convention:
+//
+// - Aelys convention: the local holds a fat pointer { fn_ptr, env_ptr }
+//
+//   We extract both fields, prepend env_ptr to the argument list, and call
+//   fn_ptr indirectly. This works identically for capturing closures (env points to a heap struct), non-capturing lambdas (env is null),
+//   and also named  functions used as values (env is null). 
+// 
+// The callee always expects env as its first parameter.
+//
+// - C convention: the local holds a bare function pointer, standard indirect call
+//
+// Direct calls (Callee::Direct, Callee::Named) to Aelys functions prepend a
+// null env pointer. 
+// 
+// callee_has_implicit_env checks whether the target function
+// was declared with the implicit env 
+// 
+// (i.e. it's a non-extern, non-closure Aelys function). Extern, builtin, and ad-hoc functions don't get env
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn generate_call(
@@ -57,56 +80,96 @@ impl<'a> FunctionCodegen<'a> {
 
         match callee {
             Callee::FnPtr(local) => {
-                let fn_ptr = self.load_local(*local)?.into_pointer_value();
                 let (fn_ty, call_conv, sret_ret) = self.fn_ptr_signature_for_local(*local)?;
-                if let Some(ret_air_ty) = sret_ret {
-                    let ret_ty = air_basic_type_to_llvm(&ret_air_ty, self.context)?;
-                    let result_ptr = self
+                let is_aelys_fnptr = self.is_aelys_convention_fnptr(*local);
+
+                if is_aelys_fnptr {
+                    // Aelys-convention fat pointer: { fn_ptr, env_ptr }
+                    let fat_ptr = self.load_local(*local)?.into_struct_value();
+                    let fn_ptr = self
                         .builder
-                        .build_alloca(ret_ty, "sret_slot")
+                        .build_extract_value(fat_ptr, 0, "closure_fn")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                        .into_pointer_value();
+                    let env_ptr = self
+                        .builder
+                        .build_extract_value(fat_ptr, 1, "closure_env")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    self.align_alloca(result_ptr, ret_ty)?;
+                    // Prepend env_ptr to args
                     let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
-                        vec![result_ptr.into()];
+                        vec![env_ptr.into()];
                     all_args.extend(metadata_args.iter().copied());
-                    // Indirect C fnptr calls need the same hidden sret pointer as
-                    // direct calls, or LLVM will call a mismatched signature.
                     let call = self
                         .builder
-                        .build_indirect_call(fn_ty, fn_ptr, &all_args, "call_indirect")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    call.set_call_convention(call_conv);
-                    self.add_sret_callsite_attr(call, ret_ty);
-                    Ok(Some(
-                        self.builder
-                            .build_load(ret_ty, result_ptr, "call_indirect_sret")
-                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?,
-                    ))
-                } else {
-                    let call = self
-                        .builder
-                        .build_indirect_call(fn_ty, fn_ptr, &metadata_args, "call_indirect")
+                        .build_indirect_call(fn_ty, fn_ptr, &all_args, "call_closure")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                     call.set_call_convention(call_conv);
                     Ok(call.try_as_basic_value().basic())
+                } else {
+                    // C-convention bare function pointer
+                    let fn_ptr = self.load_local(*local)?.into_pointer_value();
+                    if let Some(ret_air_ty) = sret_ret {
+                        let ret_ty = air_basic_type_to_llvm(&ret_air_ty, self.context)?;
+                        let result_ptr = self
+                            .builder
+                            .build_alloca(ret_ty, "sret_slot")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                        self.align_alloca(result_ptr, ret_ty)?;
+                        let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
+                            vec![result_ptr.into()];
+                        all_args.extend(metadata_args.iter().copied());
+                        let call = self
+                            .builder
+                            .build_indirect_call(fn_ty, fn_ptr, &all_args, "call_indirect")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                        call.set_call_convention(call_conv);
+                        self.add_sret_callsite_attr(call, ret_ty);
+                        Ok(Some(
+                            self.builder
+                                .build_load(ret_ty, result_ptr, "call_indirect_sret")
+                                .map_err(|e| CodegenError::LlvmError(e.to_string()))?,
+                        ))
+                    } else {
+                        let call = self
+                            .builder
+                            .build_indirect_call(fn_ty, fn_ptr, &metadata_args, "call_indirect")
+                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                        call.set_call_convention(call_conv);
+                        Ok(call.try_as_basic_value().basic())
+                    }
                 }
             }
             _ => {
                 let fn_value = self.resolve_callee(callee, &arg_types, expected_ret)?;
+                // Non-extern Aelys functions get an implicit env param; prepend null.
+                let needs_env = self.callee_has_implicit_env(callee);
+                let final_args = if needs_env {
+                    let null_env = self
+                        .context
+                        .ptr_type(inkwell::AddressSpace::default())
+                        .const_null();
+                    let mut all = Vec::with_capacity(metadata_args.len() + 1);
+                    all.push(null_env.into());
+                    all.extend(metadata_args.iter().copied());
+                    all
+                } else {
+                    metadata_args
+                };
+
                 if let Some(ret_air_ty) = expected_ret
                     && self.callee_needs_sret(callee)
                 {
                     let ret_ty = air_basic_type_to_llvm(ret_air_ty, self.context)?;
                     Ok(Some(self.call_with_sret(
                         fn_value,
-                        &metadata_args,
+                        &final_args,
                         ret_ty,
                         "call_sret",
                     )?))
                 } else {
                     let call = self
                         .builder
-                        .build_call(fn_value, &metadata_args, "call_direct")
+                        .build_call(fn_value, &final_args, "call_direct")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                     call.set_call_convention(fn_value.get_call_conventions());
                     Ok(call.try_as_basic_value().basic())
@@ -313,16 +376,51 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
+    /// Returns true if the local holds an Aelys-convention fat pointer.
+    fn is_aelys_convention_fnptr(&self, local: LocalId) -> bool {
+        matches!(
+            self.local_air_type(local),
+            Ok(AirType::FnPtr { conv: aelys_air::CallingConv::Aelys, .. })
+        )
+    }
+
+    /// Returns true if a direct/named callee has an implicit env param.
+    fn callee_has_implicit_env(&self, callee: &Callee) -> bool {
+        match callee {
+            Callee::Direct(id) => self
+                .program
+                .functions
+                .iter()
+                .find(|f| f.id == *id)
+                .map_or(false, |f| function_has_implicit_env(f)),
+            Callee::Named(name) => {
+                // Ad-hoc / builtin / extern functions don't get env
+                self.program
+                    .functions
+                    .iter()
+                    .find(|f| f.name == *name)
+                    .map_or(false, |f| function_has_implicit_env(f))
+            }
+            _ => false,
+        }
+    }
+
     fn fn_ptr_signature_for_local(
         &self,
         local: LocalId,
     ) -> Result<(FunctionType<'static>, u32, Option<AirType>), CodegenError> {
         match self.local_air_type(local)? {
             AirType::FnPtr { params, ret, conv } => {
+                let is_aelys = matches!(conv, aelys_air::CallingConv::Aelys);
                 let use_sret =
                     needs_sret(ret.as_ref(), *conv, self.target_is_windows(), self.program);
-                let mut param_types = Vec::with_capacity(params.len() + usize::from(use_sret));
+                let extra = usize::from(use_sret) + usize::from(is_aelys);
+                let mut param_types = Vec::with_capacity(params.len() + extra);
                 if use_sret {
+                    param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
+                }
+                if is_aelys {
+                    // Implicit env_ptr parameter
                     param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
                 }
                 for param in params {

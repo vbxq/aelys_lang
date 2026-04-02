@@ -366,6 +366,14 @@ impl TypeInference {
                     ));
                 }
             }
+            TypedExprKind::FieldAssign {
+                object,
+                field: _,
+                value,
+            } => {
+                self.validate_expr(object, generic_scope, declared_type_params);
+                self.validate_expr(value, generic_scope, declared_type_params);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(start) = start {
                     self.validate_expr(start, generic_scope, declared_type_params);

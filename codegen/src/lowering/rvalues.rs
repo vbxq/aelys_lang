@@ -1,6 +1,7 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
-use crate::types::{air_basic_type_to_llvm, alignment_of};
+use crate::lowering::functions::function_symbol_name;
+use crate::types::{air_basic_type_to_llvm, alignment_of, closure_fat_ptr_type};
 use aelys_air::layout::{enum_has_data, enum_max_payload_size};
 use aelys_air::{AirType, Operand, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};
@@ -52,6 +53,9 @@ impl<'a> FunctionCodegen<'a> {
                 operand,
                 field_index,
             } => self.generate_enum_payload(enum_name, *tag, operand, *field_index),
+            Rvalue::ClosureCreate { fn_name, env } => {
+                self.generate_closure_create(fn_name, env)
+            }
         }
     }
 
@@ -422,5 +426,44 @@ impl<'a> FunctionCodegen<'a> {
             .set_alignment(field_align)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         Ok(load)
+    }
+
+    // Builds a fat pointer { fn_ptr, env_ptr } for a closure or a named
+    // function used as a value. env is either a heap-allocated env struct
+    // pointer (capturing closure) or null (non-capturing lambda, named fn).
+    fn generate_closure_create(
+        &mut self,
+        fn_name: &str,
+        env: &Operand,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let symbol_name = self
+            .program
+            .functions
+            .iter()
+            .find(|f| f.name == *fn_name)
+            .map(function_symbol_name)
+            .unwrap_or_else(|| fn_name.to_string());
+        let func = self.module.get_function(&symbol_name).ok_or_else(|| {
+            CodegenError::LlvmError(format!("closure_create: unknown function '{}'", fn_name))
+        })?;
+        let fn_ptr = func.as_global_value().as_pointer_value();
+
+        // generate the env operand (pointer or null)
+        let env_ptr = self.generate_operand(env)?;
+
+        // Build { ptr fn_ptr, ptr env_ptr } struct
+        let fat_ty = closure_fat_ptr_type(self.context);
+        let mut fat = fat_ty.get_undef();
+        fat = self
+            .builder
+            .build_insert_value(fat, fn_ptr, 0, "closure_fn")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_struct_value();
+        fat = self
+            .builder
+            .build_insert_value(fat, env_ptr, 1, "closure_env")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_struct_value();
+        Ok(fat.into())
     }
 }

@@ -260,10 +260,15 @@ fn fastcc_struct_return_does_not_use_sret() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // fastcc should return struct directly, never sret
+    // fastcc should return struct directly, never sret.
+    // Aelys-convention functions have an implicit env ptr at param 0.
+    let fn_decl = ir
+        .lines()
+        .find(|l| l.contains("define fastcc %__aelys_string @internal_fn"))
+        .expect("internal_fn must be defined");
     assert!(
-        ir.contains("define fastcc %__aelys_string @internal_fn()"),
-        "fastcc function should return struct directly: {ir}"
+        fn_decl.contains("%__aelys_string"),
+        "fastcc function should return struct directly: {fn_decl}"
     );
     // sret should not appear anywhere for internal functions
     let sret_on_internal = ir

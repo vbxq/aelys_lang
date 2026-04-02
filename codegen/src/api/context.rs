@@ -24,7 +24,8 @@ impl CodegenContext {
 
         // Set target triple and data layout immediately so ABI decisions
         // (for eg sret, struct sizes/alignments) are correct during codegen
-        Target::initialize_native(&InitializationConfig::default()).ok();
+        Target::initialize_native(&InitializationConfig::default())
+            .expect("LLVM native target initialization failed");
         let triple = TargetMachine::get_default_triple();
         module.set_triple(&triple);
 
@@ -76,7 +77,8 @@ impl CodegenContext {
                 &cpu,
                 &features,
                 inkwell_opt_level(opt_numeric),
-                RelocMode::Default,
+                // PIC so it works on Linux
+                RelocMode::PIC,
                 CodeModel::Default,
             )
             .ok_or_else(|| {
@@ -102,7 +104,7 @@ impl CodegenContext {
                 &cpu,
                 &features,
                 inkwell_opt_level(opt_numeric),
-                RelocMode::Default,
+                RelocMode::PIC,
                 CodeModel::Default,
             )
             .ok_or_else(|| {

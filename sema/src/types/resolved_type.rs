@@ -105,6 +105,8 @@ impl ResolvedType {
             InferType::Bool => ResolvedType::Bool,
             InferType::String => ResolvedType::String,
             InferType::Null => ResolvedType::Null,
+            // Never represents unreachable code; map to Null (void) for codegen.
+            InferType::Never => ResolvedType::Null,
             InferType::Function { params, ret } => ResolvedType::Function {
                 params: params.iter().map(ResolvedType::from_infer_type).collect(),
                 ret: Box::new(ResolvedType::from_infer_type(ret)),

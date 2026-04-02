@@ -48,6 +48,23 @@ pub enum AirValidationDetail {
         struct_name: String,
         field_name: String,
     },
+    /// A local or param references an enum definition that is not present in the AIR program.
+    UnknownEnumType {
+        local_id: u32,
+        local_name: Option<String>,
+        enum_name: String,
+    },
+    /// A struct field references an enum definition that is not present in the AIR program.
+    UnknownStructFieldEnum {
+        struct_name: String,
+        field_name: String,
+        enum_name: String,
+    },
+    /// An enum operation references an enum definition that is not present in the AIR program.
+    UnknownEnumReference {
+        enum_name: String,
+        context: String,
+    },
     /// A function has no blocks (non-extern function with empty body).
     EmptyBody,
 }
@@ -104,6 +121,36 @@ impl fmt::Display for AirValidationError {
                     "struct `{struct_name}` field `{field_name}` has unresolved Dynamic type (Opaque)"
                 )
             }
+            AirValidationDetail::UnknownEnumType {
+                local_id,
+                local_name,
+                enum_name,
+            } => {
+                write!(f, "local %{local_id}")?;
+                if let Some(name) = local_name {
+                    write!(f, " (`{name}`)")?;
+                }
+                write!(
+                    f,
+                    " references unknown enum `{enum_name}` after monomorphization"
+                )
+            }
+            AirValidationDetail::UnknownStructFieldEnum {
+                struct_name,
+                field_name,
+                enum_name,
+            } => {
+                write!(
+                    f,
+                    "struct `{struct_name}` field `{field_name}` references unknown enum `{enum_name}` after monomorphization"
+                )
+            }
+            AirValidationDetail::UnknownEnumReference { enum_name, context } => {
+                write!(
+                    f,
+                    "enum operation references unknown enum `{enum_name}` after monomorphization ({context})"
+                )
+            }
             AirValidationDetail::EmptyBody => {
                 write!(f, "non-extern function has no basic blocks")
             }
@@ -125,9 +172,30 @@ fn contains_opaque(ty: &AirType) -> bool {
     }
 }
 
+fn collect_unknown_enum_names(ty: &AirType, known_enums: &HashSet<String>, missing: &mut Vec<String>) {
+    match ty {
+        AirType::Enum(name) => {
+            if !known_enums.contains(name) && !missing.iter().any(|existing| existing == name) {
+                missing.push(name.clone());
+            }
+        }
+        AirType::Ptr(inner) | AirType::Array(inner, _) | AirType::Slice(inner) => {
+            collect_unknown_enum_names(inner, known_enums, missing);
+        }
+        AirType::FnPtr { params, ret, .. } => {
+            for param in params {
+                collect_unknown_enum_names(param, known_enums, missing);
+            }
+            collect_unknown_enum_names(ret, known_enums, missing);
+        }
+        _ => {}
+    }
+}
+
 /// Validate the entire AIR program. Returns `Ok(())` if all invariants hold, or `Err(errors)` with every violation found
 pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>> {
     let mut errors = Vec::new();
+    let known_enums: HashSet<String> = program.enums.iter().map(|def| def.name.clone()).collect();
 
     // Check struct fields for Opaque types.
     for def in &program.structs {
@@ -141,11 +209,23 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
                     },
                 });
             }
+            let mut missing = Vec::new();
+            collect_unknown_enum_names(&field.ty, &known_enums, &mut missing);
+            for enum_name in missing {
+                errors.push(AirValidationError {
+                    function_name: format!("struct {}", def.name),
+                    detail: AirValidationDetail::UnknownStructFieldEnum {
+                        struct_name: def.name.clone(),
+                        field_name: field.name.clone(),
+                        enum_name,
+                    },
+                });
+            }
         }
     }
 
     for function in &program.functions {
-        validate_function(function, &mut errors);
+        validate_function(function, &known_enums, &mut errors);
     }
 
     if errors.is_empty() {
@@ -155,7 +235,11 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
     }
 }
 
-fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError>) {
+fn validate_function(
+    function: &AirFunction,
+    known_enums: &HashSet<String>,
+    errors: &mut Vec<AirValidationError>,
+) {
     // Skip extern declarations, they have no body by design.
     if function.is_extern {
         return;
@@ -204,6 +288,18 @@ fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError
                 },
             });
         }
+        let mut missing = Vec::new();
+        collect_unknown_enum_names(&local.ty, known_enums, &mut missing);
+        for enum_name in missing {
+            errors.push(AirValidationError {
+                function_name: function.name.clone(),
+                detail: AirValidationDetail::UnknownEnumType {
+                    local_id: local.id.0,
+                    local_name: local.name.clone(),
+                    enum_name,
+                },
+            });
+        }
     }
 
     // Also check params for Void and Opaque types.
@@ -226,6 +322,18 @@ fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError
                 },
             });
         }
+        let mut missing = Vec::new();
+        collect_unknown_enum_names(&param.ty, known_enums, &mut missing);
+        for enum_name in missing {
+            errors.push(AirValidationError {
+                function_name: function.name.clone(),
+                detail: AirValidationDetail::UnknownEnumType {
+                    local_id: param.id.0,
+                    local_name: Some(param.name.clone()),
+                    enum_name,
+                },
+            });
+        }
     }
 
     // check return type for Opaque.
@@ -235,6 +343,18 @@ fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError
             detail: AirValidationDetail::OpaqueType {
                 local_id: 0,
                 local_name: Some("(return type)".to_string()),
+            },
+        });
+    }
+    let mut missing = Vec::new();
+    collect_unknown_enum_names(&function.ret_ty, known_enums, &mut missing);
+    for enum_name in missing {
+        errors.push(AirValidationError {
+            function_name: function.name.clone(),
+            detail: AirValidationDetail::UnknownEnumType {
+                local_id: 0,
+                local_name: Some("(return type)".to_string()),
+                enum_name,
             },
         });
     }
@@ -252,7 +372,14 @@ fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError
     // all referenced locals exist check
     for block in &function.blocks {
         let block_ctx = format!("bb{}", block.id.0);
-        check_block_locals(block, &declared_locals, &function.name, &block_ctx, errors);
+        check_block_locals(
+            block,
+            &declared_locals,
+            known_enums,
+            &function.name,
+            &block_ctx,
+            errors,
+        );
         check_block_target_blocks(block, &declared_blocks, &function.name, &block_ctx, errors);
     }
 }
@@ -260,21 +387,30 @@ fn validate_function(function: &AirFunction, errors: &mut Vec<AirValidationError
 fn check_block_locals(
     block: &AirBlock,
     declared: &HashSet<LocalId>,
+    known_enums: &HashSet<String>,
     func_name: &str,
     block_ctx: &str,
     errors: &mut Vec<AirValidationError>,
 ) {
     for (i, stmt) in block.stmts.iter().enumerate() {
         let ctx = format!("{block_ctx}, stmt #{i}");
-        check_stmt_locals(&stmt.kind, declared, func_name, &ctx, errors);
+        check_stmt_locals(&stmt.kind, declared, known_enums, func_name, &ctx, errors);
     }
     let ctx = format!("{block_ctx}, terminator");
-    check_terminator_locals(&block.terminator, declared, func_name, &ctx, errors);
+    check_terminator_locals(
+        &block.terminator,
+        declared,
+        known_enums,
+        func_name,
+        &ctx,
+        errors,
+    );
 }
 
 fn check_stmt_locals(
     stmt: &AirStmtKind,
     declared: &HashSet<LocalId>,
+    known_enums: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
@@ -282,7 +418,7 @@ fn check_stmt_locals(
     match stmt {
         AirStmtKind::Assign { place, rvalue } => {
             check_place_locals(place, declared, func_name, ctx, errors);
-            check_rvalue_locals(rvalue, declared, func_name, ctx, errors);
+            check_rvalue_locals(rvalue, declared, known_enums, func_name, ctx, errors);
         }
         AirStmtKind::GcAlloc { local, .. } | AirStmtKind::Alloc { local, .. } => {
             check_local(*local, declared, func_name, ctx, errors);
@@ -305,6 +441,7 @@ fn check_stmt_locals(
 fn check_terminator_locals(
     term: &AirTerminator,
     declared: &HashSet<LocalId>,
+    _known_enums: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
@@ -339,6 +476,7 @@ fn check_terminator_locals(
 fn check_rvalue_locals(
     rvalue: &Rvalue,
     declared: &HashSet<LocalId>,
+    known_enums: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
@@ -372,16 +510,50 @@ fn check_rvalue_locals(
         Rvalue::AddressOf(local) => {
             check_local(*local, declared, func_name, ctx, errors);
         }
-        Rvalue::EnumInit { payload, .. } => {
+        Rvalue::EnumInit {
+            enum_name, payload, ..
+        } => {
+            if !known_enums.contains(enum_name) {
+                errors.push(AirValidationError {
+                    function_name: func_name.to_string(),
+                    detail: AirValidationDetail::UnknownEnumReference {
+                        enum_name: enum_name.clone(),
+                        context: ctx.to_string(),
+                    },
+                });
+            }
             for operand in payload {
                 check_operand_locals(operand, declared, func_name, ctx, errors);
             }
         }
-        Rvalue::EnumTag { operand, .. } => {
+        Rvalue::EnumTag { enum_name, operand } => {
+            if !known_enums.contains(enum_name) {
+                errors.push(AirValidationError {
+                    function_name: func_name.to_string(),
+                    detail: AirValidationDetail::UnknownEnumReference {
+                        enum_name: enum_name.clone(),
+                        context: ctx.to_string(),
+                    },
+                });
+            }
             check_operand_locals(operand, declared, func_name, ctx, errors);
         }
-        Rvalue::EnumPayload { operand, .. } => {
+        Rvalue::EnumPayload {
+            enum_name, operand, ..
+        } => {
+            if !known_enums.contains(enum_name) {
+                errors.push(AirValidationError {
+                    function_name: func_name.to_string(),
+                    detail: AirValidationDetail::UnknownEnumReference {
+                        enum_name: enum_name.clone(),
+                        context: ctx.to_string(),
+                    },
+                });
+            }
             check_operand_locals(operand, declared, func_name, ctx, errors);
+        }
+        Rvalue::ClosureCreate { env, .. } => {
+            check_operand_locals(env, declared, func_name, ctx, errors);
         }
     }
 }

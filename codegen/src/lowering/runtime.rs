@@ -141,6 +141,45 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_str_eq", fn_ty, None)
     }
 
+    /// Emit a division-by-zero check: if `divisor == 0`, branch to a panic
+    /// block; otherwise continue in a new `div_ok` block.
+    pub(crate) fn emit_div_zero_check(
+        &mut self,
+        divisor: IntValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let is_zero = self
+            .builder
+            .build_int_compare(
+                IntPredicate::EQ,
+                divisor,
+                divisor.get_type().const_zero(),
+                "div_zero_cmp",
+            )
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        let current_fn = self.function;
+        let trap_block = self.context.append_basic_block(current_fn, "div_zero");
+        let ok_block = self.context.append_basic_block(current_fn, "div_ok");
+
+        self.builder
+            .build_conditional_branch(is_zero, trap_block, ok_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(trap_block);
+        let panic_fn = self.ensure_panic_function();
+        let (msg_ptr, msg_len) = self.global_string_ptr_len("division by zero")?;
+        let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+        self.builder
+            .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(ok_block);
+        Ok(())
+    }
+
     /// Emit a bounds check: if `index >= length` (unsigned), branch to a panic
     /// block; otherwise continue in a new `idx_ok` block.
     pub(crate) fn emit_bounds_check(

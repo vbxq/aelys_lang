@@ -142,3 +142,91 @@ fn f() {
         result
     );
 }
+
+#[test]
+fn rejects_index_assign_on_immutable_array() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let arr = [1, 2, 3]
+    arr[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_err(),
+        "index assignment on immutable array should be rejected"
+    );
+}
+
+#[test]
+fn rejects_index_assign_on_immutable_vec() {
+    let result = sema_check(
+        r#"
+fn f() {
+    let v = Vec<i64>[1, 2, 3]
+    v[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_err(),
+        "index assignment on immutable vec should be rejected"
+    );
+}
+
+#[test]
+fn accepts_index_assign_on_mut_param() {
+    let result = sema_check(
+        r#"
+fn f(mut arr: [i64; 3]) {
+    arr[0] = 10
+}
+"#,
+    );
+    assert!(
+        result.is_ok(),
+        "index assignment on mut param should be accepted, got {:?}",
+        result
+    );
+}
+
+#[test]
+fn rejects_legacy_array_type_annotation() {
+    let result = sema_check(
+        r#"
+fn f(arr: Array<i64>) -> i64 {
+    return arr[0]
+}
+"#,
+    );
+    assert!(
+        result.is_err(),
+        "Array<T> syntax should be rejected — use [T; N] instead"
+    );
+    let errors = result.unwrap_err();
+    let has_help = errors
+        .iter()
+        .any(|e| e.help.as_deref() == Some("use [T; N] syntax instead of Array<T>"));
+    assert!(
+        has_help,
+        "error should include help suggesting [T; N] syntax, got: {:?}",
+        errors.iter().map(|e| &e.help).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn accepts_bracket_array_annotation() {
+    let result = sema_check(
+        r#"
+fn f(arr: [i64; 3]) -> i64 {
+    return arr[0]
+}
+"#,
+    );
+    assert!(
+        result.is_ok(),
+        "[T; N] bracket syntax should be accepted, got {:?}",
+        result
+    );
+}

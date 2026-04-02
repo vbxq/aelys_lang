@@ -400,7 +400,7 @@ fn caller() -> i32 {
     );
     let mut program = air;
     compute_layouts(&mut program);
-    let program = monomorphize(program);
+    let program = monomorphize(program).unwrap();
     let mono_fn = program
         .functions
         .iter()

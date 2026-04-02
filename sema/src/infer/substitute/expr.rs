@@ -144,6 +144,15 @@ impl TypeInference {
                 index: Box::new(self.apply_substitution_expr(index, subst)),
                 value: Box::new(self.apply_substitution_expr(value, subst)),
             },
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => TypedExprKind::FieldAssign {
+                object: Box::new(self.apply_substitution_expr(object, subst)),
+                field: field.clone(),
+                value: Box::new(self.apply_substitution_expr(value, subst)),
+            },
             TypedExprKind::Range {
                 start,
                 end,

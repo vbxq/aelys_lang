@@ -106,6 +106,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             has_side_effects(object) || has_side_effects(index)
         }
         TypedExprKind::IndexAssign { .. } => true, // assignment has side effects
+        TypedExprKind::FieldAssign { .. } => true, // assignment has side effects
         TypedExprKind::Range { start, end, .. } => {
             start.as_ref().is_some_and(|s| has_side_effects(s))
                 || end.as_ref().is_some_and(|e| has_side_effects(e))

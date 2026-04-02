@@ -316,7 +316,7 @@ fn index_assign_i32_array_literal() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let arr: [i32; 3] = [0, 0, 0]
+    let mut arr: [i32; 3] = [0, 0, 0]
     arr[0] = 42
 }
 "#,

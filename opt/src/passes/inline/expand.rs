@@ -212,6 +212,16 @@ impl InlineExpander {
                 value: Box::new(self.substitute_expr(value, params, span)),
             },
 
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => TypedExprKind::FieldAssign {
+                object: Box::new(self.substitute_expr(object, params, span)),
+                field: field.clone(),
+                value: Box::new(self.substitute_expr(value, params, span)),
+            },
+
             TypedExprKind::Range {
                 start,
                 end,

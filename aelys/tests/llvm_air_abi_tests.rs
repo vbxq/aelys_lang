@@ -136,11 +136,19 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
 
     let ir = compile_air_to_verified_ir(&program);
     assert!(ir.contains("%__aelys_string = type { ptr, i64 }"), "{ir}");
+    // Aelys-convention functions prepend an implicit env ptr; the string follows.
+    let sink_decl = ir
+        .lines()
+        .find(|l| l.contains("define fastcc i64 @sink"))
+        .expect("sink function must be defined");
     assert!(
-        ir.contains("define fastcc i64 @sink(%__aelys_string"),
-        "{ir}"
+        sink_decl.contains("%__aelys_string"),
+        "string param must lower to %__aelys_string struct, not a bare ptr:\n{sink_decl}"
     );
-    assert!(!ir.contains("define fastcc i64 @sink(ptr"), "{ir}");
+    assert!(
+        !sink_decl.contains("ptr, i64"),
+        "string must not be flattened to (ptr, i64) scalars:\n{sink_decl}"
+    );
 
     let context = Context::create();
     let mut nul_terminated_ir = ir.into_bytes();

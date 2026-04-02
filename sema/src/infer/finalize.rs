@@ -272,6 +272,16 @@ impl TypeInference {
                 value: Box::new(self.finalize_expr(*value)),
             },
 
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => TypedExprKind::FieldAssign {
+                object: Box::new(self.finalize_expr(*object)),
+                field,
+                value: Box::new(self.finalize_expr(*value)),
+            },
+
             TypedExprKind::Range {
                 start,
                 end,

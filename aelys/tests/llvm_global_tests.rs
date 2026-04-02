@@ -25,7 +25,7 @@ fn compile_source_to_verified_ir_without_link(source: &str) -> String {
         .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
     let mut air = lower(&typed);
-    air = monomorphize(air);
+    air = monomorphize(air).unwrap();
     compute_layouts(&mut air);
     eliminate_copies(&mut air);
     eliminate_dead_locals(&mut air);
@@ -86,9 +86,16 @@ fn main() -> i64 {
 "#,
     );
     assert!(ir.contains("@__aelys_global_g = internal global i64 7"), "{ir}");
-    assert!(ir.contains("define fastcc i64 @__aelys_main()"), "{ir}");
+    // Aelys-convention main receives an implicit env ptr; check the function exists with fastcc.
+    let main_decl = ir
+        .lines()
+        .find(|l| l.contains("define fastcc i64 @__aelys_main"))
+        .expect("__aelys_main must be defined");
+    assert!(
+        main_decl.contains("fastcc"),
+        "__aelys_main must use fastcc:\n{main_decl}"
+    );
     assert!(ir.contains("load i64, ptr @__aelys_global_g"), "{ir}");
-    assert!(!ir.contains("define i64 @__aelys_main(ptr"), "{ir}");
 }
 
 #[test]
@@ -102,9 +109,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(ir.contains("@__aelys_global_f = internal global ptr @__aelys_main"), "{ir}");
-    assert!(ir.contains("load ptr, ptr @__aelys_global_f"), "{ir}");
-    assert!(ir.contains("call_indirect = call fastcc i64 %"), "{ir}");
+    // Aelys FnPtr globals are fat pointers { fn_ptr, env_ptr }; named fns have null env.
+    assert!(
+        ir.contains("@__aelys_global_f = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        "{ir}"
+    );
+    assert!(ir.contains("load { ptr, ptr }, ptr @__aelys_global_f"), "{ir}");
+    assert!(ir.contains("extractvalue { ptr, ptr }"), "{ir}");
+    assert!(ir.contains("call fastcc i64 %"), "{ir}");
     assert!(!ir.contains("declare i64 @f()"), "{ir}");
 }
 
@@ -120,9 +132,16 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(ir.contains("@__aelys_global_g = internal global ptr @__aelys_main"), "{ir}");
-    assert!(ir.contains("@__aelys_global_h = internal global ptr @__aelys_main"), "{ir}");
-    assert!(ir.contains("load ptr, ptr @__aelys_global_h"), "{ir}");
+    // Both aliases should resolve to the same fat pointer { fn_ptr, null_env }.
+    assert!(
+        ir.contains("@__aelys_global_g = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        "{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_global_h = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        "{ir}"
+    );
+    assert!(ir.contains("load { ptr, ptr }, ptr @__aelys_global_h"), "{ir}");
     assert!(!ir.contains("unknown function 'g'"), "{ir}");
     assert!(!ir.contains("declare i64 @g()"), "{ir}");
 }

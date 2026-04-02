@@ -25,10 +25,7 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
         (InferType::Enum(a, args_a), InferType::Enum(b, args_b)) if a == b => {
             // For generic enums, unify type arguments pairwise.
-            // If one side has type args and the other doesn't (e.g., Enum("Option", []) from
-            // a variant constructor vs Enum("Option", [I64]) from an annotation), we accept
-            // the match -- the type args are informational for monomorphization, not for
-            // semantic equality.
+            // If one side has type args and the other doesn't (e.g., Enum("Option", []) from a variant constructor vs Enum("Option", [I64]) from an annotation), we accept  the match, the type args are informational for monomorphization, not for semantic equality.
             if !args_a.is_empty() && !args_b.is_empty() && args_a.len() == args_b.len() {
                 for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {
                     unify(a_arg, b_arg, subst)?;
@@ -38,6 +35,13 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         }
 
         (InferType::Dynamic, _) | (_, InferType::Dynamic) => Ok(()),
+
+        // Never is the bottom type (diverging control flow). It unifies with
+        // any type T without binding type variables, because a Never-typed
+        // expression never produces a value. 
+        // 
+        // So it's placed before the Var arms so that `unify(Never, Var(v))` succeeds without binding v, letting other constraints determine the variable's actual type.
+        (InferType::Never, _) | (_, InferType::Never) => Ok(()),
 
         (InferType::Var(id1), InferType::Var(id2)) if id1 == id2 => Ok(()),
 

@@ -218,6 +218,12 @@ pub enum TypedExprKind {
         value: Box<TypedExpr>,
     },
 
+    FieldAssign {
+        object: Box<TypedExpr>,
+        field: String,
+        value: Box<TypedExpr>,
+    },
+
     Range {
         start: Option<Box<TypedExpr>>,
         end: Option<Box<TypedExpr>>,

@@ -134,7 +134,7 @@ fn array_of_structs_field_access() {
         sema_ok(
             r#"
 struct Item { val: i64 }
-fn get_val(items: Array<Item>, idx: i64) -> i64 {
+fn get_val(items: [Item; 3], idx: i64) -> i64 {
     return items[idx].val
 }
 "#
@@ -245,12 +245,12 @@ fn narrowing_array_of_i32() {
         sema_ok(
             r#"
 fn f() -> i32 {
-    let arr: Array<i32> = [1, 2, 3]
+    let arr: [i32; 3] = [1, 2, 3]
     return arr[0]
 }
 "#
         ),
-        "Array<i32> with literal elements should narrow correctly"
+        "[i32; 3] with literal elements should narrow correctly"
     );
 }
 

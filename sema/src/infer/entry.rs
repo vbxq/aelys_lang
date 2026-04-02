@@ -63,8 +63,10 @@ impl TypeInference {
         // for the inner type. raw from_annotation uses Self::from_annotation which
         // doesn't know about enums, so [Color; 3] would produce Array(Struct("Color"))
         // instead of Array(Enum("Color", [])).
+        // Only the bracket syntax [T; N] is supported (array_size is Some).
+        // The legacy Array<T> generic syntax is no longer recognized.
         let name_lower = ann.name.to_lowercase();
-        if name_lower == "array" {
+        if name_lower == "array" && ann.array_size.is_some() {
             let inner = ann
                 .type_param
                 .as_ref()
@@ -131,6 +133,24 @@ impl TypeInference {
         }
 
         let name_lower = ann.name.to_lowercase();
+
+        // Reject legacy Array<T> syntax, use [T; N] instead.
+        if name_lower == "array" && ann.array_size.is_none() {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Struct(ann.name.clone()),
+                },
+                span: ann.span,
+                reason: ConstraintReason::UnknownType {
+                    name: ann.name.clone(),
+                },
+                secondary_spans: Vec::new(),
+                help: Some("use [T; N] syntax instead of Array<T>".to_string()),
+                suggestion: None,
+            });
+            return;
+        }
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
             if let Some(ref param) = ann.type_param {

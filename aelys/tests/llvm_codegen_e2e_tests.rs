@@ -49,7 +49,7 @@ fn compile_source_to_verified_ir_without_link(source: &str) -> String {
         .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
     let mut air = lower(&typed);
-    air = monomorphize(air);
+    air = monomorphize(air).unwrap();
     compute_layouts(&mut air);
     eliminate_copies(&mut air);
     eliminate_dead_locals(&mut air);
@@ -779,10 +779,18 @@ fn char_at(s: string, i: i64) -> string {
         ir.contains("@__aelys_str_char_at"),
         "string index should call __aelys_str_char_at:\n{ir}"
     );
-    // Windows x64 MSVC uses sret for struct returns
+    // Return convention varies by platform: by-value on Linux, sret on Windows.
+    let char_at_decl = ir
+        .lines()
+        .find(|l| l.contains("declare") && l.contains("@__aelys_str_char_at"))
+        .expect("__aelys_str_char_at must be declared");
     assert!(
-        ir.contains("declare void @__aelys_str_char_at(ptr sret(%__aelys_string), ptr, i64, i64)"),
-        "should declare __aelys_str_char_at with correct Windows x64 MSVC flat+sret ABI:\n{ir}"
+        char_at_decl.contains("__aelys_string"),
+        "char_at must involve %__aelys_string type:\n{char_at_decl}"
+    );
+    assert!(
+        char_at_decl.contains("ptr") && char_at_decl.contains("i64"),
+        "char_at must accept (ptr, i64, i64) args:\n{char_at_decl}"
     );
 }
 
@@ -830,7 +838,7 @@ fn llvm_array_index_write_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn mutate() -> i64 {
-    let arr = [10, 20, 30]
+    let mut arr = [10, 20, 30]
     arr[0] = 99
     return arr[0]
 }
@@ -877,7 +885,7 @@ fn use_index() -> i64 {
 fn llvm_array_index_with_variable_has_bounds_check() {
     let ir = compile_to_verified_ir(
         r#"
-fn at(arr: Array<i64>, i: i64) -> i64 {
+fn at(arr: [i64; 3], i: i64) -> i64 {
     return arr[i]
 }
 "#,
@@ -900,7 +908,7 @@ fn at(arr: Array<i64>, i: i64) -> i64 {
 fn llvm_array_swap_pattern_compiles() {
     let ir = compile_to_verified_ir(
         r#"
-fn swap(arr: Array<i64>, i: i64, j: i64) -> void {
+fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
     let tmp = arr[i]
     arr[i] = arr[j]
     arr[j] = tmp
@@ -946,7 +954,7 @@ fn first_char() -> string {
 fn llvm_loop_with_array_index_compiles() {
     let ir = compile_to_verified_ir(
         r#"
-fn sum_array(arr: Array<i64>, n: i64) -> i64 {
+fn sum_array(arr: [i64; 10], n: i64) -> i64 {
     let mut total: i64 = 0
     let mut i: i64 = 0
     while i < n {
@@ -992,7 +1000,7 @@ fn set_it(x: i64) -> void {
 fn llvm_void_function_with_index_assign_produces_ret_void() {
     let ir = compile_to_verified_ir(
         r#"
-fn fill(arr: Array<i64>, i: i64, val: i64) -> void {
+fn fill(mut arr: [i64; 3], i: i64, val: i64) -> void {
     arr[i] = val
 }
 "#,
@@ -1004,5 +1012,305 @@ fn fill(arr: Array<i64>, i: i64, val: i64) -> void {
     assert!(
         !ir.contains("ret ptr null"),
         "void function must not emit ret ptr null:\n{ir}"
+    );
+}
+
+/// Integer division emits a div-zero check in the IR.
+#[test]
+fn llvm_int_div_emits_div_zero_check() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn divide(a: i64, b: i64) -> i64 {
+    return a / b
+}
+"#,
+    );
+    assert!(
+        ir.contains("icmp eq"),
+        "integer div should compare divisor to zero:\n{ir}"
+    );
+    assert!(
+        ir.contains("div_zero:"),
+        "should have div_zero trap block:\n{ir}"
+    );
+    assert!(
+        ir.contains("div_ok:"),
+        "should have div_ok continuation block:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "div-by-zero should call __aelys_panic:\n{ir}"
+    );
+}
+
+/// Integer modulo also emits a div-zero check.
+#[test]
+fn llvm_int_rem_emits_div_zero_check() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn modulo(a: i64, b: i64) -> i64 {
+    return a % b
+}
+"#,
+    );
+    assert!(
+        ir.contains("div_zero:"),
+        "integer rem should have div_zero trap block:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "integer rem should call __aelys_panic:\n{ir}"
+    );
+}
+
+/// Unsigned division also gets the check.
+#[test]
+fn llvm_unsigned_div_emits_div_zero_check() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn udivide(a: u64, b: u64) -> u64 {
+    return a / b
+}
+"#,
+    );
+    assert!(
+        ir.contains("div_zero:"),
+        "unsigned div should have div_zero trap block:\n{ir}"
+    );
+    assert!(
+        ir.contains("udiv"),
+        "unsigned div should emit udiv instruction:\n{ir}"
+    );
+}
+
+/// Float division does NOT emit a div-zero check (IEEE 754 well-defined).
+#[test]
+fn llvm_float_div_has_no_div_zero_check() {
+    let ir = compile_to_verified_ir(
+        r#"
+fn fdivide(a: f64, b: f64) -> f64 {
+    return a / b
+}
+"#,
+    );
+    assert!(
+        !ir.contains("div_zero:"),
+        "float div should NOT have div_zero check:\n{ir}"
+    );
+    assert!(
+        ir.contains("fdiv"),
+        "float div should emit fdiv instruction:\n{ir}"
+    );
+}
+
+/// Div-zero check survives -O2 — the panic call must not be optimized away.
+#[test]
+fn llvm_div_zero_check_survives_o2() {
+    let ir = compile_to_verified_ir_with_opt(
+        r#"
+fn divide(a: i64, b: i64) -> i64 {
+    return a / b
+}
+"#,
+        OptimizationLevel::Standard,
+    );
+    assert!(
+        ir.contains("@__aelys_panic"),
+        "div-zero check must survive -O2 — panic must not be eliminated:\n{ir}"
+    );
+}
+
+/// Runtime: division by zero actually terminates the process (non-zero exit).
+#[test]
+fn llvm_div_by_zero_runtime_panics() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let a: i64 = 42
+    let b: i64 = 0
+    return a / b
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
+        if linker_unavailable(&err.to_string()) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(
+        !output.status.success(),
+        "division by zero should cause non-zero exit"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("division by zero"),
+        "panic message should contain 'division by zero', got: {stderr}"
+    );
+}
+
+/// Runtime: division by zero also panics at -O2.
+#[test]
+fn llvm_div_by_zero_runtime_panics_at_o2() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let a: i64 = 42
+    let b: i64 = 0
+    return a / b
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+        if linker_unavailable(&err.to_string()) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(
+        !output.status.success(),
+        "division by zero at -O2 should cause non-zero exit"
+    );
+}
+
+/// Runtime: modulo by zero also panics.
+#[test]
+fn llvm_rem_by_zero_runtime_panics() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let a: i64 = 42
+    let b: i64 = 0
+    return a % b
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
+        if linker_unavailable(&err.to_string()) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert!(
+        !output.status.success(),
+        "modulo by zero should cause non-zero exit"
+    );
+}
+
+/// Runtime: normal division still works correctly (no regression).
+#[test]
+fn llvm_normal_div_still_works() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let a: i64 = 100
+    let b: i64 = 4
+    return a / b
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
+        if linker_unavailable(&err.to_string()) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    assert_eq!(
+        output.status.code().unwrap_or(-1),
+        25,
+        "100 / 4 should return 25"
+    );
+}
+
+/// Runtime: division by runtime-computed zero in a loop panics.
+#[test]
+fn llvm_div_by_zero_in_loop_panics() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let mut sum: i64 = 0
+    for i in 0..3 {
+        let divisor: i64 = 2 - i
+        sum = sum + 10 / divisor
+    }
+    return sum
+}
+"#,
+    )
+    .expect("source should be written");
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
+        if linker_unavailable(&err.to_string()) {
+            return;
+        }
+        panic!("llvm backend compilation should succeed: {err}");
+    }
+
+    if !executable_path_for(&source_path).is_file() {
+        return;
+    }
+
+    let exe_path = executable_path_for(&source_path);
+    let output = Command::new(&exe_path)
+        .output()
+        .expect("compiled executable should run");
+    // i=0: 10/2=5, i=1: 10/1=10, i=2: 10/0 → panic
+    assert!(
+        !output.status.success(),
+        "division by zero in loop iteration should panic"
     );
 }

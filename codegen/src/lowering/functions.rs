@@ -14,6 +14,29 @@ use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::FunctionValue;
 use std::collections::HashMap;
 
+// Calling convention for Aelys function values
+//
+// All Aelys-convention function values (closures, lambdas, named functions used as values) share a uniform fat pointer representation:
+//
+// { fn_ptr, env_ptr }.
+//
+// Non-capturing forms have env_ptr = null. C-convention FnPtrs stay as bare
+// pointers; the C ABI has no notion of an env, and extern functions don't
+// need one
+//
+// To make indirect calls uniform, every non-extern Aelys function receives an
+// implicit `env: ptr` as its first LLVM parameter.
+//
+// Named functions ignore it (callers pass null); closure bodies use it to access captured values.
+// The cost is zero under fastcc: it's just an unused register not a stack push
+//
+// Exception: closure functions already have `__env` as an explicit AIR-level parameter (added during lower_closure).
+// These do not get the implicit env on top; function_has_implicit_env excludes them. 
+// 
+// At LLVM level, both forms end up with env at param 0, which is what indirect callers expect.
+//
+// The entry wrapper (__aelys_user_main) bridges from C convention to the Aelys main function by passing null as the env argument.
+
 const USER_MAIN_SYMBOL: &str = "__aelys_main";
 const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 
@@ -150,8 +173,13 @@ impl CodegenContext {
         let builder = self.context.create_builder();
         let entry = self.context.append_basic_block(wrapper, "entry");
         builder.position_at_end(entry);
+        // __aelys_main has an implicit env parameter; pass null.
+        let null_env = self
+            .context
+            .ptr_type(AddressSpace::default())
+            .const_null();
         let call = builder
-            .build_call(user_fn, &[], "user_main")
+            .build_call(user_fn, &[null_env.into()], "user_main")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         call.set_call_convention(user_fn.get_call_conventions());
 
@@ -187,8 +215,14 @@ impl CodegenContext {
             self.target_is_windows(),
             program,
         );
-        let mut params = Vec::with_capacity(function.params.len() + usize::from(use_sret));
+        let has_implicit_env = function_has_implicit_env(function);
+        let extra = usize::from(use_sret) + usize::from(has_implicit_env);
+        let mut params = Vec::with_capacity(function.params.len() + extra);
         if use_sret {
+            params.push(self.context.ptr_type(AddressSpace::default()).into());
+        }
+        if has_implicit_env {
+            // Implicit env pointer (ptr) as first user-visible param
             params.push(self.context.ptr_type(AddressSpace::default()).into());
         }
         for param in &function.params {
@@ -243,6 +277,28 @@ impl CodegenContext {
         function.add_attribute(AttributeLoc::Function, attr);
         Ok(())
     }
+}
+
+/// Returns true if a function gets an implicit `env: ptr` prepended to its
+/// LLVM parameter list. 
+/// 
+/// This is every non-extern Aelys-convention function that doesn't already have `__env` as its first AIR parameter (closures)
+///
+/// The distinction matters ::
+///
+/// named functions get env added here (codegen-only, invisible in AIR), while closures already have it in their AIR param list
+/// (added by lower_closure). 
+/// 
+/// Both end up with env at LLVM param 0. Without this check, closures would get env twice and indirect calls would pass the wrong number of arguments.
+pub(crate) fn function_has_implicit_env(function: &AirFunction) -> bool {
+    if function.is_extern || !matches!(function.calling_conv, AirCallingConv::Aelys) {
+        return false;
+    }
+    // Closures already declare __env as their first AIR param.
+    !function
+        .params
+        .first()
+        .is_some_and(|p| p.name == "__env")
 }
 
 pub(crate) fn llvm_calling_convention(conv: AirCallingConv) -> u32 {

@@ -49,6 +49,19 @@ impl Parser {
                 ));
             }
 
+            // Field assignment: s.field = value
+            if let ExprKind::Member { object, member } = expr.kind {
+                let span = object.span.merge(value.span);
+                return Ok(Expr::new(
+                    ExprKind::FieldAssign {
+                        object,
+                        field: member,
+                        value: Box::new(value),
+                    },
+                    span,
+                ));
+            }
+
             return Err(CompileError::new(
                 CompileErrorKind::InvalidAssignmentTarget,
                 expr.span,
@@ -99,6 +112,31 @@ impl Parser {
                     ExprKind::IndexAssign {
                         object: object.clone(),
                         index: index.clone(),
+                        value: Box::new(binary),
+                    },
+                    span,
+                ));
+            }
+
+            // field compound assignment: s.x += y → s.x = s.x + y
+            if let ExprKind::Member {
+                ref object,
+                ref member,
+            } = expr.kind
+            {
+                let binary = Expr::new(
+                    ExprKind::Binary {
+                        left: Box::new(expr.clone()),
+                        op,
+                        right: Box::new(rhs),
+                    },
+                    expr.span.merge(self.previous().span),
+                );
+                let span = object.span.merge(binary.span);
+                return Ok(Expr::new(
+                    ExprKind::FieldAssign {
+                        object: object.clone(),
+                        field: member.clone(),
                         value: Box::new(binary),
                     },
                     span,
