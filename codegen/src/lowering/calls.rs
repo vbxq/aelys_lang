@@ -8,28 +8,9 @@ use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_da
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
-// Call generation for Aelys closures and function values
-//
-// Indirect calls (Callee::FnPtr) split into two paths based on calling
-// convention:
-//
-// - Aelys convention: the local holds a fat pointer { fn_ptr, env_ptr }
-//
-//   We extract both fields, prepend env_ptr to the argument list, and call
-//   fn_ptr indirectly. This works identically for capturing closures (env points to a heap struct), non-capturing lambdas (env is null),
-//   and also named  functions used as values (env is null). 
-// 
-// The callee always expects env as its first parameter.
-//
-// - C convention: the local holds a bare function pointer, standard indirect call
-//
-// Direct calls (Callee::Direct, Callee::Named) to Aelys functions prepend a
-// null env pointer. 
-// 
-// callee_has_implicit_env checks whether the target function
-// was declared with the implicit env 
-// 
-// (i.e. it's a non-extern, non-closure Aelys function). Extern, builtin, and ad-hoc functions don't get env
+// an aelys callee always takes env as its first parameter, so a fat-pointer call passes
+// the captured env and every other aelys call passes null. extern, builtin and ad-hoc
+// functions get no env at all
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn generate_call(
@@ -43,8 +24,7 @@ impl<'a> FunctionCodegen<'a> {
             arg_values.push(self.generate_operand(arg)?);
         }
 
-        // AIR still models globals as synthetic get/set calls until it grows
-        // first-class global operands, so lower them directly here.
+        // AIR has no first-class global operand yet, so globals arrive as get/set calls
         if let Callee::Named(name) = callee {
             if let Some(global_name) = name.strip_prefix(GLOBAL_GET_PREFIX) {
                 return self.generate_global_get(global_name, args);
@@ -71,6 +51,61 @@ impl<'a> FunctionCodegen<'a> {
                     expected_ret,
                 );
             }
+
+            // intercept here: resolve_callee would synthesize a struct-by-value signature
+            // that does not match the C runtime ABI and fails to link
+            if name == "__aelys_to_string" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_to_string expects exactly one argument".to_string(),
+                    ));
+                }
+                let arg_type = self.operand_type(&args[0])?;
+                return Ok(Some(self.emit_scalar_to_string(&arg_type, arg_values[0])?));
+            }
+
+            if name == "__aelys_str_concat" {
+                if args.len() != 2 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_concat expects exactly two arguments".to_string(),
+                    ));
+                }
+                return Ok(Some(self.emit_str_concat(arg_values[0], arg_values[1])?));
+            }
+
+            // force the exact void(ptr) signature instead of letting resolve_callee infer a
+            // pointer element type from the argument
+            if name == "__aelys_rc_retain" || name == "__aelys_rc_release" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(format!(
+                        "{name} expects exactly one argument"
+                    )));
+                }
+                let function = if name == "__aelys_rc_retain" {
+                    self.ensure_rc_retain_function()
+                } else {
+                    self.ensure_rc_release_function()
+                };
+                let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
+                let casted = self
+                    .builder
+                    .build_pointer_cast(
+                        arg_values[0].into_pointer_value(),
+                        ptr_ty,
+                        "rc_arg_cast",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                self.builder
+                    .build_call(function, &[casted.into()], "")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(None);
+            }
+
+            // the runtime needs the element size, which AIR cannot compute without program
+            // context, so recover T from the &v argument and splice the size in here
+            if name == "__aelys_vec_init" || name == "__aelys_vec_push" {
+                return self.generate_vec_runtime_call(name, args, &arg_values);
+            }
         }
 
         let metadata_args: Vec<BasicMetadataValueEnum<'static>> =
@@ -84,7 +119,6 @@ impl<'a> FunctionCodegen<'a> {
                 let is_aelys_fnptr = self.is_aelys_convention_fnptr(*local);
 
                 if is_aelys_fnptr {
-                    // Aelys-convention fat pointer: { fn_ptr, env_ptr }
                     let fat_ptr = self.load_local(*local)?.into_struct_value();
                     let fn_ptr = self
                         .builder
@@ -95,7 +129,6 @@ impl<'a> FunctionCodegen<'a> {
                         .builder
                         .build_extract_value(fat_ptr, 1, "closure_env")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    // Prepend env_ptr to args
                     let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
                         vec![env_ptr.into()];
                     all_args.extend(metadata_args.iter().copied());
@@ -106,7 +139,6 @@ impl<'a> FunctionCodegen<'a> {
                     call.set_call_convention(call_conv);
                     Ok(call.try_as_basic_value().basic())
                 } else {
-                    // C-convention bare function pointer
                     let fn_ptr = self.load_local(*local)?.into_pointer_value();
                     if let Some(ret_air_ty) = sret_ret {
                         let ret_ty = air_basic_type_to_llvm(&ret_air_ty, self.context)?;
@@ -141,7 +173,6 @@ impl<'a> FunctionCodegen<'a> {
             }
             _ => {
                 let fn_value = self.resolve_callee(callee, &arg_types, expected_ret)?;
-                // Non-extern Aelys functions get an implicit env param; prepend null.
                 let needs_env = self.callee_has_implicit_env(callee);
                 let final_args = if needs_env {
                     let null_env = self
@@ -244,52 +275,6 @@ impl<'a> FunctionCodegen<'a> {
         let value = arg_values[0];
 
         let string_value = match arg_type {
-            AirType::I64 | AirType::I32 | AirType::I16 | AirType::I8 => {
-                let int_val = value.into_int_value();
-                let i64_val = if int_val.get_type() == self.context.i64_type() {
-                    int_val
-                } else {
-                    self.builder
-                        .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                };
-                let fn_val = self.ensure_to_string_i64_function();
-                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
-            }
-            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 => {
-                // unsigned: zero-extend to i64 before calling to_string_i64
-                let int_val = value.into_int_value();
-                let i64_val = if int_val.get_type() == self.context.i64_type() {
-                    int_val
-                } else {
-                    self.builder
-                        .build_int_z_extend(int_val, self.context.i64_type(), "zext_i64")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                };
-                let fn_val = self.ensure_to_string_i64_function();
-                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
-            }
-            AirType::F64 | AirType::F32 => {
-                let float_val = value.into_float_value();
-                let f64_val = if float_val.get_type() == self.context.f64_type() {
-                    float_val
-                } else {
-                    self.builder
-                        .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
-                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
-                };
-                let fn_val = self.ensure_to_string_f64_function();
-                self.call_sret_returning_fn(fn_val, &[f64_val.into()], "to_str")?
-            }
-            AirType::Bool => {
-                let bool_val = value.into_int_value();
-                let i64_val = self
-                    .builder
-                    .build_int_z_extend(bool_val, self.context.i64_type(), "bool_to_i64")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                let fn_val = self.ensure_to_string_bool_function();
-                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")?
-            }
             AirType::Str => match &args[0] {
                 Operand::Const(AirConst::Str(text)) => self.global_string_value(text)?,
                 _ if value.is_struct_value() => {
@@ -310,12 +295,7 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Enum(ref enum_name) => {
                 return self.generate_enum_print(enum_name, &args[0], value, newline, expected_ret);
             }
-            _ => {
-                return Err(CodegenError::UnsupportedType(format!(
-                    "print/println does not support type {:?}",
-                    arg_type
-                )));
-            }
+            _ => self.emit_scalar_to_string(&arg_type, value)?,
         };
 
         let (ptr, len) = if string_value.is_struct_value() {
@@ -339,10 +319,8 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
 
-        // print/println is semantically void but sema infers Dynamic → I64 for its return,
-        // so the AIR may emit Rvalue::Call (not CallVoid). We return const_zero() here because
-        // erroring would break normal println("hi") calls. The real fix is in sema: type
-        // bootstrap builtins as void so the AIR always emits CallVoid
+        // println is void, but sema types it Dynamic and the AIR emits a value call, so
+        // hand back a zero. the real fix is to type the bootstrap builtins as void in sema
         match expected_ret {
             None | Some(AirType::Void) => Ok(None),
             Some(ret) => Ok(Some(
@@ -351,8 +329,85 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    /// Check if a callee uses sret convention on the current target.
-    /// Only C-convention functions with struct-like returns need this.
+    pub(crate) fn emit_scalar_to_string(
+        &mut self,
+        arg_type: &AirType,
+        value: BasicValueEnum<'static>,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        match arg_type {
+            AirType::I64 | AirType::I32 | AirType::I16 | AirType::I8 => {
+                let int_val = value.into_int_value();
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
+                } else {
+                    self.builder
+                        .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let fn_val = self.ensure_to_string_i64_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
+            }
+            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 => {
+                // zero-extend, the formatter is signed
+                let int_val = value.into_int_value();
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
+                } else {
+                    self.builder
+                        .build_int_z_extend(int_val, self.context.i64_type(), "zext_i64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let fn_val = self.ensure_to_string_i64_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
+            }
+            AirType::F64 | AirType::F32 => {
+                let float_val = value.into_float_value();
+                let f64_val = if float_val.get_type() == self.context.f64_type() {
+                    float_val
+                } else {
+                    self.builder
+                        .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let fn_val = self.ensure_to_string_f64_function();
+                self.call_sret_returning_fn(fn_val, &[f64_val.into()], "to_str")
+            }
+            AirType::Bool => {
+                let bool_val = value.into_int_value();
+                let i64_val = self
+                    .builder
+                    .build_int_z_extend(bool_val, self.context.i64_type(), "bool_to_i64")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let fn_val = self.ensure_to_string_bool_function();
+                self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
+            }
+            other => Err(CodegenError::UnsupportedType(format!(
+                "cannot convert {:?} to string",
+                other
+            ))),
+        }
+    }
+
+    pub(crate) fn emit_str_concat(
+        &mut self,
+        left: BasicValueEnum<'static>,
+        right: BasicValueEnum<'static>,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        if !left.is_struct_value() || !right.is_struct_value() {
+            return Err(CodegenError::UnsupportedType(
+                "string concat expects string operands".to_string(),
+            ));
+        }
+        let (a_ptr, a_len) = self.string_parts_from_value(left.into_struct_value())?;
+        let (b_ptr, b_len) = self.string_parts_from_value(right.into_struct_value())?;
+        let concat_fn = self.ensure_str_concat_function();
+        self.call_sret_returning_fn(
+            concat_fn,
+            &[a_ptr.into(), a_len.into(), b_ptr.into(), b_len.into()],
+            "str_concat",
+        )
+    }
+
     fn callee_needs_sret(&self, callee: &Callee) -> bool {
         let is_windows = self.target_is_windows();
         match callee {
@@ -376,7 +431,6 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    /// Returns true if the local holds an Aelys-convention fat pointer.
     fn is_aelys_convention_fnptr(&self, local: LocalId) -> bool {
         matches!(
             self.local_air_type(local),
@@ -384,7 +438,6 @@ impl<'a> FunctionCodegen<'a> {
         )
     }
 
-    /// Returns true if a direct/named callee has an implicit env param.
     fn callee_has_implicit_env(&self, callee: &Callee) -> bool {
         match callee {
             Callee::Direct(id) => self
@@ -394,7 +447,6 @@ impl<'a> FunctionCodegen<'a> {
                 .find(|f| f.id == *id)
                 .map_or(false, |f| function_has_implicit_env(f)),
             Callee::Named(name) => {
-                // Ad-hoc / builtin / extern functions don't get env
                 self.program
                     .functions
                     .iter()
@@ -420,7 +472,6 @@ impl<'a> FunctionCodegen<'a> {
                     param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
                 }
                 if is_aelys {
-                    // Implicit env_ptr parameter
                     param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
                 }
                 for param in params {
@@ -468,7 +519,6 @@ impl<'a> FunctionCodegen<'a> {
             })?
             .clone();
 
-        // Use the original enum name for display (strip __mono_ prefix)
         let display_name = if let Some(rest) = enum_name.strip_prefix("__mono_") {
             rest.split('_').next().unwrap_or(rest)
         } else {
@@ -477,12 +527,10 @@ impl<'a> FunctionCodegen<'a> {
 
         let is_data = enum_has_data(&enum_def);
 
-        // Save the entry block (where the tag computation happens)
         let entry_bb = self.builder.get_insert_block().ok_or_else(|| {
             CodegenError::LlvmError("no current block".to_string())
         })?;
 
-        // Extract the i32 tag
         let tag_val = if is_data {
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
             let enum_ty =
@@ -513,7 +561,6 @@ impl<'a> FunctionCodegen<'a> {
         let current_fn = self.function;
         let write_fn = self.ensure_write_function();
 
-        // Create blocks: one per variant + default + merge
         let merge_bb = self
             .context
             .append_basic_block(current_fn, "print_enum_merge");
@@ -529,13 +576,11 @@ impl<'a> FunctionCodegen<'a> {
             variant_blocks.push((variant.tag, variant.name.clone(), bb));
         }
 
-        // Build default block (fallthrough to merge)
         self.builder.position_at_end(default_bb);
         self.builder
             .build_unconditional_branch(merge_bb)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        // Build each variant block: write "EnumName::VariantName", branch to merge
         for &(_, ref name, bb) in &variant_blocks {
             self.builder.position_at_end(bb);
             let text = format!("{}::{}", display_name, name);
@@ -549,7 +594,6 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
 
-        // Go back to entry block and build the switch terminator
         self.builder.position_at_end(entry_bb);
         let cases: Vec<_> = variant_blocks
             .iter()
@@ -559,7 +603,6 @@ impl<'a> FunctionCodegen<'a> {
             .build_switch(tag_val, default_bb, &cases)
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        // Continue in merge block
         self.builder.position_at_end(merge_bb);
 
         if newline {
@@ -576,5 +619,66 @@ impl<'a> FunctionCodegen<'a> {
                 air_basic_type_to_llvm(ret, self.context)?.const_zero(),
             )),
         }
+    }
+
+    fn generate_vec_runtime_call(
+        &mut self,
+        name: &str,
+        args: &[Operand],
+        arg_values: &[BasicValueEnum<'static>],
+    ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        // arg0 is &v, typed Ptr(Vec(T)), which is where the element size comes from
+        let vec_ptr_ty = self.operand_type(&args[0])?;
+        let elem_ty = match &vec_ptr_ty {
+            AirType::Ptr(inner) => match inner.as_ref() {
+                AirType::Vec(elem) => (**elem).clone(),
+                other => {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "{name}: first argument must be a pointer to a Vec, got pointer to {other:?}"
+                    )));
+                }
+            },
+            other => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "{name}: first argument must be a pointer to a Vec, got {other:?}"
+                )));
+            }
+        };
+        let elem_size = self.air_type_size(&elem_ty)? as u64;
+        let size_val = self.context.i64_type().const_int(elem_size, false);
+        let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
+        let i64_ty = self.context.i64_type();
+
+        let (fn_ty, call_args): (FunctionType<'static>, Vec<BasicMetadataValueEnum<'static>>) =
+            if name == "__aelys_vec_init" {
+                let vec_ptr = arg_values[0].into_pointer_value();
+                let count = arg_values[1].into_int_value();
+                (
+                    self.context.void_type().fn_type(
+                        &[ptr_ty.into(), i64_ty.into(), i64_ty.into()],
+                        false,
+                    ),
+                    vec![vec_ptr.into(), size_val.into(), count.into()],
+                )
+            } else {
+                let vec_ptr = arg_values[0].into_pointer_value();
+                let elem_ptr = arg_values[1].into_pointer_value();
+                (
+                    self.context.void_type().fn_type(
+                        &[ptr_ty.into(), ptr_ty.into(), i64_ty.into()],
+                        false,
+                    ),
+                    vec![vec_ptr.into(), elem_ptr.into(), size_val.into()],
+                )
+            };
+
+        let function = self
+            .module
+            .get_function(name)
+            .unwrap_or_else(|| self.module.add_function(name, fn_ty, None));
+        self.builder
+            .build_call(function, &call_args, "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        Ok(None)
     }
 }

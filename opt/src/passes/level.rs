@@ -1,5 +1,5 @@
 // -O0 through -O3, classic style
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub enum OptimizationLevel {
     None,  // -O0
     Basic, // -O1: just constant folding

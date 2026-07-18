@@ -1,10 +1,13 @@
 // AIR, the Aelys Intermediate Representation
 
+pub mod analysis;
 pub mod layout;
 pub mod lower;
 pub mod mono;
 pub mod passes;
 pub mod print;
+pub mod rc_paths;
+pub mod rc_types;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -49,14 +52,16 @@ pub enum AirType {
     Enum(String),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
+    // a 24-byte {ptr,len,cap} over a refcounted buffer, kept distinct from Slice so the
+    // extra cap field never perturbs immutable array views
+    Vec(Box<AirType>),
     FnPtr {
         params: Vec<AirType>,
         ret: Box<AirType>,
         conv: CallingConv,
     },
     Param(TypeParamId),
-    /// unresolved Dynamic type from sema. must be eliminated by monomorphization before reaching codegen.
-    /// the validation pass rejects any Opaque that survives past the AIR pipeline
+    // mono must eliminate this, validation rejects any Opaque that survives
     Opaque,
     Void,
 }
@@ -134,8 +139,9 @@ pub struct AirProgram {
     pub globals: Vec<AirGlobal>,
     pub source_files: Vec<String>,
     pub mono_instances: Vec<MonoInstance>,
-    /// Computed struct sizes (populated by `compute_layouts`).
     pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
+    // empty until collect_rc_types runs, codegen serializes it as __aelys_rc_type_table
+    pub rc_type_table: rc_types::RcTypeTable,
 }
 
 #[derive(Clone)]
@@ -243,6 +249,14 @@ pub enum AirStmtKind {
     ArenaCreate(ArenaId),
     ArenaDestroy(ArenaId),
     Alloc {
+        local: LocalId,
+        ty: AirType,
+    },
+    // `ty` is the data type, not the pointer: codegen adds the 16-byte header itself
+    // and hands back base + 16 (the pointer the
+    /// program sees). This is a statement variant, not a new AIR *type* variant;
+    /// `local`'s type is `Ptr(ty)` exactly like a plain `Alloc`.
+    RcAlloc {
         local: LocalId,
         ty: AirType,
     },

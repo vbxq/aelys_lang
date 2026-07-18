@@ -67,6 +67,8 @@ impl TypeInference {
             typed_init.ty.clone()
         };
 
+        self.check_rc_let_surface(name, mutable, &var_type, initializer, span);
+
         self.env
             .define_local_with_span(name.to_string(), var_type.clone(), span);
         if mutable {
@@ -79,6 +81,62 @@ impl TypeInference {
             initializer: typed_init,
             var_type,
             is_pub,
+        }
+    }
+
+    // an Rc binding must be initialized directly at the let, which is what lets the
+    // release insertion assume a single init site
+    fn check_rc_let_surface(
+        &mut self,
+        name: &str,
+        mutable: bool,
+        var_type: &crate::types::InferType,
+        initializer: &Expr,
+        span: Span,
+    ) {
+        use aelys_syntax::ExprKind;
+
+        if var_type.is_rc() {
+            if mutable {
+                self.errors.push(
+                    crate::constraint::TypeError::rc_out_of_surface(
+                        format!("`Rc<T>` binding `{name}` cannot be `mut`: an Rc is single-assignment (not supported yet)"),
+                        span,
+                    ),
+                );
+            }
+            // a member clone (`let n = a.next`) is co-ownership: the AIR retains it at the
+            // bind so the scope-exit release stays balanced
+            let direct_init = matches!(
+                &initializer.kind,
+                ExprKind::EnumVariant { enum_name, variant, .. }
+                    if enum_name == "Rc" && (variant == "new" || variant == "null")
+            ) || matches!(
+                initializer.kind,
+                ExprKind::Identifier(_) | ExprKind::Member { .. }
+            );
+            if !direct_init {
+                self.errors.push(
+                    crate::constraint::TypeError::rc_out_of_surface(
+                        format!(
+                            "`Rc<T>` binding `{name}` must be initialized directly by `Rc::new(..)`, \
+                             `Rc::null()`, by cloning another Rc binding, or by reading an Rc field; \
+                             indirect/conditional init is not supported yet"
+                        ),
+                        span,
+                    ),
+                );
+            }
+        } else if var_type.contains_rc() || self.aggregate_embeds_rc_nominal(var_type) {
+            self.errors.push(
+                crate::constraint::TypeError::rc_out_of_surface(
+                    format!(
+                        "binding `{name}` has type `{var_type}` which embeds an `Rc<T>` in an \
+                         aggregate value; Rc inside arrays/vecs/tuples/structs is not supported yet"
+                    ),
+                    span,
+                ),
+            );
         }
     }
 
@@ -151,6 +209,21 @@ impl TypeInference {
                 Some(LiteralInit::Float(worst))
             }
             _ => None,
+        }
+    }
+
+    // only aggregates: copying one duplicates raw Rc pointers with no transitive retain,
+    // which double-frees. a bare carrier binding is legal and tracked by carrier_locals
+    fn aggregate_embeds_rc_nominal(&self, ty: &crate::types::InferType) -> bool {
+        use crate::types::InferType;
+        match ty {
+            InferType::Array(inner, _) | InferType::Vec(inner) => {
+                self.type_table.contains_rc_nominal(inner)
+            }
+            InferType::Tuple(elems) => elems
+                .iter()
+                .any(|e| self.type_table.contains_rc_nominal(e)),
+            _ => false,
         }
     }
 }

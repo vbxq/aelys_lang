@@ -116,6 +116,7 @@ fn multi_block_assign_gets_alloca_and_verifies() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -211,6 +212,7 @@ fn same_block_reassign_stays_ssa() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

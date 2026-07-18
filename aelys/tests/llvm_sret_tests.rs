@@ -120,6 +120,7 @@ fn extern_c_struct_return_compiles_and_verifies() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -188,6 +189,7 @@ fn c_convention_aelys_fn_returning_struct_uses_sret() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -256,6 +258,7 @@ fn fastcc_struct_return_does_not_use_sret() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -378,6 +381,7 @@ fn extern_c_data_enum_return_uses_sret() {
             "Opt".to_string(),
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -445,6 +449,7 @@ fn extern_c_data_enum_param_is_rejected() {
             "Opt".to_string(),
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let mut codegen = CodegenContext::new("enum_param_reject");
@@ -579,6 +584,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret() {
             "Opt".to_string(),
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -656,6 +662,7 @@ fn c_convention_defined_data_enum_param_is_rejected() {
             "Opt".to_string(),
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let mut codegen = CodegenContext::new("c_param_reject");

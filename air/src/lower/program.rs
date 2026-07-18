@@ -106,6 +106,8 @@ impl<'a> LoweringContext<'a> {
         let saved_blocks = std::mem::take(&mut self.current_blocks);
         let saved_stmts = std::mem::take(&mut self.current_stmts);
         let saved_names = std::mem::take(&mut self.locals_by_name);
+        let saved_rc_locals = std::mem::take(&mut self.rc_locals);
+        let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
         let saved_pending = self.pending_block_id.take();
         let saved_next_local = self.next_local_id;
@@ -128,6 +130,8 @@ impl<'a> LoweringContext<'a> {
         self.current_blocks = saved_blocks;
         self.current_stmts = saved_stmts;
         self.locals_by_name = saved_names;
+        self.rc_locals = saved_rc_locals;
+        self.cow_locals = saved_cow_locals;
         self.block_aliases = saved_aliases;
         self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
@@ -137,6 +141,8 @@ impl<'a> LoweringContext<'a> {
     fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
         let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
+        // retain each Vec param's buffer at entry, see emit_cow_param_entry_retains
+        self.retain_vec_params(&func.params, &params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
             self.report_error(format!(
@@ -146,13 +152,15 @@ impl<'a> LoweringContext<'a> {
             ));
             ret_ty = AirType::Void;
         }
-        // InferType::Null is used by sema for both the null literal *and* the implicit void return.
-        // In lower_type_from_infer it becomes Ptr(Void) (which is correct for the null literal), but as a return type it means void
+        // sema uses Null for both the null literal and an implicit void return, and only
+        // the literal should become Ptr(Void)
         if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
             ret_ty = AirType::Void;
         }
 
         self.lower_body(&func.body);
+        // explicit returns already released these, this covers the fall-through exit
+        self.emit_param_cow_releases_on_fallthrough();
         self.finalize_function_body();
         self.resolve_block_aliases();
 
@@ -233,6 +241,7 @@ impl<'a> LoweringContext<'a> {
         );
 
         let user_params = self.lower_params(&func.params);
+        self.retain_vec_params(&func.params, &user_params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
             self.report_error(format!(
@@ -247,6 +256,7 @@ impl<'a> LoweringContext<'a> {
         }
 
         self.lower_body(&func.body);
+        self.emit_param_cow_releases_on_fallthrough();
         self.finalize_function_body();
         self.resolve_block_aliases();
 
@@ -275,17 +285,16 @@ impl<'a> LoweringContext<'a> {
         self.type_params_map.clear();
     }
 
-    /// Lower a function always taking the closure path (with __env param),
-    /// regardless of whether it has captures. This ensures every lambda gets an
-    /// __env parameter, so the calling convention is uniform: a call site that
-    /// receives `fn(i64) -> i64` can always pass env as the first argument
-    /// without caring whether it's a capturing closure or a bare lambda.
+    // every lambda gets an __env param, capturing or not, so the calling convention at a
+    // call site never depends on whether the callee captures
     pub(super) fn lower_function_as_closure(&mut self, func: &TypedFunction) {
         let saved_locals = std::mem::take(&mut self.current_locals);
         let saved_params = std::mem::take(&mut self.current_params);
         let saved_blocks = std::mem::take(&mut self.current_blocks);
         let saved_stmts = std::mem::take(&mut self.current_stmts);
         let saved_names = std::mem::take(&mut self.locals_by_name);
+        let saved_rc_locals = std::mem::take(&mut self.rc_locals);
+        let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
         let saved_pending = self.pending_block_id.take();
         let saved_next_local = self.next_local_id;
@@ -305,6 +314,8 @@ impl<'a> LoweringContext<'a> {
         self.current_blocks = saved_blocks;
         self.current_stmts = saved_stmts;
         self.locals_by_name = saved_names;
+        self.rc_locals = saved_rc_locals;
+        self.cow_locals = saved_cow_locals;
         self.block_aliases = saved_aliases;
         self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
@@ -339,6 +350,19 @@ impl<'a> LoweringContext<'a> {
                 }
             })
             .collect()
+    }
+
+    // a Vec param aliases the caller's buffer, so without this retain the callee would see
+    // refcount 1, take the in-place push path and mutate the caller's Vec. unlike an Rc
+    // param, which is borrowed and never touched, a Vec param has value semantics
+    pub(super) fn retain_vec_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
+        // depth 0 keeps them function-level, so no inner scope releases them
+        for (p, air) in params.iter().zip(air_params.iter()) {
+            if matches!(p.ty, InferType::Vec(_)) {
+                self.emit_cow_retain(air.id, Some(self.span(&p.span)));
+                self.cow_locals.push((air.id, 0));
+            }
+        }
     }
 
     pub(super) fn func_attribs(&self, func: &TypedFunction) -> FunctionAttribs {
@@ -380,17 +404,11 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// Try to evaluate an expression as a compile-time constant for a global initializer.
-    ///
-    /// Extends `try_const_expr` (which is `&self`) to also handle:
-    /// - Non-capturing lambdas: emitted as closure-convention functions, returned as `FnRef`
-    /// - Compound types (Array, Struct) whose elements may themselves be lambdas
+    // unlike try_const_expr this can emit, so it also folds non-capturing lambdas
     pub(super) fn try_global_const_expr(&mut self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
         use aelys_sema::TypedExprKind;
         match &expr.kind {
-            // Peel Lambda wrapper
             TypedExprKind::Lambda(inner) => self.try_global_const_expr(inner),
-            // Non-capturing lambda → emit as a named closure-convention function
             TypedExprKind::LambdaInner { params, return_type, body, captures } => {
                 let runtime_caps = self.runtime_captures(captures);
                 if !runtime_caps.is_empty() {
@@ -411,7 +429,6 @@ impl<'a> LoweringContext<'a> {
                 self.lower_function_as_closure(&fake_func);
                 Some(AirConst::FnRef(lambda_name))
             }
-            // Array literals may contain lambdas as elements
             TypedExprKind::ArrayLiteral { elements } => {
                 let elements = elements.clone();
                 let mut consts = Vec::with_capacity(elements.len());
@@ -420,7 +437,6 @@ impl<'a> LoweringContext<'a> {
                 }
                 Some(AirConst::Array(consts))
             }
-            // Struct literals may contain lambdas as field values
             TypedExprKind::StructLiteral { name, fields } => {
                 let name = name.clone();
                 let fields = fields.clone();
@@ -430,7 +446,6 @@ impl<'a> LoweringContext<'a> {
                 }
                 Some(AirConst::Struct { name, fields: field_consts })
             }
-            // Everything else delegates to the immutable version
             _ => self.try_const_expr(expr),
         }
     }
@@ -447,9 +462,8 @@ impl<'a> LoweringContext<'a> {
             ));
         };
         if matches!(ty, AirType::Enum(_)) && Self::enum_payload_needs_runtime_storage(init) {
-            // Data enum globals are serialized as raw constant bytes today.
-            // Payloads that smuggle runtime addresses (string/fnptr) must fail here
-            // instead of drifting into a later backend-only error.
+            // globals are raw constant bytes, so a payload holding a runtime address must
+            // fail here rather than drift into a backend-only error
             return Some(format!(
                 "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
             ));
@@ -534,8 +548,6 @@ impl<'a> LoweringContext<'a> {
                             .iter()
                             .any(|candidate| candidate.name == *variant && candidate.data.is_empty())) =>
             {
-                // Unit variants are constant at AIR level. Simple enums stay bare
-                // i32 tags; data enums rebuild the aggregate from the tag later.
                 Some(AirConst::Int(*tag as i64, AirIntSize::I32))
             }
             TypedExprKind::EnumVariant { tag, args, .. } => {
@@ -543,8 +555,7 @@ impl<'a> LoweringContext<'a> {
                     .iter()
                     .map(|arg| self.try_const_expr(arg))
                     .collect::<Option<Vec<_>>>()?;
-                // Globals skip EnumInit AIR, so payload-bearing enum constants need
-                // to carry the concrete monomorphized enum name here.
+                // globals skip EnumInit, so carry the monomorphized name here
                 let AirType::Enum(enum_name) = self.lower_type_from_infer(&expr.ty) else {
                     return None;
                 };

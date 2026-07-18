@@ -26,6 +26,7 @@ pub enum ResolvedType {
 
     Array(Box<ResolvedType>, Option<u64>),
     Vec(Box<ResolvedType>),
+    Rc(Box<ResolvedType>),
     Tuple(Vec<ResolvedType>),
     Range,
 
@@ -117,6 +118,9 @@ impl ResolvedType {
             InferType::Vec(inner) => {
                 ResolvedType::Vec(Box::new(ResolvedType::from_infer_type(inner)))
             }
+            InferType::Rc(inner) => {
+                ResolvedType::Rc(Box::new(ResolvedType::from_infer_type(inner)))
+            }
             InferType::Tuple(elems) => {
                 ResolvedType::Tuple(elems.iter().map(ResolvedType::from_infer_type).collect())
             }
@@ -157,6 +161,7 @@ impl fmt::Display for ResolvedType {
             ResolvedType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
             ResolvedType::Array(inner, None) => write!(f, "[{}]", inner),
             ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
+            ResolvedType::Rc(inner) => write!(f, "Rc<{}>", inner),
             ResolvedType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {

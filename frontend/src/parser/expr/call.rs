@@ -47,7 +47,7 @@ impl Parser {
                     span,
                 );
             } else if self.match_token(&TokenKind::ColonColon) {
-                let variant = self.consume_identifier("variant name")?;
+                let variant = self.consume_path_segment("variant name")?;
                 let span = expr.span.merge(self.previous().span);
 
                 match &expr.kind {

@@ -54,7 +54,6 @@ impl Parser {
                                 continue;
                             }
                         }
-                        AelysError::Runtime(e) => e.to_diagnostic(),
                     };
                     self.errors.push(diag);
                     self.synchronize();
@@ -175,6 +174,16 @@ impl Parser {
                 found: self.peek().kind.to_string(),
             })),
         }
+    }
+
+    // `null` is reinterpreted as a name only right after `::`, so that Rc::null() parses
+    // while null stays a reserved keyword everywhere else
+    fn consume_path_segment(&mut self, expected: &str) -> Result<String> {
+        if matches!(self.peek().kind, TokenKind::Null) {
+            self.advance();
+            return Ok("null".to_string());
+        }
+        self.consume_identifier(expected)
     }
 
     fn check(&self, kind: &TokenKind) -> bool {

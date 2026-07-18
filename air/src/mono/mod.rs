@@ -411,6 +411,11 @@ fn substitute_enum_type(
             type_params,
             type_args,
         ))),
+        AirType::Vec(inner) => AirType::Vec(Box::new(substitute_enum_type(
+            inner,
+            type_params,
+            type_args,
+        ))),
         AirType::FnPtr { params, ret, conv } => AirType::FnPtr {
             params: params
                 .iter()
@@ -512,7 +517,7 @@ fn collect_premangled_enum_requests_from_type(
                 }
             }
         }
-        AirType::Ptr(inner) | AirType::Slice(inner) => {
+        AirType::Ptr(inner) | AirType::Slice(inner) | AirType::Vec(inner) => {
             collect_premangled_enum_requests_from_type(inner, generic_enums, enum_defs, requests);
         }
         AirType::Array(inner, _) => {
@@ -573,6 +578,11 @@ fn unify_enum_param(param_ty: &AirType, arg_ty: &AirType, resolved: &mut HashMap
         }
         AirType::Slice(inner) => {
             if let AirType::Slice(arg_inner) = arg_ty {
+                unify_enum_param(inner, arg_inner, resolved);
+            }
+        }
+        AirType::Vec(inner) => {
+            if let AirType::Vec(arg_inner) = arg_ty {
                 unify_enum_param(inner, arg_inner, resolved);
             }
         }
@@ -791,6 +801,8 @@ fn resolve_single_type_arg(s: &str) -> Option<AirType> {
                 AirType::Ptr(Box::new(resolve_single_type_arg(rest)?))
             } else if let Some(rest) = other.strip_prefix("slice_") {
                 AirType::Slice(Box::new(resolve_single_type_arg(rest)?))
+            } else if let Some(rest) = other.strip_prefix("vec_") {
+                AirType::Vec(Box::new(resolve_single_type_arg(rest)?))
             } else if let Some(rest) = other.strip_prefix("array_") {
                 let split = rest.rfind('_')?;
                 let inner = &rest[..split];
@@ -1010,6 +1022,11 @@ impl MonoContext {
             }
             AirType::Slice(inner) => {
                 if let AirType::Slice(arg_inner) = arg_ty {
+                    self.unify_param(inner, arg_inner, resolved);
+                }
+            }
+            AirType::Vec(inner) => {
+                if let AirType::Vec(arg_inner) = arg_ty {
                     self.unify_param(inner, arg_inner, resolved);
                 }
             }

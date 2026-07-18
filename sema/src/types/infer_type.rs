@@ -30,6 +30,8 @@ pub enum InferType {
 
     Array(Box<InferType>, Option<u64>),
     Vec(Box<InferType>),
+    // the only reference type, every other constructor is a value type
+    Rc(Box<InferType>),
     Tuple(Vec<InferType>),
     Range,
 
@@ -72,7 +74,9 @@ impl InferType {
             InferType::Function { params, ret } => {
                 params.iter().any(|p| p.has_vars()) || ret.has_vars()
             }
-            InferType::Array(inner, _) | InferType::Vec(inner) => inner.has_vars(),
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+                inner.has_vars()
+            }
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
             InferType::Enum(_, args) => args.iter().any(|a| a.has_vars()),
             _ => false,
@@ -105,6 +109,24 @@ impl InferType {
         }
     }
 
+    pub fn is_rc(&self) -> bool {
+        matches!(self, InferType::Rc(_))
+    }
+
+    // blind to nominals: a struct holding an Rc field reads as false here
+    pub fn contains_rc(&self) -> bool {
+        match self {
+            InferType::Rc(_) => true,
+            InferType::Array(inner, _) | InferType::Vec(inner) => inner.contains_rc(),
+            InferType::Tuple(elems) => elems.iter().any(|e| e.contains_rc()),
+            InferType::Enum(_, args) => args.iter().any(|a| a.contains_rc()),
+            InferType::Function { params, ret } => {
+                params.iter().any(|p| p.contains_rc()) || ret.contains_rc()
+            }
+            _ => false,
+        }
+    }
+
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
         if ann.is_function_type() {
             let params = ann
@@ -121,6 +143,15 @@ impl InferType {
                 params,
                 ret: Box::new(ret),
             };
+        }
+        // must come before the uppercase guard, which would read it as Struct("Rc")
+        if ann.name == "Rc" {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| Self::from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Rc(Box::new(inner));
         }
         // Uppercase-starting names are always user-defined types (structs/enums).
         // Check this first so that names like "Void", "String", etc. are not
@@ -349,6 +380,7 @@ impl fmt::Display for InferType {
             InferType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
             InferType::Array(inner, None) => write!(f, "[{}]", inner),
             InferType::Vec(inner) => write!(f, "vec[{}]", inner),
+            InferType::Rc(inner) => write!(f, "Rc<{}>", inner),
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {

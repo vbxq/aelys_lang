@@ -5,6 +5,38 @@ use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, Span, StructFieldInit};
 
 impl TypeInference {
+    // an Rc is allowed in a concrete carrier, where the AIR knows its offset and can
+    // balance retain/release, but never in a generic slot, where the type erases and the
+    // offset is gone, nor inside an array/vec/tuple, which no single field GEP can reach
+    pub(crate) fn reject_rc_out_of_carrier_surface(
+        &mut self,
+        ty: &InferType,
+        container_is_generic: bool,
+        span: Span,
+        what: &str,
+    ) {
+        if container_is_generic {
+            if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
+                self.errors.push(TypeError::rc_out_of_surface(format!(
+                    "{what} stores a value of type `{ty}` carrying an `Rc<T>` into a \
+                     generic carrier; a generic field/payload of `Rc<T>` is erased at \
+                     the AIR boundary and is not supported yet"
+                ), span));
+            }
+            return;
+        }
+        let transparent_aggregate_of_rc = matches!(
+            ty,
+            InferType::Array(..) | InferType::Vec(_) | InferType::Tuple(_)
+        ) && ty.contains_rc();
+        if transparent_aggregate_of_rc {
+            self.errors.push(TypeError::rc_out_of_surface(format!(
+                "{what} is initialized with a value of type `{ty}` (a transparent \
+                 aggregate embedding an `Rc<T>`); storing an Rc inside an \
+                 array/vec/tuple is not supported yet"
+            ), span));
+        }
+    }
     pub(super) fn infer_member_expr(
         &mut self,
         object: &Expr,
@@ -33,11 +65,25 @@ impl TypeInference {
                     InferType::Dynamic
                 }
             }
+            // auto-deref a read through an Rc<Struct> handle, one level only
+            InferType::Rc(inner) => {
+                if let InferType::Struct(name) = inner.as_ref() {
+                    if let Some(def) = self.type_table.get_struct(name) {
+                        def.fields
+                            .iter()
+                            .find(|f| f.name == member)
+                            .map(|f| f.ty.clone())
+                            .unwrap_or(InferType::Dynamic)
+                    } else {
+                        InferType::Dynamic
+                    }
+                } else {
+                    InferType::Dynamic
+                }
+            }
             InferType::Dynamic => InferType::Dynamic,
-            // when the object is an unresolved type variable, return a fresh type variable instead
-            // of Dynamic so that type information can propagate once the Var is resolved by the constraint solver
-            //
-            // if it is never resolved, finalization converts the fresh Var to Dynamic, it's the same end result, but without premature widening
+            // a fresh var, not Dynamic, so the type can still propagate once the solver
+            // resolves it; finalization widens it to Dynamic anyway if it never does
             InferType::Var(_) => self.type_gen.fresh(),
             _other => InferType::Dynamic,
         };
@@ -61,9 +107,11 @@ impl TypeInference {
         let typed_object = self.infer_expr(object);
         let mut typed_value = self.infer_expr(value);
 
-        // Check mutability: the object variable must be declared `let mut`
+        // writing through an Rc handle mutates the shared heap data, not the binding, so
+        // the handle itself does not need to be `mut`; a struct value still does
+        let object_through_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
         if let ExprKind::Identifier(ref name) = object.kind {
-            if !self.env.is_mutable(name) {
+            if !object_through_rc_handle && !self.env.is_mutable(name) {
                 let binding_span = self.env.lookup_binding_span(name);
                 let suggestion = binding_span.map(|bs| {
                     let insert_offset = bs.start + 4;
@@ -84,11 +132,36 @@ impl TypeInference {
             }
         }
 
-        // Validate the field exists and constrain the value type
-        if let InferType::Struct(ref struct_name) = typed_object.ty {
+        // resolve the struct name from either shape, so a store through a handle gets the
+        // same field validation and lift decision as a store on a value
+        let object_struct: Option<String> = match &typed_object.ty {
+            InferType::Struct(name) => Some(name.clone()),
+            InferType::Rc(inner) => match inner.as_ref() {
+                InferType::Struct(name) => Some(name.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        let object_is_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
+        if let Some(ref struct_name) = object_struct {
             if let Some(def) = self.type_table.get_struct(struct_name) {
                 if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
                     let field_ty = field_def.ty.clone();
+                    // reassigning a directly-Rc field is only allowed through a handle,
+                    // where the AIR balances it; a field that merely carries a nested Rc
+                    // is refused either way, since a plain store would orphan that Rc
+                    let field_is_rc = field_ty.is_rc();
+                    let field_is_nominal_carrier =
+                        !field_is_rc && self.type_table.contains_rc_nominal(&field_ty);
+                    let reject =
+                        field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle);
+                    if reject {
+                        self.errors.push(TypeError::rc_out_of_surface(format!(
+                            "in-place reassignment of field `{field}` (type `{field_ty}`, \
+                             which carries an `Rc<T>`) is not supported here; \
+                             reassigning would leak the previously-held reference"
+                        ), span));
+                    }
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     // Implicit numeric widening for field assignment
                     if typed_value.ty != field_ty
@@ -202,6 +275,17 @@ impl TypeInference {
             .iter()
             .map(|f| {
                 let mut typed_value = self.infer_expr(&f.value);
+
+                let container_is_generic = self
+                    .type_table
+                    .get_struct(name)
+                    .is_some_and(|d| !d.type_params.is_empty());
+                self.reject_rc_out_of_carrier_surface(
+                    &typed_value.ty,
+                    container_is_generic,
+                    f.span,
+                    &format!("field `{}` of struct literal `{}`", f.name, name),
+                );
 
                 if let Some(field_ty) = self
                     .type_table

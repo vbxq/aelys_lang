@@ -181,6 +181,7 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.push(super::LoopBlocks {
             header: incr_id,
             exit: exit_id,
+            body_scope_depth: self.locals_by_name.len(),
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
@@ -200,6 +201,8 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        // iterator locals are never Rc today, this just keeps the registry honest
+        self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
     }
 
@@ -300,6 +303,7 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.push(super::LoopBlocks {
             header: incr_id,
             exit: exit_id,
+            body_scope_depth: self.locals_by_name.len(),
         });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
@@ -322,6 +326,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
     }
 }

@@ -31,7 +31,6 @@ impl CompileErrorKind {
             Self::InfiniteType { .. } => 305,
             Self::UnknownType { .. } => 306,
             Self::InvalidCast { .. } => 307,
-            Self::IntegerOverflow { .. } => 308,
             Self::RecursionLimitExceeded => 309,
             Self::UndefinedFunction(_) => 203,
 
@@ -44,22 +43,12 @@ impl CompileErrorKind {
             Self::ContinueOutsideLoop => 502,
             Self::ReturnOutsideFunction => 503,
 
-            // Legacy (unused but kept for transition)
-            Self::TooManyConstants => 204,
-            Self::TooManyRegisters => 205,
-            Self::TooManyArguments => 206,
-            Self::TooManyUpvalues => 211,
-
             // Module errors (E04xx range reserved, using 6xx)
             Self::ModuleNotFound { .. } => 601,
             Self::CircularDependency { .. } => 602,
             Self::SymbolNotPublic { .. } => 603,
             Self::StdlibNotAvailable { .. } => 604,
             Self::SymbolNotFound { .. } => 605,
-            Self::InvalidNativeModule { .. } => 606,
-            Self::NativeCapabilityDenied { .. } => 607,
-            Self::NativeChecksumMismatch { .. } => 608,
-            Self::NativeVersionMismatch { .. } => 609,
             Self::SymbolConflict { .. } => 610,
 
             // Sema catch-all (legacy, being phased out)

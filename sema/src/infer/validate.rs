@@ -306,6 +306,25 @@ impl TypeInference {
                             ));
                         }
                     }
+                     InferType::Rc(inner) => {
+                        if let InferType::Struct(name) = inner.as_ref() {
+                            if let Some(def) = self.type_table.get_struct(name) {
+                                if !def.fields.iter().any(|f| f.name == *member) {
+                                    self.errors.push(TypeError::member_access(
+                                        format!("unknown field '{}' on struct '{}'", member, name),
+                                        expr.span,
+                                    ));
+                                }
+                            }
+                        } else {
+                            self.errors.push(TypeError::member_access(
+                                format!(
+                                    "field access through `Rc<{inner}>` requires a struct payload"
+                                ),
+                                expr.span,
+                            ));
+                        }
+                    }
                     InferType::Dynamic => {}
                     other => {
                         self.errors.push(TypeError::member_access(
@@ -424,12 +443,6 @@ impl TypeInference {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
-                // For generic enum UNIT variants (no payload) where type
-                // parameters could not be resolved (remained as Dynamic after
-                // substitution), emit a clear error suggesting a type annotation.
-                // Data variants (with args) have at least partial type info from
-                // their arguments, so we only flag unit variants where there is
-                // truly no information to determine the type params.
                 if args.is_empty() {
                 if let InferType::Enum(name, type_args) = &expr.ty {
                     if let Some(def) = self.type_table.get_enum(name) {

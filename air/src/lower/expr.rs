@@ -6,11 +6,65 @@ use aelys_sema::{
 };
 
 impl<'a> LoweringContext<'a> {
-    /// Returns true for types that have no runtime representation (void, null,
-    /// opaque).  Used to skip result assignments in match/if-else branches.
     fn is_void_like(ty: &AirType) -> bool {
         matches!(ty, AirType::Void | AirType::Opaque)
             || matches!(ty, AirType::Ptr(inner) if matches!(inner.as_ref(), AirType::Void))
+    }
+
+    // a carrier field is retained only when it clones a live reference; a fresh literal
+    // already owns its +1, so retaining it again would double-count
+    fn emit_construction_field_retain(
+        &mut self,
+        field_air_ty: &AirType,
+        value_op: &Operand,
+        value_expr: &TypedExpr,
+        sp: Option<Span>,
+        what: &str,
+    ) {
+        let paths = match crate::rc_paths::rc_field_paths(field_air_ty, &self.structs, &self.enums) {
+            crate::rc_paths::RcScan::None => return,
+            crate::rc_paths::RcScan::Paths(paths) => paths,
+            // skipping is only sound while generic structs never reach codegen; once they
+            // monomorphize, an Rc carrier will slip through here and leak or UAF
+            crate::rc_paths::RcScan::Undecidable(_) => return,
+            // already rejected at the carrier's `let`, so emit nothing here
+            crate::rc_paths::RcScan::RejectedMultiVariant(_) => return,
+        };
+        let mut prov = value_expr;
+        while let TypedExprKind::Grouping(inner) = &prov.kind {
+            prov = inner;
+        }
+        match &prov.kind {
+            // fresh: Rc::new already set refcount to 1
+            TypedExprKind::EnumVariant { enum_name, variant, .. }
+                if enum_name == "Rc" && variant == "new" => {}
+            TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
+            // a clone of a live reference, so retain every transitive leaf
+            TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
+                self.emit_carrier_field_retains(value_op.clone(), field_air_ty, &paths, sp);
+            }
+            TypedExprKind::Call { .. } => {
+                self.report_error(format!(
+                    "[rc-stage3a] {what} is initialized from a call returning an `Rc<T>`-bearing \
+                     value; ownership transfer into a carrier field is not supported yet"
+                ));
+            }
+            _ => {
+                self.report_error(format!(
+                    "[rc-stage3a] {what} is initialized from a conditional/compound expression \
+                     producing an `Rc<T>`-bearing value; only a direct reference (clone) or a \
+                     fresh literal is supported yet"
+                ));
+            }
+        }
+    }
+
+    fn air_field_type_of(&self, struct_name: &str, field: &str) -> Option<AirType> {
+        self.structs
+            .iter()
+            .find(|s| s.name == struct_name)
+            .and_then(|d| d.fields.iter().find(|f| f.name == field))
+            .map(|f| f.ty.clone())
     }
 
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
@@ -135,10 +189,20 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::StructLiteral { name, fields } => {
-                let lowered_fields: Vec<(String, Operand)> = fields
-                    .iter()
-                    .map(|(fname, fval)| (fname.clone(), self.lower_expr(fval)))
-                    .collect();
+                let mut lowered_fields: Vec<(String, Operand)> = Vec::with_capacity(fields.len());
+                for (fname, fval) in fields {
+                    let op = self.lower_expr(fval);
+                    if let Some(field_air_ty) = self.air_field_type_of(name, fname) {
+                        self.emit_construction_field_retain(
+                            &field_air_ty,
+                            &op,
+                            fval,
+                            sp,
+                            &format!("field `{name}.{fname}`"),
+                        );
+                    }
+                    lowered_fields.push((fname.clone(), op));
+                }
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::StructInit {
@@ -242,14 +306,17 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::VecLiteral { elements, .. } => {
                 let lowered: Vec<Operand> = elements.iter().map(|e| self.lower_expr(e)).collect();
-                self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&expr.ty),
-                    Rvalue::Call {
-                        func: Callee::Named("__aelys_vec_new".to_string()),
-                        args: lowered,
-                    },
-                    sp,
-                )
+                let vec_ty = self.lower_type_from_infer(&expr.ty);
+                let elem_ty = match &vec_ty {
+                    AirType::Vec(inner) => (**inner).clone(),
+                    other => {
+                        self.report_error(format!(
+                            "ICE: vec literal has non-Vec AIR type `{other:?}` at lowering"
+                        ));
+                        AirType::I64
+                    }
+                };
+                self.lower_vec_construct(vec_ty, elem_ty, lowered, sp)
             }
 
             TypedExprKind::Index { object, index } => {
@@ -323,7 +390,49 @@ impl<'a> LoweringContext<'a> {
                 tag,
                 args,
             } => {
-                let payload: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
+                // sema carries the Rc and Vec intrinsics as EnumVariant, so intercept
+                // them here before the generic enum path
+                // no retain: the alloc already sets refcount to 1
+                if enum_name == "Rc" && variant == "new" {
+                    return self.lower_rc_new(&expr.ty, args, sp);
+                }
+                // a read never touches the refcount
+                if enum_name == "Rc" && variant == "get" {
+                    return self.lower_rc_get(&expr.ty, args, sp);
+                }
+                // a null data pointer for cycle construction, not an allocation
+                if enum_name == "Rc" && variant == "null" {
+                    return self.lower_rc_null(&expr.ty);
+                }
+                if enum_name == "Vec" && variant == "new" {
+                    let vec_ty = self.lower_type_from_infer(&expr.ty);
+                    let elem_ty = match &vec_ty {
+                        AirType::Vec(inner) => (**inner).clone(),
+                        other => {
+                            self.report_error(format!(
+                                "ICE: Vec::new has non-Vec AIR type `{other:?}` at lowering"
+                            ));
+                            AirType::I64
+                        }
+                    };
+                    return self.lower_vec_construct(vec_ty, elem_ty, Vec::new(), sp);
+                }
+                if enum_name == "Vec" && variant == "push" {
+                    return self.lower_vec_push(args, sp);
+                }
+                let mut payload: Vec<Operand> = Vec::with_capacity(args.len());
+                for arg in args {
+                    let op = self.lower_expr(arg);
+                    let payload_air_ty = self.lower_type_from_infer(&arg.ty);
+                    self.emit_construction_field_retain(
+                        &payload_air_ty,
+                        &op,
+                        arg,
+                        sp,
+                        &format!("payload of `{enum_name}::{variant}`"),
+                    );
+                    payload.push(op);
+                }
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::EnumInit {
@@ -809,14 +918,67 @@ impl<'a> LoweringContext<'a> {
             val
         };
 
-        // Write the final field on the deepest temp.
-        self.emit(
-            AirStmtKind::Assign {
-                place: Place::Field(cur_local, field.to_string()),
-                rvalue: Rvalue::Use(final_val),
+        // reassigning an Rc field through an Rc handle must stay balanced, so the store is
+        // lifted into: load old, release old, store new, retain new. skipping the release
+        // orphans the old reference, skipping the retain under-counts the new one
+        let lift_field_ty: Option<AirType> = match self.local_air_type(cur_local) {
+            Some(AirType::Ptr(inner)) => match inner.as_ref() {
+                AirType::Struct(name) => match self.air_field_type_of(name, field) {
+                    Some(fty @ AirType::Ptr(_)) => Some(fty),
+                    _ => None,
+                },
+                _ => None,
             },
-            sp,
-        );
+            _ => None,
+        };
+        if let Some(field_ty) = lift_field_ty {
+            let old = self.emit_rvalue_to_temp(
+                field_ty,
+                Rvalue::FieldAccess {
+                    base: Operand::Copy(cur_local),
+                    field: field.to_string(),
+                },
+                sp,
+            );
+            self.emit_rc_release_operand(old, sp);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(cur_local, field.to_string()),
+                    rvalue: Rvalue::Use(final_val.clone()),
+                },
+                sp,
+            );
+            // the final retain is gated on provenance, like the construction site above:
+            // retaining a fresh value would orphan the +1 it already carries
+            let prov_expr = match &compound_info {
+                Some((_, rhs_expr)) => *rhs_expr,
+                None => value,
+            };
+            let mut prov = prov_expr;
+            while let TypedExprKind::Grouping(inner) = &prov.kind {
+                prov = inner;
+            }
+            match &prov.kind {
+                // fresh, so it already holds a +1 for this slot
+                TypedExprKind::EnumVariant { enum_name, variant, .. }
+                    if enum_name == "Rc" && variant == "new" => {}
+                TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
+                // shared, so the source keeps its count and this slot needs its own
+                TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
+                    self.emit_rc_retain(final_val, sp);
+                }
+                // anything else is treated as owned, the slot takes over its count
+                _ => {}
+            }
+        } else {
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Field(cur_local, field.to_string()),
+                    rvalue: Rvalue::Use(final_val),
+                },
+                sp,
+            );
+        }
 
         // Write-back phase: propagate modifications back up to the root.
         for info in temps.iter().rev() {
@@ -1041,6 +1203,159 @@ impl<'a> LoweringContext<'a> {
     //
     // Captures are by value at creation time. Mutating the original variable after
     // closure creation does not affect what the closure sees.
+
+    // codegen injects the element size from the address operand's pointee type
+    fn lower_vec_construct(
+        &mut self,
+        vec_ty: AirType,
+        elem_ty: AirType,
+        elements: Vec<Operand>,
+        sp: Option<Span>,
+    ) -> Operand {
+        let count = elements.len() as i64;
+        // must be mutable: push writes ptr/len/cap later, and the address needs a real alloca
+        let vec_local = self.alloc_temp_mut(vec_ty.clone());
+        let addr = self.emit_rvalue_to_temp(
+            AirType::Ptr(Box::new(vec_ty)),
+            Rvalue::AddressOf(vec_local),
+            sp,
+        );
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_init".to_string()),
+                args: vec![addr, Operand::Const(AirConst::IntLiteral(count))],
+            },
+            sp,
+        );
+        for (i, elem_op) in elements.into_iter().enumerate() {
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Index(vec_local, Operand::Const(AirConst::IntLiteral(i as i64))),
+                    rvalue: Rvalue::Use(elem_op),
+                },
+                sp,
+            );
+        }
+        let _ = elem_ty; // element type is recovered by codegen from the Vec local
+        Operand::Copy(vec_local)
+    }
+
+    // the element is spilled to a mutable temp only so its address can be taken
+    fn lower_vec_push(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        if args.len() != 2 {
+            self.report_error(format!(
+                "ICE: Vec::push expects 2 arguments, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        // The Vec l-value: lower it to the local holding the fat-ptr, take &v.
+        let vec_ty = self.lower_type_from_infer(&args[0].ty);
+        let vec_op = self.lower_expr(&args[0]);
+        let vec_local = match vec_op {
+            Operand::Copy(id) | Operand::Move(id) => id,
+            _ => {
+                self.report_error(
+                    "Vec::push target must be a Vec variable (an addressable l-value)".to_string(),
+                );
+                return Operand::Const(AirConst::Null);
+            }
+        };
+        let vec_addr = self.emit_rvalue_to_temp(
+            AirType::Ptr(Box::new(vec_ty)),
+            Rvalue::AddressOf(vec_local),
+            sp,
+        );
+        let elem_ty = self.lower_type_from_infer(&args[1].ty);
+        let elem_op = self.lower_expr(&args[1]);
+        let elem_slot = self.alloc_temp_mut(elem_ty.clone());
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(elem_slot),
+                rvalue: Rvalue::Use(elem_op),
+            },
+            sp,
+        );
+        let elem_addr = self.emit_rvalue_to_temp(
+            AirType::Ptr(Box::new(elem_ty)),
+            Rvalue::AddressOf(elem_slot),
+            sp,
+        );
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_push".to_string()),
+                args: vec![vec_addr, elem_addr],
+            },
+            sp,
+        );
+        Operand::Const(AirConst::Null)
+    }
+
+    fn lower_rc_new(
+        &mut self,
+        rc_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        let inner_infer = match rc_ty {
+            InferType::Rc(inner) => inner.as_ref(),
+            // sema guarantees Rc<_>, this fallback just keeps the AIR well-typed
+            _ => args.first().map(|a| &a.ty).unwrap_or(&InferType::Null),
+        };
+        let data_ty = self.lower_type_from_infer(inner_infer);
+        let ptr_ty = AirType::Ptr(Box::new(data_ty.clone()));
+
+        // evaluate the payload before the alloc local exists
+        let data_op = args
+            .first()
+            .map(|a| self.lower_expr(a))
+            .unwrap_or(Operand::Const(AirConst::ZeroInit(data_ty.clone())));
+
+        let ptr_local = self.alloc_temp(ptr_ty);
+        self.emit(
+            AirStmtKind::RcAlloc {
+                local: ptr_local,
+                ty: data_ty,
+            },
+            sp,
+        );
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Deref(ptr_local),
+                rvalue: Rvalue::Use(data_op),
+            },
+            sp,
+        );
+        Operand::Copy(ptr_local)
+    }
+
+    // the value is copied out before any scope-exit release, so the read stays sound
+    fn lower_rc_get(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        let inner_ty = self.lower_type_from_infer(result_ty);
+        let handle = args
+            .first()
+            .map(|a| self.lower_expr(a))
+            .unwrap_or(Operand::Const(AirConst::Null));
+        self.emit_rvalue_to_temp(inner_ty, Rvalue::Deref(handle), sp)
+    }
+
+    // no RcAlloc, so a null is never tracked in the type table nor seen by the collector
+    fn lower_rc_null(&mut self, rc_ty: &InferType) -> Operand {
+        let inner_infer = match rc_ty {
+            InferType::Rc(inner) => inner.as_ref(),
+            // sema guarantees Rc<_>, this fallback just keeps the AIR well-typed
+            _ => &InferType::Null,
+        };
+        let data_ty = self.lower_type_from_infer(inner_infer);
+        let ptr_ty = AirType::Ptr(Box::new(data_ty));
+        self.emit_rvalue_to_temp(ptr_ty, Rvalue::Use(Operand::Const(AirConst::Null)), None)
+    }
+
     fn lower_lambda(
         &mut self,
         params: &[TypedParam],
@@ -1070,6 +1385,23 @@ impl<'a> LoweringContext<'a> {
         let sp = Some(self.span(&parent.span));
         let result_ty = self.lower_type_from_infer(&parent.ty);
         let runtime_caps = self.runtime_captures(captures);
+
+        // capturing an Rc into a closure env is a use-after-free: the capture is a plain
+        // copy with no retain, yet the outer Rc is still released at scope exit
+        for (cap_name, cap_ty) in &runtime_caps {
+            let cap_air = self.lower_type_from_infer(cap_ty);
+            // only a resolved carrier rejects; an undecidable generic must not
+            let carrier_capture = matches!(
+                crate::rc_paths::rc_field_paths(&cap_air, &self.structs, &self.enums),
+                crate::rc_paths::RcScan::Paths(_)
+            );
+            if cap_ty.is_rc() || cap_ty.contains_rc() || carrier_capture {
+                self.report_error(format!(
+                    "[rc-stage1] closure captures `{cap_name}` of type `{cap_ty}` which is or contains \
+                     an `Rc<T>`; capturing an Rc (or a carrier of one) in a closure is not supported"
+                ));
+            }
+        }
 
         if runtime_caps.is_empty() {
             // Non-capturing: fat pointer with null env

@@ -66,20 +66,6 @@ pub enum CompileErrorKind {
     ContinueOutsideLoop,
     ReturnOutsideFunction,
 
-    // 48-bit signed range for NaN-boxed ints
-    // Legacy VM code
-    IntegerOverflow {
-        value: String,
-        min: i64,
-        max: i64,
-    },
-
-    // Legacy VM codes
-    TooManyConstants,
-    TooManyRegisters,
-    TooManyArguments,
-    TooManyUpvalues,
-
     // Module errors
     ModuleNotFound {
         module_path: String,
@@ -98,25 +84,6 @@ pub enum CompileErrorKind {
     SymbolNotFound {
         symbol: String,
         module: String,
-    },
-    InvalidNativeModule {
-        module: String,
-        reason: String,
-    },
-    NativeCapabilityDenied {
-        module: String,
-        capability: String,
-        required: Vec<String>,
-    },
-    NativeChecksumMismatch {
-        module: String,
-        expected: String,
-        actual: String,
-    },
-    NativeVersionMismatch {
-        module: String,
-        required: String,
-        found: Option<String>,
     },
     SymbolConflict {
         symbol: String,

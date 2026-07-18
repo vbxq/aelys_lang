@@ -394,6 +394,7 @@ impl TypeInference {
                 InferType::Array(Box::new(Self::finalize_type(*inner)), len)
             }
             InferType::Vec(inner) => InferType::Vec(Box::new(Self::finalize_type(*inner))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(Self::finalize_type(*inner))),
             InferType::Function { params, ret } => InferType::Function {
                 params: params.into_iter().map(Self::finalize_type).collect(),
                 ret: Box::new(Self::finalize_type(*ret)),

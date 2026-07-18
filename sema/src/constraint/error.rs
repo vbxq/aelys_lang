@@ -58,6 +58,8 @@ pub enum TypeErrorKind {
     },
     /// Assignment to a loop-controlled variable
     AssignToLoopVariable { name: String },
+    // always rendered with the stable [rc-stage1] marker, which the tests assert on
+    RcOutOfSurface { detail: String },
 }
 
 impl fmt::Display for TypeError {
@@ -105,6 +107,9 @@ impl fmt::Display for TypeError {
             }
             TypeErrorKind::AssignToLoopVariable { name } => {
                 write!(f, "cannot assign to loop variable `{}`", name)
+            }
+            TypeErrorKind::RcOutOfSurface { detail } => {
+                write!(f, "[rc-stage1] {}", detail)
             }
         }
     }
@@ -171,6 +176,19 @@ impl TypeError {
             kind: TypeErrorKind::ArityMismatch { expected, found },
             span,
             reason,
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn rc_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::RcOutOfSurface {
+                detail: detail.into(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,

@@ -323,7 +323,11 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
 pub(crate) fn is_abi_unsafe_type(ty: &AirType, program: &AirProgram) -> bool {
     matches!(
         ty,
-        AirType::Str | AirType::Struct(_) | AirType::Slice(_) | AirType::Array(_, _)
+        AirType::Str
+            | AirType::Struct(_)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::Array(_, _)
     ) || matches!(ty, AirType::Enum(name) if program
         .enums
         .iter()
@@ -391,6 +395,7 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::Enum(_) => "enum",
         AirType::Array(_, _) => "array",
         AirType::Slice(_) => "slice",
+        AirType::Vec(_) => "vec",
         AirType::FnPtr { .. } => "fn",
         AirType::Param(_) => "param",
         AirType::Opaque => "opaque",

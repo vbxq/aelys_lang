@@ -234,14 +234,6 @@ type or user-defined struct.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
-        code: "E0308",
-        title: "integer literal overflow",
-        explanation: "\
-The literal value doesn't fit in the target integer type. For example,
-assigning `300` to an `i8` (max 127) would trigger this.",
-        severity: Severity::Error,
-    },
-    DiagnosticInfo {
         code: "E0309",
         title: "type inference recursion limit",
         explanation: "\

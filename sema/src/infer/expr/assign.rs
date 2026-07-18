@@ -14,6 +14,15 @@ impl TypeInference {
         let mut typed_value = self.infer_expr(value);
 
         if let Some(var_type) = self.env.lookup(name).cloned() {
+            // an Rc binding is single-assignment even when mut: a second provenance would
+            // not be tracked by the retain/release insertion and the release would be wrong
+            if var_type.is_rc() {
+                self.errors.push(TypeError::rc_out_of_surface(
+                    format!("cannot reassign `Rc<T>` binding `{name}`: an Rc is single-assignment yet"),
+                    span,
+                ));
+            }
+
             // check mutability, reject assignment to immutable variables
             if !self.env.is_mutable(name) {
                 let binding_span = self.env.lookup_binding_span(name);

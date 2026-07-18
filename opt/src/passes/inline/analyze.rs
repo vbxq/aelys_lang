@@ -1,4 +1,6 @@
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind};
+use aelys_sema::{
+    InferType, TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -11,6 +13,9 @@ pub struct FunctionInfo {
     pub is_recursive: bool,
     pub has_inline: bool,
     pub has_inline_always: bool,
+    // a Vec param must cross a real call: inlining erases the entry retain, so the body
+    // would push straight into the caller's buffer at refcount 1 and corrupt it
+    pub has_vec_param: bool,
 }
 
 pub struct ProgramAnalysis {
@@ -74,6 +79,11 @@ impl ProgramAnalysis {
             }
         }
 
+        // a correctness block, checked before @inline_always: no decorator may override it
+        if info.has_vec_param {
+            return InlineDecision::Blocked(BlockReason::VecParam);
+        }
+
         // @inline_always forces it (except for truly impossible cases already checked)
         if info.has_inline_always {
             return InlineDecision::Inline;
@@ -127,6 +137,7 @@ pub enum BlockReason {
     MutualRecursion(Vec<String>),
     HasCaptures,
     HasTypeParams,
+    VecParam,
 }
 
 fn analyze_function(func: &TypedFunction) -> FunctionInfo {
@@ -137,6 +148,8 @@ fn analyze_function(func: &TypedFunction) -> FunctionInfo {
 
     let has_inline = func.decorators.iter().any(|d| d.name == "inline");
     let has_inline_always = func.decorators.iter().any(|d| d.name == "inline_always");
+    // read from the sema type, never an erased one
+    let has_vec_param = func.params.iter().any(|p| param_type_holds_vec(&p.ty));
 
     FunctionInfo {
         body_size: func.body.iter().map(count_stmt_size).sum(),
@@ -147,6 +160,17 @@ fn analyze_function(func: &TypedFunction) -> FunctionInfo {
         is_recursive: false,
         has_inline,
         has_inline_always,
+        has_vec_param,
+    }
+}
+
+// a nominal holding a Vec is already rejected at sema, so only value types matter here
+fn param_type_holds_vec(ty: &InferType) -> bool {
+    match ty {
+        InferType::Vec(_) => true,
+        InferType::Array(inner, _) => param_type_holds_vec(inner),
+        InferType::Tuple(elems) => elems.iter().any(param_type_holds_vec),
+        _ => false,
     }
 }
 

@@ -38,6 +38,71 @@ impl CodegenContext {
         Ok(())
     }
 
+    // flat i32 blob: n_entries, then {count, offset_idx} per type, then the offsets.
+    // index 0 is a reserved {count:0} entry, so a stray type_id 0 object reads zero
+    // children instead of walking a real type's pointer map
+    pub(crate) fn emit_rc_type_table(&self, program: &AirProgram) -> Result<(), CodegenError> {
+        const SYMBOL: &str = "__aelys_rc_type_table";
+        // a re-run must not double-define the symbol
+        if self.module.get_global(SYMBOL).is_some() {
+            return Ok(());
+        }
+
+        let table = &program.rc_type_table;
+        let n_entries = table.entries.len() + 1;
+
+        let offsets_base = 1 + 2 * n_entries;
+
+        let mut words: Vec<u32> = Vec::with_capacity(offsets_base);
+        words.push(u32::try_from(n_entries).map_err(|_| {
+            CodegenError::LlvmError("rc type table: too many reference types".to_string())
+        })?);
+
+        // count 0 means it is never dereferenced, so any in-range offset_idx works
+        words.push(0);
+        words.push(u32::try_from(offsets_base).map_err(|_| {
+            CodegenError::LlvmError("rc type table: offsets region too large".to_string())
+        })?);
+
+        // real ids must be dense and 1-based, which collect_rc_types guarantees
+        let mut running: u32 = 0;
+        for (i, entry) in table.entries.iter().enumerate() {
+            if entry.type_id as usize != i + 1 {
+                return Err(CodegenError::LlvmError(format!(
+                    "rc type table: entry {i} has non-dense type_id {}",
+                    entry.type_id
+                )));
+            }
+            let count = u32::try_from(entry.pointer_offsets.len()).map_err(|_| {
+                CodegenError::LlvmError("rc type table: too many pointer fields".to_string())
+            })?;
+            let offset_idx = u32::try_from(offsets_base + running as usize).map_err(|_| {
+                CodegenError::LlvmError("rc type table: offsets region too large".to_string())
+            })?;
+            words.push(count);
+            words.push(offset_idx);
+            running += count;
+        }
+
+        for entry in &table.entries {
+            for &off in &entry.pointer_offsets {
+                words.push(off);
+            }
+        }
+
+        let i32_ty = self.context.i32_type();
+        let vals: Vec<_> = words
+            .iter()
+            .map(|w| i32_ty.const_int(*w as u64, false))
+            .collect();
+        let array_ty = i32_ty.array_type(words.len() as u32);
+        let global_value = self.module.add_global(array_ty, None, SYMBOL);
+        global_value.set_linkage(Linkage::External);
+        global_value.set_constant(true);
+        global_value.set_initializer(&i32_ty.const_array(&vals));
+        Ok(())
+    }
+
     fn global_initializer(
         &self,
         global: &AirGlobal,

@@ -14,9 +14,6 @@ impl ConstantFolder {
 
         match (&operand_val.kind, op) {
             (TypedExprKind::Int(n), UnaryOp::Neg) => {
-                if !super::super::is_in_vm_range(*n) {
-                    return None;
-                }
                 let result = n.wrapping_neg();
                 let result_ty = if original.ty.is_integer() {
                     original.ty.clone()
@@ -24,9 +21,6 @@ impl ConstantFolder {
                     operand_val.ty.clone()
                 };
                 let result = super::super::truncate_to_type(result, &result_ty);
-                if !super::super::is_in_vm_range(result) {
-                    return None;
-                }
                 self.stats.constants_folded += 1;
                 Some(TypedExpr::new(
                     TypedExprKind::Int(result),
@@ -51,9 +45,6 @@ impl ConstantFolder {
                 ))
             }
             (TypedExprKind::Int(n), UnaryOp::BitNot) => {
-                if !super::super::is_in_vm_range(*n) {
-                    return None;
-                }
                 let result_ty = if original.ty.is_integer() {
                     original.ty.clone()
                 } else {

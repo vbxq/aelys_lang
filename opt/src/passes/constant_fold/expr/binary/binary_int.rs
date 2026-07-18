@@ -10,11 +10,6 @@ impl ConstantFolder {
         b: i64,
         original: &TypedExpr,
     ) -> Option<TypedExpr> {
-        use super::super::super::is_in_vm_range;
-        if !is_in_vm_range(a) || !is_in_vm_range(b) {
-            return None;
-        }
-
         // helper to emit a bool result
         let bool_result = |this: &mut Self, v: bool| {
             this.stats.constants_folded += 1;
@@ -73,9 +68,6 @@ impl ConstantFolder {
                 }
                 let result = a.wrapping_shl(b as u32);
                 let result = super::super::super::truncate_to_type(result, &result_ty);
-                if !is_in_vm_range(result) {
-                    return None;
-                }
                 return int_result(self, result);
             }
             BinaryOp::Shr => {
@@ -104,9 +96,6 @@ impl ConstantFolder {
         // Truncate to the actual target type so that narrower-type wrapping is
         // correctly modelled. e.g. 100_i8 + 100_i8 folds to -56, not 200.
         let result = super::super::super::truncate_to_type(result, &result_ty);
-        if !is_in_vm_range(result) {
-            return None;
-        }
         int_result(self, result)
     }
 }

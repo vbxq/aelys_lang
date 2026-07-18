@@ -258,6 +258,8 @@ impl FunctionInliner {
             BlockReason::MutualRecursion(cycle) => WarningKind::InlineMutualRecursion { cycle },
             BlockReason::HasCaptures => WarningKind::InlineHasCaptures,
             BlockReason::HasTypeParams => WarningKind::InlineHasCaptures, // reuse warning kind for now
+            // reusing the captures warning kind, there is no dedicated variant yet
+            BlockReason::VecParam => WarningKind::InlineHasCaptures,
         };
 
         let has_always = func.decorators.iter().any(|d| d.name == "inline_always");

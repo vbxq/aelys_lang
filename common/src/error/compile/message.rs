@@ -1,5 +1,3 @@
-// TODO: clean up the legacy VM error codes
-
 use super::CompileErrorKind;
 
 impl CompileErrorKind {
@@ -70,14 +68,6 @@ impl CompileErrorKind {
             Self::BreakOutsideLoop => "'break' outside of loop".to_string(),
             Self::ContinueOutsideLoop => "'continue' outside of loop".to_string(),
             Self::ReturnOutsideFunction => "'return' outside of function".to_string(),
-            Self::IntegerOverflow { value, min, max } => format!(
-                "integer literal `{}` exceeds range ({} to {})",
-                value, min, max
-            ),
-            Self::TooManyConstants => "too many constants in function".to_string(),
-            Self::TooManyRegisters => "too many local variables in function".to_string(),
-            Self::TooManyArguments => "too many arguments in function call".to_string(),
-            Self::TooManyUpvalues => "too many captured variables (max 255)".to_string(),
             Self::ModuleNotFound { module_path, .. } => {
                 format!("module not found: '{}'", module_path,)
             }
@@ -95,31 +85,6 @@ impl CompileErrorKind {
             }
             Self::SymbolNotFound { symbol, module } => {
                 format!("symbol '{}' not found in module '{}'", symbol, module)
-            }
-            Self::InvalidNativeModule { module, reason } => {
-                format!("invalid native module '{}': {}", module, reason)
-            }
-            Self::NativeCapabilityDenied {
-                module, capability, ..
-            } => {
-                format!(
-                    "native module '{}' requires capability '{}' which is not allowed",
-                    module, capability
-                )
-            }
-            Self::NativeChecksumMismatch { module, .. } => {
-                format!("native module '{}' checksum mismatch", module)
-            }
-            Self::NativeVersionMismatch {
-                module,
-                required,
-                found,
-            } => {
-                let found_str = found.as_deref().unwrap_or("(none)");
-                format!(
-                    "native module '{}' version constraint not satisfied (required: {}, found: {})",
-                    module, required, found_str
-                )
             }
             Self::SymbolConflict { symbol, modules } => {
                 format!(

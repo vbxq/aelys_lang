@@ -19,6 +19,7 @@ pub(crate) fn type_to_string(ty: &AirType) -> String {
         AirType::Enum(name) => format!("enum_{}", name),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
+        AirType::Vec(inner) => format!("vec_{}", type_to_string(inner)),
         // was using _ as separator everywhere, so fn(i32, f64)->bool and
         // fn(i32)->f64 with a bool from somewhere else both gave "fnptr_i32_f64_bool"
         AirType::FnPtr { params, ret, conv } => {
@@ -76,6 +77,7 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
         AirType::Ptr(inner) => substitute_type(inner, type_params, type_args),
         AirType::Array(inner, _) => substitute_type(inner, type_params, type_args),
         AirType::Slice(inner) => substitute_type(inner, type_params, type_args),
+        AirType::Vec(inner) => substitute_type(inner, type_params, type_args),
         AirType::FnPtr { params, ret, .. } => {
             for p in params {
                 substitute_type(p, type_params, type_args);
@@ -107,7 +109,9 @@ fn substitute_stmt(stmt: &mut AirStmt, type_params: &[TypeParamId], type_args: &
         AirStmtKind::Assign { rvalue, .. } => {
             substitute_rvalue(rvalue, type_params, type_args);
         }
-        AirStmtKind::GcAlloc { ty, .. } | AirStmtKind::Alloc { ty, .. } => {
+        AirStmtKind::GcAlloc { ty, .. }
+        | AirStmtKind::Alloc { ty, .. }
+        | AirStmtKind::RcAlloc { ty, .. } => {
             substitute_type(ty, type_params, type_args);
         }
         _ => {}
@@ -196,7 +200,7 @@ pub(super) fn operand_type_from(
             .or_else(|| locals.iter().find(|l| l.id == *id).map(|l| l.ty.clone()))
             .unwrap_or_else(|| {
                 panic!(
-                    "mono: operand_type_from: local %{} not found in params or locals",
+                    "invariant: mono operand_type_from: local %{} not found in params or locals",
                     id.0
                 )
             }),

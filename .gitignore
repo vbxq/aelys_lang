@@ -18,3 +18,4 @@ audit_tmp/**
 .vs/**
 .idea/**
 tests_e2e/**
+docs/sh1/**

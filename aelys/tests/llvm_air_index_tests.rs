@@ -116,6 +116,7 @@ fn array_index_read_generates_gep_and_bounds_check() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -209,6 +210,7 @@ fn string_index_read_calls_runtime_char_at() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -308,6 +310,7 @@ fn array_index_write_generates_gep_and_store() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -402,6 +405,7 @@ fn bounds_check_structure_has_unreachable_after_panic() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

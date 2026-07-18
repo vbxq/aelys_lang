@@ -335,7 +335,12 @@ impl Parser {
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
-            TokenKind::Identifier(ref name) if name.eq_ignore_ascii_case("vec") => {
+            // only a `[` or a type-arg list makes `vec` the literal keyword; a `Vec::` path
+            // must fall through to the identifier path so `::` can build an EnumVariant
+            TokenKind::Identifier(ref name)
+                if name.eq_ignore_ascii_case("vec")
+                    && (self.check(&TokenKind::LBracket) || self.check(&TokenKind::Lt)) =>
+            {
                 let name = name.clone();
                 return self.vec_literal(name, span);
             }

@@ -1,7 +1,7 @@
 // LLVM native compiler
 
 use aelys_common::{ColorConfig, WarningConfig, format_warnings, render_summary};
-use aelys_driver::{compile_file_with_llvm_with_warnings, lower_file_to_air};
+use aelys_driver::{compile_file_with_llvm_with_warnings, lower_file_to_air, RuntimeVariant};
 use aelys_opt::OptimizationLevel;
 use std::path::{Path, PathBuf};
 
@@ -9,6 +9,7 @@ pub fn run_with_options(
     path: &str,
     output: Option<String>,
     opt_level: OptimizationLevel,
+    runtime: RuntimeVariant,
     _warn_config: WarningConfig,
     emit_air: bool,
     emit_llvm_ir: bool,
@@ -22,7 +23,7 @@ pub fn run_with_options(
         return Err("--output is not supported yet".to_string());
     }
 
-    match compile_file_with_llvm_with_warnings(Path::new(path), opt_level, emit_llvm_ir) {
+    match compile_file_with_llvm_with_warnings(Path::new(path), opt_level, emit_llvm_ir, runtime) {
         Ok(warnings) => {
             let filtered: Vec<_> = warnings
                 .into_iter()

@@ -121,7 +121,7 @@ impl<'a> FunctionCodegen<'a> {
             Some(
                 function
                     .get_nth_param(0)
-                    .expect("sret function must have param 0")
+                    .expect("invariant: sret function must have param 0")
                     .into_pointer_value(),
             )
         } else {

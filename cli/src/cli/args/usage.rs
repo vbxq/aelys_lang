@@ -9,6 +9,7 @@ Flags:
   -h, --help                 Show help
   -v, --version              Show version
   -O<level> or -O <level>    Optimization level: 0,1,2,3, none, basic, standard, aggressive
+  --runtime <leak|rc|rc+cycles>  Runtime: rc (real refcount, default), leak (never frees), rc+cycles (rc + cycle collector)
   -o, --output <path>        Output path
   --emit-air                 Print AIR instead of compiling
   --emit-llvm-ir             Emit LLVM IR to <source>.ll

@@ -40,9 +40,9 @@ fn collect_write_counts(function: &AirFunction) -> HashMap<LocalId, u32> {
         for stmt in &block.stmts {
             match &stmt.kind {
                 AirStmtKind::Assign { place, .. } => bump_place_write(place, &mut counts),
-                AirStmtKind::GcAlloc { local, .. } | AirStmtKind::Alloc { local, .. } => {
-                    bump_local(*local, &mut counts)
-                }
+                AirStmtKind::GcAlloc { local, .. }
+                | AirStmtKind::Alloc { local, .. }
+                | AirStmtKind::RcAlloc { local, .. } => bump_local(*local, &mut counts),
                 _ => {}
             }
         }

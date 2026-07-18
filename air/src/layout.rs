@@ -19,6 +19,8 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::Str => TypeLayout { size: 16, align: 8 },
         AirType::Void => TypeLayout { size: 0, align: 1 },
         AirType::Slice(_) => TypeLayout { size: 16, align: 8 },
+        // Stage 4 Vec: 24-byte fat ptr {ptr, len, cap}, 8-aligned (design §2/§8 H2).
+        AirType::Vec(_) => TypeLayout { size: 24, align: 8 },
         AirType::Param(_) | AirType::Opaque => TypeLayout { size: 8, align: 8 },
         AirType::Array(inner, n) => {
             let el = layout_of(inner);
@@ -27,10 +29,10 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
                 align: el.align,
             }
         }
-        // Simple enum layout (tag only). Data enums use their registered LLVM struct
-        // type in codegen, so this is only used for simple enums without data variants.
+        // tag only: a data enum is sized from its registered llvm struct in codegen
         AirType::Enum(_) => TypeLayout { size: 4, align: 4 },
         AirType::Struct(name) => {
+            // no sound fallback exists here, so reaching this context-free path is a bug
             panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
         }
     }
@@ -166,6 +168,7 @@ fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
         | AirType::Str
         | AirType::Void
         | AirType::Slice(_)
+        | AirType::Vec(_)
         | AirType::Param(_)
         | AirType::Opaque => true,
     }
@@ -175,10 +178,10 @@ pub fn resolved_layout(ty: &AirType, sizes: &HashMap<String, TypeLayout>) -> Typ
     match ty {
         AirType::Struct(name) => *sizes
             .get(name.as_str())
-            .unwrap_or_else(|| panic!("struct `{name}` referenced before its layout is computed")),
+            .unwrap_or_else(|| {
+                panic!("invariant: struct `{name}` referenced before its layout is computed")
+            }),
         AirType::Enum(name) => {
-            // Look up pre-computed enum size. Falls back to tag-only (4 bytes)
-            // for simple enums that weren't added to the map.
             sizes
                 .get(name.as_str())
                 .copied()
@@ -218,7 +221,7 @@ fn struct_layout(
     (total, offsets)
 }
 
-fn align_to(offset: u32, align: u32) -> u32 {
+pub fn align_to(offset: u32, align: u32) -> u32 {
     (offset + align - 1) & !(align - 1)
 }
 

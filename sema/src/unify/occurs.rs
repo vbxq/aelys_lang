@@ -6,7 +6,9 @@ pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
         InferType::Function { params, ret } => {
             params.iter().any(|p| occurs_check(var, p)) || occurs_check(var, ret)
         }
-        InferType::Array(inner, _) | InferType::Vec(inner) => occurs_check(var, inner),
+        InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+            occurs_check(var, inner)
+        }
         InferType::Tuple(elems) => elems.iter().any(|e| occurs_check(var, e)),
         InferType::I8
         | InferType::I16

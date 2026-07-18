@@ -34,7 +34,22 @@ impl TypeInference {
                         let data = v
                             .fields
                             .iter()
-                            .map(|ann| self.type_from_annotation(ann))
+                            .map(|ann| {
+                                // an enum may carry an Rc payload directly, but not one
+                                // buried in an aggregate, which has no single offset
+                                let ty = self.type_from_annotation(ann);
+                                if Self::is_transparent_aggregate_of_rc(&ty) {
+                                    self.errors.push(
+                                        crate::constraint::TypeError::rc_out_of_surface(format!(
+                                            "variant `{}` of enum `{}` has a payload of type `{}`, \
+                                             a transparent aggregate embedding an `Rc<T>`; an Rc \
+                                             inside an array/vec/tuple payload is not supported yet",
+                                            v.name, name, ty
+                                        ), ann.span),
+                                    );
+                                }
+                                ty
+                            })
                             .collect();
                         EnumVariant {
                             name: v.name.clone(),

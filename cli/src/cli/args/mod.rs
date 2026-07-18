@@ -1,6 +1,7 @@
 mod parse;
 mod usage;
 
+use aelys_driver::RuntimeVariant;
 use aelys_opt::OptimizationLevel;
 
 pub use parse::parse_args;
@@ -32,6 +33,7 @@ pub enum Command {
 pub struct ParsedArgs {
     pub command: Command,
     pub opt_level: OptimizationLevel,
+    pub runtime: RuntimeVariant,
     pub warning_flags: Vec<String>,
     pub color: ColorChoice,
 }

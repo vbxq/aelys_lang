@@ -74,6 +74,7 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Str => Ok((16, 8)),
             AirType::Void => Ok((0, 1)),
             AirType::Slice(_) => Ok((16, 8)),
+            AirType::Vec(_) => Ok((24, 8)),
             AirType::Array(inner, n) => {
                 let (size, align) = self.type_size_align(inner)?;
                 Ok((size.saturating_mul(*n as u32), align))

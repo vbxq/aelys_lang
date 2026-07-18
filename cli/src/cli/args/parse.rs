@@ -1,6 +1,7 @@
 // hand-rolled recursive descent, clap felt overkill for this
 
 use super::{ColorChoice, Command, ParsedArgs};
+use aelys_driver::RuntimeVariant;
 use aelys_opt::OptimizationLevel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +23,7 @@ struct Parser<'a> {
     command: Option<CommandName>,
     path: Option<String>,
     opt_level: OptimizationLevel,
+    runtime: RuntimeVariant,
     output: Option<String>,
     emit_air: bool,
     emit_llvm_ir: bool,
@@ -39,6 +41,7 @@ impl<'a> Parser<'a> {
             command: None,
             path: None,
             opt_level: OptimizationLevel::Standard,
+            runtime: RuntimeVariant::default(),
             output: None,
             emit_air: false,
             emit_llvm_ir: false,
@@ -65,6 +68,15 @@ impl<'a> Parser<'a> {
 
             if let Some((level, consumed_next)) = self.parse_opt(token_str)? {
                 self.opt_level = level;
+                self.advance();
+                if consumed_next {
+                    self.advance();
+                }
+                continue;
+            }
+
+            if let Some((variant, consumed_next)) = self.parse_runtime(token_str)? {
+                self.runtime = variant;
                 self.advance();
                 if consumed_next {
                     self.advance();
@@ -203,6 +215,7 @@ impl<'a> Parser<'a> {
         Ok(ParsedArgs {
             command,
             opt_level: self.opt_level,
+            runtime: self.runtime,
             warning_flags: self.warning_flags,
             color: self.color,
         })
@@ -212,6 +225,7 @@ impl<'a> Parser<'a> {
         ParsedArgs {
             command: Command::Help,
             opt_level: OptimizationLevel::Standard,
+            runtime: RuntimeVariant::default(),
             warning_flags: Vec::new(),
             color: self.color,
         }
@@ -221,6 +235,7 @@ impl<'a> Parser<'a> {
         ParsedArgs {
             command: Command::Version,
             opt_level: OptimizationLevel::Standard,
+            runtime: RuntimeVariant::default(),
             warning_flags: Vec::new(),
             color: self.color,
         }
@@ -282,6 +297,25 @@ impl<'a> Parser<'a> {
             let level = OptimizationLevel::parse(rest)
                 .ok_or_else(|| format!("invalid optimization level: {}", rest))?;
             return Ok(Some((level, false)));
+        }
+        Ok(None)
+    }
+
+    fn parse_runtime(&self, token: &str) -> Result<Option<(RuntimeVariant, bool)>, String> {
+        if token == "--runtime" {
+            let next = self
+                .peek_next()
+                .ok_or_else(|| "--runtime requires a value (leak, rc, or rc+cycles)".to_string())?;
+            let variant = RuntimeVariant::parse(next).ok_or_else(|| {
+                format!("invalid runtime variant: {} (expected leak, rc, or rc+cycles)", next)
+            })?;
+            return Ok(Some((variant, true)));
+        }
+        if let Some(rest) = token.strip_prefix("--runtime=") {
+            let variant = RuntimeVariant::parse(rest).ok_or_else(|| {
+                format!("invalid runtime variant: {} (expected leak, rc, or rc+cycles)", rest)
+            })?;
+            return Ok(Some((variant, false)));
         }
         Ok(None)
     }

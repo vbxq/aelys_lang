@@ -82,6 +82,15 @@ impl TypeInference {
                 .unwrap_or(InferType::Dynamic);
             return InferType::Vec(Box::new(inner));
         }
+        // resolve the inner type enum-aware, from_annotation would call an enum a struct
+        if ann.name == "Rc" {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| self.type_from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Rc(Box::new(inner));
+        }
 
         let ty = InferType::from_annotation(ann);
         // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
@@ -153,6 +162,14 @@ impl TypeInference {
         }
 
         if KNOWN_TYPE_NAMES.contains(&name_lower.as_str()) {
+            if let Some(ref param) = ann.type_param {
+                self.check_type_annotation(param);
+            }
+            return;
+        }
+
+        // Rc is known but uppercase, so accept it before the unknown-type reject fires
+        if ann.name == "Rc" {
             if let Some(ref param) = ann.type_param {
                 self.check_type_annotation(param);
             }
@@ -235,6 +252,11 @@ impl TypeInference {
                     params: vec![InferType::Dynamic],
                     ret: Box::new(InferType::Null),
                 },
+                // the explicit collect builtin, a no-op unless the cycles runtime is linked
+                "__aelys_collect" => InferType::Function {
+                    params: vec![],
+                    ret: Box::new(InferType::Null),
+                },
                 _ => InferType::Dynamic,
             };
             inf.env.define_function_owned(global.clone(), ty);
@@ -243,6 +265,9 @@ impl TypeInference {
         inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
+        // a nominal holding a Vec by value would leak its buffer, since carrier-Vec
+        // retain/release does not exist yet
+        inf.reject_nominal_vec_carriers(&stmts);
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);

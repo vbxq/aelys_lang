@@ -65,7 +65,9 @@ fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
             collect_place_locals(place, out);
             collect_rvalue_locals(rvalue, out);
         }
-        AirStmtKind::GcAlloc { local, .. } | AirStmtKind::Alloc { local, .. } => {
+        AirStmtKind::GcAlloc { local, .. }
+        | AirStmtKind::Alloc { local, .. }
+        | AirStmtKind::RcAlloc { local, .. } => {
             out.insert(*local);
         }
         AirStmtKind::GcDrop(local) | AirStmtKind::Free(local) => {

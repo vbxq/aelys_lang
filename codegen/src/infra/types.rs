@@ -47,6 +47,19 @@ pub fn air_type_to_llvm<'ctx>(
                 .struct_type(&[ptr_ty?.into(), context.i64_type().into()], false)
                 .into())
         }
+        AirType::Vec(inner) => {
+            let ptr_ty = pointer_to_air_type(inner, context)?;
+            Ok(context
+                .struct_type(
+                    &[
+                        ptr_ty.into(),
+                        context.i64_type().into(),
+                        context.i64_type().into(),
+                    ],
+                    false,
+                )
+                .into())
+        }
         AirType::FnPtr {
             params,
             ret,

@@ -71,28 +71,6 @@ impl CompileError {
                 // TODO: clean up when std is done
                 diag.add_note("standard library will be available in a future version".to_string());
             }
-            CompileErrorKind::NativeCapabilityDenied {
-                capability,
-                required,
-                ..
-            } => {
-                // FIXME: legacy VM code, clean up
-                diag.add_note(format!("required capabilities: [{}]", required.join(", ")));
-                diag.add_help(format!(
-                    "use --allow-caps={} or -ae.trusted=true to allow",
-                    capability
-                ));
-            }
-            CompileErrorKind::NativeChecksumMismatch {
-                // FIXME: legacy VM code, clean up
-                expected,
-                actual,
-                ..
-            } => {
-                diag.add_note(format!("expected: {}", expected));
-                diag.add_note(format!("actual:   {}", actual));
-                diag.add_help("the module file may have been modified or corrupted".to_string());
-            }
             CompileErrorKind::SymbolConflict { .. } => {
                 diag.add_help("use 'as' alias to disambiguate".to_string());
             }

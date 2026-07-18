@@ -91,6 +91,26 @@ impl TypeInference {
         args: &[Expr],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        // a `::` path always parses as an EnumVariant, so the Rc and Vec builtins are
+        // intercepted here, before the enum lookup that would never find them
+        if enum_name == "Rc" && variant == "new" {
+            return self.infer_rc_new(args, span);
+        }
+        if enum_name == "Rc" && variant == "get" {
+            return self.infer_rc_get(args, span);
+        }
+        // null is the only way to build cyclic data, since Rc<Node> has no base case.
+        // nothing checks for null yet, so Rc::get(Rc::null()) derefs NULL
+        if enum_name == "Rc" && variant == "null" {
+            return self.infer_rc_null(args, span);
+        }
+        if enum_name == "Vec" && variant == "new" {
+            return self.infer_vec_new(args, span);
+        }
+        if enum_name == "Vec" && variant == "push" {
+            return self.infer_vec_push(args, span);
+        }
+
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
             Some(def) => {
@@ -139,6 +159,13 @@ impl TypeInference {
                     let mut typed_args = Vec::with_capacity(args.len());
                     for (i, arg_expr) in args.iter().enumerate() {
                         let mut typed_arg = self.infer_expr(arg_expr);
+
+                        self.reject_rc_out_of_carrier_surface(
+                            &typed_arg.ty,
+                            is_generic,
+                            arg_expr.span,
+                            &format!("payload {i} of enum variant `{enum_name}::{variant}`"),
+                        );
 
                         // Instantiate type params in the expected type if this is a generic enum
                         let expected_ty = if is_generic {
@@ -255,5 +282,226 @@ impl TypeInference {
                 (TypedExprKind::Null, InferType::Dynamic)
             }
         }
+    }
+
+    fn infer_rc_new(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::new expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            // still type the args, so downstream inference stays stable
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "new".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_arg = self.infer_expr(&args[0]);
+        let inner = typed_arg.ty.clone();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "new".to_string(),
+                tag: 0,
+                args: vec![typed_arg],
+            },
+            InferType::Rc(Box::new(inner)),
+        )
+    }
+
+    fn infer_rc_get(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::get expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "get".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_arg = self.infer_expr(&args[0]);
+        let result_ty = match &typed_arg.ty {
+            InferType::Rc(inner) => inner.as_ref().clone(),
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Rc(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "Rc::get expects an `Rc<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "get".to_string(),
+                tag: 0,
+                args: vec![typed_arg],
+            },
+            result_ty,
+        )
+    }
+
+    // the inner type is a fresh var so the destination field's Rc<inner> unifies it
+    fn infer_rc_null(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if !args.is_empty() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Rc::null expects 0 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Rc".to_string(),
+                    variant: "null".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+        let inner = self.type_gen.fresh();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "null".to_string(),
+                tag: 0,
+                args: vec![],
+            },
+            InferType::Rc(Box::new(inner)),
+        )
+    }
+
+    // the element type is a fresh var, unified later with the annotation or first use
+    fn infer_vec_new(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if !args.is_empty() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::new expects 0 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "new".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+        let elem = self.type_gen.fresh();
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "new".to_string(),
+                tag: 0,
+                args: vec![],
+            },
+            InferType::Vec(Box::new(elem)),
+        )
+    }
+
+    fn infer_vec_push(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 2 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::push expects exactly 2 arguments, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "push".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Null,
+            );
+        }
+        let typed_vec = self.infer_expr(&args[0]);
+        let typed_elem = self.infer_expr(&args[1]);
+
+        match &typed_vec.ty {
+            InferType::Vec(inner) => {
+                self.constraints.push(Constraint::equal(
+                    typed_elem.ty.clone(),
+                    (**inner).clone(),
+                    args[1].span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            InferType::Var(_) | InferType::Dynamic => {
+                // stay permissive here, a non-Vec target is caught by validation
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(typed_elem.ty.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::push expects a `Vec<T>` first argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+            }
+        }
+
+        // an element carrying an Rc would be memcpy'd by the copy-on-write path without a
+        // retain, so it must be refused; contains_rc_nominal resolves through the type
+        // table, unlike contains_rc which misses a struct holding an Rc field
+        if self.type_table.contains_rc_nominal(&typed_elem.ty) {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "element pushed to a Vec has type `{}` which embeds an `Rc<T>`; \
+                     storing an Rc (directly or inside a struct/enum) in a Vec is not supported yet",
+                    typed_elem.ty
+                ),
+                args[1].span,
+            ));
+        }
+
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "push".to_string(),
+                tag: 0,
+                args: vec![typed_vec, typed_elem],
+            },
+            InferType::Null,
+        )
     }
 }

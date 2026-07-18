@@ -1,9 +1,0 @@
-fn main() -> i64 {
-    let s = "hello"
-    let t = "world"
-    let u = s + " " + t
-    if u == "hello world" {
-        return 1
-    }
-    return 0
-}

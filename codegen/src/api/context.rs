@@ -24,6 +24,7 @@ impl CodegenContext {
 
         // Set target triple and data layout immediately so ABI decisions
         // (for eg sret, struct sizes/alignments) are correct during codegen
+        // a working native llvm backend is required, so this is fatal by design
         Target::initialize_native(&InitializationConfig::default())
             .expect("LLVM native target initialization failed");
         let triple = TargetMachine::get_default_triple();
@@ -58,6 +59,7 @@ impl CodegenContext {
         self.declare_struct_types(program)?;
         self.declare_functions(program)?;
         self.declare_globals(program)?;
+        self.emit_rc_type_table(program)?;
         self.define_function_bodies(program)?;
         self.emit_entry_wrapper(program)?;
         self.module

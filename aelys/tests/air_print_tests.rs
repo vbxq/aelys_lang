@@ -10,6 +10,7 @@ fn empty_program() -> AirProgram {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     }
 }
 

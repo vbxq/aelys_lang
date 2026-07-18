@@ -95,6 +95,8 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Vec(inner1), InferType::Vec(inner2)) => unify(inner1, inner2, subst),
 
+        (InferType::Rc(inner1), InferType::Rc(inner2)) => unify(inner1, inner2, subst),
+
         (InferType::Range, InferType::Range) => Ok(()),
 
         (InferType::Tuple(elems1), InferType::Tuple(elems2)) => {

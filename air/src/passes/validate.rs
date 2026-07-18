@@ -162,9 +162,10 @@ impl fmt::Display for AirValidationError {
 fn contains_opaque(ty: &AirType) -> bool {
     match ty {
         AirType::Opaque => true,
-        AirType::Ptr(inner) | AirType::Array(inner, _) | AirType::Slice(inner) => {
-            contains_opaque(inner)
-        }
+        AirType::Ptr(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner)
+        | AirType::Vec(inner) => contains_opaque(inner),
         AirType::FnPtr { params, ret, .. } => {
             params.iter().any(contains_opaque) || contains_opaque(ret)
         }
@@ -179,7 +180,10 @@ fn collect_unknown_enum_names(ty: &AirType, known_enums: &HashSet<String>, missi
                 missing.push(name.clone());
             }
         }
-        AirType::Ptr(inner) | AirType::Array(inner, _) | AirType::Slice(inner) => {
+        AirType::Ptr(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner)
+        | AirType::Vec(inner) => {
             collect_unknown_enum_names(inner, known_enums, missing);
         }
         AirType::FnPtr { params, ret, .. } => {
@@ -420,7 +424,9 @@ fn check_stmt_locals(
             check_place_locals(place, declared, func_name, ctx, errors);
             check_rvalue_locals(rvalue, declared, known_enums, func_name, ctx, errors);
         }
-        AirStmtKind::GcAlloc { local, .. } | AirStmtKind::Alloc { local, .. } => {
+        AirStmtKind::GcAlloc { local, .. }
+        | AirStmtKind::Alloc { local, .. }
+        | AirStmtKind::RcAlloc { local, .. } => {
             check_local(*local, declared, func_name, ctx, errors);
         }
         AirStmtKind::GcDrop(local) | AirStmtKind::Free(local) => {

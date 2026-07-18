@@ -5,12 +5,36 @@ use crate::types::{InferType, ResolvedType};
 use aelys_syntax::{Expr, ExprKind, Span, TypeAnnotation};
 
 impl TypeInference {
+    fn reject_rc_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
+        for elem in elements {
+            // contains_rc is blind to a struct that holds an Rc, contains_rc_nominal
+            // resolves it through the type table. keep both, the blind one is cheap
+            if elem.ty.is_rc()
+                || elem.ty.contains_rc()
+                || self.type_table.contains_rc_nominal(&elem.ty)
+            {
+                self.errors.push(TypeError::rc_out_of_surface(
+                    format!(
+                        "element of {} is a value of type `{}` which embeds an `Rc<T>`; \
+                         storing an Rc inside an array/vec is not supported in Stage 1",
+                        kind, elem.ty
+                    ),
+                    elem.span,
+                ));
+            }
+        }
+    }
+
     pub(super) fn infer_array_literal(
         &mut self,
         elements: &[Expr],
         _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
+
+        // guard the element values, not just the let: `return [a, b]` builds the array
+        // inline and would release the Rc while the returned array still points at it
+        self.reject_rc_aggregate_elements(&typed_elements, "array literal");
 
         let elem_ty = if typed_elements.is_empty() {
             self.type_gen.fresh()
@@ -59,6 +83,22 @@ impl TypeInference {
 
         let typed_fill = fill_value.map(|fv| Box::new(self.infer_expr(fv)));
 
+        if let Some(ref fv) = typed_fill {
+            if fv.ty.is_rc()
+                || fv.ty.contains_rc()
+                || self.type_table.contains_rc_nominal(&fv.ty)
+            {
+                self.errors.push(TypeError::rc_out_of_surface(
+                    format!(
+                        "fill value of array `[_; N]` is a value of type `{}` which embeds an \
+                         `Rc<T>`; storing an Rc inside an array is not supported yet",
+                        fv.ty
+                    ),
+                    fv.span,
+                ));
+            }
+        }
+
         let elem_ty = if let Some(ref fv) = typed_fill {
             fv.ty.clone()
         } else {
@@ -82,6 +122,8 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let mut typed_elements: Vec<TypedExpr> =
             elements.iter().map(|e| self.infer_expr(e)).collect();
+
+        self.reject_rc_aggregate_elements(&typed_elements, "vec literal");
 
         let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
             let ty = self.type_from_annotation(ann);

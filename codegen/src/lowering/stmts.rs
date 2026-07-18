@@ -1,7 +1,7 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::air_basic_type_to_llvm;
-use aelys_air::{AirStmtKind, AirType, Place};
+use aelys_air::{AirStmtKind, AirType, LocalId, Place};
 use inkwell::AddressSpace;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::PointerValue;
@@ -58,6 +58,7 @@ impl<'a> FunctionCodegen<'a> {
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.assign_local(*local, casted.into())
             }
+            AirStmtKind::RcAlloc { local, ty } => self.generate_rc_alloc(*local, ty),
             AirStmtKind::Free(local) => {
                 let free_fn = self.ensure_free_function();
                 let ptr_value = self.load_local(*local)?;
@@ -89,6 +90,81 @@ impl<'a> FunctionCodegen<'a> {
                 format!("memory fence ordering {ordering:?} is not implemented"),
             )),
         }
+    }
+
+    fn generate_rc_alloc(&mut self, local: LocalId, data_ty: &AirType) -> Result<(), CodegenError> {
+        // must match AELYS_RC_HEADER_SIZE in core/src/aelys_rc.h
+        const RC_HEADER_SIZE: u64 = 16;
+
+        let alloc_fn = self.ensure_alloc_function();
+        let data_size = self.air_type_size(data_ty)? as u64;
+        let total = RC_HEADER_SIZE + data_size;
+        let size_value = self.context.i64_type().const_int(total, false);
+        let call = self
+            .builder
+            .build_call(alloc_fn, &[size_value.into()], "rc_alloc_raw")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let base_ptr = call
+            .try_as_basic_value()
+            .basic()
+            .ok_or_else(|| CodegenError::LlvmError("__aelys_alloc returned void".to_string()))?
+            .into_pointer_value();
+
+        let i8_ty = self.context.i8_type();
+        let i32_ty = self.context.i32_type();
+        let store_at = |this: &Self,
+                        byte_off: u64,
+                        value: inkwell::values::IntValue<'static>|
+         -> Result<(), CodegenError> {
+            let field_ptr = if byte_off == 0 {
+                base_ptr
+            } else {
+                let idx = this.context.i64_type().const_int(byte_off, false);
+                unsafe {
+                    this.builder
+                        .build_in_bounds_gep(i8_ty, base_ptr, &[idx], "rc_hdr_ptr")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                }
+            };
+            this.builder
+                .build_store(field_ptr, value)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            Ok(())
+        };
+        store_at(self, 0, i32_ty.const_int(1, false))?;
+        store_at(self, 4, i8_ty.const_int(0, false))?;
+        // collect_rc_types sees every RcAlloc, so a miss here is a compiler bug
+        let type_id = self.program.rc_type_table.lookup_id(data_ty).ok_or_else(|| {
+            CodegenError::LlvmError(format!(
+                "rc_alloc: type {data_ty:?} has no entry in the RC pointer-map table \
+                 (collect_rc_types must run before codegen)"
+            ))
+        })?;
+        store_at(self, 8, i32_ty.const_int(type_id as u64, false))?;
+
+        let off16 = self.context.i64_type().const_int(RC_HEADER_SIZE, false);
+        let data_ptr = unsafe {
+            self.builder
+                .build_in_bounds_gep(i8_ty, base_ptr, &[off16], "rc_data_ptr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+        };
+
+        let local_ty = self.local_air_type(local)?.clone();
+        let target_ty = air_basic_type_to_llvm(&local_ty, self.context)?;
+        let target_ptr_ty = match target_ty {
+            BasicTypeEnum::PointerType(ptr) => ptr,
+            _ => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "rc_alloc destination local {} is not a pointer type",
+                    local.0
+                )));
+            }
+        };
+        let casted = self
+            .builder
+            .build_pointer_cast(data_ptr, target_ptr_ty, "rc_data_cast")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.assign_local(local, casted.into())
     }
 
     fn place_ptr(&mut self, place: &Place) -> Result<PointerValue<'static>, CodegenError> {
@@ -145,7 +221,8 @@ impl<'a> FunctionCodegen<'a> {
                                 .map_err(|e| CodegenError::LlvmError(e.to_string()))
                         }
                     }
-                    AirType::Slice(ref inner) => {
+                    // a Vec indexes through fields 0 and 1 exactly like a Slice
+                    AirType::Slice(ref inner) | AirType::Vec(ref inner) => {
                         let slice_val = self.load_local(*local)?.into_struct_value();
                         let data_ptr = self
                             .builder
@@ -206,7 +283,9 @@ impl<'a> FunctionCodegen<'a> {
                 ))),
             },
             Place::Index(local, _) => match self.local_air_type(*local)? {
-                AirType::Array(inner, _) | AirType::Slice(inner) => Ok((**inner).clone()),
+                AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
+                    Ok((**inner).clone())
+                }
                 other => Err(CodegenError::UnsupportedType(format!(
                     "cannot index into {:?}",
                     other

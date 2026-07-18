@@ -784,6 +784,7 @@ fn make_valid_program() -> AirProgram {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     }
 }
 
@@ -860,6 +861,7 @@ fn validate_accepts_void_return_local_on_void_function() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1048,6 +1050,7 @@ fn validate_rejects_undeclared_block_reference() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1105,6 +1108,7 @@ fn validate_rejects_undeclared_local_reference() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1226,6 +1230,7 @@ fn validate_collects_multiple_errors() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1273,6 +1278,7 @@ fn validate_skips_extern_functions() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1385,6 +1391,7 @@ fn validate_rejects_opaque_struct_field() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1515,6 +1522,7 @@ fn validate_rejects_opaque_from_tuple_or_range() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let result = validate_air(&program);
@@ -1708,6 +1716,7 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let errors = match monomorphize(program) {
@@ -1874,6 +1883,7 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
         source_files: vec![],
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
     let air = monomorphize(program).unwrap();

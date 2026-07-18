@@ -91,7 +91,8 @@ impl<'a> FunctionCodegen<'a> {
                 let elem_ty = air_basic_type_to_llvm(inner, self.context)?;
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
-            AirType::Slice(ref inner) => {
+            // a Vec indexes through fields 0 and 1 exactly like a Slice
+            AirType::Slice(ref inner) | AirType::Vec(ref inner) => {
                 let slice_val = self.generate_operand(base)?.into_struct_value();
                 let data_ptr = self
                     .builder
@@ -145,7 +146,7 @@ impl<'a> FunctionCodegen<'a> {
             // Simple enum or unit variant of a data enum: still need to produce
             // the right type. For data enums, we must produce a { i32, [N x i8] } value.
             if is_data_enum {
-                let def = enum_def.unwrap();
+                let def = enum_def.expect("invariant: is_data_enum implies the enum def exists");
                 let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
                 let enum_struct_name = format!("__aelys_enum_{}", enum_name);
                 let enum_ty = self
@@ -190,7 +191,7 @@ impl<'a> FunctionCodegen<'a> {
             }
         } else {
             // Data variant construction: build { i32 tag, [N x i8] payload }
-            let def = enum_def.unwrap();
+            let def = enum_def.expect("invariant: is_data_enum implies the enum def exists");
             let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
             let enum_ty = self

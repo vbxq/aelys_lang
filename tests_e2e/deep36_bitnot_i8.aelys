@@ -1,9 +1,0 @@
-fn main() -> i64 {
-    let x: i8 = 0
-    let y: i8 = ~x
-    // ~0_i8 = -1 (all bits set), so y == -1 < 0
-    if y < 0 {
-        return 1
-    }
-    return 0
-}

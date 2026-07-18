@@ -48,23 +48,34 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) current_params: Vec<AirParam>,
     pub(super) current_stmts: Vec<AirStmt>,
     pub(super) locals_by_name: Vec<(String, LocalId)>,
+    // these three registries are all fed from the sema type, never the AIR type, which
+    // erases an Rc into a plain Ptr indistinguishable from a closure env or a null
+    pub(super) rc_locals: Vec<(LocalId, usize)>,
+    // never fed from lower_params: releasing a borrowed carrier param callee-side would
+    // hand the caller a use-after-free
+    pub(super) carrier_locals: Vec<CarrierLocal>,
+    pub(super) cow_locals: Vec<(LocalId, usize)>,
     pub(super) loop_stack: Vec<LoopBlocks>,
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
     pub(super) block_aliases: Vec<(u32, u32)>,
-    /// When inside a closure body, the local holding the env pointer (__env param).
-    /// Used to write back mutations to captured variables.
     pub(super) closure_env_param: Option<LocalId>,
-    /// Names of variables captured from the enclosing scope (keys of the env struct).
     pub(super) closure_captures: std::collections::HashSet<String>,
-    /// collected compile errors from lowering
-    /// if non-empty after lowering completes, `finish()` returns them to the caller
     pub(super) lowering_errors: Vec<String>,
+}
+
+pub(super) struct CarrierLocal {
+    pub(super) local: LocalId,
+    pub(super) ty: AirType,
+    pub(super) paths: Vec<crate::rc_paths::RcLeafPath>,
+    pub(super) depth: usize,
 }
 
 pub(super) struct LoopBlocks {
     pub(super) header: BlockId,
     pub(super) exit: BlockId,
+    // captured at loop entry, to catch an Rc born in the body that a break would abandon
+    pub(super) body_scope_depth: usize,
 }
 
 impl<'a> LoweringContext<'a> {
@@ -85,6 +96,9 @@ impl<'a> LoweringContext<'a> {
             current_params: Vec::new(),
             current_stmts: Vec::new(),
             locals_by_name: Vec::new(),
+            rc_locals: Vec::new(),
+            carrier_locals: Vec::new(),
+            cow_locals: Vec::new(),
             loop_stack: Vec::new(),
             type_params_map: Vec::new(),
             pending_block_id: None,
@@ -107,6 +121,7 @@ impl<'a> LoweringContext<'a> {
             source_files: self.source_files,
             mono_instances: Vec::new(),
             struct_sizes: std::collections::HashMap::new(),
+            rc_type_table: crate::rc_types::RcTypeTable::default(),
         })
     }
 
@@ -140,8 +155,8 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-    // alloc_temp creates immutable locals ->> codegen uses a flat value_map that doesn't respect SSA dominance
-    // anything written from 2+ blocks needs an alloca.
+    // codegen keeps a flat value map that ignores SSA dominance, so anything written from
+    // two or more blocks needs a real alloca, which is what mut gives it
     pub(super) fn alloc_temp_mut(&mut self, ty: AirType) -> LocalId {
         let id = self.alloc_local_id();
         self.current_locals.push(AirLocal {
@@ -206,7 +221,6 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// Alloc a temp, emit an Assign of rvalue into it, return Copy(tmp).
     pub(super) fn emit_rvalue_to_temp(
         &mut self,
         ty: AirType,
@@ -224,7 +238,6 @@ impl<'a> LoweringContext<'a> {
         Operand::Copy(tmp)
     }
 
-    /// Extract a LocalId from an Operand, materializing a const to a temp if needed.
     pub(super) fn operand_to_local(&mut self, op: Operand, ty: &AirType) -> LocalId {
         match op {
             Operand::Copy(id) | Operand::Move(id) => id,
@@ -242,8 +255,13 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// Report a compile error and continue lowering with a fallback value.
-    /// All errors are returned together at the end via `finish()`.
+    pub(super) fn local_air_type(&self, id: LocalId) -> Option<AirType> {
+        self.current_locals
+            .iter()
+            .find(|l| l.id == id)
+            .map(|l| l.ty.clone())
+    }
+
     pub(super) fn report_error(&mut self, message: String) {
         self.lowering_errors.push(message);
     }
@@ -289,7 +307,11 @@ impl<'a> LoweringContext<'a> {
             InferType::Array(inner, None) => {
                 AirType::Slice(Box::new(self.lower_type_from_infer(inner)))
             }
-            InferType::Vec(inner) => AirType::Slice(Box::new(self.lower_type_from_infer(inner))),
+            // a Vec is its own 24-byte type, not the 16-byte array-view Slice
+            InferType::Vec(inner) => AirType::Vec(Box::new(self.lower_type_from_infer(inner))),
+            // an Rc erases to a plain data pointer, the refcount machinery lives in the
+            // lowering and the runtime, never in the type
+            InferType::Rc(inner) => AirType::Ptr(Box::new(self.lower_type_from_infer(inner))),
             // TODO: add support for InferType::Tuple in the backend
             InferType::Tuple(_) => {
                 #[cfg(debug_assertions)]
@@ -319,17 +341,13 @@ impl<'a> LoweringContext<'a> {
                 if type_args.is_empty() {
                     AirType::Enum(name.clone())
                 } else {
-                    // When sema preserves concrete type args (e.g., Enum("Option", [I64])),
-                    // pre-compute the mangled name so that the mono pass can use the local's
-                    // type to disambiguate unit variant assignments.
+                    // pre-mangle so the mono pass can disambiguate unit variant assignments
                     let lowered_args: Vec<AirType> = type_args
                         .iter()
                         .map(|a| self.lower_type_from_infer(a))
                         .collect();
-                    // Only pre-mangle if all type args are fully concrete.
-                    // Opaque/Void come from unresolved inference, and Param comes
-                    // from generic function bodies — both would produce nonsensical
-                    // mangled names that function monomorphization can't rewrite.
+                    // only when every arg is concrete: an unresolved or generic arg would
+                    // mangle to a name monomorphization cannot rewrite
                     let all_concrete = lowered_args
                         .iter()
                         .all(|t| !matches!(t, AirType::Opaque | AirType::Void | AirType::Param(_)));
@@ -345,8 +363,8 @@ impl<'a> LoweringContext<'a> {
                     }
                 }
             }
-            // A Var reaching lowering is always a compiler bug: finalize should have converted every Var to Dynamic before the AIR stage.
-            // Map to Opaque so the validation pass rejects it with a clear diagnostic.
+            // a Var reaching lowering is a compiler bug, finalize should have widened it;
+            // map it to Opaque so validation rejects it with a clear message
             InferType::Var(_id) => {
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -355,16 +373,13 @@ impl<'a> LoweringContext<'a> {
                 );
                 AirType::Opaque
             }
-            // Never (bottom type) represents unreachable code; map to Void.
             InferType::Never => AirType::Void,
-            // Dynamic = sema's "gradual typing" fallback. For generic call results, monomorphization patches the type before codegen.
-            // For anything else (error recovery, unresolved inference), Opaque survives past mono and the validation pass rejects it with a clear diagnostic
+            // mono patches this for generic call results; anything else stays Opaque and is
+            // rejected by validation
             InferType::Dynamic => AirType::Opaque,
         }
     }
 
-    /// Check that a stack array doesn't exceed the 1MB stack size threshold.
-    /// Reports a compile error if the array is too large (no longer panics)
     pub(super) fn check_stack_array_size(&mut self, elem_ty: &AirType, n: u64) {
         const MAX_STACK_BYTES: u64 = 1024 * 1024; // 1 MB
         let elem_size = self.stack_array_elem_size(elem_ty) as u64;
@@ -414,11 +429,12 @@ impl<'a> LoweringContext<'a> {
             source_files: vec![],
             mono_instances: vec![],
             struct_sizes: std::collections::HashMap::new(),
+            rc_type_table: crate::rc_types::RcTypeTable::default(),
         };
 
-        // `layout_of` is context-free and underestimates data enums as 4 bytes.
-        // Build a tiny AIR probe so mono + layout can recover the real aggregate size.
-        probe = crate::mono::monomorphize(probe).unwrap();
+        // layout_of is context-free and undersizes data enums to 4 bytes, so probe instead
+        probe = crate::mono::monomorphize(probe)
+            .expect("invariant: the compiler-built layout probe always monomorphizes");
         let _ = crate::layout::compute_layouts(&mut probe);
         crate::layout::resolved_layout(elem_ty, &probe.struct_sizes).size
     }

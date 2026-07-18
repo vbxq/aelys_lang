@@ -22,6 +22,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Enum(name) => format!("enum {}", name),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
         AirType::Slice(inner) => format!("[{}]", fmt_type(inner)),
+        AirType::Vec(inner) => format!("Vec<{}>", fmt_type(inner)),
         AirType::FnPtr { params, ret, .. } => {
             let ps: Vec<_> = params.iter().map(fmt_type).collect();
             format!("fn({}) -> {}", ps.join(", "), fmt_type(ret))
@@ -97,7 +98,7 @@ fn local_type(func: &AirFunction, id: LocalId) -> &AirType {
         .find(|p| p.id == id)
         .map(|p| &p.ty)
         .or_else(|| func.locals.iter().find(|l| l.id == id).map(|l| &l.ty))
-        .unwrap_or_else(|| panic!("unknown local %{}", id.0))
+        .unwrap_or_else(|| panic!("invariant: unknown local %{} in AIR pretty-printer", id.0))
 }
 
 fn fmt_operand(op: &Operand, func: &AirFunction) -> String {
@@ -189,7 +190,9 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             _ => AirType::Void,
         },
         Place::Index(id, _) => match local_type(func, *id) {
-            AirType::Array(inner, _) | AirType::Slice(inner) => (**inner).clone(),
+            AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
+                (**inner).clone()
+            }
             _ => AirType::Void,
         },
     }
@@ -321,6 +324,7 @@ fn fmt_stmt(stmt: &AirStmtKind, func: &AirFunction, program: &AirProgram) -> Str
         AirStmtKind::ArenaCreate(id) => format!("arena_create {}", id.0),
         AirStmtKind::ArenaDestroy(id) => format!("arena_destroy {}", id.0),
         AirStmtKind::Alloc { local, ty } => format!("alloc %{}: {}", local.0, fmt_type(ty)),
+        AirStmtKind::RcAlloc { local, ty } => format!("rc_alloc %{}: {}", local.0, fmt_type(ty)),
         AirStmtKind::Free(id) => format!("free %{}", id.0),
         AirStmtKind::CallVoid { func: callee, args } => format!(
             "call void {}({})",
@@ -412,7 +416,7 @@ fn struct_size_align(def: &AirStructDef, program: &AirProgram) -> (u32, u32) {
         for f in &def.fields {
             let (fs, fa) = type_layout_for_print(&f.ty, program);
             max_align = max_align.max(fa);
-            end = end.max(f.offset.unwrap() + fs);
+            end = end.max(f.offset.expect("invariant: field offset is Some in this branch") + fs);
         }
         ((end + max_align - 1) & !(max_align - 1), max_align)
     } else {
@@ -545,7 +549,7 @@ pub fn print_block(block: &AirBlock, program: &AirProgram) -> String {
         .functions
         .iter()
         .find(|f| f.blocks.iter().any(|b| std::ptr::eq(b, block)))
-        .expect("block not found in any function in the program");
+        .expect("invariant: block not found in any function in the program");
     let mut out = String::new();
     write_block(&mut out, block, func, program);
     out

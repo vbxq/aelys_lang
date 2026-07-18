@@ -30,6 +30,28 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_free", fn_ty, None)
     }
 
+    pub(crate) fn ensure_rc_retain_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_rc_retain") {
+            return function;
+        }
+        let fn_ty = self.context.void_type().fn_type(
+            &[self.context.ptr_type(AddressSpace::default()).into()],
+            false,
+        );
+        self.module.add_function("__aelys_rc_retain", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_rc_release_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_rc_release") {
+            return function;
+        }
+        let fn_ty = self.context.void_type().fn_type(
+            &[self.context.ptr_type(AddressSpace::default()).into()],
+            false,
+        );
+        self.module.add_function("__aelys_rc_release", fn_ty, None)
+    }
+
     pub(crate) fn ensure_write_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_write") {
             return function;
@@ -139,6 +161,12 @@ impl<'a> FunctionCodegen<'a> {
             .i64_type()
             .fn_type(&[ptr_ty, i64_ty, ptr_ty, i64_ty], false);
         self.module.add_function("__aelys_str_eq", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_str_concat_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn("__aelys_str_concat", &[ptr_ty, i64_ty, ptr_ty, i64_ty])
     }
 
     /// Emit a division-by-zero check: if `divisor == 0`, branch to a panic

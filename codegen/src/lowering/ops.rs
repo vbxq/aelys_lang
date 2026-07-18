@@ -362,8 +362,9 @@ impl<'a> FunctionCodegen<'a> {
                     .map(Into::into)
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))
             }
+            BinOp::Add => self.emit_str_concat(left.into(), right.into()),
             _ => Err(CodegenError::UnsupportedInstruction(
-                "unsupported string binary op (only == and != are supported)".to_string(),
+                "unsupported string binary op (only +, == and != are supported)".to_string(),
             )),
         }
     }
