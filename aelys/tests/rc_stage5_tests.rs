@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -345,7 +345,11 @@ fn main() -> i64 {
     return 0
 }
 "#;
-    let Some((code, stderr)) = run_with_env(src, RuntimeVariant::RcCycles, &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "immix")]) else {
+    let Some((code, stderr)) = run_with_env(
+        src,
+        RuntimeVariant::RcCycles,
+        &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "immix")],
+    ) else {
         return;
     };
     assert_eq!(code, 0, "cycle program exits 0; stderr:\n{stderr}");
@@ -366,7 +370,11 @@ fn main() -> i64 {
     return Rc::get(b)
 }
 "#;
-    let Some((code, stderr)) = run_with_env(src, RuntimeVariant::Rc, &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "immix")]) else {
+    let Some((code, stderr)) = run_with_env(
+        src,
+        RuntimeVariant::Rc,
+        &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "immix")],
+    ) else {
         return;
     };
     assert_eq!(code, 7, "shared Rc reads 7; stderr:\n{stderr}");
@@ -386,7 +394,11 @@ fn main() -> i64 {
     return Rc::get(b)
 }
 "#;
-    let Some((code, stderr)) = run_with_env(src, RuntimeVariant::Rc, &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "malloc")]) else {
+    let Some((code, stderr)) = run_with_env(
+        src,
+        RuntimeVariant::Rc,
+        &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "malloc")],
+    ) else {
         return;
     };
     assert_eq!(code, 7, "shared Rc reads 7 under malloc; stderr:\n{stderr}");
@@ -407,11 +419,24 @@ fn main() -> i64 {
     return a[0] + a[1] + a[2] + b[3]
 }
 "#;
-    let Some((code, stderr)) = run_with_env(src, RuntimeVariant::Rc, &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "malloc")]) else {
+    let Some((code, stderr)) = run_with_env(
+        src,
+        RuntimeVariant::Rc,
+        &[("AELYS_RC_STATS", "1"), ("AELYS_ALLOC", "malloc")],
+    ) else {
         return;
     };
-    assert_eq!(code, 15, "a=[1,2,3] (6) + b[3]=9 => 15 under malloc; stderr:\n{stderr}");
+    assert_eq!(
+        code, 15,
+        "a=[1,2,3] (6) + b[3]=9 => 15 under malloc; stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(allocs, frees, "balanced under malloc (no leak/double-free); stderr:\n{stderr}");
-    assert_eq!(allocs, 2, "shared push allocates the CoW copy (slow path); stderr:\n{stderr}");
+    assert_eq!(
+        allocs, frees,
+        "balanced under malloc (no leak/double-free); stderr:\n{stderr}"
+    );
+    assert_eq!(
+        allocs, 2,
+        "shared push allocates the CoW copy (slow path); stderr:\n{stderr}"
+    );
 }

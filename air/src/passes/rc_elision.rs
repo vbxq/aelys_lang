@@ -1,4 +1,3 @@
-
 use crate::analysis::{escape, liveness};
 use crate::{
     AirFunction, AirProgram, AirStmtKind, BlockId, Callee, LocalId, Operand, Place, Rvalue,
@@ -173,9 +172,11 @@ fn collect_write_counts(function: &AirFunction) -> HashMap<LocalId, u32> {
         for stmt in &block.stmts {
             match &stmt.kind {
                 AirStmtKind::Assign { place, .. } => match place {
-                    Place::Local(l) | Place::Field(l, _) | Place::Index(l, _) => bump(*l, &mut counts),
-// neither writes a local of this function; the pointee/global is protected
-// by the address-taken escape test instead
+                    Place::Local(l) | Place::Field(l, _) | Place::Index(l, _) => {
+                        bump(*l, &mut counts)
+                    }
+                    // neither writes a local of this function; the pointee/global is protected
+                    // by the address-taken escape test instead
                     Place::Deref(_) | Place::Global(_) => {}
                 },
                 AirStmtKind::GcAlloc { local, .. }
@@ -202,4 +203,3 @@ fn local_is_mut(function: &AirFunction, local: LocalId) -> bool {
         .map(|l| l.is_mut)
         .unwrap_or(false)
 }
-

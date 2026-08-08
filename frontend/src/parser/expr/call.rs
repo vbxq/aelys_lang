@@ -192,7 +192,7 @@ impl Parser {
                         span,
                     );
                 } else if let ExprKind::Deref(ref target) = expr.kind {
-// unconsumed and deleted the statement, silently
+                    // unconsumed and deleted the statement, silently
                     let binary = Expr::new(
                         ExprKind::Binary {
                             left: Box::new(expr.clone()),
@@ -323,4 +323,3 @@ impl Parser {
         Ok(first)
     }
 }
-

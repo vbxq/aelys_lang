@@ -143,10 +143,7 @@ impl Parser {
         };
 
         let end_span = self.previous().span;
-        let stmt = Stmt::new(
-            StmtKind::Return(value),
-            ret_span.merge(end_span),
-        );
+        let stmt = Stmt::new(StmtKind::Return(value), ret_span.merge(end_span));
         Ok(Expr::new(
             ExprKind::Block {
                 stmts: vec![stmt],
@@ -774,4 +771,3 @@ fn remap_stmt_spans(stmt: &mut Stmt, span: aelys_syntax::Span) {
         _ => {}
     }
 }
-

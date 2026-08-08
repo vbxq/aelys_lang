@@ -359,8 +359,8 @@ fn main() -> i64 { return f() }
 ",
     ),
     (
-// this source once exploited the nested-shadow miscompile to route the
-// nogc call at `f` into the nested vec body . that shadow is now rejected e0418 in
+        // this source once exploited the nested-shadow miscompile to route the
+        // nogc call at `f` into the nested vec body . that shadow is now rejected e0418 in
         "reject_e0418_nested_fn_shadows_global",
         "E0418",
         "fn dup() -> i64 { return 0 }
@@ -376,7 +376,7 @@ nogc fn f() -> i64 { return dup() }
 fn main() -> i64 { return f() + holder() }
 ",
     ),
-// appear at -o0 and vanish at -o2. these pin every enforcement point across all four levels.
+    // appear at -o0 and vanish at -o2. these pin every enforcement point across all four levels.
     (
         "reject_e0412_vec_producing_form_grouping",
         "E0412",
@@ -419,7 +419,7 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
 ",
     ),
     (
-// invariant. a live dangerous construct must reject at every level, and this fixture pins that.
+        // invariant. a live dangerous construct must reject at every level, and this fixture pins that.
         "reject_e0412_generic_enum_with_vec_payload",
         "E0412",
         "enum Opt<T> { Some(T), Nil }
@@ -536,9 +536,10 @@ fn accept_fixtures_stay_accepted_at_every_opt_level() {
         let path = write_fixture(dir.path(), name, source);
         match invariant_verdict(&path) {
             Err(breakdown) => failures.push(format!("  {name}: {breakdown}")),
-            Ok(set) if !set.is_empty() => {
-                failures.push(format!("  {name}: rejected at every level with {}", render(&set)))
-            }
+            Ok(set) if !set.is_empty() => failures.push(format!(
+                "  {name}: rejected at every level with {}",
+                render(&set)
+            )),
             Ok(_) => {}
         }
     }
@@ -563,7 +564,12 @@ fn collect_aelys(dir: &Path, out: &mut Vec<PathBuf>) {
 fn the_aelys_corpus_reports_the_same_code_set_at_every_opt_level() {
     let root = workspace_root();
     let mut files = Vec::new();
-    for dir in ["tests_e2e", "torture", "examples", "aelys/tests/exploration"] {
+    for dir in [
+        "tests_e2e",
+        "torture",
+        "examples",
+        "aelys/tests/exploration",
+    ] {
         collect_aelys(&root.join(dir), &mut files);
     }
     files.sort();
@@ -582,4 +588,3 @@ fn the_aelys_corpus_reports_the_same_code_set_at_every_opt_level() {
     }
     report(failures, "corpus file", files.len());
 }
-

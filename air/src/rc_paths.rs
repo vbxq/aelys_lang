@@ -32,7 +32,14 @@ enum ScanReject {
 pub fn rc_field_paths(ty: &AirType, structs: &[AirStructDef], enums: &[AirEnumDef]) -> RcScan {
     let mut paths = Vec::new();
     let mut visited = HashSet::new();
-    match scan(ty, structs, enums, &mut Vec::new(), &mut paths, &mut visited) {
+    match scan(
+        ty,
+        structs,
+        enums,
+        &mut Vec::new(),
+        &mut paths,
+        &mut visited,
+    ) {
         Ok(()) => {
             if paths.is_empty() {
                 RcScan::None

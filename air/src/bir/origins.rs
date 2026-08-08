@@ -8,7 +8,7 @@ use super::*;
 // per parameter index (< arg_count): true iff the returned reference may borrow that parameter,
 pub struct ReturnOrigins {
     pub params: Vec<bool>,
-// (floor): the body is rejected, so its call sites over-approximate rather than trust params
+    // (floor): the body is rejected, so its call sites over-approximate rather than trust params
     pub escapes_local: bool,
 }
 
@@ -41,7 +41,7 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
     let mut params = vec![false; arg_count];
     let mut escapes_local = false;
 
-// gate on the declared return type: a non-reference return borrows nothing, so even a
+    // gate on the declared return type: a non-reference return borrows nothing, so even a
     if !is_ref_ty(&body.return_type) {
         return ReturnOrigins {
             params,
@@ -63,9 +63,14 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
             None => HashSet::new(),
         };
         if origin_set.is_empty() {
-// has no call edges) cannot be proven loan-free, so reject conservatively (the floor)
+            // has no call edges) cannot be proven loan-free, so reject conservatively (the floor)
             escapes_local = true;
-            errors.push(BirDiagnostic::new("E0723", "[escape]", ret_span, floor_message()));
+            errors.push(BirDiagnostic::new(
+                "E0723",
+                "[escape]",
+                ret_span,
+                floor_message(),
+            ));
             continue;
         }
         for origin in &origin_set {
@@ -73,21 +78,29 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
                 Origin::Param(i) => params[*i] = true,
                 Origin::Loan(id) => {
                     let root = loans[*id as usize].place.local;
-// the guard mirrors its twin below: a by-value parameter is storage the
-// callee owns and destroys on return, so a reference into it dangles just
+                    // the guard mirrors its twin below: a by-value parameter is storage the
+                    // callee owns and destroys on return, so a reference into it dangles just
                     if (root.0 as usize) < arg_count && is_ref_ty(&body.locals[root.0 as usize].ty)
                     {
                         params[root.0 as usize] = true;
                     } else {
-// the returned reference borrows a local that dies on return: d1
+                        // the returned reference borrows a local that dies on return: d1
                         escapes_local = true;
                         let decl = body.locals[root.0 as usize].decl_span;
                         errors.push(
-                            BirDiagnostic::new("E0721", "[escape]", ret_span, d1_message(body, root))
-                                .with_secondary(
-                                    decl,
-                                    format!("`{}` declared here; destroyed on return", local_name(body, root)),
+                            BirDiagnostic::new(
+                                "E0721",
+                                "[escape]",
+                                ret_span,
+                                d1_message(body, root),
+                            )
+                            .with_secondary(
+                                decl,
+                                format!(
+                                    "`{}` declared here; destroyed on return",
+                                    local_name(body, root)
                                 ),
+                            ),
                         );
                     }
                 }
@@ -185,4 +198,3 @@ fn d1_message(body: &BirBody, local: BirLocalId) -> String {
 fn floor_message() -> String {
     "[escape] cannot infer the origin of this returned reference".to_string()
 }
-

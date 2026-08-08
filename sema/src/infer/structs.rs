@@ -102,12 +102,15 @@ impl TypeInference {
                     .map(|f| {
                         let ty = self.type_from_annotation(&f.type_annotation);
                         if Self::is_transparent_aggregate_of_rc(&ty) {
-                            self.errors.push(TypeError::rc_out_of_surface(format!(
-                                "field `{}` of struct `{}` has type `{}`, a transparent \
+                            self.errors.push(TypeError::rc_out_of_surface(
+                                format!(
+                                    "field `{}` of struct `{}` has type `{}`, a transparent \
                                  aggregate embedding an `Rc<T>`; an Rc inside an \
                                  array/vec/tuple field is not supported",
-                                f.name, name, ty
-                            ), f.span));
+                                    f.name, name, ty
+                                ),
+                                f.span,
+                            ));
                         }
                         StructField {
                             name: f.name.clone(),
@@ -209,4 +212,3 @@ impl TypeInference {
         }
     }
 }
-

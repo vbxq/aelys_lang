@@ -46,7 +46,9 @@ fn run_air_program(name: &str, program: &AirProgram) -> Option<Vec<(&'static str
     let mut out: Vec<(&'static str, i32)> = Vec::new();
     let dir = tempdir().expect("tempdir");
     for (level, opt) in LEVELS {
-        let path = dir.path().join(format!("{name}{}.aelys", level.replace('-', "_")));
+        let path = dir
+            .path()
+            .join(format!("{name}{}.aelys", level.replace('-', "_")));
         match compile_air_program_to_executable(&path, program, *opt, RuntimeVariant::Rc) {
             Ok(()) => {}
             Err(err) => {
@@ -135,10 +137,16 @@ fn index_through_a_pointer_to_an_array_writes_the_owner() {
                 Rvalue::AddressOf(Place::Local(LocalId(0))),
             ),
             assign(
-                Place::Index(LocalId(1), Operand::Const(AirConst::Int(1, aelys_air::AirIntSize::I64))),
-                Rvalue::Use(Operand::Const(AirConst::Int(101, aelys_air::AirIntSize::I64))),
+                Place::Index(
+                    LocalId(1),
+                    Operand::Const(AirConst::Int(1, aelys_air::AirIntSize::I64)),
+                ),
+                Rvalue::Use(Operand::Const(AirConst::Int(
+                    101,
+                    aelys_air::AirIntSize::I64,
+                ))),
             ),
-// read back through the owner, never through the pointer that wrote
+            // read back through the owner, never through the pointer that wrote
             assign(
                 Place::Local(LocalId(2)),
                 Rvalue::Index {
@@ -177,8 +185,14 @@ fn field_through_a_stack_derived_pointer_writes_the_owner() {
                 Rvalue::StructInit {
                     name: "Cell".to_string(),
                     fields: vec![
-                        ("f".to_string(), Operand::Const(AirConst::Int(7, aelys_air::AirIntSize::I64))),
-                        ("g".to_string(), Operand::Const(AirConst::Int(0, aelys_air::AirIntSize::I64))),
+                        (
+                            "f".to_string(),
+                            Operand::Const(AirConst::Int(7, aelys_air::AirIntSize::I64)),
+                        ),
+                        (
+                            "g".to_string(),
+                            Operand::Const(AirConst::Int(0, aelys_air::AirIntSize::I64)),
+                        ),
                     ],
                 },
             ),
@@ -188,7 +202,10 @@ fn field_through_a_stack_derived_pointer_writes_the_owner() {
             ),
             assign(
                 Place::Field(LocalId(1), "f".to_string()),
-                Rvalue::Use(Operand::Const(AirConst::Int(101, aelys_air::AirIntSize::I64))),
+                Rvalue::Use(Operand::Const(AirConst::Int(
+                    101,
+                    aelys_air::AirIntSize::I64,
+                ))),
             ),
             assign(
                 Place::Local(LocalId(2)),
@@ -258,7 +275,10 @@ fn a_chained_address_of_a_field_writes_the_owner() {
             ),
             assign(
                 Place::Field(LocalId(2), "v".to_string()),
-                Rvalue::Use(Operand::Const(AirConst::Int(101, aelys_air::AirIntSize::I64))),
+                Rvalue::Use(Operand::Const(AirConst::Int(
+                    101,
+                    aelys_air::AirIntSize::I64,
+                ))),
             ),
             assign(
                 Place::Local(LocalId(3)),
@@ -312,4 +332,3 @@ fn a_chained_address_of_a_field_writes_the_owner() {
         );
     }
 }
-

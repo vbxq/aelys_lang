@@ -65,9 +65,7 @@ fn visit_stmt_uses(kind: &AirStmtKind, f: &mut impl FnMut(LocalId)) {
             visit_rvalue_uses(rvalue, f);
         }
         // these define the local, so they are defs and not uses (dead_locals differs here)
-        AirStmtKind::GcAlloc { .. }
-        | AirStmtKind::Alloc { .. }
-        | AirStmtKind::RcAlloc { .. } => {}
+        AirStmtKind::GcAlloc { .. } | AirStmtKind::Alloc { .. } | AirStmtKind::RcAlloc { .. } => {}
         AirStmtKind::GcDrop(local) | AirStmtKind::Free(local) => f(*local),
         AirStmtKind::CallVoid { func, args } => {
             visit_callee_uses(func, f);
@@ -186,4 +184,3 @@ pub fn block_uses(block: &AirBlock, mut f: impl FnMut(LocalId)) {
     }
     visit_term_uses(&block.terminator, &mut f);
 }
-

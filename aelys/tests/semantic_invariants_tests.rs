@@ -1,11 +1,11 @@
-use aelys_driver::{compile_file_with_llvm_variant, lower_file_to_air, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Once;
 use std::time::{Duration, Instant};
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
@@ -95,7 +95,9 @@ fn slug(id: &str, tag: &str) -> String {
 impl Harness {
     fn new() -> Self {
         warm_core_archive();
-        Harness { dir: tempdir().expect("tempdir") }
+        Harness {
+            dir: tempdir().expect("tempdir"),
+        }
     }
 
     fn write(&self, id: &str, tag: &str, src: &str) -> PathBuf {
@@ -104,7 +106,7 @@ impl Harness {
         path
     }
 
-// none means the toolchain cannot link here, which is a skip and not a failure
+    // none means the toolchain cannot link here, which is a skip and not a failure
     fn compile(&self, id: &str, tag: &str, src: &str, opt: OptimizationLevel) -> Option<PathBuf> {
         let path = self.write(id, tag, src);
         match compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
@@ -203,9 +205,9 @@ enum Oracle {
     ExitOut(i32, &'static str),
     ExitOutErr(i32, &'static str, &'static str),
     Terminates(u64, i32, &'static str),
-// cannot express it, because the owed value is an aslr-varying address.
+    // cannot express it, because the owed value is an aslr-varying address.
     AllocAgree(i32),
-// an exact (allocs, frees) pair beside the value. balanced and namedleak both pass on
+    // an exact (allocs, frees) pair beside the value. balanced and namedleak both pass on
     ExitOutStats(i32, &'static str, i64, i64),
     Balanced(i32),
     Leaks(i32, &'static str),
@@ -235,9 +237,9 @@ fn check(h: &Harness, id: &str, src: &str, exit: i32, out: Option<&str>, mem: Me
             match mem {
                 Memory::Ignore => {}
                 Memory::Balanced => {
-                    let (allocs, frees) = o
-                        .stats
-                        .unwrap_or_else(|| panic!("{id} at {name}/{alloc_name}: no [rc] stats line"));
+                    let (allocs, frees) = o.stats.unwrap_or_else(|| {
+                        panic!("{id} at {name}/{alloc_name}: no [rc] stats line")
+                    });
                     assert_eq!(
                         allocs, frees,
                         "{id} at {name}/{alloc_name}: every buffer freed exactly once \
@@ -245,9 +247,9 @@ fn check(h: &Harness, id: &str, src: &str, exit: i32, out: Option<&str>, mem: Me
                     );
                 }
                 Memory::NamedLeak(why) => {
-                    let (allocs, frees) = o
-                        .stats
-                        .unwrap_or_else(|| panic!("{id} at {name}/{alloc_name}: no [rc] stats line"));
+                    let (allocs, frees) = o.stats.unwrap_or_else(|| {
+                        panic!("{id} at {name}/{alloc_name}: no [rc] stats line")
+                    });
                     assert!(
                         frees < allocs,
                         "{id} at {name}/{alloc_name}: {why} (allocs={allocs} frees={frees})"
@@ -258,15 +260,33 @@ fn check(h: &Harness, id: &str, src: &str, exit: i32, out: Option<&str>, mem: Me
     }
 }
 
-fn check_allocs(h: &Harness, id: &str, src: &str, level: &str, opt: OptimizationLevel, exit: i32, n: i64) {
+fn check_allocs(
+    h: &Harness,
+    id: &str,
+    src: &str,
+    level: &str,
+    opt: OptimizationLevel,
+    exit: i32,
+    n: i64,
+) {
     let Some(exe) = h.compile(id, level, src, opt) else {
         eprintln!("{id}: linker unavailable, skipping");
         return;
     };
     let o = h.run(&exe, None);
-    assert_eq!(o.exit, exit, "{id} at {level}: the answer MUST be {exit}\nstderr:\n{}", o.stderr);
-    let (allocs, _) = o.stats.unwrap_or_else(|| panic!("{id} at {level}: no [rc] stats line"));
-    assert_eq!(allocs, n, "{id} at {level}: MUST allocate exactly {n} time(s)\nstderr:\n{}", o.stderr);
+    assert_eq!(
+        o.exit, exit,
+        "{id} at {level}: the answer MUST be {exit}\nstderr:\n{}",
+        o.stderr
+    );
+    let (allocs, _) = o
+        .stats
+        .unwrap_or_else(|| panic!("{id} at {level}: no [rc] stats line"));
+    assert_eq!(
+        allocs, n,
+        "{id} at {level}: MUST allocate exactly {n} time(s)\nstderr:\n{}",
+        o.stderr
+    );
 }
 
 fn run_row(h: &Harness, id: &str, src: &str, oracle: Oracle) {
@@ -492,7 +512,7 @@ fn main() -> i64 {
         Oracle::Balanced(6),
     ),
     (
-// the env slot owns a share, so the closure write detaches; the env leak is by design
+        // the env slot owns a share, so the closure write detaches; the env leak is by design
         "SI-V06",
         r#"
 fn make() -> fn() -> i64 {
@@ -510,7 +530,10 @@ fn main() -> i64 {
     return g()
 }
 "#,
-        Oracle::Leaks(1, "the captured buffer leaks with the deliberately leaked closure env"),
+        Oracle::Leaks(
+            1,
+            "the captured buffer leaks with the deliberately leaked closure env",
+        ),
     ),
     (
         "SI-V07",
@@ -537,7 +560,7 @@ fn main() -> i64 {
         Oracle::Exit(1),
     ),
     (
-// both directions of the aliasing relation, so a fix that detaches the wrong side is caught
+        // both directions of the aliasing relation, so a fix that detaches the wrong side is caught
         "SI-V09",
         r#"
 fn main() -> i64 {
@@ -553,7 +576,7 @@ fn main() -> i64 {
         Oracle::Balanced(23),
     ),
     (
-// stale-but-correct read is impossible. this row must never return 77.
+        // stale-but-correct read is impossible. this row must never return 77.
         "SI-V10",
         r#"
 fn main() -> i64 {
@@ -950,7 +973,7 @@ fn main() -> i64 {
         Oracle::Exit(9),
     ),
     (
-// `&mut *r` lowered to the address of the loaded pointee, so the write
+        // `&mut *r` lowered to the address of the loaded pointee, so the write
         "SI-B08",
         r#"
 fn f(r: &mut i64) {
@@ -966,7 +989,7 @@ fn main() -> i64 {
         Oracle::Exit(5),
     ),
     (
-// the same reborrow taken twice, so a fix that collapses one level but not the chain is caught
+        // the same reborrow taken twice, so a fix that collapses one level but not the chain is caught
         "SI-B09",
         r#"
 fn main() -> i64 {
@@ -1111,7 +1134,7 @@ fn main() -> i64 {
         Oracle::ExitOut(5, "7\n"),
     ),
     (
-// the err path short-circuits, so the marker must not print
+        // the err path short-circuits, so the marker must not print
         "SI-E02",
         r#"
 enum Result<T, E> { Ok(T), Err(E) }
@@ -1250,7 +1273,7 @@ struct XRow {
     id: &'static str,
     code: &'static str,
     rejected: &'static str,
-// none where the rejected form has no kept counterpart
+    // none where the rejected form has no kept counterpart
     twin: Option<(&'static str, i32)>,
 }
 
@@ -1327,7 +1350,7 @@ fn main() -> i64 {
         )),
     },
     XRow {
-// stage 5 widened e0415 to a field spine. this program used to compile and silently drop the
+        // stage 5 widened e0415 to a field spine. this program used to compile and silently drop the
         id: "SI-X15",
         code: "E0415",
         rejected: r#"
@@ -1664,7 +1687,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-// the m3 root: `rc::get(x)` denotes storage and place_of has no arm for it.
+        // the m3 root: `rc::get(x)` denotes storage and place_of has no arm for it.
         "SI-PA03",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -1692,8 +1715,8 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-// the push target is a place. sigabrt 134 `index out of bounds` at the sentinel,
-// because the open-coded unwrap named the pointer local as if it were the vec
+        // the push target is a place. sigabrt 134 `index out of bounds` at the sentinel,
+        // because the open-coded unwrap named the pointer local as if it were the vec
         "SI-PA05",
         r#"
 fn addone(r: &mut Vec<i64>) -> i64 {
@@ -1710,7 +1733,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-// must keep working"), and place::global must not change that. the `&mut g` witness that
+        // must keep working"), and place::global must not change that. the `&mut g` witness that
         "SI-PA06",
         r#"
 struct S { f: i64 }
@@ -1815,7 +1838,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-// w26: compound assignment through a projected pointer target
+        // w26: compound assignment through a projected pointer target
         "SI-PA12",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -1832,10 +1855,10 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOut(0, "101\n"),
     ),
-// ---- p10/p11: captures are pointers into the env --
+    // ---- p10/p11: captures are pointers into the env --
     (
-// a capture is a pointer into the env, so a projected write into a captured
-// the row exists so deleting the write-back cannot silently break it
+        // a capture is a pointer into the env, so a projected write into a captured
+        // the row exists so deleting the write-back cannot silently break it
         "SI-PA13",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -1891,7 +1914,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "2\n3\n1\n"),
     ),
     (
-// the 389-fixture corpus has zero `&mut` and vec_value_semantics_tests has no
+        // the 389-fixture corpus has zero `&mut` and vec_value_semantics_tests has no
         "SI-PA15",
         r#"
 fn poke(r: &mut Vec<i64>) -> i64 {
@@ -1910,7 +1933,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n7919\n"),
     ),
     (
-// still be freed exactly once. this is what catches emit_vec_detach's pointer form
+        // still be freed exactly once. this is what catches emit_vec_detach's pointer form
         "SI-PA16",
         r#"
 fn poke(r: &mut Vec<i64>) -> i64 {
@@ -1926,7 +1949,7 @@ fn main() -> i64 {
         Oracle::Balanced(0),
     ),
     (
-// a write through a pointer into rc payload storage, rc[n/n]
+        // a write through a pointer into rc payload storage, rc[n/n]
         "SI-PA17",
         r#"
 struct Node { val: i64, next: Rc<Node> }
@@ -1954,7 +1977,10 @@ fn main() -> i64 {
     return f() - 7
 }
 "#,
-        Oracle::Leaks(0, "the closure env is a deliberate owner of the captured Vec buffer"),
+        Oracle::Leaks(
+            0,
+            "the closure env is a deliberate owner of the captured Vec buffer",
+        ),
     ),
     (
         "SI-PA19",
@@ -2002,7 +2028,7 @@ fn main() -> i64 {
         Oracle::Terminates(20_000, 0, "0\n"),
     ),
     (
-// the c53 self-call twin: the counter lives behind the pointer across a recursive call
+        // the c53 self-call twin: the counter lives behind the pointer across a recursive call
         "SI-PA22",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -2023,7 +2049,7 @@ fn main() -> i64 {
         Oracle::Terminates(20_000, 0, "0\n"),
     ),
     (
-// the sentinel printed an aslr-varying address that differed per allocator and per run,
+        // the sentinel printed an aslr-varying address that differed per allocator and per run,
         "SI-PA23",
         r#"
 fn main() -> i64 {
@@ -2038,8 +2064,8 @@ fn main() -> i64 {
         Oracle::AllocAgree(0),
     ),
     (
-// v1: `&v[0]` on a vec compiles and reads right. it never reaches the detach dispatch,
-// so retiring e0415/e0413/e0422 must fail a test rather than open the hole silently
+        // v1: `&v[0]` on a vec compiles and reads right. it never reaches the detach dispatch,
+        // so retiring e0415/e0413/e0422 must fail a test rather than open the hole silently
         "SI-PA24",
         r#"
 fn main() -> i64 {
@@ -2052,7 +2078,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "1973\n"),
     ),
     (
-// diii: a triply-nested index spine through a pointer root, rooted at a local because
+        // diii: a triply-nested index spine through a pointer root, rooted at a local because
         "SI-PA09b",
         r#"
 fn main() -> i64 {
@@ -2066,7 +2092,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-// v2: the same through a pointer root
+        // v2: the same through a pointer root
         "SI-PA25",
         r#"
 fn peek(r: &mut Vec<i64>) -> i64 {
@@ -2082,9 +2108,9 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOut(0, "7919\n"),
     ),
-// a capture is a pointer, so every site that reads a capture's
+    // a capture is a pointer, so every site that reads a capture's
     (
-// place against rvalue, so it compiled clean. pre-fix: an aslr-varying integer that
+        // place against rvalue, so it compiled clean. pre-fix: an aslr-varying integer that
         "SI-PA26",
         r#"
 fn main() -> i64 {
@@ -2137,7 +2163,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "7\n"),
     ),
     (
-// a 32-byte struct: the store into the inner env field was 8 bytes wide (a pointer)
+        // a 32-byte struct: the store into the inner env field was 8 bytes wide (a pointer)
         "SI-PA29",
         r#"
 struct Big { a: i64, b: i64, c: i64, d: i64 }
@@ -2156,8 +2182,8 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "10\n"),
     ),
     (
-// a captured vec: the inner env's {ptr,len,cap} header was overwritten with a pointer,
-// so the read went out of bounds. pre-fix: sigabrt 134 at every level, compile-clean
+        // a captured vec: the inner env's {ptr,len,cap} header was overwritten with a pointer,
+        // so the read went out of bounds. pre-fix: sigabrt 134 at every level, compile-clean
         "SI-PA30",
         r#"
 fn main() -> i64 {
@@ -2175,7 +2201,7 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "7\n"),
     ),
     (
-// miscompiled. check() walks -o0/-o2/-o3, so the row fails on the -o0 leg
+        // miscompiled. check() walks -o0/-o2/-o3, so the row fails on the -o0 leg
         "SI-PA31",
         r#"
 fn make_f() -> fn() -> fn() -> i64 {
@@ -2198,8 +2224,8 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "3\n"),
     ),
     (
-// a pointer, so the runtime decremented the closure env's own rc header. one iteration
-// only leaked (frees 1 -> 0), which balanced and namedleak both accept; four iterations
+        // a pointer, so the runtime decremented the closure env's own rc header. one iteration
+        // only leaked (frees 1 -> 0), which balanced and namedleak both accept; four iterations
         "SI-PA32",
         r#"
 fn main() -> i64 {
@@ -2390,7 +2416,7 @@ fn main() -> i64 {
     XRow {
         id: "SI-PAX06",
         code: "E0721",
-// pass as if it borrowed the caller. stage 1 makes that address real
+        // pass as if it borrowed the caller. stage 1 makes that address real
         rejected: r#"
 struct Cell { f: i64, g: i64 }
 fn leak(c: Cell) -> &i64 {
@@ -2447,7 +2473,7 @@ fn main() -> i64 {
     XRow {
         id: "SI-PAX07",
         code: "E0711",
-// borrow checker, not by anything designed for it
+        // borrow checker, not by anything designed for it
         rejected: r#"
 fn main() -> i64 {
     let mut v: Vec<i64> = vec[1, 2, 3]
@@ -2571,9 +2597,17 @@ fn main() -> i64 {
 
     fn build_asan_archive(dir: &Path) -> Option<PathBuf> {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let core_src = manifest.parent().unwrap_or(manifest).join("core").join("src");
+        let core_src = manifest
+            .parent()
+            .unwrap_or(manifest)
+            .join("core")
+            .join("src");
         let mut objects = Vec::new();
-        for unit in ["aelys_core_common.c", "aelys_alloc_immix.c", "aelys_rc_real.c"] {
+        for unit in [
+            "aelys_core_common.c",
+            "aelys_alloc_immix.c",
+            "aelys_rc_real.c",
+        ] {
             let src = core_src.join(unit);
             if !src.is_file() {
                 eprintln!("core source {unit} missing; skipping the ASan tier");
@@ -2600,7 +2634,12 @@ fn main() -> i64 {
             }
         }
         let archive = dir.join("libaelys-core-rc-asan.a");
-        match Command::new("ar").arg("rcs").arg(&archive).args(&objects).output() {
+        match Command::new("ar")
+            .arg("rcs")
+            .arg(&archive)
+            .args(&objects)
+            .output()
+        {
             Ok(out) if out.status.success() => Some(archive),
             Ok(out) => panic!("ar failed:\n{}", String::from_utf8_lossy(&out.stderr)),
             Err(_) => {
@@ -2613,7 +2652,9 @@ fn main() -> i64 {
     #[test]
     fn asan_tier_value_rows_are_clean() {
         let h = Harness::new();
-        let Some(_archive) = build_asan_archive(h.dir.path()) else { return };
+        let Some(_archive) = build_asan_archive(h.dir.path()) else {
+            return;
+        };
 
         for (id, src, expected) in ASAN_ROWS {
             let path = h.write(id, "asan", src);
@@ -2669,7 +2710,7 @@ fn main() -> i64 {
         }
     }
 
-// the nested vec shape was a reproducible use-after-free returning 77; it now fails closed, so
+    // the nested vec shape was a reproducible use-after-free returning 77; it now fails closed, so
     #[test]
     fn asan_tier_nested_vec_still_fails_closed() {
         let h = Harness::new();
@@ -2687,7 +2728,9 @@ fn main() -> i64 {
 "#,
             OptimizationLevel::None,
         );
-        assert!(rendered.contains("[E0412]"), "nested Vec must fail closed:\n{rendered}");
+        assert!(
+            rendered.contains("[E0412]"),
+            "nested Vec must fail closed:\n{rendered}"
+        );
     }
 }
-

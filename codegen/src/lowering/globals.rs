@@ -144,7 +144,9 @@ impl CodegenContext {
                     global.name, global.ty
                 ))),
             },
-            AirConst::FnRef(name) => self.fnref_initializer(&global.name, &global.ty, name, program),
+            AirConst::FnRef(name) => {
+                self.fnref_initializer(&global.name, &global.ty, name, program)
+            }
             AirConst::Enum {
                 enum_name,
                 tag,
@@ -157,10 +159,13 @@ impl CodegenContext {
                 "global '{}' has mismatched zeroinit type {:?} for {:?}",
                 global.name, ty, global.ty
             ))),
-            AirConst::Array(elems) => self.array_initializer(&global.name, &global.ty, elems, program),
-            AirConst::Struct { name: struct_name, fields } => {
-                self.struct_initializer(&global.name, &global.ty, struct_name, fields, program)
+            AirConst::Array(elems) => {
+                self.array_initializer(&global.name, &global.ty, elems, program)
             }
+            AirConst::Struct {
+                name: struct_name,
+                fields,
+            } => self.struct_initializer(&global.name, &global.ty, struct_name, fields, program),
             other => Err(CodegenError::UnsupportedInstruction(format!(
                 "global '{}' has unsupported initializer kind {}",
                 global.name,
@@ -203,38 +208,23 @@ impl CodegenContext {
         // Build the LLVM const array for the element type.
         let const_arr: BasicValueEnum<'static> = match elem_llvm_ty {
             inkwell::types::BasicTypeEnum::IntType(t) => {
-                let vals: Vec<_> = elem_values
-                    .iter()
-                    .map(|v| v.into_int_value())
-                    .collect();
+                let vals: Vec<_> = elem_values.iter().map(|v| v.into_int_value()).collect();
                 t.const_array(&vals).into()
             }
             inkwell::types::BasicTypeEnum::FloatType(t) => {
-                let vals: Vec<_> = elem_values
-                    .iter()
-                    .map(|v| v.into_float_value())
-                    .collect();
+                let vals: Vec<_> = elem_values.iter().map(|v| v.into_float_value()).collect();
                 t.const_array(&vals).into()
             }
             inkwell::types::BasicTypeEnum::PointerType(t) => {
-                let vals: Vec<_> = elem_values
-                    .iter()
-                    .map(|v| v.into_pointer_value())
-                    .collect();
+                let vals: Vec<_> = elem_values.iter().map(|v| v.into_pointer_value()).collect();
                 t.const_array(&vals).into()
             }
             inkwell::types::BasicTypeEnum::StructType(t) => {
-                let vals: Vec<_> = elem_values
-                    .iter()
-                    .map(|v| v.into_struct_value())
-                    .collect();
+                let vals: Vec<_> = elem_values.iter().map(|v| v.into_struct_value()).collect();
                 t.const_array(&vals).into()
             }
             inkwell::types::BasicTypeEnum::ArrayType(t) => {
-                let vals: Vec<_> = elem_values
-                    .iter()
-                    .map(|v| v.into_array_value())
-                    .collect();
+                let vals: Vec<_> = elem_values.iter().map(|v| v.into_array_value()).collect();
                 t.const_array(&vals).into()
             }
             other => {
@@ -279,7 +269,8 @@ impl CodegenContext {
                 ))
             })?;
         // Build field values in canonical order.
-        let mut field_values: Vec<BasicValueEnum<'static>> = Vec::with_capacity(struct_def.fields.len());
+        let mut field_values: Vec<BasicValueEnum<'static>> =
+            Vec::with_capacity(struct_def.fields.len());
         for struct_field in &struct_def.fields {
             let (_, field_const) = fields
                 .iter()
@@ -314,9 +305,21 @@ impl CodegenContext {
             AirType::I32 => self.context.i32_type().const_int(value as u64, true).into(),
             AirType::I64 => self.context.i64_type().const_int(value as u64, true).into(),
             AirType::U8 => self.context.i8_type().const_int(value as u64, false).into(),
-            AirType::U16 => self.context.i16_type().const_int(value as u64, false).into(),
-            AirType::U32 => self.context.i32_type().const_int(value as u64, false).into(),
-            AirType::U64 => self.context.i64_type().const_int(value as u64, false).into(),
+            AirType::U16 => self
+                .context
+                .i16_type()
+                .const_int(value as u64, false)
+                .into(),
+            AirType::U32 => self
+                .context
+                .i32_type()
+                .const_int(value as u64, false)
+                .into(),
+            AirType::U64 => self
+                .context
+                .i64_type()
+                .const_int(value as u64, false)
+                .into(),
             AirType::Enum(name) => self.enum_int_initializer(name, value, program)?,
             other => {
                 return Err(CodegenError::UnsupportedType(format!(
@@ -336,16 +339,26 @@ impl CodegenContext {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let enum_struct_name = format!("__aelys_enum_{}", name);
         if self.context.get_struct_type(&enum_struct_name).is_none() {
-            return Ok(self.context.i32_type().const_int(value as u64, false).into());
+            return Ok(self
+                .context
+                .i32_type()
+                .const_int(value as u64, false)
+                .into());
         }
 
         let enum_def = program
             .enums
             .iter()
             .find(|def| def.name == name)
-            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown enum type {:?}", name)))?;
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!("unknown enum type {:?}", name))
+            })?;
         if !enum_has_data(enum_def) {
-            return Ok(self.context.i32_type().const_int(value as u64, false).into());
+            return Ok(self
+                .context
+                .i32_type()
+                .const_int(value as u64, false)
+                .into());
         }
 
         let tag = u32::try_from(value).map_err(|_| {
@@ -375,14 +388,13 @@ impl CodegenContext {
             .context
             .get_struct_type(&enum_struct_name)
             .ok_or_else(|| {
-                CodegenError::UnsupportedType(format!("unknown enum struct type: {}", enum_struct_name))
+                CodegenError::UnsupportedType(format!(
+                    "unknown enum struct type: {}",
+                    enum_struct_name
+                ))
             })?;
         let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
-        let payload = self
-            .context
-            .i8_type()
-            .array_type(payload_len)
-            .const_zero();
+        let payload = self.context.i8_type().array_type(payload_len).const_zero();
         Ok(enum_ty
             .const_named_struct(&[
                 self.context.i32_type().const_int(tag as u64, false).into(),
@@ -417,7 +429,9 @@ impl CodegenContext {
             .enums
             .iter()
             .find(|def| def.name == enum_name)
-            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown enum type {:?}", enum_name)))?;
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!("unknown enum type {:?}", enum_name))
+            })?;
         if !enum_has_data(enum_def) {
             if !payload.is_empty() {
                 return Err(CodegenError::UnsupportedInstruction(format!(
@@ -452,7 +466,10 @@ impl CodegenContext {
             .context
             .get_struct_type(&enum_struct_name)
             .ok_or_else(|| {
-                CodegenError::UnsupportedType(format!("unknown enum struct type: {}", enum_struct_name))
+                CodegenError::UnsupportedType(format!(
+                    "unknown enum struct type: {}",
+                    enum_struct_name
+                ))
             })?;
         let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
         let payload_bytes =
@@ -567,10 +584,7 @@ impl CodegenContext {
         if matches!(conv, aelys_air::CallingConv::Aelys) {
             // Aelys-convention function values are fat pointers { fn_ptr, env_ptr }.
             // Named functions have no captures, so env_ptr is null.
-            let null_env = self
-                .context
-                .ptr_type(AddressSpace::default())
-                .const_null();
+            let null_env = self.context.ptr_type(AddressSpace::default()).const_null();
             let fat = closure_fat_ptr_type(self.context)
                 .const_named_struct(&[fn_ptr.into(), null_env.into()]);
             Ok(fat.into())
@@ -591,7 +605,9 @@ impl CodegenContext {
         let mut bytes = vec![self.context.i8_type().const_zero(); payload_len as usize];
         let mut byte_offset = 0u32;
 
-        for (index, (field_ty, field_const)) in variant.payload.iter().zip(payload.iter()).enumerate() {
+        for (index, (field_ty, field_const)) in
+            variant.payload.iter().zip(payload.iter()).enumerate()
+        {
             let field_layout = resolved_layout(field_ty, &program.struct_sizes);
             byte_offset = align_to(byte_offset, field_layout.align);
 
@@ -631,12 +647,12 @@ impl CodegenContext {
     ) -> Result<Vec<IntValue<'static>>, CodegenError> {
         match (ty, constant) {
             (AirType::I8 | AirType::U8, AirConst::Int(value, _))
-            | (AirType::I8 | AirType::U8, AirConst::IntLiteral(value)) => Ok(vec![
-                self.context.i8_type().const_int(*value as u64, false),
-            ]),
-            (AirType::Bool, AirConst::Bool(value)) => {
-                Ok(vec![self.context.i8_type().const_int(u64::from(*value), false)])
+            | (AirType::I8 | AirType::U8, AirConst::IntLiteral(value)) => {
+                Ok(vec![self.context.i8_type().const_int(*value as u64, false)])
             }
+            (AirType::Bool, AirConst::Bool(value)) => Ok(vec![
+                self.context.i8_type().const_int(u64::from(*value), false),
+            ]),
             (
                 AirType::I16
                 | AirType::I32
@@ -700,7 +716,9 @@ impl CodegenContext {
             .enums
             .iter()
             .find(|def| def.name == enum_name)
-            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown enum type {:?}", enum_name)))?;
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!("unknown enum type {:?}", enum_name))
+            })?;
         if !enum_has_data(enum_def) {
             return self.integer_bytes(&AirType::I32, tag as i64);
         }
@@ -729,7 +747,8 @@ impl CodegenContext {
         let mut bytes = vec![self.context.i8_type().const_zero(); layout.size as usize];
         let tag_bytes = self.integer_bytes(&AirType::I32, tag as i64)?;
         bytes[..4].clone_from_slice(&tag_bytes);
-        let payload_bytes = self.enum_payload_initializer_bytes(name, enum_def, variant, payload, program)?;
+        let payload_bytes =
+            self.enum_payload_initializer_bytes(name, enum_def, variant, payload, program)?;
         let start = payload_offset as usize;
         let end = start + payload_bytes.len();
         bytes[start..end].clone_from_slice(&payload_bytes);
@@ -810,7 +829,9 @@ impl<'a> FunctionCodegen<'a> {
             .globals
             .iter()
             .find(|global| global.name == name)
-            .ok_or_else(|| CodegenError::UnsupportedInstruction(format!("unknown global '{}'", name)))
+            .ok_or_else(|| {
+                CodegenError::UnsupportedInstruction(format!("unknown global '{}'", name))
+            })
     }
 
     pub(crate) fn lookup_global_ptr(
@@ -823,4 +844,3 @@ impl<'a> FunctionCodegen<'a> {
             .ok_or_else(|| CodegenError::LlvmError(format!("missing LLVM global '{}'", name)))
     }
 }
-

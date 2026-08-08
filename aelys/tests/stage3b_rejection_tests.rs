@@ -77,7 +77,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[E0413]"), "must carry the E0413 code: {err}");
-    assert!(err.contains("[vec-slice]"), "must carry the vec-slice marker: {err}");
+    assert!(
+        err.contains("[vec-slice]"),
+        "must carry the vec-slice marker: {err}"
+    );
 }
 
 #[test]
@@ -125,7 +128,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[E0414]"), "must carry the E0414 code: {err}");
-    assert!(err.contains("[vec-foreach]"), "must carry the vec-foreach marker: {err}");
+    assert!(
+        err.contains("[vec-foreach]"),
+        "must carry the vec-foreach marker: {err}"
+    );
 }
 
 #[test]
@@ -193,7 +199,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[E0415]"), "must carry the E0415 code: {err}");
-    assert!(err.contains("[mut-index-ref]"), "must carry the mut-index-ref marker: {err}");
+    assert!(
+        err.contains("[mut-index-ref]"),
+        "must carry the mut-index-ref marker: {err}"
+    );
 }
 
 #[test]
@@ -238,13 +247,16 @@ fn main() -> i64 {
 "#;
     accepts(src);
     if let Some(code) = run_exit(src, OptimizationLevel::None) {
-        assert_eq!(code, 10, "reading through an immutable element ref must give v[0] = 10");
+        assert_eq!(
+            code, 10,
+            "reading through an immutable element ref must give v[0] = 10"
+        );
     }
 }
 
 #[test]
 fn mut_ref_into_struct_field_is_rejected() {
-// which it did, while silently dropping both writes into stack temps: `p.x` stayed 1 and `p.y`
+    // which it did, while silently dropping both writes into stack temps: `p.x` stayed 1 and `p.y`
     let err = reject(
         r#"
 struct Point { x: i64, y: i64 }
@@ -256,7 +268,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[E0415]"), "a mutable ref into a field must reject: {err}");
+    assert!(
+        err.contains("[E0415]"),
+        "a mutable ref into a field must reject: {err}"
+    );
 }
 
 #[test]
@@ -290,7 +305,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[E0416]"), "must carry the E0416 code: {err}");
-    assert!(err.contains("[payload-ref]"), "must carry the payload-ref marker: {err}");
+    assert!(
+        err.contains("[payload-ref]"),
+        "must carry the payload-ref marker: {err}"
+    );
 }
 
 #[test]
@@ -306,7 +324,9 @@ fn main() -> i64 {
 "#;
     accepts(src);
     if let Some(code) = run_exit(src, OptimizationLevel::None) {
-        assert_eq!(code, 7, "reading through a bound payload field ref must give 7");
+        assert_eq!(
+            code, 7,
+            "reading through a bound payload field ref must give 7"
+        );
     }
 }
-

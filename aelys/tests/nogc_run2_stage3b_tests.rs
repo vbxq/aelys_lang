@@ -269,7 +269,7 @@ nogc fn f() -> i64 {
 fn main() -> i64 { return f() }
 ",
     );
-// an inferred aggregate cannot carry the nogc marker, so the indirect call is not tightened
+    // an inferred aggregate cannot carry the nogc marker, so the indirect call is not tightened
     assert_code(&err, "E0727");
 }
 
@@ -290,4 +290,3 @@ fn main() -> i64 { return f() }
     );
     assert_code(&err, "E0727");
 }
-

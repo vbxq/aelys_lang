@@ -15,7 +15,9 @@ impl TypeInference {
     ) -> TypedStmtKind {
         if self.nogc_fn_params.contains(name) {
             self.errors
-                .push(crate::constraint::TypeError::nogc_param_shadowed(name, span));
+                .push(crate::constraint::TypeError::nogc_param_shadowed(
+                    name, span,
+                ));
         }
 
         let mut typed_init = self.infer_expr(initializer);
@@ -31,9 +33,7 @@ impl TypeInference {
             self.try_narrow_literal(&mut typed_init, decl);
 
             // Implicit numeric widening for let initializer
-            if typed_init.ty != *decl
-                && typed_init.ty.can_implicit_widen_to(decl)
-            {
+            if typed_init.ty != *decl && typed_init.ty.can_implicit_widen_to(decl) {
                 let vspan = typed_init.span;
                 let original = std::mem::replace(
                     &mut typed_init,
@@ -134,20 +134,19 @@ impl TypeInference {
                 );
             }
         } else if var_type.contains_rc() || self.aggregate_embeds_rc_nominal(var_type) {
-            self.errors.push(
-                crate::constraint::TypeError::rc_out_of_surface(
+            self.errors
+                .push(crate::constraint::TypeError::rc_out_of_surface(
                     format!(
                         "binding `{name}` has type `{var_type}` which embeds an `Rc<T>` in an \
                          aggregate value; Rc inside arrays/vecs/tuples/structs is not supported yet"
                     ),
                     span,
-                ),
-            );
+                ));
         }
     }
 
-// the construction sites already fail closed; this is the honest place to report, and it
-// mirrors the rc treatment right above
+    // the construction sites already fail closed; this is the honest place to report, and it
+    // mirrors the rc treatment right above
     fn check_vec_let_surface(
         &mut self,
         name: &str,
@@ -165,8 +164,8 @@ impl TypeInference {
             _ => false,
         };
         if holds {
-            self.errors.push(
-                crate::constraint::TypeError::vec_out_of_surface(
+            self.errors
+                .push(crate::constraint::TypeError::vec_out_of_surface(
                     format!(
                         "binding `{name}` has type `{var_type}`, whose element holds a `Vec<T>` \
                          by value; a Vec inside a Vec/array is not supported yet (the buffer \
@@ -174,8 +173,7 @@ impl TypeInference {
                          not implemented)"
                     ),
                     span,
-                ),
-            );
+                ));
         }
     }
 
@@ -259,9 +257,7 @@ impl TypeInference {
             InferType::Array(inner, _) | InferType::Vec(inner) => {
                 self.type_table.contains_rc_nominal(inner)
             }
-            InferType::Tuple(elems) => elems
-                .iter()
-                .any(|e| self.type_table.contains_rc_nominal(e)),
+            InferType::Tuple(elems) => elems.iter().any(|e| self.type_table.contains_rc_nominal(e)),
             _ => false,
         }
     }
@@ -273,4 +269,3 @@ pub enum LiteralInit {
     Int(i64),
     Float(f64),
 }
-

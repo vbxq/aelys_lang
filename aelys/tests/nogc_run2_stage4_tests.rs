@@ -588,4 +588,3 @@ fn main() -> i64 { return add(1, 2) }
 ",
     );
 }
-

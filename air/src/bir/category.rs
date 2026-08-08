@@ -1,4 +1,3 @@
-
 use aelys_sema::{InferType, TypeTable};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -23,4 +22,3 @@ pub fn category(ty: &InferType, tt: &TypeTable) -> Category {
 pub fn is_affine(ty: &InferType) -> bool {
     matches!(ty, InferType::Struct(name) if name == AFFINE_TEST_TYPE)
 }
-

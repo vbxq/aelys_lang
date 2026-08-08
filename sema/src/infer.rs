@@ -46,7 +46,7 @@ pub struct TypeInference {
     // used by `try_narrow_literal` to narrow Identifier expressions whose original value is a known literal
     literal_init_vars: HashMap<String, LiteralInit>,
     try_counter: usize,
-// lexical nesting depth of `unsafe` blocks; gates `.unwrap_unchecked()`
+    // lexical nesting depth of `unsafe` blocks; gates `.unwrap_unchecked()`
     unsafe_depth: usize,
     catch_match_pending: bool,
     nogc_fn_params: HashSet<String>,
@@ -55,4 +55,3 @@ pub struct TypeInference {
     pub(crate) shadowed_globals: HashSet<String>,
     pub(crate) lambda_depth: usize,
 }
-

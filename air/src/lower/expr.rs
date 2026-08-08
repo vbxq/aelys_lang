@@ -21,7 +21,8 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
         what: &str,
     ) {
-        let paths = match crate::rc_paths::rc_field_paths(field_air_ty, &self.structs, &self.enums) {
+        let paths = match crate::rc_paths::rc_field_paths(field_air_ty, &self.structs, &self.enums)
+        {
             crate::rc_paths::RcScan::None => return,
             crate::rc_paths::RcScan::Paths(paths) => paths,
             // skipping is only sound while generic structs never reach codegen; once they
@@ -36,8 +37,9 @@ impl<'a> LoweringContext<'a> {
         }
         match &prov.kind {
             // fresh: Rc::new already set refcount to 1
-            TypedExprKind::EnumVariant { enum_name, variant, .. }
-                if enum_name == "Rc" && variant == "new" => {}
+            TypedExprKind::EnumVariant {
+                enum_name, variant, ..
+            } if enum_name == "Rc" && variant == "new" => {}
             TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
             // a clone of a live reference, so retain every transitive leaf
             TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
@@ -91,7 +93,7 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
-// a capture is a pointer into the env, so a read is a load through it.
+                    // a capture is a pointer into the env, so a read is a load through it.
                     if self.capture_slots.contains_key(&id) {
                         let value_ty = self.lower_type_from_infer(&expr.ty);
                         return self.emit_rvalue_to_temp(
@@ -379,7 +381,7 @@ impl<'a> LoweringContext<'a> {
                 self.lower_slice_expr(object, range, &expr.ty, sp)
             }
 
-// the reborrow short-circuit is gone: `&mut *p` is now just the deref line of
+            // the reborrow short-circuit is gone: `&mut *p` is now just the deref line of
             TypedExprKind::Reference { operand, .. } => match self.place_addr(operand) {
                 Some(addr) => Operand::Copy(addr.ptr),
                 None => {
@@ -402,9 +404,9 @@ impl<'a> LoweringContext<'a> {
                 let target_ptr_ty = self.lower_type_from_infer(&target.ty);
                 let t = self.operand_to_local(target_op, &target_ptr_ty);
                 let v = self.lower_expr(value);
-// `*p = <vec>` overwrites the pointee slot. retain-first: take the
-// incoming share, then drop the buffer *p currently points at (t is the aelysvec
-// address, so release goes through the pointer with no addressof).
+                // `*p = <vec>` overwrites the pointee slot. retain-first: take the
+                // incoming share, then drop the buffer *p currently points at (t is the aelysvec
+                // address, so release goes through the pointer with no addressof).
                 let pointee_is_vec = matches!(value.ty, InferType::Vec(_));
                 self.emit_vec_slot_acquire(pointee_is_vec, Some(&value.kind), &v, sp);
                 if pointee_is_vec {
@@ -591,8 +593,8 @@ impl<'a> LoweringContext<'a> {
                     self.emit_affine_drop(local, &id_field, sp);
                 }
             }
-// previous buffer, so `v = v` (rc 1 -> 2 -> 1) never frees the buffer it keeps.
-// a capture is written through its env pointer; there is no cache to write back
+            // previous buffer, so `v = v` (rc 1 -> 2 -> 1) never frees the buffer it keeps.
+            // a capture is written through its env pointer; there is no cache to write back
             let is_capture = self.capture_slots.contains_key(&id);
             let slot_is_vec = matches!(value.ty, InferType::Vec(_));
             self.emit_vec_slot_acquire(slot_is_vec, Some(&value.kind), &val, sp);
@@ -615,7 +617,7 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
-// the rhs, and re-loading through the pointer would only add a second deref site
+            // the rhs, and re-loading through the pointer would only add a second deref site
             if is_capture {
                 return val;
             }
@@ -645,7 +647,7 @@ impl<'a> LoweringContext<'a> {
         result_ty: &InferType,
         sp: Option<Span>,
     ) -> Operand {
-// `y[0]`, so building a zero-length view must not trap)
+        // `y[0]`, so building a zero-length view must not trap)
         let ptr_op = match self.projection_base(object) {
             Some(addr) => Operand::Copy(addr.ptr),
             None => {
@@ -805,7 +807,7 @@ impl<'a> LoweringContext<'a> {
             val
         };
 
-// does not change, and no longer on "the root local is a pointer", which stage 1 makes
+        // does not change, and no longer on "the root local is a pointer", which stage 1 makes
         let mut obj = object;
         while let TypedExprKind::Grouping(inner) = &obj.kind {
             obj = inner;
@@ -851,8 +853,9 @@ impl<'a> LoweringContext<'a> {
             }
             match &prov.kind {
                 // fresh, so it already holds a +1 for this slot
-                TypedExprKind::EnumVariant { enum_name, variant, .. }
-                    if enum_name == "Rc" && variant == "new" => {}
+                TypedExprKind::EnumVariant {
+                    enum_name, variant, ..
+                } if enum_name == "Rc" && variant == "new" => {}
                 TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
                 // shared, so the source keeps its count and this slot needs its own
                 TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
@@ -878,7 +881,7 @@ impl<'a> LoweringContext<'a> {
         match &callee.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
-// a captured callable is a pointer into the env, so it must be loaded
+                    // a captured callable is a pointer into the env, so it must be loaded
                     if self.capture_slots.contains_key(&id) {
                         let op = self.lower_expr(callee);
                         let ty = self.lower_type_from_infer(&callee.ty);
@@ -980,7 +983,11 @@ impl<'a> LoweringContext<'a> {
     ) -> Operand {
         let result_ty = self.lower_type_from_infer(&parent.ty);
         let is_void = Self::is_void_like(&result_ty);
-        let result = if is_void { None } else { Some(self.alloc_temp_mut(result_ty)) };
+        let result = if is_void {
+            None
+        } else {
+            Some(self.alloc_temp_mut(result_ty))
+        };
 
         let cond = self.lower_expr(condition);
         let then_id = self.alloc_block_id();
@@ -1113,8 +1120,8 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
-// p6, enumerated caller 2: the by-value copy is the intended abi; only the address
-// of that copy now comes from the one entry point
+        // p6, enumerated caller 2: the by-value copy is the intended abi; only the address
+        // of that copy now comes from the one entry point
         let elem_addr = self.addr_of_own_temp(elem_slot, &elem_ty, sp);
         self.emit(
             AirStmtKind::CallVoid {
@@ -1126,12 +1133,7 @@ impl<'a> LoweringContext<'a> {
         Operand::Const(AirConst::Null)
     }
 
-    fn lower_rc_new(
-        &mut self,
-        rc_ty: &InferType,
-        args: &[TypedExpr],
-        sp: Option<Span>,
-    ) -> Operand {
+    fn lower_rc_new(&mut self, rc_ty: &InferType, args: &[TypedExpr], sp: Option<Span>) -> Operand {
         let inner_infer = match rc_ty {
             InferType::Rc(inner) => inner.as_ref(),
             // sema guarantees Rc<_>, this fallback just keeps the AIR well-typed
@@ -1264,15 +1266,11 @@ impl<'a> LoweringContext<'a> {
             // Store each captured value into the env struct
             for (cap_name, cap_ty) in &runtime_caps {
                 let cap_val = if let Some(id) = self.lookup_local(cap_name) {
-// capture's value type, so the pointer must be loaded first. storing the
-// pointer bits produced a compile-clean, aslr-varying wrong answer:
+                    // capture's value type, so the pointer must be loaded first. storing the
+                    // pointer bits produced a compile-clean, aslr-varying wrong answer:
                     if self.capture_slots.contains_key(&id) {
                         let value_ty = self.lower_type_from_infer(cap_ty);
-                        self.emit_rvalue_to_temp(
-                            value_ty,
-                            Rvalue::Deref(Operand::Copy(id)),
-                            sp,
-                        )
+                        self.emit_rvalue_to_temp(value_ty, Rvalue::Deref(Operand::Copy(id)), sp)
                     } else {
                         Operand::Copy(id)
                     }
@@ -1283,8 +1281,8 @@ impl<'a> LoweringContext<'a> {
                     ));
                     continue;
                 };
-// takes a share here. there is no matching release: the env is deliberately leaked
-// (its buffer leaks with it). without this the buffer is freed at the creating
+                // takes a share here. there is no matching release: the env is deliberately leaked
+                // (its buffer leaks with it). without this the buffer is freed at the creating
                 self.emit_vec_slot_acquire(matches!(cap_ty, InferType::Vec(_)), None, &cap_val, sp);
                 self.emit(
                     AirStmtKind::Assign {
@@ -1316,7 +1314,11 @@ impl<'a> LoweringContext<'a> {
         let result_ty = self.lower_type_from_infer(&parent.ty);
         let is_void = Self::is_void_like(&result_ty);
         // Only allocate a result local when the match produces a value.
-        let result = if is_void { None } else { Some(self.alloc_temp_mut(result_ty)) };
+        let result = if is_void {
+            None
+        } else {
+            Some(self.alloc_temp_mut(result_ty))
+        };
 
         // Lower the scrutinee
         let scrutinee_op = self.lower_expr(scrutinee);
@@ -1444,7 +1446,7 @@ impl<'a> LoweringContext<'a> {
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
-// two-arm slice of lower_match_expr, the err arm seals a divergence instead of a goto to merge
+    // two-arm slice of lower_match_expr, the err arm seals a divergence instead of a goto to merge
     fn lower_result_assert(
         &mut self,
         node: &TypedExpr,
@@ -1575,4 +1577,3 @@ impl<'a> LoweringContext<'a> {
         acc
     }
 }
-

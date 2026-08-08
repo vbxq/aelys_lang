@@ -178,7 +178,7 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             .find(|g| g.name == *name)
             .map(|g| g.ty.clone())
             .unwrap_or(AirType::Void),
-// through the pointer is what keeps `--emit-air` readable
+        // through the pointer is what keeps `--emit-air` readable
         Place::Field(id, name) => {
             let root = match local_type(func, *id) {
                 AirType::Ptr(inner) => inner.as_ref(),
@@ -305,11 +305,7 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
             )
         }
         Rvalue::ClosureCreate { fn_name, env } => {
-            format!(
-                "closure_create @{} env={}",
-                fn_name,
-                fmt_operand(env, func)
-            )
+            format!("closure_create @{} env={}", fn_name, fmt_operand(env, func))
         }
         Rvalue::SliceFromParts { ptr, len } => {
             format!(
@@ -442,7 +438,11 @@ fn struct_size_align(def: &AirStructDef, program: &AirProgram) -> (u32, u32) {
         for f in &def.fields {
             let (fs, fa) = type_layout_for_print(&f.ty, program);
             max_align = max_align.max(fa);
-            end = end.max(f.offset.expect("invariant: field offset is Some in this branch") + fs);
+            end = end.max(
+                f.offset
+                    .expect("invariant: field offset is Some in this branch")
+                    + fs,
+            );
         }
         ((end + max_align - 1) & !(max_align - 1), max_align)
     } else {
@@ -580,4 +580,3 @@ pub fn print_block(block: &AirBlock, program: &AirProgram) -> String {
     write_block(&mut out, block, func, program);
     out
 }
-

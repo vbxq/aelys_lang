@@ -10,7 +10,7 @@ pub mod print;
 pub mod rc_paths;
 pub mod rc_types;
 
-pub use bir::{check, Checked};
+pub use bir::{Checked, check};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -382,7 +382,7 @@ pub enum AirConst {
 #[derive(Clone)]
 pub enum Place {
     Local(LocalId),
-/// module-level storage; it has no localid, so every root walk must answer `none` for it
+    /// module-level storage; it has no localid, so every root walk must answer `none` for it
     Global(String),
     Field(LocalId, String),
     Deref(LocalId),
@@ -449,4 +449,3 @@ pub enum UnOp {
     Not,
     BitNot,
 }
-

@@ -4,8 +4,8 @@ use crate::lowering::body::FunctionCodegen;
 use crate::types::{air_basic_type_to_llvm, air_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
-    layout::enum_has_data,
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
+    layout::enum_has_data,
 };
 use inkwell::AddressSpace;
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -31,8 +31,8 @@ use std::collections::HashMap;
 // The cost is zero under fastcc: it's just an unused register not a stack push
 //
 // Exception: closure functions already have `__env` as an explicit AIR-level parameter (added during lower_closure).
-// These do not get the implicit env on top; function_has_implicit_env excludes them. 
-// 
+// These do not get the implicit env on top; function_has_implicit_env excludes them.
+//
 // At LLVM level, both forms end up with env at param 0, which is what indirect callers expect.
 //
 // The entry wrapper (__aelys_user_main) bridges from C convention to the Aelys main function by passing null as the env argument.
@@ -174,10 +174,7 @@ impl CodegenContext {
         let entry = self.context.append_basic_block(wrapper, "entry");
         builder.position_at_end(entry);
         // __aelys_main has an implicit env parameter; pass null.
-        let null_env = self
-            .context
-            .ptr_type(AddressSpace::default())
-            .const_null();
+        let null_env = self.context.ptr_type(AddressSpace::default()).const_null();
         let call = builder
             .build_call(user_fn, &[null_env.into()], "user_main")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
@@ -280,25 +277,22 @@ impl CodegenContext {
 }
 
 /// Returns true if a function gets an implicit `env: ptr` prepended to its
-/// LLVM parameter list. 
-/// 
+/// LLVM parameter list.
+///
 /// This is every non-extern Aelys-convention function that doesn't already have `__env` as its first AIR parameter (closures)
 ///
 /// The distinction matters ::
 ///
 /// named functions get env added here (codegen-only, invisible in AIR), while closures already have it in their AIR param list
-/// (added by lower_closure). 
-/// 
+/// (added by lower_closure).
+///
 /// Both end up with env at LLVM param 0. Without this check, closures would get env twice and indirect calls would pass the wrong number of arguments.
 pub(crate) fn function_has_implicit_env(function: &AirFunction) -> bool {
     if function.is_extern || !matches!(function.calling_conv, AirCallingConv::Aelys) {
         return false;
     }
     // Closures already declare __env as their first AIR param.
-    !function
-        .params
-        .first()
-        .is_some_and(|p| p.name == "__env")
+    !function.params.first().is_some_and(|p| p.name == "__env")
 }
 
 pub(crate) fn llvm_calling_convention(conv: AirCallingConv) -> u32 {

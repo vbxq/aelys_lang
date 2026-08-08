@@ -1,4 +1,3 @@
-
 use aelys_driver::lower_file_to_air;
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -152,7 +151,7 @@ fn main() -> i64 { return 0 }
         err.contains("drop `mut` from `f`"),
         "must offer the concrete alternative: {err}"
     );
-// call is e0727. the help must not name an escape hatch that only trades one code for another.
+    // call is e0727. the help must not name an escape hatch that only trades one code for another.
     assert!(
         !err.contains("plain `fn`"),
         "the help must not suggest a plain `fn`, which an enclosing nogc fn rejects: {err}"
@@ -348,7 +347,7 @@ fn main() -> i64 {
         err.contains("`U` of `keep` carries a `nogc` bound"),
         "must show the callee secondary caret: {err}"
     );
-// fix 3: the generic-struct reject no longer borrows the violation kind's caret hint
+    // fix 3: the generic-struct reject no longer borrows the violation kind's caret hint
     assert!(
         err.contains("a generic struct cannot satisfy the `nogc` bound"),
         "the caret hint must describe the generic-struct reject: {err}"
@@ -372,7 +371,9 @@ fn main() -> i64 {
     );
     assert_nogc_code(&err, "E0730");
     assert!(
-        err.contains("`B` of `f` is bound `nogc`, but this call passes the generic struct `Holder`"),
+        err.contains(
+            "`B` of `f` is bound `nogc`, but this call passes the generic struct `Holder`"
+        ),
         "`B` is instantiated by the Holder argument, never by the Bag one: {err}"
     );
     assert!(
@@ -429,7 +430,7 @@ fn main() -> i64 { return make() }
         "must be the fail-closed unresolved-binding message: {err}"
     );
     assert_anchor(&err, "3:27");
-// fix 3: the message says the bound cannot be proven, so the caret must not assert a violation
+    // fix 3: the message says the bound cannot be proven, so the caret must not assert a violation
     assert!(
         err.contains("`nogc` bound cannot be proven here"),
         "must show the fail-closed callee caret hint: {err}"
@@ -533,4 +534,3 @@ fn explain_e0728_covers_all_three_shapes() {
         "must describe the let-shadow shape: {text}"
     );
 }
-

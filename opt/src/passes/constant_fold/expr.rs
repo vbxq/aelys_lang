@@ -95,11 +95,7 @@ impl ConstantFolder {
                 self.optimize_expr(index);
                 self.optimize_expr(value);
             }
-            TypedExprKind::FieldAssign {
-                object,
-                value,
-                ..
-            } => {
+            TypedExprKind::FieldAssign { object, value, .. } => {
                 self.optimize_expr(object);
                 self.optimize_expr(value);
             }

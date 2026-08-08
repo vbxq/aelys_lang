@@ -51,8 +51,8 @@ fn stmt_escape(kind: &AirStmtKind, local: LocalId) -> Option<EscapeKind> {
                         return Some(EscapeKind::Call);
                     }
                 }
-// pointer local marks that pointer; when the pointer is a parameter the storage
-// it names belongs to the caller and has no local here to mark
+                // pointer local marks that pointer; when the pointer is a parameter the storage
+                // it names belongs to the caller and has no local here to mark
                 Rvalue::AddressOf(p) if place_base(p) == Some(local) => {
                     return Some(EscapeKind::AddressOf);
                 }
@@ -230,4 +230,3 @@ fn is_own_rc_bookkeeping(func: &Callee, args: &[Operand], local: LocalId) -> boo
     }
     false
 }
-

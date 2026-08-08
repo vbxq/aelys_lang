@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -169,7 +169,10 @@ fn c1_cycle_collected_under_rc_cycles_leaks_under_rc() {
     assert_eq!(code_rc, 0, "rc run must exit 0; stderr:\n{stderr_rc}");
     let (allocs_rc, frees_rc) =
         parse_stats(&stderr_rc).unwrap_or_else(|| panic!("no stats under rc:\n{stderr_rc}"));
-    assert_eq!(allocs_rc, 2, "the cycle allocates two Nodes; stderr:\n{stderr_rc}");
+    assert_eq!(
+        allocs_rc, 2,
+        "the cycle allocates two Nodes; stderr:\n{stderr_rc}"
+    );
     assert!(
         frees_rc < allocs_rc,
         "under pure rc the cycle must leak (frees<allocs); got allocs={allocs_rc} frees={frees_rc}"
@@ -178,7 +181,10 @@ fn c1_cycle_collected_under_rc_cycles_leaks_under_rc() {
     let Some((code_cyc, stderr_cyc)) = run_with_stats(CYCLE_SRC, RuntimeVariant::RcCycles) else {
         return;
     };
-    assert_eq!(code_cyc, 0, "rc+cycles run must exit 0; stderr:\n{stderr_cyc}");
+    assert_eq!(
+        code_cyc, 0,
+        "rc+cycles run must exit 0; stderr:\n{stderr_cyc}"
+    );
     let (allocs_cyc, frees_cyc) = parse_stats(&stderr_cyc)
         .unwrap_or_else(|| panic!("no stats under rc+cycles:\n{stderr_cyc}"));
     assert_eq!(
@@ -193,7 +199,10 @@ fn c1_cycle_construction_is_null_safe_under_leak() {
     let Some((code, stderr)) = run_with_stats(CYCLE_SRC, RuntimeVariant::Leak) else {
         return;
     };
-    assert_eq!(code, 0, "cycle construction under leak must not crash; stderr:\n{stderr}");
+    assert_eq!(
+        code, 0,
+        "cycle construction under leak must not crash; stderr:\n{stderr}"
+    );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
     assert_eq!((a, f), (2, 0), "leak never frees (2/0); stderr:\n{stderr}");
 }
@@ -203,13 +212,20 @@ fn c2_asan_clean_on_collected_cycle() {
     let Some((code, stderr)) = asan_run_cycles(CYCLE_SRC) else {
         return;
     };
-    assert_eq!(code, 0, "ASan run must exit 0 (no sanitizer abort); stderr:\n{stderr}");
+    assert_eq!(
+        code, 0,
+        "ASan run must exit 0 (no sanitizer abort); stderr:\n{stderr}"
+    );
     assert!(
         !stderr.contains("AddressSanitizer") && !stderr.contains("LeakSanitizer"),
         "ASan must report no errors on the collected cycle; stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats under ASan:\n{stderr}"));
-    assert_eq!((a, f), (2, 2), "collected cycle under ASan must be 2/2; stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (2, 2),
+        "collected cycle under ASan must be 2/2; stderr:\n{stderr}"
+    );
 }
 
 const C3_SRC: &str = r#"
@@ -237,7 +253,11 @@ fn c3_cycle_attached_to_live_root_survives_collect() {
         "anti-UAF: keep.next.val must read 20 after collect (A,B survived); stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!((a, f), (2, 2), "end-of-main reclaims the cycle (2/2); stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (2, 2),
+        "end-of-main reclaims the cycle (2/2); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -245,7 +265,10 @@ fn c3_asan_clean_with_live_root_and_postcollect_deref() {
     let Some((code, stderr)) = asan_run_cycles(C3_SRC) else {
         return;
     };
-    assert_eq!(code, 20, "ASan anti-UAF run must exit 20; stderr:\n{stderr}");
+    assert_eq!(
+        code, 20,
+        "ASan anti-UAF run must exit 20; stderr:\n{stderr}"
+    );
     assert!(
         !stderr.contains("AddressSanitizer") && !stderr.contains("LeakSanitizer"),
         "ASan must report no errors on the survivor deref; stderr:\n{stderr}"
@@ -271,13 +294,20 @@ fn main() -> i64 {
     let Some((code, stderr)) = asan_run_cycles(src) else {
         return;
     };
-    assert_eq!(code, 2, "the cloned read must yield keep.next.val=2; stderr:\n{stderr}");
+    assert_eq!(
+        code, 2,
+        "the cloned read must yield keep.next.val=2; stderr:\n{stderr}"
+    );
     assert!(
         !stderr.contains("AddressSanitizer") && !stderr.contains("LeakSanitizer"),
         "the 4th piece must keep the read balanced (no UAF); stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!((a, f), (2, 2), "balanced clone read collects 2/2; stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (2, 2),
+        "balanced clone read collects 2/2; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -304,7 +334,10 @@ fn main() -> i64 {
         "multi-reassign lift must be ASan-clean; stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!(a, f, "every alloc must be freed (b acyclic + a/c cycle); stderr:\n{stderr}");
+    assert_eq!(
+        a, f,
+        "every alloc must be freed (b acyclic + a/c cycle); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -327,7 +360,11 @@ fn main() -> i64 {
         "self-cycle lift must be ASan-clean (no double-free); stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!((a, f), (1, 1), "self-cycle must be collected (1/1); stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (1, 1),
+        "self-cycle must be collected (1/1); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -346,13 +383,20 @@ fn main() -> i64 {
     let Some((code, stderr)) = asan_run_cycles(src) else {
         return;
     };
-    assert_eq!(code, 0, "reassign-to-null run must exit 0; stderr:\n{stderr}");
+    assert_eq!(
+        code, 0,
+        "reassign-to-null run must exit 0; stderr:\n{stderr}"
+    );
     assert!(
         !stderr.contains("AddressSanitizer") && !stderr.contains("LeakSanitizer"),
         "reassign-to-null lift must be ASan-clean; stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!((a, f), (2, 2), "both Nodes acyclic -> freed (2/2); stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (2, 2),
+        "both Nodes acyclic -> freed (2/2); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -381,7 +425,10 @@ fn main() -> i64 {
         "loop-reassign lift must be ASan-clean; stderr:\n{stderr}"
     );
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!(a, f, "every loop allocation must be freed; stderr:\n{stderr}");
+    assert_eq!(
+        a, f,
+        "every loop allocation must be freed; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -401,9 +448,12 @@ fn main() -> i64 {
         let Some((code, stderr)) = run_with_stats(src, variant) else {
             return;
         };
-        assert_eq!(code, 0, "{variant:?}: fresh-rhs reassign must exit 0; stderr:\n{stderr}");
-        let (a, f) = parse_stats(&stderr)
-            .unwrap_or_else(|| panic!("{variant:?}: no stats:\n{stderr}"));
+        assert_eq!(
+            code, 0,
+            "{variant:?}: fresh-rhs reassign must exit 0; stderr:\n{stderr}"
+        );
+        let (a, f) =
+            parse_stats(&stderr).unwrap_or_else(|| panic!("{variant:?}: no stats:\n{stderr}"));
         assert_eq!(
             (a, f),
             (2, 2),
@@ -481,10 +531,20 @@ fn main() -> i64 {
     let Some((code_rc, _)) = run_with_stats(src, RuntimeVariant::Rc) else {
         return;
     };
-    assert_eq!(code_cyc, code_rc, "rc+cycles must match rc exit on an acyclic program");
-    assert_eq!(code_cyc, 7, "expected the value read through the handle; stderr:\n{stderr_cyc}");
+    assert_eq!(
+        code_cyc, code_rc,
+        "rc+cycles must match rc exit on an acyclic program"
+    );
+    assert_eq!(
+        code_cyc, 7,
+        "expected the value read through the handle; stderr:\n{stderr_cyc}"
+    );
     let (a, f) = parse_stats(&stderr_cyc).unwrap_or_else(|| panic!("no stats:\n{stderr_cyc}"));
-    assert_eq!((a, f), (1, 1), "shared acyclic Rc frees once under rc+cycles; stderr:\n{stderr_cyc}");
+    assert_eq!(
+        (a, f),
+        (1, 1),
+        "shared acyclic Rc frees once under rc+cycles; stderr:\n{stderr_cyc}"
+    );
 }
 
 #[test]
@@ -502,7 +562,11 @@ fn main() -> i64 {
     };
     assert_eq!(code, 0, "Rc::null program must exit 0; stderr:\n{stderr}");
     let (a, f) = parse_stats(&stderr).unwrap_or_else(|| panic!("no stats:\n{stderr}"));
-    assert_eq!((a, f), (0, 0), "Rc::null must allocate/free nothing; stderr:\n{stderr}");
+    assert_eq!(
+        (a, f),
+        (0, 0),
+        "Rc::null must allocate/free nothing; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -563,8 +627,12 @@ fn main() -> i64 {
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
-    let res =
-        compile_file_with_llvm_variant(&source_path, OptimizationLevel::None, true, RuntimeVariant::RcCycles);
+    let res = compile_file_with_llvm_variant(
+        &source_path,
+        OptimizationLevel::None,
+        true,
+        RuntimeVariant::RcCycles,
+    );
     assert!(
         res.is_err(),
         "reassigning a nominal-carrier field through an Rc handle must be rejected"
@@ -573,7 +641,11 @@ fn main() -> i64 {
 
 #[test]
 fn c8_default_runtime_is_still_rc() {
-    assert_eq!(RuntimeVariant::default(), RuntimeVariant::Rc, "default must stay Rc");
+    assert_eq!(
+        RuntimeVariant::default(),
+        RuntimeVariant::Rc,
+        "default must stay Rc"
+    );
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -593,7 +665,10 @@ fn main() -> i64 {
 
 #[test]
 fn c8_runtime_variant_parse_and_suffix() {
-    assert_eq!(RuntimeVariant::parse("rc+cycles"), Some(RuntimeVariant::RcCycles));
+    assert_eq!(
+        RuntimeVariant::parse("rc+cycles"),
+        Some(RuntimeVariant::RcCycles)
+    );
     assert_eq!(RuntimeVariant::parse("rc"), Some(RuntimeVariant::Rc));
     assert_eq!(RuntimeVariant::parse("leak"), Some(RuntimeVariant::Leak));
     assert_eq!(RuntimeVariant::parse("nonsense"), None);

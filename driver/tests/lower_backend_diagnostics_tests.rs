@@ -62,7 +62,11 @@ fn f() -> [i64; 3] {
     let path = write_temp_source("arr_ret", src);
     let result = lower_file_to_air(&path, OptimizationLevel::None);
     let _ = fs::remove_file(&path);
-    assert!(result.is_ok(), "array return should compile, got: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "array return should compile, got: {:?}",
+        result.err()
+    );
 }
 
 #[test]
@@ -109,10 +113,7 @@ fn main() {
     n;
 }
 "#;
-    assert_lowering_error(
-        src,
-        "recursive type cycle involving by-value enums/structs",
-    );
+    assert_lowering_error(src, "recursive type cycle involving by-value enums/structs");
 }
 
 #[test]

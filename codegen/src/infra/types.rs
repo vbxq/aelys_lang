@@ -165,9 +165,7 @@ fn struct_alignment(ty: inkwell::types::StructType<'_>) -> u32 {
 }
 
 /// Fat pointer type for Aelys closures: `{ ptr fn_ptr, ptr env_ptr }`.
-pub fn closure_fat_ptr_type(
-    context: &'_ inkwell::context::Context,
-) -> StructType<'_> {
+pub fn closure_fat_ptr_type(context: &'_ inkwell::context::Context) -> StructType<'_> {
     let ptr_ty = context.ptr_type(AddressSpace::default());
     context.struct_type(&[ptr_ty.into(), ptr_ty.into()], false)
 }

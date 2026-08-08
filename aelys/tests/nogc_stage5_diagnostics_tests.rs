@@ -1,4 +1,3 @@
-
 use aelys_driver::lower_file_to_air;
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -29,10 +28,19 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[move]"), "must carry the move marker: {err}");
-    assert!(err.contains("after it was moved"), "must be a use-after-move diagnostic: {err}");
+    assert!(
+        err.contains("after it was moved"),
+        "must be a use-after-move diagnostic: {err}"
+    );
     assert!(err.contains("[E0701]"), "must carry the E0701 code: {err}");
-    assert!(err.contains("module.aelys:6:5"), "primary caret must anchor at the use: {err}");
-    assert!(err.contains("moved here"), "must show the move-site secondary caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:5"),
+        "primary caret must anchor at the use: {err}"
+    );
+    assert!(
+        err.contains("moved here"),
+        "must show the move-site secondary caret: {err}"
+    );
 }
 
 #[test]
@@ -48,10 +56,19 @@ fn main() -> i64 {
 "#,
     );
     assert!(err.contains("[move]"), "must carry the move marker: {err}");
-    assert!(err.contains("already moved"), "must be a double-move diagnostic: {err}");
+    assert!(
+        err.contains("already moved"),
+        "must be a double-move diagnostic: {err}"
+    );
     assert!(err.contains("[E0702]"), "must carry the E0702 code: {err}");
-    assert!(err.contains("module.aelys:6:5"), "primary caret must anchor at the second move: {err}");
-    assert!(err.contains("first moved here"), "must show the first-move secondary caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:5"),
+        "primary caret must anchor at the second move: {err}"
+    );
+    assert!(
+        err.contains("first moved here"),
+        "must show the first-move secondary caret: {err}"
+    );
 }
 
 #[test]
@@ -75,7 +92,10 @@ fn main() -> i64 {
         "must be a use-of-maybe-moved diagnostic: {err}"
     );
     assert!(err.contains("[E0703]"), "must carry the E0703 code: {err}");
-    assert!(err.contains("module.aelys:9:5"), "primary caret must anchor at the use: {err}");
+    assert!(
+        err.contains("module.aelys:9:5"),
+        "primary caret must anchor at the use: {err}"
+    );
     assert!(
         err.contains("moved here on one branch"),
         "must show the conditional-move secondary caret: {err}"
@@ -104,7 +124,10 @@ fn main() -> i64 {
         "must be the scope-exit maybe-moved diagnostic: {err}"
     );
     assert!(err.contains("[E0704]"), "must carry the E0704 code: {err}");
-    assert!(err.contains("`a` declared here"), "must show the owner-decl secondary caret: {err}");
+    assert!(
+        err.contains("`a` declared here"),
+        "must show the owner-decl secondary caret: {err}"
+    );
 }
 
 #[test]
@@ -130,8 +153,14 @@ fn main() -> i64 {
         "must be the reassignment maybe-moved diagnostic: {err}"
     );
     assert!(err.contains("[E0704]"), "must carry the E0704 code: {err}");
-    assert!(err.contains("module.aelys:8:5"), "primary caret must anchor at the reassignment: {err}");
-    assert!(err.contains("`a` declared here"), "must show the owner-decl secondary caret: {err}");
+    assert!(
+        err.contains("module.aelys:8:5"),
+        "primary caret must anchor at the reassignment: {err}"
+    );
+    assert!(
+        err.contains("`a` declared here"),
+        "must show the owner-decl secondary caret: {err}"
+    );
 }
 
 // ============================ borrow rejections (e071x) ============================
@@ -148,12 +177,27 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot write"), "must be a write-while-borrowed diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot write"),
+        "must be a write-while-borrowed diagnostic: {err}"
+    );
     assert!(err.contains("[E0711]"), "must carry the E0711 code: {err}");
-    assert!(err.contains("module.aelys:6:5"), "primary caret must anchor at the write: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
-    assert!(err.contains("borrow last used here"), "must show the loan-last-use caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:5"),
+        "primary caret must anchor at the write: {err}"
+    );
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
+    assert!(
+        err.contains("borrow last used here"),
+        "must show the loan-last-use caret: {err}"
+    );
 }
 
 // the row-6 marquee, and the three-point proof: creation, conflict, last-use on distinct lines.
@@ -169,12 +213,27 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot write"), "push must be modeled as a write of v: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot write"),
+        "push must be modeled as a write of v: {err}"
+    );
     assert!(err.contains("[E0711]"), "must carry the E0711 code: {err}");
-    assert!(err.contains("module.aelys:6:5"), "primary caret must anchor at the push: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
-    assert!(err.contains("borrow last used here"), "must show the loan-last-use caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:5"),
+        "primary caret must anchor at the push: {err}"
+    );
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
+    assert!(
+        err.contains("borrow last used here"),
+        "must show the loan-last-use caret: {err}"
+    );
 }
 
 #[test]
@@ -192,12 +251,27 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot move"), "must be a move-while-borrowed diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot move"),
+        "must be a move-while-borrowed diagnostic: {err}"
+    );
     assert!(err.contains("[E0712]"), "must carry the E0712 code: {err}");
-    assert!(err.contains("module.aelys:8:5"), "primary caret must anchor at the move: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
-    assert!(err.contains("borrow last used here"), "must show the loan-last-use caret: {err}");
+    assert!(
+        err.contains("module.aelys:8:5"),
+        "primary caret must anchor at the move: {err}"
+    );
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
+    assert!(
+        err.contains("borrow last used here"),
+        "must show the loan-last-use caret: {err}"
+    );
 }
 
 #[test]
@@ -214,11 +288,23 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("as mutable"), "must be a mutable-reborrow conflict: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("as mutable"),
+        "must be a mutable-reborrow conflict: {err}"
+    );
     assert!(err.contains("[E0713]"), "must carry the E0713 code: {err}");
-    assert!(err.contains("module.aelys:6:14"), "primary caret must anchor at the second borrow: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:14"),
+        "primary caret must anchor at the second borrow: {err}"
+    );
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
 }
 
 #[test]
@@ -234,11 +320,23 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("as shared"), "must be a shared-while-mut conflict: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("as shared"),
+        "must be a shared-while-mut conflict: {err}"
+    );
     assert!(err.contains("[E0713]"), "must carry the E0713 code: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
-    assert!(err.contains("borrow last used here"), "must show the loan-last-use caret: {err}");
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
+    assert!(
+        err.contains("borrow last used here"),
+        "must show the loan-last-use caret: {err}"
+    );
 }
 
 #[test]
@@ -254,11 +352,23 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot use"), "must be a read-while-mut conflict: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot use"),
+        "must be a read-while-mut conflict: {err}"
+    );
     assert!(err.contains("[E0713]"), "must carry the E0713 code: {err}");
-    assert!(err.contains("module.aelys:6:5"), "primary caret must anchor at the read: {err}");
-    assert!(err.contains("borrow created here"), "must show the loan-creation caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:5"),
+        "primary caret must anchor at the read: {err}"
+    );
+    assert!(
+        err.contains("borrow created here"),
+        "must show the loan-creation caret: {err}"
+    );
 }
 
 #[test]
@@ -273,11 +383,23 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("aggregate containers"), "must be the container-boundary diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("aggregate containers"),
+        "must be the container-boundary diagnostic: {err}"
+    );
     assert!(err.contains("[E0714]"), "must carry the E0714 code: {err}");
-    assert!(err.contains("module.aelys:6:15"), "primary caret must anchor at the aggregate: {err}");
-    assert!(err.contains("this reference"), "must show the offending-operand secondary caret: {err}");
+    assert!(
+        err.contains("module.aelys:6:15"),
+        "primary caret must anchor at the aggregate: {err}"
+    );
+    assert!(
+        err.contains("this reference"),
+        "must show the offending-operand secondary caret: {err}"
+    );
 }
 
 // ============================ escape rejections (e072x) ============================
@@ -295,10 +417,19 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("returns a reference to local"), "must be the D1 return-ref diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("returns a reference to local"),
+        "must be the D1 return-ref diagnostic: {err}"
+    );
     assert!(err.contains("[E0721]"), "must carry the E0721 code: {err}");
-    assert!(err.contains("module.aelys:5:5"), "primary caret must anchor at the return: {err}");
+    assert!(
+        err.contains("module.aelys:5:5"),
+        "primary caret must anchor at the return: {err}"
+    );
     assert!(
         err.contains("destroyed on return"),
         "must show the owner-decl death secondary caret: {err}"
@@ -321,11 +452,23 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("does not live long enough"), "must be the D2 scope-death diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("does not live long enough"),
+        "must be the D2 scope-death diagnostic: {err}"
+    );
     assert!(err.contains("[E0722]"), "must carry the E0722 code: {err}");
-    assert!(err.contains("`x` declared here"), "must show the owner-decl secondary caret: {err}");
-    assert!(err.contains("scope of `x` ends here"), "must show the death-point secondary caret: {err}");
+    assert!(
+        err.contains("`x` declared here"),
+        "must show the owner-decl secondary caret: {err}"
+    );
+    assert!(
+        err.contains("scope of `x` ends here"),
+        "must show the death-point secondary caret: {err}"
+    );
 }
 
 #[test]
@@ -343,10 +486,19 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("cannot infer the origin"), "must be the origin-floor diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("cannot infer the origin"),
+        "must be the origin-floor diagnostic: {err}"
+    );
     assert!(err.contains("[E0723]"), "must carry the E0723 code: {err}");
-    assert!(err.contains("module.aelys:7:5"), "primary caret must anchor at the return: {err}");
+    assert!(
+        err.contains("module.aelys:7:5"),
+        "primary caret must anchor at the return: {err}"
+    );
 }
 
 #[test]
@@ -361,10 +513,19 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("aggregate containers"), "must be the container-boundary diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("aggregate containers"),
+        "must be the container-boundary diagnostic: {err}"
+    );
     assert!(err.contains("[E0724]"), "must carry the E0724 code: {err}");
-    assert!(err.contains("module.aelys:6:14"), "primary caret must anchor at the stored reference: {err}");
+    assert!(
+        err.contains("module.aelys:6:14"),
+        "primary caret must anchor at the stored reference: {err}"
+    );
 }
 
 #[test]
@@ -381,10 +542,19 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("closure"), "must be the closure-capture diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("closure"),
+        "must be the closure-capture diagnostic: {err}"
+    );
     assert!(err.contains("[E0725]"), "must carry the E0725 code: {err}");
-    assert!(err.contains("module.aelys:6:13"), "primary caret must anchor at the closure: {err}");
+    assert!(
+        err.contains("module.aelys:6:13"),
+        "primary caret must anchor at the closure: {err}"
+    );
 }
 
 #[test]
@@ -399,10 +569,19 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("references to references"), "must be the nested-ref diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("references to references"),
+        "must be the nested-ref diagnostic: {err}"
+    );
     assert!(err.contains("[E0726]"), "must carry the E0726 code: {err}");
-    assert!(err.contains("module.aelys:6:14"), "primary caret must anchor at the nested borrow: {err}");
+    assert!(
+        err.contains("module.aelys:6:14"),
+        "primary caret must anchor at the nested borrow: {err}"
+    );
 }
 
 #[test]
@@ -415,7 +594,9 @@ fn all_e07xx_codes_are_registered() {
         let info = aelys_common::registry::lookup(code)
             .unwrap_or_else(|| panic!("E07xx code {code} must be registered for --explain"));
         assert!(!info.title.is_empty(), "{code} must have a title");
-        assert!(!info.explanation.is_empty(), "{code} must have an explanation");
+        assert!(
+            !info.explanation.is_empty(),
+            "{code} must have an explanation"
+        );
     }
 }
-

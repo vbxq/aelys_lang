@@ -125,4 +125,3 @@ pub struct Decorator {
     pub name: String,
     pub span: Span,
 }
-

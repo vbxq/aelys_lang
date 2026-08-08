@@ -1,7 +1,7 @@
 // LLVM native compiler
 
 use aelys_common::{ColorConfig, WarningConfig, format_warnings, render_summary};
-use aelys_driver::{compile_file_with_llvm_with_warnings, lower_file_to_air, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_with_warnings, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::path::{Path, PathBuf};
 

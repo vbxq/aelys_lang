@@ -294,7 +294,10 @@ fn self_reference_reports_error() {
         vec![field("inner", AirType::Struct("Bad".into()))],
     )]);
     let errors = compute_layouts(&mut prog);
-    assert!(!errors.is_empty(), "expected error for self-referencing struct");
+    assert!(
+        !errors.is_empty(),
+        "expected error for self-referencing struct"
+    );
     assert!(errors[0].contains("infinite size"));
 }
 

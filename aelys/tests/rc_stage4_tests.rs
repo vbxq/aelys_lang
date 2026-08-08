@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -108,9 +108,15 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 6, "a must stay [1,2,3] across b's realloc-grows; stderr:\n{stderr}");
+    assert_eq!(
+        code, 6,
+        "a must stay [1,2,3] across b's realloc-grows; stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(allocs, frees, "balanced (no double-free / no leak); stderr:\n{stderr}");
+    assert_eq!(
+        allocs, frees,
+        "balanced (no double-free / no leak); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -189,7 +195,12 @@ fn main() -> i64 {
     )
     .expect("write source");
 
-    match compile_file_with_llvm_variant(&source_path, OptimizationLevel::None, false, RuntimeVariant::Rc) {
+    match compile_file_with_llvm_variant(
+        &source_path,
+        OptimizationLevel::None,
+        false,
+        RuntimeVariant::Rc,
+    ) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
@@ -206,9 +217,13 @@ fn main() -> i64 {
         return;
     }
 
-// uninstrumented archive only exposes the malloc/free interceptors, not the immix poison net
+    // uninstrumented archive only exposes the malloc/free interceptors, not the immix poison net
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let core_src = manifest.parent().unwrap_or(manifest).join("core").join("src");
+    let core_src = manifest
+        .parent()
+        .unwrap_or(manifest)
+        .join("core")
+        .join("src");
     let asan_lib_dir = dir.path();
     let core_units = [
         "aelys_core_common.c",
@@ -316,7 +331,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N1 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N1 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -331,7 +349,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N2 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N2 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -345,7 +366,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N3 (array) must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N3 (array) must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -359,7 +383,10 @@ fn make() -> i64 {
 fn main() -> i64 { return 0 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N4 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N4 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -374,7 +401,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N5 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N5 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -391,7 +421,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "a plain-struct Vec must compile and run; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "a plain-struct Vec must compile and run; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -409,9 +442,15 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 15, "leak: a stays [1,2,3] (6) + b[3]=9 => 15; stderr:\n{stderr}");
+    assert_eq!(
+        code, 15,
+        "leak: a stays [1,2,3] (6) + b[3]=9 => 15; stderr:\n{stderr}"
+    );
     let (_, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(frees, 0, "the leak variant must never free; stderr:\n{stderr}");
+    assert_eq!(
+        frees, 0,
+        "the leak variant must never free; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -431,7 +470,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 15, "Vec::new + 4 pushes grow & read back: 1+2+4+8=15; stderr:\n{stderr}");
+    assert_eq!(
+        code, 15,
+        "Vec::new + 4 pushes grow & read back: 1+2+4+8=15; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -517,7 +559,10 @@ fn main() -> i64 {
          the escaping param would UAF/double-free; stderr:\n{stderr}"
     );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(allocs, frees, "balanced (escape excluded from release); stderr:\n{stderr}");
+    assert_eq!(
+        allocs, frees,
+        "balanced (escape excluded from release); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -595,6 +640,8 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "a plain struct (no Vec field) must compile and run; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "a plain struct (no Vec field) must compile and run; stderr:\n{stderr}"
+    );
 }
-

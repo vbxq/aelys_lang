@@ -81,9 +81,10 @@ pub(crate) struct LoweringContext<'a> {
     // hand the caller a use-after-free
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
-// no drop bool: the point-keyed plan below decides every drop, read per program point.
+    // no drop bool: the point-keyed plan below decides every drop, read per program point.
     pub(super) affine_locals: Vec<AffineLocal>,
-    pub(super) affine_drops: std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
+    pub(super) affine_drops:
+        std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
     pub(super) loop_stack: Vec<LoopBlocks>,
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
@@ -227,7 +228,7 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-// the capture prologue allocates its pointer through place.rs, which cannot name it, so
+    // the capture prologue allocates its pointer through place.rs, which cannot name it, so
     pub(super) fn rename_local(&mut self, id: LocalId, name: &str) {
         if let Some(l) = self.current_locals.iter_mut().find(|l| l.id == id) {
             l.name = Some(name.to_string());
@@ -359,7 +360,7 @@ impl<'a> LoweringContext<'a> {
             // an Rc erases to a plain data pointer, the refcount machinery lives in the
             // lowering and the runtime, never in the type
             InferType::Rc(inner) => AirType::Ptr(Box::new(self.lower_type_from_infer(inner))),
-// references erase to raw ptr / fat {ptr,len}, mutability is dropped
+            // references erase to raw ptr / fat {ptr,len}, mutability is dropped
             InferType::Ref { referent, .. } => {
                 AirType::Ptr(Box::new(self.lower_type_from_infer(referent)))
             }
@@ -510,9 +511,9 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn emit_affine_drop(&mut self, local: LocalId, id_field: &str, sp: Option<Span>) {
-        let base_ty = self
-            .local_air_type(local)
-            .unwrap_or(AirType::Struct(crate::bir::category::AFFINE_TEST_TYPE.to_string()));
+        let base_ty = self.local_air_type(local).unwrap_or(AirType::Struct(
+            crate::bir::category::AFFINE_TEST_TYPE.to_string(),
+        ));
         let field_ty = self.air_struct_field_type(&base_ty, id_field);
         let id = self.emit_rvalue_to_temp(
             field_ty,
@@ -531,7 +532,7 @@ impl<'a> LoweringContext<'a> {
         );
     }
 
-// collect (local, id_field) to drop at a point: registered affines whose decl is listed by
+    // collect (local, id_field) to drop at a point: registered affines whose decl is listed by
     pub(super) fn collect_affine_drops(
         &self,
         point_key: crate::bir::DropKey,
@@ -555,7 +556,7 @@ impl<'a> LoweringContext<'a> {
 }
 
 fn format_lowering_errors(failure: &LowerFailure) -> String {
-// borrow rejections join their primary phrases (markers preserved) into the same shell as the
+    // borrow rejections join their primary phrases (markers preserved) into the same shell as the
     let errors: Vec<String> = match failure {
         LowerFailure::Lowering(errors) => errors.clone(),
         LowerFailure::Borrow(diags) => diags.iter().map(|d| d.primary.1.clone()).collect(),
@@ -615,4 +616,3 @@ fn lower_unop(op: &aelys_syntax::UnaryOp) -> UnOp {
         aelys_syntax::UnaryOp::BitNot => UnOp::BitNot,
     }
 }
-

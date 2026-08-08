@@ -33,22 +33,36 @@ pub enum TypeErrorKind {
         found: InferType,
     },
     /// Infinite type (occurs check failed)
-    InfiniteType { var: TypeVarId, ty: InferType },
+    InfiniteType {
+        var: TypeVarId,
+        ty: InferType,
+    },
     /// Type is not one of the expected options
     NotOneOf {
         ty: InferType,
         options: Vec<InferType>,
     },
     /// Arity mismatch in function call
-    ArityMismatch { expected: usize, found: usize },
+    ArityMismatch {
+        expected: usize,
+        found: usize,
+    },
     /// Tried to call a non-function
-    NotCallable { ty: InferType },
+    NotCallable {
+        ty: InferType,
+    },
     /// Undefined variable
-    UndefinedVariable { name: String },
+    UndefinedVariable {
+        name: String,
+    },
     /// Undefined function
-    UndefinedFunction { name: String },
+    UndefinedFunction {
+        name: String,
+    },
     /// Invalid field/member access
-    MemberAccess { message: String },
+    MemberAccess {
+        message: String,
+    },
     /// Recursion depth limit exceeded in type inference
     RecursionLimit,
     /// Assignment to an immutable variable
@@ -57,38 +71,77 @@ pub enum TypeErrorKind {
         binding_span: Option<Span>,
     },
     /// Assignment to a loop-controlled variable
-    AssignToLoopVariable { name: String },
+    AssignToLoopVariable {
+        name: String,
+    },
     // always rendered with the stable [rc-stage1] marker, which the tests assert on
-    RcOutOfSurface { detail: String },
-    VecOutOfSurface { detail: String },
-// slicing a vec addresses the header, not the buffer, so it is rejected until the buffer-view path exists
+    RcOutOfSurface {
+        detail: String,
+    },
+    VecOutOfSurface {
+        detail: String,
+    },
+    // slicing a vec addresses the header, not the buffer, so it is rejected until the buffer-view path exists
     VecSliceUnsupported,
-// for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
+    // for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
     VecForeachUnsupported,
     MutIndexRefUnsupported,
-// a reference into a field of a call/enum-variant result forms no loan and points at a temporary
+    // a reference into a field of a call/enum-variant result forms no loan and points at a temporary
     PayloadFieldRefUnsupported,
-    MutRefImmutableBinding { name: String },
-// a nested fn reusing an outer fn's bare name clobbers its dispatch slot, a silent miscompile
-    NestedFnShadowsOuter { name: String },
-    ReservedTypeName { name: String },
+    MutRefImmutableBinding {
+        name: String,
+    },
+    // a nested fn reusing an outer fn's bare name clobbers its dispatch slot, a silent miscompile
+    NestedFnShadowsOuter {
+        name: String,
+    },
+    ReservedTypeName {
+        name: String,
+    },
     RcFieldAssignIndirect,
-    NoPlace { what: String },
-    SharedMut { what: String },
-// a reference formed or returned inside a closure body has no bir body to check it
-    ClosureRefUnchecked { what: String },
-// bir has no local for a global, so two `&mut` of one global would genuinely alias
-    GlobalBorrow { name: String, mutable: bool },
-    MustUse { error: InferType },
-    NogcOutOfPosition { detail: String },
-    NogcMutParam { detail: String },
-    NogcParamShadowed { detail: String },
-    NogcCallbackMismatch { detail: String },
-    NogcBoundViolation { detail: String },
-// kind-keyed caret hint stays fail-closed instead of asserting a violation nobody proved
-    NogcBoundUnresolved { detail: String },
-    NogcBoundGenericStruct { detail: String },
-    NogcGenericAsValue { detail: String },
+    NoPlace {
+        what: String,
+    },
+    SharedMut {
+        what: String,
+    },
+    // a reference formed or returned inside a closure body has no bir body to check it
+    ClosureRefUnchecked {
+        what: String,
+    },
+    // bir has no local for a global, so two `&mut` of one global would genuinely alias
+    GlobalBorrow {
+        name: String,
+        mutable: bool,
+    },
+    MustUse {
+        error: InferType,
+    },
+    NogcOutOfPosition {
+        detail: String,
+    },
+    NogcMutParam {
+        detail: String,
+    },
+    NogcParamShadowed {
+        detail: String,
+    },
+    NogcCallbackMismatch {
+        detail: String,
+    },
+    NogcBoundViolation {
+        detail: String,
+    },
+    // kind-keyed caret hint stays fail-closed instead of asserting a violation nobody proved
+    NogcBoundUnresolved {
+        detail: String,
+    },
+    NogcBoundGenericStruct {
+        detail: String,
+    },
+    NogcGenericAsValue {
+        detail: String,
+    },
 }
 
 impl fmt::Display for TypeError {
@@ -475,7 +528,7 @@ impl TypeError {
         }
     }
 
-// a `nogc fn` type is only accepted as a bare immutable fn parameter
+    // a `nogc fn` type is only accepted as a bare immutable fn parameter
     pub fn nogc_out_of_position(span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::NogcOutOfPosition {
@@ -574,7 +627,7 @@ impl TypeError {
         }
     }
 
-// fail-closed, a binding the call site cannot pin down is a reject
+    // fail-closed, a binding the call site cannot pin down is a reject
     pub fn nogc_bound_unresolved(fn_name: &str, type_param: &str, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::NogcBoundUnresolved {
@@ -619,7 +672,7 @@ impl TypeError {
         }
     }
 
-// a nogc-bound generic referenced as a value escapes every checked call site
+    // a nogc-bound generic referenced as a value escapes every checked call site
     pub fn nogc_generic_as_value(fn_name: &str, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::NogcGenericAsValue {
@@ -724,4 +777,3 @@ impl TypeError {
         }
     }
 }
-

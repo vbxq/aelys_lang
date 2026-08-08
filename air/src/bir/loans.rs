@@ -1,9 +1,8 @@
-
 use std::collections::{HashMap, HashSet};
 
 use aelys_syntax::Span;
 
-use super::origins::{SummaryEntry, Summaries};
+use super::origins::{Summaries, SummaryEntry};
 use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -18,16 +17,16 @@ enum LoanKind {
 // pub(super) fields are the seeds pass 1 (origins.rs) reads: id, borrowed place, holder, reborrow
 pub(super) struct Loan {
     pub(super) id: LoanId,
-// the borrowed place, e.g. {v,[index]} for &v[0]
+    // the borrowed place, e.g. {v,[index]} for &v[0]
     pub(super) place: BirPlace,
     kind: LoanKind,
-// creation point: block ...
+    // creation point: block ...
     block: BirBlockId,
     index: usize,
-// borrow-expression span, for the [borrow] message
+    // borrow-expression span, for the [borrow] message
     span: Span,
     pub(super) holder: BirLocalId,
-// some(r) iff this is &mut *r, so the reborrow inherits r's loans (suspend rule)
+    // some(r) iff this is &mut *r, so the reborrow inherits r's loans (suspend rule)
     pub(super) reborrow_base: Option<BirLocalId>,
 }
 
@@ -57,7 +56,7 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
 
 fn check_body(body: &BirBody, summaries: &Summaries, errors: &mut Vec<BirDiagnostic>) {
     let loans = gen_loans(body, errors);
-// no borrows form zero loans, so the whole pass is a no-op (managed byte-identity rests here);
+    // no borrows form zero loans, so the whole pass is a no-op (managed byte-identity rests here);
     if loans.is_empty() {
         return;
     }
@@ -79,7 +78,11 @@ pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<
                     loans.push(Loan {
                         id: LoanId(loans.len() as u32),
                         place: place.clone(),
-                        kind: if *mutable { LoanKind::Mut } else { LoanKind::Shared },
+                        kind: if *mutable {
+                            LoanKind::Mut
+                        } else {
+                            LoanKind::Shared
+                        },
                         block: block.id,
                         index: i,
                         span: stmt.span,
@@ -88,7 +91,7 @@ pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<
                     });
                 }
                 BirRvalue::Aggregate(ops) => {
-// is rejected here, so no aggregate local ever carries a loan to track
+                    // is rejected here, so no aggregate local ever carries a loan to track
                     for op in ops {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = op {
                             if local_is_ref(body, p.local) {
@@ -138,7 +141,7 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
         }
     }
 
-// dst <- src flow edges: copy/move of a whole-local reference, and reborrow inheritance
+    // dst <- src flow edges: copy/move of a whole-local reference, and reborrow inheritance
     let mut edges: Vec<(usize, usize)> = Vec::new();
     for block in &body.blocks {
         for stmt in &block.stmts {
@@ -159,10 +162,13 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
         }
     }
 
-// pass-2 call-site edges: a returned reference inherits the loan of the argument it borrows,
+    // pass-2 call-site edges: a returned reference inherits the loan of the argument it borrows,
     for block in &body.blocks {
         for stmt in &block.stmts {
-            let BirStmtKind::Assign { dest, rvalue: BirRvalue::Call { callee, args, .. } } = &stmt.kind
+            let BirStmtKind::Assign {
+                dest,
+                rvalue: BirRvalue::Call { callee, args, .. },
+            } = &stmt.kind
             else {
                 continue;
             };
@@ -171,7 +177,7 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
             }
             match callee.as_ref().and_then(|name| summaries.get(name)) {
                 Some(SummaryEntry::Unique(ro)) if !ro.escapes_local => {
-// precise: only the arguments the summary marks as borrowed
+                    // precise: only the arguments the summary marks as borrowed
                     for (i, arg) in args.iter().enumerate() {
                         if ro.params.get(i).copied().unwrap_or(false) {
                             if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
@@ -181,8 +187,8 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
                     }
                 }
                 _ => {
-// none / ambiguous / a rejected (escapes_local) callee: over-approximate by
-// modelling the result as borrowing every reference-typed argument (sound)
+                    // none / ambiguous / a rejected (escapes_local) callee: over-approximate by
+                    // modelling the result as borrowing every reference-typed argument (sound)
                     for arg in args {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
                             if local_is_ref(body, p.local) {
@@ -332,7 +338,7 @@ fn compute_liveness(body: &BirBody) -> Liveness {
         }
     }
 
-// one backward sweep per block turns block sets into per-point sets
+    // one backward sweep per block turns block sets into per-point sets
     let mut live_before: Vec<Vec<HashSet<BirLocalId>>> = Vec::with_capacity(nblocks);
     let mut live_at_term: Vec<HashSet<BirLocalId>> = Vec::with_capacity(nblocks);
     for bi in 0..nblocks {
@@ -382,7 +388,7 @@ fn places_conflict(a: &BirPlace, b: &BirPlace) -> bool {
                 }
                 (BirProjection::Index, BirProjection::Index) => return true,
                 (BirProjection::Deref, BirProjection::Deref) => {}
-// e.g. field vs index cannot alias
+                // e.g. field vs index cannot alias
                 _ => return false,
             },
             _ => return true,
@@ -420,7 +426,7 @@ fn rvalue_operand_events<'a>(rv: &'a BirRvalue, out: &mut Vec<(&'a BirPlace, Acc
                 push_operand_event(o, out);
             }
         }
-// a ref is a borrow event, handled by the caller, never also a read of its place
+        // a ref is a borrow event, handled by the caller, never also a read of its place
         BirRvalue::Ref { .. } | BirRvalue::Reborrow { .. } => {}
     }
 }
@@ -473,14 +479,28 @@ fn check_conflicts(
             let created = created_loan_id(loans, block.id, i);
             let events = stmt_events(stmt);
             check_events(
-                body, loans, holds, live, &live.live_before[bi][i], created, &events, stmt.span,
+                body,
+                loans,
+                holds,
+                live,
+                &live.live_before[bi][i],
+                created,
+                &events,
+                stmt.span,
                 errors,
             );
         }
-// the terminator only reads; a borrow can never be created in a terminator
+        // the terminator only reads; a borrow can never be created in a terminator
         let events = term_events(&block.term);
         check_events(
-            body, loans, holds, live, &live.live_at_term[bi], None, &events, block.term_span,
+            body,
+            loans,
+            holds,
+            live,
+            &live.live_at_term[bi],
+            None,
+            &events,
+            block.term_span,
             errors,
         );
     }
@@ -501,7 +521,7 @@ fn check_events(
     if events.is_empty() {
         return;
     }
-// loan ids live at this point: a loan is live iff one of its holders is live
+    // loan ids live at this point: a loan is live iff one of its holders is live
     let mut live_loan_ids: HashSet<u32> = HashSet::new();
     for l in live_set {
         if let Some(h) = holds.get(l.0 as usize) {
@@ -516,9 +536,8 @@ fn check_events(
             if !live_loan_ids.contains(&l.id.0) {
                 continue;
             }
-// a borrow event does not conflict with the loan it is itself creating
-            if Some(l.id.0) == created
-                && matches!(access, Access::BorrowShared | Access::BorrowMut)
+            // a borrow event does not conflict with the loan it is itself creating
+            if Some(l.id.0) == created && matches!(access, Access::BorrowShared | Access::BorrowMut)
             {
                 continue;
             }
@@ -667,7 +686,9 @@ fn conflict_message(
         ),
         Access::BorrowShared => (
             "E0713",
-            format!("[borrow] cannot borrow `{name}` as shared while it is already mutably borrowed"),
+            format!(
+                "[borrow] cannot borrow `{name}` as shared while it is already mutably borrowed"
+            ),
         ),
         Access::Read => (
             "E0713",
@@ -702,4 +723,3 @@ fn render_place(body: &BirBody, place: &BirPlace) -> String {
     s.push_str(&suffix);
     s
 }
-

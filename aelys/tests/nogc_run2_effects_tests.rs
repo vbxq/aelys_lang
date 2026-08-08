@@ -22,7 +22,10 @@ fn f(src: &S) -> Rc<i64> {
 }
 ";
     let eff = effects_of(src, "f");
-    assert!(eff.contains(Effect::Managed), "reading a managed field through a ref carries Managed");
+    assert!(
+        eff.contains(Effect::Managed),
+        "reading a managed field through a ref carries Managed"
+    );
     assert!(!eff.contains(Effect::Alloc), "a retain allocates nothing");
 }
 
@@ -33,9 +36,18 @@ fn nogc_keystone_slice_arithmetic() {
 fn sum(a: &[i64]) -> i64 { return a[0] + a[1] }
 "#;
     let eff = effects_of(src, "sum");
-    assert!(eff.contains(Effect::Panic), "indexing carries Panic (bounds check)");
-    assert!(!eff.contains(Effect::Managed), "a slice compute is nogc: Managed absent");
-    assert!(!eff.contains(Effect::Alloc), "no allocation in a slice compute");
+    assert!(
+        eff.contains(Effect::Panic),
+        "indexing carries Panic (bounds check)"
+    );
+    assert!(
+        !eff.contains(Effect::Managed),
+        "a slice compute is nogc: Managed absent"
+    );
+    assert!(
+        !eff.contains(Effect::Alloc),
+        "no allocation in a slice compute"
+    );
 }
 
 #[test]
@@ -44,8 +56,14 @@ fn managed_param_even_if_unused() {
 fn f(r: Rc<i64>) -> i64 { return 5 }
 "#;
     let eff = effects_of(src, "f");
-    assert!(eff.contains(Effect::Managed), "an Rc param is released, so Managed");
-    assert!(!eff.contains(Effect::Alloc), "holding a param allocates nothing");
+    assert!(
+        eff.contains(Effect::Managed),
+        "an Rc param is released, so Managed"
+    );
+    assert!(
+        !eff.contains(Effect::Alloc),
+        "holding a param allocates nothing"
+    );
 }
 
 #[test]
@@ -81,7 +99,10 @@ fn push_one(v: Vec<i64>) -> i64 {
 ";
     let eff = effects_of(src, "push_one");
     assert!(eff.contains(Effect::Managed), "a Vec param is managed");
-    assert!(eff.contains(Effect::Alloc), "Vec::push grows on the managed heap");
+    assert!(
+        eff.contains(Effect::Alloc),
+        "Vec::push grows on the managed heap"
+    );
 }
 
 #[test]
@@ -96,17 +117,31 @@ fn dump() -> i64 {
 }
 ";
     let eff = effects_of(src, "dump");
-    assert!(eff.contains(Effect::Managed), "a discarded Rc temporary is released");
-    assert!(!eff.contains(Effect::Alloc), "the callee's alloc is a stage-2 summary, not intrinsic");
+    assert!(
+        eff.contains(Effect::Managed),
+        "a discarded Rc temporary is released"
+    );
+    assert!(
+        !eff.contains(Effect::Alloc),
+        "the callee's alloc is a stage-2 summary, not intrinsic"
+    );
 }
 
 #[test]
 fn div_and_mod_are_panic() {
     let div = effects_of("fn d(a: i64, b: i64) -> i64 { return a / b }", "d");
-    assert_eq!(div, EffectSet::EMPTY.with(Effect::Panic), "div carries only Panic");
+    assert_eq!(
+        div,
+        EffectSet::EMPTY.with(Effect::Panic),
+        "div carries only Panic"
+    );
 
     let modu = effects_of("fn m(a: i64, b: i64) -> i64 { return a % b }", "m");
-    assert_eq!(modu, EffectSet::EMPTY.with(Effect::Panic), "mod carries only Panic");
+    assert_eq!(
+        modu,
+        EffectSet::EMPTY.with(Effect::Panic),
+        "mod carries only Panic"
+    );
 }
 
 // a slice range is bounds-checked, so it panics; primitive elements keep it nogc.
@@ -133,7 +168,10 @@ fn unwrapper() -> i64 { return ok_val().unwrap() }
 "#;
     let eff = effects_of(src, "unwrapper");
     assert!(eff.contains(Effect::Panic), "the Err arm panics");
-    assert!(!eff.contains(Effect::Managed), "a Result of primitives is not managed");
+    assert!(
+        !eff.contains(Effect::Managed),
+        "a Result of primitives is not managed"
+    );
 }
 
 #[test]
@@ -141,7 +179,11 @@ fn pure_arithmetic_is_empty() {
     let src = r#"
 fn pure(a: i64, b: i64) -> i64 { return a + b * a - b }
 "#;
-    assert_eq!(effects_of(src, "pure"), EffectSet::EMPTY, "pure arithmetic is effect-free");
+    assert_eq!(
+        effects_of(src, "pure"),
+        EffectSet::EMPTY,
+        "pure arithmetic is effect-free"
+    );
 }
 
 #[test]
@@ -155,9 +197,18 @@ fn make() -> i64 {
 }
 "#;
     let eff = effects_of(src, "make");
-    assert!(eff.contains(Effect::Managed), "the captured env lives on the managed heap");
-    assert!(eff.contains(Effect::Alloc), "constructing the closure env allocates");
-    assert!(!eff.contains(Effect::Panic), "no bounds-checked or dividing op in the constructor");
+    assert!(
+        eff.contains(Effect::Managed),
+        "the captured env lives on the managed heap"
+    );
+    assert!(
+        eff.contains(Effect::Alloc),
+        "constructing the closure env allocates"
+    );
+    assert!(
+        !eff.contains(Effect::Panic),
+        "no bounds-checked or dividing op in the constructor"
+    );
 }
 
 #[test]
@@ -172,4 +223,3 @@ fn effectset_algebra() {
     assert!(!managed.is_nogc());
     assert!(panic.is_nogc(), "Panic alone is still nogc");
 }
-

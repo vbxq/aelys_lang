@@ -368,7 +368,7 @@ impl TypeInference {
                     .collect(),
             },
 
-// payload_ty is a separate copy of the node type, so finalize it too or a var leaks
+            // payload_ty is a separate copy of the node type, so finalize it too or a var leaks
             TypedExprKind::ResultAssert {
                 scrutinee,
                 ok_tag,
@@ -445,4 +445,3 @@ impl TypeInference {
         }
     }
 }
-

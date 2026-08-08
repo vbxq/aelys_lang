@@ -292,11 +292,7 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(index, calls);
             collect_calls_in_expr(value, calls);
         }
-        TypedExprKind::FieldAssign {
-            object,
-            value,
-            ..
-        } => {
+        TypedExprKind::FieldAssign { object, value, .. } => {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(value, calls);
         }
@@ -458,11 +454,7 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(index, counts);
             count_calls_in_expr(value, counts);
         }
-        TypedExprKind::FieldAssign {
-            object,
-            value,
-            ..
-        } => {
+        TypedExprKind::FieldAssign { object, value, .. } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(value, counts);
         }

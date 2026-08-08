@@ -201,7 +201,7 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
             rewrite_operand(base, replacements);
             rewrite_operand(index, replacements);
         }
-// the root and the index operand: a missed index leaves a stale local reference
+        // the root and the index operand: a missed index leaves a stale local reference
         Rvalue::AddressOf(place) => {
             rewrite_place(place, replacements);
         }
@@ -299,4 +299,3 @@ fn bump_place_write(place: &Place, counts: &mut HashMap<LocalId, u32>) {
 fn bump_local(local: LocalId, counts: &mut HashMap<LocalId, u32>) {
     *counts.entry(local).or_insert(0) += 1;
 }
-

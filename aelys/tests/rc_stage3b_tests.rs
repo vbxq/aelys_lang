@@ -1,9 +1,7 @@
 use aelys_air::layout::compute_layouts;
 use aelys_air::rc_paths::{RcLeafPath, RcPathStep};
 use aelys_air::rc_types::{collect_rc_types, compute_offset_for_path};
-use aelys_air::{
-    AirEnumDef, AirEnumVariant, AirProgram, AirStructDef, AirStructField, AirType,
-};
+use aelys_air::{AirEnumDef, AirEnumVariant, AirProgram, AirStructDef, AirStructField, AirType};
 use aelys_driver::compile_file_with_llvm;
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -109,13 +107,17 @@ fn unit_struct_offsets_match_field_offsets() {
     );
     let off_a = compute_offset_for_path(
         &AirType::Struct("Pair".into()),
-        &RcLeafPath { steps: vec![RcPathStep::Field("a".into())] },
+        &RcLeafPath {
+            steps: vec![RcPathStep::Field("a".into())],
+        },
         &p,
     )
     .expect("offset a");
     let off_b = compute_offset_for_path(
         &AirType::Struct("Pair".into()),
-        &RcLeafPath { steps: vec![RcPathStep::Field("b".into())] },
+        &RcLeafPath {
+            steps: vec![RcPathStep::Field("b".into())],
+        },
         &p,
     )
     .expect("offset b");
@@ -147,7 +149,10 @@ fn unit_enum_payload_head_is_four_not_eight() {
         &p,
     )
     .expect("enum offset");
-    assert_eq!(off, 4, "enum payload Rc leaf MUST be at offset 4, not 8 (R-K4)");
+    assert_eq!(
+        off, 4,
+        "enum payload Rc leaf MUST be at offset 4, not 8 (R-K4)"
+    );
 }
 
 #[test]
@@ -200,10 +205,15 @@ fn unit_missing_field_offset_is_a_hard_error() {
     p.struct_sizes.clear();
     let err = compute_offset_for_path(
         &AirType::Struct("Pair".into()),
-        &RcLeafPath { steps: vec![RcPathStep::Field("a".into())] },
+        &RcLeafPath {
+            steps: vec![RcPathStep::Field("a".into())],
+        },
         &p,
     );
-    assert!(err.is_err(), "missing field offset must be a hard error, got {err:?}");
+    assert!(
+        err.is_err(),
+        "missing field offset must be a hard error, got {err:?}"
+    );
 }
 
 const PAIR_CARRIER: &str = r#"
@@ -226,7 +236,10 @@ fn b1_carrier_writes_distinct_nonzero_type_id() {
         "the Pair carrier must stamp the distinct 1-based type_id 2 @8; got:\n{ir}"
     );
     let words = table_words(&ir);
-    assert_eq!(words[0], 3, "expected reserved + 2 real reference types (n_entries=3); got {words:?}");
+    assert_eq!(
+        words[0], 3,
+        "expected reserved + 2 real reference types (n_entries=3); got {words:?}"
+    );
 }
 
 #[test]
@@ -243,9 +256,17 @@ fn main() -> i64 {
 "#,
     );
     let entries = decode_table(&table_words(&ir));
-    assert_eq!(entries.len(), 2, "reserved sentinel + Rc<i64> should be in the table; got {entries:?}");
+    assert_eq!(
+        entries.len(),
+        2,
+        "reserved sentinel + Rc<i64> should be in the table; got {entries:?}"
+    );
     assert_eq!(entries[0], (0, vec![]), "reserved sentinel slot (count 0)");
-    assert_eq!(entries[1], (0, vec![]), "Rc<i64> must be count 0 (no Ptr leaf)");
+    assert_eq!(
+        entries[1],
+        (0, vec![]),
+        "Rc<i64> must be count 0 (no Ptr leaf)"
+    );
 }
 
 #[test]
@@ -407,7 +428,9 @@ fn main() -> i64 { return mk() }
     match cc {
         Ok(out) if out.status.success() => {}
         Ok(_) | Err(_) => {
-            eprintln!("clang unavailable / table compile failed; skipping C exec proof (IR offset=4 already asserted)");
+            eprintln!(
+                "clang unavailable / table compile failed; skipping C exec proof (IR offset=4 already asserted)"
+            );
             return;
         }
     }
@@ -455,7 +478,10 @@ fn b_extra_collect_dedups_and_orders_by_appearance() {
         FunctionId, GcMode, InlineHint, LocalId,
     };
     let rc_alloc = |id: u32, ty: AirType| AirStmt {
-        kind: AirStmtKind::RcAlloc { local: LocalId(id), ty },
+        kind: AirStmtKind::RcAlloc {
+            local: LocalId(id),
+            ty,
+        },
         span: None,
     };
     let mut p = AirProgram {
@@ -524,7 +550,10 @@ fn opta_no_real_type_is_zero() {
         FunctionId, GcMode, InlineHint, LocalId,
     };
     let rc_alloc = |id: u32, ty: AirType| AirStmt {
-        kind: AirStmtKind::RcAlloc { local: LocalId(id), ty },
+        kind: AirStmtKind::RcAlloc {
+            local: LocalId(id),
+            ty,
+        },
         span: None,
     };
     let mut p = AirProgram {

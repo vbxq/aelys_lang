@@ -75,11 +75,7 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(index);
                 self.substitute_constants(value);
             }
-            TypedExprKind::FieldAssign {
-                object,
-                value,
-                ..
-            } => {
+            TypedExprKind::FieldAssign { object, value, .. } => {
                 self.substitute_constants(object);
                 self.substitute_constants(value);
             }

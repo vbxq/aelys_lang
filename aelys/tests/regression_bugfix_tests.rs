@@ -506,4 +506,3 @@ fn main() -> i64 {
         side_calls, printed
     );
 }
-

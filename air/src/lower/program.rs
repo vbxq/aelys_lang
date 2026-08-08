@@ -108,7 +108,7 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
-// next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
+        // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
@@ -225,7 +225,7 @@ impl<'a> LoweringContext<'a> {
             span: Some(self.span(&func.span)),
         });
 
-// write-backs are gone, so a `&mut <capture>` that escapes into a call still writes
+        // write-backs are gone, so a `&mut <capture>` that escapes into a call still writes
         let mut slot_pairs: Vec<(LocalId, String)> = Vec::new();
         for (cap_name, cap_ty) in captures {
             let cap_air = self.lower_type_from_infer(cap_ty);
@@ -295,7 +295,7 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
-// next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
+        // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
@@ -327,7 +327,10 @@ impl<'a> LoweringContext<'a> {
         self.next_block_id = saved_next_block;
     }
 
-    pub(super) fn runtime_captures(&self, captures: &[(String, InferType)]) -> Vec<(String, InferType)> {
+    pub(super) fn runtime_captures(
+        &self,
+        captures: &[(String, InferType)],
+    ) -> Vec<(String, InferType)> {
         // File-scope lets live in global storage, not in closure environments.
         captures
             .iter()
@@ -370,7 +373,11 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    pub(super) fn register_affine_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
+    pub(super) fn register_affine_params(
+        &mut self,
+        params: &[TypedParam],
+        air_params: &[AirParam],
+    ) {
         for (p, air) in params.iter().zip(air_params.iter()) {
             if matches!(self.affine_category(&p.ty), crate::bir::Category::Affine) {
                 self.affine_locals.push(crate::lower::AffineLocal {
@@ -423,11 +430,19 @@ impl<'a> LoweringContext<'a> {
     }
 
     // unlike try_const_expr this can emit, so it also folds non-capturing lambdas
-    pub(super) fn try_global_const_expr(&mut self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
+    pub(super) fn try_global_const_expr(
+        &mut self,
+        expr: &aelys_sema::TypedExpr,
+    ) -> Option<AirConst> {
         use aelys_sema::TypedExprKind;
         match &expr.kind {
             TypedExprKind::Lambda(inner) => self.try_global_const_expr(inner),
-            TypedExprKind::LambdaInner { params, return_type, body, captures } => {
+            TypedExprKind::LambdaInner {
+                params,
+                return_type,
+                body,
+                captures,
+            } => {
                 let runtime_caps = self.runtime_captures(captures);
                 if !runtime_caps.is_empty() {
                     return None; // capturing lambdas cannot be global constants
@@ -463,7 +478,10 @@ impl<'a> LoweringContext<'a> {
                 for (fname, fexpr) in &fields {
                     field_consts.push((fname.clone(), self.try_global_const_expr(fexpr)?));
                 }
-                Some(AirConst::Struct { name, fields: field_consts })
+                Some(AirConst::Struct {
+                    name,
+                    fields: field_consts,
+                })
             }
             _ => self.try_const_expr(expr),
         }
@@ -493,9 +511,9 @@ impl<'a> LoweringContext<'a> {
     fn enum_payload_needs_runtime_storage(init: &AirConst) -> bool {
         match init {
             AirConst::Str(_) | AirConst::FnRef(_) => true,
-            AirConst::Enum { payload, .. } => payload
-                .iter()
-                .any(Self::enum_payload_needs_runtime_storage),
+            AirConst::Enum { payload, .. } => {
+                payload.iter().any(Self::enum_payload_needs_runtime_storage)
+            }
             _ => false,
         }
     }
@@ -513,7 +531,9 @@ impl<'a> LoweringContext<'a> {
             let init = global.init.as_ref()?.clone();
             match init {
                 // Follow fnptr aliases through prior globals until we reach the real symbol.
-                AirConst::FnRef(target) if self.globals.iter().any(|global| global.name == target) => {
+                AirConst::FnRef(target)
+                    if self.globals.iter().any(|global| global.name == target) =>
+                {
                     current = target;
                 }
                 other => return Some(other),
@@ -556,16 +576,16 @@ impl<'a> LoweringContext<'a> {
                 variant,
                 tag,
                 args,
-            }
-                if args.is_empty()
-                    && self
-                        .program
-                        .type_table
-                        .get_enum(enum_name)
-                        .is_some_and(|def| def
-                            .variants
-                            .iter()
-                            .any(|candidate| candidate.name == *variant && candidate.data.is_empty())) =>
+            } if args.is_empty()
+                && self
+                    .program
+                    .type_table
+                    .get_enum(enum_name)
+                    .is_some_and(|def| {
+                        def.variants.iter().any(|candidate| {
+                            candidate.name == *variant && candidate.data.is_empty()
+                        })
+                    }) =>
             {
                 Some(AirConst::Int(*tag as i64, AirIntSize::I32))
             }
@@ -602,14 +622,14 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::StructLiteral { name, fields } => {
                 let field_consts: Option<Vec<(String, AirConst)>> = fields
                     .iter()
-                    .map(|(fname, fexpr)| {
-                        self.try_const_expr(fexpr).map(|c| (fname.clone(), c))
-                    })
+                    .map(|(fname, fexpr)| self.try_const_expr(fexpr).map(|c| (fname.clone(), c)))
                     .collect();
-                field_consts.map(|fields| AirConst::Struct { name: name.clone(), fields })
+                field_consts.map(|fields| AirConst::Struct {
+                    name: name.clone(),
+                    fields,
+                })
             }
             _ => None,
         }
     }
 }
-

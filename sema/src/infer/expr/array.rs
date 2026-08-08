@@ -25,8 +25,8 @@ impl TypeInference {
         }
     }
 
-// same hazard one container down: an aggregate element that owns a vec buffer is copied
-// flat, so both copies would point at one buffer with no retain
+    // same hazard one container down: an aggregate element that owns a vec buffer is copied
+    // flat, so both copies would point at one buffer with no retain
     fn reject_vec_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
         for elem in elements {
             if self.type_table.contains_vec_by_value(&elem.ty) {
@@ -104,10 +104,7 @@ impl TypeInference {
         let typed_fill = fill_value.map(|fv| Box::new(self.infer_expr(fv)));
 
         if let Some(ref fv) = typed_fill {
-            if fv.ty.is_rc()
-                || fv.ty.contains_rc()
-                || self.type_table.contains_rc_nominal(&fv.ty)
-            {
+            if fv.ty.is_rc() || fv.ty.contains_rc() || self.type_table.contains_rc_nominal(&fv.ty) {
                 self.errors.push(TypeError::rc_out_of_surface(
                     format!(
                         "fill value of array `[_; N]` is a value of type `{}` which embeds an \
@@ -246,7 +243,7 @@ impl TypeInference {
         let typed_index = self.infer_expr(index);
         let mut typed_value = self.infer_expr(value);
 
-// a slice write is governed by the slice referent, not the binding mutability
+        // a slice write is governed by the slice referent, not the binding mutability
         if !matches!(typed_object.ty, InferType::Slice { .. }) {
             if let ExprKind::Identifier(ref name) = object.kind {
                 if !self.env.is_mutable(name) {
@@ -278,11 +275,9 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-// r1-r3 already refuse the construction forms; this is the fail-closed backstop
-        if matches!(
-            typed_object.ty,
-            InferType::Array(_, _) | InferType::Vec(_)
-        ) && self.type_table.contains_vec_by_value(&typed_value.ty)
+        // r1-r3 already refuse the construction forms; this is the fail-closed backstop
+        if matches!(typed_object.ty, InferType::Array(_, _) | InferType::Vec(_))
+            && self.type_table.contains_vec_by_value(&typed_value.ty)
         {
             self.errors.push(TypeError::vec_out_of_surface(
                 format!(
@@ -303,13 +298,15 @@ impl TypeInference {
             | InferType::Slice { elem: elem_ty, .. } => {
                 self.try_narrow_literal(&mut typed_value, elem_ty);
                 // Implicit numeric widening for index assignment
-                if typed_value.ty != **elem_ty
-                    && typed_value.ty.can_implicit_widen_to(elem_ty)
-                {
+                if typed_value.ty != **elem_ty && typed_value.ty.can_implicit_widen_to(elem_ty) {
                     let vspan = typed_value.span;
                     let original = std::mem::replace(
                         &mut typed_value,
-                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
                     );
                     typed_value = TypedExpr {
                         kind: TypedExprKind::Cast {
@@ -351,7 +348,7 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
 
-// real sliceability error is reported post-substitution in validate.rs
+        // real sliceability error is reported post-substitution in validate.rs
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
@@ -455,4 +452,3 @@ impl TypeInference {
         )
     }
 }
-

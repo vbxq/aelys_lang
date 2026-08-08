@@ -15,10 +15,7 @@ pub struct RcTypeTable {
 
 impl RcTypeTable {
     pub fn lookup_id(&self, ty: &AirType) -> Option<u32> {
-        self.entries
-            .iter()
-            .find(|e| &e.ty == ty)
-            .map(|e| e.type_id)
+        self.entries.iter().find(|e| &e.ty == ty).map(|e| e.type_id)
     }
 }
 
@@ -86,15 +83,9 @@ pub fn compute_offset_for_path(
                     .ok_or_else(|| {
                         RcOffsetError(format!("unknown enum `{enum_name}` along Rc path"))
                     })?;
-                let variant = def
-                    .variants
-                    .iter()
-                    .find(|v| v.tag == *tag)
-                    .ok_or_else(|| {
-                        RcOffsetError(format!(
-                            "unknown variant tag {tag} on enum `{enum_name}`"
-                        ))
-                    })?;
+                let variant = def.variants.iter().find(|v| v.tag == *tag).ok_or_else(|| {
+                    RcOffsetError(format!("unknown variant tag {tag} on enum `{enum_name}`"))
+                })?;
                 let idx = *field_index as usize;
                 if idx >= variant.payload.len() {
                     return Err(RcOffsetError(format!(

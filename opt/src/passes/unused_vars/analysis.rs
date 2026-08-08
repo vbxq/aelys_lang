@@ -159,11 +159,7 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             collect_uses_in_expr(index, used);
             collect_uses_in_expr(value, used);
         }
-        TypedExprKind::FieldAssign {
-            object,
-            value,
-            ..
-        } => {
+        TypedExprKind::FieldAssign { object, value, .. } => {
             collect_uses_in_expr(object, used);
             collect_uses_in_expr(value, used);
         }
@@ -227,4 +223,3 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         | TypedExprKind::Null => {}
     }
 }
-

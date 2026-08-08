@@ -78,7 +78,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
     assert!(
         err.contains("returns a reference to local"),
         "must be the return-ref-to-local diagnostic: {err}"
@@ -117,8 +120,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot move"), "the move while the returned ref is live must reject: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot move"),
+        "the move while the returned ref is live must reject: {err}"
+    );
 }
 
 #[test]
@@ -158,7 +167,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
     assert!(
         err.contains("does not live long enough"),
         "must be the scope-death escape diagnostic: {err}"
@@ -182,7 +194,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
     assert!(
         err.contains("does not live long enough"),
         "must be the scope-death escape diagnostic: {err}"
@@ -237,7 +252,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
     assert!(
         err.contains("aggregate containers"),
         "must be the container-boundary diagnostic: {err}"
@@ -272,8 +290,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
-    assert!(err.contains("closure"), "must be the closure-capture diagnostic: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
+    assert!(
+        err.contains("closure"),
+        "must be the closure-capture diagnostic: {err}"
+    );
 }
 
 #[test]
@@ -307,7 +331,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[escape]"), "must carry the escape marker: {err}");
+    assert!(
+        err.contains("[escape]"),
+        "must carry the escape marker: {err}"
+    );
     assert!(
         err.contains("cannot infer the origin"),
         "must be the origin-floor diagnostic: {err}"
@@ -331,7 +358,10 @@ fn main() -> i64 {
     let Some(code) = run_exit(src) else {
         return;
     };
-    assert_eq!(code, 10, "the returned reference borrows `a`, so *r is a = 10");
+    assert_eq!(
+        code, 10,
+        "the returned reference borrows `a`, so *r is a = 10"
+    );
 }
 
 #[test]
@@ -412,4 +442,3 @@ fn main() -> i64 {
         "expected the nested-ref construction reject, got: {err}"
     );
 }
-

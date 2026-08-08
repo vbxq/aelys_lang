@@ -1,6 +1,6 @@
 // must-use for a dropped result + the discard escape hatch
 
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -209,7 +209,10 @@ fn positive_discard_runs() {
     else {
         return;
     };
-    assert_eq!(code, 0, "discard risky(5); return 0 must exit 0; stderr:\n{stderr}");
+    assert_eq!(
+        code, 0,
+        "discard risky(5); return 0 must exit 0; stderr:\n{stderr}"
+    );
     assert!(stdout.is_empty(), "no output expected, got {stdout:?}");
 }
 
@@ -239,7 +242,12 @@ fn discard_evaluates_operand_exactly_once() {
     };
     assert!(stdout.is_empty(), "no output expected, got {stdout:?}");
     let (allocs, _frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(code, 0, "discard make(); return 0 must exit 0; stderr:\n{stderr}");
-    assert_eq!(allocs, 1, "discard must evaluate its operand exactly once (one Rc::new)");
+    assert_eq!(
+        code, 0,
+        "discard make(); return 0 must exit 0; stderr:\n{stderr}"
+    );
+    assert_eq!(
+        allocs, 1,
+        "discard must evaluate its operand exactly once (one Rc::new)"
+    );
 }
-

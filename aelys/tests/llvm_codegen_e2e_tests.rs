@@ -398,7 +398,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(ir.contains("@__aelys_main"), "{ir}");
-    assert!(ir.contains("ptr @__aelys_main") || ir.contains("@__aelys_main"), "{ir}");
+    assert!(
+        ir.contains("ptr @__aelys_main") || ir.contains("@__aelys_main"),
+        "{ir}"
+    );
 }
 
 #[test]

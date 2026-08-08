@@ -1,4 +1,3 @@
-
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_common::{Diagnostic, Replacement, Severity, Suggestion};
@@ -76,7 +75,11 @@ pub(super) fn mono_errors_to_error(
                 &format!("[monomorphization] {}", numbered(&other)),
             )
             .with_code("E0901")
-            .with_primary_label(source.clone(), span, Some("backend error".to_string())),
+            .with_primary_label(
+                source.clone(),
+                span,
+                Some("backend error".to_string()),
+            ),
         );
     }
     AelysError::Multiple(diagnostics)
@@ -182,7 +185,10 @@ fn primary_hint(marker: &str) -> String {
     }
 }
 
-pub(super) fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> AelysError {
+pub(super) fn sema_errors_to_diagnostics(
+    errors: Vec<TypeError>,
+    source: Arc<Source>,
+) -> AelysError {
     let mut sorted_errors = errors;
     sorted_errors.sort_by(|a, b| {
         let left = (a.span.start, a.span.end, a.span.line, a.span.column);
@@ -348,11 +354,9 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "reference to module-level storage".to_string(),
         ),
-        TypeErrorKind::MustUse { .. } => (
-            "E0411",
-            error.to_string(),
-            "unused `Result`".to_string(),
-        ),
+        TypeErrorKind::MustUse { .. } => {
+            ("E0411", error.to_string(), "unused `Result`".to_string())
+        }
         TypeErrorKind::NogcOutOfPosition { .. } => (
             "E0728",
             error.to_string(),
@@ -368,11 +372,9 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "shadows a `nogc fn` parameter".to_string(),
         ),
-        TypeErrorKind::NogcCallbackMismatch { .. } => (
-            "E0729",
-            error.to_string(),
-            "not a `nogc fn`".to_string(),
-        ),
+        TypeErrorKind::NogcCallbackMismatch { .. } => {
+            ("E0729", error.to_string(), "not a `nogc fn`".to_string())
+        }
         TypeErrorKind::NogcBoundViolation { .. } => (
             "E0730",
             error.to_string(),
@@ -604,4 +606,3 @@ fn native_entry_help(message: &str) -> Option<String> {
     }
     None
 }
-

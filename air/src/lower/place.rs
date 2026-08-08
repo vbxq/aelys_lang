@@ -12,17 +12,17 @@ pub(super) enum PlaceRoot {
 }
 
 pub(super) struct Addr {
-/// an air local of type `ptr(pointee)`: the address of the place, never of a copy
+    /// an air local of type `ptr(pointee)`: the address of the place, never of a copy
     pub ptr: LocalId,
     pub pointee: AirType,
     pub root: PlaceRoot,
-/// the chain dereferenced a shared `&`; sema owns the decision, this only reports it
+    /// the chain dereferenced a shared `&`; sema owns the decision, this only reports it
     #[allow(dead_code)]
     pub shared: bool,
 }
 
 impl<'a> LoweringContext<'a> {
-/// the canonical place-address computation for user places. `none` iff the expression
+    /// the canonical place-address computation for user places. `none` iff the expression
     pub(super) fn place_addr(&mut self, e: &TypedExpr) -> Option<Addr> {
         let sp = Some(self.span(&e.span));
         match &e.kind {
@@ -58,7 +58,7 @@ impl<'a> LoweringContext<'a> {
                 }
             }
 
-// the loaded pointee would address a stack temp
+            // the loaded pointee would address a stack temp
             TypedExprKind::Deref(inner) => {
                 let op = self.lower_expr(inner);
                 let ptr_ty = self.lower_type_from_infer(&inner.ty);
@@ -71,7 +71,7 @@ impl<'a> LoweringContext<'a> {
                 })
             }
 
-// shared borrow, so `shared` stays false and `rc::get(rc).f = v` becomes correct
+            // shared borrow, so `shared` stays false and `rc::get(rc).f = v` becomes correct
             TypedExprKind::EnumVariant {
                 enum_name,
                 variant,
@@ -119,7 +119,7 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-/// pointer an `rc` handle, a reference, an `rc`-typed field the projection auto-derefs
+    /// pointer an `rc` handle, a reference, an `rc`-typed field the projection auto-derefs
     pub(super) fn projection_base(&mut self, object: &TypedExpr) -> Option<Addr> {
         if let AirType::Ptr(inner) = self.lower_type_from_infer(&object.ty) {
             let ptr_ty = AirType::Ptr(inner.clone());
@@ -135,7 +135,7 @@ impl<'a> LoweringContext<'a> {
         self.place_addr(object)
     }
 
-/// only reason it is not `place_addr(<the capture identifier>)` is that the binding it
+    /// only reason it is not `place_addr(<the capture identifier>)` is that the binding it
     pub(super) fn addr_of_env_field(
         &mut self,
         env: LocalId,
@@ -145,8 +145,8 @@ impl<'a> LoweringContext<'a> {
         self.emit_addr_of(Place::Field(env, field.to_string()), pointee, None)
     }
 
-/// a capture reads and writes through the env-field pointer the prologue computed, so its
-/// address is that pointer, with no second addressof.
+    /// a capture reads and writes through the env-field pointer the prologue computed, so its
+    /// address is that pointer, with no second addressof.
     pub(super) fn capture_addr(&mut self, cap_ptr: LocalId, pointee: AirType) -> Addr {
         Addr {
             ptr: cap_ptr,
@@ -156,7 +156,7 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-/// the only other entry point: the address of a temp this lowering just allocated. its
+    /// the only other entry point: the address of a temp this lowering just allocated. its
     pub(super) fn addr_of_own_temp(
         &mut self,
         t: LocalId,
@@ -178,4 +178,3 @@ impl<'a> LoweringContext<'a> {
         tmp
     }
 }
-

@@ -1,5 +1,5 @@
 use aelys_air::bir::build::build_program;
-use aelys_air::bir::{effect_summaries, Effect, EffectSet};
+use aelys_air::bir::{Effect, EffectSet, effect_summaries};
 use aelys_driver::{compile_file_with_llvm, compile_to_typed_ast, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -511,4 +511,3 @@ fn nogc_panic_path_is_asan_clean() {
         assert_asan_clean("asan in bounds", &out);
     }
 }
-

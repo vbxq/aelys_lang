@@ -61,20 +61,28 @@ impl TypeInference {
                 // is still i64/f64/Var (e.g. a match/if/block containing literals),
                 // narrow the unresolved operand to match. This handles patterns
                 // like `total_i32 + match m { ... => 0 }`.
-                if typed_left.ty.is_integer() && typed_left.ty != InferType::I64
-                    && (typed_right.ty == InferType::I64 || matches!(typed_right.ty, InferType::Var(_)))
+                if typed_left.ty.is_integer()
+                    && typed_left.ty != InferType::I64
+                    && (typed_right.ty == InferType::I64
+                        || matches!(typed_right.ty, InferType::Var(_)))
                 {
                     self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
-                } else if typed_right.ty.is_integer() && typed_right.ty != InferType::I64
-                    && (typed_left.ty == InferType::I64 || matches!(typed_left.ty, InferType::Var(_)))
+                } else if typed_right.ty.is_integer()
+                    && typed_right.ty != InferType::I64
+                    && (typed_left.ty == InferType::I64
+                        || matches!(typed_left.ty, InferType::Var(_)))
                 {
                     self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
-                } else if typed_left.ty.is_float() && typed_left.ty != InferType::F64
-                    && (typed_right.ty == InferType::F64 || matches!(typed_right.ty, InferType::Var(_)))
+                } else if typed_left.ty.is_float()
+                    && typed_left.ty != InferType::F64
+                    && (typed_right.ty == InferType::F64
+                        || matches!(typed_right.ty, InferType::Var(_)))
                 {
                     self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
-                } else if typed_right.ty.is_float() && typed_right.ty != InferType::F64
-                    && (typed_left.ty == InferType::F64 || matches!(typed_left.ty, InferType::Var(_)))
+                } else if typed_right.ty.is_float()
+                    && typed_right.ty != InferType::F64
+                    && (typed_left.ty == InferType::F64
+                        || matches!(typed_left.ty, InferType::Var(_)))
                 {
                     self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
                 }
@@ -88,7 +96,11 @@ impl TypeInference {
                     let span = typed_left.span;
                     let original = std::mem::replace(
                         &mut typed_left,
-                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span,
+                        },
                     );
                     typed_left = TypedExpr {
                         kind: TypedExprKind::Cast {
@@ -104,7 +116,11 @@ impl TypeInference {
                     let span = typed_right.span;
                     let original = std::mem::replace(
                         &mut typed_right,
-                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span,
+                        },
                     );
                     typed_right = TypedExpr {
                         kind: TypedExprKind::Cast {
@@ -191,8 +207,10 @@ impl TypeInference {
                 if *mutable {
                     if let ExprKind::Identifier(name) = &operand.kind {
                         if self.env.lookup_local(name).is_some() && !self.env.is_mutable(name) {
-                            self.errors
-                                .push(TypeError::mut_ref_immutable_binding(name.clone(), expr.span));
+                            self.errors.push(TypeError::mut_ref_immutable_binding(
+                                name.clone(),
+                                expr.span,
+                            ));
                         }
                     }
                 }
@@ -297,7 +315,7 @@ impl TypeInference {
             ExprKind::Catch { scrutinee, handler } => {
                 self.infer_catch_expr(scrutinee, handler, expr.span)
             }
-// unsafe is erased like try; tuple flow keeps depth -= 1 from being skipped by an early return
+            // unsafe is erased like try; tuple flow keeps depth -= 1 from being skipped by an early return
             ExprKind::Unsafe(inner) => {
                 self.unsafe_depth += 1;
                 let t = self.infer_expr(inner);
@@ -523,7 +541,11 @@ impl TypeInference {
                             let vspan = elem.span;
                             let original = std::mem::replace(
                                 elem,
-                                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                                TypedExpr {
+                                    kind: TypedExprKind::Null,
+                                    ty: InferType::Null,
+                                    span: vspan,
+                                },
                             );
                             *elem = TypedExpr {
                                 kind: TypedExprKind::Cast {
@@ -671,8 +693,10 @@ impl TypeInference {
                 if matches!(expr.ty, InferType::Var(_)) || matches!(expr.ty, InferType::Enum(..)) {
                     let then_ok = self.try_narrow_literal(then_branch, target_ty);
                     let else_ok = self.try_narrow_literal(else_branch, target_ty);
-                    if then_ok && else_ok
-                        && then_branch.ty == *target_ty && else_branch.ty == *target_ty
+                    if then_ok
+                        && else_ok
+                        && then_branch.ty == *target_ty
+                        && else_branch.ty == *target_ty
                     {
                         expr.ty = target_ty.clone();
                         return true;
@@ -714,9 +738,14 @@ impl TypeInference {
         // Match result types are often Var(_) (unresolved type variable) rather
         // than concrete I64/F64, so also attempt narrowing when the type is a Var.
         if let TypedExprKind::Match { arms, .. } = &mut expr.kind {
-            let is_narrowable = (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
-                || (expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64)
-                || (matches!(expr.ty, InferType::Var(_)) && (target_ty.is_integer() || target_ty.is_float()));
+            let is_narrowable = (expr.ty == InferType::I64
+                && target_ty.is_integer()
+                && *target_ty != InferType::I64)
+                || (expr.ty == InferType::F64
+                    && target_ty.is_float()
+                    && *target_ty != InferType::F64)
+                || (matches!(expr.ty, InferType::Var(_))
+                    && (target_ty.is_integer() || target_ty.is_float()));
             if is_narrowable {
                 let mut all_ok = true;
                 let mut all_narrowed = true;
@@ -743,7 +772,9 @@ impl TypeInference {
         // narrow block expressions: recurse into the tail expression.
         if let TypedExprKind::Block { tail, .. } = &mut expr.kind {
             if (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
-                || (expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64)
+                || (expr.ty == InferType::F64
+                    && target_ty.is_float()
+                    && *target_ty != InferType::F64)
             {
                 let ok = self.try_narrow_literal(tail, target_ty);
                 if ok && tail.ty == *target_ty {
@@ -759,10 +790,14 @@ impl TypeInference {
 
         // narrow enum variant args when the target is the same enum with concrete type params.
         // e.g. `Maybe::Just(2.5)` with target `Maybe<f32>` → narrow 2.5 to f32.
-        if let TypedExprKind::EnumVariant { args, enum_name, .. } = &mut expr.kind {
+        if let TypedExprKind::EnumVariant {
+            args, enum_name, ..
+        } = &mut expr.kind
+        {
             if let InferType::Enum(target_name, target_type_args) = target_ty {
                 if let InferType::Enum(expr_name, expr_type_args) = &expr.ty {
-                    if enum_name == target_name && expr_name == target_name
+                    if enum_name == target_name
+                        && expr_name == target_name
                         && target_type_args.len() == expr_type_args.len()
                     {
                         // For each type arg that is Var in expr but concrete in target,
@@ -771,10 +806,10 @@ impl TypeInference {
                         // all target type args are concrete — if so, we can adopt
                         // the target type. For unit variants (no args), this is the
                         // only way to narrow.
-                        let all_expr_var = expr_type_args.iter()
+                        let all_expr_var = expr_type_args
+                            .iter()
                             .all(|t| matches!(t, InferType::Var(_)));
-                        let all_target_concrete = target_type_args.iter()
-                            .all(|t| t.is_concrete());
+                        let all_target_concrete = target_type_args.iter().all(|t| t.is_concrete());
 
                         if all_expr_var && all_target_concrete {
                             // Try to narrow data variant args to match target type params.
@@ -861,4 +896,3 @@ impl TypeInference {
         true
     }
 }
-

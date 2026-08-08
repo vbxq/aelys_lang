@@ -58,7 +58,7 @@ pub fn check_vec_surface(program: &AirProgram) -> Result<(), Vec<VecSurfaceError
         );
     }
 
-// e2b already rejected every concrete-vec instantiation at the mono call site, so no surviving
+    // e2b already rejected every concrete-vec instantiation at the mono call site, so no surviving
     for def in &program.structs {
         if !def.type_params.is_empty() {
             continue;
@@ -203,12 +203,9 @@ impl Scan<'_> {
                 visited.remove(name);
                 Ok(found)
             }
-            AirType::Param(id) => Err(format!(
-                "type parameter {} survived monomorphization",
-                id.0
-            )),
+            AirType::Param(id) => Err(format!("type parameter {} survived monomorphization", id.0)),
             AirType::Opaque => Err("an unresolved `Dynamic` type survived lowering".to_string()),
-// a pointer, a slice and a fn pointer refer to a buffer, they never carry one
+            // a pointer, a slice and a fn pointer refer to a buffer, they never carry one
             AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
             AirType::I8
             | AirType::I16
@@ -263,10 +260,7 @@ impl Scan<'_> {
                 visited.remove(name);
                 Ok(found)
             }
-            AirType::Param(id) => Err(format!(
-                "type parameter {} survived monomorphization",
-                id.0
-            )),
+            AirType::Param(id) => Err(format!("type parameter {} survived monomorphization", id.0)),
             AirType::Opaque => Err("an unresolved `Dynamic` type survived lowering".to_string()),
             AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
             AirType::I8
@@ -308,7 +302,7 @@ mod tests {
         }
     }
 
-// m-b: a type the scan cannot decide must reject, never silently pass. a `_ => false`
+    // m-b: a type the scan cannot decide must reject, never silently pass. a `_ => false`
     #[test]
     fn param_type_arg_rejects_not_passes() {
         let program = empty_program();
@@ -356,9 +350,11 @@ mod tests {
     #[test]
     fn generic_enum_template_with_param_payload_is_accepted() {
         let mut program = empty_program();
-        program
-            .enums
-            .push(opt_enum("Opt", vec![TypeParamId(0)], AirType::Param(TypeParamId(0))));
+        program.enums.push(opt_enum(
+            "Opt",
+            vec![TypeParamId(0)],
+            AirType::Param(TypeParamId(0)),
+        ));
         assert!(check_vec_surface(&program).is_ok());
     }
 
@@ -373,4 +369,3 @@ mod tests {
         assert!(check_vec_surface(&program).is_err());
     }
 }
-

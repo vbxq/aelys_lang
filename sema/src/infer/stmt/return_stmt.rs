@@ -13,13 +13,15 @@ impl TypeInference {
                 self.try_narrow_literal(texpr, &expected_ret);
 
                 // Implicit numeric widening (e.g. return i32_val from fn -> i64)
-                if texpr.ty != expected_ret
-                    && texpr.ty.can_implicit_widen_to(&expected_ret)
-                {
+                if texpr.ty != expected_ret && texpr.ty.can_implicit_widen_to(&expected_ret) {
                     let vspan = texpr.span;
                     let original = std::mem::replace(
                         texpr,
-                        TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
                     );
                     *texpr = TypedExpr {
                         kind: TypedExprKind::Cast {

@@ -47,19 +47,19 @@ impl ConstantFolder {
                 return int_result(
                     self,
                     super::super::super::truncate_to_type(a & b, &result_ty),
-                )
+                );
             }
             BinaryOp::BitOr => {
                 return int_result(
                     self,
                     super::super::super::truncate_to_type(a | b, &result_ty),
-                )
+                );
             }
             BinaryOp::BitXor => {
                 return int_result(
                     self,
                     super::super::super::truncate_to_type(a ^ b, &result_ty),
-                )
+                );
             }
             // shifts need bounds checking
             BinaryOp::Shl => {
@@ -74,10 +74,7 @@ impl ConstantFolder {
                 if !(0..=63).contains(&b) {
                     return None;
                 }
-                let result = super::super::super::truncate_to_type(
-                    a >> (b as u32),
-                    &result_ty,
-                );
+                let result = super::super::super::truncate_to_type(a >> (b as u32), &result_ty);
                 return int_result(self, result);
             }
             _ => {}

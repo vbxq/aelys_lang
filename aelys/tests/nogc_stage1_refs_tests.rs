@@ -257,7 +257,10 @@ fn p7_const_prop_loop_borrow_o2_standard() {
     let Some(code) = compile_and_run_opt(LOOP_BORROW_SRC, OptimizationLevel::Standard) else {
         return;
     };
-    assert_eq!(code, 141, "P7 O2: const-prop must not fold x across a &mut borrow in a loop");
+    assert_eq!(
+        code, 141,
+        "P7 O2: const-prop must not fold x across a &mut borrow in a loop"
+    );
 }
 
 #[test]
@@ -265,6 +268,8 @@ fn p7_const_prop_loop_borrow_o3_aggressive() {
     let Some(code) = compile_and_run_opt(LOOP_BORROW_SRC, OptimizationLevel::Aggressive) else {
         return;
     };
-    assert_eq!(code, 141, "P7 O3: const-prop must not fold x across a &mut borrow in a loop");
+    assert_eq!(
+        code, 141,
+        "P7 O3: const-prop must not fold x across a &mut borrow in a loop"
+    );
 }
-

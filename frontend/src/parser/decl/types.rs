@@ -56,12 +56,12 @@ impl Parser {
             return self.parse_function_type_annotation(start_span, nogc);
         }
         if nogc {
-            return Err(self.error(
-                aelys_common::error::CompileErrorKind::UnexpectedToken {
+            return Err(
+                self.error(aelys_common::error::CompileErrorKind::UnexpectedToken {
                     expected: "`fn` after `nogc` in a type".to_string(),
                     found: self.peek().kind.to_string(),
-                },
-            ));
+                }),
+            );
         }
 
         let name = self.consume_identifier("type name")?;
@@ -145,4 +145,3 @@ impl Parser {
         ))
     }
 }
-

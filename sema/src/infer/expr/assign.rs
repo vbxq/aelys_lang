@@ -18,7 +18,9 @@ impl TypeInference {
             // not be tracked by the retain/release insertion and the release would be wrong
             if var_type.is_rc() {
                 self.errors.push(TypeError::rc_out_of_surface(
-                    format!("cannot reassign `Rc<T>` binding `{name}`: an Rc is single-assignment yet"),
+                    format!(
+                        "cannot reassign `Rc<T>` binding `{name}`: an Rc is single-assignment yet"
+                    ),
                     span,
                 ));
             }
@@ -48,13 +50,15 @@ impl TypeInference {
             self.try_narrow_literal(&mut typed_value, &var_type);
 
             // Implicit numeric widening (e.g. x: i64 = val: i32)
-            if typed_value.ty != var_type
-                && typed_value.ty.can_implicit_widen_to(&var_type)
-            {
+            if typed_value.ty != var_type && typed_value.ty.can_implicit_widen_to(&var_type) {
                 let vspan = typed_value.span;
                 let original = std::mem::replace(
                     &mut typed_value,
-                    TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                    TypedExpr {
+                        kind: TypedExprKind::Null,
+                        ty: InferType::Null,
+                        span: vspan,
+                    },
                 );
                 typed_value = TypedExpr {
                     kind: TypedExprKind::Cast {

@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -182,8 +182,14 @@ fn seam1_probe_no_trace_excludes_vec_buffer_from_collector() {
         "NO_TRACE Vec buffer must be EXCLUDED from the collector (frees==0, intact, \
          ASan-clean); stderr:\n{stderr}"
     );
-    assert!(asan_clean(&stderr), "fixed path must be ASan-clean; stderr:\n{stderr}");
-    assert!(stderr.contains("frees=0"), "the buffer must never be freed by the collector; stderr:\n{stderr}");
+    assert!(
+        asan_clean(&stderr),
+        "fixed path must be ASan-clean; stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("frees=0"),
+        "the buffer must never be freed by the collector; stderr:\n{stderr}"
+    );
 
     let dir2 = tempdir().expect("tempdir2");
     let buggy_body = SEAM1_PROBE_TEMPLATE.replace("__AELYS_VEC_FLAGS", "0");
@@ -349,10 +355,19 @@ fn main() -> i64 {
         "value semantics through the Immix slow-path copy: a=[1,2,3] (6) + b[3]=9 = 15; \
          stderr:\n{stderr}"
     );
-    assert!(asan_clean(&stderr), "CoW-through-immix must be ASan/LSan clean; stderr:\n{stderr}");
+    assert!(
+        asan_clean(&stderr),
+        "CoW-through-immix must be ASan/LSan clean; stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(allocs, frees, "balanced (original buffer + the CoW copy, both freed); stderr:\n{stderr}");
-    assert_eq!(allocs, 2, "shared push allocates the CoW copy (slow path); stderr:\n{stderr}");
+    assert_eq!(
+        allocs, frees,
+        "balanced (original buffer + the CoW copy, both freed); stderr:\n{stderr}"
+    );
+    assert_eq!(
+        allocs, 2,
+        "shared push allocates the CoW copy (slow path); stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -387,14 +402,20 @@ fn main() -> i64 {
         "reusing collector-reclaimed Immix slots must read the NEW values \
          (33+44=77), never stale cycle data; stderr:\n{stderr}"
     );
-    assert!(asan_clean(&stderr), "reclaim+reuse must be ASan/LSan clean (no UAF); stderr:\n{stderr}");
+    assert!(
+        asan_clean(&stderr),
+        "reclaim+reuse must be ASan/LSan clean (no UAF); stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
     assert_eq!(
         allocs, frees,
         "balanced: 2 cycle nodes (collected) + 2 fresh nodes (dropped at scope exit); \
          stderr:\n{stderr}"
     );
-    assert_eq!(allocs, 4, "two cycle nodes + two fresh nodes; stderr:\n{stderr}");
+    assert_eq!(
+        allocs, 4,
+        "two cycle nodes + two fresh nodes; stderr:\n{stderr}"
+    );
 }
 
 const SEAM4_SRC: &str = r#"
@@ -433,7 +454,10 @@ fn run_seam4(opt: OptimizationLevel) -> Option<(i32, i64, i64)> {
             ("ASAN_OPTIONS", "detect_leaks=1"),
         ],
     )?;
-    assert!(asan_clean(&stderr), "seam4 must be ASan/LSan clean; stderr:\n{stderr}");
+    assert!(
+        asan_clean(&stderr),
+        "seam4 must be ASan/LSan clean; stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
     Some((code, allocs, frees))
 }
@@ -443,8 +467,14 @@ fn seam4_combined_balanced_o0() {
     let Some((code, allocs, frees)) = run_seam4(OptimizationLevel::None) else {
         return;
     };
-    assert_eq!(code, 85, "combined Rc+Vec+cycle+CoW result must be 85 at -O0");
-    assert_eq!(allocs, frees, "retain/release insertion balanced at -O0 (allocs={allocs} frees={frees})");
+    assert_eq!(
+        code, 85,
+        "combined Rc+Vec+cycle+CoW result must be 85 at -O0"
+    );
+    assert_eq!(
+        allocs, frees,
+        "retain/release insertion balanced at -O0 (allocs={allocs} frees={frees})"
+    );
 }
 
 #[test]
@@ -452,6 +482,12 @@ fn seam4_combined_balanced_o2() {
     let Some((code, allocs, frees)) = run_seam4(OptimizationLevel::Aggressive) else {
         return;
     };
-    assert_eq!(code, 85, "combined Rc+Vec+cycle+CoW result must be 85 at -O2");
-    assert_eq!(allocs, frees, "retain/release insertion balanced at -O2 (allocs={allocs} frees={frees})");
+    assert_eq!(
+        code, 85,
+        "combined Rc+Vec+cycle+CoW result must be 85 at -O2"
+    );
+    assert_eq!(
+        allocs, frees,
+        "retain/release insertion balanced at -O2 (allocs={allocs} frees={frees})"
+    );
 }

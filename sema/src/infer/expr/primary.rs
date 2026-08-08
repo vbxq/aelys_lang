@@ -201,7 +201,11 @@ impl TypeInference {
                             let vspan = typed_arg.span;
                             let original = std::mem::replace(
                                 &mut typed_arg,
-                                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                                TypedExpr {
+                                    kind: TypedExprKind::Null,
+                                    ty: InferType::Null,
+                                    span: vspan,
+                                },
                             );
                             typed_arg = TypedExpr {
                                 kind: TypedExprKind::Cast {
@@ -507,7 +511,7 @@ impl TypeInference {
             ));
         }
 
-// the copy-on-write path memcpys elements flat, so an element that owns a vec buffer
+        // the copy-on-write path memcpys elements flat, so an element that owns a vec buffer
         if self.type_table.contains_vec_by_value(&typed_elem.ty) {
             self.errors.push(TypeError::vec_out_of_surface(
                 format!(
@@ -531,4 +535,3 @@ impl TypeInference {
         )
     }
 }
-

@@ -116,7 +116,7 @@ impl TypeInference {
         self.infer_match_typed(typed_inner, inner.span, &arms, span, false)
     }
 
-// $ is rejected by the identifier scanner, so these names never collide with user code
+    // $ is rejected by the identifier scanner, so these names never collide with user code
     fn next_try_binding(&mut self, tag: char) -> String {
         let n = self.try_counter;
         self.try_counter += 1;
@@ -167,4 +167,3 @@ fn return_variant_block(enum_name: &str, variant: &str, args: Vec<Expr>, span: S
         span,
     )
 }
-

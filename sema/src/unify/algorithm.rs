@@ -38,8 +38,8 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         // Never is the bottom type (diverging control flow). It unifies with
         // any type T without binding type variables, because a Never-typed
-        // expression never produces a value. 
-        // 
+        // expression never produces a value.
+        //
         // So it's placed before the Var arms so that `unify(Never, Var(v))` succeeds without binding v, letting other constraints determine the variable's actual type.
         (InferType::Never, _) | (_, InferType::Never) => Ok(()),
 
@@ -99,15 +99,13 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Rc(inner1), InferType::Rc(inner2)) => unify(inner1, inner2, subst),
 
-        (
-            InferType::Ref { referent: r1, .. },
-            InferType::Ref { referent: r2, .. },
-        ) => unify(r1, r2, subst),
+        (InferType::Ref { referent: r1, .. }, InferType::Ref { referent: r2, .. }) => {
+            unify(r1, r2, subst)
+        }
 
-        (
-            InferType::Slice { elem: e1, .. },
-            InferType::Slice { elem: e2, .. },
-        ) => unify(e1, e2, subst),
+        (InferType::Slice { elem: e1, .. }, InferType::Slice { elem: e2, .. }) => {
+            unify(e1, e2, subst)
+        }
 
         (InferType::Range, InferType::Range) => Ok(()),
 
@@ -126,4 +124,3 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         _ => Err(UnifyError::Mismatch(t1.clone(), t2.clone())),
     }
 }
-

@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -116,10 +116,19 @@ const RC_ENV: &[(&str, &str)] = &[
 
 fn assert_balanced_run(src: &str, opt: OptimizationLevel, oracle: i32, ctx: &str) -> Option<()> {
     let (code, _out, stderr) = run_with_env_opt(src, RuntimeVariant::RcCycles, opt, RC_ENV)?;
-    assert!(asan_clean(&stderr), "{ctx}: must be ASan/LSan clean; stderr:\n{stderr}");
-    assert_eq!(code, oracle, "{ctx}: oracle must be {oracle}; stderr:\n{stderr}");
+    assert!(
+        asan_clean(&stderr),
+        "{ctx}: must be ASan/LSan clean; stderr:\n{stderr}"
+    );
+    assert_eq!(
+        code, oracle,
+        "{ctx}: oracle must be {oracle}; stderr:\n{stderr}"
+    );
     let (allocs, frees) = parse_stats(&stderr).expect("stats line");
-    assert_eq!(allocs, frees, "{ctx}: must be balanced (allocs={allocs} frees={frees})");
+    assert_eq!(
+        allocs, frees,
+        "{ctx}: must be balanced (allocs={allocs} frees={frees})"
+    );
     Some(())
 }
 
@@ -175,7 +184,12 @@ fn main() -> i64 {
 
 #[test]
 fn d1_struct_literal_store_balanced() {
-    assert_balanced_run(D1_STRUCT_LITERAL_SRC, OptimizationLevel::None, 42, "D-1 @ -O0");
+    assert_balanced_run(
+        D1_STRUCT_LITERAL_SRC,
+        OptimizationLevel::None,
+        42,
+        "D-1 @ -O0",
+    );
     assert_balanced_run(
         D1_STRUCT_LITERAL_SRC,
         OptimizationLevel::Aggressive,
@@ -209,8 +223,16 @@ fn main() -> i64 {
 fn positive_seam4_let_r2_r_elided() {
     let off = count_rc_calls_air(SEAM4_SRC, false);
     let on = count_rc_calls_air(SEAM4_SRC, true);
-    assert_eq!(off, (3, 6), "SEAM4 before-elision baseline (retain, release)");
-    assert_eq!(on, (2, 5), "SEAM4 after-elision (one retain+release pair removed)");
+    assert_eq!(
+        off,
+        (3, 6),
+        "SEAM4 before-elision baseline (retain, release)"
+    );
+    assert_eq!(
+        on,
+        (2, 5),
+        "SEAM4 after-elision (one retain+release pair removed)"
+    );
     assert_balanced_run(SEAM4_SRC, OptimizationLevel::None, 85, "SEAM4 @ -O0");
     assert_balanced_run(SEAM4_SRC, OptimizationLevel::Aggressive, 85, "SEAM4 @ -O2");
 }
@@ -236,7 +258,12 @@ fn positive_dense_chain_all_intermediates_elided() {
         "dense chain after-elision: all 3 clone retains + 3 releases removed (combined 7→1)"
     );
     assert_balanced_run(DENSE_CHAIN_SRC, OptimizationLevel::None, 7, "dense @ -O0");
-    assert_balanced_run(DENSE_CHAIN_SRC, OptimizationLevel::Aggressive, 7, "dense @ -O2");
+    assert_balanced_run(
+        DENSE_CHAIN_SRC,
+        OptimizationLevel::Aggressive,
+        7,
+        "dense @ -O2",
+    );
 }
 
 const LOOP_LIVE_SRC: &str = r#"
@@ -255,7 +282,12 @@ fn main() -> i64 {
 
 #[test]
 fn negative_loop_live_across_backedge_kept() {
-    assert_balanced_run(LOOP_LIVE_SRC, OptimizationLevel::None, 36, "loop-live @ -O0");
+    assert_balanced_run(
+        LOOP_LIVE_SRC,
+        OptimizationLevel::None,
+        36,
+        "loop-live @ -O0",
+    );
     assert_balanced_run(
         LOOP_LIVE_SRC,
         OptimizationLevel::Aggressive,
@@ -279,7 +311,12 @@ fn main() -> i64 {
 
 #[test]
 fn negative_call_arg_escape_kept() {
-    assert_balanced_run(CALL_ARG_ESCAPE_SRC, OptimizationLevel::None, 22, "call-arg @ -O0");
+    assert_balanced_run(
+        CALL_ARG_ESCAPE_SRC,
+        OptimizationLevel::None,
+        22,
+        "call-arg @ -O0",
+    );
     assert_balanced_run(
         CALL_ARG_ESCAPE_SRC,
         OptimizationLevel::Aggressive,
@@ -301,7 +338,12 @@ fn main() -> i64 {
 
 #[test]
 fn divergent_release_soundly_elided() {
-    assert_balanced_run(DIVERGENT_RELEASE_SRC, OptimizationLevel::None, 13, "divergent @ -O0");
+    assert_balanced_run(
+        DIVERGENT_RELEASE_SRC,
+        OptimizationLevel::None,
+        13,
+        "divergent @ -O0",
+    );
     assert_balanced_run(
         DIVERGENT_RELEASE_SRC,
         OptimizationLevel::Aggressive,
@@ -331,10 +373,16 @@ fn negative_member_init_clone_kept() {
          (off={:?} on={:?})",
         off, on
     );
-    if let Some((code, _o, e)) =
-        run_with_env_opt(MEMBER_INIT_SRC, RuntimeVariant::RcCycles, OptimizationLevel::None, RC_ENV)
-    {
-        assert!(asan_clean(&e), "member-init @ -O0 must be ASan/LSan clean; stderr:\n{e}");
+    if let Some((code, _o, e)) = run_with_env_opt(
+        MEMBER_INIT_SRC,
+        RuntimeVariant::RcCycles,
+        OptimizationLevel::None,
+        RC_ENV,
+    ) {
+        assert!(
+            asan_clean(&e),
+            "member-init @ -O0 must be ASan/LSan clean; stderr:\n{e}"
+        );
         assert_eq!(code, 7, "member-init @ -O0 result must be 7; stderr:\n{e}");
     }
     if let Some((code, _o, e)) = run_with_env_opt(
@@ -343,7 +391,10 @@ fn negative_member_init_clone_kept() {
         OptimizationLevel::Aggressive,
         RC_ENV,
     ) {
-        assert!(asan_clean(&e), "member-init @ -O2 must be ASan/LSan clean; stderr:\n{e}");
+        assert!(
+            asan_clean(&e),
+            "member-init @ -O2 must be ASan/LSan clean; stderr:\n{e}"
+        );
         assert_eq!(code, 7, "member-init @ -O2 result must be 7; stderr:\n{e}");
     }
 }

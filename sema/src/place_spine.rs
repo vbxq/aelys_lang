@@ -8,7 +8,10 @@ pub fn deref_is_shared(ty: &InferType) -> bool {
 
 /// a `.` or `[]` whose object already holds a pointer auto-derefs it: the object's value is
 pub fn projects_through_pointer(ty: &InferType) -> bool {
-    matches!(ty, InferType::Rc(_) | InferType::Ref { .. } | InferType::Null)
+    matches!(
+        ty,
+        InferType::Rc(_) | InferType::Ref { .. } | InferType::Null
+    )
 }
 
 fn is_rc_get(e: &TypedExpr) -> bool {
@@ -36,7 +39,7 @@ pub fn spine_is_shared(e: &TypedExpr) -> bool {
     match &e.kind {
         TypedExprKind::Grouping(inner) => spine_is_shared(inner),
         TypedExprKind::Deref(inner) => deref_is_shared(&inner.ty),
-// an rc handle is not a shared borrow, so it never sets the flag
+        // an rc handle is not a shared borrow, so it never sets the flag
         _ if is_rc_get(e) => false,
         TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
             if projects_through_pointer(&object.ty) {
@@ -57,4 +60,3 @@ pub fn target_ptr_is_shared(target: &TypedExpr) -> bool {
     }
     deref_is_shared(&t.ty)
 }
-

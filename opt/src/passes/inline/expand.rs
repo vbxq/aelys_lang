@@ -46,7 +46,9 @@ impl InlineExpander {
             | TypedExprKind::Identifier(_) => true,
             TypedExprKind::Binary { left, right, .. }
             | TypedExprKind::And { left, right }
-            | TypedExprKind::Or { left, right } => self.arg_is_pure(left) && self.arg_is_pure(right),
+            | TypedExprKind::Or { left, right } => {
+                self.arg_is_pure(left) && self.arg_is_pure(right)
+            }
             TypedExprKind::Unary { operand, .. } => self.arg_is_pure(operand),
             TypedExprKind::Grouping(inner) => self.arg_is_pure(inner),
             TypedExprKind::Cast { expr, .. } => self.arg_is_pure(expr),
@@ -478,4 +480,3 @@ impl Default for InlineExpander {
         Self::new()
     }
 }
-

@@ -33,9 +33,15 @@ pub enum InferType {
     Vec(Box<InferType>),
     // the only reference type, every other constructor is a value type
     Rc(Box<InferType>),
-// stage 1 borrows, erased to a raw ptr / fat {ptr,len} in air
-    Ref { referent: Box<InferType>, mutable: bool },
-    Slice { elem: Box<InferType>, mutable: bool },
+    // stage 1 borrows, erased to a raw ptr / fat {ptr,len} in air
+    Ref {
+        referent: Box<InferType>,
+        mutable: bool,
+    },
+    Slice {
+        elem: Box<InferType>,
+        mutable: bool,
+    },
     Tuple(Vec<InferType>),
     Range,
 
@@ -449,4 +455,3 @@ impl fmt::Display for InferType {
         }
     }
 }
-

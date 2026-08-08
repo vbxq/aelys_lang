@@ -1,6 +1,5 @@
-
 use aelys_air::bir::build::build_program;
-use aelys_air::bir::{effect_summaries, managed_chain, Step, StepKind};
+use aelys_air::bir::{Step, StepKind, effect_summaries, managed_chain};
 use aelys_driver::{compile_to_typed_ast, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -40,7 +39,10 @@ fn has(err: &str, needle: &str) {
 }
 
 fn lacks(err: &str, needle: &str) {
-    assert!(!err.contains(needle), "did not expect `{needle}` in:\n{err}");
+    assert!(
+        !err.contains(needle),
+        "did not expect `{needle}` in:\n{err}"
+    );
 }
 
 fn chain_of(src: &str, root: &str) -> Vec<Step> {
@@ -175,8 +177,15 @@ fn mutual_recursion_terminates_with_a_sane_chain() {
     assert_e0727(&err);
     has(&err, "via `f -> a -> b -> c -> Vec::new`");
     has(&err, "module.aelys:7:17");
-    let names: Vec<String> = chain_of(MUTUAL, "f").iter().map(|s| s.name.clone()).collect();
-    assert_eq!(names, vec!["f", "a", "b", "c", "Vec::new"], "no name may repeat");
+    let names: Vec<String> = chain_of(MUTUAL, "f")
+        .iter()
+        .map(|s| s.name.clone())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["f", "a", "b", "c", "Vec::new"],
+        "no name may repeat"
+    );
 }
 
 #[test]
@@ -207,8 +216,16 @@ fn descent_backtracks_to_the_allocation_it_walked_past() {
 
     let chain = chain_of(PAST_CULPRIT, "f");
     let names: Vec<String> = chain.iter().map(|s| s.name.clone()).collect();
-    assert_eq!(names, vec!["f", "a", "Vec::new"], "the unverified tail hop must be trimmed");
-    assert_eq!(chain[2].kind, StepKind::Operation, "the operation must be named");
+    assert_eq!(
+        names,
+        vec!["f", "a", "Vec::new"],
+        "the unverified tail hop must be trimmed"
+    );
+    assert_eq!(
+        chain[2].kind,
+        StepKind::Operation,
+        "the operation must be named"
+    );
 }
 
 #[test]
@@ -235,11 +252,14 @@ fn main() -> i64 { return f() }
         "note: the call target here is not statically known, so its effects are conservatively \
          assumed to reach managed memory",
     );
-    has(&err, "help: call a function by name so its effects can be checked, or drop `nogc` from `f`");
-// the caret must not assert an allocation the compiler never observed
+    has(
+        &err,
+        "help: call a function by name so its effects can be checked, or drop `nogc` from `f`",
+    );
+    // the caret must not assert an allocation the compiler never observed
     lacks(&err, "managed memory reached here");
     has(&err, "effects assumed to reach managed memory here");
-// `println` is a builtin outside `fn_names`, so it cannot be made nogc; there is no value either
+    // `println` is a builtin outside `fn_names`, so it cannot be made nogc; there is no value either
     lacks(&err, "keep the value on the stack");
     lacks(&err, "make every function on this path nogc");
     has(&err, "module.aelys:2:5");
@@ -268,7 +288,7 @@ fn main() -> i64 { return f() }
     );
     lacks(&err, "managed memory reached here");
     has(&err, "effects assumed to reach managed memory here");
-// e0728 rejects `nogc fn` outside an immutable parameter type, so a local closure cannot be one
+    // e0728 rejects `nogc fn` outside an immutable parameter type, so a local closure cannot be one
     lacks(&err, "make every function on this path nogc");
     has(&err, "module.aelys:6:12");
 }
@@ -295,8 +315,15 @@ fn mid_chain_collision_truncates_at_the_last_verified_hop() {
     let chain = chain_of(COLLISION, "f");
     let names: Vec<String> = chain.iter().map(|s| s.name.clone()).collect();
     assert_eq!(names, vec!["f", "outer", "dup"]);
-    assert!(chain[1].span.is_some(), "an unambiguous hop keeps its call site");
-    assert_eq!(chain[2].kind, StepKind::Ambiguous, "the stop reason is not a hop");
+    assert!(
+        chain[1].span.is_some(),
+        "an unambiguous hop keeps its call site"
+    );
+    assert_eq!(
+        chain[2].kind,
+        StepKind::Ambiguous,
+        "the stop reason is not a hop"
+    );
     assert!(
         chain[2].span.is_none(),
         "a name shared by two bodies must carry no span"
@@ -304,7 +331,10 @@ fn mid_chain_collision_truncates_at_the_last_verified_hop() {
 
     let err = reject(COLLISION);
     assert_e0727(&err);
-    has(&err, "via `f -> outer` (further steps are ambiguous: several functions are named `dup`)");
+    has(
+        &err,
+        "via `f -> outer` (further steps are ambiguous: several functions are named `dup`)",
+    );
     lacks(&err, "via `f -> outer -> dup`");
     lacks(&err, "calls `dup` here");
     has(&err, "module.aelys:13:29");
@@ -329,7 +359,10 @@ fn direct_collision_never_names_the_ambiguous_callee_as_a_hop() {
     let err = reject(DIRECT_COLLISION);
     assert_e0727(&err);
     lacks(&err, "via `f -> dup`");
-    has(&err, "via `f` (further steps are ambiguous: several functions are named `dup`)");
+    has(
+        &err,
+        "via `f` (further steps are ambiguous: several functions are named `dup`)",
+    );
     lacks(&err, "calls `dup` here");
 
     let chain = chain_of(DIRECT_COLLISION, "f");
@@ -367,7 +400,9 @@ fn main() -> i64 { return f() + holder() }
 // a deep chain must not produce a 1600-character header nor 200 secondary carets
 #[test]
 fn a_deep_chain_is_elided_and_its_carets_are_capped() {
-    let mut src = String::from("fn h0() -> i64 {\n    let mut v = Vec::new()\n    Vec::push(v, 1)\n    return 0\n}\n");
+    let mut src = String::from(
+        "fn h0() -> i64 {\n    let mut v = Vec::new()\n    Vec::push(v, 1)\n    return 0\n}\n",
+    );
     for i in 1..=200 {
         src.push_str(&format!("fn h{}() -> i64 {{ return h{}() }}\n", i, i - 1));
     }
@@ -375,12 +410,22 @@ fn a_deep_chain_is_elided_and_its_carets_are_capped() {
 
     let err = reject(&src);
     assert_e0727(&err);
-    has(&err, "via `f -> h200 -> h199 -> ... (197 more) ... -> h1 -> h0 -> Vec::new`");
+    has(
+        &err,
+        "via `f -> h200 -> h199 -> ... (197 more) ... -> h1 -> h0 -> Vec::new`",
+    );
     let header = err.lines().next().expect("a first line");
-    assert!(header.len() < 200, "the header must stay readable, got {}: {header}", header.len());
+    assert!(
+        header.len() < 200,
+        "the header must stay readable, got {}: {header}",
+        header.len()
+    );
     let carets = err.matches("calls `").count();
     assert!(carets <= 3, "at most 3 hop carets, got {carets}:\n{err}");
-    assert!(err.lines().count() < 40, "the whole render must stay short:\n{err}");
+    assert!(
+        err.lines().count() < 40,
+        "the whole render must stay short:\n{err}"
+    );
     assert_eq!(chain_of(&src, "f").len(), 203);
 }
 
@@ -398,7 +443,11 @@ fn rendered_chain_is_identical_across_compiles() {
     let first = render();
     assert!(first.contains("via `f -> helper -> leaf -> Vec::new`"));
     for _ in 0..24 {
-        assert_eq!(first, render(), "the rendered witness must not vary run to run");
+        assert_eq!(
+            first,
+            render(),
+            "the rendered witness must not vary run to run"
+        );
     }
 }
 
@@ -406,7 +455,11 @@ fn rendered_chain_is_identical_across_compiles() {
 fn reconstructed_chain_is_identical_across_runs() {
     let first = chain_of(MUTUAL, "f");
     for _ in 0..24 {
-        assert_eq!(first, chain_of(MUTUAL, "f"), "the chain must not vary run to run");
+        assert_eq!(
+            first,
+            chain_of(MUTUAL, "f"),
+            "the chain must not vary run to run"
+        );
     }
 }
 
@@ -421,4 +474,3 @@ fn main() -> i64 { return f() }
 ",
     );
 }
-

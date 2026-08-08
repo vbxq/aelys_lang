@@ -1,12 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
 use aelys_sema::{
-    InferType, ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam,
-    TypedStmt, TypedStmtKind, TypeTable,
+    InferType, ResultAssertOnErr, TypeTable, TypedExpr, TypedExprKind, TypedFmtStringPart,
+    TypedParam, TypedStmt, TypedStmtKind,
 };
 use aelys_syntax::{BinaryOp, Span};
 
-use super::category::{category, Category};
+use super::category::{Category, category};
 use super::{BirBody, BirProgram, BirRvalue, BirStmtKind};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -80,7 +80,11 @@ pub fn intrinsic_effects(
     for p in params {
         if category(&p.ty, tt) == Category::Managed {
             set.insert(Effect::Managed);
-            w.record(RANK_TYPE, p.span, format!("the managed parameter `{}`", p.name));
+            w.record(
+                RANK_TYPE,
+                p.span,
+                format!("the managed parameter `{}`", p.name),
+            );
         }
     }
     for stmt in body {
@@ -108,10 +112,19 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
 fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness) {
     match &stmt.kind {
         TypedStmtKind::Expression(e) => walk_expr(e, tt, set, w),
-        TypedStmtKind::Let { name, initializer, var_type, .. } => {
+        TypedStmtKind::Let {
+            name,
+            initializer,
+            var_type,
+            ..
+        } => {
             if category(var_type, tt) == Category::Managed {
                 set.insert(Effect::Managed);
-                w.record(RANK_TYPE, stmt.span, format!("the managed local `{}`", name));
+                w.record(
+                    RANK_TYPE,
+                    stmt.span,
+                    format!("the managed local `{}`", name),
+                );
             }
             walk_expr(initializer, tt, set, w);
         }
@@ -120,7 +133,11 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 walk_stmt(s, tt, set, w);
             }
         }
-        TypedStmtKind::If { condition, then_branch, else_branch } => {
+        TypedStmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             walk_expr(condition, tt, set, w);
             walk_stmt(then_branch, tt, set, w);
             if let Some(e) = else_branch {
@@ -131,7 +148,13 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             walk_expr(condition, tt, set, w);
             walk_stmt(body, tt, set, w);
         }
-        TypedStmtKind::For { start, end, step, body, .. } => {
+        TypedStmtKind::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
             walk_expr(start, tt, set, w);
             walk_expr(end, tt, set, w);
             if let Some(s) = step.as_ref().as_ref() {
@@ -211,7 +234,11 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         TypedExprKind::Assign { value, .. } => walk_expr(value, tt, set, w),
         TypedExprKind::Grouping(inner) => walk_expr(inner, tt, set, w),
 
-        TypedExprKind::If { condition, then_branch, else_branch } => {
+        TypedExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
             walk_expr(condition, tt, set, w);
             walk_expr(then_branch, tt, set, w);
             walk_expr(else_branch, tt, set, w);
@@ -251,7 +278,11 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             walk_expr(object, tt, set, w);
             walk_expr(index, tt, set, w);
         }
-        TypedExprKind::IndexAssign { object, index, value } => {
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
             set.insert(Effect::Panic);
             walk_expr(object, tt, set, w);
             walk_expr(index, tt, set, w);
@@ -287,10 +318,19 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         }
         TypedExprKind::Cast { expr: inner, .. } => walk_expr(inner, tt, set, w),
 
-        TypedExprKind::EnumVariant { enum_name, variant, args, .. } => {
+        TypedExprKind::EnumVariant {
+            enum_name,
+            variant,
+            args,
+            ..
+        } => {
             if is_managed_alloc_variant(enum_name, variant) {
                 alloc_managed(set);
-                w.record(RANK_INTRINSIC, expr.span, format!("{}::{}", enum_name, variant));
+                w.record(
+                    RANK_INTRINSIC,
+                    expr.span,
+                    format!("{}::{}", enum_name, variant),
+                );
             }
             for a in args {
                 walk_expr(a, tt, set, w);
@@ -304,7 +344,9 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             }
         }
 
-        TypedExprKind::ResultAssert { scrutinee, on_err, .. } => {
+        TypedExprKind::ResultAssert {
+            scrutinee, on_err, ..
+        } => {
             if let ResultAssertOnErr::Panic(_) = on_err {
                 set.insert(Effect::Panic);
             }
@@ -336,7 +378,12 @@ pub fn effect_summaries(bir: &BirProgram) -> HashMap<String, EffectSet> {
         for block in &body.blocks {
             for stmt in &block.stmts {
                 if let BirStmtKind::Assign {
-                    rvalue: BirRvalue::Call { callee, indirect_nogc, .. },
+                    rvalue:
+                        BirRvalue::Call {
+                            callee,
+                            indirect_nogc,
+                            ..
+                        },
                     ..
                 } = &stmt.kind
                 {
@@ -350,10 +397,13 @@ pub fn effect_summaries(bir: &BirProgram) -> HashMap<String, EffectSet> {
                 }
             }
         }
-        edges.entry(body.name.clone()).or_default().push((direct, has_indirect));
+        edges
+            .entry(body.name.clone())
+            .or_default()
+            .push((direct, has_indirect));
     }
 
-// monotone round-robin fixpoint (same while-changed idiom as origins.rs, lifted to the call
+    // monotone round-robin fixpoint (same while-changed idiom as origins.rs, lifted to the call
     let mut eff = seed.clone();
     let mut changed = true;
     while changed {
@@ -476,7 +526,12 @@ fn next_managed_call<'a>(
     for block in &body.blocks {
         for stmt in &block.stmts {
             let BirStmtKind::Assign {
-                rvalue: BirRvalue::Call { callee, indirect_nogc, .. },
+                rvalue:
+                    BirRvalue::Call {
+                        callee,
+                        indirect_nogc,
+                        ..
+                    },
                 ..
             } = &stmt.kind
             else {
@@ -504,4 +559,3 @@ fn next_managed_call<'a>(
     }
     best
 }
-

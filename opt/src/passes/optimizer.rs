@@ -67,11 +67,11 @@ impl Optimizer {
         self.level
     }
 
-/// optimizer without first running the borrow/move check is a compile error, not a convention.
-/// a raw `typedprogram` is rejected at compile time, the standing proof the ordering is structural:
-/// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
-/// the positive control pins the intended shape so the negative test cannot pass vacuously:
-/// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
+    /// optimizer without first running the borrow/move check is a compile error, not a convention.
+    /// a raw `typedprogram` is rejected at compile time, the standing proof the ordering is structural:
+    /// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
+    /// the positive control pins the intended shape so the negative test cannot pass vacuously:
+    /// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
     pub fn optimize(&mut self, checked: Checked) -> TypedProgram {
         let mut program = checked.into_inner();
         self.collected_warnings.clear();
@@ -106,4 +106,3 @@ impl Default for Optimizer {
         Self::new(OptimizationLevel::Standard)
     }
 }
-

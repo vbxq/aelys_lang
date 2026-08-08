@@ -172,4 +172,3 @@ fn twin_direct_rc_new_field_assign_compiles() {
 fn twin_direct_member_rc_field_assign_compiles() {
     assert_compiles(DIRECT_MEMBER);
 }
-

@@ -67,8 +67,8 @@ impl TypeEnv {
         None
     }
 
-/// look up a variable among locals and captures only, never function signatures.
-/// mirrors the bir's name_map (locals-only) so a fn name is not resolved as a local.
+    /// look up a variable among locals and captures only, never function signatures.
+    /// mirrors the bir's name_map (locals-only) so a fn name is not resolved as a local.
     pub fn lookup_local(&self, name: &str) -> Option<&InferType> {
         for scope in self.locals.iter().rev() {
             if let Some(ty) = scope.get(name) {
@@ -112,4 +112,3 @@ impl TypeEnv {
         false
     }
 }
-

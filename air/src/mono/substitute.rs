@@ -92,7 +92,11 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
                 .join("$");
             *ty = AirType::Enum(format!("__mono_{}_{}", name, suffix));
         }
-        AirType::Struct(name) if !name.contains("__mono_") && !name.starts_with("__closure_env_") && !type_args.is_empty() => {
+        AirType::Struct(name)
+            if !name.contains("__mono_")
+                && !name.starts_with("__closure_env_")
+                && !type_args.is_empty() =>
+        {
             let suffix = type_args
                 .iter()
                 .map(type_to_string)
@@ -207,4 +211,3 @@ pub(super) fn operand_type_from(
             }),
     }
 }
-

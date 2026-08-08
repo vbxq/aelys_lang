@@ -3,17 +3,17 @@
 use std::collections::HashSet;
 
 use aelys_sema::{
-    InferType, TypedExpr, TypedExprKind, TypedFunction, TypedMatchArm, TypedProgram, TypedStmt,
-    TypedStmtKind, TypeTable,
+    InferType, TypeTable, TypedExpr, TypedExprKind, TypedFunction, TypedMatchArm, TypedProgram,
+    TypedStmt, TypedStmtKind,
 };
 use aelys_syntax::Span;
 
-use super::category::{category, Category};
+use super::category::{Category, category};
 use super::*;
 
 pub fn build_program(program: &TypedProgram) -> BirProgram {
     let tt = &program.type_table;
-// distinguishable from an indirect call at every call site (mirrors lower_callee)
+    // distinguishable from an indirect call at every call site (mirrors lower_callee)
     let mut fn_names = gather_fn_names(&program.stmts);
     let globals = gather_global_names(&program.stmts);
     fn_names.retain(|n| !globals.contains(n));
@@ -85,8 +85,19 @@ fn build_toplevel(
     program: &TypedProgram,
     fn_names: &HashSet<String>,
 ) -> BirBody {
-    let span = program.stmts.first().map(|s| s.span).unwrap_or(Span::dummy());
-    let mut b = BodyBuilder::new(tt, "__toplevel".to_string(), span, true, fn_names, InferType::Null);
+    let span = program
+        .stmts
+        .first()
+        .map(|s| s.span)
+        .unwrap_or(Span::dummy());
+    let mut b = BodyBuilder::new(
+        tt,
+        "__toplevel".to_string(),
+        span,
+        true,
+        fn_names,
+        InferType::Null,
+    );
     (b.intrinsic_effects, b.managed_witness) = effects::intrinsic_effects(&program.stmts, &[], tt);
     b.open_scope(span);
     for stmt in stmts {
@@ -238,7 +249,7 @@ impl<'a> BodyBuilder<'a> {
         false
     }
 
-// a reference reaching a container through a projected store escapes the aggregate guard,
+    // a reference reaching a container through a projected store escapes the aggregate guard,
     fn reject_projected_ref_store(&mut self, value: &TypedExpr) {
         if is_ref_ty(&value.ty) {
             self.build_errors.push(BirDiagnostic::new(
@@ -251,7 +262,7 @@ impl<'a> BodyBuilder<'a> {
         }
     }
 
-// a closure becomes an opaque const with no bir trace, so a ref capture is rejected here
+    // a closure becomes an opaque const with no bir trace, so a ref capture is rejected here
     fn reject_ref_captures(&mut self, captures: &[(String, InferType)], span: Span) {
         if captures.iter().any(|(_, ty)| is_ref_ty(ty)) {
             self.build_errors.push(BirDiagnostic::new(
@@ -319,7 +330,13 @@ impl<'a> BodyBuilder<'a> {
         id
     }
 
-    fn new_named(&mut self, name: &str, ty: InferType, decl_span: Span, mutable: bool) -> BirLocalId {
+    fn new_named(
+        &mut self,
+        name: &str,
+        ty: InferType,
+        decl_span: Span,
+        mutable: bool,
+    ) -> BirLocalId {
         let id = BirLocalId(self.locals.len() as u32);
         let category = self.cat(&ty);
         self.locals.push(BirLocal {
@@ -349,10 +366,10 @@ impl<'a> BodyBuilder<'a> {
 
     fn close_scope(&mut self) {
         let frame = self.scopes.pop().expect("balanced scopes");
-// fallthrough (open) block reaches this point. exit_index is captured before the
+        // fallthrough (open) block reaches this point. exit_index is captured before the
         if self.cur_open {
             let exit_index = self.cur_stmts.len();
-// every named non-parameter local declared here dies at this exit (the escape pass
+            // every named non-parameter local declared here dies at this exit (the escape pass
             let dying: Vec<BirLocalId> = self.name_map[frame.name_len..]
                 .iter()
                 .map(|(_, id)| *id)
@@ -382,26 +399,36 @@ impl<'a> BodyBuilder<'a> {
     }
 
     fn in_scope_affine(&self) -> Vec<BirLocalId> {
-        self.scopes.iter().flat_map(|f| f.affine.iter().copied()).collect()
+        self.scopes
+            .iter()
+            .flat_map(|f| f.affine.iter().copied())
+            .collect()
     }
 
     fn emit_to_temp(&mut self, rvalue: BirRvalue, ty: InferType, span: Span) -> BirOperand {
         let temp = self.new_temp(ty, span);
         self.push(
             BirStmtKind::Assign {
-                dest: BirPlace { local: temp, proj: Vec::new() },
+                dest: BirPlace {
+                    local: temp,
+                    proj: Vec::new(),
+                },
                 rvalue,
             },
             span,
         );
-        BirOperand::Copy(BirPlace { local: temp, proj: Vec::new() })
+        BirOperand::Copy(BirPlace {
+            local: temp,
+            proj: Vec::new(),
+        })
     }
 
     fn place_of(&mut self, expr: &TypedExpr) -> Option<BirPlace> {
         match &expr.kind {
-            TypedExprKind::Identifier(name) => self
-                .lookup(name)
-                .map(|local| BirPlace { local, proj: Vec::new() }),
+            TypedExprKind::Identifier(name) => self.lookup(name).map(|local| BirPlace {
+                local,
+                proj: Vec::new(),
+            }),
             TypedExprKind::Member { object, member } => {
                 let mut base = self.place_of(object)?;
                 base.proj.push(BirProjection::Field(member.clone()));
@@ -435,7 +462,10 @@ impl<'a> BodyBuilder<'a> {
 
             TypedExprKind::Identifier(name) => match self.lookup(name) {
                 Some(local) => {
-                    let place = BirPlace { local, proj: Vec::new() };
+                    let place = BirPlace {
+                        local,
+                        proj: Vec::new(),
+                    };
                     if self.locals[local.0 as usize].category == Category::Affine {
                         BirOperand::Move(place)
                     } else {
@@ -445,12 +475,12 @@ impl<'a> BodyBuilder<'a> {
                 None => BirOperand::Const,
             },
 
-            TypedExprKind::Member { .. } | TypedExprKind::Index { .. } | TypedExprKind::Deref(_) => {
-                match self.place_of(expr) {
-                    Some(place) => BirOperand::Copy(place),
-                    None => BirOperand::Const,
-                }
-            }
+            TypedExprKind::Member { .. }
+            | TypedExprKind::Index { .. }
+            | TypedExprKind::Deref(_) => match self.place_of(expr) {
+                Some(place) => BirOperand::Copy(place),
+                None => BirOperand::Const,
+            },
 
             TypedExprKind::Grouping(inner) => self.build_operand(inner),
             TypedExprKind::Cast { expr: inner, .. } => {
@@ -476,7 +506,11 @@ impl<'a> BodyBuilder<'a> {
                 let indirect_nogc = self.indirect_nogc_callee(&recovered, callee);
                 let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
                 self.emit_to_temp(
-                    BirRvalue::Call { callee: recovered, args: ops, indirect_nogc },
+                    BirRvalue::Call {
+                        callee: recovered,
+                        args: ops,
+                        indirect_nogc,
+                    },
                     expr.ty.clone(),
                     span,
                 )
@@ -487,25 +521,37 @@ impl<'a> BodyBuilder<'a> {
                     fields.iter().map(|(_, v)| self.build_operand(v)).collect();
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
-            TypedExprKind::EnumVariant { enum_name, variant, args, .. } => {
-// row 6: the sole run-1 vec mutator writes its receiver, so a live element borrow
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                // row 6: the sole run-1 vec mutator writes its receiver, so a live element borrow
                 if enum_name.as_str() == "Vec" && variant.as_str() == "push" {
                     if let Some((recv, rest)) = args.split_first() {
                         match self.build_operand(recv) {
                             BirOperand::Copy(dest) => {
                                 let ops = rest.iter().map(|a| self.build_operand(a)).collect();
                                 self.push(
-                                    BirStmtKind::Assign { dest, rvalue: BirRvalue::Aggregate(ops) },
+                                    BirStmtKind::Assign {
+                                        dest,
+                                        rvalue: BirRvalue::Aggregate(ops),
+                                    },
                                     span,
                                 );
                                 return BirOperand::Const;
                             }
                             recv_op => {
-// a non-place receiver (vec::push(make(), x)) has no outstanding
-// borrow, so the reused single operand is read-modeled, sound either way
+                                // a non-place receiver (vec::push(make(), x)) has no outstanding
+                                // borrow, so the reused single operand is read-modeled, sound either way
                                 let mut ops = vec![recv_op];
                                 ops.extend(rest.iter().map(|a| self.build_operand(a)));
-                                return self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span);
+                                return self.emit_to_temp(
+                                    BirRvalue::Aggregate(ops),
+                                    expr.ty.clone(),
+                                    span,
+                                );
                             }
                         }
                     }
@@ -513,7 +559,8 @@ impl<'a> BodyBuilder<'a> {
                 let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
-            TypedExprKind::ArrayLiteral { elements } | TypedExprKind::VecLiteral { elements, .. } => {
+            TypedExprKind::ArrayLiteral { elements }
+            | TypedExprKind::VecLiteral { elements, .. } => {
                 let ops: Vec<BirOperand> = elements.iter().map(|e| self.build_operand(e)).collect();
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
@@ -526,7 +573,7 @@ impl<'a> BodyBuilder<'a> {
             }
 
             TypedExprKind::Reference { mutable, operand } => {
-// a reference to a reference lets a loan escape via a deref-copy that whole-local provenance misses
+                // a reference to a reference lets a loan escape via a deref-copy that whole-local provenance misses
                 if is_ref_ty(&operand.ty) {
                     self.build_errors.push(BirDiagnostic::new(
                         "E0726",
@@ -537,7 +584,10 @@ impl<'a> BodyBuilder<'a> {
                 }
                 match self.place_of(operand) {
                     Some(place) => self.emit_to_temp(
-                        BirRvalue::Ref { place, mutable: *mutable },
+                        BirRvalue::Ref {
+                            place,
+                            mutable: *mutable,
+                        },
                         expr.ty.clone(),
                         span,
                     ),
@@ -566,21 +616,38 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Assign { name, value } => {
                 self.build_assign(name, value, expr.span);
                 match self.lookup(name) {
-                    Some(local) => BirOperand::Copy(BirPlace { local, proj: Vec::new() }),
+                    Some(local) => BirOperand::Copy(BirPlace {
+                        local,
+                        proj: Vec::new(),
+                    }),
                     None => BirOperand::Const,
                 }
             }
-            TypedExprKind::FieldAssign { object, field, value } => {
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => {
                 self.build_field_assign(object, field, value, expr.span);
                 BirOperand::Const
             }
-            TypedExprKind::IndexAssign { object, index, value } => {
+            TypedExprKind::IndexAssign {
+                object,
+                index,
+                value,
+            } => {
                 self.reject_projected_ref_store(value);
                 let v = self.build_operand(value);
                 let _ = self.build_operand(index);
                 if let Some(mut place) = self.place_of(object) {
                     place.proj.push(BirProjection::Index);
-                    self.push(BirStmtKind::Assign { dest: place, rvalue: BirRvalue::Use(v) }, span);
+                    self.push(
+                        BirStmtKind::Assign {
+                            dest: place,
+                            rvalue: BirRvalue::Use(v),
+                        },
+                        span,
+                    );
                 }
                 BirOperand::Const
             }
@@ -589,19 +656,29 @@ impl<'a> BodyBuilder<'a> {
                 let v = self.build_operand(value);
                 if let Some(mut place) = self.place_of(target) {
                     place.proj.push(BirProjection::Deref);
-                    self.push(BirStmtKind::Assign { dest: place, rvalue: BirRvalue::Use(v) }, span);
+                    self.push(
+                        BirStmtKind::Assign {
+                            dest: place,
+                            rvalue: BirRvalue::Use(v),
+                        },
+                        span,
+                    );
                 }
                 BirOperand::Const
             }
 
-            TypedExprKind::If { condition, then_branch, else_branch } => {
-                self.build_if_expr(condition, then_branch, Some(else_branch), expr)
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => self.build_if_expr(condition, then_branch, Some(else_branch), expr),
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.build_match_expr(scrutinee, arms, expr)
             }
-            TypedExprKind::Match { scrutinee, arms } => self.build_match_expr(scrutinee, arms, expr),
             TypedExprKind::Block { stmts, tail } => self.build_block_expr(stmts, tail),
 
             TypedExprKind::ResultAssert { scrutinee, .. } => {
-// build the scrutinee for its reads; the err arm seals a divergence, modeled
+                // build the scrutinee for its reads; the err arm seals a divergence, modeled
                 let op = self.build_operand(scrutinee);
                 self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
             }
@@ -634,7 +711,13 @@ impl<'a> BodyBuilder<'a> {
         } else {
             vec![merge_id, rhs_id]
         };
-        self.seal(BirTerminator::Branch { discr: cond, targets }, left.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: cond,
+                targets,
+            },
+            left.span,
+        );
         self.start(rhs_id);
         let _ = self.build_operand(right);
         if self.cur_open {
@@ -660,7 +743,13 @@ impl<'a> BodyBuilder<'a> {
         } else {
             merge_id
         };
-        self.seal(BirTerminator::Branch { discr: cond, targets: vec![then_id, else_id] }, condition.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: cond,
+                targets: vec![then_id, else_id],
+            },
+            condition.span,
+        );
 
         self.start(then_id);
         let _ = self.build_operand(then_branch);
@@ -733,7 +822,10 @@ impl<'a> BodyBuilder<'a> {
             }
             self.push(
                 BirStmtKind::Assign {
-                    dest: BirPlace { local, proj: Vec::new() },
+                    dest: BirPlace {
+                        local,
+                        proj: Vec::new(),
+                    },
                     rvalue: BirRvalue::Use(v),
                 },
                 span,
@@ -741,12 +833,24 @@ impl<'a> BodyBuilder<'a> {
         }
     }
 
-    fn build_field_assign(&mut self, object: &TypedExpr, field: &str, value: &TypedExpr, span: Span) {
+    fn build_field_assign(
+        &mut self,
+        object: &TypedExpr,
+        field: &str,
+        value: &TypedExpr,
+        span: Span,
+    ) {
         self.reject_projected_ref_store(value);
         let v = self.build_operand(value);
         if let Some(mut place) = self.place_of(object) {
             place.proj.push(BirProjection::Field(field.to_string()));
-            self.push(BirStmtKind::Assign { dest: place, rvalue: BirRvalue::Use(v) }, span);
+            self.push(
+                BirStmtKind::Assign {
+                    dest: place,
+                    rvalue: BirRvalue::Use(v),
+                },
+                span,
+            );
         }
     }
 
@@ -756,13 +860,22 @@ impl<'a> BodyBuilder<'a> {
             TypedStmtKind::Expression(e) => {
                 self.build_effect(e);
             }
-            TypedStmtKind::Let { name, mutable, initializer, var_type, .. } => {
+            TypedStmtKind::Let {
+                name,
+                mutable,
+                initializer,
+                var_type,
+                ..
+            } => {
                 let v = self.build_operand(initializer);
                 let local = self.new_named(name, var_type.clone(), span, *mutable);
                 self.push(BirStmtKind::StorageLive(local), span);
                 self.push(
                     BirStmtKind::Assign {
-                        dest: BirPlace { local, proj: Vec::new() },
+                        dest: BirPlace {
+                            local,
+                            proj: Vec::new(),
+                        },
                         rvalue: BirRvalue::Use(v),
                     },
                     span,
@@ -775,16 +888,32 @@ impl<'a> BodyBuilder<'a> {
                 }
                 self.close_scope();
             }
-            TypedStmtKind::If { condition, then_branch, else_branch } => {
+            TypedStmtKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 self.build_if_stmt(condition, then_branch, else_branch.as_deref());
             }
             TypedStmtKind::While { condition, body } => {
                 self.build_while(condition, body);
             }
-            TypedStmtKind::For { iterator, start, end, step, body, .. } => {
+            TypedStmtKind::For {
+                iterator,
+                start,
+                end,
+                step,
+                body,
+                ..
+            } => {
                 self.build_for(iterator, start, end, step.as_ref().as_ref(), body);
             }
-            TypedStmtKind::ForEach { iterator, iterable, elem_type, body } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                elem_type,
+                body,
+            } => {
                 self.build_foreach(iterator, iterable, elem_type, body);
             }
             TypedStmtKind::Return(val) => {
@@ -829,20 +958,33 @@ impl<'a> BodyBuilder<'a> {
                 let temp = self.new_temp(expr.ty.clone(), span);
                 self.push(
                     BirStmtKind::Assign {
-                        dest: BirPlace { local: temp, proj: Vec::new() },
-                        rvalue: BirRvalue::Call { callee: recovered, args: ops, indirect_nogc },
+                        dest: BirPlace {
+                            local: temp,
+                            proj: Vec::new(),
+                        },
+                        rvalue: BirRvalue::Call {
+                            callee: recovered,
+                            args: ops,
+                            indirect_nogc,
+                        },
                     },
                     span,
                 );
             }
             TypedExprKind::Assign { name, value } => self.build_assign(name, value, span),
-            TypedExprKind::FieldAssign { object, field, value } => {
-                self.build_field_assign(object, field, value, span)
-            }
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => self.build_field_assign(object, field, value, span),
             TypedExprKind::IndexAssign { .. } | TypedExprKind::DerefAssign { .. } => {
                 let _ = self.build_operand(expr);
             }
-            TypedExprKind::If { condition, then_branch, else_branch } => {
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
                 let _ = self.build_if_expr(condition, then_branch, Some(else_branch), expr);
             }
             TypedExprKind::Match { scrutinee, arms } => {
@@ -871,7 +1013,13 @@ impl<'a> BodyBuilder<'a> {
         } else {
             merge_id
         };
-        self.seal(BirTerminator::Branch { discr: cond, targets: vec![then_id, else_id] }, condition.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: cond,
+                targets: vec![then_id, else_id],
+            },
+            condition.span,
+        );
 
         self.start(then_id);
         self.build_stmt(then_branch);
@@ -896,7 +1044,13 @@ impl<'a> BodyBuilder<'a> {
 
         self.start(header_id);
         let cond = self.build_operand(condition);
-        self.seal(BirTerminator::Branch { discr: cond, targets: vec![body_id, exit_id] }, condition.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: cond,
+                targets: vec![body_id, exit_id],
+            },
+            condition.span,
+        );
 
         self.loop_stack.push((header_id, exit_id));
         self.start(body_id);
@@ -926,7 +1080,13 @@ impl<'a> BodyBuilder<'a> {
         let exit_id = self.new_block_id();
         self.seal(BirTerminator::Goto(header_id), body.span);
         self.start(header_id);
-        self.seal(BirTerminator::Branch { discr: BirOperand::Const, targets: vec![body_id, exit_id] }, body.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: BirOperand::Const,
+                targets: vec![body_id, exit_id],
+            },
+            body.span,
+        );
         self.loop_stack.push((header_id, exit_id));
         self.start(body_id);
         self.open_scope(body.span);
@@ -953,7 +1113,13 @@ impl<'a> BodyBuilder<'a> {
         let exit_id = self.new_block_id();
         self.seal(BirTerminator::Goto(header_id), body.span);
         self.start(header_id);
-        self.seal(BirTerminator::Branch { discr: BirOperand::Const, targets: vec![body_id, exit_id] }, body.span);
+        self.seal(
+            BirTerminator::Branch {
+                discr: BirOperand::Const,
+                targets: vec![body_id, exit_id],
+            },
+            body.span,
+        );
         self.loop_stack.push((header_id, exit_id));
         self.start(body_id);
         self.open_scope(body.span);
@@ -967,4 +1133,3 @@ impl<'a> BodyBuilder<'a> {
         self.start(exit_id);
     }
 }
-

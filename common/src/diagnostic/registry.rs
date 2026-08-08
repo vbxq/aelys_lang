@@ -576,7 +576,7 @@ outside `for` or `while`.",
 nowhere to return to.",
         severity: Severity::Error,
     },
-// borrow / ownership (e07xx)
+    // borrow / ownership (e07xx)
     DiagnosticInfo {
         code: "E0701",
         title: "use of a moved value",
@@ -792,4 +792,3 @@ pub fn lookup(code: &str) -> Option<&'static DiagnosticInfo> {
 pub fn all_codes() -> &'static [DiagnosticInfo] {
     REGISTRY
 }
-

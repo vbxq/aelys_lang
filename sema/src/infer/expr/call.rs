@@ -85,8 +85,7 @@ impl TypeInference {
             && matches!(
                 member.as_str(),
                 "unwrap" | "expect" | "map_error" | "into_ok" | "unwrap_unchecked"
-            )
-        {
+            ) {
             let typed_object = self.infer_expr(object);
             if let InferType::Enum(name, targs) = &typed_object.ty
                 && name == "Result"
@@ -260,7 +259,7 @@ impl TypeInference {
                     }
                 }
             }
-// into_ok is a compile-time proof that the error is uninhabited, so err seals unreachable
+            // into_ok is a compile-time proof that the error is uninhabited, so err seals unreachable
             "into_ok" => {
                 if !args.is_empty() {
                     self.errors.push(TypeError::member_access(
@@ -289,7 +288,7 @@ impl TypeInference {
                 }
                 ResultAssertOnErr::Unreachable
             }
-// unwrap_unchecked is ub on err, so it is gated behind an unsafe block and err seals unreachable
+            // unwrap_unchecked is ub on err, so it is gated behind an unsafe block and err seals unreachable
             "unwrap_unchecked" => {
                 if !args.is_empty() {
                     self.errors.push(TypeError::member_access(
@@ -310,9 +309,7 @@ impl TypeInference {
                 }
                 ResultAssertOnErr::Unreachable
             }
-            _ => unreachable!(
-                "the seam only routes unwrap/expect/into_ok/unwrap_unchecked here"
-            ),
+            _ => unreachable!("the seam only routes unwrap/expect/into_ok/unwrap_unchecked here"),
         };
 
         (
@@ -357,7 +354,9 @@ impl TypeInference {
             InferType::Dynamic => return (TypedExprKind::Null, InferType::Dynamic),
             other => {
                 self.errors.push(TypeError::member_access(
-                    format!("[eh-stage3] `.map_error(f)` needs `f: fn({e}) -> E2`, found `{other}`"),
+                    format!(
+                        "[eh-stage3] `.map_error(f)` needs `f: fn({e}) -> E2`, found `{other}`"
+                    ),
                     args[0].span,
                 ));
                 return (TypedExprKind::Null, InferType::Dynamic);
@@ -383,7 +382,11 @@ impl TypeInference {
             body: Box::new(variant_construct(
                 "Result",
                 "Err",
-                vec![call_expr(args[0].clone(), vec![ident_expr(&e_name, span)], span)],
+                vec![call_expr(
+                    args[0].clone(),
+                    vec![ident_expr(&e_name, span)],
+                    span,
+                )],
                 span,
             )),
             span,
@@ -394,7 +397,7 @@ impl TypeInference {
         (kind, InferType::Enum("Result".to_string(), vec![t, e2]))
     }
 
-// $ is rejected by the scanner, so these hygienic names never collide with user code
+    // $ is rejected by the scanner, so these hygienic names never collide with user code
     fn next_map_error_binding(&mut self, tag: char) -> String {
         let n = self.try_counter;
         self.try_counter += 1;
@@ -448,4 +451,3 @@ fn call_expr(callee: Expr, args: Vec<Expr>, span: Span) -> Expr {
         span,
     )
 }
-

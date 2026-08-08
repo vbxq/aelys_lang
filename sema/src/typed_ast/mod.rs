@@ -97,7 +97,7 @@ pub struct TypedFunction {
     pub body: Vec<TypedStmt>,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
-/// from the `nogc` keyword; carried to the bir where the effect check consumes it
+    /// from the `nogc` keyword; carried to the bir where the effect check consumes it
     pub declared_nogc: bool,
     pub span: Span,
     /// Captured variables from enclosing scopes (for closures)
@@ -269,7 +269,7 @@ pub enum TypedExprKind {
         arms: Vec<TypedMatchArm>,
     },
 
-// assert family node for `.unwrap()`/`.expect(lit)`, err arm seals a divergence
+    // assert family node for `.unwrap()`/`.expect(lit)`, err arm seals a divergence
     ResultAssert {
         scrutinee: Box<TypedExpr>,
         ok_tag: u32,
@@ -287,7 +287,7 @@ pub enum TypedExprKind {
 #[derive(Debug, Clone)]
 pub enum ResultAssertOnErr {
     Panic(String),
-// statically impossible err, lowered to airterminator::unreachable
+    // statically impossible err, lowered to airterminator::unreachable
     Unreachable,
 }
 
@@ -325,4 +325,3 @@ impl TypedStmt {
         Self { kind, span }
     }
 }
-

@@ -1,5 +1,4 @@
-
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -146,9 +145,12 @@ fn main() -> i64 {
 
 #[test]
 fn behavioral_chained_try_and_option_propagation() {
-    let Some((code, stdout, stderr)) =
-        run_native(BEHAVIORAL_SRC, RuntimeVariant::Rc, OptimizationLevel::None, &[])
-    else {
+    let Some((code, stdout, stderr)) = run_native(
+        BEHAVIORAL_SRC,
+        RuntimeVariant::Rc,
+        OptimizationLevel::None,
+        &[],
+    ) else {
         return;
     };
     assert_eq!(
@@ -261,8 +263,14 @@ fn seam_rc_live_across_try_early_return_o0() {
     let Some((code, allocs, frees)) = run_seam(OptimizationLevel::None) else {
         return;
     };
-    assert_eq!(code, 107, "Rc live across a `?` early-return: 3 + 104 = 107 at -O0");
-    assert_eq!(allocs, 2, "two Rc::new allocations at -O0 (allocs={allocs})");
+    assert_eq!(
+        code, 107,
+        "Rc live across a `?` early-return: 3 + 104 = 107 at -O0"
+    );
+    assert_eq!(
+        allocs, 2,
+        "two Rc::new allocations at -O0 (allocs={allocs})"
+    );
     assert_eq!(
         allocs, frees,
         "no leak, no double-free across the `?` early-return at -O0 (allocs={allocs} frees={frees})"
@@ -275,7 +283,10 @@ fn seam_rc_live_across_try_early_return_o2() {
         return;
     };
     assert_eq!(code, 107, "3 + 104 = 107 at -O2");
-    assert_eq!(allocs, 2, "two Rc::new allocations at -O2 (allocs={allocs})");
+    assert_eq!(
+        allocs, 2,
+        "two Rc::new allocations at -O2 (allocs={allocs})"
+    );
     assert_eq!(
         allocs, frees,
         "balanced across the `?` early-return at -O2 (allocs={allocs} frees={frees})"
@@ -288,10 +299,12 @@ fn seam_rc_live_across_try_early_return_o3() {
         return;
     };
     assert_eq!(code, 107, "3 + 104 = 107 at -O3");
-    assert_eq!(allocs, 2, "two Rc::new allocations at -O3 (allocs={allocs})");
+    assert_eq!(
+        allocs, 2,
+        "two Rc::new allocations at -O3 (allocs={allocs})"
+    );
     assert_eq!(
         allocs, frees,
         "balanced across the `?` early-return at -O3 (allocs={allocs} frees={frees})"
     );
 }
-

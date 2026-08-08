@@ -37,8 +37,8 @@ impl<'a> FunctionCodegen<'a> {
                 match place {
                     Place::Local(local) => self.assign_local(*local, value),
                     _ => {
-// the single realization point for every indexed store in the language.
-// post-detach pointer).
+                        // the single realization point for every indexed store in the language.
+                        // post-detach pointer).
                         if let Some((root, inner, through_ptr)) = self.vec_root_of(place)? {
                             self.emit_vec_detach(root, &inner, through_ptr)?;
                         }
@@ -158,12 +158,16 @@ impl<'a> FunctionCodegen<'a> {
         store_at(self, 0, i32_ty.const_int(1, false))?;
         store_at(self, 4, i8_ty.const_int(0, false))?;
         // collect_rc_types sees every RcAlloc, so a miss here is a compiler bug
-        let type_id = self.program.rc_type_table.lookup_id(data_ty).ok_or_else(|| {
-            CodegenError::LlvmError(format!(
-                "rc_alloc: type {data_ty:?} has no entry in the RC pointer-map table \
+        let type_id = self
+            .program
+            .rc_type_table
+            .lookup_id(data_ty)
+            .ok_or_else(|| {
+                CodegenError::LlvmError(format!(
+                    "rc_alloc: type {data_ty:?} has no entry in the RC pointer-map table \
                  (collect_rc_types must run before codegen)"
-            ))
-        })?;
+                ))
+            })?;
         store_at(self, 8, i32_ty.const_int(type_id as u64, false))?;
 
         let off16 = self.context.i64_type().const_int(RC_HEADER_SIZE, false);
@@ -191,7 +195,10 @@ impl<'a> FunctionCodegen<'a> {
         self.assign_local(local, casted.into())
     }
 
-    pub(crate) fn place_ptr(&mut self, place: &Place) -> Result<PointerValue<'static>, CodegenError> {
+    pub(crate) fn place_ptr(
+        &mut self,
+        place: &Place,
+    ) -> Result<PointerValue<'static>, CodegenError> {
         match place {
             Place::Local(local) => self.lookup_local_ptr(*local),
             Place::Global(name) => self.lookup_global_ptr(name),
@@ -240,11 +247,8 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-/// the single array-vs-slice-vs-vec-vs-pointer discriminator. every caller that needs to
-    pub(crate) fn elem_base(
-        &mut self,
-        root: LocalId,
-    ) -> Result<(ElemBase, AirType), CodegenError> {
+    /// the single array-vs-slice-vs-vec-vs-pointer discriminator. every caller that needs to
+    pub(crate) fn elem_base(&mut self, root: LocalId) -> Result<(ElemBase, AirType), CodegenError> {
         let root_ty = self.local_air_type(root)?.clone();
         let (header_ptr, collection) = match &root_ty {
             AirType::Ptr(inner) => {
@@ -266,8 +270,8 @@ impl<'a> FunctionCodegen<'a> {
                     *inner,
                 ))
             }
-// through the header pointer, not extracted from a loaded struct, because the
-// pointer form has no loaded struct to extract from
+            // through the header pointer, not extracted from a loaded struct, because the
+            // pointer form has no loaded struct to extract from
             AirType::Slice(ref inner) | AirType::Vec(ref inner) => {
                 let inner = inner.clone();
                 let hdr_llvm = air_basic_type_to_llvm(&collection, self.context)?;
@@ -307,7 +311,7 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-/// the only caller of `elem_base` for addressing.
+    /// the only caller of `elem_base` for addressing.
     pub(crate) fn index_ptr(
         &mut self,
         root: LocalId,
@@ -342,10 +346,10 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-/// the only discriminator for the cow detach. it walks the same pointer chain `elem_base`
-/// walks, so a `ptr(vec)` root cannot silently stop matching.
-/// only because a vec inside a struct is e0410 and `& &t` collapses in sema. if either
-/// fence lifts, this must become a depth.
+    /// the only discriminator for the cow detach. it walks the same pointer chain `elem_base`
+    /// walks, so a `ptr(vec)` root cannot silently stop matching.
+    /// only because a vec inside a struct is e0410 and `& &t` collapses in sema. if either
+    /// fence lifts, this must become a depth.
     pub(crate) fn vec_root_of(
         &self,
         place: &Place,
@@ -413,4 +417,3 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 }
-

@@ -54,9 +54,7 @@ impl<'a> FunctionCodegen<'a> {
                 operand,
                 field_index,
             } => self.generate_enum_payload(enum_name, *tag, operand, *field_index),
-            Rvalue::ClosureCreate { fn_name, env } => {
-                self.generate_closure_create(fn_name, env)
-            }
+            Rvalue::ClosureCreate { fn_name, env } => self.generate_closure_create(fn_name, env),
             Rvalue::SliceFromParts { ptr, len } => self.generate_slice_from_parts(ptr, len),
         }
     }
@@ -82,11 +80,8 @@ impl<'a> FunctionCodegen<'a> {
                         ));
                     }
                 };
-                let elem_ptr = self.index_ptr(
-                    root,
-                    idx_val,
-                    crate::lowering::stmts::BoundsCheck::Checked,
-                )?;
+                let elem_ptr =
+                    self.index_ptr(root, idx_val, crate::lowering::stmts::BoundsCheck::Checked)?;
                 let elem_air = match inner.as_ref() {
                     AirType::Array(e, _) | AirType::Slice(e) | AirType::Vec(e) => (**e).clone(),
                     _ => unreachable!(),
@@ -277,7 +272,8 @@ impl<'a> FunctionCodegen<'a> {
                 payload.iter().zip(variant_def.payload.iter()).enumerate()
             {
                 let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
-                let field_layout = aelys_air::layout::resolved_layout(field_air_ty, &self.program.struct_sizes);
+                let field_layout =
+                    aelys_air::layout::resolved_layout(field_air_ty, &self.program.struct_sizes);
 
                 // Align the offset
                 byte_offset = (byte_offset + field_layout.align - 1) & !(field_layout.align - 1);
@@ -497,7 +493,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(fat.into())
     }
 
-// fat slice { ptr, i64 }, layout matches airtype::slice, built like the closure fat pointer
+    // fat slice { ptr, i64 }, layout matches airtype::slice, built like the closure fat pointer
     fn generate_slice_from_parts(
         &mut self,
         ptr: &Operand,
@@ -512,8 +508,12 @@ impl<'a> FunctionCodegen<'a> {
                     ) =>
                 {
                     let zero = self.context.i64_type().const_zero();
-                    self.index_ptr(*local, zero, crate::lowering::stmts::BoundsCheck::Elem0Unchecked)?
-                        .as_basic_value_enum()
+                    self.index_ptr(
+                        *local,
+                        zero,
+                        crate::lowering::stmts::BoundsCheck::Elem0Unchecked,
+                    )?
+                    .as_basic_value_enum()
                 }
                 _ => self.generate_operand(ptr)?,
             },
@@ -539,4 +539,3 @@ impl<'a> FunctionCodegen<'a> {
         Ok(slice.into())
     }
 }
-

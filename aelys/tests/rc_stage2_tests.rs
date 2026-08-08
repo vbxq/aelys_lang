@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -61,7 +61,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "expected the value read through the handle; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "expected the value read through the handle; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "expected balanced alloc/free for one unshared Rc; got stderr:\n{stderr}"
@@ -82,7 +85,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "expected value through the shared handle; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "expected value through the shared handle; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "shared Rc must free once at the last drop, not per handle; got stderr:\n{stderr}"
@@ -110,7 +116,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 42, "expected deterministic exit 42 under real rc; stderr:\n{stderr}");
+    assert_eq!(
+        code, 42,
+        "expected deterministic exit 42 under real rc; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "balanced insertion: one acyclic object allocated and freed once; got:\n{stderr}"
@@ -131,7 +140,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "leak variant must still compute the value; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "leak variant must still compute the value; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=0"),
         "the leak variant must never free (frees=0); got stderr:\n{stderr}"
@@ -200,7 +212,12 @@ fn main() -> i64 {
     )
     .expect("write source");
 
-    match compile_file_with_llvm_variant(&source_path, OptimizationLevel::None, false, RuntimeVariant::Rc) {
+    match compile_file_with_llvm_variant(
+        &source_path,
+        OptimizationLevel::None,
+        false,
+        RuntimeVariant::Rc,
+    ) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {

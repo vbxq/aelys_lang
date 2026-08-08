@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -112,7 +112,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "value read through the copied carrier; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "value read through the copied carrier; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "a copied carrier must free its Rc exactly once; got stderr:\n{stderr}"
@@ -257,7 +260,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "the escaped carrier's field must be live in the caller; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "the escaped carrier's field must be live in the caller; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "escape must not double-release nor leak; got stderr:\n{stderr}"
@@ -280,7 +286,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 7, "borrow must not free the caller's Rc early; stderr:\n{stderr}");
+    assert_eq!(
+        code, 7,
+        "borrow must not free the caller's Rc early; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "a borrowed carrier arg must not be released callee-side; got stderr:\n{stderr}"
@@ -326,7 +335,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 9, "value read through the nested transitive path; stderr:\n{stderr}");
+    assert_eq!(
+        code, 9,
+        "value read through the nested transitive path; stderr:\n{stderr}"
+    );
     assert!(
         stderr.contains("[rc] allocs=1 frees=1"),
         "a nested transitive carrier must free its leaf exactly once; got stderr:\n{stderr}"

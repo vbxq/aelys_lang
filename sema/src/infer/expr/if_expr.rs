@@ -25,13 +25,15 @@ impl TypeInference {
 
         // Implicit numeric widening between branches: if one branch is
         // a wider numeric type, widen the other (e.g. i32 vs i64 → both i64).
-        if typed_then.ty != typed_else.ty
-            && typed_then.ty.can_implicit_widen_to(&typed_else.ty)
-        {
+        if typed_then.ty != typed_else.ty && typed_then.ty.can_implicit_widen_to(&typed_else.ty) {
             let span = typed_then.span;
             let original = std::mem::replace(
                 &mut typed_then,
-                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                TypedExpr {
+                    kind: TypedExprKind::Null,
+                    ty: InferType::Null,
+                    span,
+                },
             );
             typed_then = TypedExpr {
                 kind: TypedExprKind::Cast {
@@ -47,7 +49,11 @@ impl TypeInference {
             let span = typed_else.span;
             let original = std::mem::replace(
                 &mut typed_else,
-                TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span },
+                TypedExpr {
+                    kind: TypedExprKind::Null,
+                    ty: InferType::Null,
+                    span,
+                },
             );
             typed_else = TypedExpr {
                 kind: TypedExprKind::Cast {

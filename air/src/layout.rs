@@ -76,7 +76,10 @@ pub fn compute_layouts(program: &mut AirProgram) -> Vec<String> {
                     .is_none();
                 continue;
             }
-            if !types_resolved(def.variants.iter().flat_map(|v| v.payload.iter()), &resolved) {
+            if !types_resolved(
+                def.variants.iter().flat_map(|v| v.payload.iter()),
+                &resolved,
+            ) {
                 next_enums.push(idx);
                 continue;
             }
@@ -176,17 +179,13 @@ fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
 
 pub fn resolved_layout(ty: &AirType, sizes: &HashMap<String, TypeLayout>) -> TypeLayout {
     match ty {
-        AirType::Struct(name) => *sizes
+        AirType::Struct(name) => *sizes.get(name.as_str()).unwrap_or_else(|| {
+            panic!("invariant: struct `{name}` referenced before its layout is computed")
+        }),
+        AirType::Enum(name) => sizes
             .get(name.as_str())
-            .unwrap_or_else(|| {
-                panic!("invariant: struct `{name}` referenced before its layout is computed")
-            }),
-        AirType::Enum(name) => {
-            sizes
-                .get(name.as_str())
-                .copied()
-                .unwrap_or(TypeLayout { size: 4, align: 4 })
-        }
+            .copied()
+            .unwrap_or(TypeLayout { size: 4, align: 4 }),
         AirType::Array(inner, n) => {
             let el = resolved_layout(inner, sizes);
             TypeLayout {
@@ -258,7 +257,10 @@ fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
     }
 }
 
-fn topological_order(structs: &[AirStructDef], name_to_idx: &HashMap<String, usize>) -> Result<Vec<usize>, String> {
+fn topological_order(
+    structs: &[AirStructDef],
+    name_to_idx: &HashMap<String, usize>,
+) -> Result<Vec<usize>, String> {
     let n = structs.len();
     let mut in_degree = vec![0u32; n];
     let mut dependents: Vec<Vec<usize>> = vec![vec![]; n];
@@ -322,10 +324,7 @@ fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>)
 ///
 /// `struct_sizes` must contain computed sizes for any struct types that appear
 /// in enum variant payloads. Pass `&program.struct_sizes` after `compute_layouts`.
-pub fn enum_max_payload_size(
-    def: &AirEnumDef,
-    struct_sizes: &HashMap<String, TypeLayout>,
-) -> u32 {
+pub fn enum_max_payload_size(def: &AirEnumDef, struct_sizes: &HashMap<String, TypeLayout>) -> u32 {
     def.variants
         .iter()
         .map(|v| {

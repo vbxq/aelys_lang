@@ -307,13 +307,19 @@ impl<'a> Parser<'a> {
                 .peek_next()
                 .ok_or_else(|| "--runtime requires a value (leak, rc, or rc+cycles)".to_string())?;
             let variant = RuntimeVariant::parse(next).ok_or_else(|| {
-                format!("invalid runtime variant: {} (expected leak, rc, or rc+cycles)", next)
+                format!(
+                    "invalid runtime variant: {} (expected leak, rc, or rc+cycles)",
+                    next
+                )
             })?;
             return Ok(Some((variant, true)));
         }
         if let Some(rest) = token.strip_prefix("--runtime=") {
             let variant = RuntimeVariant::parse(rest).ok_or_else(|| {
-                format!("invalid runtime variant: {} (expected leak, rc, or rc+cycles)", rest)
+                format!(
+                    "invalid runtime variant: {} (expected leak, rc, or rc+cycles)",
+                    rest
+                )
             })?;
             return Ok(Some((variant, false)));
         }

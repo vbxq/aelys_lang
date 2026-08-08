@@ -91,8 +91,9 @@ impl TypeInference {
                 self.vec_form_expr(left);
                 self.vec_form_expr(right);
             }
-            TypedExprKind::Unary { operand, .. }
-            | TypedExprKind::Reference { operand, .. } => self.vec_form_expr(operand),
+            TypedExprKind::Unary { operand, .. } | TypedExprKind::Reference { operand, .. } => {
+                self.vec_form_expr(operand)
+            }
             TypedExprKind::Grouping(inner)
             | TypedExprKind::Deref(inner)
             | TypedExprKind::Lambda(inner) => self.vec_form_expr(inner),
@@ -231,4 +232,3 @@ impl TypeInference {
         self.errors.push(error);
     }
 }
-

@@ -9,9 +9,9 @@ pub mod origins;
 
 use aelys_sema::{InferType, TypedProgram};
 
-pub use category::{category, Category};
-pub use effects::{effect_summaries, managed_chain, Effect, EffectSet, Step, StepKind};
-pub use moves::{check_program, BirCheck};
+pub use category::{Category, category};
+pub use effects::{Effect, EffectSet, Step, StepKind, effect_summaries, managed_chain};
+pub use moves::{BirCheck, check_program};
 
 // the private field is the seal: check is the only constructor, so optimize cannot run unchecked
 pub struct Checked(TypedProgram);
@@ -51,7 +51,7 @@ pub fn drop_key(span: &aelys_syntax::Span) -> DropKey {
 pub struct BirDiagnostic {
     pub code: &'static str,
     pub primary: (aelys_syntax::Span, String),
-// extra carets: borrow-created / last-used / moved-here / declared-here / destroyed-here
+    // extra carets: borrow-created / last-used / moved-here / declared-here / destroyed-here
     pub secondaries: Vec<(aelys_syntax::Span, String)>,
     pub marker: &'static str,
     pub help: Option<String>,
@@ -133,7 +133,7 @@ pub struct ScopeDeath {
     pub block: BirBlockId,
     pub index: usize,
     pub locals: Vec<BirLocalId>,
-// the death-point caret for the escape-death diagnostic
+    // the death-point caret for the escape-death diagnostic
     pub scope_span: aelys_syntax::Span,
 }
 
@@ -182,13 +182,16 @@ pub enum BirStmtKind {
     Assign { dest: BirPlace, rvalue: BirRvalue },
     StorageLive(BirLocalId),
     StorageDead(BirLocalId),
-// affine destruction, inserted point-sensitively by drop-elaboration, lowered 1:1
+    // affine destruction, inserted point-sensitively by drop-elaboration, lowered 1:1
     Drop(BirLocalId),
 }
 
 pub enum BirTerminator {
     Goto(BirBlockId),
-    Branch { discr: BirOperand, targets: Vec<BirBlockId> },
+    Branch {
+        discr: BirOperand,
+        targets: Vec<BirBlockId>,
+    },
     Return(Option<BirOperand>),
     Unreachable,
 }
@@ -198,10 +201,20 @@ pub enum BirRvalue {
     Aggregate(Vec<BirOperand>),
     BinOp(BirOperand, BirOperand),
     UnOp(BirOperand),
-    Call { callee: Option<String>, args: Vec<BirOperand>, indirect_nogc: bool },
-    Ref { place: BirPlace, mutable: bool },
+    Call {
+        callee: Option<String>,
+        args: Vec<BirOperand>,
+        indirect_nogc: bool,
+    },
+    Ref {
+        place: BirPlace,
+        mutable: bool,
+    },
     #[allow(dead_code)]
-    Reborrow { place: BirPlace, mutable: bool },
+    Reborrow {
+        place: BirPlace,
+        mutable: bool,
+    },
 }
 
 pub enum BirOperand {
@@ -222,4 +235,3 @@ pub enum BirProjection {
     Index,
     Deref,
 }
-

@@ -6,8 +6,8 @@ mod runtime;
 
 pub use runtime::RuntimeVariant;
 
-use aelys_common::error::AelysError;
 use aelys_common::Warning;
+use aelys_common::error::AelysError;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
@@ -99,7 +99,9 @@ fn lower_file_to_air_with_source(
     let typed_program = optimizer.optimize(checked);
 
     let air = aelys_air::lower::try_lower(&typed_program).map_err(|failure| match failure {
-        aelys_air::lower::LowerFailure::Borrow(diags) => bir_diagnostics_to_error(diags, src.clone()),
+        aelys_air::lower::LowerFailure::Borrow(diags) => {
+            bir_diagnostics_to_error(diags, src.clone())
+        }
         aelys_air::lower::LowerFailure::Lowering(errors) => {
             let message = if errors.is_empty() {
                 "AIR lowering failed with an unknown error".to_string()
@@ -124,7 +126,7 @@ fn lower_file_to_air_with_source(
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
-// program: before this point a generic body still hides its instantiations
+    // program: before this point a generic body still hides its instantiations
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
         return Err(vec_surface_errors_to_error(errors, &air, src.clone()));
     }
@@ -285,4 +287,3 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
         stderr.trim()
     ))
 }
-

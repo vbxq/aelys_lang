@@ -81,7 +81,9 @@ impl<'a> LoweringContext<'a> {
         // If the step is a compile-time constant we pick the direction
         // statically.  Otherwise we emit a runtime sign check.
         let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
-        let step_is_const = step.as_ref().map_or(true, |s| step_expr_is_negative(s) || step_expr_is_positive(s));
+        let step_is_const = step.as_ref().map_or(true, |s| {
+            step_expr_is_negative(s) || step_expr_is_positive(s)
+        });
 
         let cond_local = self.alloc_temp(AirType::Bool);
         if step_is_const {
@@ -108,10 +110,12 @@ impl<'a> LoweringContext<'a> {
             //   fwd_cmp  = iter < end  (or <=)
             //   bwd_cmp  = iter > end  (or >=)
             //   cond     = step_neg ? bwd_cmp : fwd_cmp
-            let zero = Operand::Const(iter_ty
-                .int_size()
-                .map(|s| AirConst::Int(0, s))
-                .unwrap_or(AirConst::IntLiteral(0)));
+            let zero = Operand::Const(
+                iter_ty
+                    .int_size()
+                    .map(|s| AirConst::Int(0, s))
+                    .unwrap_or(AirConst::IntLiteral(0)),
+            );
             let step_neg_local = self.alloc_temp(AirType::Bool);
             self.emit(
                 AirStmtKind::Assign {
@@ -126,7 +130,11 @@ impl<'a> LoweringContext<'a> {
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(fwd_local),
-                    rvalue: Rvalue::BinaryOp(fwd_op, Operand::Copy(iter_local), Operand::Copy(end_local)),
+                    rvalue: Rvalue::BinaryOp(
+                        fwd_op,
+                        Operand::Copy(iter_local),
+                        Operand::Copy(end_local),
+                    ),
                 },
                 None,
             );
@@ -134,7 +142,11 @@ impl<'a> LoweringContext<'a> {
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(bwd_local),
-                    rvalue: Rvalue::BinaryOp(bwd_op, Operand::Copy(iter_local), Operand::Copy(end_local)),
+                    rvalue: Rvalue::BinaryOp(
+                        bwd_op,
+                        Operand::Copy(iter_local),
+                        Operand::Copy(end_local),
+                    ),
                 },
                 None,
             );
@@ -144,7 +156,11 @@ impl<'a> LoweringContext<'a> {
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(neg_and_bwd),
-                    rvalue: Rvalue::BinaryOp(BinOp::And, Operand::Copy(step_neg_local), Operand::Copy(bwd_local)),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::And,
+                        Operand::Copy(step_neg_local),
+                        Operand::Copy(bwd_local),
+                    ),
                 },
                 None,
             );
@@ -160,14 +176,22 @@ impl<'a> LoweringContext<'a> {
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(pos_and_fwd),
-                    rvalue: Rvalue::BinaryOp(BinOp::And, Operand::Copy(not_neg), Operand::Copy(fwd_local)),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::And,
+                        Operand::Copy(not_neg),
+                        Operand::Copy(fwd_local),
+                    ),
                 },
                 None,
             );
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Local(cond_local),
-                    rvalue: Rvalue::BinaryOp(BinOp::Or, Operand::Copy(neg_and_bwd), Operand::Copy(pos_and_fwd)),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::Or,
+                        Operand::Copy(neg_and_bwd),
+                        Operand::Copy(pos_and_fwd),
+                    ),
                 },
                 None,
             );
@@ -194,7 +218,11 @@ impl<'a> LoweringContext<'a> {
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(iter_local),
-                rvalue: Rvalue::BinaryOp(BinOp::Add, Operand::Copy(iter_local), Operand::Copy(step_local)),
+                rvalue: Rvalue::BinaryOp(
+                    BinOp::Add,
+                    Operand::Copy(iter_local),
+                    Operand::Copy(step_local),
+                ),
             },
             None,
         );
@@ -236,9 +264,7 @@ impl<'a> LoweringContext<'a> {
 
         let len_local = self.alloc_temp(AirType::I64);
         let len_rvalue = match &col_ty {
-            AirType::Array(_, n) => {
-                Rvalue::Use(Operand::Const(AirConst::IntLiteral(*n as i64)))
-            }
+            AirType::Array(_, n) => Rvalue::Use(Operand::Const(AirConst::IntLiteral(*n as i64))),
             AirType::Str => Rvalue::FieldAccess {
                 base: Operand::Copy(col_local),
                 field: "len".to_string(),
@@ -335,7 +361,10 @@ impl<'a> LoweringContext<'a> {
 fn step_expr_is_negative(step: &TypedExpr) -> bool {
     match &step.kind {
         TypedExprKind::Int(v) => *v < 0,
-        TypedExprKind::Unary { op: UnaryOp::Neg, operand } => match &operand.kind {
+        TypedExprKind::Unary {
+            op: UnaryOp::Neg,
+            operand,
+        } => match &operand.kind {
             TypedExprKind::Int(v) => *v > 0,
             _ => false,
         },
@@ -347,7 +376,10 @@ fn step_expr_is_negative(step: &TypedExpr) -> bool {
 fn step_expr_is_positive(step: &TypedExpr) -> bool {
     match &step.kind {
         TypedExprKind::Int(v) => *v > 0,
-        TypedExprKind::Unary { op: UnaryOp::Neg, operand } => match &operand.kind {
+        TypedExprKind::Unary {
+            op: UnaryOp::Neg,
+            operand,
+        } => match &operand.kind {
             TypedExprKind::Int(v) => *v < 0,
             _ => false,
         },

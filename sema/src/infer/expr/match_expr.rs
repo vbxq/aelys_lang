@@ -328,11 +328,13 @@ impl TypeInference {
         // constraints that would conflict with later narrowing.
         if typed_arms.len() > 1 {
             // Find a concrete non-default integer or float type from any arm.
-            let concrete_int = typed_arms.iter()
+            let concrete_int = typed_arms
+                .iter()
                 .map(|a| &a.body.ty)
                 .find(|t| t.is_integer() && **t != InferType::I64)
                 .cloned();
-            let concrete_float = typed_arms.iter()
+            let concrete_float = typed_arms
+                .iter()
                 .map(|a| &a.body.ty)
                 .find(|t| t.is_float() && **t != InferType::F64)
                 .cloned();
@@ -377,7 +379,8 @@ impl TypeInference {
         // different integer or float sizes, widen narrower arms to the widest.
         // Find the widest type that all other numeric arms can widen to.
         if typed_arms.len() > 1 {
-            let widest = typed_arms.iter()
+            let widest = typed_arms
+                .iter()
                 .map(|a| &a.body.ty)
                 .find(|t| {
                     (t.is_integer() || t.is_float())
@@ -390,13 +393,15 @@ impl TypeInference {
                 .cloned();
             if let Some(ref target) = widest {
                 for arm in &mut typed_arms {
-                    if arm.body.ty != *target
-                        && arm.body.ty.can_implicit_widen_to(target)
-                    {
+                    if arm.body.ty != *target && arm.body.ty.can_implicit_widen_to(target) {
                         let vspan = arm.body.span;
                         let old_body = std::mem::replace(
                             &mut arm.body,
-                            Box::new(TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan }),
+                            Box::new(TypedExpr {
+                                kind: TypedExprKind::Null,
+                                ty: InferType::Null,
+                                span: vspan,
+                            }),
                         );
                         arm.body = Box::new(TypedExpr {
                             kind: TypedExprKind::Cast {
@@ -414,8 +419,8 @@ impl TypeInference {
         // Now resolve result_type: if all arms agree, use the concrete type directly.
         if !typed_arms.is_empty() {
             let first_ty = &typed_arms[0].body.ty;
-            let all_same_concrete = first_ty.is_concrete()
-                && typed_arms.iter().all(|a| a.body.ty == *first_ty);
+            let all_same_concrete =
+                first_ty.is_concrete() && typed_arms.iter().all(|a| a.body.ty == *first_ty);
             if all_same_concrete {
                 result_type = first_ty.clone();
             }
@@ -502,4 +507,3 @@ impl TypeInference {
             .collect()
     }
 }
-

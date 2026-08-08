@@ -1721,7 +1721,9 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
 
     let errors = match monomorphize(program) {
         Err(e) => e,
-        Ok(_) => panic!("ambiguous generic unit variant should be rejected during monomorphization"),
+        Ok(_) => {
+            panic!("ambiguous generic unit variant should be rejected during monomorphization")
+        }
     };
     assert!(
         errors.iter().any(|e| e.contains("ambiguous unit variant")),
@@ -1900,7 +1902,10 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
     assert!(
         holder_defs.iter().any(|def| matches!(
             &def.variants[0].payload[..],
-            [AirType::FnPtr { conv: CallingConv::Aelys, .. }]
+            [AirType::FnPtr {
+                conv: CallingConv::Aelys,
+                ..
+            }]
         )),
         "missing Aelys fnptr instantiation: {:?}",
         holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
@@ -1908,7 +1913,10 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
     assert!(
         holder_defs.iter().any(|def| matches!(
             &def.variants[0].payload[..],
-            [AirType::FnPtr { conv: CallingConv::C, .. }]
+            [AirType::FnPtr {
+                conv: CallingConv::C,
+                ..
+            }]
         )),
         "missing C fnptr instantiation: {:?}",
         holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()

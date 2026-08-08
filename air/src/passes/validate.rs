@@ -61,12 +61,12 @@ pub enum AirValidationDetail {
         enum_name: String,
     },
     /// An enum operation references an enum definition that is not present in the AIR program.
-    UnknownEnumReference {
-        enum_name: String,
+    UnknownEnumReference { enum_name: String, context: String },
+    /// a place names a global that is not present in the air program.
+    UnknownGlobalReference {
+        global_name: String,
         context: String,
     },
-/// a place names a global that is not present in the air program.
-    UnknownGlobalReference { global_name: String, context: String },
     /// A function has no blocks (non-extern function with empty body).
     EmptyBody,
 }
@@ -184,7 +184,11 @@ fn contains_opaque(ty: &AirType) -> bool {
     }
 }
 
-fn collect_unknown_enum_names(ty: &AirType, known_enums: &HashSet<String>, missing: &mut Vec<String>) {
+fn collect_unknown_enum_names(
+    ty: &AirType,
+    known_enums: &HashSet<String>,
+    missing: &mut Vec<String>,
+) {
     match ty {
         AirType::Enum(name) => {
             if !known_enums.contains(name) && !missing.iter().any(|existing| existing == name) {
@@ -735,4 +739,3 @@ fn check_block_ref(
         });
     }
 }
-

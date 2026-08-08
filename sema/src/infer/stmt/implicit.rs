@@ -17,8 +17,7 @@ impl TypeInference {
                 self.try_narrow_literal(&mut typed_expr, return_type);
 
                 // Implicit numeric widening for tail expressions
-                if typed_expr.ty != *return_type
-                    && typed_expr.ty.can_implicit_widen_to(return_type)
+                if typed_expr.ty != *return_type && typed_expr.ty.can_implicit_widen_to(return_type)
                 {
                     let vspan = typed_expr.span;
                     let original = std::mem::replace(
@@ -168,9 +167,7 @@ fn stmt_guarantees_return(stmt: &Stmt) -> bool {
         // and the body contains at least one `return` and no `break`, the
         // loop never falls through to the next statement.
         StmtKind::While { condition, body } => {
-            is_const_true(condition)
-                && stmt_contains_return(body)
-                && !stmt_contains_break(body)
+            is_const_true(condition) && stmt_contains_return(body) && !stmt_contains_break(body)
         }
         _ => false,
     }
@@ -195,7 +192,9 @@ fn stmt_contains_return(stmt: &Stmt) -> bool {
             ..
         } => {
             stmt_contains_return(then_branch)
-                || else_branch.as_ref().is_some_and(|e| stmt_contains_return(e))
+                || else_branch
+                    .as_ref()
+                    .is_some_and(|e| stmt_contains_return(e))
         }
         StmtKind::While { body, .. }
         | StmtKind::For { body, .. }

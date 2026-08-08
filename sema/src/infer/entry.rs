@@ -44,7 +44,7 @@ impl TypeInference {
     }
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
-// default position: a `nogc fn(...)` type is out of position here and gets rejected
+        // default position: a `nogc fn(...)` type is out of position here and gets rejected
         self.lower_type(ann, false)
     }
 
@@ -52,7 +52,7 @@ impl TypeInference {
         self.lower_type(ann, true)
     }
 
-// recursion passes false, so a `nogc fn` anywhere but a bare parameter type is rejected
+    // recursion passes false, so a `nogc fn` anywhere but a bare parameter type is rejected
     fn lower_type(&mut self, ann: &TypeAnnotation, nogc_ok: bool) -> InferType {
         if let Some(kind) = ann.reference {
             let mutable = matches!(kind, aelys_syntax::RefKind::Mut);
@@ -136,13 +136,10 @@ impl TypeInference {
             return InferType::Rc(Box::new(inner));
         }
 
-        if ann.name == "Result"
-            && self.type_table.has_enum("Result")
-            && ann.type_params.len() == 2
+        if ann.name == "Result" && self.type_table.has_enum("Result") && ann.type_params.len() == 2
         {
             let t = self.type_from_annotation(&ann.type_params[0]);
-            let e = if ann.type_params[1].name == "Never"
-                && !ann.type_params[1].is_function_type()
+            let e = if ann.type_params[1].name == "Never" && !ann.type_params[1].is_function_type()
             {
                 InferType::Never
             } else {
@@ -150,7 +147,7 @@ impl TypeInference {
             };
             return InferType::Enum("Result".to_string(), vec![t, e]);
         }
-// map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
+        // map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
         if ann.name == "Never" {
             return InferType::Never;
         }
@@ -448,4 +445,3 @@ fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
         }
     }
 }
-

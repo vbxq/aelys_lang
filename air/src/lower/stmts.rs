@@ -57,8 +57,8 @@ impl<'a> LoweringContext<'a> {
         self.emit_cow_buffer_call("__aelys_vec_release", local, sp);
     }
 
-// release the buffer a pointer already points at. the pointer is the aelysvec address, so this
-// skips the addressof that emit_cow_release does. used by `*p = <vec>` to drop the pointee's
+    // release the buffer a pointer already points at. the pointer is the aelysvec address, so this
+    // skips the addressof that emit_cow_release does. used by `*p = <vec>` to drop the pointee's
     pub(super) fn emit_cow_release_through_ptr(&mut self, ptr: Operand, sp: Option<Span>) {
         self.emit(
             AirStmtKind::CallVoid {
@@ -69,9 +69,9 @@ impl<'a> LoweringContext<'a> {
         );
     }
 
-// a slot whose type is vec<t> owns exactly one counted share of its buffer. a value
-// only ever sees a bare identifier. fail closed: an unrecognised shape retains (a leak), it
-// never skips (a use-after-free).
+    // a slot whose type is vec<t> owns exactly one counted share of its buffer. a value
+    // only ever sees a bare identifier. fail closed: an unrecognised shape retains (a leak), it
+    // never skips (a use-after-free).
     pub(super) fn emit_vec_slot_acquire(
         &mut self,
         slot_is_vec: bool,
@@ -95,14 +95,14 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-// the one place a vec-producing form's freshness is decided. a fresh producer owns the +1 the
+    // the one place a vec-producing form's freshness is decided. a fresh producer owns the +1 the
     fn vec_rhs_is_fresh(kind: &TypedExprKind) -> bool {
         match kind {
             TypedExprKind::EnumVariant {
                 enum_name, variant, ..
             } => enum_name == "Vec" && variant == "new",
             TypedExprKind::VecLiteral { .. } => true,
-// a callee transfers its share out: emit_rc_releases_for_return excludes the escaped
+            // a callee transfers its share out: emit_rc_releases_for_return excludes the escaped
             TypedExprKind::Call { .. } => true,
             _ => false,
         }
@@ -151,7 +151,7 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals.retain(|(_, d)| *d <= scope_depth);
     }
 
-// affine scope-end drops: 1:1 images of the point-sensitive drop markers the elaboration
+    // affine scope-end drops: 1:1 images of the point-sensitive drop markers the elaboration
     pub(super) fn emit_scope_affine_drops(
         &mut self,
         scope_depth: usize,
@@ -170,7 +170,7 @@ impl<'a> LoweringContext<'a> {
         self.affine_locals.retain(|a| a.depth <= scope_depth);
     }
 
-// or returned. unlike borrowed rc/carrier params, which are never released callee-side.
+    // or returned. unlike borrowed rc/carrier params, which are never released callee-side.
     pub(super) fn emit_affine_param_drops_on_fallthrough(&mut self, func_span: aelys_syntax::Span) {
         if !self.affine_locals.iter().any(|a| a.depth == 0) {
             return;
@@ -185,9 +185,9 @@ impl<'a> LoweringContext<'a> {
         self.affine_locals.retain(|a| a.depth != 0);
     }
 
-// point-sensitive: the plan lists exactly the affine locals live on this return edge, so a
-// local moved earlier on the path is absent. it must not copy emit_rc_releases_for_return's
-// escaped-only filter, whose drop-everything-registered structure is the double-drop source.
+    // point-sensitive: the plan lists exactly the affine locals live on this return edge, so a
+    // local moved earlier on the path is absent. it must not copy emit_rc_releases_for_return's
+    // escaped-only filter, whose drop-everything-registered structure is the double-drop source.
     pub(super) fn emit_affine_drops_for_return(&mut self, return_span: aelys_syntax::Span) {
         let key = crate::bir::drop_key(&return_span);
         let to_drop = self.collect_affine_drops(key, |_| true);
@@ -287,8 +287,7 @@ impl<'a> LoweringContext<'a> {
                     tag,
                     field_index,
                 } => {
-                    let payload_ty =
-                        self.air_enum_payload_type(enum_name, *tag, *field_index);
+                    let payload_ty = self.air_enum_payload_type(enum_name, *tag, *field_index);
                     cur = self.emit_rvalue_to_temp(
                         payload_ty.clone(),
                         Rvalue::EnumPayload {
@@ -379,9 +378,7 @@ impl<'a> LoweringContext<'a> {
             // monomorphize, an Rc carrier will slip through here and leak or UAF
             crate::rc_paths::RcScan::Undecidable(_) => None,
             crate::rc_paths::RcScan::RejectedMultiVariant(why) => {
-                self.report_error(format!(
-                    "[rc-stage1] {why}"
-                ));
+                self.report_error(format!("[rc-stage1] {why}"));
                 None
             }
         }
@@ -817,4 +814,3 @@ impl<'a> LoweringContext<'a> {
                 .is_some_and(|b| !matches!(b.terminator, AirTerminator::Goto(_)))
     }
 }
-

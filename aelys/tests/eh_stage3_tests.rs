@@ -328,7 +328,8 @@ fn main() -> i64 {
     );
     let hits = out.stdout.iter().filter(|&&b| b == b'F').count();
     assert_eq!(
-        hits, 1,
+        hits,
+        1,
         "f must be evaluated exactly once (one 'F'), not zero and not twice; stdout: {:?}",
         String::from_utf8_lossy(&out.stdout)
     );
@@ -700,4 +701,3 @@ fn main() -> i64 {
         "unwrap_unchecked after the unsafe block closes must be rejected (depth not leaked), got: {err}"
     );
 }
-

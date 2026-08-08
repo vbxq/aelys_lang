@@ -498,4 +498,3 @@ fn main() -> i64 {
         "generic if condition should reject non-bool concrete instantiations"
     );
 }
-

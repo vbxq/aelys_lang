@@ -1,10 +1,10 @@
-use aelys_driver::{compile_file_with_llvm_variant, lower_file_to_air, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Once;
-use tempfile::{tempdir, TempDir};
+use tempfile::{TempDir, tempdir};
 
 const LEVELS: [(&str, OptimizationLevel); 4] = [
     ("-O0", OptimizationLevel::None),
@@ -24,8 +24,12 @@ fn warm_core_archive() {
         if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
             return;
         }
-        let _ =
-            compile_file_with_llvm_variant(&path, OptimizationLevel::None, false, RuntimeVariant::Rc);
+        let _ = compile_file_with_llvm_variant(
+            &path,
+            OptimizationLevel::None,
+            false,
+            RuntimeVariant::Rc,
+        );
     });
 }
 
@@ -47,7 +51,7 @@ impl LevelResult {
 #[derive(Clone, Copy)]
 enum Expect {
     Invariant,
-// a dead construct is removed by dce, so the post-opt check has nothing to compare
+    // a dead construct is removed by dce, so the post-opt check has nothing to compare
     SeamDivergent(&'static str),
 }
 
@@ -99,12 +103,17 @@ fn slug(id: &str, tag: &str) -> String {
 impl Harness {
     fn new() -> Self {
         warm_core_archive();
-        Harness { dir: tempdir().expect("tempdir") }
+        Harness {
+            dir: tempdir().expect("tempdir"),
+        }
     }
 
     fn run(exe: &Path) -> Option<(i32, String)> {
         let out = Command::new(exe).output().ok()?;
-        Some((exit_code(&out.status), String::from_utf8_lossy(&out.stdout).into_owned()))
+        Some((
+            exit_code(&out.status),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+        ))
     }
 
     fn evaluate(&self, id: &str, src: &str) -> Eval {
@@ -171,14 +180,19 @@ fn compare(id: &str, levels: &[(&'static str, LevelResult)]) -> (Vec<String>, bo
         .map(|(name, r)| format!("{name}: {}", r.render()))
         .collect::<Vec<_>>()
         .join("\n      ");
-    (vec![format!("  {id}: the levels that produced a runtime disagree:\n      {breakdown}")], partial)
+    (
+        vec![format!(
+            "  {id}: the levels that produced a runtime disagree:\n      {breakdown}"
+        )],
+        partial,
+    )
 }
 
 // every divergence class this project has seen, plus the two value-semantics shapes the run was built around
 
 const FIXTURES: &[(&str, Expect, &str)] = &[
     (
-// the inliner duplicated the argument to every parameter occurrence, so an effectful arg ran more than once
+        // the inliner duplicated the argument to every parameter occurrence, so an effectful arg ran more than once
         "SI-D01",
         Expect::Invariant,
         r#"
@@ -211,7 +225,7 @@ fn main() -> i64 {
 "#,
     ),
     (
-// int_min / -1 was undefined in the backend: sigfpe at -o0, a folded constant at -o2
+        // int_min / -1 was undefined in the backend: sigfpe at -o0, a folded constant at -o2
         "SI-D05",
         Expect::Invariant,
         r#"
@@ -261,7 +275,7 @@ fn main() -> i64 {
 "#,
     ),
     (
-// value stability across a real reallocation: the alias is taken while the buffer is small
+        // value stability across a real reallocation: the alias is taken while the buffer is small
         "SI-D09",
         Expect::Invariant,
         r#"
@@ -280,9 +294,11 @@ fn main() -> i64 {
 "#,
     ),
     (
-// dce removes it at -o2/-o3 and the post-mono vec-surface check has nothing to reject
+        // dce removes it at -o2/-o3 and the post-mono vec-surface check has nothing to reject
         "SI-D10",
-        Expect::SeamDivergent("dead generic-enum-with-Vec: dce removes the instantiation the post-mono vec-surface check would reject"),
+        Expect::SeamDivergent(
+            "dead generic-enum-with-Vec: dce removes the instantiation the post-mono vec-surface check would reject",
+        ),
         r#"
 enum Opt<T> { Some(T), Nil }
 fn main() -> i64 {
@@ -294,7 +310,7 @@ fn main() -> i64 {
 "#,
     ),
     (
-// a stdout-shaped divergence: interpolation allocates and formats per iteration, so a pass can reorder it
+        // a stdout-shaped divergence: interpolation allocates and formats per iteration, so a pass can reorder it
         "SI-D11",
         Expect::Invariant,
         r#"
@@ -325,7 +341,7 @@ fn main() -> i64 {
 "#,
     ),
     (
-// defect number one, carried here for its -o1 leg: the invariants suite fixes the absolute bound
+        // defect number one, carried here for its -o1 leg: the invariants suite fixes the absolute bound
         "SI-D13",
         Expect::Invariant,
         r#"
@@ -355,7 +371,7 @@ fn main() -> i64 {
 "#,
     ),
     (
-// `?` short-circuits on the error path, so the second marker must not print at any level
+        // `?` short-circuits on the error path, so the second marker must not print at any level
         "SI-D15",
         Expect::Invariant,
         r#"
@@ -430,7 +446,11 @@ fn curated_fixtures_produce_the_same_answer_at_every_opt_level() {
         failures.len(),
         failures.join("\n")
     );
-    assert_eq!(measured, FIXTURES.len(), "every curated fixture must be measured");
+    assert_eq!(
+        measured,
+        FIXTURES.len(),
+        "every curated fixture must be measured"
+    );
 }
 
 const PREOPT_FIXTURES: &[(&str, &str, &str)] = &[
@@ -520,11 +540,20 @@ fn collect_aelys(dir: &Path, out: &mut Vec<PathBuf>) {
 fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
     let root = workspace_root();
     let mut files = Vec::new();
-    for dir in ["tests_e2e", "torture", "examples", "aelys/tests/exploration"] {
+    for dir in [
+        "tests_e2e",
+        "torture",
+        "examples",
+        "aelys/tests/exploration",
+    ] {
         collect_aelys(&root.join(dir), &mut files);
     }
     files.sort();
-    assert!(files.len() > 300, "the corpus should be the repo's .aelys files, found {}", files.len());
+    assert!(
+        files.len() > 300,
+        "the corpus should be the repo's .aelys files, found {}",
+        files.len()
+    );
 
     let h = Harness::new();
     let mut failures = Vec::new();
@@ -532,8 +561,14 @@ fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
     let mut nondeterministic = Vec::new();
 
     for (i, path) in files.iter().enumerate() {
-        let name = path.strip_prefix(&root).unwrap_or(path).display().to_string();
-        let Ok(src) = fs::read_to_string(path) else { continue };
+        let name = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
+        let Ok(src) = fs::read_to_string(path) else {
+            continue;
+        };
         let id = format!("c{i}");
         match h.evaluate(&id, &src) {
             Eval::Unavailable => {
@@ -558,7 +593,12 @@ fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
         }
     }
 
-    eprintln!("corpus sweep: {} files, {} partially accepting, {} nondeterministic", files.len(), partials.len(), nondeterministic.len());
+    eprintln!(
+        "corpus sweep: {} files, {} partially accepting, {} nondeterministic",
+        files.len(),
+        partials.len(),
+        nondeterministic.len()
+    );
     for line in &partials {
         eprintln!("{line}");
     }
@@ -582,4 +622,3 @@ fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
         partials.join("\n")
     );
 }
-

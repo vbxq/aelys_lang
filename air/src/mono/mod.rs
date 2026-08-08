@@ -155,12 +155,8 @@ fn monomorphize_enums(program: &mut AirProgram) -> Vec<String> {
     // Phase 2: Build per-local mono resolution map for each function
     // Phase 3: Rewrite enum_name references in all functions
     for func in &mut program.functions {
-        let local_mono_map = resolve_local_enum_monos(
-            func,
-            &generic_enums,
-            &program.enums,
-            &mono_enum_names,
-        );
+        let local_mono_map =
+            resolve_local_enum_monos(func, &generic_enums, &program.enums, &mono_enum_names);
 
         for block in &mut func.blocks {
             for stmt in &mut block.stmts {
@@ -275,9 +271,7 @@ fn resolve_local_enum_monos(
             } = &stmt.kind
             {
                 if let Rvalue::EnumInit {
-                    enum_name,
-                    payload,
-                    ..
+                    enum_name, payload, ..
                 } = rvalue
                 {
                     if payload.is_empty() {
@@ -285,9 +279,7 @@ fn resolve_local_enum_monos(
                     }
                     if let Some(&enum_idx) = generic_enums.get(enum_name.as_str()) {
                         let enum_def = &enum_defs[enum_idx];
-                        if let Some(type_args) =
-                            infer_enum_type_args(enum_def, rvalue, func)
-                        {
+                        if let Some(type_args) = infer_enum_type_args(enum_def, rvalue, func) {
                             let key_strs: Vec<String> =
                                 type_args.iter().map(substitute::type_to_string).collect();
                             let key = (enum_name.clone(), key_strs);
@@ -331,10 +323,16 @@ fn resolve_local_enum_monos(
     if let Some(ref ret_mono) = ret_ty_mono {
         for block in &func.blocks {
             if let AirTerminator::Return(Some(Operand::Copy(local_id))) = &block.terminator {
-                let local_ty = func.locals.iter().find(|l| l.id == *local_id).map(|l| &l.ty);
+                let local_ty = func
+                    .locals
+                    .iter()
+                    .find(|l| l.id == *local_id)
+                    .map(|l| &l.ty);
                 if let Some(AirType::Enum(name)) = local_ty {
                     if generic_enums.contains_key(name) {
-                        local_mono.entry(*local_id).or_insert_with(|| ret_mono.clone());
+                        local_mono
+                            .entry(*local_id)
+                            .or_insert_with(|| ret_mono.clone());
                     }
                 }
             }
@@ -505,8 +503,10 @@ fn collect_premangled_enum_requests_from_type(
                         let key_strs: Vec<String> =
                             type_args.iter().map(substitute::type_to_string).collect();
                         let key = (enum_name.clone(), key_strs);
-                        let inserted =
-                            requests.entry(key).or_insert_with(|| type_args.clone()).clone();
+                        let inserted = requests
+                            .entry(key)
+                            .or_insert_with(|| type_args.clone())
+                            .clone();
                         for nested in &inserted {
                             collect_premangled_enum_requests_from_type(
                                 nested,
@@ -528,7 +528,12 @@ fn collect_premangled_enum_requests_from_type(
         }
         AirType::FnPtr { params, ret, .. } => {
             for param in params {
-                collect_premangled_enum_requests_from_type(param, generic_enums, enum_defs, requests);
+                collect_premangled_enum_requests_from_type(
+                    param,
+                    generic_enums,
+                    enum_defs,
+                    requests,
+                );
             }
             collect_premangled_enum_requests_from_type(ret, generic_enums, enum_defs, requests);
         }
@@ -620,8 +625,7 @@ fn rewrite_enum_refs_in_stmt(
                         if let Some(vd) = variant_def {
                             let mut resolved: HashMap<u32, AirType> = HashMap::new();
                             for (param_ty, operand) in vd.payload.iter().zip(payload.iter()) {
-                                let arg_ty =
-                                    operand_type_from(operand, func_params, func_locals);
+                                let arg_ty = operand_type_from(operand, func_params, func_locals);
                                 unify_enum_param(param_ty, &arg_ty, &mut resolved);
                             }
                             let type_args: Option<Vec<AirType>> = enum_def
@@ -659,7 +663,9 @@ fn rewrite_enum_refs_in_stmt(
                                         "ambiguous unit variant {}::{} with {} \
                                          monomorphizations; cannot determine which to use \
                                          (type annotation info lost during sema)",
-                                        enum_name, variant, mono_names.len()
+                                        enum_name,
+                                        variant,
+                                        mono_names.len()
                                     ));
                                 }
                             }
@@ -668,9 +674,7 @@ fn rewrite_enum_refs_in_stmt(
                 }
             }
             Rvalue::EnumTag {
-                enum_name,
-                operand,
-                ..
+                enum_name, operand, ..
             } => {
                 if generic_enums.contains_key(enum_name.as_str()) {
                     // Resolve from the operand's local
@@ -690,9 +694,7 @@ fn rewrite_enum_refs_in_stmt(
                 }
             }
             Rvalue::EnumPayload {
-                enum_name,
-                operand,
-                ..
+                enum_name, operand, ..
             } => {
                 if generic_enums.contains_key(enum_name.as_str()) {
                     // Resolve from the operand's local
@@ -814,7 +816,11 @@ fn resolve_single_type_arg(s: &str) -> Option<AirType> {
             } else if let Some((rest, conv)) = other
                 .strip_prefix("fnptrRust$")
                 .map(|rest| (rest, CallingConv::Rust))
-                .or_else(|| other.strip_prefix("fnptrC$").map(|rest| (rest, CallingConv::C)))
+                .or_else(|| {
+                    other
+                        .strip_prefix("fnptrC$")
+                        .map(|rest| (rest, CallingConv::C))
+                })
                 .or_else(|| {
                     other
                         .strip_prefix("fnptr$")
@@ -1128,4 +1134,3 @@ impl MonoContext {
         errors
     }
 }
-

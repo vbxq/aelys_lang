@@ -35,11 +35,11 @@ fn annotation_mentions(ann: &TypeAnnotation, type_param: &str) -> bool {
 }
 
 impl TypeInference {
-/// binds only what it wrote as `<t: nogc>`. nothing is recorded when nothing is bound, so the
-/// a name is a list of candidates, never a single entry: the same bare name is registered for
-/// every scope (`signatures.rs`), and the post-solve check has no scope state, so an entry that
-/// could be overwritten would let a weaker same-named signature erase a bound. recording only
-/// ever appends, and a call must satisfy every candidate, so an insert cannot weaken the table.
+    /// binds only what it wrote as `<t: nogc>`. nothing is recorded when nothing is bound, so the
+    /// a name is a list of candidates, never a single entry: the same bare name is registered for
+    /// every scope (`signatures.rs`), and the post-solve check has no scope state, so an entry that
+    /// could be overwritten would let a weaker same-named signature erase a bound. recording only
+    /// ever appends, and a call must satisfy every candidate, so an insert cannot weaken the table.
     pub(super) fn record_nogc_generic_sig(&mut self, key: &str, func: &Function) {
         if func.type_params.is_empty() {
             return;
@@ -80,10 +80,10 @@ impl TypeInference {
         });
     }
 
-/// at a call instantiating a nogc-bound generic, every bound type param must resolve to a
-/// concrete nogc value. fail-closed: a binding the matcher cannot recover is a reject.
+    /// at a call instantiating a nogc-bound generic, every bound type param must resolve to a
+    /// concrete nogc value. fail-closed: a binding the matcher cannot recover is a reject.
     pub(super) fn check_nogc_bound_call(&mut self, callee: &TypedExpr, args: &[TypedExpr]) {
-// any other callee form reaches the name through a value use, already rejected as one
+        // any other callee form reaches the name through a value use, already rejected as one
         let TypedExprKind::Identifier(name) = &callee.kind else {
             return;
         };
@@ -132,7 +132,7 @@ impl TypeInference {
                             arg_span,
                         )
                         .with_secondary(callee.span, carries_bound()),
-// nothing pins the param, so the call itself is the only place to point at
+                        // nothing pins the param, so the call itself is the only place to point at
                         None => TypeError::nogc_bound_unresolved(name, type_param, callee.span),
                     },
                 };
@@ -143,7 +143,7 @@ impl TypeInference {
         }
     }
 
-/// only a slot the declaration ties to the param qualifies, and only when there is exactly one,
+    /// only a slot the declaration ties to the param qualifies, and only when there is exactly one,
     fn generic_struct_culprit(
         &self,
         slots: &[usize],
@@ -170,7 +170,7 @@ impl TypeInference {
         culprit
     }
 
-/// argument type in lockstep. `unify` cannot do this (it binds only `var` and matches `struct`
+    /// argument type in lockstep. `unify` cannot do this (it binds only `var` and matches `struct`
     fn bind_type_params(
         &self,
         sig: &InferType,
@@ -232,7 +232,7 @@ impl TypeInference {
         }
     }
 
-/// the bound, so only a direct call is allowed.
+    /// the bound, so only a direct call is allowed.
     pub(super) fn check_nogc_generic_value(&mut self, name: &str, expr: &TypedExpr) {
         if !matches!(expr.ty, InferType::Function { .. }) {
             return;
@@ -244,4 +244,3 @@ impl TypeInference {
         self.errors.push(err);
     }
 }
-

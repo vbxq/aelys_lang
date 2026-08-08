@@ -149,9 +149,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
         }
         TypedExprKind::ResultAssert { .. } => true,
-        TypedExprKind::EnumVariant { args, .. } => {
-            args.iter().any(|a| has_side_effects(a))
-        }
+        TypedExprKind::EnumVariant { args, .. } => args.iter().any(|a| has_side_effects(a)),
         TypedExprKind::Identifier(_)
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
@@ -160,4 +158,3 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Null => false,
     }
 }
-

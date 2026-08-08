@@ -1,5 +1,5 @@
 use aelys_common::{WarningKind, format_warnings};
-use aelys_driver::{compile_file_with_llvm_with_warnings, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_with_warnings};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::PathBuf;

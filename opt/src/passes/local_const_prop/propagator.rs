@@ -155,7 +155,7 @@ impl LocalConstantPropagator {
     fn collect_assigned_vars(stmt: &TypedStmt, out: &mut Vec<String>) {
         match &stmt.kind {
             TypedStmtKind::Expression(expr) => Self::collect_assigned_vars_expr(expr, out),
-// a let initializer may borrow a loop-carried local (let r = &mut x)
+            // a let initializer may borrow a loop-carried local (let r = &mut x)
             TypedStmtKind::Let { initializer, .. } => {
                 Self::collect_assigned_vars_expr(initializer, out)
             }
@@ -227,7 +227,7 @@ impl LocalConstantPropagator {
                 Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(index, out);
             }
-// a borrow may mutate the referent, mark it assigned so loop heads invalidate it
+            // a borrow may mutate the referent, mark it assigned so loop heads invalidate it
             TypedExprKind::Reference { operand, .. } => {
                 if let TypedExprKind::Identifier(name) = &operand.kind {
                     out.push(name.clone());
@@ -248,11 +248,7 @@ impl LocalConstantPropagator {
                 Self::collect_assigned_vars_expr(index, out);
                 Self::collect_assigned_vars_expr(value, out);
             }
-            TypedExprKind::FieldAssign {
-                object,
-                value,
-                ..
-            } => {
+            TypedExprKind::FieldAssign { object, value, .. } => {
                 Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(value, out);
             }
@@ -441,11 +437,7 @@ impl LocalConstantPropagator {
                 self.propagate_expr(value);
             }
 
-            TypedExprKind::FieldAssign {
-                object,
-                value,
-                ..
-            } => {
+            TypedExprKind::FieldAssign { object, value, .. } => {
                 self.propagate_expr(object);
                 self.propagate_expr(value);
             }
@@ -464,7 +456,7 @@ impl LocalConstantPropagator {
                 self.propagate_expr(range);
             }
 
-// taking a reference may mutate the operand through the borrow; invalidate it
+            // taking a reference may mutate the operand through the borrow; invalidate it
             TypedExprKind::Reference { operand, .. } => {
                 if let TypedExprKind::Identifier(name) = &operand.kind {
                     self.scopes.invalidate(name);
@@ -556,4 +548,3 @@ impl OptimizationPass for LocalConstantPropagator {
         self.stats.clone()
     }
 }
-

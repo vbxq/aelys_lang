@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm, compile_file_with_llvm_variant, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -32,7 +32,7 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
 
 fn compile(src: &str, opt: OptimizationLevel) -> Option<PathBuf> {
     let dir = tempdir().expect("tempdir");
-// leak the dir so the exe survives past this function
+    // leak the dir so the exe survives past this function
     let dir = Box::leak(Box::new(dir));
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -89,7 +89,10 @@ fn assert_exit_balanced(label: &str, src: &str, expected: i32) {
         for alloc in [None, Some("malloc")] {
             let (code, stderr) = run(&exe, alloc);
             let a = alloc.unwrap_or("immix");
-            assert_eq!(code, expected, "{label} at {name}/{a}: exit; stderr:\n{stderr}");
+            assert_eq!(
+                code, expected,
+                "{label} at {name}/{a}: exit; stderr:\n{stderr}"
+            );
             let (allocs, frees) = parse_stats(&stderr).expect("stats line");
             assert_eq!(
                 allocs, frees,
@@ -110,7 +113,7 @@ fn reject_e0412(src: &str) -> String {
 
 #[test]
 fn v01_let_copy_then_index_assign_original() {
-// let w = v; v[0] = 9; the copy must not see the write
+    // let w = v; v[0] = 9; the copy must not see the write
     assert_exit_balanced(
         "v01",
         r#"
@@ -258,7 +261,7 @@ fn main() -> i64 {
 
 #[test]
 fn v30_deref_store_of_a_vec_releases_the_old_buffer() {
-// *r = u overwrites the pointee slot: retain-new, release-old-through-ptr (n-3, s5)
+    // *r = u overwrites the pointee slot: retain-new, release-old-through-ptr (n-3, s5)
     assert_exit_balanced(
         "v30",
         r#"
@@ -294,7 +297,7 @@ fn main() -> i64 {
 
 #[test]
 fn v11_self_assign_does_not_free() {
-// v = v with retain-first ordering: rc 1 -> 2 -> 1, no free, no uaf
+    // v = v with retain-first ordering: rc 1 -> 2 -> 1, no free, no uaf
     assert_exit_balanced(
         "v11",
         r#"
@@ -329,7 +332,10 @@ fn main() -> i64 {
     let (code, stderr) = run(&exe, None);
     assert_eq!(code, 60, "v15 exit; stderr:\n{stderr}");
     let (allocs, _) = parse_stats(&stderr).expect("stats");
-    assert_eq!(allocs, 1, "fast path: no copy on an unshared write; stderr:\n{stderr}");
+    assert_eq!(
+        allocs, 1,
+        "fast path: no copy on an unshared write; stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -366,7 +372,7 @@ fn main() -> i64 {
 
 #[test]
 fn v12_escaping_closure_reads_a_live_buffer() {
-// stale-but-correct read cannot pass by luck. the env leaks by design, so a leak is expected.
+    // stale-but-correct read cannot pass by luck. the env leaks by design, so a leak is expected.
     let src = r#"
 fn make() -> fn() -> i64 {
     let mut v = Vec::new()
@@ -383,8 +389,10 @@ fn main() -> i64 {
 }
 "#;
     assert_exit("v12", src, 1);
-// the captured buffer leaks with the env
-    let Some(exe) = compile(src, OptimizationLevel::None) else { return };
+    // the captured buffer leaks with the env
+    let Some(exe) = compile(src, OptimizationLevel::None) else {
+        return;
+    };
     let (_, stderr) = run(&exe, None);
     let (allocs, frees) = parse_stats(&stderr).expect("stats");
     assert!(
@@ -395,7 +403,7 @@ fn main() -> i64 {
 
 #[test]
 fn v06_write_from_a_closure_over_a_shared_vec() {
-// the env slot owns a share, so the closure's v[0]=9 detaches and the outer copy w keeps [1,2,3]
+    // the env slot owns a share, so the closure's v[0]=9 detaches and the outer copy w keeps [1,2,3]
     assert_exit(
         "v06",
         r#"
@@ -419,8 +427,8 @@ fn main() -> i64 {
 
 #[test]
 fn v29_closure_capture_leak_is_per_creation_not_a_wrap() {
-// m-1: a closure created in a loop leaks one env + one buffer per creation. the count must not
-// wrap; the value stays correct (acc = 100, 100 % 7 = 2) and the leak is named, not "balanced".
+    // m-1: a closure created in a loop leaks one env + one buffer per creation. the count must not
+    // wrap; the value stays correct (acc = 100, 100 % 7 = 2) and the leak is named, not "balanced".
     let src = r#"
 fn main() -> i64 {
     let mut i = 0
@@ -435,7 +443,9 @@ fn main() -> i64 {
 }
 "#;
     assert_exit("v29", src, 2);
-    let Some(exe) = compile(src, OptimizationLevel::None) else { return };
+    let Some(exe) = compile(src, OptimizationLevel::None) else {
+        return;
+    };
     let (_, stderr) = run(&exe, None);
     let (allocs, frees) = parse_stats(&stderr).expect("stats");
     assert!(
@@ -472,7 +482,7 @@ fn main() -> i64 {
 
 #[test]
 fn v34_nested_closures_do_not_collide_on_localid() {
-// localid restarts at 0 per function, so an outer capture_slots entry must not false-
+    // localid restarts at 0 per function, so an outer capture_slots entry must not false-
     assert_exit(
         "v34",
         r#"
@@ -522,7 +532,7 @@ fn main() -> i64 {
 
 #[test]
 fn v22_parenthesised_producer_rejects_e0412() {
-// not a compile-to-exit-1: an indirect producer aliases a slot the acquire cannot see.
+    // not a compile-to-exit-1: an indirect producer aliases a slot the acquire cannot see.
     let err = reject_e0412(
         r#"
 fn main() -> i64 {
@@ -533,12 +543,15 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("E0412"), "paren producer must reject E0412: {err}");
+    assert!(
+        err.contains("E0412"),
+        "paren producer must reject E0412: {err}"
+    );
 }
 
 #[test]
 fn v35_return_of_an_indirect_producer_rejects_e0412() {
-// `return if c { a } else { a }` at vec return type is s6/e0412; keeping the escape filter
+    // `return if c { a } else { a }` at vec return type is s6/e0412; keeping the escape filter
     let err = reject_e0412(
         r#"
 fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
@@ -551,6 +564,8 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("E0412"), "return of an `if` must reject E0412: {err}");
+    assert!(
+        err.contains("E0412"),
+        "return of an `if` must reject E0412: {err}"
+    );
 }
-

@@ -1,4 +1,3 @@
-
 use aelys_driver::compile_file_with_llvm;
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -27,12 +26,18 @@ fn main() -> i64 {
 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[must-use]"), "keeps the [must-use] marker, got: {err}");
+    assert!(
+        err.contains("[must-use]"),
+        "keeps the [must-use] marker, got: {err}"
+    );
     assert!(
         err.contains("MyErr"),
         "the menu must name the concrete error type MyErr, got: {err}"
     );
-    assert!(err.contains("catch"), "the menu must list the catch route, got: {err}");
+    assert!(
+        err.contains("catch"),
+        "the menu must list the catch route, got: {err}"
+    );
     assert!(
         err.contains(".expect"),
         "the menu must list the .expect assert route, got: {err}"
@@ -60,7 +65,10 @@ fn outer() -> Result<i64, i64> {
 fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[?-stage1]"), "keeps the [?-stage1] marker, got: {err}");
+    assert!(
+        err.contains("[?-stage1]"),
+        "keeps the [?-stage1] marker, got: {err}"
+    );
     assert!(
         err.contains(".map_error"),
         "the mismatch note must point at .map_error, got: {err}"
@@ -131,7 +139,10 @@ fn main() -> i64 {
 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[?-stage1]"), "keeps the [?-stage1] marker, got: {err}");
+    assert!(
+        err.contains("[?-stage1]"),
+        "keeps the [?-stage1] marker, got: {err}"
+    );
     assert!(
         err.contains("requires the function to return"),
         "using `?` outside a Result fn must explain the return-type requirement, got: {err}"
@@ -154,7 +165,10 @@ fn f() -> Result<i64, E> {
 fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[?-stage1]"), "keeps the [?-stage1] marker, got: {err}");
+    assert!(
+        err.contains("[?-stage1]"),
+        "keeps the [?-stage1] marker, got: {err}"
+    );
     assert!(
         err.contains("expects a `Result"),
         "`?` on an i64 must say it expects a Result/Option, got: {err}"
@@ -173,7 +187,10 @@ fn maybe() -> Result<i64, RealErr> { return Result::Ok(5) }
 fn main() -> i64 { return maybe().into_ok() }
 "#;
     let err = reject(src);
-    assert!(err.contains("[eh-stage3]"), "keeps the [eh-stage3] marker, got: {err}");
+    assert!(
+        err.contains("[eh-stage3]"),
+        "keeps the [eh-stage3] marker, got: {err}"
+    );
     assert!(err.contains("into_ok"), "must name into_ok, got: {err}");
     assert!(
         err.contains("RealErr"),
@@ -193,8 +210,14 @@ fn mk_ok() -> Result<i64, E> { return Result::Ok(5) }
 fn main() -> i64 { return mk_ok().unwrap_unchecked() }
 "#;
     let err = reject(src);
-    assert!(err.contains("[eh-stage3]"), "keeps the [eh-stage3] marker, got: {err}");
-    assert!(err.contains("unsafe"), "must name the unsafe requirement, got: {err}");
+    assert!(
+        err.contains("[eh-stage3]"),
+        "keeps the [eh-stage3] marker, got: {err}"
+    );
+    assert!(
+        err.contains("unsafe"),
+        "must name the unsafe requirement, got: {err}"
+    );
 }
 
 // 3a: a non-literal .expect(msg) is rejected and says string literal
@@ -212,7 +235,10 @@ fn main() -> i64 {
 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[eh-stage3]"), "keeps the [eh-stage3] marker, got: {err}");
+    assert!(
+        err.contains("[eh-stage3]"),
+        "keeps the [eh-stage3] marker, got: {err}"
+    );
     assert!(
         err.contains("string literal"),
         "must say .expect takes a string literal, got: {err}"
@@ -230,8 +256,14 @@ fn f() -> Never { return 5 }
 fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[eh-stage3]"), "keeps the [eh-stage3] marker, got: {err}");
-    assert!(err.contains("Never"), "the Never restriction must name Never, got: {err}");
+    assert!(
+        err.contains("[eh-stage3]"),
+        "keeps the [eh-stage3] marker, got: {err}"
+    );
+    assert!(
+        err.contains("Never"),
+        "the Never restriction must name Never, got: {err}"
+    );
 }
 
 // 3b: map_error with a non-function argument is rejected and names map_error
@@ -250,10 +282,12 @@ fn main() -> i64 {
 }
 "#;
     let err = reject(src);
-    assert!(err.contains("[eh-stage3]"), "keeps the [eh-stage3] marker, got: {err}");
+    assert!(
+        err.contains("[eh-stage3]"),
+        "keeps the [eh-stage3] marker, got: {err}"
+    );
     assert!(
         err.contains("map_error"),
         "must name map_error and describe the expected fn shape, got: {err}"
     );
 }
-

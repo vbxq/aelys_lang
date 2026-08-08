@@ -98,7 +98,9 @@ impl<'a> FunctionCodegen<'a> {
             Operand::Const(AirConst::Str(_)) => Ok(AirType::Str),
             Operand::Const(AirConst::Null) => Ok(AirType::Ptr(Box::new(AirType::Void))),
             Operand::Const(AirConst::FnRef(_)) => Ok(AirType::Ptr(Box::new(AirType::Void))),
-            Operand::Const(AirConst::Enum { enum_name, .. }) => Ok(AirType::Enum(enum_name.clone())),
+            Operand::Const(AirConst::Enum { enum_name, .. }) => {
+                Ok(AirType::Enum(enum_name.clone()))
+            }
             Operand::Const(AirConst::ZeroInit(ty)) | Operand::Const(AirConst::Undef(ty)) => {
                 Ok(ty.clone())
             }

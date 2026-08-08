@@ -38,7 +38,9 @@ fn compile_run_capture_stdout(source: &str, opt: OptimizationLevel) -> Option<St
         "executable must be produced, link must succeed"
     );
 
-    let output = Command::new(&exe).output().expect("compiled program should run");
+    let output = Command::new(&exe)
+        .output()
+        .expect("compiled program should run");
     assert!(
         output.status.success(),
         "program should exit 0, got {:?}\nstderr: {}",

@@ -1,4 +1,4 @@
-use aelys_driver::{compile_file_with_llvm_variant, lower_file_to_air, RuntimeVariant};
+use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -42,7 +42,12 @@ fn run_stdout(body: &str) -> Option<(i32, String)> {
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, format!("{RESOURCE}{body}")).expect("write source");
 
-    match compile_file_with_llvm_variant(&source_path, OptimizationLevel::None, false, RuntimeVariant::Rc) {
+    match compile_file_with_llvm_variant(
+        &source_path,
+        OptimizationLevel::None,
+        false,
+        RuntimeVariant::Rc,
+    ) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
@@ -177,8 +182,16 @@ fn main() -> i64 {
         return;
     };
     assert_eq!(code, 0, "program should exit 0; stdout:\n{out}");
-    assert_eq!(count_lines(&out, "1"), 1, "b (holding 1) dropped once; stdout:\n{out}");
-    assert_eq!(count_lines(&out, "2"), 2, "println(2) + drop a(2); stdout:\n{out}");
+    assert_eq!(
+        count_lines(&out, "1"),
+        1,
+        "b (holding 1) dropped once; stdout:\n{out}"
+    );
+    assert_eq!(
+        count_lines(&out, "2"),
+        2,
+        "println(2) + drop a(2); stdout:\n{out}"
+    );
 }
 
 #[test]
@@ -213,7 +226,7 @@ fn main() -> i64 {
 
 #[test]
 fn discriminator_reassignment_no_leak() {
-// installs id 2; scope end drops it (prints 2). both values are dropped, none leaked.
+    // installs id 2; scope end drops it (prints 2). both values are dropped, none leaked.
     let Some((code, out)) = run_stdout(
         r#"
 fn main() -> i64 {
@@ -258,8 +271,11 @@ fn main() -> i64 {
     ) else {
         return;
     };
-// x is the then-branch tail, so the drop must not clobber the result: main still returns 1
-    assert_eq!(code, 1, "the branch tail value (1) must survive the drop; stdout:\n{out}");
+    // x is the then-branch tail, so the drop must not clobber the result: main still returns 1
+    assert_eq!(
+        code, 1,
+        "the branch tail value (1) must survive the drop; stdout:\n{out}"
+    );
     assert_eq!(
         count_lines(&out, "43"),
         1,
@@ -295,4 +311,3 @@ fn main() -> i64 {
         "affine drops must fire in reverse-declaration (lifo) order; stdout:\n{out}"
     );
 }
-

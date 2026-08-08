@@ -16,7 +16,7 @@ pub struct TypeAnnotation {
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
     pub array_size: Option<u64>,
-/// the outer `&` / `&mut`, none for value types
+    /// the outer `&` / `&mut`, none for value types
     pub reference: Option<RefKind>,
     pub is_slice: bool,
     pub nogc: bool,
@@ -315,16 +315,16 @@ pub enum ExprKind {
         tail: Box<Expr>,
     },
 
-// postfix ?; desugared away in sema, has no typed-ast counterpart
+    // postfix ?; desugared away in sema, has no typed-ast counterpart
     Try(Box<Expr>),
 
-// postfix catch; desugared to a match in sema, has no typed-ast counterpart
+    // postfix catch; desugared to a match in sema, has no typed-ast counterpart
     Catch {
         scrutinee: Box<Expr>,
         handler: CatchHandler,
     },
 
-// unsafe { ... } block; erased in sema like try, gates unwrap_unchecked via unsafe_depth
+    // unsafe { ... } block; erased in sema like try, gates unwrap_unchecked via unsafe_depth
     Unsafe(Box<Expr>),
 }
 
@@ -426,4 +426,3 @@ impl UnaryOp {
         }
     }
 }
-

@@ -93,7 +93,7 @@ impl TypeTable {
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_vec_by_value(e, visited)),
             // behind an Rc the Vec is a pointer, not held by value
             InferType::Rc(_) => false,
-// a reference is a non-owning boundary, never owns its referent
+            // a reference is a non-owning boundary, never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Function { .. } => false,
             InferType::Struct(name) => {
@@ -144,7 +144,7 @@ impl TypeTable {
             InferType::Array(inner, _) | InferType::Vec(inner) => {
                 self.scan_rc_nominal(inner, visited)
             }
-// a reference is a non-owning boundary, never owns its referent
+            // a reference is a non-owning boundary, never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_rc_nominal(e, visited)),
             InferType::Function { .. } => false,
@@ -160,7 +160,10 @@ impl TypeTable {
                 if !visited.insert(name.clone()) {
                     return false;
                 }
-                let found = def.fields.iter().any(|f| self.scan_rc_nominal(&f.ty, visited));
+                let found = def
+                    .fields
+                    .iter()
+                    .any(|f| self.scan_rc_nominal(&f.ty, visited));
                 visited.remove(name);
                 found
             }
@@ -192,4 +195,3 @@ pub enum RcNominalScan {
     None,
     HasRc,
 }
-

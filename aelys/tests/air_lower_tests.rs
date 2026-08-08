@@ -197,7 +197,10 @@ fn main() -> i64 {
     );
 
     let main = func(&air, "main");
-    assert!(main.params.is_empty(), "main should not get a hidden env param");
+    assert!(
+        main.params.is_empty(),
+        "main should not get a hidden env param"
+    );
     assert!(
         !air.structs.iter().any(|s| s.name == "__closure_env_main"),
         "top-level globals must not synthesize a closure env"
@@ -226,7 +229,10 @@ let c: Color = Color::Green
         .iter()
         .find(|g| g.name == "c")
         .expect("global 'c' not found");
-    assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
 }
 
 #[test]
@@ -247,7 +253,10 @@ let g: Option<i64> = Option::None
         .iter()
         .find(|g| g.name == "g")
         .expect("global 'g' not found");
-    assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
 }
 
 #[test]
@@ -319,7 +328,10 @@ let h: Option<i64> = g
         .iter()
         .find(|g| g.name == "h")
         .expect("global 'h' not found");
-    assert!(matches!(global.init, Some(AirConst::Int(1, AirIntSize::I32))));
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
 }
 
 // regression test: Null -> Ptr(Void)

@@ -18,7 +18,9 @@ impl TypeInference {
         }
 
         let t = match &typed_scrutinee.ty {
-            InferType::Enum(name, targs) if name == "Result" && targs.len() == 2 => targs[0].clone(),
+            InferType::Enum(name, targs) if name == "Result" && targs.len() == 2 => {
+                targs[0].clone()
+            }
             other => {
                 self.errors.push(TypeError::member_access(
                     format!("[eh-stage3] `catch` requires a `Result<T, E>` value, found `{other}`"),
@@ -62,11 +64,11 @@ impl TypeInference {
 
         let arms = vec![ok_arm, err_arm];
         let (kind, _) = self.infer_match_typed(typed_scrutinee, obj_span, &arms, span, false);
-// pin t so must-use never fires: catch removes e, so the value is no longer a result
+        // pin t so must-use never fires: catch removes e, so the value is no longer a result
         (kind, t)
     }
 
-// $ is rejected by the scanner, so these hygienic names never collide with user code
+    // $ is rejected by the scanner, so these hygienic names never collide with user code
     fn next_catch_binding(&mut self, tag: char) -> String {
         let n = self.try_counter;
         self.try_counter += 1;
@@ -86,4 +88,3 @@ fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: 
 fn ident_expr(name: &str, span: Span) -> Expr {
     Expr::new(ExprKind::Identifier(name.to_string()), span)
 }
-

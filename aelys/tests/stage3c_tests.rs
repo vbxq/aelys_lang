@@ -1,4 +1,3 @@
-
 use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -268,4 +267,3 @@ fn main() -> i64 { return pick(7, 8) }
         7,
     );
 }
-

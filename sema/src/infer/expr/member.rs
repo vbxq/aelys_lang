@@ -17,11 +17,14 @@ impl TypeInference {
     ) {
         if container_is_generic {
             if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
-                self.errors.push(TypeError::rc_out_of_surface(format!(
-                    "{what} stores a value of type `{ty}` carrying an `Rc<T>` into a \
+                self.errors.push(TypeError::rc_out_of_surface(
+                    format!(
+                        "{what} stores a value of type `{ty}` carrying an `Rc<T>` into a \
                      generic carrier; a generic field/payload of `Rc<T>` is erased at \
                      the AIR boundary and is not supported yet"
-                ), span));
+                    ),
+                    span,
+                ));
             }
             return;
         }
@@ -30,11 +33,14 @@ impl TypeInference {
             InferType::Array(..) | InferType::Vec(_) | InferType::Tuple(_)
         ) && ty.contains_rc();
         if transparent_aggregate_of_rc {
-            self.errors.push(TypeError::rc_out_of_surface(format!(
-                "{what} is initialized with a value of type `{ty}` (a transparent \
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "{what} is initialized with a value of type `{ty}` (a transparent \
                  aggregate embedding an `Rc<T>`); storing an Rc inside an \
                  array/vec/tuple is not supported yet"
-            ), span));
+                ),
+                span,
+            ));
         }
     }
     pub(super) fn infer_member_expr(
@@ -166,14 +172,16 @@ impl TypeInference {
                     let field_is_rc = field_ty.is_rc();
                     let field_is_nominal_carrier =
                         !field_is_rc && self.type_table.contains_rc_nominal(&field_ty);
-                    let reject =
-                        field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle);
+                    let reject = field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle);
                     if reject {
-                        self.errors.push(TypeError::rc_out_of_surface(format!(
-                            "in-place reassignment of field `{field}` (type `{field_ty}`, \
+                        self.errors.push(TypeError::rc_out_of_surface(
+                            format!(
+                                "in-place reassignment of field `{field}` (type `{field_ty}`, \
                              which carries an `Rc<T>`) is not supported here; \
                              reassigning would leak the previously-held reference"
-                        ), span));
+                            ),
+                            span,
+                        ));
                     }
                     if field_is_rc
                         && object_is_rc_handle
@@ -184,13 +192,16 @@ impl TypeInference {
                     }
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     // Implicit numeric widening for field assignment
-                    if typed_value.ty != field_ty
-                        && typed_value.ty.can_implicit_widen_to(&field_ty)
+                    if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
                         let vspan = typed_value.span;
                         let original = std::mem::replace(
                             &mut typed_value,
-                            TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                            TypedExpr {
+                                kind: TypedExprKind::Null,
+                                ty: InferType::Null,
+                                span: vspan,
+                            },
                         );
                         typed_value = TypedExpr {
                             kind: TypedExprKind::Cast {
@@ -211,10 +222,7 @@ impl TypeInference {
                     ));
                 } else {
                     self.errors.push(TypeError::member_access(
-                        format!(
-                            "struct '{}' has no field '{}'",
-                            struct_name, field
-                        ),
+                        format!("struct '{}' has no field '{}'", struct_name, field),
                         span,
                     ));
                 }
@@ -316,13 +324,16 @@ impl TypeInference {
                     self.try_narrow_literal(&mut typed_value, &field_ty);
 
                     // Implicit numeric widening for struct field initialization
-                    if typed_value.ty != field_ty
-                        && typed_value.ty.can_implicit_widen_to(&field_ty)
+                    if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
                         let vspan = typed_value.span;
                         let original = std::mem::replace(
                             &mut typed_value,
-                            TypedExpr { kind: TypedExprKind::Null, ty: InferType::Null, span: vspan },
+                            TypedExpr {
+                                kind: TypedExprKind::Null,
+                                ty: InferType::Null,
+                                span: vspan,
+                            },
                         );
                         typed_value = TypedExpr {
                             kind: TypedExprKind::Cast {
@@ -361,4 +372,3 @@ impl TypeInference {
         )
     }
 }
-

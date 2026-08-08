@@ -157,7 +157,9 @@ fn write_golden(results: &BTreeMap<String, Verdict>) {
     let mut out = String::new();
     out.push_str("# golden snapshop of *.aelys tests on the green state.\n");
     out.push_str("# oracle of records, captures behaviour verbatim: mod-256 exit truncation and\n");
-    out.push_str("# the runtime SIGABRT guards (div/0, out-of-bounds). not a list of \"correct\" answers.\n");
+    out.push_str(
+        "# the runtime SIGABRT guards (div/0, out-of-bounds). not a list of \"correct\" answers.\n",
+    );
     out.push_str("# regenerate only when the green behaviour legitimately changes:\n");
     out.push_str("#   AELYS_REGEN_GOLDEN=1 cargo test -p aelys --test e2e_fixtures_golden_tests -- --nocapture\n");
     out.push_str("# Format: <fixture.aelys>\\t<verdict>  (reject | compile_fail | compile_ok | exit:N | signal:N)\n");
@@ -230,7 +232,11 @@ fn e2e_fixtures_match_golden() {
 
     if std::env::var_os("AELYS_REGEN_GOLDEN").is_some() {
         write_golden(&actual);
-        eprintln!("regenerated golden: {} fixtures -> {:?}", actual.len(), golden_path());
+        eprintln!(
+            "regenerated golden: {} fixtures -> {:?}",
+            actual.len(),
+            golden_path()
+        );
         return;
     }
 
@@ -244,7 +250,9 @@ fn e2e_fixtures_match_golden() {
     let mut diffs: Vec<String> = Vec::new();
     for name in actual.keys() {
         if !expected.contains_key(name) {
-            diffs.push(format!("{name}: present on disk but absent from golden (regen needed)"));
+            diffs.push(format!(
+                "{name}: present on disk but absent from golden (regen needed)"
+            ));
         }
     }
     for name in expected.keys() {
@@ -340,7 +348,9 @@ fn golden_vs_should_be_annotations() {
     }
 
     if mismatches.is_empty() {
-        eprintln!("annotation cross-check: all '// should be N' annotations agree with the golden (mod 256)");
+        eprintln!(
+            "annotation cross-check: all '// should be N' annotations agree with the golden (mod 256)"
+        );
     } else {
         eprintln!(
             "[soft] {} fixture(s) where the golden exit code disagrees with the '// should be N' annotation:",
@@ -351,4 +361,3 @@ fn golden_vs_should_be_annotations() {
         }
     }
 }
-

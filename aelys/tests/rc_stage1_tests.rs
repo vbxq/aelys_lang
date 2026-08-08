@@ -452,7 +452,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N1 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N1 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -466,7 +469,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N2 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N2 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -528,7 +534,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[air-lowering]"), "N4 must carry the marker: {err}");
+    assert!(
+        err.contains("[air-lowering]"),
+        "N4 must carry the marker: {err}"
+    );
 }
 
 #[test]
@@ -544,7 +553,10 @@ fn make() -> i64 {
 fn main() -> i64 { return make() }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N5 must carry the marker: {err}");
+    assert!(
+        err.contains("[rc-stage1]"),
+        "N5 must carry the marker: {err}"
+    );
 }
 
 #[test]

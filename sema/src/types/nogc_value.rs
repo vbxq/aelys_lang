@@ -2,8 +2,8 @@ use super::{InferType, TypeTable};
 use std::collections::HashSet;
 
 impl TypeTable {
-/// stricter than "not managed": an owned `string` and a general `fn` are also rejected. the walk
-/// is fail-closed, so any type it cannot resolve is not a nogc value.
+    /// stricter than "not managed": an owned `string` and a general `fn` are also rejected. the walk
+    /// is fail-closed, so any type it cannot resolve is not a nogc value.
     pub fn is_nogc_value(&self, ty: &InferType) -> bool {
         let mut visited = HashSet::new();
         self.scan_nogc_value(ty, &[], &mut visited)
@@ -30,7 +30,7 @@ impl TypeTable {
             | InferType::Null
             | InferType::Never => true,
             InferType::String => false,
-// a reference never owns its referent
+            // a reference never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => true,
             InferType::Function { nogc, .. } => *nogc,
             InferType::Vec(_) | InferType::Rc(_) => false,
@@ -48,7 +48,7 @@ impl TypeTable {
                     Some(def) => def,
                     None => return false,
                 };
-// a struct carries no type args, so a generic one has nothing to recurse on
+                // a struct carries no type args, so a generic one has nothing to recurse on
                 if !def.type_params.is_empty() {
                     return false;
                 }
@@ -91,4 +91,3 @@ impl TypeTable {
         }
     }
 }
-

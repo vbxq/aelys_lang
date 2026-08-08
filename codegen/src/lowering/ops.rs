@@ -176,7 +176,9 @@ impl<'a> FunctionCodegen<'a> {
                 // Mask shift amount to prevent LLVM UB (like Rust: amount % bitwidth)
                 let bitwidth = left.get_type().get_bit_width();
                 let mask = left.get_type().const_int((bitwidth - 1) as u64, false);
-                let masked = self.builder.build_and(right, mask, "shl_mask")
+                let masked = self
+                    .builder
+                    .build_and(right, mask, "shl_mask")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.builder
                     .build_left_shift(left, masked, "ishl")
@@ -185,7 +187,9 @@ impl<'a> FunctionCodegen<'a> {
             BinOp::Shr => {
                 let bitwidth = left.get_type().get_bit_width();
                 let mask = left.get_type().const_int((bitwidth - 1) as u64, false);
-                let masked = self.builder.build_and(right, mask, "shr_mask")
+                let masked = self
+                    .builder
+                    .build_and(right, mask, "shr_mask")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.builder
                     .build_right_shift(left, masked, !is_unsigned, "ishr")

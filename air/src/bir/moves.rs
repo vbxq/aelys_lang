@@ -10,7 +10,7 @@ use super::*;
 
 pub struct BirCheck {
     pub errors: Vec<BirDiagnostic>,
-// emission-point span -> decl_spans to drop there, one entry per point-sensitive drop marker
+    // emission-point span -> decl_spans to drop there, one entry per point-sensitive drop marker
     pub drops: HashMap<DropKey, Vec<DropKey>>,
 }
 
@@ -23,11 +23,7 @@ enum Lat {
 }
 
 fn join(a: Lat, b: Lat) -> Lat {
-    if a == b {
-        a
-    } else {
-        Lat::Maybe
-    }
+    if a == b { a } else { Lat::Maybe }
 }
 
 fn join_state(a: &[Lat], b: &[Lat]) -> Vec<Lat> {
@@ -40,13 +36,13 @@ pub fn check_program(bir: &BirProgram) -> BirCheck {
     for body in &bir.bodies {
         check_body(body, &mut errors, &mut drops);
     }
-// origin summaries + the d1/floor return-escape diagnostics
+    // origin summaries + the d1/floor return-escape diagnostics
     let summaries = super::origins::summaries(bir, &mut errors);
     errors.extend(super::loans::check(bir, &summaries));
     for body in &bir.bodies {
         errors.extend(body.build_errors.iter().cloned());
     }
-// body whose inferred effects reach managed memory is rejected. summaries computed once; the
+    // body whose inferred effects reach managed memory is rejected. summaries computed once; the
     if bir.bodies.iter().any(|b| b.declared_nogc) {
         let effects = super::effects::effect_summaries(bir);
         for body in &bir.bodies {
@@ -90,8 +86,13 @@ fn nogc_diagnostic(
         );
     }
 
-    let anchor = chain.iter().rposition(|s| s.span.is_some()).filter(|i| *i > 0);
-    let primary = anchor.map_or(body.span, |i| chain[i].span.expect("rposition found a span"));
+    let anchor = chain
+        .iter()
+        .rposition(|s| s.span.is_some())
+        .filter(|i| *i > 0);
+    let primary = anchor.map_or(body.span, |i| {
+        chain[i].span.expect("rposition found a span")
+    });
     let indirect = chain.iter().any(|s| s.kind == StepKind::Indirect);
 
     let mut diag = BirDiagnostic::new("E0727", "[nogc]", primary, message);
@@ -194,7 +195,7 @@ fn rvalue_uses(rv: &BirRvalue, out: &mut Vec<UseSite>) {
                 op(o, out);
             }
         }
-// a borrow is a non-consuming read of its place
+        // a borrow is a non-consuming read of its place
         BirRvalue::Ref { place, .. } | BirRvalue::Reborrow { place, .. } => out.push(UseSite {
             local: place.local,
             is_move: false,
@@ -291,7 +292,7 @@ fn check_body(
     let mut in_state: Vec<Option<Vec<Lat>>> = vec![None; nblocks];
     let mut out_state: Vec<Option<Vec<Lat>>> = vec![None; nblocks];
 
-// round-robin to a fixpoint; small cfgs, monotone raise to maybe, so it terminates
+    // round-robin to a fixpoint; small cfgs, monotone raise to maybe, so it terminates
     let mut changed = true;
     while changed {
         changed = false;
@@ -547,4 +548,3 @@ fn maybe_scope_msg(body: &BirBody, l: BirLocalId) -> String {
         local_name(body, l)
     )
 }
-

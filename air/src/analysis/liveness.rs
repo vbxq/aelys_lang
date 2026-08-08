@@ -78,10 +78,16 @@ fn compute_with_mask(
     mask: &dyn Fn(BlockId, &AirStmtKind, LocalId) -> bool,
 ) -> Liveness {
     let preds = cfg::predecessors(function);
-    let mut live_in: HashMap<BlockId, HashSet<LocalId>> =
-        function.blocks.iter().map(|b| (b.id, HashSet::new())).collect();
-    let mut live_out: HashMap<BlockId, HashSet<LocalId>> =
-        function.blocks.iter().map(|b| (b.id, HashSet::new())).collect();
+    let mut live_in: HashMap<BlockId, HashSet<LocalId>> = function
+        .blocks
+        .iter()
+        .map(|b| (b.id, HashSet::new()))
+        .collect();
+    let mut live_out: HashMap<BlockId, HashSet<LocalId>> = function
+        .blocks
+        .iter()
+        .map(|b| (b.id, HashSet::new()))
+        .collect();
 
     let mut worklist: Vec<BlockId> = function.blocks.iter().map(|b| b.id).collect();
     while let Some(bid) = worklist.pop() {

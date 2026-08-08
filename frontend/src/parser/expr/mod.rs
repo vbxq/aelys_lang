@@ -186,7 +186,7 @@ impl Parser {
         Ok(expr)
     }
 
-// keeps the outer span, so a diagnostic still points at the parenthesised form
+    // keeps the outer span, so a diagnostic still points at the parenthesised form
     pub(super) fn unwrap_grouping(expr: Expr) -> Expr {
         let span = expr.span;
         let mut cur = expr;
@@ -278,4 +278,3 @@ fn token_to_binary_op(kind: &TokenKind) -> Option<BinaryOp> {
         _ => None,
     }
 }
-

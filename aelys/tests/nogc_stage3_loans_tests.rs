@@ -77,8 +77,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot write"), "must be a write-while-borrowed diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot write"),
+        "must be a write-while-borrowed diagnostic: {err}"
+    );
 }
 
 // discriminator: the same shape with a value copy instead of a borrow compiles.
@@ -111,8 +117,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("as mutable"), "must be a mutable-reborrow conflict: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("as mutable"),
+        "must be a mutable-reborrow conflict: {err}"
+    );
 }
 
 #[test]
@@ -147,8 +159,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot move"), "must be a move-while-borrowed diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot move"),
+        "must be a move-while-borrowed diagnostic: {err}"
+    );
 }
 
 // discriminator: with the borrow dead before the move (nll), the move is accepted.
@@ -182,8 +200,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("cannot write"), "push must be modeled as a write of v: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("cannot write"),
+        "push must be modeled as a write of v: {err}"
+    );
 }
 
 // a reference stored into an array literal is rejected (charter-15 v1 boundary).
@@ -199,8 +223,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("aggregate containers"), "must be the container-boundary diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("aggregate containers"),
+        "must be the container-boundary diagnostic: {err}"
+    );
 }
 
 #[test]
@@ -230,8 +260,14 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
-    assert!(err.contains("aggregate containers"), "must be the container-boundary diagnostic: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("aggregate containers"),
+        "must be the container-boundary diagnostic: {err}"
+    );
 }
 
 #[test]
@@ -265,7 +301,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[borrow]"), "must carry the borrow marker: {err}");
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
 }
 
 // nll: the element borrow is dead before the push, so the push is accepted. it also runs and
@@ -285,7 +324,10 @@ fn main() -> i64 {
     let Some(code) = run_exit(src) else {
         return;
     };
-    assert_eq!(code, 10, "the borrow dies before the push, so it runs and returns v[0] = 10");
+    assert_eq!(
+        code, 10,
+        "the borrow dies before the push, so it runs and returns v[0] = 10"
+    );
 }
 
 // with a value oracle rather than a compile check: borrowing one field must not block writing another.
@@ -304,7 +346,10 @@ fn main() -> i64 {
     ) else {
         return;
     };
-    assert_eq!(code, 21, "borrowing p.x must not block writing p.y, and *a must still read 1");
+    assert_eq!(
+        code, 21,
+        "borrowing p.x must not block writing p.y, and *a must still read 1"
+    );
 }
 
 // the discriminating twin: the same place, so the write must be rejected. without this a
@@ -322,7 +367,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[E0711]"), "writing the borrowed field itself must reject: {err}");
+    assert!(
+        err.contains("[E0711]"),
+        "writing the borrowed field itself must reject: {err}"
+    );
 }
 
 // a reborrow &mut *r that never touches the base r again is accepted (no self-conflict).
@@ -342,4 +390,3 @@ fn main() -> i64 {
 "#,
     );
 }
-

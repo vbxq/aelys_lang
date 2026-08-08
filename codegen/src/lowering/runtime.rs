@@ -67,9 +67,9 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_vec_detach", fn_ty, None)
     }
 
-/// buffer if it is shared. inline fast path (a pointer load, a null test, a u32 refcount load
-/// itself in an out-of-line cold block, so an unshared write pays no call and never allocates.
-/// `elem_base` walks, so the two cannot disagree about the root's storage class.
+    /// buffer if it is shared. inline fast path (a pointer load, a null test, a u32 refcount load
+    /// itself in an out-of-line cold block, so an unshared write pays no call and never allocates.
+    /// `elem_base` walks, so the two cannot disagree about the root's storage class.
     pub(crate) fn emit_vec_detach(
         &mut self,
         local: LocalId,
@@ -78,7 +78,7 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<(), CodegenError> {
         let detach_fn = self.ensure_vec_detach_function();
         let elem_size = self.air_type_size(inner)? as u64;
-// the fat struct {ptr,len,cap} alloca; field 0 (the data pointer) sits at offset 0
+        // the fat struct {ptr,len,cap} alloca; field 0 (the data pointer) sits at offset 0
         let v_alloca = if through_ptr {
             let p = self.load_local(local)?.into_pointer_value();
             self.emit_null_check(p)?;
@@ -126,7 +126,12 @@ impl<'a> FunctionCodegen<'a> {
             .into_int_value();
         let shared = self
             .builder
-            .build_int_compare(IntPredicate::UGT, refcount, i32_ty.const_int(1, false), "cow_shared")
+            .build_int_compare(
+                IntPredicate::UGT,
+                refcount,
+                i32_ty.const_int(1, false),
+                "cow_shared",
+            )
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         self.builder
             .build_conditional_branch(shared, slow_block, cont_block)
@@ -387,7 +392,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 
-/// emit a null-pointer check before a dereference: if `ptr` is null, branch to a panic
+    /// emit a null-pointer check before a dereference: if `ptr` is null, branch to a panic
     pub(crate) fn emit_null_check(
         &mut self,
         ptr: PointerValue<'static>,
@@ -420,4 +425,3 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 }
-

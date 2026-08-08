@@ -170,11 +170,7 @@ impl FunctionInliner {
                 self.inline_in_expr(index, analysis);
                 self.inline_in_expr(value, analysis);
             }
-            TypedExprKind::FieldAssign {
-                object,
-                value,
-                ..
-            } => {
+            TypedExprKind::FieldAssign { object, value, .. } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(value, analysis);
             }
@@ -218,7 +214,9 @@ impl FunctionInliner {
                 }
             }
             TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
-            TypedExprKind::ResultAssert { scrutinee, .. } => self.inline_in_expr(scrutinee, analysis),
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.inline_in_expr(scrutinee, analysis)
+            }
             _ => {}
         }
 

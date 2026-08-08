@@ -70,8 +70,8 @@ fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
     )
     .expect("sema failed");
     let mut opt = aelys_opt::Optimizer::new(OptimizationLevel::Standard);
-    let checked =
-        aelys_air::bir::check(inference.program).unwrap_or_else(|_| panic!("fixture is well-formed"));
+    let checked = aelys_air::bir::check(inference.program)
+        .unwrap_or_else(|_| panic!("fixture is well-formed"));
     let typed = opt.optimize(checked);
     lower(&typed)
 }
@@ -87,7 +87,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(ir.contains("@__aelys_global_g = internal global i64 7"), "{ir}");
+    assert!(
+        ir.contains("@__aelys_global_g = internal global i64 7"),
+        "{ir}"
+    );
     // Aelys-convention main receives an implicit env ptr; check the function exists with fastcc.
     let main_decl = ir
         .lines()
@@ -113,10 +116,15 @@ fn main() -> i64 {
     );
     // Aelys FnPtr globals are fat pointers { fn_ptr, env_ptr }; named fns have null env.
     assert!(
-        ir.contains("@__aelys_global_f = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        ir.contains(
+            "@__aelys_global_f = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"
+        ),
         "{ir}"
     );
-    assert!(ir.contains("load { ptr, ptr }, ptr @__aelys_global_f"), "{ir}");
+    assert!(
+        ir.contains("load { ptr, ptr }, ptr @__aelys_global_f"),
+        "{ir}"
+    );
     assert!(ir.contains("extractvalue { ptr, ptr }"), "{ir}");
     assert!(ir.contains("call fastcc i64 %"), "{ir}");
     assert!(!ir.contains("declare i64 @f()"), "{ir}");
@@ -136,14 +144,21 @@ fn main() -> i64 {
     );
     // Both aliases should resolve to the same fat pointer { fn_ptr, null_env }.
     assert!(
-        ir.contains("@__aelys_global_g = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        ir.contains(
+            "@__aelys_global_g = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"
+        ),
         "{ir}"
     );
     assert!(
-        ir.contains("@__aelys_global_h = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"),
+        ir.contains(
+            "@__aelys_global_h = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"
+        ),
         "{ir}"
     );
-    assert!(ir.contains("load { ptr, ptr }, ptr @__aelys_global_h"), "{ir}");
+    assert!(
+        ir.contains("load { ptr, ptr }, ptr @__aelys_global_h"),
+        "{ir}"
+    );
     assert!(!ir.contains("unknown function 'g'"), "{ir}");
     assert!(!ir.contains("declare i64 @g()"), "{ir}");
 }
@@ -176,7 +191,10 @@ fn main() -> i64 {
         ir.contains("@__aelys_global_h = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
         "{ir}"
     );
-    assert!(ir.contains("load %__aelys_enum___mono_Option_i64, ptr @__aelys_global_h"), "{ir}");
+    assert!(
+        ir.contains("load %__aelys_enum___mono_Option_i64, ptr @__aelys_global_h"),
+        "{ir}"
+    );
 }
 
 #[test]
@@ -198,7 +216,10 @@ fn read_color() -> i64 {
 }
 "#,
     );
-    assert!(ir.contains("@__aelys_global_c = internal global i32 1"), "{ir}");
+    assert!(
+        ir.contains("@__aelys_global_c = internal global i32 1"),
+        "{ir}"
+    );
     assert!(ir.contains("load i32, ptr @__aelys_global_c"), "{ir}");
 }
 

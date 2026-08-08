@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use aelys_air::bir::build::build_program;
-use aelys_air::bir::{effect_summaries, Effect, EffectSet};
+use aelys_air::bir::{Effect, EffectSet, effect_summaries};
 use aelys_driver::compile_to_typed_ast;
 
 // top: the reachable top an indirect/unknown call floors to (mirrors the pass-internal const).
@@ -38,7 +38,10 @@ fn dump() -> i64 {
 }
 ";
     let eff = summary_of(src, "dump");
-    assert!(eff.contains(Effect::Managed), "dump releases the discarded Rc temporary");
+    assert!(
+        eff.contains(Effect::Managed),
+        "dump releases the discarded Rc temporary"
+    );
     assert!(
         eff.contains(Effect::Alloc),
         "dump inherits Alloc from make_rc via propagation (intrinsic had none)"
@@ -69,8 +72,14 @@ fn root() -> i64 {
 }
 ";
     let eff = summary_of(src, "root");
-    assert!(eff.contains(Effect::Managed), "root reaches managed memory two calls deep");
-    assert!(eff.contains(Effect::Alloc), "Alloc propagates from leaf through helper to root");
+    assert!(
+        eff.contains(Effect::Managed),
+        "root reaches managed memory two calls deep"
+    );
+    assert!(
+        eff.contains(Effect::Alloc),
+        "Alloc propagates from leaf through helper to root"
+    );
 }
 
 #[test]
@@ -83,7 +92,11 @@ fn fib(n: i64) -> i64 {
     return fib(n - 1) + fib(n - 2)
 }
 ";
-    assert_eq!(summary_of(src, "fib"), EffectSet::EMPTY, "pure recursion stays effect-free");
+    assert_eq!(
+        summary_of(src, "fib"),
+        EffectSet::EMPTY,
+        "pure recursion stays effect-free"
+    );
 }
 
 // direct recursion, managed: the fixpoint keeps managed across the self-edge, and does not invent
@@ -98,8 +111,14 @@ fn mrec(n: i64, r: Rc<i64>) -> i64 {
 }
 ";
     let eff = summary_of(src, "mrec");
-    assert!(eff.contains(Effect::Managed), "the Rc param is released, self-recursion preserves it");
-    assert!(!eff.contains(Effect::Alloc), "no construction, so no Alloc despite recursion");
+    assert!(
+        eff.contains(Effect::Managed),
+        "the Rc param is released, self-recursion preserves it"
+    );
+    assert!(
+        !eff.contains(Effect::Alloc),
+        "no construction, so no Alloc despite recursion"
+    );
 }
 
 // mutual recursion (an scc): ping <-> pong, only pong allocates; the fixpoint over the cycle gives
@@ -121,7 +140,10 @@ fn pong(n: i64) -> i64 {
 }
 ";
     let s = summaries(src);
-    assert!(s["pong"].contains(Effect::Managed) && s["pong"].contains(Effect::Alloc), "pong allocates");
+    assert!(
+        s["pong"].contains(Effect::Managed) && s["pong"].contains(Effect::Alloc),
+        "pong allocates"
+    );
     assert!(
         s["ping"].contains(Effect::Managed) && s["ping"].contains(Effect::Alloc),
         "ping inherits Managed+Alloc across the mutual-recursion cycle"
@@ -136,7 +158,11 @@ fn caller() -> i64 {
     return f()
 }
 ";
-    assert_eq!(summary_of(src, "caller"), top(), "an indirect call floors the caller to TOP");
+    assert_eq!(
+        summary_of(src, "caller"),
+        top(),
+        "an indirect call floors the caller to TOP"
+    );
 }
 
 #[test]
@@ -151,7 +177,10 @@ fn caller() -> i64 {
 }
 ";
     let eff = summary_of(src, "caller");
-    assert!(eff.contains(Effect::Managed), "the closure's managed work is caught by the TOP floor");
+    assert!(
+        eff.contains(Effect::Managed),
+        "the closure's managed work is caught by the TOP floor"
+    );
 }
 
 #[test]
@@ -168,7 +197,10 @@ fn consumer() -> i64 {
         s["produce"].contains(Effect::Managed),
         "the helper's returned-then-dropped Rc is elision-eligible yet still Managed pre-elision"
     );
-    assert!(s["consumer"].contains(Effect::Managed), "consumer inherits Managed from produce");
+    assert!(
+        s["consumer"].contains(Effect::Managed),
+        "consumer inherits Managed from produce"
+    );
     assert!(
         s["consumer"].contains(Effect::Alloc),
         "consumer's only Alloc source is the propagated summary of produce"
@@ -191,7 +223,10 @@ fn caller() -> i64 { return foo() }
         eff.contains(Effect::Managed),
         "a global shadowing a fn is an indirect call: caller must not under-report to EMPTY"
     );
-    assert!(eff.contains(Effect::Alloc), "the indirect floor carries Alloc too");
+    assert!(
+        eff.contains(Effect::Alloc),
+        "the indirect floor carries Alloc too"
+    );
 }
 
 #[test]
@@ -217,6 +252,8 @@ fn corpus_no_panic_smoke() {
             processed += 1;
         }
     }
-    assert!(processed >= 50, "expected the fixture corpus to be reachable, only ran {processed}");
+    assert!(
+        processed >= 50,
+        "expected the fixture corpus to be reachable, only ran {processed}"
+    );
 }
-

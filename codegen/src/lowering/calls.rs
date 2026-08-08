@@ -89,11 +89,7 @@ impl<'a> FunctionCodegen<'a> {
                 let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
                 let casted = self
                     .builder
-                    .build_pointer_cast(
-                        arg_values[0].into_pointer_value(),
-                        ptr_ty,
-                        "rc_arg_cast",
-                    )
+                    .build_pointer_cast(arg_values[0].into_pointer_value(), ptr_ty, "rc_arg_cast")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.builder
                     .build_call(function, &[casted.into()], "")
@@ -129,8 +125,7 @@ impl<'a> FunctionCodegen<'a> {
                         .builder
                         .build_extract_value(fat_ptr, 1, "closure_env")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
-                        vec![env_ptr.into()];
+                    let mut all_args: Vec<BasicMetadataValueEnum<'static>> = vec![env_ptr.into()];
                     all_args.extend(metadata_args.iter().copied());
                     let call = self
                         .builder
@@ -434,7 +429,10 @@ impl<'a> FunctionCodegen<'a> {
     fn is_aelys_convention_fnptr(&self, local: LocalId) -> bool {
         matches!(
             self.local_air_type(local),
-            Ok(AirType::FnPtr { conv: aelys_air::CallingConv::Aelys, .. })
+            Ok(AirType::FnPtr {
+                conv: aelys_air::CallingConv::Aelys,
+                ..
+            })
         )
     }
 
@@ -446,13 +444,12 @@ impl<'a> FunctionCodegen<'a> {
                 .iter()
                 .find(|f| f.id == *id)
                 .map_or(false, |f| function_has_implicit_env(f)),
-            Callee::Named(name) => {
-                self.program
-                    .functions
-                    .iter()
-                    .find(|f| f.name == *name)
-                    .map_or(false, |f| function_has_implicit_env(f))
-            }
+            Callee::Named(name) => self
+                .program
+                .functions
+                .iter()
+                .find(|f| f.name == *name)
+                .map_or(false, |f| function_has_implicit_env(f)),
             _ => false,
         }
     }
@@ -469,10 +466,18 @@ impl<'a> FunctionCodegen<'a> {
                 let extra = usize::from(use_sret) + usize::from(is_aelys);
                 let mut param_types = Vec::with_capacity(params.len() + extra);
                 if use_sret {
-                    param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
+                    param_types.push(
+                        self.context
+                            .ptr_type(inkwell::AddressSpace::default())
+                            .into(),
+                    );
                 }
                 if is_aelys {
-                    param_types.push(self.context.ptr_type(inkwell::AddressSpace::default()).into());
+                    param_types.push(
+                        self.context
+                            .ptr_type(inkwell::AddressSpace::default())
+                            .into(),
+                    );
                 }
                 for param in params {
                     param_types.push(air_basic_type_to_llvm(param, self.context)?.into());
@@ -484,7 +489,8 @@ impl<'a> FunctionCodegen<'a> {
                         if use_sret {
                             self.context.void_type().fn_type(&param_types, false)
                         } else {
-                            air_basic_type_to_llvm(other, self.context)?.fn_type(&param_types, false)
+                            air_basic_type_to_llvm(other, self.context)?
+                                .fn_type(&param_types, false)
                         }
                     }
                 };
@@ -527,21 +533,22 @@ impl<'a> FunctionCodegen<'a> {
 
         let is_data = enum_has_data(&enum_def);
 
-        let entry_bb = self.builder.get_insert_block().ok_or_else(|| {
-            CodegenError::LlvmError("no current block".to_string())
-        })?;
+        let entry_bb = self
+            .builder
+            .get_insert_block()
+            .ok_or_else(|| CodegenError::LlvmError("no current block".to_string()))?;
 
         let tag_val = if is_data {
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
-            let enum_ty =
-                self.context
-                    .get_struct_type(&enum_struct_name)
-                    .ok_or_else(|| {
-                        CodegenError::UnsupportedType(format!(
-                            "unknown enum struct type: {}",
-                            enum_struct_name
-                        ))
-                    })?;
+            let enum_ty = self
+                .context
+                .get_struct_type(&enum_struct_name)
+                .ok_or_else(|| {
+                    CodegenError::UnsupportedType(format!(
+                        "unknown enum struct type: {}",
+                        enum_struct_name
+                    ))
+                })?;
             let tmp = self
                 .builder
                 .build_alloca(enum_ty, "print_enum_tmp")
@@ -654,20 +661,18 @@ impl<'a> FunctionCodegen<'a> {
                 let vec_ptr = arg_values[0].into_pointer_value();
                 let count = arg_values[1].into_int_value();
                 (
-                    self.context.void_type().fn_type(
-                        &[ptr_ty.into(), i64_ty.into(), i64_ty.into()],
-                        false,
-                    ),
+                    self.context
+                        .void_type()
+                        .fn_type(&[ptr_ty.into(), i64_ty.into(), i64_ty.into()], false),
                     vec![vec_ptr.into(), size_val.into(), count.into()],
                 )
             } else {
                 let vec_ptr = arg_values[0].into_pointer_value();
                 let elem_ptr = arg_values[1].into_pointer_value();
                 (
-                    self.context.void_type().fn_type(
-                        &[ptr_ty.into(), ptr_ty.into(), i64_ty.into()],
-                        false,
-                    ),
+                    self.context
+                        .void_type()
+                        .fn_type(&[ptr_ty.into(), ptr_ty.into(), i64_ty.into()], false),
                     vec![vec_ptr.into(), elem_ptr.into(), size_val.into()],
                 )
             };
