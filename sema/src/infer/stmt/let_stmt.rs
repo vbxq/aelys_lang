@@ -13,6 +13,11 @@ impl TypeInference {
         initializer: &Expr,
         is_pub: bool,
     ) -> TypedStmtKind {
+        if self.nogc_fn_params.contains(name) {
+            self.errors
+                .push(crate::constraint::TypeError::nogc_param_shadowed(name, span));
+        }
+
         let mut typed_init = self.infer_expr(initializer);
 
         let declared_type = type_annotation
@@ -68,6 +73,7 @@ impl TypeInference {
         };
 
         self.check_rc_let_surface(name, mutable, &var_type, initializer, span);
+        self.check_vec_let_surface(name, &var_type, span);
 
         self.env
             .define_local_with_span(name.to_string(), var_type.clone(), span);
@@ -133,6 +139,39 @@ impl TypeInference {
                     format!(
                         "binding `{name}` has type `{var_type}` which embeds an `Rc<T>` in an \
                          aggregate value; Rc inside arrays/vecs/tuples/structs is not supported yet"
+                    ),
+                    span,
+                ),
+            );
+        }
+    }
+
+// the construction sites already fail closed; this is the honest place to report, and it
+// mirrors the rc treatment right above
+    fn check_vec_let_surface(
+        &mut self,
+        name: &str,
+        var_type: &crate::types::InferType,
+        span: Span,
+    ) {
+        use crate::types::InferType;
+        let holds = match var_type {
+            InferType::Array(inner, _) | InferType::Vec(inner) => {
+                self.type_table.contains_vec_by_value(inner)
+            }
+            InferType::Tuple(elems) => elems
+                .iter()
+                .any(|e| self.type_table.contains_vec_by_value(e)),
+            _ => false,
+        };
+        if holds {
+            self.errors.push(
+                crate::constraint::TypeError::vec_out_of_surface(
+                    format!(
+                        "binding `{name}` has type `{var_type}`, whose element holds a `Vec<T>` \
+                         by value; a Vec inside a Vec/array is not supported yet (the buffer \
+                         would be shared without a retain, the transitive Vec retain/release is \
+                         not implemented)"
                     ),
                     span,
                 ),
@@ -234,3 +273,4 @@ pub enum LiteralInit {
     Int(i64),
     Float(f64),
 }
+

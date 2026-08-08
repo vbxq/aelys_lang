@@ -1,8 +1,8 @@
 use super::{LoweringContext, infer_to_int_size, lower_binop, lower_unop};
 use crate::*;
 use aelys_sema::{
-    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedMatchArm, TypedParam,
-    TypedPattern, TypedStmt,
+    InferType, ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedMatchArm,
+    TypedParam, TypedPattern, TypedStmt,
 };
 
 impl<'a> LoweringContext<'a> {
@@ -91,7 +91,20 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
-                    Operand::Copy(id)
+// a capture is a pointer into the env, so a read is a load through it.
+                    if self.capture_slots.contains_key(&id) {
+                        let value_ty = self.lower_type_from_infer(&expr.ty);
+                        return self.emit_rvalue_to_temp(
+                            value_ty,
+                            Rvalue::Deref(Operand::Copy(id)),
+                            sp,
+                        );
+                    }
+                    if matches!(self.affine_category(&expr.ty), crate::bir::Category::Affine) {
+                        Operand::Move(id)
+                    } else {
+                        Operand::Copy(id)
+                    }
                 } else if self.globals.iter().any(|global| global.name == *name) {
                     self.emit_rvalue_to_temp(
                         self.lower_type_from_infer(&expr.ty),
@@ -363,16 +376,48 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Slice { object, range } => {
-                let obj = self.lower_expr(object);
-                let rng = self.lower_expr(range);
-                self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&expr.ty),
-                    Rvalue::Call {
-                        func: Callee::Named("__aelys_slice".to_string()),
-                        args: vec![obj, rng],
+                self.lower_slice_expr(object, range, &expr.ty, sp)
+            }
+
+// the reborrow short-circuit is gone: `&mut *p` is now just the deref line of
+            TypedExprKind::Reference { operand, .. } => match self.place_addr(operand) {
+                Some(addr) => Operand::Copy(addr.ptr),
+                None => {
+                    self.report_error(
+                        "ICE: `&` of an expression that denotes no storage reached AIR lowering;                          sema must reject it (E0421)"
+                            .to_string(),
+                    );
+                    Operand::Const(AirConst::Null)
+                }
+            },
+
+            TypedExprKind::Deref(operand) => {
+                let op = self.lower_expr(operand);
+                let referent_air = self.lower_type_from_infer(&expr.ty);
+                self.emit_rvalue_to_temp(referent_air, Rvalue::Deref(op), sp)
+            }
+
+            TypedExprKind::DerefAssign { target, value } => {
+                let target_op = self.lower_expr(target);
+                let target_ptr_ty = self.lower_type_from_infer(&target.ty);
+                let t = self.operand_to_local(target_op, &target_ptr_ty);
+                let v = self.lower_expr(value);
+// `*p = <vec>` overwrites the pointee slot. retain-first: take the
+// incoming share, then drop the buffer *p currently points at (t is the aelysvec
+// address, so release goes through the pointer with no addressof).
+                let pointee_is_vec = matches!(value.ty, InferType::Vec(_));
+                self.emit_vec_slot_acquire(pointee_is_vec, Some(&value.kind), &v, sp);
+                if pointee_is_vec {
+                    self.emit_cow_release_through_ptr(Operand::Copy(t), sp);
+                }
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Deref(t),
+                        rvalue: Rvalue::Use(v),
                     },
                     sp,
-                )
+                );
+                Operand::Const(AirConst::Null)
             }
 
             TypedExprKind::Cast {
@@ -450,12 +495,19 @@ impl<'a> LoweringContext<'a> {
                     self.lower_stmt(stmt);
                 }
                 let result = self.lower_expr(tail);
+                self.emit_scope_affine_drops(scope_depth, tail.span);
                 self.locals_by_name.truncate(scope_depth);
                 result
             }
             TypedExprKind::Match { scrutinee, arms } => {
                 self.lower_match_expr(scrutinee, arms, expr)
             }
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => self.lower_result_assert(expr, scrutinee, *ok_tag, payload_ty, on_err),
         }
     }
 
@@ -533,25 +585,39 @@ impl<'a> LoweringContext<'a> {
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
         let val = self.lower_expr(value);
         if let Some(id) = self.lookup_local(name) {
+            if let Some(key) = Self::air_drop_key(sp) {
+                let old_drops = self.collect_affine_drops(key, |_| true);
+                for (local, id_field) in old_drops {
+                    self.emit_affine_drop(local, &id_field, sp);
+                }
+            }
+// previous buffer, so `v = v` (rc 1 -> 2 -> 1) never frees the buffer it keeps.
+// a capture is written through its env pointer; there is no cache to write back
+            let is_capture = self.capture_slots.contains_key(&id);
+            let slot_is_vec = matches!(value.ty, InferType::Vec(_));
+            self.emit_vec_slot_acquire(slot_is_vec, Some(&value.kind), &val, sp);
+            if slot_is_vec {
+                if is_capture {
+                    self.emit_cow_release_through_ptr(Operand::Copy(id), sp);
+                } else {
+                    self.emit_cow_release(id, sp);
+                }
+            }
+            let place = if is_capture {
+                Place::Deref(id)
+            } else {
+                Place::Local(id)
+            };
             self.emit(
                 AirStmtKind::Assign {
-                    place: Place::Local(id),
-                    rvalue: Rvalue::Use(val),
+                    place,
+                    rvalue: Rvalue::Use(val.clone()),
                 },
                 sp,
             );
-            // If this variable is a closure capture, write the new value back
-            // to the env struct so future calls see the updated value.
-            if let Some(env_id) = self.closure_env_param {
-                if self.closure_captures.contains(name) {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(env_id, name.to_string()),
-                            rvalue: Rvalue::Use(Operand::Copy(id)),
-                        },
-                        sp,
-                    );
-                }
+// the rhs, and re-loading through the pointer would only add a second deref site
+            if is_capture {
+                return val;
             }
             Operand::Copy(id)
         } else {
@@ -572,6 +638,63 @@ impl<'a> LoweringContext<'a> {
     /// (e.g. `buf.data[i] = val`). In that case a read-modify-write is needed:
     /// load the array from the parent struct(s), assign into the element, then
     /// store the array back up the chain.
+    fn lower_slice_expr(
+        &mut self,
+        object: &TypedExpr,
+        range: &TypedExpr,
+        result_ty: &InferType,
+        sp: Option<Span>,
+    ) -> Operand {
+// `y[0]`, so building a zero-length view must not trap)
+        let ptr_op = match self.projection_base(object) {
+            Some(addr) => Operand::Copy(addr.ptr),
+            None => {
+                self.report_error(
+                    "ICE: slice of an expression that denotes no storage reached AIR lowering; \
+                     sema must reject it (E0421)"
+                        .to_string(),
+                );
+                return Operand::Const(AirConst::Null);
+            }
+        };
+        let slice_air = self.lower_type_from_infer(result_ty);
+
+        let (start, end) = match &range.kind {
+            TypedExprKind::Range { start, end, .. } => (start.as_deref(), end.as_deref()),
+            _ => (None, None),
+        };
+        if let Some(s) = start {
+            if !matches!(&s.kind, TypedExprKind::Int(0)) {
+                self.report_error(
+                    "slice with a non-zero start bound is not supported yet".to_string(),
+                );
+            }
+        }
+        let len_op = match end {
+            Some(e) => self.lower_expr(e),
+            None => match &object.ty {
+                InferType::Array(_, Some(n)) => {
+                    Operand::Const(AirConst::Int(*n as i64, AirIntSize::I64))
+                }
+                _ => {
+                    self.report_error(
+                        "slice of a non-fixed-size collection is not supported yet".to_string(),
+                    );
+                    Operand::Const(AirConst::Int(0, AirIntSize::I64))
+                }
+            },
+        };
+
+        self.emit_rvalue_to_temp(
+            slice_air,
+            Rvalue::SliceFromParts {
+                ptr: ptr_op,
+                len: len_op,
+            },
+            sp,
+        )
+    }
+
     fn lower_index_assign(
         &mut self,
         object: &TypedExpr,
@@ -579,13 +702,6 @@ impl<'a> LoweringContext<'a> {
         value: &TypedExpr,
         sp: Option<Span>,
     ) -> Operand {
-        let idx = self.lower_expr(index);
-
-        // Detect compound index assignment pattern from parser desugaring:
-        //   arr[idx] += rhs  →  arr[idx] = arr[idx] + rhs
-        // The parser clones index/object expressions, so they'd be re-evaluated
-        // on the RHS (wrong if they have side effects).  Defer value computation
-        // to after the path is established so we can reuse the path locals.
         let compound_info = if let TypedExprKind::Binary { left, op, right } = &value.kind {
             if let TypedExprKind::Index { .. } = &left.kind {
                 Some((*op, right.as_ref()))
@@ -596,182 +712,46 @@ impl<'a> LoweringContext<'a> {
             None
         };
 
+        let idx = self.lower_expr(index);
         let val = if compound_info.is_none() {
             self.lower_expr(value)
         } else {
-            Operand::Const(AirConst::Null) // placeholder, computed below
+            Operand::Const(AirConst::Null)
         };
 
-        // Collect the full access path (mix of Member and Index layers) from
-        // `object` back to the root variable.  Handles all patterns:
-        //   arr[i] = val, arr[i][j] = val, s.arr[i] = val,
-        //   s.arr[i][j] = val, rows[i].cells[j] = val, etc.
-        enum PathStep<'a> {
-            Field { name: String, result_ty: AirType },
-            Index { idx_expr: &'a TypedExpr, result_ty: AirType },
-        }
-
-        let mut steps: Vec<PathStep<'_>> = Vec::new();
-        let mut walk = object;
-        loop {
-            match &walk.kind {
-                TypedExprKind::Index { object, index: nested_idx } => {
-                    let result_ty = self.lower_type_from_infer(&walk.ty);
-                    steps.push(PathStep::Index { idx_expr: nested_idx, result_ty });
-                    walk = object;
-                }
-                TypedExprKind::Member { object, member } => {
-                    let result_ty = self.lower_type_from_infer(&walk.ty);
-                    steps.push(PathStep::Field { name: member.clone(), result_ty });
-                    walk = object;
-                }
-                _ => break,
-            }
-        }
-        steps.reverse(); // root → outermost
-
-        // `walk` is now the root expression (usually an Identifier).
-        let root_name = if let TypedExprKind::Identifier(name) = &walk.kind {
-            Some(name.clone())
-        } else {
-            None
+        let Some(base) = self.projection_base(object) else {
+            self.report_error(
+                "ICE: indexed-assign target denotes no storage at AIR lowering; sema must \
+                 reject it (E0421)"
+                    .to_string(),
+            );
+            return Operand::Const(AirConst::Null);
         };
-        let root_op = self.lower_expr(walk);
-        let root_ty = self.lower_type_from_infer(&walk.ty);
-        let root_local = self.operand_to_local(root_op, &root_ty);
 
-        // Read phase: load each intermediate into a mutable temp.
-        enum WriteBack {
-            Field(String),
-            Index(Operand),
-        }
-        struct TempInfo {
-            local: LocalId,
-            parent: LocalId,
-            wb: WriteBack,
-        }
-
-        let mut temps: Vec<TempInfo> = Vec::new();
-        let mut cur_local = root_local;
-
-        for step in &steps {
-            match step {
-                PathStep::Field { name, result_ty } => {
-                    let tmp = self.alloc_temp_mut(result_ty.clone());
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Local(tmp),
-                            rvalue: Rvalue::FieldAccess {
-                                base: Operand::Copy(cur_local),
-                                field: name.clone(),
-                            },
-                        },
-                        sp,
-                    );
-                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Field(name.clone()) });
-                    cur_local = tmp;
-                }
-                PathStep::Index { idx_expr, result_ty } => {
-                    let index_op = self.lower_expr(idx_expr);
-                    let tmp = self.alloc_temp_mut(result_ty.clone());
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Local(tmp),
-                            rvalue: Rvalue::Index {
-                                base: Operand::Copy(cur_local),
-                                index: index_op.clone(),
-                            },
-                        },
-                        sp,
-                    );
-                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Index(index_op) });
-                    cur_local = tmp;
-                }
-            }
-        }
-
-        // For compound index assigns, compute the value now using the path-loaded
-        // cur_local instead of re-evaluating the object path.
         let final_val = if let Some((op, rhs_expr)) = compound_info {
             let elem_ty = self.lower_type_from_infer(&value.ty);
             let current = self.emit_rvalue_to_temp(
                 elem_ty.clone(),
                 Rvalue::Index {
-                    base: Operand::Copy(cur_local),
+                    base: Operand::Copy(base.ptr),
                     index: idx.clone(),
                 },
                 sp,
             );
             let rhs = self.lower_expr(rhs_expr);
             let air_op = super::lower_binop(&op);
-            self.emit_rvalue_to_temp(
-                elem_ty,
-                Rvalue::BinaryOp(air_op, current, rhs),
-                sp,
-            )
+            self.emit_rvalue_to_temp(elem_ty, Rvalue::BinaryOp(air_op, current, rhs), sp)
         } else {
             val
         };
 
-        // Write the value at the innermost level.
         self.emit(
             AirStmtKind::Assign {
-                place: Place::Index(cur_local, idx),
+                place: Place::Index(base.ptr, idx),
                 rvalue: Rvalue::Use(final_val),
             },
             sp,
         );
-
-        // Write-back phase: propagate modifications back up to the root.
-        for info in temps.iter().rev() {
-            match &info.wb {
-                WriteBack::Field(name) => {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(info.parent, name.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                        },
-                        sp,
-                    );
-                }
-                WriteBack::Index(index_op) => {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Index(info.parent, index_op.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                        },
-                        sp,
-                    );
-                }
-            }
-        }
-
-        // Closure env / global write-back for root.
-        if let Some(ref name) = root_name {
-            if let Some(env_id) = self.closure_env_param {
-                if self.closure_captures.contains(name) {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(env_id, name.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(root_local)),
-                        },
-                        sp,
-                    );
-                }
-            }
-            if self.lookup_local(name).is_none()
-                && self.globals.iter().any(|g| g.name == *name)
-            {
-                self.emit(
-                    AirStmtKind::CallVoid {
-                        func: Callee::Named(format!("__aelys_global_set_{}", name)),
-                        args: vec![Operand::Copy(root_local)],
-                    },
-                    sp,
-                );
-            }
-        }
-
         Operand::Const(AirConst::Null)
     }
 
@@ -783,11 +763,6 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         // Detect compound field assignment from parser desugaring:
-        //   obj.field += rhs  →  obj.field = obj.field + rhs
-        // When the object path contains side-effecting expressions (e.g.
-        // arr[f()].field += rhs), the desugared form evaluates them twice.
-        // Detect the pattern and defer value computation to after the path
-        // is established, so we can reuse the already-loaded current value.
         let compound_info = if let TypedExprKind::Binary { left, op, right } = &value.kind {
             if let TypedExprKind::Member { .. } = &left.kind {
                 Some((*op, right.as_ref()))
@@ -798,144 +773,60 @@ impl<'a> LoweringContext<'a> {
             None
         };
 
-        // For non-compound assigns, lower the value normally.
-        // For compound assigns, we'll compute val later using the path locals.
         let val = if compound_info.is_none() {
             self.lower_expr(value)
         } else {
-            // Placeholder — will be replaced below
             Operand::Const(AirConst::Null)
         };
 
-        // Collect the full access path from root → immediate parent of the
-        // assigned field.  Each step is either a `.field` or `[idx]` access.
-        // This handles arbitrary mixes like `a.b[i].c.d[j].field = val`.
-        enum PathStep<'a> {
-            Field { name: String, result_ty: AirType },
-            Index { idx_expr: &'a TypedExpr, result_ty: AirType },
-        }
-
-        let mut steps: Vec<PathStep<'_>> = Vec::new();
-        let mut current = object;
-        loop {
-            match &current.kind {
-                TypedExprKind::Member { object: inner, member } => {
-                    let result_ty = self.lower_type_from_infer(&current.ty);
-                    steps.push(PathStep::Field { name: member.clone(), result_ty });
-                    current = inner;
-                }
-                TypedExprKind::Index { object: inner, index: idx_expr } => {
-                    let result_ty = self.lower_type_from_infer(&current.ty);
-                    steps.push(PathStep::Index { idx_expr, result_ty });
-                    current = inner;
-                }
-                _ => break,
-            }
-        }
-        steps.reverse(); // root → deepest
-
-        // `current` is now the root expression (usually an Identifier).
-        let root_name = if let TypedExprKind::Identifier(name) = &current.kind {
-            Some(name.clone())
-        } else {
-            None
+        let Some(base) = self.projection_base(object) else {
+            self.report_error(
+                "ICE: field-assign target denotes no storage at AIR lowering; sema must \
+                 reject it (E0421)"
+                    .to_string(),
+            );
+            return Operand::Const(AirConst::Null);
         };
-        let root_op = self.lower_expr(current);
-        let root_ty = self.lower_type_from_infer(&current.ty);
-        let root_local = self.operand_to_local(root_op, &root_ty);
 
-        // Read phase: load each intermediate into a mutable temp.
-        enum WriteBack {
-            Field(String),
-            Index(Operand),
-        }
-        struct TempInfo {
-            local: LocalId,
-            parent: LocalId,
-            wb: WriteBack,
-        }
-
-        let mut temps: Vec<TempInfo> = Vec::new();
-        let mut cur_local = root_local;
-
-        for step in &steps {
-            match step {
-                PathStep::Field { name, result_ty } => {
-                    let tmp = self.alloc_temp_mut(result_ty.clone());
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Local(tmp),
-                            rvalue: Rvalue::FieldAccess {
-                                base: Operand::Copy(cur_local),
-                                field: name.clone(),
-                            },
-                        },
-                        sp,
-                    );
-                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Field(name.clone()) });
-                    cur_local = tmp;
-                }
-                PathStep::Index { idx_expr, result_ty } => {
-                    let idx_op = self.lower_expr(idx_expr);
-                    let tmp = self.alloc_temp_mut(result_ty.clone());
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Local(tmp),
-                            rvalue: Rvalue::Index {
-                                base: Operand::Copy(cur_local),
-                                index: idx_op.clone(),
-                            },
-                        },
-                        sp,
-                    );
-                    temps.push(TempInfo { local: tmp, parent: cur_local, wb: WriteBack::Index(idx_op) });
-                    cur_local = tmp;
-                }
-            }
-        }
-
-        // For compound field assigns, compute the value now using the path-loaded
-        // intermediates instead of the pre-lowered val (which would re-evaluate
-        // side-effecting path expressions).
         let final_val = if let Some((op, rhs_expr)) = compound_info {
             let field_ty = self.lower_type_from_infer(&value.ty);
             let current = self.emit_rvalue_to_temp(
                 field_ty.clone(),
                 Rvalue::FieldAccess {
-                    base: Operand::Copy(cur_local),
+                    base: Operand::Copy(base.ptr),
                     field: field.to_string(),
                 },
                 sp,
             );
             let rhs = self.lower_expr(rhs_expr);
             let air_op = super::lower_binop(&op);
-            self.emit_rvalue_to_temp(
-                field_ty,
-                Rvalue::BinaryOp(air_op, current, rhs),
-                sp,
-            )
+            self.emit_rvalue_to_temp(field_ty, Rvalue::BinaryOp(air_op, current, rhs), sp)
         } else {
             val
         };
 
-        // reassigning an Rc field through an Rc handle must stay balanced, so the store is
-        // lifted into: load old, release old, store new, retain new. skipping the release
-        // orphans the old reference, skipping the retain under-counts the new one
-        let lift_field_ty: Option<AirType> = match self.local_air_type(cur_local) {
-            Some(AirType::Ptr(inner)) => match inner.as_ref() {
+// does not change, and no longer on "the root local is a pointer", which stage 1 makes
+        let mut obj = object;
+        while let TypedExprKind::Grouping(inner) = &obj.kind {
+            obj = inner;
+        }
+        let object_is_rc_handle = matches!(obj.ty, InferType::Rc(_));
+        let lift_field_ty: Option<AirType> = if object_is_rc_handle {
+            match &base.pointee {
                 AirType::Struct(name) => match self.air_field_type_of(name, field) {
                     Some(fty @ AirType::Ptr(_)) => Some(fty),
                     _ => None,
                 },
                 _ => None,
-            },
-            _ => None,
+            }
+        } else {
+            None
         };
         if let Some(field_ty) = lift_field_ty {
             let old = self.emit_rvalue_to_temp(
                 field_ty,
                 Rvalue::FieldAccess {
-                    base: Operand::Copy(cur_local),
+                    base: Operand::Copy(base.ptr),
                     field: field.to_string(),
                 },
                 sp,
@@ -943,7 +834,7 @@ impl<'a> LoweringContext<'a> {
             self.emit_rc_release_operand(old, sp);
             self.emit(
                 AirStmtKind::Assign {
-                    place: Place::Field(cur_local, field.to_string()),
+                    place: Place::Field(base.ptr, field.to_string()),
                     rvalue: Rvalue::Use(final_val.clone()),
                 },
                 sp,
@@ -973,61 +864,11 @@ impl<'a> LoweringContext<'a> {
         } else {
             self.emit(
                 AirStmtKind::Assign {
-                    place: Place::Field(cur_local, field.to_string()),
+                    place: Place::Field(base.ptr, field.to_string()),
                     rvalue: Rvalue::Use(final_val),
                 },
                 sp,
             );
-        }
-
-        // Write-back phase: propagate modifications back up to the root.
-        for info in temps.iter().rev() {
-            match &info.wb {
-                WriteBack::Field(name) => {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(info.parent, name.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                        },
-                        sp,
-                    );
-                }
-                WriteBack::Index(idx_op) => {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Index(info.parent, idx_op.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(info.local)),
-                        },
-                        sp,
-                    );
-                }
-            }
-        }
-
-        // Write back to closure env or global store if needed.
-        if let Some(ref name) = root_name {
-            if let Some(env_id) = self.closure_env_param {
-                if self.closure_captures.contains(name) {
-                    self.emit(
-                        AirStmtKind::Assign {
-                            place: Place::Field(env_id, name.clone()),
-                            rvalue: Rvalue::Use(Operand::Copy(root_local)),
-                        },
-                        sp,
-                    );
-                }
-            }
-            if self.lookup_local(name).is_none()
-                && self.globals.iter().any(|g| g.name == *name)
-            {
-                self.emit(
-                    AirStmtKind::CallVoid {
-                        func: Callee::Named(format!("__aelys_global_set_{}", name)),
-                        args: vec![Operand::Copy(root_local)],
-                    },
-                    sp,
-                );
-            }
         }
 
         Operand::Const(AirConst::Null)
@@ -1037,6 +878,12 @@ impl<'a> LoweringContext<'a> {
         match &callee.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
+// a captured callable is a pointer into the env, so it must be loaded
+                    if self.capture_slots.contains_key(&id) {
+                        let op = self.lower_expr(callee);
+                        let ty = self.lower_type_from_infer(&callee.ty);
+                        return Callee::FnPtr(self.operand_to_local(op, &ty));
+                    }
                     Callee::FnPtr(id)
                 } else if self.globals.iter().any(|global| global.name == *name) {
                     // A callable file-scope let is still data in global storage; lower the
@@ -1215,11 +1062,7 @@ impl<'a> LoweringContext<'a> {
         let count = elements.len() as i64;
         // must be mutable: push writes ptr/len/cap later, and the address needs a real alloca
         let vec_local = self.alloc_temp_mut(vec_ty.clone());
-        let addr = self.emit_rvalue_to_temp(
-            AirType::Ptr(Box::new(vec_ty)),
-            Rvalue::AddressOf(vec_local),
-            sp,
-        );
+        let addr = self.addr_of_own_temp(vec_local, &vec_ty, sp);
         self.emit(
             AirStmtKind::CallVoid {
                 func: Callee::Named("__aelys_vec_init".to_string()),
@@ -1249,23 +1092,17 @@ impl<'a> LoweringContext<'a> {
             ));
             return Operand::Const(AirConst::Null);
         }
-        // The Vec l-value: lower it to the local holding the fat-ptr, take &v.
-        let vec_ty = self.lower_type_from_infer(&args[0].ty);
-        let vec_op = self.lower_expr(&args[0]);
-        let vec_local = match vec_op {
-            Operand::Copy(id) | Operand::Move(id) => id,
-            _ => {
+        let vec_addr = match self.projection_base(&args[0]) {
+            Some(addr) => Operand::Copy(addr.ptr),
+            None => {
                 self.report_error(
-                    "Vec::push target must be a Vec variable (an addressable l-value)".to_string(),
+                    "ICE: Vec::push target denotes no storage at AIR lowering; sema must \
+                     reject it (E0421)"
+                        .to_string(),
                 );
                 return Operand::Const(AirConst::Null);
             }
         };
-        let vec_addr = self.emit_rvalue_to_temp(
-            AirType::Ptr(Box::new(vec_ty)),
-            Rvalue::AddressOf(vec_local),
-            sp,
-        );
         let elem_ty = self.lower_type_from_infer(&args[1].ty);
         let elem_op = self.lower_expr(&args[1]);
         let elem_slot = self.alloc_temp_mut(elem_ty.clone());
@@ -1276,11 +1113,9 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
-        let elem_addr = self.emit_rvalue_to_temp(
-            AirType::Ptr(Box::new(elem_ty)),
-            Rvalue::AddressOf(elem_slot),
-            sp,
-        );
+// p6, enumerated caller 2: the by-value copy is the intended abi; only the address
+// of that copy now comes from the one entry point
+        let elem_addr = self.addr_of_own_temp(elem_slot, &elem_ty, sp);
         self.emit(
             AirStmtKind::CallVoid {
                 func: Callee::Named("__aelys_vec_push".to_string()),
@@ -1375,6 +1210,7 @@ impl<'a> LoweringContext<'a> {
             body: body.to_vec(),
             decorators: Vec::new(),
             is_pub: false,
+            declared_nogc: false,
             span: parent.span,
             captures: captures.to_vec(),
         };
@@ -1426,9 +1262,20 @@ impl<'a> LoweringContext<'a> {
                 sp,
             );
             // Store each captured value into the env struct
-            for (cap_name, _cap_ty) in &runtime_caps {
+            for (cap_name, cap_ty) in &runtime_caps {
                 let cap_val = if let Some(id) = self.lookup_local(cap_name) {
-                    Operand::Copy(id)
+// capture's value type, so the pointer must be loaded first. storing the
+// pointer bits produced a compile-clean, aslr-varying wrong answer:
+                    if self.capture_slots.contains_key(&id) {
+                        let value_ty = self.lower_type_from_infer(cap_ty);
+                        self.emit_rvalue_to_temp(
+                            value_ty,
+                            Rvalue::Deref(Operand::Copy(id)),
+                            sp,
+                        )
+                    } else {
+                        Operand::Copy(id)
+                    }
                 } else {
                     self.report_error(format!(
                         "ICE: captured variable `{}` not found in scope during closure lowering",
@@ -1436,6 +1283,9 @@ impl<'a> LoweringContext<'a> {
                     ));
                     continue;
                 };
+// takes a share here. there is no matching release: the env is deliberately leaked
+// (its buffer leaks with it). without this the buffer is freed at the creating
+                self.emit_vec_slot_acquire(matches!(cap_ty, InferType::Vec(_)), None, &cap_val, sp);
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Field(env_ptr, cap_name.clone()),
@@ -1594,6 +1444,85 @@ impl<'a> LoweringContext<'a> {
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
+// two-arm slice of lower_match_expr, the err arm seals a divergence instead of a goto to merge
+    fn lower_result_assert(
+        &mut self,
+        node: &TypedExpr,
+        scrutinee: &TypedExpr,
+        ok_tag: u32,
+        payload_ty: &InferType,
+        on_err: &ResultAssertOnErr,
+    ) -> Operand {
+        let sp = Some(self.span(&node.span));
+        let result_ty = self.lower_type_from_infer(payload_ty);
+        let is_void = Self::is_void_like(&result_ty);
+        let result = if is_void {
+            None
+        } else {
+            Some(self.alloc_temp_mut(result_ty))
+        };
+
+        let scrutinee_op = self.lower_expr(scrutinee);
+        let enum_name = match &scrutinee.ty {
+            InferType::Enum(name, _) => name.clone(),
+            _ => {
+                self.report_error(format!(
+                    "result assert scrutinee is not an enum type: {:?}",
+                    scrutinee.ty
+                ));
+                return Operand::Const(AirConst::Null);
+            }
+        };
+
+        let tag_op = self.emit_rvalue_to_temp(
+            AirType::I32,
+            Rvalue::EnumTag {
+                enum_name: enum_name.clone(),
+                operand: scrutinee_op.clone(),
+            },
+            sp,
+        );
+
+        let ok_block = self.alloc_block_id();
+        let err_block = self.alloc_block_id();
+        let merge = self.alloc_block_id();
+
+        self.seal_block(AirTerminator::Switch {
+            discr: tag_op,
+            targets: vec![(AirConst::Int(ok_tag as i64, AirIntSize::I32), ok_block)],
+            default: err_block,
+        });
+
+        self.fixup_block_id_noop(ok_block);
+        if let Some(result) = result {
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(result),
+                    rvalue: Rvalue::EnumPayload {
+                        enum_name,
+                        tag: ok_tag,
+                        operand: scrutinee_op,
+                        field_index: 0,
+                    },
+                },
+                sp,
+            );
+        }
+        self.seal_block(AirTerminator::Goto(merge));
+
+        self.fixup_block_id_noop(err_block);
+        self.seal_block(match on_err {
+            ResultAssertOnErr::Panic(msg) => AirTerminator::Panic {
+                message: msg.clone(),
+                span: sp,
+            },
+            ResultAssertOnErr::Unreachable => AirTerminator::Unreachable,
+        });
+
+        self.fixup_block_id_noop(merge);
+        result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
     // format string -> __aelys_str_concat / __aelys_to_string
     fn lower_fmt_string(&mut self, parts: &[TypedFmtStringPart], sp: Option<Span>) -> Operand {
         let mut operands: Vec<Operand> = Vec::new();
@@ -1646,3 +1575,4 @@ impl<'a> LoweringContext<'a> {
         acc
     }
 }
+

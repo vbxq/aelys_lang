@@ -134,8 +134,11 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
             collect_operand_locals(base, out);
             collect_operand_locals(index, out);
         }
-        Rvalue::AddressOf(local) => {
-            out.insert(*local);
+        Rvalue::AddressOf(place) => {
+            if let Place::Local(local) = place {
+                out.insert(*local);
+            }
+            collect_place_locals(place, out);
         }
         Rvalue::EnumInit { payload, .. } => {
             for operand in payload {
@@ -151,12 +154,16 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
         Rvalue::ClosureCreate { env, .. } => {
             collect_operand_locals(env, out);
         }
+        Rvalue::SliceFromParts { ptr, len } => {
+            collect_operand_locals(ptr, out);
+            collect_operand_locals(len, out);
+        }
     }
 }
 
 fn collect_place_locals(place: &Place, out: &mut HashSet<LocalId>) {
     match place {
-        Place::Local(_) => {
+        Place::Local(_) | Place::Global(_) => {
             // this is just a write destination, don't mark as referenced, only Field/Index/Deref need the base local to exist because they read it
         }
         Place::Field(local, _) | Place::Deref(local) => {

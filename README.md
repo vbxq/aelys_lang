@@ -4,13 +4,13 @@
 
 # Aelys
 
-A programming language with garbage collection by default and explicit opt-out for performance-critical code.
+A programming language with managed memory by default and explicit opt-out for performance-critical code.
 
 Most languages force a single memory model on the entire program. GC'd languages pay for a runtime on every path; systems languages demand manual control everywhere.
 
-Aelys starts from a tracing GC and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced zero-allocation with statically checked references, no user-written lifetime annotations.
+Aelys starts from managed memory, reference counting with an optional cycle collector, and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced zero-allocation with statically checked references, no user-written lifetime annotations.
 
-<!-- ```rust is used for syntax highlighting only — this is Aelys -->
+<!-- ```rust is used for syntax highlighting only, this is Aelys -->
 ```rust
 fn load_mesh(path: str) -> Result<Mesh, IoError> {
     let data = read_file(path) fail |e| IoError::from(e)
@@ -38,23 +38,23 @@ fn main() {
 }
 ```
 
-`load_mesh` is default mode: GC-backed allocation, `Result` for errors, `fail` for propagation, `or` for fallback. `compute_normals` is `nogc`, meaning no heap allocation, no GC containers, and references checked at compile time. In `main`, `&` at the call site marks the boundary where data is borrowed into `nogc` territory.
+`load_mesh` is default mode: GC-backed allocation, Result-based error handling with `?` for propagation and `catch` for recovery. `compute_normals` is `nogc`, meaning no heap allocation, no GC containers, and references checked at compile time. In `main`, `&` at the call site marks the boundary where data is borrowed into `nogc` territory.
 
-GC code calls `nogc` freely; the reverse is a compile error.
+Managed code calls `nogc` freely; the reverse is a compile error.
 
-Beyond the memory model: inferred types, pattern matching, Result-based error handling with `fail` for propagation and `or` for fallback composition, direct C header imports through `needs`, and compilation to native code via LLVM.
+Beyond the memory model: inferred types, pattern matching, compilation to native code via LLVM.
 
 ## Memory model
 
-The language provides three levels of control, each narrowing what the runtime provides.
+The language provides two levels of control, each narrowing what the runtime provides.
 
-**Default mode.** A tracing garbage collector manages the heap, types are inferred, and standard collections are GC-backed. Type annotations are optional. `fail` propagates errors, either through a closure for remapping or directly for a fixed error, and `or` provides fallback between results. This is the intended level for most code.
+**Default mode.** Reference counting manages the heap, with an optional cycle collector (`--runtime rc+cycles`). Types are inferred and standard collections are managed. Type annotations are optional. `?` propagates errors and `catch` handles them. This is the intended level for most code.
 
 <br>
 
-**`nogc` functions.** A function-level opt-out from GC allocation. Inside a `nogc` function, GC-backed allocation is rejected at compile time, GC-managed containers cannot be created, references are checked for escape and aliasing violations, and calls into GC code are rejected.
+**`nogc` functions.** A function-level opt-out from managed allocation. Inside a `nogc` function, managed allocation is rejected at compile time, managed containers cannot be created, references are checked for escape and aliasing violations, and calls into managed code are rejected.
 
-The compiler proves that the function satisfies these constraints or rejects it. No warnings, no user-written lifetime annotations. `unsafe {}` permits operations the checker cannot validate statically but does not re-enable GC allocation. FFI is handled through `needs`, which imports C headers directly.
+The compiler proves that the function satisfies these constraints or rejects it. No warnings, no user-written lifetime annotations. `unsafe {}` is reserved; today it permits only `.unwrap_unchecked()`, and it does not re-enable managed allocation.
 
 ```rust
 needs "GL/glext.h"
@@ -112,7 +112,7 @@ source → parser → semantic analysis → AIR (Aelys IR) → LLVM IR → nativ
 
 Parser and semantic analysis are partially implemented. The `nogc` checker rules are under active design. Codegen targets LLVM.
 
-Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the GC strategy, panic behavior in `#![no_std]`, iterator design, the GC / `nogc` boundary rules, and static guarantees in freestanding mode.
+Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the collection strategy, iterator design, the managed / `nogc` boundary rules, and whether a freestanding mode is in scope at all.
 
 ## Contributing
 

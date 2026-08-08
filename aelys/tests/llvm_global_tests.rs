@@ -70,7 +70,9 @@ fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
     )
     .expect("sema failed");
     let mut opt = aelys_opt::Optimizer::new(OptimizationLevel::Standard);
-    let typed = opt.optimize(inference.program);
+    let checked =
+        aelys_air::bir::check(inference.program).unwrap_or_else(|_| panic!("fixture is well-formed"));
+    let typed = opt.optimize(checked);
     lower(&typed)
 }
 

@@ -1,7 +1,7 @@
 // removes unused let bindings (unless they have side effects)
 
 use super::super::OptimizationStats;
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use std::collections::HashSet;
 
 pub fn eliminate_unused_in_block(
@@ -24,7 +24,10 @@ pub fn eliminate_unused_in_block(
             if *is_pub {
                 return true;
             } // keep pub exports
-            if !used_vars.contains(name) && !has_side_effects(initializer) {
+            if !used_vars.contains(name)
+                && !has_side_effects(initializer)
+                && !has_observable_drop(&initializer.ty)
+            {
                 stats.dead_code_eliminated += 1;
                 return false;
             }
@@ -75,6 +78,11 @@ fn eliminate_unused_in_function(
     eliminate_unused_in_block(&mut func.body, &local_used, stats);
 }
 
+// reports. leaf types are enough here because a transitive carrier is already rejected upstream.
+fn has_observable_drop(ty: &InferType) -> bool {
+    aelys_air::bir::category::is_affine(ty) || matches!(ty, InferType::Vec(_) | InferType::Rc(_))
+}
+
 fn has_side_effects(expr: &TypedExpr) -> bool {
     match &expr.kind {
         TypedExprKind::Call { .. } | TypedExprKind::Assign { .. } => true,
@@ -114,6 +122,9 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Slice { object, range } => {
             has_side_effects(object) || has_side_effects(range)
         }
+        TypedExprKind::Reference { operand, .. } => has_side_effects(operand),
+        TypedExprKind::Deref(operand) => has_side_effects(operand),
+        TypedExprKind::DerefAssign { .. } => true, // write through a reference has side effects
         TypedExprKind::FmtString(parts) => parts.iter().any(|p| {
             if let aelys_sema::TypedFmtStringPart::Expr(e) = p {
                 has_side_effects(e)
@@ -137,6 +148,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Match { scrutinee, arms } => {
             has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
         }
+        TypedExprKind::ResultAssert { .. } => true,
         TypedExprKind::EnumVariant { args, .. } => {
             args.iter().any(|a| has_side_effects(a))
         }
@@ -148,3 +160,4 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Null => false,
     }
 }
+

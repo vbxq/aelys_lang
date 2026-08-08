@@ -26,7 +26,8 @@ fn lower_optimized(code: &str) -> AirProgram {
         .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
     let mut opt = aelys_opt::Optimizer::new(aelys_opt::OptimizationLevel::Standard);
-    let optimized = opt.optimize(typed);
+    let checked = aelys_air::bir::check(typed).unwrap_or_else(|_| panic!("fixture is well-formed"));
+    let optimized = opt.optimize(checked);
     lower(&optimized)
 }
 
@@ -477,3 +478,32 @@ fn sum(n: i32) -> i64 {
         );
     }
 }
+
+#[test]
+fn inliner_does_not_duplicate_effectful_argument() {
+    let air = lower_optimized(
+        r#"
+fn side() -> i64 {
+    let x: i64 = 2
+    return x
+}
+fn twice(v: i64) -> i64 {
+    return v + v
+}
+fn main() -> i64 {
+    return twice(side())
+}
+"#,
+    );
+    let printed = print_program(&air);
+    let side_calls = printed
+        .lines()
+        .filter(|line| line.contains("call side("))
+        .count();
+    assert_eq!(
+        side_calls, 1,
+        "effectful argument side() must be evaluated exactly once after optimization, got {}:\n{}",
+        side_calls, printed
+    );
+}
+

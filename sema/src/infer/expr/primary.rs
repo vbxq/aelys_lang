@@ -46,7 +46,7 @@ impl TypeInference {
                 .entry(name.clone())
                 .or_insert_with(|| self.type_gen.fresh())
                 .clone(),
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, nogc } => {
                 let new_params = params
                     .iter()
                     .map(|p| self.instantiate_enum_type_param(p, type_param_names, mapping))
@@ -56,6 +56,7 @@ impl TypeInference {
                 InferType::Function {
                     params: new_params,
                     ret: new_ret,
+                    nogc: *nogc,
                 }
             }
             InferType::Array(inner, len) => InferType::Array(
@@ -67,6 +68,18 @@ impl TypeInference {
                 type_param_names,
                 mapping,
             ))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.instantiate_enum_type_param(
+                    referent,
+                    type_param_names,
+                    mapping,
+                )),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.instantiate_enum_type_param(elem, type_param_names, mapping)),
+                mutable: *mutable,
+            },
             InferType::Tuple(elems) => InferType::Tuple(
                 elems
                     .iter()
@@ -494,6 +507,19 @@ impl TypeInference {
             ));
         }
 
+// the copy-on-write path memcpys elements flat, so an element that owns a vec buffer
+        if self.type_table.contains_vec_by_value(&typed_elem.ty) {
+            self.errors.push(TypeError::vec_out_of_surface(
+                format!(
+                    "element pushed to a Vec has type `{}`, which holds a `Vec<T>` by value; \
+                     a Vec inside a Vec/array is not supported yet (the buffer would be shared \
+                     without a retain, the transitive Vec retain/release is not implemented)",
+                    typed_elem.ty
+                ),
+                args[1].span,
+            ));
+        }
+
         (
             TypedExprKind::EnumVariant {
                 enum_name: "Vec".to_string(),
@@ -505,3 +531,4 @@ impl TypeInference {
         )
     }
 }
+

@@ -1,6 +1,7 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
+use crate::place_spine::{denotes_a_place, spine_is_shared, target_ptr_is_shared};
 use crate::types::InferType;
 use aelys_syntax::Span;
 use std::collections::HashSet;
@@ -13,9 +14,76 @@ impl TypeInference {
         stmts: &[TypedStmt],
         declared_type_params: &HashSet<String>,
     ) {
+        self.module_globals = stmts
+            .iter()
+            .filter_map(|s| match &s.kind {
+                TypedStmtKind::Let { name, .. } => Some(name.clone()),
+                _ => None,
+            })
+            .collect();
         let generic_scope = HashSet::new();
         for stmt in stmts {
             self.validate_stmt(stmt, &generic_scope, declared_type_params);
+        }
+    }
+
+// whole body. over-fencing a global borrow is worse than under-fencing a shadow.
+    fn collect_bound_names(stmts: &[TypedStmt], out: &mut HashSet<String>) {
+        for stmt in stmts {
+            match &stmt.kind {
+                TypedStmtKind::Let { name, .. } => {
+                    out.insert(name.clone());
+                }
+                TypedStmtKind::Block(inner) => Self::collect_bound_names(inner, out),
+                TypedStmtKind::If {
+                    then_branch,
+                    else_branch,
+                    ..
+                } => {
+                    Self::collect_bound_names(std::slice::from_ref(then_branch), out);
+                    if let Some(e) = else_branch {
+                        Self::collect_bound_names(std::slice::from_ref(e), out);
+                    }
+                }
+                TypedStmtKind::While { body, .. } => {
+                    Self::collect_bound_names(std::slice::from_ref(body), out)
+                }
+                TypedStmtKind::For { iterator, body, .. } => {
+                    out.insert(iterator.clone());
+                    Self::collect_bound_names(std::slice::from_ref(body), out);
+                }
+                TypedStmtKind::ForEach { iterator, body, .. } => {
+                    out.insert(iterator.clone());
+                    Self::collect_bound_names(std::slice::from_ref(body), out);
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn names_a_global(&self, e: &TypedExpr) -> Option<String> {
+        let mut cur = e;
+        while let TypedExprKind::Grouping(inner) = &cur.kind {
+            cur = inner;
+        }
+        match &cur.kind {
+            TypedExprKind::Identifier(name)
+                if self.module_globals.contains(name) && !self.shadowed_globals.contains(name) =>
+            {
+                Some(name.clone())
+            }
+            _ => None,
+        }
+    }
+
+    fn check_write_target(&mut self, target: &TypedExpr, what: &str, span: Span) {
+        if !denotes_a_place(target) {
+            self.errors.push(TypeError::no_place(
+                format!("the target of {what}"),
+                span,
+            ));
+        } else if spine_is_shared(target) {
+            self.errors.push(TypeError::shared_mut(what.to_string(), span));
         }
     }
 
@@ -80,7 +148,10 @@ impl TypeInference {
                 self.validate_expr(iterable, generic_scope, declared_type_params);
                 self.validate_type(elem_type, stmt.span, generic_scope, declared_type_params);
 
-                if !Self::is_iterable_type(&iterable.ty)
+                if matches!(iterable.ty, InferType::Vec(_)) {
+                    self.errors
+                        .push(TypeError::vec_foreach_unsupported(iterable.span));
+                } else if !Self::is_iterable_type(&iterable.ty)
                     && !self.is_active_generic_placeholder_type(
                         &iterable.ty,
                         generic_scope,
@@ -89,7 +160,7 @@ impl TypeInference {
                 {
                     self.errors.push(TypeError::member_access(
                         format!(
-                            "for-each requires an iterable (array, vec, or string), got {}",
+                            "for-each requires an iterable (array or string), got {}",
                             iterable.ty
                         ),
                         iterable.span,
@@ -100,6 +171,13 @@ impl TypeInference {
             }
             TypedStmtKind::Return(Some(expr)) => {
                 self.validate_expr(expr, generic_scope, declared_type_params);
+// a reference returned out of a lambda body escapes a
+                if self.lambda_depth > 0 && matches!(expr.ty, InferType::Ref { .. }) {
+                    self.errors.push(TypeError::closure_ref_unchecked(
+                        "a reference is returned",
+                        stmt.span,
+                    ));
+                }
             }
             TypedStmtKind::Function(func) => {
                 self.validate_function(func, generic_scope, declared_type_params);
@@ -144,9 +222,15 @@ impl TypeInference {
         for (_, capture_ty) in &func.captures {
             self.validate_type(capture_ty, func.span, &generic_scope, declared_type_params);
         }
+        let saved_shadow = std::mem::take(&mut self.shadowed_globals);
+// counting them would make e0424 unreachable
+        let mut bound: HashSet<String> = func.params.iter().map(|p| p.name.clone()).collect();
+        Self::collect_bound_names(&func.body, &mut bound);
+        self.shadowed_globals = bound;
         for stmt in &func.body {
             self.validate_stmt(stmt, &generic_scope, declared_type_params);
         }
+        self.shadowed_globals = saved_shadow;
         self.validate_return_escapes_in_stmts(
             &func.body,
             &func.return_type,
@@ -172,10 +256,13 @@ impl TypeInference {
                 self.validate_expr(operand, generic_scope, declared_type_params);
             }
             TypedExprKind::Call { callee, args } => {
-                self.validate_expr(callee, generic_scope, declared_type_params);
+                if !matches!(callee.kind, TypedExprKind::Identifier(_)) {
+                    self.validate_expr(callee, generic_scope, declared_type_params);
+                }
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
+                self.check_nogc_bound_call(callee, args);
                 match &callee.ty {
                     InferType::Function { params, .. } => {
                         if params.len() != args.len() {
@@ -257,14 +344,21 @@ impl TypeInference {
                         declared_type_params,
                     )
                 });
+                let saved_shadow = std::mem::take(&mut self.shadowed_globals);
+                let mut bound: HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
+                Self::collect_bound_names(body, &mut bound);
+                self.shadowed_globals = bound;
+                self.lambda_depth += 1;
+                for stmt in body {
+                    self.validate_stmt(stmt, generic_scope, declared_type_params);
+                }
+                self.lambda_depth -= 1;
+                self.shadowed_globals = saved_shadow;
                 if has_generic_placeholder {
                     self.errors.push(TypeError::member_access(
                         "lambda cannot use active generic type parameters".to_string(),
                         expr.span,
                     ));
-                }
-                for stmt in body {
-                    self.validate_stmt(stmt, generic_scope, declared_type_params);
                 }
             }
             TypedExprKind::Member { object, member } => {
@@ -371,6 +465,7 @@ impl TypeInference {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(index, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
+                self.check_write_target(object, "an indexed assignment", expr.span);
 
                 if !Self::is_index_assignable_type(&object.ty)
                     && !self.is_active_generic_placeholder_type(
@@ -392,6 +487,7 @@ impl TypeInference {
             } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
+                self.check_write_target(object, "a field assignment", expr.span);
             }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(start) = start {
@@ -404,7 +500,75 @@ impl TypeInference {
             TypedExprKind::Slice { object, range } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(range, generic_scope, declared_type_params);
-                // TODO: slice error/validation, they're reported eargly in inference (array.rs) sincec slices are just not supported right now.
+                if !denotes_a_place(object) {
+                    self.errors
+                        .push(TypeError::no_place("the base of a slice", expr.span));
+                }
+                if matches!(object.ty, InferType::Vec(_)) {
+                    self.errors.push(TypeError::vec_slice_unsupported(expr.span));
+                } else if !Self::is_indexable_type(&object.ty)
+                    && !self.is_active_generic_placeholder_type(
+                        &object.ty,
+                        generic_scope,
+                        declared_type_params,
+                    )
+                {
+                    self.errors.push(TypeError::member_access(
+                        format!("slice operation on non-sliceable type {}", object.ty),
+                        expr.span,
+                    ));
+                }
+            }
+            TypedExprKind::Reference { mutable, operand } => {
+                self.validate_expr(operand, generic_scope, declared_type_params);
+                if !denotes_a_place(operand) {
+                    self.errors
+                        .push(TypeError::no_place("the operand of `&`", expr.span));
+                }
+// `&mut *<shared &>` reborrows a shared borrow mutably
+                if *mutable && spine_is_shared(operand) {
+                    self.errors.push(TypeError::shared_mut(
+                        "a `&mut` reborrow of a shared reference",
+                        expr.span,
+                    ));
+                }
+// a global has no borrow-checked local to attach a loan to
+                if let Some(name) = self.names_a_global(operand) {
+                    self.errors
+                        .push(TypeError::global_borrow(name, *mutable, expr.span));
+                }
+                if self.lambda_depth > 0 {
+                    self.errors
+                        .push(TypeError::closure_ref_unchecked("a reference is formed", expr.span));
+                }
+// a `&` into a call/enum-variant payload field forms no loan and points at a temporary
+                if let TypedExprKind::Member { object, .. } = &operand.kind {
+                    if matches!(
+                        object.kind,
+                        TypedExprKind::Call { .. } | TypedExprKind::EnumVariant { .. }
+                    ) {
+                        self.errors
+                            .push(TypeError::payload_field_ref_unsupported(expr.span));
+                    }
+                }
+                if *mutable && Self::ref_operand_has_index_projection(&operand.kind) {
+                    self.errors
+                        .push(TypeError::mut_index_ref_unsupported(expr.span));
+                }
+            }
+            TypedExprKind::Deref(operand) => {
+                self.validate_expr(operand, generic_scope, declared_type_params);
+            }
+            TypedExprKind::DerefAssign { target, value } => {
+                self.validate_expr(target, generic_scope, declared_type_params);
+                self.validate_expr(value, generic_scope, declared_type_params);
+// the target of a derefassign is the pointer itself, so the shared test is one
+                if target_ptr_is_shared(target) {
+                    self.errors.push(TypeError::shared_mut(
+                        "an assignment through `*p`",
+                        expr.span,
+                    ));
+                }
             }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
@@ -442,6 +606,9 @@ impl TypeInference {
             } => {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
+                }
+                if enum_name == "Vec" && variant == "push" && !args.is_empty() {
+                    self.check_write_target(&args[0], "a `Vec::push`", expr.span);
                 }
                 if args.is_empty() {
                 if let InferType::Enum(name, type_args) = &expr.ty {
@@ -492,8 +659,14 @@ impl TypeInference {
                     self.validate_expr(&arm.body, generic_scope, declared_type_params);
                 }
             }
-            TypedExprKind::Identifier(_)
-            | TypedExprKind::Int(_)
+// no member node reaches here, so e0304 cannot fire on the intercepted call
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.validate_expr(scrutinee, generic_scope, declared_type_params);
+            }
+            TypedExprKind::Identifier(name) => {
+                self.check_nogc_generic_value(name, expr);
+            }
+            TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
@@ -535,7 +708,7 @@ impl TypeInference {
                     None
                 }
             }
-            InferType::Function { params, ret } => params
+            InferType::Function { params, ret, .. } => params
                 .iter()
                 .find_map(|p| self.find_leaked_type_param(p, generic_scope, declared_type_params))
                 .or_else(|| self.find_leaked_type_param(ret, generic_scope, declared_type_params)),
@@ -568,11 +741,24 @@ impl TypeInference {
         }
     }
 
+// spine is fine, a reborrow is the pointer itself.
+    fn ref_operand_has_index_projection(kind: &TypedExprKind) -> bool {
+        match kind {
+            TypedExprKind::Index { .. } | TypedExprKind::Member { .. } => true,
+            TypedExprKind::Deref(inner) => Self::ref_operand_has_index_projection(&inner.kind),
+            TypedExprKind::Grouping(inner) => {
+                Self::ref_operand_has_index_projection(&inner.kind)
+            }
+            _ => false,
+        }
+    }
+
     fn is_indexable_type(ty: &InferType) -> bool {
         matches!(
             ty,
             InferType::Array(_, _)
                 | InferType::Vec(_)
+                | InferType::Slice { .. }
                 | InferType::String
                 | InferType::Dynamic
                 | InferType::Var(_)
@@ -582,7 +768,11 @@ impl TypeInference {
     fn is_index_assignable_type(ty: &InferType) -> bool {
         matches!(
             ty,
-            InferType::Array(_, _) | InferType::Vec(_) | InferType::Dynamic | InferType::Var(_)
+            InferType::Array(_, _)
+                | InferType::Vec(_)
+                | InferType::Slice { .. }
+                | InferType::Dynamic
+                | InferType::Var(_)
         )
     }
 
@@ -614,7 +804,7 @@ impl TypeInference {
                     && !self.type_table.has_struct(name)
                     && generic_scope.contains(name)
             }
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, .. } => {
                 params.iter().any(|p| {
                     self.contains_active_generic_placeholder_type(
                         p,
@@ -746,3 +936,4 @@ impl TypeInference {
         }
     }
 }
+

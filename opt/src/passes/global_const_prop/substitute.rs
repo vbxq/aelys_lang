@@ -95,6 +95,12 @@ impl GlobalConstantPropagator {
                 self.substitute_constants(object);
                 self.substitute_constants(range);
             }
+            TypedExprKind::Reference { operand, .. } => self.substitute_constants(operand),
+            TypedExprKind::Deref(operand) => self.substitute_constants(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.substitute_constants(target);
+                self.substitute_constants(value);
+            }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
@@ -135,6 +141,9 @@ impl GlobalConstantPropagator {
                         self.constants.insert(name, val);
                     }
                 }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.substitute_constants(scrutinee);
             }
             TypedExprKind::EnumVariant { args, .. } => {
                 for arg in args {

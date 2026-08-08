@@ -1,6 +1,7 @@
 // AIR, the Aelys Intermediate Representation
 
 pub mod analysis;
+pub mod bir;
 pub mod layout;
 pub mod lower;
 pub mod mono;
@@ -8,6 +9,8 @@ pub mod passes;
 pub mod print;
 pub mod rc_paths;
 pub mod rc_types;
+
+pub use bir::{check, Checked};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -294,7 +297,7 @@ pub enum Rvalue {
         base: Operand,
         field: String,
     },
-    AddressOf(LocalId),
+    AddressOf(Place),
     Deref(Operand),
     Cast {
         operand: Operand,
@@ -328,6 +331,10 @@ pub enum Rvalue {
     ClosureCreate {
         fn_name: String,
         env: Operand,
+    },
+    SliceFromParts {
+        ptr: Operand,
+        len: Operand,
     },
 }
 
@@ -375,6 +382,8 @@ pub enum AirConst {
 #[derive(Clone)]
 pub enum Place {
     Local(LocalId),
+/// module-level storage; it has no localid, so every root walk must answer `none` for it
+    Global(String),
     Field(LocalId, String),
     Deref(LocalId),
     Index(LocalId, Operand),
@@ -440,3 +449,4 @@ pub enum UnOp {
     Not,
     BitNot,
 }
+

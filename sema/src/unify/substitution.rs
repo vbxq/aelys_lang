@@ -38,13 +38,22 @@ impl Substitution {
                     ty.clone()
                 }
             }
-            InferType::Function { params, ret } => InferType::Function {
+            InferType::Function { params, ret, nogc } => InferType::Function {
                 params: params.iter().map(|p| self.apply(p)).collect(),
                 ret: Box::new(self.apply(ret)),
+                nogc: *nogc,
             },
             InferType::Array(inner, len) => InferType::Array(Box::new(self.apply(inner)), *len),
             InferType::Vec(inner) => InferType::Vec(Box::new(self.apply(inner))),
             InferType::Rc(inner) => InferType::Rc(Box::new(self.apply(inner))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.apply(referent)),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.apply(elem)),
+                mutable: *mutable,
+            },
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.iter().map(|e| self.apply(e)).collect())
             }
@@ -177,6 +186,7 @@ mod tests {
         let fn_ty = InferType::Function {
             params: vec![InferType::Var(vid(0)), InferType::Var(vid(1))],
             ret: Box::new(InferType::Var(vid(0))),
+            nogc: false,
         };
         let result = subst.apply(&fn_ty);
         assert_eq!(
@@ -184,6 +194,7 @@ mod tests {
             InferType::Function {
                 params: vec![InferType::I64, InferType::I64],
                 ret: Box::new(InferType::I64),
+                nogc: false,
             }
         );
     }

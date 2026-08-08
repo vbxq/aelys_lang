@@ -40,13 +40,22 @@ impl Parser {
             return self.enum_declaration(is_pub);
         }
 
+        let is_nogc = self.match_token(&TokenKind::Nogc);
+
         if self.check(&TokenKind::Fn) {
-            return self.function_declaration(decorators, is_pub);
+            return self.function_declaration(decorators, is_pub, is_nogc);
         }
 
         if !decorators.is_empty() {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
                 expected: "function after decorator".to_string(),
+                found: self.peek().kind.to_string(),
+            }));
+        }
+
+        if is_nogc {
+            return Err(self.error(CompileErrorKind::UnexpectedToken {
+                expected: "fn after `nogc`".to_string(),
                 found: self.peek().kind.to_string(),
             }));
         }
@@ -65,3 +74,4 @@ impl Parser {
         self.statement()
     }
 }
+

@@ -26,6 +26,14 @@ impl Default for TypeInference {
             type_table: TypeTable::new(),
             type_params_in_scope: Vec::new(),
             literal_init_vars: HashMap::new(),
+            try_counter: 0,
+            unsafe_depth: 0,
+            catch_match_pending: false,
+            nogc_fn_params: HashSet::new(),
+            nogc_generic_sigs: HashMap::new(),
+            module_globals: HashSet::new(),
+            shadowed_globals: HashSet::new(),
+            lambda_depth: 0,
         }
     }
 }
@@ -36,6 +44,38 @@ impl TypeInference {
     }
 
     pub fn type_from_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
+// default position: a `nogc fn(...)` type is out of position here and gets rejected
+        self.lower_type(ann, false)
+    }
+
+    pub(crate) fn type_from_param_annotation(&mut self, ann: &TypeAnnotation) -> InferType {
+        self.lower_type(ann, true)
+    }
+
+// recursion passes false, so a `nogc fn` anywhere but a bare parameter type is rejected
+    fn lower_type(&mut self, ann: &TypeAnnotation, nogc_ok: bool) -> InferType {
+        if let Some(kind) = ann.reference {
+            let mutable = matches!(kind, aelys_syntax::RefKind::Mut);
+            if ann.is_slice {
+                let elem = ann
+                    .type_param
+                    .as_ref()
+                    .map(|p| self.lower_type(p, false))
+                    .unwrap_or(InferType::Dynamic);
+                return InferType::Slice {
+                    elem: Box::new(elem),
+                    mutable,
+                };
+            }
+            let mut base = ann.clone();
+            base.reference = None;
+            let referent = self.lower_type(&base, false);
+            return InferType::Ref {
+                referent: Box::new(referent),
+                mutable,
+            };
+        }
+
         self.check_type_annotation(ann);
 
         // Handle function types specially: use enum-aware type_from_annotation
@@ -43,19 +83,23 @@ impl TypeInference {
         // which doesn't know about enums and would produce Struct("Option")
         // instead of Enum("Option", [...]) for types like fn(i64) -> Option<i64>.
         if ann.is_function_type() {
+            if ann.nogc && !nogc_ok {
+                self.errors.push(TypeError::nogc_out_of_position(ann.span));
+            }
             let params = ann
                 .fn_params
                 .as_ref()
-                .map(|ps| ps.iter().map(|p| self.type_from_annotation(p)).collect())
+                .map(|ps| ps.iter().map(|p| self.lower_type(p, false)).collect())
                 .unwrap_or_default();
             let ret = ann
                 .fn_ret
                 .as_ref()
-                .map(|r| self.type_from_annotation(r))
+                .map(|r| self.lower_type(r, false))
                 .unwrap_or(InferType::Null);
             return InferType::Function {
                 params,
                 ret: Box::new(ret),
+                nogc: ann.nogc,
             };
         }
 
@@ -90,6 +134,25 @@ impl TypeInference {
                 .map(|p| self.type_from_annotation(p))
                 .unwrap_or(InferType::Dynamic);
             return InferType::Rc(Box::new(inner));
+        }
+
+        if ann.name == "Result"
+            && self.type_table.has_enum("Result")
+            && ann.type_params.len() == 2
+        {
+            let t = self.type_from_annotation(&ann.type_params[0]);
+            let e = if ann.type_params[1].name == "Never"
+                && !ann.type_params[1].is_function_type()
+            {
+                InferType::Never
+            } else {
+                self.type_from_annotation(&ann.type_params[1])
+            };
+            return InferType::Enum("Result".to_string(), vec![t, e]);
+        }
+// map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
+        if ann.name == "Never" {
+            return InferType::Never;
         }
 
         let ty = InferType::from_annotation(ann);
@@ -176,6 +239,14 @@ impl TypeInference {
             return;
         }
 
+        if ann.name == "Never" {
+            self.errors.push(TypeError::member_access(
+                "[eh-stage3] `Never` may only appear as the error type of a `Result`".to_string(),
+                ann.span,
+            ));
+            return;
+        }
+
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             if self.type_table.has_struct(&ann.name)
                 || self.type_table.has_enum(&ann.name)
@@ -251,17 +322,20 @@ impl TypeInference {
                 "print" | "println" => InferType::Function {
                     params: vec![InferType::Dynamic],
                     ret: Box::new(InferType::Null),
+                    nogc: false,
                 },
                 // the explicit collect builtin, a no-op unless the cycles runtime is linked
                 "__aelys_collect" => InferType::Function {
                     params: vec![],
                     ret: Box::new(InferType::Null),
+                    nogc: false,
                 },
                 _ => InferType::Dynamic,
             };
             inf.env.define_function_owned(global.clone(), ty);
         }
 
+        inf.reject_reserved_type_names(&stmts);
         inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
@@ -284,6 +358,7 @@ impl TypeInference {
         let declared_type_params = collect_declared_type_params(&stmts);
 
         inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
+        inf.check_vec_producing_forms(&resolved_stmts);
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 
@@ -373,3 +448,4 @@ fn collect_type_params_recursive(stmts: &[Stmt], params: &mut HashSet<String>) {
         }
     }
 }
+

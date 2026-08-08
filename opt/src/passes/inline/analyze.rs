@@ -335,6 +335,7 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             }
         }
         TypedExprKind::Cast { expr, .. } => collect_calls_in_expr(expr, calls),
+        TypedExprKind::ResultAssert { scrutinee, .. } => collect_calls_in_expr(scrutinee, calls),
         _ => {}
     }
 }
@@ -500,6 +501,7 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             }
         }
         TypedExprKind::Cast { expr, .. } => count_calls_in_expr(expr, counts),
+        TypedExprKind::ResultAssert { scrutinee, .. } => count_calls_in_expr(scrutinee, counts),
         _ => {}
     }
 }

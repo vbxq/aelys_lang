@@ -71,7 +71,7 @@ impl TypeTable {
             RcNominalScan::None
         }
     }
-    
+
     pub fn contains_rc_nominal(&self, ty: &InferType) -> bool {
         let mut visited = std::collections::HashSet::new();
         self.scan_rc_nominal(ty, &mut visited)
@@ -93,6 +93,8 @@ impl TypeTable {
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_vec_by_value(e, visited)),
             // behind an Rc the Vec is a pointer, not held by value
             InferType::Rc(_) => false,
+// a reference is a non-owning boundary, never owns its referent
+            InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Function { .. } => false,
             InferType::Struct(name) => {
                 let Some(def) = self.structs.get(name) else {
@@ -142,6 +144,8 @@ impl TypeTable {
             InferType::Array(inner, _) | InferType::Vec(inner) => {
                 self.scan_rc_nominal(inner, visited)
             }
+// a reference is a non-owning boundary, never owns its referent
+            InferType::Ref { .. } | InferType::Slice { .. } => false,
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_rc_nominal(e, visited)),
             InferType::Function { .. } => false,
             InferType::Struct(name) => {
@@ -188,3 +192,4 @@ pub enum RcNominalScan {
     None,
     HasRc,
 }
+

@@ -8,7 +8,10 @@ use substitute::operand_type_from;
 pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<String>> {
     let mut ctx = MonoContext::new(&program);
     ctx.collect_mono_requests(&program);
-    ctx.instantiate(&mut program);
+    let surface_errors = ctx.instantiate(&mut program);
+    if !surface_errors.is_empty() {
+        return Err(surface_errors);
+    }
     ctx.rewrite_call_sites(&mut program);
     program.functions.retain(|f| f.type_params.is_empty());
 
@@ -1063,9 +1066,10 @@ impl MonoContext {
         format!("__mono_{}_{}", name, type_str)
     }
 
-    fn instantiate(&mut self, program: &mut AirProgram) {
+    fn instantiate(&mut self, program: &mut AirProgram) -> Vec<String> {
         let mut new_functions = Vec::new();
         let mut mono_instances = Vec::new();
+        let mut errors = Vec::new();
 
         for request in &self.requests {
             let key = (
@@ -1075,6 +1079,19 @@ impl MonoContext {
 
             if self.instantiated.contains_key(&key) {
                 continue;
+            }
+
+            for ty in &request.type_args {
+                if let Some(detail) = crate::passes::vec_surface::type_args_reject(program, ty) {
+                    errors.push(format!(
+                        "{} `{}` is instantiated with a type argument for which {detail}; \
+                         a Vec inside a generic instantiation is not supported yet (the buffer \
+                         would be shared without a retain, the transitive Vec retain/release is \
+                         not implemented)",
+                        crate::passes::vec_surface::MARKER,
+                        request.function_name
+                    ));
+                }
             }
 
             let func_idx = self.generic_functions[&request.function_name];
@@ -1108,5 +1125,7 @@ impl MonoContext {
 
         program.functions.extend(new_functions);
         program.mono_instances.extend(mono_instances);
+        errors
     }
 }
+

@@ -57,6 +57,7 @@ fn test_functions() {
     let fn_type = InferType::Function {
         params: vec![InferType::I64],
         ret: Box::new(InferType::I64),
+        nogc: false,
     };
     let fn_type_rc = Rc::new(fn_type.clone());
     env.define_function("double".to_string(), fn_type_rc.clone());

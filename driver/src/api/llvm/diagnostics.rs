@@ -35,6 +35,153 @@ pub(super) fn backend_diagnostic_error(
     ))
 }
 
+const VEC_SURFACE_ANNOTATION: &str = "Vec used outside the guaranteed value-semantics surface";
+
+pub(super) fn mono_errors_to_error(
+    errors: Vec<String>,
+    span: SyntaxSpan,
+    source: Arc<Source>,
+) -> AelysError {
+    let marker = aelys_air::passes::vec_surface::MARKER;
+    let (surface, other): (Vec<String>, Vec<String>) =
+        errors.into_iter().partition(|e| e.starts_with(marker));
+
+    if surface.is_empty() {
+        return backend_diagnostic_error(
+            source.clone(),
+            span,
+            "monomorphization",
+            numbered(&other),
+            None,
+            None,
+        );
+    }
+
+    let mut diagnostics: Vec<Diagnostic> = surface
+        .iter()
+        .map(|message| {
+            Diagnostic::new(Severity::Error, message)
+                .with_code("E0412")
+                .with_primary_label(
+                    source.clone(),
+                    span,
+                    Some(VEC_SURFACE_ANNOTATION.to_string()),
+                )
+        })
+        .collect();
+    if !other.is_empty() {
+        diagnostics.push(
+            Diagnostic::new(
+                Severity::Error,
+                &format!("[monomorphization] {}", numbered(&other)),
+            )
+            .with_code("E0901")
+            .with_primary_label(source.clone(), span, Some("backend error".to_string())),
+        );
+    }
+    AelysError::Multiple(diagnostics)
+}
+
+pub(super) fn vec_surface_errors_to_error(
+    errors: Vec<aelys_air::passes::vec_surface::VecSurfaceError>,
+    air: &aelys_air::AirProgram,
+    source: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = errors
+        .iter()
+        .map(|err| {
+            let span = err
+                .span
+                .map(|s| air_span_to_syntax_span(s, source.as_ref()))
+                .unwrap_or_else(|| program_anchor_span(air, source.as_ref()));
+            Diagnostic::new(Severity::Error, &err.message)
+                .with_code("E0412")
+                .with_primary_label(
+                    source.clone(),
+                    span,
+                    Some(VEC_SURFACE_ANNOTATION.to_string()),
+                )
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
+fn numbered(errors: &[String]) -> String {
+    errors
+        .iter()
+        .enumerate()
+        .map(|(i, e)| format!("{}. {}", i + 1, e))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+// the emitted set is a faithful 1:1 of the borrow checker's error set.
+pub(super) fn bir_diagnostics_to_error(
+    diags: Vec<aelys_air::bir::BirDiagnostic>,
+    source: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = diags
+        .into_iter()
+        .map(|d| {
+            let clamp = d.code == "E0727";
+            let cut = |span| {
+                if clamp {
+                    first_line_only(source.as_ref(), span)
+                } else {
+                    span
+                }
+            };
+            let hint = d.hint.clone().unwrap_or_else(|| primary_hint(d.marker));
+            let mut diag = Diagnostic::new(Severity::Error, &d.primary.1)
+                .with_code(d.code)
+                .with_primary_label(source.clone(), cut(d.primary.0), Some(hint));
+            for (span, label) in &d.secondaries {
+                diag.add_secondary_label(source.clone(), cut(*span), Some(label.clone()));
+            }
+            if let Some(note) = &d.note {
+                diag.add_note(note.clone());
+            }
+            if let Some(help) = &d.help {
+                diag.add_help(help.clone());
+            }
+            diag
+        })
+        .collect();
+
+    if diagnostics.is_empty() {
+        backend_diagnostic_error(
+            source.clone(),
+            fallback_source_span(source.as_ref()),
+            "borrow-check",
+            "borrow check failed",
+            None,
+            None,
+        )
+    } else {
+        AelysError::Multiple(diagnostics)
+    }
+}
+
+fn first_line_only(source: &Source, span: SyntaxSpan) -> SyntaxSpan {
+    let bytes = source.content.as_bytes();
+    let end = span.end.min(bytes.len());
+    let start = span.start.min(end);
+    match bytes[start..end].iter().position(|b| *b == b'\n') {
+        Some(i) => SyntaxSpan::new(span.start, start + i, span.line, span.column),
+        None => span,
+    }
+}
+
+fn primary_hint(marker: &str) -> String {
+    match marker {
+        "[borrow]" => "borrow occurs here".to_string(),
+        "[move]" => "move occurs here".to_string(),
+        "[escape]" => "borrow escapes here".to_string(),
+        "[nogc]" => "managed memory reached here".to_string(),
+        _ => "here".to_string(),
+    }
+}
+
 pub(super) fn sema_errors_to_diagnostics(errors: Vec<TypeError>, source: Arc<Source>) -> AelysError {
     let mut sorted_errors = errors;
     sorted_errors.sort_by(|a, b| {
@@ -136,11 +283,134 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             format!("[rc-stage1] {}", detail),
             "Rc used outside the Stage 1 supported surface".to_string(),
         ),
+        TypeErrorKind::VecOutOfSurface { detail } => (
+            "E0412",
+            format!("[vec-surface] {}", detail),
+            "Vec used outside the guaranteed value-semantics surface".to_string(),
+        ),
+        TypeErrorKind::VecSliceUnsupported => (
+            "E0413",
+            error.to_string(),
+            "slicing a `Vec<T>` is not supported yet".to_string(),
+        ),
+        TypeErrorKind::VecForeachUnsupported => (
+            "E0414",
+            error.to_string(),
+            "iterating a `Vec<T>` with `for` is not supported yet".to_string(),
+        ),
+        TypeErrorKind::MutIndexRefUnsupported => (
+            "E0415",
+            error.to_string(),
+            "a mutable reference into an element is not supported yet".to_string(),
+        ),
+        TypeErrorKind::PayloadFieldRefUnsupported => (
+            "E0416",
+            error.to_string(),
+            "a reference into a call-result field is not supported yet".to_string(),
+        ),
+        TypeErrorKind::MutRefImmutableBinding { .. } => (
+            "E0417",
+            error.to_string(),
+            "mutable reference to an immutable binding".to_string(),
+        ),
+        TypeErrorKind::NestedFnShadowsOuter { .. } => (
+            "E0418",
+            error.to_string(),
+            "nested function shadows an outer function".to_string(),
+        ),
+        TypeErrorKind::ReservedTypeName { .. } => (
+            "E0419",
+            error.to_string(),
+            "reserved builtin type name".to_string(),
+        ),
+        TypeErrorKind::RcFieldAssignIndirect => (
+            "E0420",
+            error.to_string(),
+            "indirect right-hand side of an `Rc` field assignment".to_string(),
+        ),
+        TypeErrorKind::NoPlace { .. } => (
+            "E0421",
+            error.to_string(),
+            "this expression denotes no storage".to_string(),
+        ),
+        TypeErrorKind::SharedMut { .. } => (
+            "E0422",
+            error.to_string(),
+            "mutation through a shared reference".to_string(),
+        ),
+        TypeErrorKind::ClosureRefUnchecked { .. } => (
+            "E0423",
+            error.to_string(),
+            "unchecked reference inside a closure body".to_string(),
+        ),
+        TypeErrorKind::GlobalBorrow { .. } => (
+            "E0424",
+            error.to_string(),
+            "reference to module-level storage".to_string(),
+        ),
+        TypeErrorKind::MustUse { .. } => (
+            "E0411",
+            error.to_string(),
+            "unused `Result`".to_string(),
+        ),
+        TypeErrorKind::NogcOutOfPosition { .. } => (
+            "E0728",
+            error.to_string(),
+            "`nogc fn` type out of position".to_string(),
+        ),
+        TypeErrorKind::NogcMutParam { .. } => (
+            "E0728",
+            error.to_string(),
+            "`nogc fn` parameter declared `mut`".to_string(),
+        ),
+        TypeErrorKind::NogcParamShadowed { .. } => (
+            "E0728",
+            error.to_string(),
+            "shadows a `nogc fn` parameter".to_string(),
+        ),
+        TypeErrorKind::NogcCallbackMismatch { .. } => (
+            "E0729",
+            error.to_string(),
+            "not a `nogc fn`".to_string(),
+        ),
+        TypeErrorKind::NogcBoundViolation { .. } => (
+            "E0730",
+            error.to_string(),
+            "`nogc` bound not satisfied here".to_string(),
+        ),
+        TypeErrorKind::NogcBoundUnresolved { .. } => (
+            "E0730",
+            error.to_string(),
+            "`nogc` bound cannot be proven here".to_string(),
+        ),
+        TypeErrorKind::NogcBoundGenericStruct { .. } => (
+            "E0730",
+            error.to_string(),
+            "a generic struct cannot satisfy the `nogc` bound".to_string(),
+        ),
+        TypeErrorKind::NogcGenericAsValue { .. } => (
+            "E0731",
+            error.to_string(),
+            "`nogc` generic used as a value".to_string(),
+        ),
+    };
+
+    let clamp = matches!(code, "E0728" | "E0729" | "E0730" | "E0731");
+    let cut = |span| {
+        if clamp {
+            first_line_only(source.as_ref(), span)
+        } else {
+            span
+        }
     };
 
     let mut diag = Diagnostic::new(Severity::Error, &message)
         .with_code(code)
-        .with_primary_label(source.clone(), error.span, Some(annotation));
+        .with_primary_label(source.clone(), cut(error.span), Some(annotation));
+
+    for (span, label) in &error.secondary_spans {
+        diag.add_secondary_label(source.clone(), cut(*span), Some(label.clone()));
+    }
 
     if let TypeErrorKind::AssignToImmutable {
         name, binding_span, ..
@@ -334,3 +604,4 @@ fn native_entry_help(message: &str) -> Option<String> {
     }
     None
 }
+

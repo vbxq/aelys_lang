@@ -95,7 +95,11 @@ impl<'a> FunctionCodegen<'a> {
                     if let Place::Index(local, _) = place {
                         alloca_locals.insert(*local);
                     }
-                    if let Rvalue::AddressOf(local) = rvalue {
+                    // itself a pointer, so it needs a real slot; a deref root is read as a value
+                    if let Rvalue::AddressOf(
+                        Place::Local(local) | Place::Field(local, _) | Place::Index(local, _),
+                    ) = rvalue
+                    {
                         alloca_locals.insert(*local);
                     }
                     if let Rvalue::Index { base, .. } = rvalue {

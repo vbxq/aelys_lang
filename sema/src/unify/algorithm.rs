@@ -65,10 +65,12 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
             InferType::Function {
                 params: p1,
                 ret: r1,
+                ..
             },
             InferType::Function {
                 params: p2,
                 ret: r2,
+                ..
             },
         ) => {
             if p1.len() != p2.len() {
@@ -97,6 +99,16 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Rc(inner1), InferType::Rc(inner2)) => unify(inner1, inner2, subst),
 
+        (
+            InferType::Ref { referent: r1, .. },
+            InferType::Ref { referent: r2, .. },
+        ) => unify(r1, r2, subst),
+
+        (
+            InferType::Slice { elem: e1, .. },
+            InferType::Slice { elem: e2, .. },
+        ) => unify(e1, e2, subst),
+
         (InferType::Range, InferType::Range) => Ok(()),
 
         (InferType::Tuple(elems1), InferType::Tuple(elems2)) => {
@@ -114,3 +126,4 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         _ => Err(UnifyError::Mismatch(t1.clone(), t2.clone())),
     }
 }
+

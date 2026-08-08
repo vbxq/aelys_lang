@@ -88,6 +88,7 @@ impl<'a> FunctionCodegen<'a> {
                         .build_int_unsigned_div(left, right, "iudiv")
                         .map(Into::into)
                 } else {
+                    self.emit_div_overflow_check(left, right)?;
                     self.builder
                         .build_int_signed_div(left, right, "isdiv")
                         .map(Into::into)
@@ -100,6 +101,7 @@ impl<'a> FunctionCodegen<'a> {
                         .build_int_unsigned_rem(left, right, "iurem")
                         .map(Into::into)
                 } else {
+                    self.emit_div_overflow_check(left, right)?;
                     self.builder
                         .build_int_signed_rem(left, right, "isrem")
                         .map(Into::into)

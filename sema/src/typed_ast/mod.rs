@@ -97,6 +97,8 @@ pub struct TypedFunction {
     pub body: Vec<TypedStmt>,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
+/// from the `nogc` keyword; carried to the bir where the effect check consumes it
+    pub declared_nogc: bool,
     pub span: Span,
     /// Captured variables from enclosing scopes (for closures)
     pub captures: Vec<(String, InferType)>,
@@ -235,6 +237,16 @@ pub enum TypedExprKind {
         range: Box<TypedExpr>,
     },
 
+    Reference {
+        mutable: bool,
+        operand: Box<TypedExpr>,
+    },
+    Deref(Box<TypedExpr>),
+    DerefAssign {
+        target: Box<TypedExpr>,
+        value: Box<TypedExpr>,
+    },
+
     StructLiteral {
         name: String,
         fields: Vec<(String, Box<TypedExpr>)>,
@@ -257,11 +269,26 @@ pub enum TypedExprKind {
         arms: Vec<TypedMatchArm>,
     },
 
+// assert family node for `.unwrap()`/`.expect(lit)`, err arm seals a divergence
+    ResultAssert {
+        scrutinee: Box<TypedExpr>,
+        ok_tag: u32,
+        payload_ty: InferType,
+        on_err: ResultAssertOnErr,
+    },
+
     /// Block expression: `{ stmts...; tail_expr }`
     Block {
         stmts: Vec<TypedStmt>,
         tail: Box<TypedExpr>,
     },
+}
+
+#[derive(Debug, Clone)]
+pub enum ResultAssertOnErr {
+    Panic(String),
+// statically impossible err, lowered to airterminator::unreachable
+    Unreachable,
 }
 
 #[derive(Debug, Clone)]
@@ -298,3 +325,4 @@ impl TypedStmt {
         Self { kind, span }
     }
 }
+

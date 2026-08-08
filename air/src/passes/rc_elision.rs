@@ -174,7 +174,9 @@ fn collect_write_counts(function: &AirFunction) -> HashMap<LocalId, u32> {
             match &stmt.kind {
                 AirStmtKind::Assign { place, .. } => match place {
                     Place::Local(l) | Place::Field(l, _) | Place::Index(l, _) => bump(*l, &mut counts),
-                    Place::Deref(_) => {}
+// neither writes a local of this function; the pointee/global is protected
+// by the address-taken escape test instead
+                    Place::Deref(_) | Place::Global(_) => {}
                 },
                 AirStmtKind::GcAlloc { local, .. }
                 | AirStmtKind::Alloc { local, .. }
@@ -185,7 +187,7 @@ fn collect_write_counts(function: &AirFunction) -> HashMap<LocalId, u32> {
         if let crate::AirTerminator::Invoke { ret, .. } = &block.terminator {
             match ret {
                 Place::Local(l) | Place::Field(l, _) | Place::Index(l, _) => bump(*l, &mut counts),
-                Place::Deref(_) => {}
+                Place::Deref(_) | Place::Global(_) => {}
             }
         }
     }
@@ -200,3 +202,4 @@ fn local_is_mut(function: &AirFunction, local: LocalId) -> bool {
         .map(|l| l.is_mut)
         .unwrap_or(false)
 }
+

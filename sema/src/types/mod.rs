@@ -1,4 +1,5 @@
 mod infer_type;
+mod nogc_value;
 mod resolved_type;
 mod type_table;
 mod type_var;

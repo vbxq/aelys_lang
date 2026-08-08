@@ -3,13 +3,14 @@ use crate::*;
 use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl<'a> LoweringContext<'a> {
-    pub(super) fn lower_body(&mut self, stmts: &[TypedStmt]) {
+    pub(super) fn lower_body(&mut self, stmts: &[TypedStmt], scope_span: aelys_syntax::Span) {
         // Save the current scope depth so inner `let` bindings don't leak out.
         let scope_depth = self.locals_by_name.len();
         for stmt in stmts {
             self.lower_stmt(stmt);
         }
         self.emit_scope_rc_releases(scope_depth);
+        self.emit_scope_affine_drops(scope_depth, scope_span);
         self.locals_by_name.truncate(scope_depth);
     }
 
@@ -38,11 +39,7 @@ impl<'a> LoweringContext<'a> {
         let vec_ty = self
             .local_air_type(local)
             .unwrap_or(AirType::Vec(Box::new(AirType::I64)));
-        let addr = self.emit_rvalue_to_temp(
-            AirType::Ptr(Box::new(vec_ty)),
-            Rvalue::AddressOf(local),
-            sp,
-        );
+        let addr = self.addr_of_own_temp(local, &vec_ty, sp);
         self.emit(
             AirStmtKind::CallVoid {
                 func: Callee::Named(fn_name.to_string()),
@@ -58,6 +55,57 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn emit_cow_release(&mut self, local: LocalId, sp: Option<Span>) {
         self.emit_cow_buffer_call("__aelys_vec_release", local, sp);
+    }
+
+// release the buffer a pointer already points at. the pointer is the aelysvec address, so this
+// skips the addressof that emit_cow_release does. used by `*p = <vec>` to drop the pointee's
+    pub(super) fn emit_cow_release_through_ptr(&mut self, ptr: Operand, sp: Option<Span>) {
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_release".to_string()),
+                args: vec![ptr],
+            },
+            sp,
+        );
+    }
+
+// a slot whose type is vec<t> owns exactly one counted share of its buffer. a value
+// only ever sees a bare identifier. fail closed: an unrecognised shape retains (a leak), it
+// never skips (a use-after-free).
+    pub(super) fn emit_vec_slot_acquire(
+        &mut self,
+        slot_is_vec: bool,
+        rhs: Option<&TypedExprKind>,
+        val: &Operand,
+        sp: Option<Span>,
+    ) {
+        if !slot_is_vec {
+            return;
+        }
+        if rhs.is_some_and(Self::vec_rhs_is_fresh) {
+            return;
+        }
+        match val {
+            Operand::Copy(id) | Operand::Move(id) => self.emit_cow_retain(*id, sp),
+            Operand::Const(_) => self.report_error(
+                "[cow] a Vec slot is initialised from a non-local operand; the share cannot be \
+                 accounted (this is a compiler bug, not a program error)"
+                    .to_string(),
+            ),
+        }
+    }
+
+// the one place a vec-producing form's freshness is decided. a fresh producer owns the +1 the
+    fn vec_rhs_is_fresh(kind: &TypedExprKind) -> bool {
+        match kind {
+            TypedExprKind::EnumVariant {
+                enum_name, variant, ..
+            } => enum_name == "Vec" && variant == "new",
+            TypedExprKind::VecLiteral { .. } => true,
+// a callee transfers its share out: emit_rc_releases_for_return excludes the escaped
+            TypedExprKind::Call { .. } => true,
+            _ => false,
+        }
     }
 
     pub(super) fn emit_scope_rc_releases(&mut self, scope_depth: usize) {
@@ -101,6 +149,51 @@ impl<'a> LoweringContext<'a> {
         self.rc_locals.retain(|(_, d)| *d <= scope_depth);
         self.carrier_locals.retain(|c| c.depth <= scope_depth);
         self.cow_locals.retain(|(_, d)| *d <= scope_depth);
+    }
+
+// affine scope-end drops: 1:1 images of the point-sensitive drop markers the elaboration
+    pub(super) fn emit_scope_affine_drops(
+        &mut self,
+        scope_depth: usize,
+        scope_span: aelys_syntax::Span,
+    ) {
+        if !self.affine_locals.iter().any(|a| a.depth > scope_depth) {
+            return;
+        }
+        let key = crate::bir::drop_key(&scope_span);
+        if !self.last_block_is_terminated() {
+            let to_drop = self.collect_affine_drops(key, |d| d > scope_depth);
+            for (local, id_field) in to_drop.into_iter().rev() {
+                self.emit_affine_drop(local, &id_field, None);
+            }
+        }
+        self.affine_locals.retain(|a| a.depth <= scope_depth);
+    }
+
+// or returned. unlike borrowed rc/carrier params, which are never released callee-side.
+    pub(super) fn emit_affine_param_drops_on_fallthrough(&mut self, func_span: aelys_syntax::Span) {
+        if !self.affine_locals.iter().any(|a| a.depth == 0) {
+            return;
+        }
+        let key = crate::bir::drop_key(&func_span);
+        if !self.last_block_is_terminated() {
+            let to_drop = self.collect_affine_drops(key, |d| d == 0);
+            for (local, id_field) in to_drop {
+                self.emit_affine_drop(local, &id_field, None);
+            }
+        }
+        self.affine_locals.retain(|a| a.depth != 0);
+    }
+
+// point-sensitive: the plan lists exactly the affine locals live on this return edge, so a
+// local moved earlier on the path is absent. it must not copy emit_rc_releases_for_return's
+// escaped-only filter, whose drop-everything-registered structure is the double-drop source.
+    pub(super) fn emit_affine_drops_for_return(&mut self, return_span: aelys_syntax::Span) {
+        let key = crate::bir::drop_key(&return_span);
+        let to_drop = self.collect_affine_drops(key, |_| true);
+        for (local, id_field) in to_drop.into_iter().rev() {
+            self.emit_affine_drop(local, &id_field, None);
+        }
     }
 
     // the returned value keeps its count, it travels to the caller
@@ -161,6 +254,10 @@ impl<'a> LoweringContext<'a> {
             || self.carrier_locals.iter().any(|c| c.depth > threshold)
     }
 
+    pub(super) fn affine_live_below(&self, threshold: usize) -> bool {
+        self.affine_locals.iter().any(|a| a.depth > threshold)
+    }
+
     pub(super) fn emit_load_rc_leaf(
         &mut self,
         base: Operand,
@@ -209,7 +306,7 @@ impl<'a> LoweringContext<'a> {
         cur
     }
 
-    fn air_struct_field_type(&self, ty: &AirType, field: &str) -> AirType {
+    pub(super) fn air_struct_field_type(&self, ty: &AirType, field: &str) -> AirType {
         if let AirType::Struct(name) = ty {
             if let Some(def) = self.structs.iter().find(|s| &s.name == name) {
                 if let Some(f) = def.fields.iter().find(|f| f.name == field) {
@@ -438,19 +535,28 @@ impl<'a> LoweringContext<'a> {
                 }
 
                 if matches!(var_type, InferType::Vec(_)) {
-                    let is_vec_copy = matches!(
-                        initializer.kind,
-                        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. }
+                    self.emit_vec_slot_acquire(
+                        true,
+                        Some(&initializer.kind),
+                        &Operand::Copy(local),
+                        sp,
                     );
-                    if is_vec_copy {
-                        self.emit_cow_retain(local, sp);
-                    }
                     let depth = self.locals_by_name.len();
                     self.cow_locals.push((local, depth));
                 }
+
+                if matches!(self.affine_category(var_type), crate::bir::Category::Affine) {
+                    let depth = self.locals_by_name.len();
+                    self.affine_locals.push(crate::lower::AffineLocal {
+                        local,
+                        depth,
+                        id_field: "id".to_string(),
+                        decl_key: crate::bir::drop_key(&stmt.span),
+                    });
+                }
             }
             TypedStmtKind::Block(stmts) => {
-                self.lower_body(stmts);
+                self.lower_body(stmts, stmt.span);
             }
             TypedStmtKind::If {
                 condition,
@@ -488,21 +594,31 @@ impl<'a> LoweringContext<'a> {
                     if matches!(ret_ty, AirType::Opaque) {
                         self.lower_expr_discard(e);
                         self.emit_rc_releases_for_return(None);
+                        self.emit_affine_drops_for_return(stmt.span);
                         self.seal_block(AirTerminator::Return(None));
                         return;
                     }
                 }
                 let operand = val.as_ref().map(|e| self.lower_expr(e));
                 self.emit_rc_releases_for_return(operand.as_ref());
+                self.emit_affine_drops_for_return(stmt.span);
                 self.seal_block(AirTerminator::Return(operand));
             }
             TypedStmtKind::Break => {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let exit = loop_ctx.exit;
-                    if self.rc_live_below(loop_ctx.body_scope_depth) {
+                    let body_depth = loop_ctx.body_scope_depth;
+                    if self.rc_live_below(body_depth) {
                         self.report_error(
                             "[rc] an Rc<T> live in a loop body is abandoned by `break`; \
                              non-local jumps out of an Rc's scope are not supported yet"
+                                .to_string(),
+                        );
+                        self.seal_block(AirTerminator::Unreachable);
+                    } else if self.affine_live_below(body_depth) {
+                        self.report_error(
+                            "[move] an affine value live in a loop body is abandoned by `break`; \
+                             non-local jumps out of an affine scope are not supported yet"
                                 .to_string(),
                         );
                         self.seal_block(AirTerminator::Unreachable);
@@ -519,10 +635,18 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Continue => {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let header = loop_ctx.header;
-                    if self.rc_live_below(loop_ctx.body_scope_depth) {
+                    let body_depth = loop_ctx.body_scope_depth;
+                    if self.rc_live_below(body_depth) {
                         self.report_error(
                             "[rc] an Rc<T> live in a loop body is abandoned by `continue`; \
                              non-local jumps out of an Rc's scope are not supported yet"
+                                .to_string(),
+                        );
+                        self.seal_block(AirTerminator::Unreachable);
+                    } else if self.affine_live_below(body_depth) {
+                        self.report_error(
+                            "[move] an affine value live in a loop body is abandoned by `continue`; \
+                             non-local jumps out of an affine scope are not supported yet"
                                 .to_string(),
                         );
                         self.seal_block(AirTerminator::Unreachable);
@@ -693,3 +817,4 @@ impl<'a> LoweringContext<'a> {
                 .is_some_and(|b| !matches!(b.terminator, AirTerminator::Goto(_)))
     }
 }
+

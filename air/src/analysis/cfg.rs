@@ -128,7 +128,7 @@ fn visit_rvalue_uses(rvalue: &Rvalue, f: &mut impl FnMut(LocalId)) {
             visit_operand_uses(base, f);
             visit_operand_uses(index, f);
         }
-        Rvalue::AddressOf(local) => f(*local),
+        Rvalue::AddressOf(place) => visit_place_addr_uses(place, f),
         Rvalue::EnumInit { payload, .. } => {
             for operand in payload {
                 visit_operand_uses(operand, f);
@@ -137,13 +137,28 @@ fn visit_rvalue_uses(rvalue: &Rvalue, f: &mut impl FnMut(LocalId)) {
         Rvalue::EnumTag { operand, .. } => visit_operand_uses(operand, f),
         Rvalue::EnumPayload { operand, .. } => visit_operand_uses(operand, f),
         Rvalue::ClosureCreate { env, .. } => visit_operand_uses(env, f),
+        Rvalue::SliceFromParts { ptr, len } => {
+            visit_operand_uses(ptr, f);
+            visit_operand_uses(len, f);
+        }
+    }
+}
+
+fn visit_place_addr_uses(place: &Place, f: &mut impl FnMut(LocalId)) {
+    match place {
+        Place::Global(_) => {}
+        Place::Local(local) | Place::Field(local, _) | Place::Deref(local) => f(*local),
+        Place::Index(local, operand) => {
+            f(*local);
+            visit_operand_uses(operand, f);
+        }
     }
 }
 
 fn visit_place_uses(place: &Place, f: &mut impl FnMut(LocalId)) {
     match place {
         // a write-only destination is a def, not a use
-        Place::Local(_) => {}
+        Place::Local(_) | Place::Global(_) => {}
         Place::Field(local, _) | Place::Deref(local) => f(*local),
         Place::Index(local, operand) => {
             f(*local);
@@ -171,3 +186,4 @@ pub fn block_uses(block: &AirBlock, mut f: impl FnMut(LocalId)) {
     }
     visit_term_uses(&block.terminator, &mut f);
 }
+

@@ -33,6 +33,10 @@ impl Parser {
             return self.return_statement();
         }
 
+        if self.match_token(&TokenKind::Discard) {
+            return self.discard_statement();
+        }
+
         if self.match_token(&TokenKind::LBrace) {
             return Ok(Stmt::new(
                 StmtKind::Block(self.block_statements()?),
@@ -157,6 +161,18 @@ impl Parser {
 
         Ok(Stmt::new(
             StmtKind::Return(Some(value)),
+            start_span.merge(end_span),
+        ))
+    }
+
+    fn discard_statement(&mut self) -> Result<Stmt> {
+        let start_span = self.previous().span;
+        let value = self.expression()?;
+        self.consume_semicolon()?;
+        let end_span = self.previous().span;
+
+        Ok(Stmt::new(
+            StmtKind::Discard(value),
             start_span.merge(end_span),
         ))
     }

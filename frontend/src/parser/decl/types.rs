@@ -1,10 +1,30 @@
 use super::Parser;
 use aelys_common::Result;
-use aelys_syntax::{Parameter, TokenKind, TypeAnnotation};
+use aelys_syntax::{Parameter, RefKind, TokenKind, TypeAnnotation};
 
 impl Parser {
     pub fn parse_type_annotation(&mut self) -> Result<TypeAnnotation> {
         let start_span = self.peek().span;
+
+        if self.match_token(&TokenKind::Ampersand) {
+            let kind = if self.match_token(&TokenKind::Mut) {
+                RefKind::Mut
+            } else {
+                RefKind::Shared
+            };
+            if self.match_token(&TokenKind::LBracket) {
+                let element = self.parse_type_annotation()?;
+                self.consume(&TokenKind::RBracket, "]")?;
+                let end_span = self.previous().span;
+                let mut ann = TypeAnnotation::slice_referent(element, start_span.merge(end_span));
+                ann.reference = Some(kind);
+                return Ok(ann);
+            }
+            let mut referent = self.parse_type_annotation()?;
+            referent.reference = Some(kind);
+            referent.span = start_span.merge(referent.span);
+            return Ok(referent);
+        }
 
         if self.match_token(&TokenKind::LBracket) {
             let inner = self.parse_type_annotation()?;
@@ -31,8 +51,17 @@ impl Parser {
             ));
         }
 
+        let nogc = self.match_token(&TokenKind::Nogc);
         if self.match_token(&TokenKind::Fn) {
-            return self.parse_function_type_annotation(start_span);
+            return self.parse_function_type_annotation(start_span, nogc);
+        }
+        if nogc {
+            return Err(self.error(
+                aelys_common::error::CompileErrorKind::UnexpectedToken {
+                    expected: "`fn` after `nogc` in a type".to_string(),
+                    found: self.peek().kind.to_string(),
+                },
+            ));
         }
 
         let name = self.consume_identifier("type name")?;
@@ -68,6 +97,7 @@ impl Parser {
     fn parse_function_type_annotation(
         &mut self,
         start_span: aelys_syntax::Span,
+        nogc: bool,
     ) -> Result<TypeAnnotation> {
         self.consume(&TokenKind::LParen, "(")?;
         let mut params = Vec::new();
@@ -90,6 +120,7 @@ impl Parser {
         Ok(TypeAnnotation::function_type(
             params,
             ret,
+            nogc,
             start_span.merge(end_span),
         ))
     }
@@ -114,3 +145,4 @@ impl Parser {
         ))
     }
 }
+

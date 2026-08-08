@@ -26,12 +26,16 @@ pub enum InferType {
     Function {
         params: Vec<InferType>,
         ret: Box<InferType>,
+        nogc: bool,
     },
 
     Array(Box<InferType>, Option<u64>),
     Vec(Box<InferType>),
     // the only reference type, every other constructor is a value type
     Rc(Box<InferType>),
+// stage 1 borrows, erased to a raw ptr / fat {ptr,len} in air
+    Ref { referent: Box<InferType>, mutable: bool },
+    Slice { elem: Box<InferType>, mutable: bool },
     Tuple(Vec<InferType>),
     Range,
 
@@ -71,12 +75,14 @@ impl InferType {
     pub fn has_vars(&self) -> bool {
         match self {
             InferType::Var(_) => true,
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, .. } => {
                 params.iter().any(|p| p.has_vars()) || ret.has_vars()
             }
             InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
                 inner.has_vars()
             }
+            InferType::Ref { referent, .. } => referent.has_vars(),
+            InferType::Slice { elem, .. } => elem.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
             InferType::Enum(_, args) => args.iter().any(|a| a.has_vars()),
             _ => false,
@@ -105,6 +111,8 @@ impl InferType {
             | InferType::Struct(_) => true,
             // An Enum is only concrete if all its type args are also concrete.
             InferType::Enum(_, args) => args.iter().all(|a| a.is_concrete()),
+            InferType::Ref { referent, .. } => referent.is_concrete(),
+            InferType::Slice { elem, .. } => elem.is_concrete(),
             _ => false,
         }
     }
@@ -118,9 +126,11 @@ impl InferType {
         match self {
             InferType::Rc(_) => true,
             InferType::Array(inner, _) | InferType::Vec(inner) => inner.contains_rc(),
+            InferType::Ref { referent, .. } => referent.contains_rc(),
+            InferType::Slice { elem, .. } => elem.contains_rc(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.contains_rc()),
             InferType::Enum(_, args) => args.iter().any(|a| a.contains_rc()),
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, .. } => {
                 params.iter().any(|p| p.contains_rc()) || ret.contains_rc()
             }
             _ => false,
@@ -128,6 +138,26 @@ impl InferType {
     }
 
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
+        if let Some(kind) = ann.reference {
+            let mutable = matches!(kind, aelys_syntax::RefKind::Mut);
+            if ann.is_slice {
+                let elem = ann
+                    .type_param
+                    .as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                return InferType::Slice {
+                    elem: Box::new(elem),
+                    mutable,
+                };
+            }
+            let mut base = ann.clone();
+            base.reference = None;
+            return InferType::Ref {
+                referent: Box::new(Self::from_annotation(&base)),
+                mutable,
+            };
+        }
         if ann.is_function_type() {
             let params = ann
                 .fn_params
@@ -142,6 +172,7 @@ impl InferType {
             return InferType::Function {
                 params,
                 ret: Box::new(ret),
+                nogc: ann.nogc,
             };
         }
         // must come before the uppercase guard, which would read it as Struct("Rc")
@@ -367,7 +398,7 @@ impl fmt::Display for InferType {
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
             InferType::Never => write!(f, "!"),
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, .. } => {
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -381,6 +412,12 @@ impl fmt::Display for InferType {
             InferType::Array(inner, None) => write!(f, "[{}]", inner),
             InferType::Vec(inner) => write!(f, "vec[{}]", inner),
             InferType::Rc(inner) => write!(f, "Rc<{}>", inner),
+            InferType::Ref { referent, mutable } => {
+                write!(f, "&{}{}", if *mutable { "mut " } else { "" }, referent)
+            }
+            InferType::Slice { elem, mutable } => {
+                write!(f, "&{}[{}]", if *mutable { "mut " } else { "" }, elem)
+            }
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {
@@ -412,3 +449,4 @@ impl fmt::Display for InferType {
         }
     }
 }
+

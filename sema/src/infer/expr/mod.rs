@@ -2,11 +2,13 @@ mod array;
 mod assign;
 mod binary;
 mod call;
+mod catch_expr;
 mod if_expr;
 mod lambda;
 mod match_expr;
 mod member;
 mod primary;
+mod try_expr;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
@@ -184,6 +186,65 @@ impl TypeInference {
                 inclusive,
             } => self.infer_range_expr(start, end, *inclusive, expr.span),
             ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
+            ExprKind::Reference { mutable, operand } => {
+                let typed_operand = self.infer_expr(operand);
+                if *mutable {
+                    if let ExprKind::Identifier(name) = &operand.kind {
+                        if self.env.lookup_local(name).is_some() && !self.env.is_mutable(name) {
+                            self.errors
+                                .push(TypeError::mut_ref_immutable_binding(name.clone(), expr.span));
+                        }
+                    }
+                }
+                let referent = typed_operand.ty.clone();
+                (
+                    TypedExprKind::Reference {
+                        mutable: *mutable,
+                        operand: Box::new(typed_operand),
+                    },
+                    InferType::Ref {
+                        referent: Box::new(referent),
+                        mutable: *mutable,
+                    },
+                )
+            }
+            ExprKind::Deref(operand) => {
+                let typed_operand = self.infer_expr(operand);
+                let result_ty = match &typed_operand.ty {
+                    InferType::Ref { referent, .. } => (**referent).clone(),
+                    InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+                    other => {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "cannot dereference a non-reference value of type `{}`",
+                                other
+                            ),
+                            expr.span,
+                        ));
+                        InferType::Dynamic
+                    }
+                };
+                (TypedExprKind::Deref(Box::new(typed_operand)), result_ty)
+            }
+            ExprKind::DerefAssign { target, value } => {
+                let typed_target = self.infer_expr(target);
+                let typed_value = self.infer_expr(value);
+                if let InferType::Ref { referent, .. } = &typed_target.ty {
+                    self.constraints.push(Constraint::equal(
+                        (**referent).clone(),
+                        typed_value.ty.clone(),
+                        expr.span,
+                        ConstraintReason::Other("write through reference".to_string()),
+                    ));
+                }
+                (
+                    TypedExprKind::DerefAssign {
+                        target: Box::new(typed_target),
+                        value: Box::new(typed_value),
+                    },
+                    InferType::Null,
+                )
+            }
             ExprKind::StructLiteral { name, fields } => {
                 self.infer_struct_literal(name, fields, expr.span)
             }
@@ -231,6 +292,17 @@ impl TypeInference {
                     },
                     ty,
                 )
+            }
+            ExprKind::Try(inner) => self.infer_try_expr(inner, expr.span),
+            ExprKind::Catch { scrutinee, handler } => {
+                self.infer_catch_expr(scrutinee, handler, expr.span)
+            }
+// unsafe is erased like try; tuple flow keeps depth -= 1 from being skipped by an early return
+            ExprKind::Unsafe(inner) => {
+                self.unsafe_depth += 1;
+                let t = self.infer_expr(inner);
+                self.unsafe_depth -= 1;
+                (t.kind, t.ty)
             }
         };
 
@@ -789,3 +861,4 @@ impl TypeInference {
         true
     }
 }
+

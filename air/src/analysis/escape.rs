@@ -51,7 +51,11 @@ fn stmt_escape(kind: &AirStmtKind, local: LocalId) -> Option<EscapeKind> {
                         return Some(EscapeKind::Call);
                     }
                 }
-                Rvalue::AddressOf(l) if *l == local => return Some(EscapeKind::AddressOf),
+// pointer local marks that pointer; when the pointer is a parameter the storage
+// it names belongs to the caller and has no local here to mark
+                Rvalue::AddressOf(p) if place_base(p) == Some(local) => {
+                    return Some(EscapeKind::AddressOf);
+                }
                 _ => {}
             }
             None
@@ -125,16 +129,18 @@ pub fn stored_into_aggregate_set(function: &AirFunction) -> HashSet<LocalId> {
     set
 }
 
+// stored operand escapes exactly as a field store does
 fn place_is_aggregate(place: &Place) -> bool {
     matches!(
         place,
-        Place::Field(_, _) | Place::Index(_, _) | Place::Deref(_)
+        Place::Field(_, _) | Place::Index(_, _) | Place::Deref(_) | Place::Global(_)
     )
 }
 
 fn place_base(place: &Place) -> Option<LocalId> {
     match place {
         Place::Local(l) | Place::Field(l, _) | Place::Deref(l) | Place::Index(l, _) => Some(*l),
+        Place::Global(_) => None,
     }
 }
 
@@ -183,7 +189,14 @@ fn for_each_rvalue_operand_local(rvalue: &Rvalue, mut f: impl FnMut(LocalId)) {
             operand_local(base, &mut f);
             operand_local(index, &mut f);
         }
-        Rvalue::AddressOf(l) => f(*l),
+        Rvalue::AddressOf(p) => {
+            if let Some(l) = place_base(p) {
+                f(l);
+            }
+            if let Place::Index(_, idx) = p {
+                operand_local(idx, &mut f);
+            }
+        }
         Rvalue::EnumInit { payload, .. } => {
             for op in payload {
                 operand_local(op, &mut f);
@@ -192,6 +205,10 @@ fn for_each_rvalue_operand_local(rvalue: &Rvalue, mut f: impl FnMut(LocalId)) {
         Rvalue::EnumTag { operand, .. } => operand_local(operand, &mut f),
         Rvalue::EnumPayload { operand, .. } => operand_local(operand, &mut f),
         Rvalue::ClosureCreate { env, .. } => operand_local(env, &mut f),
+        Rvalue::SliceFromParts { ptr, len } => {
+            operand_local(ptr, &mut f);
+            operand_local(len, &mut f);
+        }
     }
 }
 
@@ -213,3 +230,4 @@ fn is_own_rc_bookkeeping(func: &Callee, args: &[Operand], local: LocalId) -> boo
     }
     false
 }
+

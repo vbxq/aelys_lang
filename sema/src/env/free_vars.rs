@@ -12,7 +12,7 @@ impl TypeEnv {
                 InferType::Var(id) => {
                     vars.insert(*id);
                 }
-                InferType::Function { params, ret } => {
+                InferType::Function { params, ret, .. } => {
                     for p in params {
                         collect_vars(p, vars);
                     }
@@ -21,6 +21,8 @@ impl TypeEnv {
                 InferType::Array(inner, _) => collect_vars(inner, vars),
                 InferType::Vec(inner) => collect_vars(inner, vars),
                 InferType::Rc(inner) => collect_vars(inner, vars),
+                InferType::Ref { referent, .. } => collect_vars(referent, vars),
+                InferType::Slice { elem, .. } => collect_vars(elem, vars),
                 InferType::Tuple(elems) => {
                     for e in elems {
                         collect_vars(e, vars);

@@ -149,6 +149,7 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
             }
         }
         Rvalue::ClosureCreate { .. } => {}
+        Rvalue::SliceFromParts { .. } => {}
         _ => {}
     }
 }
@@ -206,3 +207,4 @@ pub(super) fn operand_type_from(
             }),
     }
 }
+

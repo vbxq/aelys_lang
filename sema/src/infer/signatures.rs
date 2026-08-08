@@ -79,7 +79,7 @@ impl TypeInference {
         let mut param_types = Vec::with_capacity(func.params.len());
         for p in &func.params {
             let ty = match &p.type_annotation {
-                Some(ann) => self.type_from_annotation(ann),
+                Some(ann) => self.type_from_param_annotation(ann),
                 None => self.type_gen.fresh(),
             };
             param_types.push(ty);
@@ -95,14 +95,25 @@ impl TypeInference {
         let fn_type = Rc::new(InferType::Function {
             params: param_types,
             ret: Box::new(ret_type),
+            nogc: func.is_nogc,
         });
 
         self.env.define_function(full_name.clone(), fn_type.clone());
+        self.record_nogc_generic_sig(&full_name, func);
 
         // Also register with unqualified name so nested functions are
         // reachable by local lookup (e.g. `inner(41)` inside `outer`).
         if !prefix.is_empty() {
-            self.env.define_function(func.name.clone(), fn_type);
+            if self.env.has_function(&func.name) {
+                self.errors.push(TypeError::nested_fn_shadows_outer(
+                    func.name.clone(),
+                    func.span,
+                ));
+            } else {
+                self.env.define_function(func.name.clone(), fn_type);
+                self.record_nogc_generic_sig(&func.name, func);
+            }
         }
     }
 }
+

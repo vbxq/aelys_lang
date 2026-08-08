@@ -18,8 +18,9 @@ use std::process::Command;
 use std::sync::Arc;
 
 use diagnostics::{
-    backend_diagnostic_error, fallback_source_span, load_source_for_diagnostics,
-    program_anchor_span, sema_errors_to_diagnostics,
+    backend_diagnostic_error, bir_diagnostics_to_error, fallback_source_span,
+    load_source_for_diagnostics, mono_errors_to_error, program_anchor_span,
+    sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::compile_air_with_llvm;
 
@@ -91,45 +92,42 @@ fn lower_file_to_air_with_source(
     )
     .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
 
-    let mut optimizer = Optimizer::new(opt_level);
-    let typed_program = optimizer.optimize(inference.program);
+    let checked = aelys_air::bir::check(inference.program)
+        .map_err(|errors| bir_diagnostics_to_error(errors, src.clone()))?;
 
-    let air = aelys_air::lower::try_lower(&typed_program).map_err(|errors| {
-        let message = if errors.is_empty() {
-            "AIR lowering failed with an unknown error".to_string()
-        } else {
-            errors
-                .iter()
-                .enumerate()
-                .map(|(i, e)| format!("{}. {}", i + 1, e))
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
-        backend_diagnostic_error(
-            src.clone(),
-            fallback_source_span(src.as_ref()),
-            "air-lowering",
-            message,
-            None,
-            None,
-        )
+    let mut optimizer = Optimizer::new(opt_level);
+    let typed_program = optimizer.optimize(checked);
+
+    let air = aelys_air::lower::try_lower(&typed_program).map_err(|failure| match failure {
+        aelys_air::lower::LowerFailure::Borrow(diags) => bir_diagnostics_to_error(diags, src.clone()),
+        aelys_air::lower::LowerFailure::Lowering(errors) => {
+            let message = if errors.is_empty() {
+                "AIR lowering failed with an unknown error".to_string()
+            } else {
+                errors
+                    .iter()
+                    .enumerate()
+                    .map(|(i, e)| format!("{}. {}", i + 1, e))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            };
+            backend_diagnostic_error(
+                src.clone(),
+                fallback_source_span(src.as_ref()),
+                "air-lowering",
+                message,
+                None,
+                None,
+            )
+        }
     })?;
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
-        let message = errors
-            .iter()
-            .enumerate()
-            .map(|(i, e)| format!("{}. {}", i + 1, e))
-            .collect::<Vec<_>>()
-            .join("\n");
-        backend_diagnostic_error(
-            src.clone(),
-            fallback_source_span(src.as_ref()),
-            "monomorphization",
-            message,
-            None,
-            None,
-        )
+        mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
+// program: before this point a generic body still hides its instantiations
+    if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
+        return Err(vec_surface_errors_to_error(errors, &air, src.clone()));
+    }
     let layout_errors = aelys_air::layout::compute_layouts(&mut air);
     if !layout_errors.is_empty() {
         return Err(backend_diagnostic_error(
@@ -195,6 +193,23 @@ fn lower_file_to_air_with_source(
         source: src,
         warnings,
     })
+}
+
+/// proves a claim about compilation, not about a value. this is the only oracle in the tree
+/// that can execute an air shape the surface language cannot yet produce, which is exactly
+pub fn compile_air_program_to_executable(
+    path: &Path,
+    air: &aelys_air::AirProgram,
+    opt_level: OptimizationLevel,
+    runtime: RuntimeVariant,
+) -> Result<(), AelysError> {
+    let name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("<air>")
+        .to_string();
+    let src = Source::new(&name, "");
+    compile_air_with_llvm(path, air, opt_level, false, runtime, src)
 }
 
 pub fn compile_file_with_llvm(
@@ -270,3 +285,4 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
         stderr.trim()
     ))
 }
+

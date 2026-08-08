@@ -218,6 +218,7 @@ impl FunctionInliner {
                 }
             }
             TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
+            TypedExprKind::ResultAssert { scrutinee, .. } => self.inline_in_expr(scrutinee, analysis),
             _ => {}
         }
 

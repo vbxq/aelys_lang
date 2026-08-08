@@ -1,7 +1,7 @@
 use super::Parser;
 use aelys_common::Result;
-use aelys_common::error::CompileErrorKind;
-use aelys_syntax::{BinaryOp, Expr, ExprKind, TokenKind};
+use aelys_common::error::{CompileError, CompileErrorKind};
+use aelys_syntax::{BinaryOp, CatchHandler, Expr, ExprKind, TokenKind};
 
 impl Parser {
     // calls and member access (highest precedence after atoms)
@@ -128,6 +128,7 @@ impl Parser {
                     BinaryOp::Sub
                 };
                 let span = expr.span.merge(self.previous().span);
+                expr = Self::unwrap_grouping(expr);
 
                 let one = Expr::new(ExprKind::Int(1), self.previous().span);
                 if let ExprKind::Identifier(ref name) = expr.kind {
@@ -190,8 +191,30 @@ impl Parser {
                         },
                         span,
                     );
+                } else if let ExprKind::Deref(ref target) = expr.kind {
+// unconsumed and deleted the statement, silently
+                    let binary = Expr::new(
+                        ExprKind::Binary {
+                            left: Box::new(expr.clone()),
+                            op,
+                            right: Box::new(one),
+                        },
+                        span,
+                    );
+                    expr = Expr::new(
+                        ExprKind::DerefAssign {
+                            target: target.clone(),
+                            value: Box::new(binary),
+                        },
+                        span,
+                    );
                 } else {
-                    break;
+                    return Err(CompileError::new(
+                        CompileErrorKind::InvalidAssignmentTarget,
+                        span,
+                        std::sync::Arc::clone(&self.source),
+                    )
+                    .into());
                 }
             } else if self.match_token(&TokenKind::As) {
                 let target = self.parse_type_annotation()?;
@@ -200,6 +223,33 @@ impl Parser {
                     ExprKind::Cast {
                         expr: Box::new(expr),
                         target,
+                    },
+                    span,
+                );
+            } else if self.match_token(&TokenKind::Question) {
+                let span = expr.span.merge(self.previous().span);
+                expr = Expr::new(ExprKind::Try(Box::new(expr)), span);
+            } else if self.match_token(&TokenKind::Catch) {
+                let handler = if self.match_token(&TokenKind::Pipe) {
+                    let name = self.consume_identifier("catch error binder")?;
+                    self.consume(&TokenKind::Pipe, "|")?;
+                    CatchHandler::Binding {
+                        name,
+                        body: Box::new(self.expression()?),
+                    }
+                } else if self.match_token(&TokenKind::LBrace) {
+                    CatchHandler::Arms(self.match_arms()?)
+                } else {
+                    return Err(self.error(CompileErrorKind::UnexpectedToken {
+                        expected: "`|` binder or `{` after catch".to_string(),
+                        found: format!("{}", self.peek().kind),
+                    }));
+                };
+                let span = expr.span.merge(self.previous().span);
+                expr = Expr::new(
+                    ExprKind::Catch {
+                        scrutinee: Box::new(expr),
+                        handler,
                     },
                     span,
                 );
@@ -273,3 +323,4 @@ impl Parser {
         Ok(first)
     }
 }
+

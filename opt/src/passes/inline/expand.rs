@@ -22,6 +22,10 @@ impl InlineExpander {
             return None;
         }
 
+        if args.iter().any(|a| !self.arg_is_pure(a)) {
+            return None;
+        }
+
         let param_map: HashMap<String, TypedExpr> = func
             .params
             .iter()
@@ -30,6 +34,28 @@ impl InlineExpander {
             .collect();
 
         self.try_simple_inline(&func.body, &param_map, call_span)
+    }
+
+    fn arg_is_pure(&self, e: &TypedExpr) -> bool {
+        match &e.kind {
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null
+            | TypedExprKind::Identifier(_) => true,
+            TypedExprKind::Binary { left, right, .. }
+            | TypedExprKind::And { left, right }
+            | TypedExprKind::Or { left, right } => self.arg_is_pure(left) && self.arg_is_pure(right),
+            TypedExprKind::Unary { operand, .. } => self.arg_is_pure(operand),
+            TypedExprKind::Grouping(inner) => self.arg_is_pure(inner),
+            TypedExprKind::Cast { expr, .. } => self.arg_is_pure(expr),
+            TypedExprKind::Member { object, .. } => self.arg_is_pure(object),
+            TypedExprKind::Index { object, index } => {
+                self.arg_is_pure(object) && self.arg_is_pure(index)
+            }
+            _ => false,
+        }
     }
 
     fn try_simple_inline(
@@ -241,6 +267,18 @@ impl InlineExpander {
                 range: Box::new(self.substitute_expr(range, params, span)),
             },
 
+            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+                mutable: *mutable,
+                operand: Box::new(self.substitute_expr(operand, params, span)),
+            },
+            TypedExprKind::Deref(operand) => {
+                TypedExprKind::Deref(Box::new(self.substitute_expr(operand, params, span)))
+            }
+            TypedExprKind::DerefAssign { target, value } => TypedExprKind::DerefAssign {
+                target: Box::new(self.substitute_expr(target, params, span)),
+                value: Box::new(self.substitute_expr(value, params, span)),
+            },
+
             // lambdas need special care to avoid capturing the wrong variables
             TypedExprKind::Lambda(inner) => {
                 TypedExprKind::Lambda(Box::new(self.substitute_expr(inner, params, span)))
@@ -334,6 +372,17 @@ impl InlineExpander {
                         body: Box::new(self.substitute_expr(&arm.body, params, span)),
                     })
                     .collect(),
+            },
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => TypedExprKind::ResultAssert {
+                scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
+                ok_tag: *ok_tag,
+                payload_ty: payload_ty.clone(),
+                on_err: on_err.clone(),
             },
         };
 
@@ -429,3 +478,4 @@ impl Default for InlineExpander {
         Self::new()
     }
 }
+

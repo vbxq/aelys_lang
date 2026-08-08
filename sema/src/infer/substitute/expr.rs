@@ -170,6 +170,17 @@ impl TypeInference {
                 object: Box::new(self.apply_substitution_expr(object, subst)),
                 range: Box::new(self.apply_substitution_expr(range, subst)),
             },
+            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+                mutable: *mutable,
+                operand: Box::new(self.apply_substitution_expr(operand, subst)),
+            },
+            TypedExprKind::Deref(operand) => {
+                TypedExprKind::Deref(Box::new(self.apply_substitution_expr(operand, subst)))
+            }
+            TypedExprKind::DerefAssign { target, value } => TypedExprKind::DerefAssign {
+                target: Box::new(self.apply_substitution_expr(target, subst)),
+                value: Box::new(self.apply_substitution_expr(value, subst)),
+            },
             TypedExprKind::StructLiteral { name, fields } => TypedExprKind::StructLiteral {
                 name: name.clone(),
                 fields: fields
@@ -230,6 +241,18 @@ impl TypeInference {
                     })
                     .collect(),
             },
+
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => TypedExprKind::ResultAssert {
+                scrutinee: Box::new(self.apply_substitution_expr(scrutinee, subst)),
+                ok_tag: *ok_tag,
+                payload_ty: subst.apply(payload_ty),
+                on_err: on_err.clone(),
+            },
         };
 
         TypedExpr {
@@ -239,3 +262,4 @@ impl TypeInference {
         }
     }
 }
+

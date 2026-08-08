@@ -90,6 +90,12 @@ impl DeadCodeEliminator {
                 self.eliminate_in_expr(object);
                 self.eliminate_in_expr(range);
             }
+            TypedExprKind::Reference { operand, .. } => self.eliminate_in_expr(operand),
+            TypedExprKind::Deref(operand) => self.eliminate_in_expr(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.eliminate_in_expr(target);
+                self.eliminate_in_expr(value);
+            }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
@@ -114,6 +120,9 @@ impl DeadCodeEliminator {
                 for arm in arms {
                     self.eliminate_in_expr(&mut arm.body);
                 }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.eliminate_in_expr(scrutinee);
             }
             TypedExprKind::EnumVariant { args, .. } => {
                 for arg in args {

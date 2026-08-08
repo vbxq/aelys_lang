@@ -12,8 +12,19 @@ impl TypeInference {
         arms: &[MatchArm],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        let is_catch = std::mem::take(&mut self.catch_match_pending);
         let typed_scrutinee = self.infer_expr(scrutinee);
+        self.infer_match_typed(typed_scrutinee, scrutinee.span, arms, span, is_catch)
+    }
 
+    pub(super) fn infer_match_typed(
+        &mut self,
+        typed_scrutinee: TypedExpr,
+        scrutinee_span: Span,
+        arms: &[MatchArm],
+        span: Span,
+        is_catch: bool,
+    ) -> (TypedExprKind, InferType) {
         // The scrutinee must be an enum type.
         // It may be a Var if it comes from a match/if-else whose result type
         // hasn't been solved yet. In that case, extract the enum name from the
@@ -32,7 +43,7 @@ impl TypeInference {
                         self.constraints.push(Constraint::equal(
                             typed_scrutinee.ty.clone(),
                             InferType::Enum(name.clone(), Vec::new()),
-                            scrutinee.span,
+                            scrutinee_span,
                             ConstraintReason::Other(
                                 "match scrutinee inferred as enum from patterns".to_string(),
                             ),
@@ -45,7 +56,7 @@ impl TypeInference {
                                 expected: InferType::Dynamic,
                                 found: typed_scrutinee.ty.clone(),
                             },
-                            span: scrutinee.span,
+                            span: scrutinee_span,
                             reason: ConstraintReason::Other(
                                 "match scrutinee type is ambiguous and no variant patterns to infer from".to_string(),
                             ),
@@ -79,7 +90,7 @@ impl TypeInference {
                         expected: InferType::Dynamic,
                         found: other.clone(),
                     },
-                    span: scrutinee.span,
+                    span: scrutinee_span,
                     reason: ConstraintReason::Other(format!(
                         "match scrutinee must be an enum type, got {}",
                         other
@@ -436,7 +447,8 @@ impl TypeInference {
                     },
                     span,
                     reason: ConstraintReason::Other(format!(
-                        "non-exhaustive match: missing variant{} {}",
+                        "non-exhaustive {}: missing variant{} {}",
+                        if is_catch { "catch" } else { "match" },
                         if missing.len() == 1 { "" } else { "s" },
                         missing
                             .iter()
@@ -490,3 +502,4 @@ impl TypeInference {
             .collect()
     }
 }
+

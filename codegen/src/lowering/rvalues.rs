@@ -23,9 +23,10 @@ impl<'a> FunctionCodegen<'a> {
             }
             Rvalue::StructInit { name, fields } => self.generate_struct_init(name, fields),
             Rvalue::FieldAccess { base, field } => self.generate_field_access(base, field),
-            Rvalue::AddressOf(local) => Ok(self.lookup_local_ptr(*local)?.as_basic_value_enum()),
+            Rvalue::AddressOf(place) => Ok(self.place_ptr(place)?.as_basic_value_enum()),
             Rvalue::Deref(operand) => {
                 let ptr = self.generate_operand(operand)?.into_pointer_value();
+                self.emit_null_check(ptr)?;
                 let inner = match self.operand_type(operand)? {
                     AirType::Ptr(inner) => *inner,
                     other => {
@@ -56,6 +57,7 @@ impl<'a> FunctionCodegen<'a> {
             Rvalue::ClosureCreate { fn_name, env } => {
                 self.generate_closure_create(fn_name, env)
             }
+            Rvalue::SliceFromParts { ptr, len } => self.generate_slice_from_parts(ptr, len),
         }
     }
 
@@ -66,6 +68,33 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let idx_val = self.generate_operand(index)?.into_int_value();
         let base_ty = self.operand_type(base)?;
+
+        if let AirType::Ptr(inner) = &base_ty {
+            if matches!(
+                inner.as_ref(),
+                AirType::Array(_, _) | AirType::Slice(_) | AirType::Vec(_)
+            ) {
+                let root = match base {
+                    Operand::Copy(id) | Operand::Move(id) => *id,
+                    _ => {
+                        return Err(CodegenError::LlvmError(
+                            "indexed read through a pointer needs a local base".to_string(),
+                        ));
+                    }
+                };
+                let elem_ptr = self.index_ptr(
+                    root,
+                    idx_val,
+                    crate::lowering::stmts::BoundsCheck::Checked,
+                )?;
+                let elem_air = match inner.as_ref() {
+                    AirType::Array(e, _) | AirType::Slice(e) | AirType::Vec(e) => (**e).clone(),
+                    _ => unreachable!(),
+                };
+                let elem_ty = air_basic_type_to_llvm(&elem_air, self.context)?;
+                return self.load_value(elem_ty, elem_ptr, "idx_load");
+            }
+        }
 
         match base_ty {
             AirType::Array(ref inner, n) => {
@@ -467,4 +496,47 @@ impl<'a> FunctionCodegen<'a> {
             .into_struct_value();
         Ok(fat.into())
     }
+
+// fat slice { ptr, i64 }, layout matches airtype::slice, built like the closure fat pointer
+    fn generate_slice_from_parts(
+        &mut self,
+        ptr: &Operand,
+        len: &Operand,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let ptr_val = match ptr {
+            Operand::Copy(local) | Operand::Move(local) => match self.local_air_type(*local)? {
+                AirType::Ptr(inner)
+                    if matches!(
+                        inner.as_ref(),
+                        AirType::Array(_, _) | AirType::Slice(_) | AirType::Vec(_)
+                    ) =>
+                {
+                    let zero = self.context.i64_type().const_zero();
+                    self.index_ptr(*local, zero, crate::lowering::stmts::BoundsCheck::Elem0Unchecked)?
+                        .as_basic_value_enum()
+                }
+                _ => self.generate_operand(ptr)?,
+            },
+            _ => self.generate_operand(ptr)?,
+        };
+        let len_val = self.generate_operand(len)?;
+
+        let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
+        let slice_ty = self
+            .context
+            .struct_type(&[ptr_ty.into(), self.context.i64_type().into()], false);
+        let mut slice = slice_ty.get_undef();
+        slice = self
+            .builder
+            .build_insert_value(slice, ptr_val, 0, "slice_ptr")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_struct_value();
+        slice = self
+            .builder
+            .build_insert_value(slice, len_val, 1, "slice_len")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_struct_value();
+        Ok(slice.into())
+    }
 }
+

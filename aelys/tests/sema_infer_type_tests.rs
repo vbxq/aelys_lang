@@ -22,6 +22,7 @@ fn test_infer_type_has_vars() {
     let fn_with_var = InferType::Function {
         params: vec![InferType::I64],
         ret: Box::new(InferType::Var(TypeVarId(0))),
+        nogc: false,
     };
     assert!(fn_with_var.has_vars());
 }

@@ -1,5 +1,11 @@
 use crate::Span;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    Shared,
+    Mut,
+}
+
 #[derive(Debug, Clone)]
 pub struct TypeAnnotation {
     pub name: String,
@@ -10,6 +16,10 @@ pub struct TypeAnnotation {
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
     pub array_size: Option<u64>,
+/// the outer `&` / `&mut`, none for value types
+    pub reference: Option<RefKind>,
+    pub is_slice: bool,
+    pub nogc: bool,
     pub span: Span,
 }
 
@@ -22,6 +32,9 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
@@ -34,6 +47,24 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn slice_referent(element: TypeAnnotation, span: Span) -> Self {
+        Self {
+            name: "[slice]".to_string(),
+            type_param: Some(Box::new(element)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            reference: None,
+            is_slice: true,
+            nogc: false,
             span,
         }
     }
@@ -51,11 +82,19 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
 
-    pub fn function_type(params: Vec<TypeAnnotation>, ret: TypeAnnotation, span: Span) -> Self {
+    pub fn function_type(
+        params: Vec<TypeAnnotation>,
+        ret: TypeAnnotation,
+        nogc: bool,
+        span: Span,
+    ) -> Self {
         Self {
             name: "fn".to_string(),
             type_param: None,
@@ -63,6 +102,9 @@ impl TypeAnnotation {
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
             array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc,
             span,
         }
     }
@@ -75,6 +117,9 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: Some(size),
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
@@ -233,6 +278,16 @@ pub enum ExprKind {
         range: Box<Expr>,
     },
 
+    Reference {
+        mutable: bool,
+        operand: Box<Expr>,
+    },
+    Deref(Box<Expr>),
+    DerefAssign {
+        target: Box<Expr>,
+        value: Box<Expr>,
+    },
+
     StructLiteral {
         name: String,
         fields: Vec<StructFieldInit>,
@@ -259,6 +314,24 @@ pub enum ExprKind {
         stmts: Vec<crate::ast::Stmt>,
         tail: Box<Expr>,
     },
+
+// postfix ?; desugared away in sema, has no typed-ast counterpart
+    Try(Box<Expr>),
+
+// postfix catch; desugared to a match in sema, has no typed-ast counterpart
+    Catch {
+        scrutinee: Box<Expr>,
+        handler: CatchHandler,
+    },
+
+// unsafe { ... } block; erased in sema like try, gates unwrap_unchecked via unsafe_depth
+    Unsafe(Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum CatchHandler {
+    Binding { name: String, body: Box<Expr> },
+    Arms(Vec<MatchArm>),
 }
 
 #[derive(Debug, Clone)]
@@ -353,3 +426,4 @@ impl UnaryOp {
         }
     }
 }
+

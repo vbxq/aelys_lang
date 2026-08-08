@@ -706,8 +706,7 @@ impl CodegenContext {
         }
 
         let layout = resolved_layout(&AirType::Enum(enum_name.to_string()), &program.struct_sizes);
-        let payload_align = enum_payload_align(enum_def, &program.struct_sizes);
-        let payload_offset = align_to(4, payload_align);
+        let payload_offset: u32 = 4;
         let variant = enum_def
             .variants
             .iter()
@@ -769,18 +768,6 @@ fn align_to(offset: u32, align: u32) -> u32 {
     (offset + align - 1) & !(align - 1)
 }
 
-fn enum_payload_align(
-    def: &AirEnumDef,
-    sizes: &std::collections::HashMap<String, aelys_air::layout::TypeLayout>,
-) -> u32 {
-    def.variants
-        .iter()
-        .flat_map(|variant| variant.payload.iter())
-        .map(|ty| resolved_layout(ty, sizes).align)
-        .max()
-        .unwrap_or(1)
-}
-
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn generate_global_get(
         &mut self,
@@ -818,7 +805,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(None)
     }
 
-    fn lookup_program_global(&self, name: &str) -> Result<&AirGlobal, CodegenError> {
+    pub(crate) fn lookup_program_global(&self, name: &str) -> Result<&AirGlobal, CodegenError> {
         self.program
             .globals
             .iter()
@@ -826,10 +813,14 @@ impl<'a> FunctionCodegen<'a> {
             .ok_or_else(|| CodegenError::UnsupportedInstruction(format!("unknown global '{}'", name)))
     }
 
-    fn lookup_global_ptr(&self, name: &str) -> Result<PointerValue<'static>, CodegenError> {
+    pub(crate) fn lookup_global_ptr(
+        &self,
+        name: &str,
+    ) -> Result<PointerValue<'static>, CodegenError> {
         self.module
             .get_global(&global_storage_name(name))
             .map(|global| global.as_pointer_value())
             .ok_or_else(|| CodegenError::LlvmError(format!("missing LLVM global '{}'", name)))
     }
 }
+

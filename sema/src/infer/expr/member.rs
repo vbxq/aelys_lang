@@ -44,9 +44,20 @@ impl TypeInference {
         _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
+        let ty = self.member_result_type(&typed_object.ty, member);
 
+        (
+            TypedExprKind::Member {
+                object: Box::new(typed_object),
+                member: member.to_string(),
+            },
+            ty,
+        )
+    }
+
+    pub(super) fn member_result_type(&mut self, object_ty: &InferType, member: &str) -> InferType {
         // determine the result type for error recovery; actual error reporting happens post-substitution in validate.rs to avoid duplicate diagnostics
-        let ty = match &typed_object.ty {
+        match object_ty {
             InferType::String => {
                 if member == "len" {
                     InferType::I64
@@ -86,14 +97,16 @@ impl TypeInference {
             // resolves it; finalization widens it to Dynamic anyway if it never does
             InferType::Var(_) => self.type_gen.fresh(),
             _other => InferType::Dynamic,
-        };
+        }
+    }
 
-        (
-            TypedExprKind::Member {
-                object: Box::new(typed_object),
-                member: member.to_string(),
-            },
-            ty,
+    fn is_direct_rc_producer(kind: &TypedExprKind) -> bool {
+        matches!(
+            kind,
+            TypedExprKind::EnumVariant { .. }
+                | TypedExprKind::Identifier(_)
+                | TypedExprKind::Member { .. }
+                | TypedExprKind::Call { .. }
         )
     }
 
@@ -161,6 +174,13 @@ impl TypeInference {
                              which carries an `Rc<T>`) is not supported here; \
                              reassigning would leak the previously-held reference"
                         ), span));
+                    }
+                    if field_is_rc
+                        && object_is_rc_handle
+                        && !Self::is_direct_rc_producer(&typed_value.kind)
+                    {
+                        self.errors
+                            .push(TypeError::rc_field_assign_indirect(typed_value.span));
                     }
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     // Implicit numeric widening for field assignment
@@ -341,3 +361,4 @@ impl TypeInference {
         )
     }
 }
+

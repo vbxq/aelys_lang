@@ -80,6 +80,7 @@ impl TypeInference {
         let fn_type = InferType::Function {
             params: param_types,
             ret: Box::new(return_type.clone()),
+            nogc: false,
         };
 
         TypedExpr {
@@ -94,3 +95,4 @@ impl TypeInference {
         }
     }
 }
+

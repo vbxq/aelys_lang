@@ -155,6 +155,10 @@ impl LocalConstantPropagator {
     fn collect_assigned_vars(stmt: &TypedStmt, out: &mut Vec<String>) {
         match &stmt.kind {
             TypedStmtKind::Expression(expr) => Self::collect_assigned_vars_expr(expr, out),
+// a let initializer may borrow a loop-carried local (let r = &mut x)
+            TypedStmtKind::Let { initializer, .. } => {
+                Self::collect_assigned_vars_expr(initializer, out)
+            }
             TypedStmtKind::Block(stmts) => {
                 for s in stmts {
                     Self::collect_assigned_vars(s, out);
@@ -222,6 +226,18 @@ impl LocalConstantPropagator {
             } => {
                 Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(index, out);
+            }
+// a borrow may mutate the referent, mark it assigned so loop heads invalidate it
+            TypedExprKind::Reference { operand, .. } => {
+                if let TypedExprKind::Identifier(name) = &operand.kind {
+                    out.push(name.clone());
+                }
+                Self::collect_assigned_vars_expr(operand, out);
+            }
+            TypedExprKind::Deref(operand) => Self::collect_assigned_vars_expr(operand, out),
+            TypedExprKind::DerefAssign { target, value } => {
+                Self::collect_assigned_vars_expr(target, out);
+                Self::collect_assigned_vars_expr(value, out);
             }
             TypedExprKind::IndexAssign {
                 object,
@@ -293,6 +309,9 @@ impl LocalConstantPropagator {
                 for arm in arms {
                     Self::collect_assigned_vars_expr(&arm.body, out);
                 }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                Self::collect_assigned_vars_expr(scrutinee, out);
             }
             TypedExprKind::EnumVariant { args, .. } => {
                 for arg in args {
@@ -445,6 +464,22 @@ impl LocalConstantPropagator {
                 self.propagate_expr(range);
             }
 
+// taking a reference may mutate the operand through the borrow; invalidate it
+            TypedExprKind::Reference { operand, .. } => {
+                if let TypedExprKind::Identifier(name) = &operand.kind {
+                    self.scopes.invalidate(name);
+                } else {
+                    self.propagate_expr(operand);
+                }
+            }
+            TypedExprKind::Deref(operand) => {
+                self.propagate_expr(operand);
+            }
+            TypedExprKind::DerefAssign { target, value } => {
+                self.propagate_expr(target);
+                self.propagate_expr(value);
+            }
+
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
@@ -482,6 +517,9 @@ impl LocalConstantPropagator {
                     self.scopes.pop();
                 }
             }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.propagate_expr(scrutinee);
+            }
             TypedExprKind::EnumVariant { args, .. } => {
                 for arg in args {
                     self.propagate_expr(arg);
@@ -518,3 +556,4 @@ impl OptimizationPass for LocalConstantPropagator {
         self.stats.clone()
     }
 }
+

@@ -2,6 +2,14 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## 0.22.x - memory model, safety checking, error handling
+
+- Managed memory is non-atomic reference counting, not a tracing GC, with a trial-deletion cycle collector behind `--runtime rc+cycles` and an Immix-style allocator (`AELYS_ALLOC=malloc` to switch)
+- `Vec<T>` has copy-on-write value semantics; the surface where they are guaranteed is fail-closed behind `E0412`-`E0414`
+- a borrow checker on a dedicated IR (BIR), non-lexical, with inferred origins and no user-written lifetime annotations (`E0701`-`E0704`, `E0711`-`E0714`, `E0723`-`E0726`)
+- `nogc` as a checked effect declaration, inferred across the call graph, part of the function type, with a `T: nogc` structural bound (`E0727`-`E0730`)
+- error handling: `?`, `catch`, `discard`, `.unwrap()`/`.expect()`, `.map_error()`, must-use on dropped `Result`
+
 ## 0.21.x - LLVM backend implementation
 
 **0.21.5-a**

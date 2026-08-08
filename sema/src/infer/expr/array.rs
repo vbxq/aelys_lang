@@ -25,6 +25,25 @@ impl TypeInference {
         }
     }
 
+// same hazard one container down: an aggregate element that owns a vec buffer is copied
+// flat, so both copies would point at one buffer with no retain
+    fn reject_vec_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
+        for elem in elements {
+            if self.type_table.contains_vec_by_value(&elem.ty) {
+                self.errors.push(TypeError::vec_out_of_surface(
+                    format!(
+                        "element of {} has type `{}`, which holds a `Vec<T>` by value; \
+                         a Vec inside a Vec/array is not supported yet (the buffer would be \
+                         shared without a retain, the transitive Vec retain/release is not \
+                         implemented)",
+                        kind, elem.ty
+                    ),
+                    elem.span,
+                ));
+            }
+        }
+    }
+
     pub(super) fn infer_array_literal(
         &mut self,
         elements: &[Expr],
@@ -35,6 +54,7 @@ impl TypeInference {
         // guard the element values, not just the let: `return [a, b]` builds the array
         // inline and would release the Rc while the returned array still points at it
         self.reject_rc_aggregate_elements(&typed_elements, "array literal");
+        self.reject_vec_aggregate_elements(&typed_elements, "array literal");
 
         let elem_ty = if typed_elements.is_empty() {
             self.type_gen.fresh()
@@ -97,6 +117,18 @@ impl TypeInference {
                     fv.span,
                 ));
             }
+            if self.type_table.contains_vec_by_value(&fv.ty) {
+                self.errors.push(TypeError::vec_out_of_surface(
+                    format!(
+                        "fill value of array `[_; N]` has type `{}`, which holds a `Vec<T>` \
+                         by value; a Vec inside a Vec/array is not supported yet (the buffer \
+                         would be shared without a retain, the transitive Vec retain/release \
+                         is not implemented)",
+                        fv.ty
+                    ),
+                    fv.span,
+                ));
+            }
         }
 
         let elem_ty = if let Some(ref fv) = typed_fill {
@@ -124,6 +156,7 @@ impl TypeInference {
             elements.iter().map(|e| self.infer_expr(e)).collect();
 
         self.reject_rc_aggregate_elements(&typed_elements, "vec literal");
+        self.reject_vec_aggregate_elements(&typed_elements, "vec literal");
 
         let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
             let ty = self.type_from_annotation(ann);
@@ -186,6 +219,7 @@ impl TypeInference {
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
+            InferType::Slice { elem, .. } => (**elem).clone(),
             InferType::String => InferType::String,
             InferType::Dynamic => InferType::Dynamic,
             InferType::Var(_) => self.type_gen.fresh(),
@@ -208,32 +242,34 @@ impl TypeInference {
         value: &Expr,
         _span: Span,
     ) -> (TypedExprKind, InferType) {
-        // Check mutability: the object variable must be declared `let mut`
-        if let ExprKind::Identifier(ref name) = object.kind {
-            if !self.env.is_mutable(name) {
-                let binding_span = self.env.lookup_binding_span(name);
-                let suggestion = binding_span.map(|bs| {
-                    let insert_offset = bs.start + 4;
-                    let insert_span =
-                        Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
-                    TypeErrorSuggestion {
-                        message: "make the binding mutable".to_string(),
-                        span: insert_span,
-                        new_text: "mut ".to_string(),
-                    }
-                });
-                self.errors.push(TypeError::assign_to_immutable(
-                    name.to_string(),
-                    _span,
-                    binding_span,
-                    suggestion,
-                ));
-            }
-        }
-
         let typed_object = self.infer_expr(object);
         let typed_index = self.infer_expr(index);
         let mut typed_value = self.infer_expr(value);
+
+// a slice write is governed by the slice referent, not the binding mutability
+        if !matches!(typed_object.ty, InferType::Slice { .. }) {
+            if let ExprKind::Identifier(ref name) = object.kind {
+                if !self.env.is_mutable(name) {
+                    let binding_span = self.env.lookup_binding_span(name);
+                    let suggestion = binding_span.map(|bs| {
+                        let insert_offset = bs.start + 4;
+                        let insert_span =
+                            Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
+                        TypeErrorSuggestion {
+                            message: "make the binding mutable".to_string(),
+                            span: insert_span,
+                            new_text: "mut ".to_string(),
+                        }
+                    });
+                    self.errors.push(TypeError::assign_to_immutable(
+                        name.to_string(),
+                        _span,
+                        binding_span,
+                        suggestion,
+                    ));
+                }
+            }
+        }
 
         self.constraints.push(Constraint::equal(
             typed_index.ty.clone(),
@@ -242,9 +278,29 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
+// r1-r3 already refuse the construction forms; this is the fail-closed backstop
+        if matches!(
+            typed_object.ty,
+            InferType::Array(_, _) | InferType::Vec(_)
+        ) && self.type_table.contains_vec_by_value(&typed_value.ty)
+        {
+            self.errors.push(TypeError::vec_out_of_surface(
+                format!(
+                    "value stored into an element of `{}` has type `{}`, which holds a `Vec<T>` \
+                     by value; a Vec inside a Vec/array is not supported yet (the buffer would \
+                     be shared without a retain, the transitive Vec retain/release is not \
+                     implemented)",
+                    typed_object.ty, typed_value.ty
+                ),
+                typed_value.span,
+            ));
+        }
+
         // actual error reporting non-assignable types happens post-substitution in validate.rs to avoid duplicate diagnostics.
         match &typed_object.ty {
-            InferType::Array(elem_ty, _) | InferType::Vec(elem_ty) => {
+            InferType::Array(elem_ty, _)
+            | InferType::Vec(elem_ty)
+            | InferType::Slice { elem: elem_ty, .. } => {
                 self.try_narrow_literal(&mut typed_value, elem_ty);
                 // Implicit numeric widening for index assignment
                 if typed_value.ty != **elem_ty
@@ -291,22 +347,71 @@ impl TypeInference {
         &mut self,
         object: &Expr,
         range: &Expr,
-        span: Span,
+        _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
-        let typed_range = self.infer_expr(range);
-        self.errors.push(TypeError::member_access(
-            "slice expressions are not supported yet".to_string(),
-            span,
-        ));
+
+// real sliceability error is reported post-substitution in validate.rs
+        let elem_ty = match &typed_object.ty {
+            InferType::Array(inner, _) => (**inner).clone(),
+            InferType::Vec(inner) => (**inner).clone(),
+            InferType::Slice { elem, .. } => (**elem).clone(),
+            InferType::Dynamic => InferType::Dynamic,
+            InferType::Var(_) => self.type_gen.fresh(),
+            _other => InferType::Dynamic,
+        };
+
+        let typed_range = self.infer_slice_range(range);
 
         (
             TypedExprKind::Slice {
                 object: Box::new(typed_object),
                 range: Box::new(typed_range),
             },
-            InferType::Dynamic,
+            InferType::Slice {
+                elem: Box::new(elem_ty),
+                mutable: false,
+            },
         )
+    }
+
+    fn infer_slice_range(&mut self, range: &Expr) -> TypedExpr {
+        match &range.kind {
+            ExprKind::Range {
+                start,
+                end,
+                inclusive,
+            } => {
+                let typed_start = start.as_ref().map(|e| Box::new(self.infer_expr(e)));
+                let typed_end = end.as_ref().map(|e| Box::new(self.infer_expr(e)));
+                if let Some(ref s) = typed_start {
+                    self.constraints.push(Constraint::equal(
+                        s.ty.clone(),
+                        InferType::I64,
+                        s.span,
+                        ConstraintReason::RangeBound,
+                    ));
+                }
+                if let Some(ref e) = typed_end {
+                    self.constraints.push(Constraint::equal(
+                        e.ty.clone(),
+                        InferType::I64,
+                        e.span,
+                        ConstraintReason::RangeBound,
+                    ));
+                }
+                TypedExpr {
+                    kind: TypedExprKind::Range {
+                        start: typed_start,
+                        end: typed_end,
+                        inclusive: *inclusive,
+                    },
+                    ty: InferType::Range,
+                    span: range.span,
+                }
+            }
+            _ => self.infer_expr(range),
+        }
     }
 
     pub(super) fn infer_range_expr(
@@ -350,3 +455,4 @@ impl TypeInference {
         )
     }
 }
+

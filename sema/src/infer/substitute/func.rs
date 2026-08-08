@@ -26,6 +26,7 @@ impl TypeInference {
             body: self.apply_substitution_stmts(&func.body, subst),
             decorators: func.decorators.clone(),
             is_pub: func.is_pub,
+            declared_nogc: func.declared_nogc,
             span: func.span,
             captures: func
                 .captures

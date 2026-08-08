@@ -297,6 +297,18 @@ impl TypeInference {
                 range: Box::new(self.finalize_expr(*range)),
             },
 
+            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+                mutable,
+                operand: Box::new(self.finalize_expr(*operand)),
+            },
+            TypedExprKind::Deref(operand) => {
+                TypedExprKind::Deref(Box::new(self.finalize_expr(*operand)))
+            }
+            TypedExprKind::DerefAssign { target, value } => TypedExprKind::DerefAssign {
+                target: Box::new(self.finalize_expr(*target)),
+                value: Box::new(self.finalize_expr(*value)),
+            },
+
             TypedExprKind::StructLiteral { name, fields } => TypedExprKind::StructLiteral {
                 name,
                 fields: fields
@@ -355,6 +367,19 @@ impl TypeInference {
                     })
                     .collect(),
             },
+
+// payload_ty is a separate copy of the node type, so finalize it too or a var leaks
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => TypedExprKind::ResultAssert {
+                scrutinee: Box::new(self.finalize_expr(*scrutinee)),
+                ok_tag,
+                payload_ty: Self::finalize_type(payload_ty),
+                on_err,
+            },
         };
 
         TypedExpr {
@@ -395,9 +420,18 @@ impl TypeInference {
             }
             InferType::Vec(inner) => InferType::Vec(Box::new(Self::finalize_type(*inner))),
             InferType::Rc(inner) => InferType::Rc(Box::new(Self::finalize_type(*inner))),
-            InferType::Function { params, ret } => InferType::Function {
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(Self::finalize_type(*referent)),
+                mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(Self::finalize_type(*elem)),
+                mutable,
+            },
+            InferType::Function { params, ret, nogc } => InferType::Function {
                 params: params.into_iter().map(Self::finalize_type).collect(),
                 ret: Box::new(Self::finalize_type(*ret)),
+                nogc,
             },
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.into_iter().map(Self::finalize_type).collect())
@@ -411,3 +445,4 @@ impl TypeInference {
         }
     }
 }
+

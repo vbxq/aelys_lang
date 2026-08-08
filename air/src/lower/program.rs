@@ -108,6 +108,9 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+// next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
+        let saved_capture_slots = std::mem::take(&mut self.capture_slots);
+        let saved_affine_locals = std::mem::take(&mut self.affine_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
         let saved_pending = self.pending_block_id.take();
         let saved_next_local = self.next_local_id;
@@ -132,6 +135,8 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.capture_slots = saved_capture_slots;
+        self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
         self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
@@ -143,6 +148,7 @@ impl<'a> LoweringContext<'a> {
         let params = self.lower_params(&func.params);
         // retain each Vec param's buffer at entry, see emit_cow_param_entry_retains
         self.retain_vec_params(&func.params, &params);
+        self.register_affine_params(&func.params, &params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
             self.report_error(format!(
@@ -158,9 +164,10 @@ impl<'a> LoweringContext<'a> {
             ret_ty = AirType::Void;
         }
 
-        self.lower_body(&func.body);
+        self.lower_body(&func.body, func.span);
         // explicit returns already released these, this covers the fall-through exit
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
         self.resolve_block_aliases();
 
@@ -218,30 +225,22 @@ impl<'a> LoweringContext<'a> {
             span: Some(self.span(&func.span)),
         });
 
+// write-backs are gone, so a `&mut <capture>` that escapes into a call still writes
+        let mut slot_pairs: Vec<(LocalId, String)> = Vec::new();
         for (cap_name, cap_ty) in captures {
-            let local_id =
-                self.alloc_named_local(cap_name, self.lower_type_from_infer(cap_ty), false, None);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(local_id),
-                    rvalue: Rvalue::FieldAccess {
-                        base: Operand::Copy(env_param_id),
-                        field: cap_name.clone(),
-                    },
-                },
-                None,
-            );
+            let cap_air = self.lower_type_from_infer(cap_ty);
+            let ptr_local = self.addr_of_env_field(env_param_id, cap_name, &cap_air);
+            self.rename_local(ptr_local, cap_name);
+            slot_pairs.push((ptr_local, cap_name.clone()));
         }
 
-        // Track env param and captured names so assignments to captures write back
         let saved_env_param = self.closure_env_param.replace(env_param_id);
-        let saved_captures = std::mem::replace(
-            &mut self.closure_captures,
-            captures.iter().map(|(n, _)| n.clone()).collect(),
-        );
+        let saved_capture_slots =
+            std::mem::replace(&mut self.capture_slots, slot_pairs.into_iter().collect());
 
         let user_params = self.lower_params(&func.params);
         self.retain_vec_params(&func.params, &user_params);
+        self.register_affine_params(&func.params, &user_params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
             self.report_error(format!(
@@ -255,14 +254,15 @@ impl<'a> LoweringContext<'a> {
             ret_ty = AirType::Void;
         }
 
-        self.lower_body(&func.body);
+        self.lower_body(&func.body, func.span);
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
         self.resolve_block_aliases();
 
         // Restore outer closure context (supports nested closures)
         self.closure_env_param = saved_env_param;
-        self.closure_captures = saved_captures;
+        self.capture_slots = saved_capture_slots;
 
         let mut all_params = vec![self.current_params.remove(0)];
         all_params.extend(user_params);
@@ -295,6 +295,9 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+// next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
+        let saved_capture_slots = std::mem::take(&mut self.capture_slots);
+        let saved_affine_locals = std::mem::take(&mut self.affine_locals);
         let saved_aliases = std::mem::take(&mut self.block_aliases);
         let saved_pending = self.pending_block_id.take();
         let saved_next_local = self.next_local_id;
@@ -316,6 +319,8 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.capture_slots = saved_capture_slots;
+        self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
         self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
@@ -361,6 +366,19 @@ impl<'a> LoweringContext<'a> {
             if matches!(p.ty, InferType::Vec(_)) {
                 self.emit_cow_retain(air.id, Some(self.span(&p.span)));
                 self.cow_locals.push((air.id, 0));
+            }
+        }
+    }
+
+    pub(super) fn register_affine_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
+        for (p, air) in params.iter().zip(air_params.iter()) {
+            if matches!(self.affine_category(&p.ty), crate::bir::Category::Affine) {
+                self.affine_locals.push(crate::lower::AffineLocal {
+                    local: air.id,
+                    depth: 0,
+                    id_field: "id".to_string(),
+                    decl_key: crate::bir::drop_key(&p.span),
+                });
             }
         }
     }
@@ -423,6 +441,7 @@ impl<'a> LoweringContext<'a> {
                     body: body.clone(),
                     decorators: Vec::new(),
                     is_pub: false,
+                    declared_nogc: false,
                     span: expr.span,
                     captures: Vec::new(),
                 };
@@ -593,3 +612,4 @@ impl<'a> LoweringContext<'a> {
         }
     }
 }
+

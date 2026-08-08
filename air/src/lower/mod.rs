@@ -1,5 +1,6 @@
 mod expr;
 mod loops;
+mod place;
 mod program;
 mod stmts;
 
@@ -8,28 +9,53 @@ use aelys_sema::{InferType, TypedProgram};
 use aelys_syntax::BinaryOp;
 
 pub fn lower(program: &TypedProgram) -> AirProgram {
-    try_lower(program).unwrap_or_else(|errors| panic!("{}", format_lowering_errors(&errors)))
+    try_lower(program).unwrap_or_else(|failure| panic!("{}", format_lowering_errors(&failure)))
 }
 
-pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, Vec<String>> {
+// a borrow rejection renders richly (spans/carets/codes); an air-lowering failure keeps its flat
+pub enum LowerFailure {
+    Borrow(Vec<crate::bir::BirDiagnostic>),
+    Lowering(Vec<String>),
+}
+
+fn build_and_check_bir(
+    program: &TypedProgram,
+) -> Result<
+    std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
+    Vec<crate::bir::BirDiagnostic>,
+> {
+    let bir = crate::bir::build::build_program(program);
+    let check = crate::bir::check_program(&bir);
+    if check.errors.is_empty() {
+        Ok(check.drops)
+    } else {
+        Err(check.errors)
+    }
+}
+
+pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, LowerFailure> {
+    let drops = build_and_check_bir(program).map_err(LowerFailure::Borrow)?;
     let mut cx = LoweringContext::new(program);
+    cx.affine_drops = drops;
     cx.lower_program();
-    cx.finish()
+    cx.finish().map_err(LowerFailure::Lowering)
 }
 
 pub fn lower_with_gc_mode(program: &TypedProgram, file_gc_mode: GcMode) -> AirProgram {
     try_lower_with_gc_mode(program, file_gc_mode)
-        .unwrap_or_else(|errors| panic!("{}", format_lowering_errors(&errors)))
+        .unwrap_or_else(|failure| panic!("{}", format_lowering_errors(&failure)))
 }
 
 pub fn try_lower_with_gc_mode(
     program: &TypedProgram,
     file_gc_mode: GcMode,
-) -> Result<AirProgram, Vec<String>> {
+) -> Result<AirProgram, LowerFailure> {
+    let drops = build_and_check_bir(program).map_err(LowerFailure::Borrow)?;
     let mut cx = LoweringContext::new(program);
     cx.file_gc_mode = file_gc_mode;
+    cx.affine_drops = drops;
     cx.lower_program();
-    cx.finish()
+    cx.finish().map_err(LowerFailure::Lowering)
 }
 
 pub(crate) struct LoweringContext<'a> {
@@ -55,12 +81,15 @@ pub(crate) struct LoweringContext<'a> {
     // hand the caller a use-after-free
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
+// no drop bool: the point-keyed plan below decides every drop, read per program point.
+    pub(super) affine_locals: Vec<AffineLocal>,
+    pub(super) affine_drops: std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
     pub(super) loop_stack: Vec<LoopBlocks>,
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
     pub(super) block_aliases: Vec<(u32, u32)>,
     pub(super) closure_env_param: Option<LocalId>,
-    pub(super) closure_captures: std::collections::HashSet<String>,
+    pub(super) capture_slots: std::collections::HashMap<LocalId, String>,
     pub(super) lowering_errors: Vec<String>,
 }
 
@@ -69,6 +98,14 @@ pub(super) struct CarrierLocal {
     pub(super) ty: AirType,
     pub(super) paths: Vec<crate::rc_paths::RcLeafPath>,
     pub(super) depth: usize,
+}
+
+// a live affine local, dropped point-sensitively per the plan; decl_key is the cross-ir key
+pub(super) struct AffineLocal {
+    pub(super) local: LocalId,
+    pub(super) depth: usize,
+    pub(super) id_field: String,
+    pub(super) decl_key: crate::bir::DropKey,
 }
 
 pub(super) struct LoopBlocks {
@@ -99,12 +136,14 @@ impl<'a> LoweringContext<'a> {
             rc_locals: Vec::new(),
             carrier_locals: Vec::new(),
             cow_locals: Vec::new(),
+            affine_locals: Vec::new(),
+            affine_drops: std::collections::HashMap::new(),
             loop_stack: Vec::new(),
             type_params_map: Vec::new(),
             pending_block_id: None,
             block_aliases: Vec::new(),
             closure_env_param: None,
-            closure_captures: std::collections::HashSet::new(),
+            capture_slots: std::collections::HashMap::new(),
             lowering_errors: Vec::new(),
         }
     }
@@ -186,6 +225,14 @@ impl<'a> LoweringContext<'a> {
         });
         self.locals_by_name.push((name.to_string(), id));
         id
+    }
+
+// the capture prologue allocates its pointer through place.rs, which cannot name it, so
+    pub(super) fn rename_local(&mut self, id: LocalId, name: &str) {
+        if let Some(l) = self.current_locals.iter_mut().find(|l| l.id == id) {
+            l.name = Some(name.to_string());
+        }
+        self.locals_by_name.push((name.to_string(), id));
     }
 
     pub(super) fn lookup_local(&self, name: &str) -> Option<LocalId> {
@@ -293,7 +340,7 @@ impl<'a> LoweringContext<'a> {
             InferType::Bool => AirType::Bool,
             InferType::String => AirType::Str,
             InferType::Null => AirType::Ptr(Box::new(AirType::Void)),
-            InferType::Function { params, ret } => AirType::FnPtr {
+            InferType::Function { params, ret, .. } => AirType::FnPtr {
                 params: params
                     .iter()
                     .map(|p| self.lower_type_from_infer(p))
@@ -312,6 +359,13 @@ impl<'a> LoweringContext<'a> {
             // an Rc erases to a plain data pointer, the refcount machinery lives in the
             // lowering and the runtime, never in the type
             InferType::Rc(inner) => AirType::Ptr(Box::new(self.lower_type_from_infer(inner))),
+// references erase to raw ptr / fat {ptr,len}, mutability is dropped
+            InferType::Ref { referent, .. } => {
+                AirType::Ptr(Box::new(self.lower_type_from_infer(referent)))
+            }
+            InferType::Slice { elem, .. } => {
+                AirType::Slice(Box::new(self.lower_type_from_infer(elem)))
+            }
             // TODO: add support for InferType::Tuple in the backend
             InferType::Tuple(_) => {
                 #[cfg(debug_assertions)]
@@ -350,7 +404,7 @@ impl<'a> LoweringContext<'a> {
                     // mangle to a name monomorphization cannot rewrite
                     let all_concrete = lowered_args
                         .iter()
-                        .all(|t| !matches!(t, AirType::Opaque | AirType::Void | AirType::Param(_)));
+                        .all(|t| !matches!(t, AirType::Opaque | AirType::Param(_)));
                     if all_concrete {
                         let suffix = lowered_args
                             .iter()
@@ -446,9 +500,66 @@ impl<'a> LoweringContext<'a> {
             self.file_gc_mode
         }
     }
+
+    pub(super) fn affine_category(&self, ty: &InferType) -> crate::bir::Category {
+        crate::bir::category(ty, &self.program.type_table)
+    }
+
+    pub(super) fn air_drop_key(sp: Option<Span>) -> Option<crate::bir::DropKey> {
+        sp.map(|s| (s.lo as usize, s.hi as usize))
+    }
+
+    pub(super) fn emit_affine_drop(&mut self, local: LocalId, id_field: &str, sp: Option<Span>) {
+        let base_ty = self
+            .local_air_type(local)
+            .unwrap_or(AirType::Struct(crate::bir::category::AFFINE_TEST_TYPE.to_string()));
+        let field_ty = self.air_struct_field_type(&base_ty, id_field);
+        let id = self.emit_rvalue_to_temp(
+            field_ty,
+            Rvalue::FieldAccess {
+                base: Operand::Copy(local),
+                field: id_field.to_string(),
+            },
+            sp,
+        );
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("println".to_string()),
+                args: vec![id],
+            },
+            sp,
+        );
+    }
+
+// collect (local, id_field) to drop at a point: registered affines whose decl is listed by
+    pub(super) fn collect_affine_drops(
+        &self,
+        point_key: crate::bir::DropKey,
+        depth_ok: impl Fn(usize) -> bool,
+    ) -> Vec<(LocalId, String)> {
+        let Some(decls) = self.affine_drops.get(&point_key) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        for decl in decls {
+            if let Some(al) = self
+                .affine_locals
+                .iter()
+                .find(|a| a.decl_key == *decl && depth_ok(a.depth))
+            {
+                out.push((al.local, al.id_field.clone()));
+            }
+        }
+        out
+    }
 }
 
-fn format_lowering_errors(errors: &[String]) -> String {
+fn format_lowering_errors(failure: &LowerFailure) -> String {
+// borrow rejections join their primary phrases (markers preserved) into the same shell as the
+    let errors: Vec<String> = match failure {
+        LowerFailure::Lowering(errors) => errors.clone(),
+        LowerFailure::Borrow(diags) => diags.iter().map(|d| d.primary.1.clone()).collect(),
+    };
     let joined = errors
         .iter()
         .enumerate()
@@ -504,3 +615,4 @@ fn lower_unop(op: &aelys_syntax::UnaryOp) -> UnOp {
         aelys_syntax::UnaryOp::BitNot => UnOp::BitNot,
     }
 }
+

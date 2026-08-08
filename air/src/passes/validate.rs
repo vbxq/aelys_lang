@@ -65,6 +65,8 @@ pub enum AirValidationDetail {
         enum_name: String,
         context: String,
     },
+/// a place names a global that is not present in the air program.
+    UnknownGlobalReference { global_name: String, context: String },
     /// A function has no blocks (non-extern function with empty body).
     EmptyBody,
 }
@@ -151,6 +153,15 @@ impl fmt::Display for AirValidationError {
                     "enum operation references unknown enum `{enum_name}` after monomorphization ({context})"
                 )
             }
+            AirValidationDetail::UnknownGlobalReference {
+                global_name,
+                context,
+            } => {
+                write!(
+                    f,
+                    "place references unknown global `{global_name}` ({context})"
+                )
+            }
             AirValidationDetail::EmptyBody => {
                 write!(f, "non-extern function has no basic blocks")
             }
@@ -200,6 +211,7 @@ fn collect_unknown_enum_names(ty: &AirType, known_enums: &HashSet<String>, missi
 pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>> {
     let mut errors = Vec::new();
     let known_enums: HashSet<String> = program.enums.iter().map(|def| def.name.clone()).collect();
+    let known_globals: HashSet<String> = program.globals.iter().map(|g| g.name.clone()).collect();
 
     // Check struct fields for Opaque types.
     for def in &program.structs {
@@ -229,7 +241,7 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
     }
 
     for function in &program.functions {
-        validate_function(function, &known_enums, &mut errors);
+        validate_function(function, &known_enums, &known_globals, &mut errors);
     }
 
     if errors.is_empty() {
@@ -242,6 +254,7 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
 fn validate_function(
     function: &AirFunction,
     known_enums: &HashSet<String>,
+    known_globals: &HashSet<String>,
     errors: &mut Vec<AirValidationError>,
 ) {
     // Skip extern declarations, they have no body by design.
@@ -380,6 +393,7 @@ fn validate_function(
             block,
             &declared_locals,
             known_enums,
+            known_globals,
             &function.name,
             &block_ctx,
             errors,
@@ -392,19 +406,29 @@ fn check_block_locals(
     block: &AirBlock,
     declared: &HashSet<LocalId>,
     known_enums: &HashSet<String>,
+    known_globals: &HashSet<String>,
     func_name: &str,
     block_ctx: &str,
     errors: &mut Vec<AirValidationError>,
 ) {
     for (i, stmt) in block.stmts.iter().enumerate() {
         let ctx = format!("{block_ctx}, stmt #{i}");
-        check_stmt_locals(&stmt.kind, declared, known_enums, func_name, &ctx, errors);
+        check_stmt_locals(
+            &stmt.kind,
+            declared,
+            known_enums,
+            known_globals,
+            func_name,
+            &ctx,
+            errors,
+        );
     }
     let ctx = format!("{block_ctx}, terminator");
     check_terminator_locals(
         &block.terminator,
         declared,
         known_enums,
+        known_globals,
         func_name,
         &ctx,
         errors,
@@ -415,14 +439,23 @@ fn check_stmt_locals(
     stmt: &AirStmtKind,
     declared: &HashSet<LocalId>,
     known_enums: &HashSet<String>,
+    known_globals: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
 ) {
     match stmt {
         AirStmtKind::Assign { place, rvalue } => {
-            check_place_locals(place, declared, func_name, ctx, errors);
-            check_rvalue_locals(rvalue, declared, known_enums, func_name, ctx, errors);
+            check_place_locals(place, declared, known_globals, func_name, ctx, errors);
+            check_rvalue_locals(
+                rvalue,
+                declared,
+                known_enums,
+                known_globals,
+                func_name,
+                ctx,
+                errors,
+            );
         }
         AirStmtKind::GcAlloc { local, .. }
         | AirStmtKind::Alloc { local, .. }
@@ -448,6 +481,7 @@ fn check_terminator_locals(
     term: &AirTerminator,
     declared: &HashSet<LocalId>,
     _known_enums: &HashSet<String>,
+    known_globals: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
@@ -469,7 +503,7 @@ fn check_terminator_locals(
             for arg in args {
                 check_operand_locals(arg, declared, func_name, ctx, errors);
             }
-            check_place_locals(ret, declared, func_name, ctx, errors);
+            check_place_locals(ret, declared, known_globals, func_name, ctx, errors);
         }
         AirTerminator::Return(None)
         | AirTerminator::Goto(_)
@@ -483,6 +517,7 @@ fn check_rvalue_locals(
     rvalue: &Rvalue,
     declared: &HashSet<LocalId>,
     known_enums: &HashSet<String>,
+    known_globals: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
@@ -513,8 +548,8 @@ fn check_rvalue_locals(
             check_operand_locals(base, declared, func_name, ctx, errors);
             check_operand_locals(index, declared, func_name, ctx, errors);
         }
-        Rvalue::AddressOf(local) => {
-            check_local(*local, declared, func_name, ctx, errors);
+        Rvalue::AddressOf(place) => {
+            check_place_locals(place, declared, known_globals, func_name, ctx, errors);
         }
         Rvalue::EnumInit {
             enum_name, payload, ..
@@ -561,17 +596,33 @@ fn check_rvalue_locals(
         Rvalue::ClosureCreate { env, .. } => {
             check_operand_locals(env, declared, func_name, ctx, errors);
         }
+        Rvalue::SliceFromParts { ptr, len } => {
+            check_operand_locals(ptr, declared, func_name, ctx, errors);
+            check_operand_locals(len, declared, func_name, ctx, errors);
+        }
     }
 }
 
 fn check_place_locals(
     place: &Place,
     declared: &HashSet<LocalId>,
+    known_globals: &HashSet<String>,
     func_name: &str,
     ctx: &str,
     errors: &mut Vec<AirValidationError>,
 ) {
     match place {
+        Place::Global(name) => {
+            if !known_globals.contains(name) {
+                errors.push(AirValidationError {
+                    function_name: func_name.to_string(),
+                    detail: AirValidationDetail::UnknownGlobalReference {
+                        global_name: name.clone(),
+                        context: ctx.to_string(),
+                    },
+                });
+            }
+        }
         Place::Local(local) | Place::Field(local, _) | Place::Deref(local) => {
             check_local(*local, declared, func_name, ctx, errors);
         }
@@ -684,3 +735,4 @@ fn check_block_ref(
         });
     }
 }
+

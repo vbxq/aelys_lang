@@ -14,13 +14,21 @@ void __aelys_rc_retain(void *ptr) {
     if (ptr == NULL) {
         return;
     }
-    aelys_rc_header(ptr)[0] += 1;
+    uint32_t *header = aelys_rc_header(ptr);
+    /* saturate: a wrap to 0 at 2^32 owners would report unshared and silently disable cow */
+    if (header[0] != UINT32_MAX) {
+        header[0] += 1;
+    }
 }
 
 void __aelys_rc_release(void *ptr) {
     if (ptr == NULL) {
         return;
     }
-    /* the leak variant never frees, even at zero: a bad release stays inert */
-    aelys_rc_header(ptr)[0] -= 1;
+    uint32_t *header = aelys_rc_header(ptr);
+    /* a pinned (saturated) count stays put; the leak variant never frees, even at zero */
+    if (header[0] == UINT32_MAX) {
+        return;
+    }
+    header[0] -= 1;
 }

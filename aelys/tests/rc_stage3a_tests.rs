@@ -459,7 +459,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[air-lowering]"),
         "T-Rej(e): a carrier abandoned by break must be rejected; got:\n{err}"
     );
 }

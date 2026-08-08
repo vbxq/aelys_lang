@@ -150,11 +150,10 @@ impl<'a> FunctionCodegen<'a> {
                         let ty = self.context.get_struct_type(name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
                         })?;
-                        Ok((
-                            name.clone(),
-                            ty,
-                            self.load_local(*local)?.into_pointer_value(),
-                        ))
+                        let name = name.clone();
+                        let base = self.load_local(*local)?.into_pointer_value();
+                        self.emit_null_check(base)?;
+                        Ok((name, ty, base))
                     }
                     other => Err(CodegenError::UnsupportedType(format!(
                         "field access pointer to non-struct {:?}",

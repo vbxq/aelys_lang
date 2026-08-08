@@ -104,7 +104,13 @@ fn linker_available() -> bool {
     }
 }
 
-fn evaluate(fixture: &Path) -> Verdict {
+// the levels the net evaluates at. -o2 alone is what let a -o0-only miscompile of two nested
+const GOLDEN_LEVELS: &[(&str, OptimizationLevel)] = &[
+    ("-O0", OptimizationLevel::None),
+    ("-O2", OptimizationLevel::Standard),
+];
+
+fn evaluate_at(fixture: &Path, opt: OptimizationLevel) -> Verdict {
     let stem = fixture
         .file_stem()
         .and_then(|s| s.to_str())
@@ -116,7 +122,7 @@ fn evaluate(fixture: &Path) -> Verdict {
     let source_path = dir.path().join(format!("{stem}.aelys"));
     fs::copy(fixture, &source_path).expect("copy fixture into tempdir");
 
-    match compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
+    match compile_file_with_llvm(&source_path, opt, false) {
         Err(_) => {
             if reject {
                 Verdict::Reject
@@ -199,17 +205,28 @@ fn e2e_fixtures_match_golden() {
         fixtures_dir()
     );
 
-    let actual: BTreeMap<String, Verdict> = fixtures
+    let mut per_level: Vec<(&str, BTreeMap<String, Verdict>)> = Vec::new();
+    for (level, opt) in GOLDEN_LEVELS {
+        per_level.push((
+            level,
+            fixtures
+                .iter()
+                .map(|path| {
+                    let name = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .expect("fixture has a utf-8 name")
+                        .to_string();
+                    (name, evaluate_at(path, *opt))
+                })
+                .collect(),
+        ));
+    }
+    let actual: BTreeMap<String, Verdict> = per_level
         .iter()
-        .map(|path| {
-            let name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .expect("fixture has a utf-8 name")
-                .to_string();
-            (name, evaluate(path))
-        })
-        .collect();
+        .find(|(l, _)| *l == "-O2")
+        .map(|(_, m)| m.clone())
+        .expect("-O2 leg present");
 
     if std::env::var_os("AELYS_REGEN_GOLDEN").is_some() {
         write_golden(&actual);
@@ -235,14 +252,16 @@ fn e2e_fixtures_match_golden() {
             diffs.push(format!("{name}: in golden but missing on disk"));
         }
     }
-    for (name, verdict) in &actual {
-        if let Some(frozen) = expected.get(name) {
-            if verdict != frozen {
-                diffs.push(format!(
-                    "{name}: golden {}, observed {}",
-                    frozen.serialize(),
-                    verdict.serialize()
-                ));
+    for (level, observed) in &per_level {
+        for (name, verdict) in observed {
+            if let Some(frozen) = expected.get(name) {
+                if verdict != frozen {
+                    diffs.push(format!(
+                        "{name} at {level}: golden {}, observed {}",
+                        frozen.serialize(),
+                        verdict.serialize()
+                    ));
+                }
             }
         }
     }
@@ -332,3 +351,4 @@ fn golden_vs_should_be_annotations() {
         }
     }
 }
+

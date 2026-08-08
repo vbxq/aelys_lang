@@ -179,6 +179,12 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             collect_uses_in_expr(object, used);
             collect_uses_in_expr(range, used);
         }
+        TypedExprKind::Reference { operand, .. } => collect_uses_in_expr(operand, used),
+        TypedExprKind::Deref(operand) => collect_uses_in_expr(operand, used),
+        TypedExprKind::DerefAssign { target, value } => {
+            collect_uses_in_expr(target, used);
+            collect_uses_in_expr(value, used);
+        }
         TypedExprKind::FmtString(parts) => {
             for part in parts {
                 if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
@@ -206,6 +212,9 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 collect_uses_in_expr(&arm.body, used);
             }
         }
+        TypedExprKind::ResultAssert { scrutinee, .. } => {
+            collect_uses_in_expr(scrutinee, used);
+        }
         TypedExprKind::EnumVariant { args, .. } => {
             for arg in args {
                 collect_uses_in_expr(arg, used);
@@ -218,3 +227,4 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         | TypedExprKind::Null => {}
     }
 }
+

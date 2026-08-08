@@ -57,6 +57,7 @@ impl Lexer {
                 }
             }
             '@' => self.add_token(TokenKind::At),
+            '?' => self.add_token(TokenKind::Question),
 
             '+' => {
                 if self.match_char('=') {

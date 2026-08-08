@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedFunction, TypedParam};
 use crate::types::InferType;
 use aelys_syntax::Function;
@@ -10,7 +10,7 @@ impl TypeInference {
         let fn_signature = self.env.lookup_function(&func.name).cloned();
 
         let (sig_params, sig_ret) = match fn_signature.as_deref() {
-            Some(InferType::Function { params, ret }) => {
+            Some(InferType::Function { params, ret, .. }) => {
                 (Some(params.clone()), Some((**ret).clone()))
             }
             _ => (None, None),
@@ -28,9 +28,13 @@ impl TypeInference {
                 .or_else(|| {
                     p.type_annotation
                         .as_ref()
-                        .map(|ann| self.type_from_annotation(ann))
+                        .map(|ann| self.type_from_param_annotation(ann))
                 })
                 .unwrap_or_else(|| self.type_gen.fresh());
+
+            if p.mutable && matches!(ty, InferType::Function { nogc: true, .. }) {
+                self.errors.push(TypeError::nogc_mut_param(&p.name, p.span));
+            }
 
             typed_params.push(TypedParam {
                 name: p.name.clone(),
@@ -39,6 +43,15 @@ impl TypeInference {
                 span: p.span,
             });
         }
+
+        let saved_nogc_fn_params = std::mem::replace(
+            &mut self.nogc_fn_params,
+            typed_params
+                .iter()
+                .filter(|p| matches!(p.ty, InferType::Function { nogc: true, .. }))
+                .map(|p| p.name.clone())
+                .collect(),
+        );
 
         let return_type = sig_ret
             .or_else(|| {
@@ -94,6 +107,7 @@ impl TypeInference {
         self.env = saved_env;
         self.type_params_in_scope = saved_type_params;
         self.literal_init_vars = saved_literal_inits;
+        self.nogc_fn_params = saved_nogc_fn_params;
 
         TypedFunction {
             name: func.name.clone(),
@@ -103,8 +117,10 @@ impl TypeInference {
             body: typed_body,
             decorators: func.decorators.clone(),
             is_pub: func.is_pub,
+            declared_nogc: func.is_nogc,
             span: func.span,
             captures,
         }
     }
 }
+

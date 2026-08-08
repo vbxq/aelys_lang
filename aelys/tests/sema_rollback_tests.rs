@@ -69,10 +69,12 @@ fn failed_function_unification_rolls_back_param_bindings() {
     let fn_a = InferType::Function {
         params: vec![InferType::Var(v0)],
         ret: Box::new(InferType::String),
+        nogc: false,
     };
     let fn_b = InferType::Function {
         params: vec![InferType::I64],
         ret: Box::new(InferType::I64),
+        nogc: false,
     };
 
     // save state, attempt unification, rollback on failure

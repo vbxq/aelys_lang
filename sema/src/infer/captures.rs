@@ -234,6 +234,16 @@ impl TypeInference {
                 self.collect_captures_inner(object, locals, captures, seen);
                 self.collect_captures_inner(range, locals, captures, seen);
             }
+            TypedExprKind::Reference { operand, .. } => {
+                self.collect_captures_inner(operand, locals, captures, seen);
+            }
+            TypedExprKind::Deref(operand) => {
+                self.collect_captures_inner(operand, locals, captures, seen);
+            }
+            TypedExprKind::DerefAssign { target, value } => {
+                self.collect_captures_inner(target, locals, captures, seen);
+                self.collect_captures_inner(value, locals, captures, seen);
+            }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let crate::typed_ast::TypedFmtStringPart::Expr(e) = part {
@@ -273,6 +283,9 @@ impl TypeInference {
                     }
                     self.collect_captures_inner(&arm.body, &arm_locals, captures, seen);
                 }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.collect_captures_inner(scrutinee, locals, captures, seen);
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

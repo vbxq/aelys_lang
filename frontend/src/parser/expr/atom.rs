@@ -83,7 +83,19 @@ impl Parser {
     pub(super) fn match_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
         let scrutinee = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;
+        let arms = self.match_arms()?;
+        let end_span = self.previous().span;
 
+        Ok(Expr::new(
+            ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms,
+            },
+            start_span.merge(end_span),
+        ))
+    }
+
+    pub(super) fn match_arms(&mut self) -> Result<Vec<MatchArm>> {
         let mut arms = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
             // Skip any stray semicolons between arms
@@ -111,15 +123,7 @@ impl Parser {
             }
         }
         self.consume(&TokenKind::RBrace, "}")?;
-        let end_span = self.previous().span;
-
-        Ok(Expr::new(
-            ExprKind::Match {
-                scrutinee: Box::new(scrutinee),
-                arms,
-            },
-            start_span.merge(end_span),
-        ))
+        Ok(arms)
     }
 
     /// Parse `return <expr>` in match arm position.
@@ -316,6 +320,7 @@ impl Parser {
                 | TokenKind::Not
                 | TokenKind::If
                 | TokenKind::Match
+                | TokenKind::Unsafe
                 | TokenKind::Fn
         )
     }
@@ -376,6 +381,16 @@ impl Parser {
 
             TokenKind::Match => {
                 return self.match_expression(span);
+            }
+
+            TokenKind::Unsafe => {
+                self.consume(&TokenKind::LBrace, "{")?;
+                let block = self.block_expression()?;
+                let end_span = self.previous().span;
+                return Ok(Expr::new(
+                    ExprKind::Unsafe(Box::new(block)),
+                    span.merge(end_span),
+                ));
             }
 
             TokenKind::Fn => {
@@ -759,3 +774,4 @@ fn remap_stmt_spans(stmt: &mut Stmt, span: aelys_syntax::Span) {
         _ => {}
     }
 }
+

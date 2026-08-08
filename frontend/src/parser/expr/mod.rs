@@ -24,6 +24,7 @@ impl Parser {
 
         if self.match_token(&TokenKind::Eq) {
             let value = self.assignment()?;
+            let expr = Self::unwrap_grouping(expr);
 
             if let ExprKind::Identifier(name) = expr.kind {
                 let span = expr.span.merge(value.span);
@@ -62,6 +63,17 @@ impl Parser {
                 ));
             }
 
+            if let ExprKind::Deref(target) = expr.kind {
+                let span = target.span.merge(value.span);
+                return Ok(Expr::new(
+                    ExprKind::DerefAssign {
+                        target,
+                        value: Box::new(value),
+                    },
+                    span,
+                ));
+            }
+
             return Err(CompileError::new(
                 CompileErrorKind::InvalidAssignmentTarget,
                 expr.span,
@@ -73,6 +85,7 @@ impl Parser {
         // compound assignment: x += y → x = x + y
         if let Some(op) = self.match_compound_assign() {
             let rhs = self.assignment()?;
+            let expr = Self::unwrap_grouping(expr);
 
             if let ExprKind::Identifier(ref name) = expr.kind {
                 let binary = Expr::new(
@@ -143,6 +156,25 @@ impl Parser {
                 ));
             }
 
+            if let ExprKind::Deref(ref target) = expr.kind {
+                let binary = Expr::new(
+                    ExprKind::Binary {
+                        left: Box::new(expr.clone()),
+                        op,
+                        right: Box::new(rhs),
+                    },
+                    expr.span.merge(self.previous().span),
+                );
+                let span = expr.span.merge(binary.span);
+                return Ok(Expr::new(
+                    ExprKind::DerefAssign {
+                        target: target.clone(),
+                        value: Box::new(binary),
+                    },
+                    span,
+                ));
+            }
+
             return Err(CompileError::new(
                 CompileErrorKind::InvalidAssignmentTarget,
                 expr.span,
@@ -152,6 +184,16 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+// keeps the outer span, so a diagnostic still points at the parenthesised form
+    pub(super) fn unwrap_grouping(expr: Expr) -> Expr {
+        let span = expr.span;
+        let mut cur = expr;
+        while let ExprKind::Grouping(inner) = cur.kind {
+            cur = *inner;
+        }
+        Expr::new(cur.kind, span)
     }
 
     fn match_compound_assign(&mut self) -> Option<BinaryOp> {
@@ -236,3 +278,4 @@ fn token_to_binary_op(kind: &TokenKind) -> Option<BinaryOp> {
         _ => None,
     }
 }
+

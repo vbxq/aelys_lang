@@ -97,7 +97,11 @@ void __aelys_rc_retain(void *ptr) {
     if (ptr == NULL) {
         return;
     }
-    aelys_rc_refcount(ptr)[0] += 1;
+    uint32_t *rc = aelys_rc_refcount(ptr);
+    /* saturate: a wrap to 0 at 2^32 owners would report unshared and silently disable cow */
+    if (rc[0] != UINT32_MAX) {
+        rc[0] += 1;
+    }
 }
 
 void __aelys_rc_release(void *ptr) {
@@ -105,6 +109,11 @@ void __aelys_rc_release(void *ptr) {
         return;
     }
     uint32_t *rc = aelys_rc_refcount(ptr);
+    /* a pinned (saturated) count never decrements, so it can never reach zero and the collector
+       sees gc_refcount stay above zero, keeping it live: a permanent leak, never a double free */
+    if (rc[0] == UINT32_MAX) {
+        return;
+    }
     rc[0] -= 1;
     if (rc[0] == 0) {
         /* drop the stale pointer first, or the next collect would deref freed memory */

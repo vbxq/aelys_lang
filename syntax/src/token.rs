@@ -56,6 +56,10 @@ pub enum TokenKind {
     Struct,
     Enum,
     Match,
+    Discard,
+    Catch,
+    Unsafe,
+    Nogc,
 
     // operators
     Plus,
@@ -81,6 +85,7 @@ pub enum TokenKind {
     PercentEq,  // %=
     PlusPlus,   // ++
     MinusMinus, // --
+    Question,   // ?
 
     // bitwise
     Shl,
@@ -144,6 +149,7 @@ impl TokenKind {
                 | Self::Star // for `needs module.*`
                 | Self::PlusPlus
                 | Self::MinusMinus
+                | Self::Question
         )
     }
 }
@@ -181,6 +187,10 @@ impl std::fmt::Display for TokenKind {
             Self::Struct => write!(f, "struct"),
             Self::Enum => write!(f, "enum"),
             Self::Match => write!(f, "match"),
+            Self::Discard => write!(f, "discard"),
+            Self::Catch => write!(f, "catch"),
+            Self::Unsafe => write!(f, "unsafe"),
+            Self::Nogc => write!(f, "nogc"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),
@@ -204,6 +214,7 @@ impl std::fmt::Display for TokenKind {
             Self::PercentEq => write!(f, "%="),
             Self::PlusPlus => write!(f, "++"),
             Self::MinusMinus => write!(f, "--"),
+            Self::Question => write!(f, "?"),
             Self::Shl => write!(f, "<<"),
             Self::Shr => write!(f, ">>"),
             Self::Ampersand => write!(f, "&"),

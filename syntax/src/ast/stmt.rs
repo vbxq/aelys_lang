@@ -17,6 +17,8 @@ impl Stmt {
 pub enum StmtKind {
     Expression(Expr),
 
+    Discard(Expr),
+
     Let {
         name: String,
         mutable: bool,
@@ -108,11 +110,13 @@ pub enum ImportKind {
 pub struct Function {
     pub name: String,
     pub type_params: Vec<String>,
+    pub nogc_bounds: Vec<bool>,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Vec<Stmt>,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
+    pub is_nogc: bool,
     pub span: Span,
 }
 
@@ -121,3 +125,4 @@ pub struct Decorator {
     pub name: String,
     pub span: Span,
 }
+

@@ -34,6 +34,19 @@ impl TypeInference {
         }
     }
 
+    pub(super) fn reject_reserved_type_names(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            let name = match &stmt.kind {
+                StmtKind::StructDecl { name, .. } | StmtKind::EnumDecl { name, .. } => name,
+                _ => continue,
+            };
+            if name == "Rc" || name == "Vec" {
+                self.errors
+                    .push(TypeError::reserved_type_name(name.clone(), stmt.span));
+            }
+        }
+    }
+
     pub(crate) fn is_transparent_aggregate_of_rc(ty: &InferType) -> bool {
         matches!(
             ty,
@@ -196,3 +209,4 @@ impl TypeInference {
         }
     }
 }
+

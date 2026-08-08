@@ -17,7 +17,8 @@ fn eliminate_function_copies(function: &mut AirFunction) {
     }
 
     let writes = collect_write_counts(function);
-    let direct_aliases = collect_direct_aliases(function, &writes);
+    let address_taken = collect_address_taken(function);
+    let direct_aliases = collect_direct_aliases(function, &writes, &address_taken);
     let replacements = resolve_to_params(&direct_aliases, &params);
     if replacements.is_empty() {
         return;
@@ -57,6 +58,7 @@ fn collect_write_counts(function: &AirFunction) -> HashMap<LocalId, u32> {
 fn collect_direct_aliases(
     function: &AirFunction,
     writes: &HashMap<LocalId, u32>,
+    address_taken: &HashSet<LocalId>,
 ) -> HashMap<LocalId, LocalId> {
     let mut aliases = HashMap::new();
     for block in &function.blocks {
@@ -66,6 +68,9 @@ fn collect_direct_aliases(
                 None => continue,
             };
             if dst == src {
+                continue;
+            }
+            if address_taken.contains(&dst) || address_taken.contains(&src) {
                 continue;
             }
             // Only safe to alias when dst is written exactly once (the copy itself)
@@ -196,8 +201,9 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
             rewrite_operand(base, replacements);
             rewrite_operand(index, replacements);
         }
-        Rvalue::AddressOf(local) => {
-            *local = rewrite_local(*local, replacements);
+// the root and the index operand: a missed index leaves a stale local reference
+        Rvalue::AddressOf(place) => {
+            rewrite_place(place, replacements);
         }
         Rvalue::EnumInit { payload, .. } => {
             for operand in payload {
@@ -212,6 +218,10 @@ fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) 
         }
         Rvalue::ClosureCreate { env, .. } => {
             rewrite_operand(env, replacements);
+        }
+        Rvalue::SliceFromParts { ptr, len } => {
+            rewrite_operand(ptr, replacements);
+            rewrite_operand(len, replacements);
         }
     }
 }
@@ -233,6 +243,7 @@ fn rewrite_operand(operand: &mut Operand, replacements: &HashMap<LocalId, LocalI
 
 fn rewrite_place(place: &mut Place, replacements: &HashMap<LocalId, LocalId>) {
     match place {
+        Place::Global(_) => {}
         Place::Local(local) | Place::Field(local, _) | Place::Deref(local) => {
             *local = rewrite_local(*local, replacements);
         }
@@ -241,6 +252,27 @@ fn rewrite_place(place: &mut Place, replacements: &HashMap<LocalId, LocalId>) {
             rewrite_operand(index, replacements);
         }
     }
+}
+
+fn collect_address_taken(function: &AirFunction) -> HashSet<LocalId> {
+    let mut set = HashSet::new();
+    let mut note = |place: &Place| {
+        if let Place::Local(l) | Place::Field(l, _) | Place::Deref(l) | Place::Index(l, _) = place {
+            set.insert(*l);
+        }
+    };
+    for block in &function.blocks {
+        for stmt in &block.stmts {
+            if let AirStmtKind::Assign {
+                rvalue: Rvalue::AddressOf(place),
+                ..
+            } = &stmt.kind
+            {
+                note(place);
+            }
+        }
+    }
+    set
 }
 
 fn rewrite_local(local: LocalId, replacements: &HashMap<LocalId, LocalId>) -> LocalId {
@@ -260,10 +292,11 @@ fn bump_place_write(place: &Place, counts: &mut HashMap<LocalId, u32>) {
         Place::Local(local) | Place::Field(local, _) | Place::Index(local, _) => {
             bump_local(*local, counts)
         }
-        Place::Deref(_) => {}
+        Place::Deref(_) | Place::Global(_) => {}
     }
 }
 
 fn bump_local(local: LocalId, counts: &mut HashMap<LocalId, u32>) {
     *counts.entry(local).or_insert(0) += 1;
 }
+

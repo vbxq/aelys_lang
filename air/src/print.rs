@@ -172,8 +172,19 @@ fn fmt_args(args: &[Operand], func: &AirFunction) -> String {
 fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirType {
     match place {
         Place::Local(id) => local_type(func, *id).clone(),
+        Place::Global(name) => program
+            .globals
+            .iter()
+            .find(|g| g.name == *name)
+            .map(|g| g.ty.clone())
+            .unwrap_or(AirType::Void),
+// through the pointer is what keeps `--emit-air` readable
         Place::Field(id, name) => {
-            if let AirType::Struct(sname) = local_type(func, *id) {
+            let root = match local_type(func, *id) {
+                AirType::Ptr(inner) => inner.as_ref(),
+                other => other,
+            };
+            if let AirType::Struct(sname) = root {
                 program
                     .structs
                     .iter()
@@ -189,12 +200,18 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             AirType::Ptr(inner) => (**inner).clone(),
             _ => AirType::Void,
         },
-        Place::Index(id, _) => match local_type(func, *id) {
-            AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
-                (**inner).clone()
+        Place::Index(id, _) => {
+            let root = match local_type(func, *id) {
+                AirType::Ptr(inner) => inner.as_ref(),
+                other => other,
+            };
+            match root {
+                AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
+                    (**inner).clone()
+                }
+                _ => AirType::Void,
             }
-            _ => AirType::Void,
-        },
+        }
     }
 }
 
@@ -202,6 +219,7 @@ fn fmt_place(place: &Place, func: &AirFunction, program: &AirProgram) -> String 
     let ty = place_type(place, func, program);
     match place {
         Place::Local(id) => format!("%{}: {}", id.0, fmt_type(&ty)),
+        Place::Global(name) => format!("@{}: {}", name, fmt_type(&ty)),
         Place::Field(id, name) => format!("%{}.{}: {}", id.0, name, fmt_type(&ty)),
         Place::Deref(id) => format!("*%{}: {}", id.0, fmt_type(&ty)),
         Place::Index(id, idx) => {
@@ -235,9 +253,10 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
         Rvalue::FieldAccess { base, field } => {
             format!("field {} . {}", fmt_operand(base, func), field)
         }
-        Rvalue::AddressOf(id) => {
+        Rvalue::AddressOf(Place::Local(id)) => {
             format!("addr %{}: {}", id.0, fmt_type(local_type(func, *id)))
         }
+        Rvalue::AddressOf(place) => format!("addr {}", fmt_place(place, func, program)),
         Rvalue::Deref(op) => format!("deref {}", fmt_operand(op, func)),
         Rvalue::Cast { operand, to, .. } => {
             format!("cast {} -> {}", fmt_operand(operand, func), fmt_type(to))
@@ -290,6 +309,13 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
                 "closure_create @{} env={}",
                 fn_name,
                 fmt_operand(env, func)
+            )
+        }
+        Rvalue::SliceFromParts { ptr, len } => {
+            format!(
+                "slice_from_parts ptr={} len={}",
+                fmt_operand(ptr, func),
+                fmt_operand(len, func)
             )
         }
     }
@@ -554,3 +580,4 @@ pub fn print_block(block: &AirBlock, program: &AirProgram) -> String {
     write_block(&mut out, block, func, program);
     out
 }
+

@@ -528,7 +528,7 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc-stage1]"), "N4 must carry the marker: {err}");
+    assert!(err.contains("[air-lowering]"), "N4 must carry the marker: {err}");
 }
 
 #[test]

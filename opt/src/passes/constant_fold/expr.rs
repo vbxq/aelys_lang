@@ -115,6 +115,12 @@ impl ConstantFolder {
                 self.optimize_expr(object);
                 self.optimize_expr(range);
             }
+            TypedExprKind::Reference { operand, .. } => self.optimize_expr(operand),
+            TypedExprKind::Deref(operand) => self.optimize_expr(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.optimize_expr(target);
+                self.optimize_expr(value);
+            }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
                     if let aelys_sema::TypedFmtStringPart::Expr(e) = part {
@@ -141,6 +147,9 @@ impl ConstantFolder {
                 for arm in arms {
                     self.optimize_expr(&mut arm.body);
                 }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.optimize_expr(scrutinee);
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

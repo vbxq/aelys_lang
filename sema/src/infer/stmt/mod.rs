@@ -8,7 +8,9 @@ mod needs;
 mod return_stmt;
 
 use super::TypeInference;
+use crate::constraint::TypeError;
 use crate::typed_ast::{TypedStmt, TypedStmtKind};
+use crate::types::InferType;
 use aelys_syntax::{Stmt, StmtKind};
 
 impl TypeInference {
@@ -21,6 +23,16 @@ impl TypeInference {
     pub(super) fn infer_stmt(&mut self, stmt: &Stmt) -> TypedStmt {
         let kind = match &stmt.kind {
             StmtKind::Expression(expr) => {
+                let typed_expr = self.infer_expr(expr);
+                if let InferType::Enum(name, args) = &typed_expr.ty {
+                    if name == "Result" && args.len() == 2 {
+                        self.errors
+                            .push(TypeError::must_use(expr.span, args[1].clone()));
+                    }
+                }
+                TypedStmtKind::Expression(typed_expr)
+            }
+            StmtKind::Discard(expr) => {
                 let typed_expr = self.infer_expr(expr);
                 TypedStmtKind::Expression(typed_expr)
             }
@@ -132,3 +144,4 @@ impl TypeInference {
         }
     }
 }
+

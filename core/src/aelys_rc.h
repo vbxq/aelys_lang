@@ -6,6 +6,11 @@
 /* must stay in sync with RC_HEADER_SIZE in codegen/src/lowering/stmts.rs */
 #define AELYS_RC_HEADER_SIZE 16
 
+/* the codegen inline cow guard loads the refcount at data_ptr - 16 as a u32; a silent drift
+   here would read the wrong word, so pin the two halves together */
+_Static_assert(AELYS_RC_HEADER_SIZE == 16,
+               "AELYS_RC_HEADER_SIZE must match RC_HEADER_SIZE in codegen/src/lowering/stmts.rs");
+
 /* set when an object is registered as a cycle candidate, owned by aelys_rc_cycles.c */
 #define AELYS_FLAG_CANDIDATE ((unsigned char)0x01)
 /* vec buffers carry an rc header but hold primitive bytes, never child pointers, so the

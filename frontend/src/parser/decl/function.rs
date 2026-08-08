@@ -7,24 +7,32 @@ impl Parser {
         &mut self,
         decorators: Vec<Decorator>,
         is_pub: bool,
+        is_nogc: bool,
     ) -> Result<Stmt> {
         let start_span = self.peek().span;
         self.advance();
 
         let name = self.consume_identifier("function name")?;
 
-        let type_params = if self.match_token(&TokenKind::Lt) {
+        let (type_params, nogc_bounds) = if self.match_token(&TokenKind::Lt) {
             let mut params = Vec::new();
+            let mut bounds = Vec::new();
             loop {
                 params.push(self.consume_identifier("type parameter")?);
+                bounds.push(if self.match_token(&TokenKind::Colon) {
+                    self.consume(&TokenKind::Nogc, "`nogc`")?;
+                    true
+                } else {
+                    false
+                });
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
             }
             self.consume(&TokenKind::Gt, ">")?;
-            params
+            (params, bounds)
         } else {
-            Vec::new()
+            (Vec::new(), Vec::new())
         };
 
         self.consume(&TokenKind::LParen, "(")?;
@@ -58,11 +66,13 @@ impl Parser {
         let function = Function {
             name: name.clone(),
             type_params,
+            nogc_bounds,
             params,
             return_type,
             body,
             decorators,
             is_pub,
+            is_nogc,
             span: start_span.merge(end_span),
         };
 
@@ -72,3 +82,4 @@ impl Parser {
         ))
     }
 }
+

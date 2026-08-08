@@ -1,9 +1,11 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
+use crate::lowering::stmts::RC_HEADER_SIZE;
 use crate::types::aelys_string_type;
+use aelys_air::{AirType, LocalId};
 use inkwell::AddressSpace;
 use inkwell::IntPredicate;
-use inkwell::values::{FunctionValue, IntValue};
+use inkwell::values::{FunctionValue, IntValue, PointerValue};
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn ensure_alloc_function(&self) -> FunctionValue<'static> {
@@ -50,6 +52,102 @@ impl<'a> FunctionCodegen<'a> {
             false,
         );
         self.module.add_function("__aelys_rc_release", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_vec_detach_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_vec_detach") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[ptr_ty, i64_ty, i64_ty], false);
+        self.module.add_function("__aelys_vec_detach", fn_ty, None)
+    }
+
+/// buffer if it is shared. inline fast path (a pointer load, a null test, a u32 refcount load
+/// itself in an out-of-line cold block, so an unshared write pays no call and never allocates.
+/// `elem_base` walks, so the two cannot disagree about the root's storage class.
+    pub(crate) fn emit_vec_detach(
+        &mut self,
+        local: LocalId,
+        inner: &AirType,
+        through_ptr: bool,
+    ) -> Result<(), CodegenError> {
+        let detach_fn = self.ensure_vec_detach_function();
+        let elem_size = self.air_type_size(inner)? as u64;
+// the fat struct {ptr,len,cap} alloca; field 0 (the data pointer) sits at offset 0
+        let v_alloca = if through_ptr {
+            let p = self.load_local(local)?.into_pointer_value();
+            self.emit_null_check(p)?;
+            p
+        } else {
+            self.lookup_local_ptr(local)?
+        };
+        let ptr_ty = self.context.ptr_type(AddressSpace::default());
+
+        let data_ptr = self
+            .builder
+            .build_load(ptr_ty, v_alloca, "cow_dataptr")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_pointer_value();
+
+        let current_fn = self.function;
+        let chk_block = self.context.append_basic_block(current_fn, "cow_chk");
+        let slow_block = self.context.append_basic_block(current_fn, "cow_slow");
+        let cont_block = self.context.append_basic_block(current_fn, "cow_cont");
+
+        let is_nonnull = self
+            .builder
+            .build_is_not_null(data_ptr, "cow_nn")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_conditional_branch(is_nonnull, chk_block, cont_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(chk_block);
+        let i8_ty = self.context.i8_type();
+        let neg_header = self
+            .context
+            .i64_type()
+            .const_int((RC_HEADER_SIZE as i64).wrapping_neg() as u64, true);
+        let header_ptr = unsafe {
+            self.builder
+                .build_in_bounds_gep(i8_ty, data_ptr, &[neg_header], "cow_hdr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+        };
+        let i32_ty = self.context.i32_type();
+        let refcount = self
+            .builder
+            .build_load(i32_ty, header_ptr, "cow_rc")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+            .into_int_value();
+        let shared = self
+            .builder
+            .build_int_compare(IntPredicate::UGT, refcount, i32_ty.const_int(1, false), "cow_shared")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_conditional_branch(shared, slow_block, cont_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(slow_block);
+        let elem_size_val = self.context.i64_type().const_int(elem_size, false);
+        let zero = self.context.i64_type().const_zero();
+        self.builder
+            .build_call(
+                detach_fn,
+                &[v_alloca.into(), elem_size_val.into(), zero.into()],
+                "",
+            )
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unconditional_branch(cont_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(cont_block);
+        Ok(())
     }
 
     pub(crate) fn ensure_write_function(&self) -> FunctionValue<'static> {
@@ -242,4 +340,84 @@ impl<'a> FunctionCodegen<'a> {
         self.builder.position_at_end(ok_block);
         Ok(())
     }
+
+    pub(crate) fn emit_div_overflow_check(
+        &mut self,
+        dividend: IntValue<'static>,
+        divisor: IntValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let int_ty = dividend.get_type();
+        let min_bits = 1u64 << (int_ty.get_bit_width() - 1);
+        let int_min = int_ty.const_int(min_bits, false);
+        let neg_one = int_ty.const_all_ones();
+
+        let is_min = self
+            .builder
+            .build_int_compare(IntPredicate::EQ, dividend, int_min, "div_ovf_min")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let is_neg_one = self
+            .builder
+            .build_int_compare(IntPredicate::EQ, divisor, neg_one, "div_ovf_neg1")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let overflow = self
+            .builder
+            .build_and(is_min, is_neg_one, "div_ovf")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        let current_fn = self.function;
+        let trap_block = self.context.append_basic_block(current_fn, "div_ovf_trap");
+        let ok_block = self.context.append_basic_block(current_fn, "div_ovf_ok");
+
+        self.builder
+            .build_conditional_branch(overflow, trap_block, ok_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(trap_block);
+        let panic_fn = self.ensure_panic_function();
+        let (msg_ptr, msg_len) = self.global_string_ptr_len("division overflow")?;
+        let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+        self.builder
+            .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(ok_block);
+        Ok(())
+    }
+
+/// emit a null-pointer check before a dereference: if `ptr` is null, branch to a panic
+    pub(crate) fn emit_null_check(
+        &mut self,
+        ptr: PointerValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let is_null = self
+            .builder
+            .build_is_null(ptr, "deref_null_cmp")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        let current_fn = self.function;
+        let trap_block = self.context.append_basic_block(current_fn, "deref_null");
+        let ok_block = self.context.append_basic_block(current_fn, "deref_ok");
+
+        self.builder
+            .build_conditional_branch(is_null, trap_block, ok_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(trap_block);
+        let panic_fn = self.ensure_panic_function();
+        let (msg_ptr, msg_len) = self.global_string_ptr_len("null pointer dereference")?;
+        let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+        self.builder
+            .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(ok_block);
+        Ok(())
+    }
 }
+

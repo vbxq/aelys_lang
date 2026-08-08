@@ -463,18 +463,18 @@ fn bad() {
 }
 
 #[test]
-fn rejects_array_slice_expression_until_backend_support() {
+fn accepts_array_slice_expression() {
     assert!(
-        sema_err(
+        !sema_err(
             r#"
-fn bad() -> i64 {
+fn ok() -> i64 {
     let arr = [1, 2, 3]
     let x = arr[0..1]
     return x[0]
 }
 "#
         ),
-        "array slicing should be rejected until backend supports ranges/slices"
+        "array slicing should now be accepted (slices implemented in nogc run 1 stage 1)"
     );
 }
 
@@ -498,3 +498,4 @@ fn main() -> i64 {
         "generic if condition should reject non-bool concrete instantiations"
     );
 }
+

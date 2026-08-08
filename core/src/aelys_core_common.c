@@ -188,23 +188,34 @@ void __aelys_vec_release(void *vecptr) {
     __aelys_rc_release(((AelysVec *)vecptr)->ptr);
 }
 
+/* make the buffer uniquely owned before any write. a plain memcpy is sound because
+   rc-bearing elements are rejected at the push site, so no element needs its own retain.
+   `extra` is headroom the caller needs beyond len, so push keeps its one-allocation shape */
+void __aelys_vec_detach(void *vecptr, long long elem_size, long long extra) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (__aelys_rc_refcount(v->ptr) <= 1) {
+        return;
+    }
+
+    long long want = v->len + extra;
+    long long newcap = v->cap > want ? v->cap : want;
+    void *newbuf = __aelys_vec_new(elem_size, newcap);
+    if (v->len > 0) {
+        memcpy(newbuf, v->ptr, (size_t)(v->len * elem_size));
+    }
+    __aelys_rc_release(v->ptr); /* drop our share, the aliased vec is untouched */
+    v->ptr = newbuf;
+    v->cap = newcap;
+}
+
 /* copy-on-write push: a shared buffer is copied before it is touched, so the other owner
-   keeps value semantics. a plain memcpy is sound because rc-bearing elements are rejected
-   at the push site, so no element needs its own retain */
+   keeps value semantics. detaching with extra==1 leaves cap > len, so the grow branch
+   below is provably dead on that path and the original `else if` short-circuit survives */
 void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
     AelysVec *v = (AelysVec *)vecptr;
-    unsigned rc = __aelys_rc_refcount(v->ptr);
+    __aelys_vec_detach(vecptr, elem_size, 1);
 
-    if (rc > 1) {
-        long long newcap = v->cap > v->len + 1 ? v->cap : v->len + 1;
-        void *newbuf = __aelys_vec_new(elem_size, newcap);
-        if (v->len > 0) {
-            memcpy(newbuf, v->ptr, (size_t)(v->len * elem_size));
-        }
-        __aelys_rc_release(v->ptr); /* drop our share, the aliased vec is untouched */
-        v->ptr = newbuf;
-        v->cap = newcap;
-    } else if (v->len == v->cap) {
+    if (v->len == v->cap) {
         long long newcap = v->cap > 0 ? v->cap * 2 : 1;
         v->ptr = __aelys_vec_grow(v->ptr, elem_size, newcap);
         v->cap = newcap;
@@ -214,15 +225,15 @@ void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
     v->len += 1;
 }
 
-/* arc is reserved, not implemented; exit code 23 is the signal the test suite expects */
+/* arc is reserved, not implemented; the length must match the 19-byte literal */
 void __aelys_arc_retain(void *ptr) {
     (void)ptr;
-    __aelys_panic("arc not implemented", 23);
+    __aelys_panic("arc not implemented", 19);
 }
 
 void __aelys_arc_release(void *ptr) {
     (void)ptr;
-    __aelys_panic("arc not implemented", 23);
+    __aelys_panic("arc not implemented", 19);
 }
 
 AELYS_NORETURN void __aelys_panic(const char *ptr, long long len) {

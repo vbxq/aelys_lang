@@ -60,6 +60,35 @@ pub enum TypeErrorKind {
     AssignToLoopVariable { name: String },
     // always rendered with the stable [rc-stage1] marker, which the tests assert on
     RcOutOfSurface { detail: String },
+    VecOutOfSurface { detail: String },
+// slicing a vec addresses the header, not the buffer, so it is rejected until the buffer-view path exists
+    VecSliceUnsupported,
+// for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
+    VecForeachUnsupported,
+    MutIndexRefUnsupported,
+// a reference into a field of a call/enum-variant result forms no loan and points at a temporary
+    PayloadFieldRefUnsupported,
+    MutRefImmutableBinding { name: String },
+// a nested fn reusing an outer fn's bare name clobbers its dispatch slot, a silent miscompile
+    NestedFnShadowsOuter { name: String },
+    ReservedTypeName { name: String },
+    RcFieldAssignIndirect,
+    NoPlace { what: String },
+    SharedMut { what: String },
+// a reference formed or returned inside a closure body has no bir body to check it
+    ClosureRefUnchecked { what: String },
+// bir has no local for a global, so two `&mut` of one global would genuinely alias
+    GlobalBorrow { name: String, mutable: bool },
+    MustUse { error: InferType },
+    NogcOutOfPosition { detail: String },
+    NogcMutParam { detail: String },
+    NogcParamShadowed { detail: String },
+    NogcCallbackMismatch { detail: String },
+    NogcBoundViolation { detail: String },
+// kind-keyed caret hint stays fail-closed instead of asserting a violation nobody proved
+    NogcBoundUnresolved { detail: String },
+    NogcBoundGenericStruct { detail: String },
+    NogcGenericAsValue { detail: String },
 }
 
 impl fmt::Display for TypeError {
@@ -111,6 +140,93 @@ impl fmt::Display for TypeError {
             TypeErrorKind::RcOutOfSurface { detail } => {
                 write!(f, "[rc-stage1] {}", detail)
             }
+            TypeErrorKind::VecOutOfSurface { detail } => {
+                write!(f, "[vec-surface] {}", detail)
+            }
+            TypeErrorKind::VecSliceUnsupported => write!(
+                f,
+                "[vec-slice] slicing a `Vec<T>` is not supported yet; a slice would address the \
+                 `{{ptr,len,cap}}` header, not the buffer. slice an array (`arr[a..b]`) instead, \
+                 or read the `Vec` element by element (`v[i]`)"
+            ),
+            TypeErrorKind::VecForeachUnsupported => write!(
+                f,
+                "[vec-foreach] iterating a `Vec<T>` with `for` is not supported yet. iterate an \
+                 array (`[T; N]`) or a string instead, or index the `Vec` by hand with a counting \
+                 `for i in 0..n` loop"
+            ),
+            TypeErrorKind::NoPlace { what } => write!(
+                f,
+                "[no-place] {what} denotes no storage, so it has no address. bind it to a name \
+                 first and use that binding"
+            ),
+            TypeErrorKind::SharedMut { what } => write!(
+                f,
+                "[shared-mut] {what} writes through a shared `&`, which would break `mut XOR \
+                 shared`. take the reference with `&mut` instead"
+            ),
+            TypeErrorKind::ClosureRefUnchecked { what } => write!(
+                f,
+                "[closure-unchecked] {what} inside a closure body; a lambda body carries no \
+                 borrow-check, so the reference would be unchecked. form the reference outside \
+                 the lambda and pass it as a parameter"
+            ),
+            TypeErrorKind::GlobalBorrow { name, mutable } => write!(
+                f,
+                "[global-borrow] cannot take `{}` of the module-level `{name}`; a global has no \
+                 borrow-checked local, so two live references to it would alias unchecked. copy \
+                 it into a local binding and reference that",
+                if *mutable { "&mut" } else { "&" }
+            ),
+            TypeErrorKind::MutIndexRefUnsupported => write!(
+                f,
+                "[mut-index-ref] a mutable reference into an element or a field is not supported \
+                 yet; write-through would hit a stack copy, not the place. take `&mut` of the \
+                 whole binding, or write the place directly with `v[i] = x` or `p.f = x`"
+            ),
+            TypeErrorKind::PayloadFieldRefUnsupported => write!(
+                f,
+                "[payload-ref] a reference into a field of a call result (such as an `Rc` payload) \
+                 is not supported yet; it forms no loan and points at a temporary. bind the value \
+                 to a local first, then reference the local"
+            ),
+            TypeErrorKind::MutRefImmutableBinding { name } => write!(
+                f,
+                "cannot take a mutable reference `&mut {name}` to immutable binding `{name}`; \
+                 declare it with `let mut {name}`"
+            ),
+            TypeErrorKind::NestedFnShadowsOuter { name } => write!(
+                f,
+                "[nested-fn-shadow] a nested `fn {name}` reuses the name of an outer function; \
+                 nested shadowing is not supported and would silently dispatch the outer call to \
+                 this body. rename the nested function"
+            ),
+            TypeErrorKind::ReservedTypeName { name } => write!(
+                f,
+                "[reserved-type] `Vec` and `Rc` are reserved builtin type names; a user type named \
+                 `{name}` would be silently rerouted to the builtin `{name}::` lowering. rename the type"
+            ),
+            TypeErrorKind::RcFieldAssignIndirect => write!(
+                f,
+                "[rc-field-assign] the right-hand side of an `Rc` field assignment must be a direct \
+                 producer (`Rc::new(...)`, `Rc::null()`, a bare identifier, an `Rc`-field read, or a \
+                 call); an indirect form (`if`/`match`/a block/parentheses) undercounts the refcount \
+                 by one. bind the value to a name first"
+            ),
+            TypeErrorKind::MustUse { error } => write!(
+                f,
+                "[must-use] this `Result` can fail with `{error}`; \
+                 use `?` to propagate, `match`/`catch` to handle, \
+                 `.expect(\"…\")` to assert, or `discard` to intentionally ignore it"
+            ),
+            TypeErrorKind::NogcOutOfPosition { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcMutParam { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcParamShadowed { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcCallbackMismatch { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcBoundViolation { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcBoundUnresolved { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcBoundGenericStruct { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::NogcGenericAsValue { detail } => write!(f, "[nogc] {detail}"),
         }
     }
 }
@@ -118,6 +234,11 @@ impl fmt::Display for TypeError {
 impl std::error::Error for TypeError {}
 
 impl TypeError {
+    pub fn with_secondary(mut self, span: Span, label: impl Into<String>) -> Self {
+        self.secondary_spans.push((span, label.into()));
+        self
+    }
+
     pub fn mismatch(
         expected: InferType,
         found: InferType,
@@ -191,6 +312,329 @@ impl TypeError {
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
             help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn vec_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::VecOutOfSurface {
+                detail: detail.into(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn no_place(what: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NoPlace { what: what.into() },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn shared_mut(what: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::SharedMut { what: what.into() },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn closure_ref_unchecked(what: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ClosureRefUnchecked { what: what.into() },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn global_borrow(name: impl Into<String>, mutable: bool, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::GlobalBorrow {
+                name: name.into(),
+                mutable,
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn vec_slice_unsupported(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::VecSliceUnsupported,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn vec_foreach_unsupported(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::VecForeachUnsupported,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn mut_index_ref_unsupported(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MutIndexRefUnsupported,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn payload_field_ref_unsupported(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::PayloadFieldRefUnsupported,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn mut_ref_immutable_binding(name: String, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MutRefImmutableBinding { name },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some("make the binding mutable: `let mut`".to_string()),
+            suggestion: None,
+        }
+    }
+
+    pub fn nested_fn_shadows_outer(name: String, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NestedFnShadowsOuter { name },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn reserved_type_name(name: String, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ReservedTypeName { name },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn rc_field_assign_indirect(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::RcFieldAssignIndirect,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn must_use(span: Span, error: InferType) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MustUse { error },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+// a `nogc fn` type is only accepted as a bare immutable fn parameter
+    pub fn nogc_out_of_position(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcOutOfPosition {
+                detail: "a `nogc fn` type is only allowed as an immutable function parameter type"
+                    .to_string(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "write it as a bare immutable parameter type, as in `fn apply(f: nogc fn(&i32))`, \
+                 or drop `nogc` and use a plain `fn` type here"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn nogc_mut_param(name: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcMutParam {
+                detail: format!(
+                    "a `nogc fn` parameter `{name}` cannot be `mut`; reassigning it would defeat the nogc guarantee"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "drop `mut` from `{name}`; a `nogc fn` parameter must stay immutable so the call \
+                 site can trust it"
+            )),
+            suggestion: None,
+        }
+    }
+
+    pub fn nogc_param_shadowed(name: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcParamShadowed {
+                detail: format!(
+                    "a `nogc fn` parameter `{name}` cannot be shadowed by a `let` binding; that would defeat the nogc guarantee"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "give the binding a different name, or rename the `{name}` parameter"
+            )),
+            suggestion: None,
+        }
+    }
+
+    pub fn nogc_callback_mismatch(found: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcCallbackMismatch {
+                detail: format!(
+                    "expected a `nogc fn` argument (a direct reference to a `nogc`-declared \
+                     function or a `nogc fn` parameter), found {found}"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "pass a `nogc`-declared function by name, or a `nogc fn` parameter of the \
+                 enclosing function; a lambda or a `let` binding never qualifies"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn nogc_bound_violation(
+        fn_name: &str,
+        type_param: &str,
+        found: &InferType,
+        span: Span,
+    ) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcBoundViolation {
+                detail: format!(
+                    "type parameter `{type_param}` of `{fn_name}` is bound `nogc`, but this call \
+                     instantiates it with `{found}`, which is not a nogc value"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "a nogc value is a primitive, a fixed array, a reference, a `nogc fn`, or a \
+                 non-generic struct/enum built only from those"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+// fail-closed, a binding the call site cannot pin down is a reject
+    pub fn nogc_bound_unresolved(fn_name: &str, type_param: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcBoundUnresolved {
+                detail: format!(
+                    "type parameter `{type_param}` of `{fn_name}` is bound `nogc`, but this call \
+                     does not pin it to a concrete type, so the bound cannot be proven"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "pass an argument whose type fixes the type parameter to a concrete nogc value"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn nogc_bound_generic_struct_arg(
+        fn_name: &str,
+        type_param: &str,
+        struct_name: &str,
+        span: Span,
+    ) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcBoundGenericStruct {
+                detail: format!(
+                    "type parameter `{type_param}` of `{fn_name}` is bound `nogc`, but this call \
+                     passes the generic struct `{struct_name}`, whose type arguments are not \
+                     tracked, so it is never a nogc value"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "a generic struct cannot satisfy a `nogc` bound; pass a non-generic struct, or \
+                 give `{struct_name}` a non-generic wrapper built only from nogc values"
+            )),
+            suggestion: None,
+        }
+    }
+
+// a nogc-bound generic referenced as a value escapes every checked call site
+    pub fn nogc_generic_as_value(fn_name: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NogcGenericAsValue {
+                detail: format!(
+                    "`{fn_name}` is a generic function with a `nogc` bound, so it may only be \
+                     called directly, never used as a value"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "call it directly, or drop the `nogc` bound if the callee need not be nogc"
+                    .to_string(),
+            ),
             suggestion: None,
         }
     }
@@ -280,3 +724,4 @@ impl TypeError {
         }
     }
 }
+

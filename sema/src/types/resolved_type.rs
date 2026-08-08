@@ -27,6 +27,8 @@ pub enum ResolvedType {
     Array(Box<ResolvedType>, Option<u64>),
     Vec(Box<ResolvedType>),
     Rc(Box<ResolvedType>),
+    Ref(Box<ResolvedType>, bool),
+    Slice(Box<ResolvedType>, bool),
     Tuple(Vec<ResolvedType>),
     Range,
 
@@ -108,7 +110,7 @@ impl ResolvedType {
             InferType::Null => ResolvedType::Null,
             // Never represents unreachable code; map to Null (void) for codegen.
             InferType::Never => ResolvedType::Null,
-            InferType::Function { params, ret } => ResolvedType::Function {
+            InferType::Function { params, ret, .. } => ResolvedType::Function {
                 params: params.iter().map(ResolvedType::from_infer_type).collect(),
                 ret: Box::new(ResolvedType::from_infer_type(ret)),
             },
@@ -120,6 +122,12 @@ impl ResolvedType {
             }
             InferType::Rc(inner) => {
                 ResolvedType::Rc(Box::new(ResolvedType::from_infer_type(inner)))
+            }
+            InferType::Ref { referent, mutable } => {
+                ResolvedType::Ref(Box::new(ResolvedType::from_infer_type(referent)), *mutable)
+            }
+            InferType::Slice { elem, mutable } => {
+                ResolvedType::Slice(Box::new(ResolvedType::from_infer_type(elem)), *mutable)
             }
             InferType::Tuple(elems) => {
                 ResolvedType::Tuple(elems.iter().map(ResolvedType::from_infer_type).collect())
@@ -162,6 +170,12 @@ impl fmt::Display for ResolvedType {
             ResolvedType::Array(inner, None) => write!(f, "[{}]", inner),
             ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
             ResolvedType::Rc(inner) => write!(f, "Rc<{}>", inner),
+            ResolvedType::Ref(inner, mutable) => {
+                write!(f, "&{}{}", if *mutable { "mut " } else { "" }, inner)
+            }
+            ResolvedType::Slice(inner, mutable) => {
+                write!(f, "&{}[{}]", if *mutable { "mut " } else { "" }, inner)
+            }
             ResolvedType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {

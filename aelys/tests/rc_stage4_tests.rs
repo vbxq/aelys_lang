@@ -64,26 +64,6 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
     Some((a.trim().parse().ok()?, m.trim().parse().ok()?))
 }
 
-fn find_core_archive(file: &str) -> Option<PathBuf> {
-    fn walk(dir: &Path, file: &str) -> Option<PathBuf> {
-        let entries = fs::read_dir(dir).ok()?;
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(found) = walk(&path, file) {
-                    return Some(found);
-                }
-            } else if path.file_name().and_then(|s| s.to_str()) == Some(file) {
-                return Some(path);
-            }
-        }
-        None
-    }
-    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest.parent().unwrap_or(manifest);
-    walk(&root.join("target"), file)
-}
-
 #[test]
 fn p1_copy_then_push_leaves_original_unchanged() {
     let Some((code, stderr)) = run_with_stats(
@@ -226,19 +206,66 @@ fn main() -> i64 {
         return;
     }
 
-    let Some(archive) = find_core_archive("libaelys-core-rc.a") else {
-        eprintln!("rc archive not found; skipping ASan probe");
-        return;
-    };
-    let lib_dir = archive.parent().expect("archive has a parent");
+// uninstrumented archive only exposes the malloc/free interceptors, not the immix poison net
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let core_src = manifest.parent().unwrap_or(manifest).join("core").join("src");
+    let asan_lib_dir = dir.path();
+    let core_units = [
+        "aelys_core_common.c",
+        "aelys_alloc_immix.c",
+        "aelys_rc_real.c",
+    ];
+    let mut objects = Vec::new();
+    for unit in core_units {
+        let src = core_src.join(unit);
+        if !src.is_file() {
+            eprintln!("core source {unit} missing; skipping ASan probe");
+            return;
+        }
+        let obj = asan_lib_dir.join(unit).with_extension("o");
+        let cc = Command::new("clang")
+            .arg("-fsanitize=address")
+            .arg("-g")
+            .arg("-c")
+            .arg(&src)
+            .arg(format!("-I{}", core_src.display()))
+            .arg("-o")
+            .arg(&obj)
+            .output();
+        match cc {
+            Ok(out) if out.status.success() => objects.push(obj),
+            Ok(out) => panic!(
+                "instrumented core compile of {unit} failed:\n{}",
+                String::from_utf8_lossy(&out.stderr)
+            ),
+            Err(_) => {
+                eprintln!("clang unavailable; skipping ASan probe");
+                return;
+            }
+        }
+    }
+    let asan_archive = asan_lib_dir.join("libaelys-core-rc-asan.a");
+    let ar = Command::new("ar")
+        .arg("rcs")
+        .arg(&asan_archive)
+        .args(&objects)
+        .output();
+    match ar {
+        Ok(out) if out.status.success() => {}
+        Ok(out) => panic!("ar failed:\n{}", String::from_utf8_lossy(&out.stderr)),
+        Err(_) => {
+            eprintln!("ar unavailable; skipping ASan probe");
+            return;
+        }
+    }
 
     let asan_exe = dir.path().join("module_asan");
     let link = Command::new("clang")
         .arg("-fsanitize=address")
         .arg("-g")
         .arg(&object)
-        .arg(format!("-L{}", lib_dir.display()))
-        .arg("-laelys-core-rc")
+        .arg(format!("-L{}", asan_lib_dir.display()))
+        .arg("-laelys-core-rc-asan")
         .arg("-o")
         .arg(&asan_exe)
         .output();
@@ -289,7 +316,7 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(err.contains("[rc]"), "N1 must carry the marker: {err}");
+    assert!(err.contains("[rc-stage1]"), "N1 must carry the marker: {err}");
 }
 
 #[test]
@@ -570,3 +597,4 @@ fn main() -> i64 {
     };
     assert_eq!(code, 7, "a plain struct (no Vec field) must compile and run; stderr:\n{stderr}");
 }
+

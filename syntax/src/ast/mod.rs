@@ -4,8 +4,8 @@ mod expr;
 mod stmt;
 
 pub use expr::{
-    BinaryOp, Expr, ExprKind, FmtStringPart, MatchArm, Parameter, Pattern, StructFieldInit,
-    TypeAnnotation, UnaryOp,
+    BinaryOp, CatchHandler, Expr, ExprKind, FmtStringPart, MatchArm, Parameter, Pattern, RefKind,
+    StructFieldInit, TypeAnnotation, UnaryOp,
 };
 pub use stmt::{
     Decorator, EnumVariantDecl, Function, ImportKind, NeedsStmt, Stmt, StmtKind, StructFieldDecl,

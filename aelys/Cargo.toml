@@ -18,6 +18,10 @@ aelys-sema = { path = "../sema" }
 aelys-syntax = { path = "../syntax" }
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", default-features = false, features = ["llvm18-1", "target-x86"] }
 
+[features]
+# the ASan tier of semantic_invariants_tests: rebuilds three C units with -fsanitize=address per run
+asan-invariants = []
+
 [build-dependencies]
 regex = "1"
 
