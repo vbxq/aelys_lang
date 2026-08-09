@@ -54,4 +54,5 @@ pub struct TypeInference {
     pub(crate) module_globals: HashSet<String>,
     pub(crate) shadowed_globals: HashSet<String>,
     pub(crate) lambda_depth: usize,
+    pub(crate) lambda_captures: HashSet<String>,
 }
