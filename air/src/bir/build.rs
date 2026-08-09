@@ -598,10 +598,23 @@ impl<'a> BodyBuilder<'a> {
                 }
             }
 
+// a slice is a borrow of its base: no e0726 here, a slice of a slice is a kept form
             TypedExprKind::Slice { object, range } => {
                 let _ = self.build_operand(range);
-                let op = self.build_operand(object);
-                self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
+                match self.place_of(object) {
+                    Some(place) => self.emit_to_temp(
+                        BirRvalue::Ref {
+                            place,
+                            mutable: false,
+                        },
+                        expr.ty.clone(),
+                        span,
+                    ),
+                    None => {
+                        let op = self.build_operand(object);
+                        self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
+                    }
+                }
             }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
@@ -1133,3 +1146,4 @@ impl<'a> BodyBuilder<'a> {
         self.start(exit_id);
     }
 }
+
