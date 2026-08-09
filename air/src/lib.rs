@@ -336,6 +336,8 @@ pub enum Rvalue {
         ptr: Operand,
         len: Operand,
     },
+/// the operand is a `ptr(array|slice|vec)` local, never the collection value itself
+    Len(Operand),
 }
 
 #[derive(Clone)]
@@ -449,3 +451,4 @@ pub enum UnOp {
     Not,
     BitNot,
 }
+
