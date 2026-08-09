@@ -668,7 +668,9 @@ impl<'a> LoweringContext<'a> {
         if let Some(s) = start {
             if !matches!(&s.kind, TypedExprKind::Int(0)) {
                 self.report_error(
-                    "slice with a non-zero start bound is not supported yet".to_string(),
+                    "ICE: slice with a non-zero start bound reached AIR lowering; sema must \
+                     reject it (E0425)"
+                        .to_string(),
                 );
             }
         }
@@ -678,9 +680,14 @@ impl<'a> LoweringContext<'a> {
                 InferType::Array(_, Some(n)) => {
                     Operand::Const(AirConst::Int(*n as i64, AirIntSize::I64))
                 }
+                InferType::Array(_, None) | InferType::Vec(_) | InferType::Slice { .. } => {
+                    self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(ptr_op.clone()), sp)
+                }
                 _ => {
                     self.report_error(
-                        "slice of a non-fixed-size collection is not supported yet".to_string(),
+                        "ICE: slice of a base with no derivable length reached AIR lowering; \
+                         sema must reject it (E0425)"
+                            .to_string(),
                     );
                     Operand::Const(AirConst::Int(0, AirIntSize::I64))
                 }
