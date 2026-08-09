@@ -1922,3 +1922,83 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
         holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
     );
 }
+
+// a use into a field and an addr into a ptr both escape this rule
+#[test]
+fn validate_rejects_address_of_into_a_non_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::I64,
+        name: Some("slot".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::AddressOf(Place::Local(LocalId(0))),
+        },
+        span: None,
+    });
+
+    let errors = validate_air(&program).expect_err("an addr into an i64 local must be rejected");
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e.detail, AirValidationDetail::PtrnessMismatch { .. })),
+        "expected a ptrness mismatch, got: {errors:?}"
+    );
+}
+
+#[test]
+fn validate_accepts_address_of_into_a_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Ptr(Box::new(AirType::I64)),
+        name: Some("slot".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::AddressOf(Place::Local(LocalId(0))),
+        },
+        span: None,
+    });
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "an addr into a ptr local must be accepted"
+    );
+}
+
+#[test]
+fn validate_rejects_len_into_a_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Ptr(Box::new(AirType::I64)),
+        name: Some("n".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::Len(Operand::Copy(LocalId(0))),
+        },
+        span: None,
+    });
+
+    let errors = validate_air(&program).expect_err("a len into a ptr local must be rejected");
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e.detail, AirValidationDetail::PtrnessMismatch { .. })),
+        "expected a ptrness mismatch, got: {errors:?}"
+    );
+}
+
