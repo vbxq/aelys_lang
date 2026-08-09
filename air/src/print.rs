@@ -258,6 +258,7 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
         }
         Rvalue::AddressOf(place) => format!("addr {}", fmt_place(place, func, program)),
         Rvalue::Deref(op) => format!("deref {}", fmt_operand(op, func)),
+        Rvalue::Len(op) => format!("len {}", fmt_operand(op, func)),
         Rvalue::Cast { operand, to, .. } => {
             format!("cast {} -> {}", fmt_operand(operand, func), fmt_type(to))
         }
