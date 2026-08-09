@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use aelys_syntax::Span;
 
-use super::origins::{Summaries, SummaryEntry};
+use super::origins::{ParamWrites, SliceWrites, Summaries, SummaryEntry};
 use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -39,10 +39,14 @@ enum Access {
     BorrowMut,
 }
 
-pub fn check(bir: &BirProgram, summaries: &Summaries) -> Vec<BirDiagnostic> {
+pub fn check(
+    bir: &BirProgram,
+    summaries: &Summaries,
+    slice_writes: &SliceWrites,
+) -> Vec<BirDiagnostic> {
     let mut errors = Vec::new();
     for body in &bir.bodies {
-        check_body(body, summaries, &mut errors);
+        check_body(body, summaries, slice_writes, &mut errors);
     }
     errors
 }
@@ -54,7 +58,12 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
         .unwrap_or(false)
 }
 
-fn check_body(body: &BirBody, summaries: &Summaries, errors: &mut Vec<BirDiagnostic>) {
+fn check_body(
+    body: &BirBody,
+    summaries: &Summaries,
+    slice_writes: &SliceWrites,
+    errors: &mut Vec<BirDiagnostic>,
+) {
     let loans = gen_loans(body, errors);
     // no borrows form zero loans, so the whole pass is a no-op (managed byte-identity rests here);
     if loans.is_empty() {
@@ -64,6 +73,102 @@ fn check_body(body: &BirBody, summaries: &Summaries, errors: &mut Vec<BirDiagnos
     let live = compute_liveness(body);
     check_conflicts(body, &loans, &holds, &live, errors);
     check_scope_deaths(body, &loans, &holds, &live, errors);
+    check_vec_slice_mutation(body, &loans, &holds, slice_writes, errors);
+}
+
+fn roots_a_vec(ty: &InferType) -> bool {
+    let mut ty = ty;
+    while let InferType::Ref { referent, .. } = ty {
+        ty = referent;
+    }
+    matches!(ty, InferType::Vec(_))
+}
+
+fn vec_root_loan<'a>(
+    body: &BirBody,
+    loans: &'a [Loan],
+    holds: &[HashSet<u32>],
+    local: BirLocalId,
+) -> Option<&'a Loan> {
+    if !matches!(body.locals[local.0 as usize].ty, InferType::Slice { .. }) {
+        return None;
+    }
+    let ids = holds.get(local.0 as usize)?;
+    loans
+        .iter()
+        .find(|l| ids.contains(&l.id.0) && roots_a_vec(&body.locals[l.place.local.0 as usize].ty))
+}
+
+fn slice_mut_diagnostic(body: &BirBody, loan: &Loan, span: Span, message: String) -> BirDiagnostic {
+    let root = loan.place.local;
+    BirDiagnostic::new("E0426", "[borrow]", span, message)
+        .with_secondary(loan.span, "slice of a `Vec` created here".to_string())
+        .with_secondary(
+            body.locals[root.0 as usize].decl_span,
+            format!("`{}` declared here", local_name(body, root)),
+        )
+}
+
+fn check_vec_slice_mutation(
+    body: &BirBody,
+    loans: &[Loan],
+    holds: &[HashSet<u32>],
+    slice_writes: &SliceWrites,
+    errors: &mut Vec<BirDiagnostic>,
+) {
+    for block in &body.blocks {
+        for stmt in &block.stmts {
+            let BirStmtKind::Assign { dest, rvalue } = &stmt.kind else {
+                continue;
+            };
+            if !dest.proj.is_empty() {
+                if let Some(loan) = vec_root_loan(body, loans, holds, dest.local) {
+                    let name = local_name(body, dest.local);
+                    errors.push(slice_mut_diagnostic(
+                        body,
+                        loan,
+                        stmt.span,
+                        format!(
+                            "[slice-mut] cannot write through `{name}`: it is a slice of a \
+                             `Vec`, whose buffer may be shared"
+                        ),
+                    ));
+                }
+            }
+            let BirRvalue::Call { callee, args, .. } = rvalue else {
+                continue;
+            };
+            let writes = callee.as_ref().and_then(|name| slice_writes.get(name));
+            for (i, arg) in args.iter().enumerate() {
+                let (BirOperand::Copy(p) | BirOperand::Move(p)) = arg else {
+                    continue;
+                };
+                if !p.proj.is_empty() {
+                    continue;
+                }
+                let may_write = match writes {
+                    Some(ParamWrites::Unique(w)) => w.get(i).copied().unwrap_or(true),
+                    _ => true,
+                };
+                if !may_write {
+                    continue;
+                }
+                if let Some(loan) = vec_root_loan(body, loans, holds, p.local) {
+                    let name = local_name(body, p.local);
+                    let f = callee.as_deref().unwrap_or("this callee");
+                    errors.push(slice_mut_diagnostic(
+                        body,
+                        loan,
+                        stmt.span,
+                        format!(
+                            "[slice-mut] cannot pass `{name}` to `{f}`: `{f}` may write through \
+                             it, and `{name}` is a slice of a `Vec` whose buffer may be shared"
+                        ),
+                    ));
+                }
+            }
+        }
+    }
 }
 
 pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<Loan> {
@@ -159,6 +264,10 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
     for l in loans {
         if let Some(r) = l.reborrow_base {
             edges.push((l.holder.0 as usize, r.0 as usize));
+        }
+// borrowing a reference-typed local inherits its loans, or a re-slice reads a freed base
+        if local_is_ref(body, l.place.local) {
+            edges.push((l.holder.0 as usize, l.place.local.0 as usize));
         }
     }
 
@@ -723,3 +832,4 @@ fn render_place(body: &BirBody, place: &BirPlace) -> String {
     s.push_str(&suffix);
     s
 }
+
