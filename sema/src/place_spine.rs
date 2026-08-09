@@ -22,6 +22,17 @@ fn is_rc_get(e: &TypedExpr) -> bool {
     )
 }
 
+pub fn spine_root_name(e: &TypedExpr) -> Option<&str> {
+    match &e.kind {
+        TypedExprKind::Identifier(name) => Some(name),
+        TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => spine_root_name(inner),
+        TypedExprKind::Member { object, .. }
+        | TypedExprKind::Index { object, .. }
+        | TypedExprKind::Slice { object, .. } => spine_root_name(object),
+        _ => None,
+    }
+}
+
 pub fn denotes_a_place(e: &TypedExpr) -> bool {
     match &e.kind {
         TypedExprKind::Grouping(inner) => denotes_a_place(inner),
