@@ -81,10 +81,12 @@ pub enum TypeErrorKind {
     VecOutOfSurface {
         detail: String,
     },
-    // slicing a vec addresses the header, not the buffer, so it is rejected until the buffer-view path exists
-    VecSliceUnsupported,
     // for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
     VecForeachUnsupported,
+// a slice form whose lowering has no base offset or no derivable length
+    SliceFormUnsupported {
+        detail: String,
+    },
     MutIndexRefUnsupported,
     // a reference into a field of a call/enum-variant result forms no loan and points at a temporary
     PayloadFieldRefUnsupported,
@@ -196,17 +198,16 @@ impl fmt::Display for TypeError {
             TypeErrorKind::VecOutOfSurface { detail } => {
                 write!(f, "[vec-surface] {}", detail)
             }
-            TypeErrorKind::VecSliceUnsupported => write!(
-                f,
-                "[vec-slice] slicing a `Vec<T>` is not supported yet; a slice would address the \
-                 `{{ptr,len,cap}}` header, not the buffer. slice an array (`arr[a..b]`) instead, \
-                 or read the `Vec` element by element (`v[i]`)"
-            ),
             TypeErrorKind::VecForeachUnsupported => write!(
                 f,
                 "[vec-foreach] iterating a `Vec<T>` with `for` is not supported yet. iterate an \
                  array (`[T; N]`) or a string instead, or index the `Vec` by hand with a counting \
                  `for i in 0..n` loop"
+            ),
+            TypeErrorKind::SliceFormUnsupported { detail } => write!(
+                f,
+                "[slice-form] {detail}. a slice is built from the address of element zero plus a \
+                 length, so it needs a base that carries a length and a range that starts at 0"
             ),
             TypeErrorKind::NoPlace { what } => write!(
                 f,
@@ -429,9 +430,11 @@ impl TypeError {
         }
     }
 
-    pub fn vec_slice_unsupported(span: Span) -> Self {
+    pub fn slice_form_unsupported(detail: impl Into<String>, span: Span) -> Self {
         TypeError {
-            kind: TypeErrorKind::VecSliceUnsupported,
+            kind: TypeErrorKind::SliceFormUnsupported {
+                detail: detail.into(),
+            },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
@@ -777,3 +780,4 @@ impl TypeError {
         }
     }
 }
+
