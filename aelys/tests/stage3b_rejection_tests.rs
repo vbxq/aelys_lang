@@ -66,35 +66,42 @@ fn run_exit(body: &str, level: OptimizationLevel) -> Option<i32> {
 }
 
 #[test]
-fn slice_of_vec_is_rejected() {
-    let err = reject(
-        r#"
+fn slice_of_vec_reads_the_buffer() {
+    let src = r#"
 fn main() -> i64 {
-    let v = vec[1, 2, 3]
+    let v = vec[11, 22, 33]
     let s = v[0..2]
-    return s[0]
+    return s[1]
 }
-"#,
-    );
-    assert!(err.contains("[E0413]"), "must carry the E0413 code: {err}");
-    assert!(
-        err.contains("[vec-slice]"),
-        "must carry the vec-slice marker: {err}"
-    );
+"#;
+    accepts(src);
+    for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
+        if let Some(code) = run_exit(src, level) {
+            assert_eq!(
+                code, 22,
+                "a slice of a Vec must read the buffer at {level:?}"
+            );
+        }
+    }
 }
 
 #[test]
-fn slice_of_vec_is_rejected_at_every_opt_level() {
+fn write_through_a_vec_slice_is_rejected_at_every_opt_level() {
     let src = r#"
 fn main() -> i64 {
-    let v = vec[1, 2, 3]
+    let mut v = vec[1, 2, 3]
     let s = v[0..2]
-    return s[0]
+    s[0] = 99
+    return v[0]
 }
 "#;
     for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
         let err = reject_at(src, level);
-        assert!(err.contains("[E0413]"), "must reject at {level:?}: {err}");
+        assert!(err.contains("[E0426]"), "must reject at {level:?}: {err}");
+        assert!(
+            err.contains("[slice-mut]"),
+            "must carry the slice-mut marker: {err}"
+        );
     }
 }
 
