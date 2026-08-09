@@ -119,9 +119,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             start.as_ref().is_some_and(|s| has_side_effects(s))
                 || end.as_ref().is_some_and(|e| has_side_effects(e))
         }
-        TypedExprKind::Slice { object, range } => {
-            has_side_effects(object) || has_side_effects(range)
-        }
+        TypedExprKind::Slice { .. } => true,
         TypedExprKind::Reference { operand, .. } => has_side_effects(operand),
         TypedExprKind::Deref(operand) => has_side_effects(operand),
         TypedExprKind::DerefAssign { .. } => true, // write through a reference has side effects
@@ -158,3 +156,4 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Null => false,
     }
 }
+
