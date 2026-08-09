@@ -318,8 +318,21 @@ impl<'a> FunctionCodegen<'a> {
         idx: IntValue<'static>,
         bounds: BoundsCheck,
     ) -> Result<PointerValue<'static>, CodegenError> {
+        Ok(self.index_ptr_and_len(root, idx, bounds)?.0)
+    }
+
+// the same gep as index_ptr plus the base length, so a caller needing both cannot drift
+    pub(crate) fn index_ptr_and_len(
+        &mut self,
+        root: LocalId,
+        idx: IntValue<'static>,
+        bounds: BoundsCheck,
+    ) -> Result<(PointerValue<'static>, IntValue<'static>), CodegenError> {
         let (base, elem) = self.elem_base(root)?;
-        match base {
+        let base_len = match &base {
+            ElemBase::Slot { len, .. } | ElemBase::Buffer { len, .. } => *len,
+        };
+        let ptr = match base {
             ElemBase::Slot { ptr, arr_ty, len } => {
                 if matches!(bounds, BoundsCheck::Checked) {
                     self.emit_bounds_check(idx, len)?;
@@ -343,7 +356,18 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))
                 }
             }
-        }
+        }?;
+        Ok((ptr, base_len))
+    }
+
+    pub(crate) fn collection_len(
+        &mut self,
+        root: LocalId,
+    ) -> Result<IntValue<'static>, CodegenError> {
+        let (base, _) = self.elem_base(root)?;
+        Ok(match base {
+            ElemBase::Slot { len, .. } | ElemBase::Buffer { len, .. } => len,
+        })
     }
 
     /// the only discriminator for the cow detach. it walks the same pointer chain `elem_base`
@@ -417,3 +441,4 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 }
+
