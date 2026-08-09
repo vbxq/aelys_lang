@@ -103,7 +103,9 @@ fn visit_term_uses(term: &AirTerminator, f: &mut impl FnMut(LocalId)) {
 
 fn visit_rvalue_uses(rvalue: &Rvalue, f: &mut impl FnMut(LocalId)) {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) => visit_operand_uses(op, f),
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Len(op) => {
+            visit_operand_uses(op, f)
+        }
         Rvalue::BinaryOp(_, left, right) => {
             visit_operand_uses(left, f);
             visit_operand_uses(right, f);
