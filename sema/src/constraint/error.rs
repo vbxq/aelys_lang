@@ -83,7 +83,7 @@ pub enum TypeErrorKind {
     },
     // for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
     VecForeachUnsupported,
-// a slice form whose lowering has no base offset or no derivable length
+    // a slice form whose lowering has no base offset or no derivable length
     SliceFormUnsupported {
         detail: String,
     },
@@ -780,4 +780,3 @@ impl TypeError {
         }
     }
 }
-

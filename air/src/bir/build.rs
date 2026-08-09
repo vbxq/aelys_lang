@@ -598,7 +598,7 @@ impl<'a> BodyBuilder<'a> {
                 }
             }
 
-// a slice is a borrow of its base: no e0726 here, a slice of a slice is a kept form
+            // a slice is a borrow of its base: no e0726 here, a slice of a slice is a kept form
             TypedExprKind::Slice { object, range } => {
                 let _ = self.build_operand(range);
                 match self.place_of(object) {
@@ -1146,4 +1146,3 @@ impl<'a> BodyBuilder<'a> {
         self.start(exit_id);
     }
 }
-

@@ -2529,7 +2529,7 @@ fn group_pa_fails_closed() {
 
 const GROUP_S2: &[(&str, &str, Oracle)] = &[
     (
-// the formation bounds check: silent -o-divergent garbage at base, a named trap now
+        // the formation bounds check: silent -o-divergent garbage at base, a named trap now
         "S2-B01",
         r#"
 fn main() -> i64 {
@@ -2542,7 +2542,7 @@ fn main() -> i64 {
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
     ),
     (
-// a runtime end bound, so the check cannot be folded away
+        // a runtime end bound, so the check cannot be folded away
         "S2-B03",
         r#"
 fn main() -> i64 {
@@ -2618,7 +2618,7 @@ fn main() -> i64 {
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
     ),
     (
-// the origins companion must not over-reject a re-slice of a reference-typed parameter
+        // the origins companion must not over-reject a re-slice of a reference-typed parameter
         "S2-L08",
         r#"
 fn f(a: &[i64]) -> &[i64] {
@@ -2669,7 +2669,7 @@ fn main() -> i64 {
         Oracle::ExitOut(2, ""),
     ),
     (
-// a slice of a vec addresses the buffer, which is the capability the stage delivers
+        // a slice of a vec addresses the buffer, which is the capability the stage delivers
         "S2-A01",
         r#"
 fn main() -> i64 {
@@ -2745,7 +2745,7 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "22\n", 1, 1),
     ),
     (
-// seven elements, so the length and the element cannot coincide
+        // seven elements, so the length and the element cannot coincide
         "S2-A07",
         r#"
 fn main() -> i64 {
@@ -2795,7 +2795,7 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "22\n", 1, 1),
     ),
     (
-// the read shape e0426's interprocedural half must not cost
+        // the read shape e0426's interprocedural half must not cost
         "S2-A11",
         r#"
 fn sum(s: &[i64]) -> i64 {
@@ -2859,7 +2859,7 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "1\n99\n", 1, 1),
     ),
     (
-// the base is born and buried inside the lambda, so nothing it borrows can outlive it
+        // the base is born and buried inside the lambda, so nothing it borrows can outlive it
         "S2-F12",
         r#"
 fn main() -> i64 {
@@ -2952,7 +2952,7 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "22\n44\n", 1, 1),
     ),
     (
-// by-value capture holds this: the env's share detaches on push, and frees=1 is the leak
+        // by-value capture holds this: the env's share detaches on push, and frees=1 is the leak
         "S2-F11",
         r#"
 fn main() -> i64 {
@@ -3179,7 +3179,7 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-// without the borrow-of-a-reference edge s dies here and t[0] reads the freed buffer
+        // without the borrow-of-a-reference edge s dies here and t[0] reads the freed buffer
         id: "S2-L07",
         code: "E0711",
         rejected: r#"
@@ -3411,7 +3411,7 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-// a re-slice inside the callee, so the write's dest is two borrows from the referent
+        // a re-slice inside the callee, so the write's dest is two borrows from the referent
         id: "S2-M14",
         code: "E0426",
         rejected: r#"
@@ -3515,7 +3515,7 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-// the widened gate has not swallowed it
+        // the widened gate has not swallowed it
         id: "S2-F10",
         code: "E0725",
         rejected: r#"
@@ -3937,4 +3937,3 @@ fn main() -> i64 {
         );
     }
 }
-

@@ -321,7 +321,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(self.index_ptr_and_len(root, idx, bounds)?.0)
     }
 
-// the same gep as index_ptr plus the base length, so a caller needing both cannot drift
+    // the same gep as index_ptr plus the base length, so a caller needing both cannot drift
     pub(crate) fn index_ptr_and_len(
         &mut self,
         root: LocalId,
@@ -441,4 +441,3 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 }
-

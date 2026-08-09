@@ -815,4 +815,3 @@ fn check_block_ref(
         });
     }
 }
-

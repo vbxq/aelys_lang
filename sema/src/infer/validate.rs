@@ -522,7 +522,7 @@ impl TypeInference {
                         expr.span,
                     ));
                 }
-// the bir never builds a lambda body, so a borrow of storage outside it is unchecked
+                // the bir never builds a lambda body, so a borrow of storage outside it is unchecked
                 if self.lambda_depth > 0 && self.slice_in_a_lambda_is_unchecked(object) {
                     self.errors.push(TypeError::closure_ref_unchecked(
                         "a slice is formed",
@@ -767,7 +767,7 @@ impl TypeInference {
         }
     }
 
-// a base born and buried in the body cannot dangle, but a vec buffer can still be shared
+    // a base born and buried in the body cannot dangle, but a vec buffer can still be shared
     fn slice_in_a_lambda_is_unchecked(&self, object: &TypedExpr) -> bool {
         let mut ty = &object.ty;
         while let InferType::Ref { referent, .. } = ty {
@@ -782,7 +782,7 @@ impl TypeInference {
         }
     }
 
-// named in sema rather than in air lowering so the refusal cannot depend on the opt level
+    // named in sema rather than in air lowering so the refusal cannot depend on the opt level
     fn check_slice_form(
         &mut self,
         object: &TypedExpr,
@@ -1001,4 +1001,3 @@ impl TypeInference {
         }
     }
 }
-

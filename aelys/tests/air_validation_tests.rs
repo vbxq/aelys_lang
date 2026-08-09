@@ -2001,4 +2001,3 @@ fn validate_rejects_len_into_a_pointer_place() {
         "expected a ptrness mismatch, got: {errors:?}"
     );
 }
-

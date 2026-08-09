@@ -115,7 +115,7 @@ fn body_slice_param_writes(body: &BirBody) -> Vec<bool> {
                     written[*p] = true;
                 }
             }
-// a one-level closure, not a call-graph fixpoint: any callee handed the view writes
+            // a one-level closure, not a call-graph fixpoint: any callee handed the view writes
             if let BirRvalue::Call { args, .. } = rvalue {
                 for arg in args {
                     if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
@@ -298,4 +298,3 @@ fn d1_message(body: &BirBody, local: BirLocalId) -> String {
 fn floor_message() -> String {
     "[escape] cannot infer the origin of this returned reference".to_string()
 }
-

@@ -156,4 +156,3 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Null => false,
     }
 }
-

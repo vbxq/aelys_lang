@@ -265,7 +265,7 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
         if let Some(r) = l.reborrow_base {
             edges.push((l.holder.0 as usize, r.0 as usize));
         }
-// borrowing a reference-typed local inherits its loans, or a re-slice reads a freed base
+        // borrowing a reference-typed local inherits its loans, or a re-slice reads a freed base
         if local_is_ref(body, l.place.local) {
             edges.push((l.holder.0 as usize, l.place.local.0 as usize));
         }
@@ -832,4 +832,3 @@ fn render_place(body: &BirBody, place: &BirPlace) -> String {
     s.push_str(&suffix);
     s
 }
-
