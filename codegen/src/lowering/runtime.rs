@@ -346,6 +346,39 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 
+    pub(crate) fn emit_slice_len_check(
+        &mut self,
+        len: IntValue<'static>,
+        base_len: IntValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let oob = self
+            .builder
+            .build_int_compare(IntPredicate::UGT, len, base_len, "slice_oob_cmp")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        let current_fn = self.function;
+        let oob_block = self.context.append_basic_block(current_fn, "slice_oob");
+        let ok_block = self.context.append_basic_block(current_fn, "slice_ok");
+
+        self.builder
+            .build_conditional_branch(oob, oob_block, ok_block)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(oob_block);
+        let panic_fn = self.ensure_panic_function();
+        let (msg_ptr, msg_len) = self.global_string_ptr_len("slice range out of bounds")?;
+        let msg_len_val = self.context.i64_type().const_int(msg_len, false);
+        self.builder
+            .build_call(panic_fn, &[msg_ptr.into(), msg_len_val.into()], "")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.builder
+            .build_unreachable()
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+
+        self.builder.position_at_end(ok_block);
+        Ok(())
+    }
+
     pub(crate) fn emit_div_overflow_check(
         &mut self,
         dividend: IntValue<'static>,
@@ -425,3 +458,4 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 }
+
