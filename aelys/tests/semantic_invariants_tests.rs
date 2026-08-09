@@ -1280,19 +1280,20 @@ struct XRow {
 const GROUP_X: &[XRow] = &[
     XRow {
         id: "SI-X01",
-        code: "E0413",
+        code: "E0426",
         rejected: r#"
 fn main() -> i64 {
-    let v = vec[1, 2, 3]
+    let mut v = vec[1, 2, 3]
     let s = v[0..2]
-    return s[0]
+    s[0] = 99
+    return v[0]
 }
 "#,
         twin: Some((
             r#"
 fn main() -> i64 {
-    let a = [1, 2, 3]
-    let s = a[0..2]
+    let v = vec[1, 2, 3]
+    let s = v[0..2]
     return s[0]
 }
 "#,
@@ -2526,7 +2527,1170 @@ fn group_pa_fails_closed() {
     }
 }
 
-// rows, which catch the same stale-but-correct-read class at zero toolchain cost.
+const GROUP_S2: &[(&str, &str, Oracle)] = &[
+    (
+// the formation bounds check: silent -o-divergent garbage at base, a named trap now
+        "S2-B01",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let s = a[0..10]
+    println(s[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutErr(134, "", "slice range out of bounds"),
+    ),
+    (
+// a runtime end bound, so the check cannot be folded away
+        "S2-B03",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let mut n = 3
+    n = n + 7
+    let s = a[0..n]
+    println(s[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutErr(134, "", "slice range out of bounds"),
+    ),
+    (
+        "S2-B04",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let s = a[0..3]
+    return s[1]
+}
+"#,
+        Oracle::ExitOut(22, ""),
+    ),
+    (
+        "S2-B05",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let s = a[0..0]
+    return 7
+}
+"#,
+        Oracle::ExitOut(7, ""),
+    ),
+    (
+        "S2-B06",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let s = a[0..10]
+    return 7
+}
+"#,
+        Oracle::ExitOutErr(134, "", "slice range out of bounds"),
+    ),
+    (
+        "S2-B07",
+        r#"
+nogc fn f(a: &[i64], n: i64) -> i64 {
+    let s = a[0..n]
+    return 0
+}
+fn main() -> i64 {
+    let arr: [i64; 3] = [1, 2, 3]
+    return f(arr[..], 9)
+}
+"#,
+        Oracle::ExitOutErr(134, "", "slice range out of bounds"),
+    ),
+    (
+        "S2-B08",
+        r#"
+fn n() -> i64 {
+    return 0 - 1
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let s = a[0..n()]
+    return 7
+}
+"#,
+        Oracle::ExitOutErr(134, "", "slice range out of bounds"),
+    ),
+    (
+// the origins companion must not over-reject a re-slice of a reference-typed parameter
+        "S2-L08",
+        r#"
+fn f(a: &[i64]) -> &[i64] {
+    let s = a[0..4]
+    return s[0..2]
+}
+fn main() -> i64 {
+    let arr: [i64; 4] = [1, 2, 3, 4]
+    let r = f(arr[..])
+    return r[1]
+}
+"#,
+        Oracle::ExitOut(2, ""),
+    ),
+    (
+        "S2-L10a",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let s = a[0..2]
+    return s[0] + a[1]
+}
+"#,
+        Oracle::ExitOut(3, ""),
+    ),
+    (
+        "S2-L10b",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let s = a[0..2]
+    let t = a[0..3]
+    return s[0] + t[2]
+}
+"#,
+        Oracle::ExitOut(4, ""),
+    ),
+    (
+        "S2-L10c",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 4] = [1, 2, 3, 4]
+    let s = a[0..4]
+    let t = s[0..2]
+    return t[1]
+}
+"#,
+        Oracle::ExitOut(2, ""),
+    ),
+    (
+// a slice of a vec addresses the buffer, which is the capability the stage delivers
+        "S2-A01",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..2]
+    println(s[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+        "S2-A02",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..]
+    println(s[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+        "S2-A03",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[..]
+    println(s[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+        "S2-A04",
+        r#"
+fn f(v: Vec<i64>) -> i64 {
+    let s = v[0..2]
+    return s[1]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    return f(v)
+}
+"#,
+        Oracle::ExitOut(22, ""),
+    ),
+    (
+        "S2-A05",
+        r#"
+fn f(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..2]
+    return s[1]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    return f(&v)
+}
+"#,
+        Oracle::ExitOut(22, ""),
+    ),
+    (
+        "S2-A06",
+        r#"
+fn main() -> i64 {
+    let v = vec[11, 22, 33]
+    println(v[..][1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+// seven elements, so the length and the element cannot coincide
+        "S2-A07",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33, 44, 55, 66, 77]
+    let s = v[..]
+    println(s[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+        "S2-A08",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..0]
+    println(7)
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "7\n", 1, 1),
+    ),
+    (
+        "S2-A09",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[7]
+    let s = v[0..1]
+    println(s[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "7\n", 1, 1),
+    ),
+    (
+        "S2-A10",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    let t = s[0..2]
+    println(t[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+// the read shape e0426's interprocedural half must not cost
+        "S2-A11",
+        r#"
+fn sum(s: &[i64]) -> i64 {
+    return s[0] + s[1]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    return sum(v[..])
+}
+"#,
+        Oracle::ExitOut(33, ""),
+    ),
+    (
+        "S2-A12",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let s = a[0..3]
+    let t = s[..]
+    return t[1]
+}
+"#,
+        Oracle::ExitOut(22, ""),
+    ),
+    (
+        "S2-M05",
+        r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [1, 2, 3]
+    let s = a[0..2]
+    s[0] = 99
+    return a[0]
+}
+"#,
+        Oracle::ExitOut(99, ""),
+    ),
+    (
+        "S2-M06",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    println(s[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "1\n", 1, 1),
+    ),
+    (
+        "S2-M07",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    println(s[0])
+    v[0] = 99
+    println(v[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "1\n99\n", 1, 1),
+    ),
+    (
+// the base is born and buried inside the lambda, so nothing it borrows can outlive it
+        "S2-F12",
+        r#"
+fn main() -> i64 {
+    let f = fn () -> i64 {
+        let a: [i64; 3] = [11, 22, 33]
+        let s = a[0..2]
+        return s[1]
+    }
+    return f()
+}
+"#,
+        Oracle::ExitOut(22, ""),
+    ),
+    (
+        "S2-M15",
+        r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    (*r)[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    println(v[0])
+    return z
+}
+"#,
+        Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
+    ),
+    (
+        "S2-M16",
+        r#"
+struct Ar { a: [i64; 3] }
+fn poke(r: &Ar) -> i64 {
+    let s = (*r).a[0..3]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut b = Ar { a: [11, 22, 33] }
+    let z = poke(&b)
+    println(b.a[0])
+    return z
+}
+"#,
+        Oracle::ExitOutStats(0, "99\n", 0, 0),
+    ),
+    (
+        "S2-X02",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    v[0] = 99
+    let s = w[..]
+    println(v[0])
+    println(s[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "99\n11\n", 2, 2),
+    ),
+    (
+        "S2-X04",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..2]
+    let t = v[0..3]
+    println(s[0] + t[2])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "44\n", 1, 1),
+    ),
+    (
+        "S2-X03",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..2]
+    println(s[1])
+    Vec::push(v, 44)
+    println(v[3])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n44\n", 1, 1),
+    ),
+    (
+// by-value capture holds this: the env's share detaches on push, and frees=1 is the leak
+        "S2-F11",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..2]
+    let f = fn () -> i64 {
+        Vec::push(v, 44)
+        Vec::push(v, 45)
+        Vec::push(v, 46)
+        return 0
+    }
+    let q = f()
+    println(s[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 3, 1),
+    ),
+    (
+        "S2-T01",
+        r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [3, 0, 0]
+    let s = a[0..3]
+    let mut guard = 0
+    while s[0] > 0 {
+        s[0] = s[0] - 1
+        guard = guard + 1
+    }
+    println(guard)
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "3\n"),
+    ),
+    (
+        "S2-T03",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[0]
+    let mut i = 1
+    while i < 100 {
+        Vec::push(v, i)
+        i = i + 1
+    }
+    let s = v[..]
+    println(s[99])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "99\n"),
+    ),
+];
+
+#[test]
+fn group_s2_slice_of_vec() {
+    let h = Harness::new();
+    run_rows(&h, GROUP_S2);
+}
+
+const GROUP_S2_X: &[XRow] = &[
+    XRow {
+        id: "S2-F01",
+        code: "E0425",
+        rejected: r#"
+fn main() -> i64 {
+    let a: [i64; 4] = [1, 2, 3, 4]
+    let s = a[1..3]
+    return s[0]
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let a: [i64; 4] = [1, 2, 3, 4]
+    let s = a[0..3]
+    return s[1]
+}
+"#,
+            2,
+        )),
+    },
+    XRow {
+        id: "S2-L01",
+        code: "E0711",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [1, 2, 3]
+    let s = a[0..3]
+    a[1] = 99
+    return s[1]
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [1, 2, 3]
+    let s = a[0..3]
+    let x = s[1]
+    a[1] = 99
+    return x + a[1] - 97
+}
+"#,
+            4,
+        )),
+    },
+    XRow {
+        id: "S2-L03",
+        code: "E0722",
+        rejected: r#"
+fn main() -> i64 {
+    let base: [i64; 3] = [0, 0, 0]
+    let mut s = base[..]
+    if true {
+        let a: [i64; 3] = [1, 2, 3]
+        s = a[..]
+    }
+    return s[1]
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let base: [i64; 3] = [0, 0, 0]
+    let a: [i64; 3] = [1, 2, 3]
+    let mut s = base[..]
+    if true {
+        s = a[..]
+    }
+    return s[1]
+}
+"#,
+            2,
+        )),
+    },
+    XRow {
+        id: "S2-L09",
+        code: "E0721",
+        rejected: r#"
+fn mk() -> &[i64] {
+    let a: [i64; 3] = [1, 2, 3]
+    return a[..]
+}
+fn main() -> i64 {
+    let s = mk()
+    return s[1]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L11",
+        code: "E0721",
+        rejected: r#"
+fn id(s: &[i64]) -> &[i64] {
+    return s
+}
+fn h() -> &[i64] {
+    let a: [i64; 3] = [11, 22, 33]
+    let s = a[0..3]
+    let t = id(s)
+    return t[0..2]
+}
+fn main() -> i64 {
+    let u = h()
+    return u[1]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L02",
+        code: "E0711",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    v[1] = 99
+    return s[1]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L04",
+        code: "E0711",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    Vec::push(v, 44)
+    return s[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L05",
+        code: "E0711",
+        rejected: r#"
+fn f(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    Vec::push((*r), 44)
+    return s[0]
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    return f(&mut v)
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L06",
+        code: "E0711",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    v = vec[9, 9, 9]
+    return s[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+// without the borrow-of-a-reference edge s dies here and t[0] reads the freed buffer
+        id: "S2-L07",
+        code: "E0711",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    let t = s[0..2]
+    Vec::push(v, 44)
+    return t[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-L03v",
+        code: "E0722",
+        rejected: r#"
+fn main() -> i64 {
+    let base: Vec<i64> = vec[0, 0, 0]
+    let mut s = base[..]
+    if true {
+        let a: Vec<i64> = vec[1, 2, 3]
+        s = a[..]
+    }
+    return s[1]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-M01",
+        code: "E0426",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let w: Vec<i64> = v
+    let s = v[0..2]
+    s[0] = 99
+    println(v[0])
+    println(w[0])
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let w: Vec<i64> = v
+    let s = v[0..2]
+    return s[0] + w[1]
+}
+"#,
+            3,
+        )),
+    },
+    XRow {
+        id: "S2-M02",
+        code: "E0426",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    let t = s
+    t[0] = 99
+    return v[0]
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    let t = s
+    return t[0]
+}
+"#,
+            1,
+        )),
+    },
+    XRow {
+        id: "S2-M03",
+        code: "E0426",
+        rejected: r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..3]
+    let u = s[0..2]
+    u[0] = 99
+    return v[0]
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..3]
+    let u = s[0..2]
+    return u[0]
+}
+"#,
+            1,
+        )),
+    },
+    XRow {
+        id: "S2-M04",
+        code: "E0426",
+        rejected: r#"
+fn poke(s: &[i64]) -> i64 {
+    s[0] = 9
+    return 0
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let q = poke(v[..])
+    return v[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-M09",
+        code: "E0426",
+        rejected: r#"
+fn d(s: &[i64]) -> i64 {
+    let t = s[0..1]
+    t[0] = 9
+    return 0
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let z = d(v[0..3])
+    return v[0] + z
+}
+"#,
+        twin: Some((
+            r#"
+fn d(s: &[i64]) -> i64 {
+    let t = s[0..1]
+    t[0] = 9
+    return 0
+}
+fn main() -> i64 {
+    let mut a: [i64; 3] = [1, 2, 3]
+    let z = d(a[0..3])
+    return a[0] + z
+}
+"#,
+            9,
+        )),
+    },
+    XRow {
+        id: "S2-M10",
+        code: "E0426",
+        rejected: r#"
+fn poke(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&v)
+    println(w[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-M11",
+        code: "E0426",
+        rejected: r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    println(v[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-M12",
+        code: "E0426",
+        rejected: r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[..]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-M13",
+        code: "E0426",
+        rejected: r#"
+fn wr(s: &[i64]) -> i64 {
+    s[0] = 99
+    return 0
+}
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    return wr(s)
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+// a re-slice inside the callee, so the write's dest is two borrows from the referent
+        id: "S2-M14",
+        code: "E0426",
+        rejected: r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    let t = s[0..2]
+    t[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F08",
+        code: "E0423",
+        rejected: r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let f = fn () -> i64 {
+        let s = a[0..2]
+        return s[1]
+    }
+    return f()
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F07",
+        code: "E0423",
+        rejected: r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let f = fn () -> i64 {
+        let s = v[0..2]
+        return s[1]
+    }
+    return f()
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F14",
+        code: "E0423",
+        rejected: r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let f = fn () -> i64 {
+        let u = v
+        let s = u[0..3]
+        s[0] = 99
+        return 0
+    }
+    let z = f()
+    println(w[0])
+    return z
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F15",
+        code: "E0423",
+        rejected: r#"
+fn main() -> i64 {
+    let f = fn () -> i64 {
+        let v: Vec<i64> = vec[11, 22, 33]
+        let s = v[0..3]
+        return s[1]
+    }
+    return f()
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F09",
+        code: "E0423",
+        rejected: r#"
+fn apply(g: fn(&[i64]) -> &[i64], s: &[i64]) -> i64 {
+    let r = g(s)
+    return r[0]
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let f = fn (s: &[i64]) -> &[i64] {
+        return s
+    }
+    return apply(f, a[..])
+}
+"#,
+        twin: None,
+    },
+    XRow {
+// the widened gate has not swallowed it
+        id: "S2-F10",
+        code: "E0725",
+        rejected: r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [11, 22, 33]
+    let s = a[0..2]
+    let f = fn () -> i64 {
+        return s[1]
+    }
+    return f()
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-C07",
+        code: "E0711",
+        rejected: r#"
+fn f(r: &Vec<i64>) -> &[i64] {
+    return (*r)[0..2]
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let s = f(&v)
+    Vec::push(v, 44)
+    return s[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-C07b",
+        code: "E0721",
+        rejected: r#"
+fn f(v: Vec<i64>) -> &[i64] {
+    return v[0..2]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let s = f(v)
+    return s[0]
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-C08",
+        code: "E0714",
+        rejected: r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    let arr = [s, s]
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "S2-F05",
+        code: "E0901",
+        rejected: r#"
+let gv: Vec<i64> = vec[1, 2, 3]
+fn main() -> i64 {
+    let s = gv[0..2]
+    return s[0]
+}
+"#,
+        twin: None,
+    },
+];
+
+#[test]
+fn s2_e0413_is_retired_and_its_heirs_are_registered() {
+    use aelys_common::diagnostic::registry;
+    assert!(
+        registry::lookup("E0413").is_none(),
+        "E0413 must be gone from the registry"
+    );
+    for code in ["E0425", "E0426"] {
+        let info =
+            registry::lookup(code).unwrap_or_else(|| panic!("{code} must have an --explain entry"));
+        assert!(
+            !info.explanation.trim().is_empty(),
+            "{code}'s --explain entry must not be empty"
+        );
+    }
+    for code in ["E0421", "E0422", "E0423", "E0424"] {
+        assert!(
+            registry::lookup(code).is_some(),
+            "{code} must have an --explain entry"
+        );
+    }
+}
+
+#[test]
+fn group_s2_fails_closed() {
+    let h = Harness::new();
+    for row in GROUP_S2_X {
+        for (name, opt) in REJECT_LEVELS {
+            let rendered = h.reject(row.id, name, row.rejected, *opt);
+            assert!(
+                rendered.contains(&format!("[{}]", row.code)),
+                "{} at {name} MUST be rejected with {}, got:\n{rendered}",
+                row.id,
+                row.code
+            );
+        }
+        if let Some((twin, exit)) = row.twin {
+            let twin_id = format!("{}-twin", row.id);
+            for (name, opt) in REJECT_LEVELS {
+                h.accepts(&twin_id, name, twin, *opt);
+            }
+            check(&h, &twin_id, twin, exit, None, Memory::Ignore);
+        }
+    }
+}
+
+#[test]
+fn s2_slice_form_refusal_is_opt_level_independent() {
+    let h = Harness::new();
+    let rows: &[(&str, &str)] = &[
+        (
+            "S2-F03",
+            r#"
+fn main() -> i64 {
+    let t = "abcdef"
+    let s = t[0..2]
+    return 22
+}
+"#,
+        ),
+        (
+            "S2-F03b",
+            r#"
+fn main() -> i64 {
+    let t = "abcdef"
+    let s = t[..]
+    return 22
+}
+"#,
+        ),
+    ];
+    for (id, src) in rows {
+        for (name, opt) in LEVELS {
+            let rendered = h.reject(id, name, src, *opt);
+            assert!(
+                rendered.contains("[E0425]"),
+                "{id} at {name} MUST be rejected with E0425, got:\n{rendered}"
+            );
+        }
+    }
+}
+
+#[test]
+fn s2_generic_slice_refusal_is_opt_level_independent() {
+    let h = Harness::new();
+    let src = r#"
+fn firstof<T>(x: T) -> i64 {
+    let s = x[0..1]
+    return 5
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    return firstof(a)
+}
+"#;
+    for (name, opt) in LEVELS {
+        let rendered = h.reject("S2-F13", name, src, *opt);
+        assert!(
+            rendered.contains("[E0901]"),
+            "S2-F13 at {name} MUST be rejected, got:\n{rendered}"
+        );
+    }
+}
 
 #[cfg(feature = "asan-invariants")]
 mod asan {
@@ -2592,6 +3756,45 @@ fn main() -> i64 {
 }
 "#,
             5,
+        ),
+        (
+            "S2-A07",
+            r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33, 44, 55, 66, 77]
+    let s = v[..]
+    return s[6] - 55
+}
+"#,
+            22,
+        ),
+        (
+            "S2-A10",
+            r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    let s = v[0..3]
+    let t = s[0..2]
+    return t[1]
+}
+"#,
+            22,
+        ),
+        (
+            "S2-T03",
+            r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[0]
+    let mut i = 1
+    while i < 100 {
+        Vec::push(v, i)
+        i = i + 1
+    }
+    let s = v[..]
+    return s[99] - 77
+}
+"#,
+            22,
         ),
     ];
 
@@ -2734,3 +3937,4 @@ fn main() -> i64 {
         );
     }
 }
+
