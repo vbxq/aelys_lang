@@ -1,6 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
-use crate::place_spine::{denotes_a_place, spine_is_shared, target_ptr_is_shared};
+use crate::place_spine::{denotes_a_place, spine_is_shared, spine_root_name, target_ptr_is_shared};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::Span;
@@ -171,7 +171,9 @@ impl TypeInference {
             TypedStmtKind::Return(Some(expr)) => {
                 self.validate_expr(expr, generic_scope, declared_type_params);
                 // a reference returned out of a lambda body escapes a
-                if self.lambda_depth > 0 && matches!(expr.ty, InferType::Ref { .. }) {
+                if self.lambda_depth > 0
+                    && matches!(expr.ty, InferType::Ref { .. } | InferType::Slice { .. })
+                {
                     self.errors.push(TypeError::closure_ref_unchecked(
                         "a reference is returned",
                         stmt.span,
@@ -347,11 +349,16 @@ impl TypeInference {
                 let mut bound: HashSet<String> = params.iter().map(|p| p.name.clone()).collect();
                 Self::collect_bound_names(body, &mut bound);
                 self.shadowed_globals = bound;
+                let saved_captures = std::mem::replace(
+                    &mut self.lambda_captures,
+                    captures.iter().map(|(n, _)| n.clone()).collect(),
+                );
                 self.lambda_depth += 1;
                 for stmt in body {
                     self.validate_stmt(stmt, generic_scope, declared_type_params);
                 }
                 self.lambda_depth -= 1;
+                self.lambda_captures = saved_captures;
                 self.shadowed_globals = saved_shadow;
                 if has_generic_placeholder {
                     self.errors.push(TypeError::member_access(
@@ -503,10 +510,7 @@ impl TypeInference {
                     self.errors
                         .push(TypeError::no_place("the base of a slice", expr.span));
                 }
-                if matches!(object.ty, InferType::Vec(_)) {
-                    self.errors
-                        .push(TypeError::vec_slice_unsupported(expr.span));
-                } else if !Self::is_indexable_type(&object.ty)
+                if !Self::is_indexable_type(&object.ty)
                     && !self.is_active_generic_placeholder_type(
                         &object.ty,
                         generic_scope,
@@ -518,6 +522,14 @@ impl TypeInference {
                         expr.span,
                     ));
                 }
+// the bir never builds a lambda body, so a borrow of storage outside it is unchecked
+                if self.lambda_depth > 0 && self.slice_in_a_lambda_is_unchecked(object) {
+                    self.errors.push(TypeError::closure_ref_unchecked(
+                        "a slice is formed",
+                        expr.span,
+                    ));
+                }
+                self.check_slice_form(object, range, expr, generic_scope, declared_type_params);
             }
             TypedExprKind::Reference { mutable, operand } => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
@@ -755,6 +767,57 @@ impl TypeInference {
         }
     }
 
+// a base born and buried in the body cannot dangle, but a vec buffer can still be shared
+    fn slice_in_a_lambda_is_unchecked(&self, object: &TypedExpr) -> bool {
+        let mut ty = &object.ty;
+        while let InferType::Ref { referent, .. } = ty {
+            ty = referent;
+        }
+        if matches!(ty, InferType::Vec(_)) {
+            return true;
+        }
+        match spine_root_name(object) {
+            Some(name) => self.lambda_captures.contains(name),
+            None => true,
+        }
+    }
+
+// named in sema rather than in air lowering so the refusal cannot depend on the opt level
+    fn check_slice_form(
+        &mut self,
+        object: &TypedExpr,
+        range: &TypedExpr,
+        expr: &TypedExpr,
+        generic_scope: &HashSet<String>,
+        declared_type_params: &HashSet<String>,
+    ) {
+        if let TypedExprKind::Range { start: Some(s), .. } = &range.kind {
+            if !matches!(&s.kind, TypedExprKind::Int(0)) {
+                self.errors.push(TypeError::slice_form_unsupported(
+                    "a slice with a non-zero start bound",
+                    expr.span,
+                ));
+            }
+        }
+        let carries_a_length = matches!(
+            object.ty,
+            InferType::Array(_, _) | InferType::Vec(_) | InferType::Slice { .. }
+        );
+        if !carries_a_length
+            && Self::is_indexable_type(&object.ty)
+            && !self.is_active_generic_placeholder_type(
+                &object.ty,
+                generic_scope,
+                declared_type_params,
+            )
+        {
+            self.errors.push(TypeError::slice_form_unsupported(
+                format!("a slice of a `{}`, which carries no length", object.ty),
+                expr.span,
+            ));
+        }
+    }
+
     fn is_indexable_type(ty: &InferType) -> bool {
         matches!(
             ty,
@@ -938,3 +1001,4 @@ impl TypeInference {
         }
     }
 }
+
