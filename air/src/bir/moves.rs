@@ -38,7 +38,8 @@ pub fn check_program(bir: &BirProgram) -> BirCheck {
     }
     // origin summaries + the d1/floor return-escape diagnostics
     let summaries = super::origins::summaries(bir, &mut errors);
-    errors.extend(super::loans::check(bir, &summaries));
+    let slice_writes = super::origins::slice_param_writes(bir);
+    errors.extend(super::loans::check(bir, &summaries, &slice_writes));
     for body in &bir.bodies {
         errors.extend(body.build_errors.iter().cloned());
     }
