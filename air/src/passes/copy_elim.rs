@@ -176,7 +176,7 @@ fn rewrite_terminator(term: &mut AirTerminator, replacements: &HashMap<LocalId, 
 
 fn rewrite_rvalue(value: &mut Rvalue, replacements: &HashMap<LocalId, LocalId>) {
     match value {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) => {
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Len(op) => {
             rewrite_operand(op, replacements);
         }
         Rvalue::BinaryOp(_, left, right) => {
