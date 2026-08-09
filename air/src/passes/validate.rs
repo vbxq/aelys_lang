@@ -69,6 +69,11 @@ pub enum AirValidationDetail {
     },
     /// A function has no blocks (non-extern function with empty body).
     EmptyBody,
+    PtrnessMismatch {
+        context: String,
+        rvalue: &'static str,
+        place_ty: String,
+    },
 }
 
 impl fmt::Display for AirValidationError {
@@ -165,6 +170,76 @@ impl fmt::Display for AirValidationError {
             AirValidationDetail::EmptyBody => {
                 write!(f, "non-extern function has no basic blocks")
             }
+            AirValidationDetail::PtrnessMismatch {
+                context,
+                rvalue,
+                place_ty,
+            } => {
+                write!(
+                    f,
+                    "`{rvalue}` assigns into a place of type {place_ty} ({context})"
+                )
+            }
+        }
+    }
+}
+
+fn place_type(function: &AirFunction, program: &AirProgram, place: &Place) -> Option<AirType> {
+    match place {
+        Place::Local(id) => function
+            .params
+            .iter()
+            .find(|p| p.id == *id)
+            .map(|p| p.ty.clone())
+            .or_else(|| {
+                function
+                    .locals
+                    .iter()
+                    .find(|l| l.id == *id)
+                    .map(|l| l.ty.clone())
+            }),
+        Place::Global(name) => program
+            .globals
+            .iter()
+            .find(|g| g.name == *name)
+            .map(|g| g.ty.clone()),
+        Place::Field(_, _) | Place::Index(_, _) | Place::Deref(_) => None,
+    }
+}
+
+// only a local or a global names a type here, so a write through a field or an index escapes it
+fn check_function_ptrness(
+    function: &AirFunction,
+    program: &AirProgram,
+    errors: &mut Vec<AirValidationError>,
+) {
+    if function.is_extern {
+        return;
+    }
+    for block in &function.blocks {
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let AirStmtKind::Assign { place, rvalue } = &stmt.kind else {
+                continue;
+            };
+            let (name, want_ptr) = match rvalue {
+                Rvalue::AddressOf(_) => ("addr", true),
+                Rvalue::Deref(_) => ("deref", false),
+                Rvalue::Len(_) => ("len", false),
+                _ => continue,
+            };
+            let Some(ty) = place_type(function, program, place) else {
+                continue;
+            };
+            if matches!(ty, AirType::Ptr(_)) != want_ptr {
+                errors.push(AirValidationError {
+                    function_name: function.name.clone(),
+                    detail: AirValidationDetail::PtrnessMismatch {
+                        context: format!("bb{}, stmt #{}", block.id.0, i),
+                        rvalue: name,
+                        place_ty: format!("{:?}", ty),
+                    },
+                });
+            }
         }
     }
 }
@@ -246,6 +321,7 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
 
     for function in &program.functions {
         validate_function(function, &known_enums, &known_globals, &mut errors);
+        check_function_ptrness(function, program, &mut errors);
     }
 
     if errors.is_empty() {
@@ -527,7 +603,7 @@ fn check_rvalue_locals(
     errors: &mut Vec<AirValidationError>,
 ) {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) => {
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Len(op) => {
             check_operand_locals(op, declared, func_name, ctx, errors);
         }
         Rvalue::BinaryOp(_, left, right) => {
@@ -739,3 +815,4 @@ fn check_block_ref(
         });
     }
 }
+
