@@ -24,6 +24,14 @@ impl<'a> FunctionCodegen<'a> {
             Rvalue::StructInit { name, fields } => self.generate_struct_init(name, fields),
             Rvalue::FieldAccess { base, field } => self.generate_field_access(base, field),
             Rvalue::AddressOf(place) => Ok(self.place_ptr(place)?.as_basic_value_enum()),
+            Rvalue::Len(op) => {
+                let (Operand::Copy(local) | Operand::Move(local)) = op else {
+                    return Err(CodegenError::UnsupportedType(
+                        "len of a constant operand: the AIR must pass a place address".to_string(),
+                    ));
+                };
+                Ok(self.collection_len(*local)?.as_basic_value_enum())
+            }
             Rvalue::Deref(operand) => {
                 let ptr = self.generate_operand(operand)?.into_pointer_value();
                 self.emit_null_check(ptr)?;
@@ -499,7 +507,7 @@ impl<'a> FunctionCodegen<'a> {
         ptr: &Operand,
         len: &Operand,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        let ptr_val = match ptr {
+        let (ptr_val, base_len) = match ptr {
             Operand::Copy(local) | Operand::Move(local) => match self.local_air_type(*local)? {
                 AirType::Ptr(inner)
                     if matches!(
@@ -508,18 +516,29 @@ impl<'a> FunctionCodegen<'a> {
                     ) =>
                 {
                     let zero = self.context.i64_type().const_zero();
-                    self.index_ptr(
+                    let (p, base_len) = self.index_ptr_and_len(
                         *local,
                         zero,
                         crate::lowering::stmts::BoundsCheck::Elem0Unchecked,
-                    )?
-                    .as_basic_value_enum()
+                    )?;
+                    (p.as_basic_value_enum(), base_len)
                 }
-                _ => self.generate_operand(ptr)?,
+                other => {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "slice of a base with no derivable length: {:?}; sema must reject it \
+                         (E0425)",
+                        other
+                    )));
+                }
             },
-            _ => self.generate_operand(ptr)?,
+            _ => {
+                return Err(CodegenError::UnsupportedType(
+                    "slice of a constant base: the AIR must pass a place address".to_string(),
+                ));
+            }
         };
         let len_val = self.generate_operand(len)?;
+        self.emit_slice_len_check(len_val.into_int_value(), base_len)?;
 
         let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
         let slice_ty = self
