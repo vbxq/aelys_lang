@@ -164,7 +164,9 @@ fn rvalue_has_operand(rvalue: &Rvalue, local: LocalId) -> bool {
 
 fn for_each_rvalue_operand_local(rvalue: &Rvalue, mut f: impl FnMut(LocalId)) {
     match rvalue {
-        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) => operand_local(op, &mut f),
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Len(op) => {
+            operand_local(op, &mut f)
+        }
         Rvalue::BinaryOp(_, a, b) => {
             operand_local(a, &mut f);
             operand_local(b, &mut f);
