@@ -294,11 +294,6 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             format!("[vec-surface] {}", detail),
             "Vec used outside the guaranteed value-semantics surface".to_string(),
         ),
-        TypeErrorKind::VecSliceUnsupported => (
-            "E0413",
-            error.to_string(),
-            "slicing a `Vec<T>` is not supported yet".to_string(),
-        ),
         TypeErrorKind::VecForeachUnsupported => (
             "E0414",
             error.to_string(),
@@ -353,6 +348,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0424",
             error.to_string(),
             "reference to module-level storage".to_string(),
+        ),
+        TypeErrorKind::SliceFormUnsupported { .. } => (
+            "E0425",
+            error.to_string(),
+            "this slice form is not supported yet".to_string(),
         ),
         TypeErrorKind::MustUse { .. } => {
             ("E0411", error.to_string(), "unused `Result`".to_string())
