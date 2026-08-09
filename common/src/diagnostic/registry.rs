@@ -300,28 +300,6 @@ directly by a local.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
-        code: "E0413",
-        title: "slicing a `Vec<T>` is not supported yet",
-        explanation: "\
-A `Vec<T>` is a `{ptr, len, cap}` header whose elements live in a separate
-heap buffer. Slicing it would take the address of that header rather than
-the buffer, so it is rejected instead of silently miscompiled.
-
-    let v = vec[1, 2, 3]
-    let s = v[0..2]        // E0413
-
-Slice an array, whose elements are stored inline, or read the `Vec`
-element by element:
-
-    let a = [1, 2, 3]
-    let s = a[0..2]        // ok, arrays are sliceable
-    let x = v[0]           // ok, index a Vec element directly
-
-A sound slice-of-Vec needs the heap-buffer-view path (a place address into
-the buffer, with copy-on-write for a mutable view), which is deferred.",
-        severity: Severity::Error,
-    },
-    DiagnosticInfo {
         code: "E0414",
         title: "iterating a `Vec<T>` with `for` is not supported yet",
         explanation: "\
@@ -549,6 +527,59 @@ Copy the global into a local, work on that, and store it back:
     let r = &mut local
     *r = 101
     g = local",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0425",
+        title: "this slice form is not supported yet",
+        explanation: "\
+A slice is built from the address of element zero of its base, plus a
+length. Two forms have neither yet.
+
+A NON-ZERO START BOUND would have to move the base pointer as well as
+the length, and the slice lowering addresses element zero:
+
+    let a = [1, 2, 3, 4]
+    let s = a[1..3]        // E0425
+    let s = a[0..3]        // ok
+
+A BASE THAT CARRIES NO LENGTH -- a string, or a type the checker left
+open -- has no header to read the length from:
+
+    let t = \"abcdef\"
+    let s = t[0..2]        // E0425
+
+Arrays, `Vec<T>` and slices all carry a length and can be sliced from
+zero.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0426",
+        title: "write reachable through a slice of a `Vec<T>`",
+        explanation: "\
+A `Vec<T>`'s buffer is reference-counted, so two `Vec` values can share
+it. A write to an element normally copies the buffer first, which is what
+keeps the two values independent. A slice is a bare `{ptr, len}` view: it
+has no way to reach the `Vec` it came from, so a write through it would
+land in a buffer another `Vec` may still be reading.
+
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let w: Vec<i64> = v            // the buffer is now shared
+    let s = v[0..2]
+    s[0] = 99                      // E0426: this would change `w` too
+
+Passing the slice to a function that writes through its slice parameter
+is the same write, one frame down, and is refused for the same reason.
+
+Reading through the slice is fine, and so is writing through the `Vec`
+itself:
+
+    let s = v[0..2]
+    let x = s[0]                   // ok
+    v[0] = 99                      // ok, this copies the buffer first
+
+Slicing an array has no such restriction, because an array's elements are
+stored inline and are never shared.",
         severity: Severity::Error,
     },
     // Control flow (E05xx)
