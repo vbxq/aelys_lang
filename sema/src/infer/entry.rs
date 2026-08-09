@@ -34,6 +34,7 @@ impl Default for TypeInference {
             module_globals: HashSet::new(),
             shadowed_globals: HashSet::new(),
             lambda_depth: 0,
+            lambda_captures: HashSet::new(),
         }
     }
 }
