@@ -555,16 +555,6 @@ impl TypeInference {
                         expr.span,
                     ));
                 }
-                // a `&` into a call/enum-variant payload field forms no loan and points at a temporary
-                if let TypedExprKind::Member { object, .. } = &operand.kind {
-                    if matches!(
-                        object.kind,
-                        TypedExprKind::Call { .. } | TypedExprKind::EnumVariant { .. }
-                    ) {
-                        self.errors
-                            .push(TypeError::payload_field_ref_unsupported(expr.span));
-                    }
-                }
                 if *mutable && Self::ref_operand_has_index_projection(&operand.kind) {
                     self.errors
                         .push(TypeError::mut_index_ref_unsupported(expr.span));

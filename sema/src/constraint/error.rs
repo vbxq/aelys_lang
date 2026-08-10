@@ -88,8 +88,6 @@ pub enum TypeErrorKind {
         detail: String,
     },
     MutIndexRefUnsupported,
-    // a reference into a field of a call/enum-variant result forms no loan and points at a temporary
-    PayloadFieldRefUnsupported,
     MutRefImmutableBinding {
         name: String,
     },
@@ -234,15 +232,10 @@ impl fmt::Display for TypeError {
             ),
             TypeErrorKind::MutIndexRefUnsupported => write!(
                 f,
-                "[mut-index-ref] a mutable reference into an element or a field is not supported \
-                 yet; write-through would hit a stack copy, not the place. take `&mut` of the \
-                 whole binding, or write the place directly with `v[i] = x` or `p.f = x`"
-            ),
-            TypeErrorKind::PayloadFieldRefUnsupported => write!(
-                f,
-                "[payload-ref] a reference into a field of a call result (such as an `Rc` payload) \
-                 is not supported yet; it forms no loan and points at a temporary. bind the value \
-                 to a local first, then reference the local"
+                "[mut-index-ref] a mutable reference through an element or field projection is \
+                 not supported yet; the place address works for a unique local, but a shared Vec \
+                 buffer is not proven unique at borrow formation. write `v[i] = x` or `p.f = x`, \
+                 or take `&mut` of the whole binding"
             ),
             TypeErrorKind::MutRefImmutableBinding { name } => write!(
                 f,
@@ -252,20 +245,20 @@ impl fmt::Display for TypeError {
             TypeErrorKind::NestedFnShadowsOuter { name } => write!(
                 f,
                 "[nested-fn-shadow] a nested `fn {name}` reuses the name of an outer function; \
-                 nested shadowing is not supported and would silently dispatch the outer call to \
-                 this body. rename the nested function"
+                 the shared namespace can bind a call to the wrong body. rename the nested \
+                 function"
             ),
             TypeErrorKind::ReservedTypeName { name } => write!(
                 f,
                 "[reserved-type] `Vec` and `Rc` are reserved builtin type names; a user type named \
-                 `{name}` would be silently rerouted to the builtin `{name}::` lowering. rename the type"
+                 `{name}` would compete with intrinsic path resolution. rename the type"
             ),
             TypeErrorKind::RcFieldAssignIndirect => write!(
                 f,
                 "[rc-field-assign] the right-hand side of an `Rc` field assignment must be a direct \
                  producer (`Rc::new(...)`, `Rc::null()`, a bare identifier, an `Rc`-field read, or a \
-                 call); an indirect form (`if`/`match`/a block/parentheses) undercounts the refcount \
-                 by one. bind the value to a name first"
+                 call); an indirect form (`if`/`match`/a block/parentheses) leaves retain/release \
+                 accounting unbalanced. bind the value to a name first"
             ),
             TypeErrorKind::MustUse { error } => write!(
                 f,
@@ -457,17 +450,6 @@ impl TypeError {
     pub fn mut_index_ref_unsupported(span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::MutIndexRefUnsupported,
-            span,
-            reason: ConstraintReason::Other(String::new()),
-            secondary_spans: Vec::new(),
-            help: None,
-            suggestion: None,
-        }
-    }
-
-    pub fn payload_field_ref_unsupported(span: Span) -> Self {
-        TypeError {
-            kind: TypeErrorKind::PayloadFieldRefUnsupported,
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),

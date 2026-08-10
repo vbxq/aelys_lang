@@ -276,8 +276,9 @@ and can't be overwritten inside the body.
         code: "E0412",
         title: "`Vec<T>` used outside the guaranteed value-semantics surface",
         explanation: "\
-`Vec<T>` gives value semantics only inside a closed surface, and anything
-outside it is rejected rather than silently miscompiled.
+`Vec<T>` gives value semantics only where every copied buffer share is
+accounted for. Forms outside that proven surface are rejected rather than
+silently miscompiled.
 
 Form: in a Vec-producing position (a `let` initializer, an assignment
 right-hand side, a `*p = e` value, a `return` operand) the expression must
@@ -287,16 +288,20 @@ be `Vec::new()`, a `vec[...]` literal, a bare identifier, or a call:
     let w = if c { v } else { v }   // E0412
     let w = v                   // ok
 
-Shape: no `Vec` may be held by value inside another `Vec`, an array, a
-struct, an enum payload or an `Rc` payload, and no generic function may be
-instantiated with a type that holds a `Vec` by value:
+Shape: a COW byte copy that carries a `Vec` inside another value has no
+transitive retain/release for the inner buffer. With the guard disabled,
+the nested reallocation witness returned 7 under immix but 32 under malloc.
+The same surface also conservatively refuses a `Vec` held by an aggregate or
+generic value:
 
     Vec::push(vv, inner)        // E0412, `inner` is a Vec
     let a = [inner, inner]      // E0412
     keep(v)                     // E0412 for `fn keep<T>(x: T)`
 
-Bind the value to a name first, or restructure so the `Vec` is held
-directly by a local.",
+An indirect producer such as parentheses, a conditional, or a block is
+also rejected when ownership transfer cannot be proven from its shape; the
+syntax itself is not the memory defect. Keep the `Vec` in a direct local or
+pass it through a direct call whose ownership is known.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -319,22 +324,25 @@ loop over its length:
         let x = v[i]
     }
 
-By-value iteration over a `Vec` shares its buffer, which needs the same
-heap-buffer-view path as slicing (deferred).",
+There is no Vec foreach lowering arm. Disabling this check reaches the
+unnamed `E0901 [air-lowering]` failure at all three optimization levels and
+both allocators, so use an array or string, or index the Vec in a counting
+loop.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
         code: "E0415",
-        title: "a mutable reference into an element is not supported yet",
+        title: "a mutable reference through an element or field projection is not supported yet",
         explanation: "\
-`&mut v[i]` (or `&mut a[i]`) forms a mutable reference into a Vec or array
-element. Today the reference is taken of a loaded stack copy of the element,
-so writing through it never reaches the real element, silently miscompiling.
-It is rejected rather than accepted.
+`&mut v[i]`, `&mut a[i]`, or `&mut p.f` forms a mutable reference through a
+projection. Stage 1 now addresses a unique local projection correctly, but a
+Vec can share its buffer and this path does not establish `refcount == 1` at
+borrow formation. With this fence disabled, a copied Vec and `&mut v[0]`
+write both values as `101`, so the shared-buffer case is rejected.
 
     let mut v = vec[1, 2, 3]
     let r = &mut v[0]      // E0415
-    *r = 9                 // would write a stack copy, not v[0]
+    *r = 9                 // E0415: shared-buffer uniqueness is not proven
 
 An immutable `&v[i]` stays valid (a read through it is sound), and so does
 `&mut` of a whole binding. Write the element directly, or reference the
@@ -345,29 +353,10 @@ binding:
     v[0] = 9               // ok, write the element directly
     let r = &mut v         // ok, reference the whole binding
 
-Sound `&mut` into an element needs a place-address path with copy-on-write
-for a shared buffer, which is deferred.",
-        severity: Severity::Error,
-    },
-    DiagnosticInfo {
-        code: "E0416",
-        title: "a reference into a call-result field is not supported yet",
-        explanation: "\
-`&Rc::get(r).x` (and `&<call>().field` in general) takes a reference into a
-field of a temporary produced by a call. No loan is formed and the address
-points into a value that does not outlive the expression, so it is rejected
-rather than accepted unsoundly.
-
-    let r = Rc::new(Cell{x: 1})
-    let p = &Rc::get(r).x  // E0416
-
-Bind the value to a local first, then reference the local:
-
-    let c = Rc::get(r)     // bind the payload
-    let p = &c.x           // ok
-
-A reference into a plain binding's field (`&p.x` where `p` is a local) stays
-valid.",
+Write the place directly, or wait for the A2(2) guarantee that proves a
+unique managed buffer before forming the mutable projected reference. The
+same fence also covers an indexed global projection, which the whole-global
+check cannot name.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -392,9 +381,10 @@ Declare the binding mutable, or take an immutable reference:
         code: "E0418",
         title: "nested function shadows an outer function",
         explanation: "\
-A nested `fn` declared with the same name as an outer function reuses that
-function's dispatch slot. A call to the outer function can then be silently
-lowered to the nested body, a miscompile, so the collision is rejected.
+A nested `fn` declared with the same bare name as an outer function enters
+the shared function namespace with an ambiguous dispatch binding. The
+generic collision witness returned 10 while its unique-name twin returned 9
+when this fence was disabled, so the collision is rejected.
 
     fn pick(a: i64, b: i64) -> i64 { return a }
     fn other() -> i64 {
@@ -414,10 +404,11 @@ Rename the nested function so its name is unique:
         code: "E0419",
         title: "reserved builtin type name",
         explanation: "\
-`Vec` and `Rc` are builtin type names. A `Vec::` or `Rc::` path is
-intercepted by the compiler before any user type of that name is looked
-up, so a user `struct`/`enum` named `Vec` or `Rc` would be silently
-rerouted to the builtin lowering. The declaration is rejected instead.
+`Vec` and `Rc` are builtin type names. Their intrinsic paths share the
+compiler's type namespace with user declarations, so a user `struct` or
+`enum` with either name would make name resolution depend on the builtin
+interception order. The declaration is rejected to keep that namespace
+unambiguous; rename the type.
 
     enum Vec { Empty, One(i64) }   // E0419
     struct Rc { count: i64 }       // E0419
@@ -433,11 +424,11 @@ Rename the type to anything else:
         title: "indirect right-hand side of an `Rc` field assignment",
         explanation: "\
 Reassigning an `Rc` field through an `Rc` handle
-(`handle.field = rhs`, where `field` is itself an `Rc`) balances the
-store with a retain of the new value and a release of the old one. The
-retain is only emitted for a direct right-hand side; an indirect form
-slips past the provenance check and undercounts the refcount by one,
-which can free a value that is still reachable.
+(`handle.field = rhs`, where `field` is itself an `Rc`) needs a retain of
+the new value and a release of the old one. The provenance check only knows
+the direct producer forms. With this fence disabled, the indirect witness
+returned the right value but reported `allocs=2 frees=1`, so the ownership
+accounting is unbalanced.
 
     node.next = if c { a } else { b }   // E0420
     node.next = (a)                     // E0420

@@ -444,6 +444,20 @@ fn run_rejects(h: &Harness, rows: &[(&str, &str, &str)]) {
 
 const GROUP_V: &[(&str, &str, Oracle)] = &[
     (
+        "SI-V17",
+        r#"
+struct Cell { x: i64 }
+fn read(p: &i64) -> i64 { return *p }
+fn main() -> i64 {
+    let r = Rc::new(Cell{x: 7})
+    let p = &Rc::get(r).x
+    let q = Rc::new(Cell{x: 31})
+    return read(p) + Rc::get(q).x
+}
+"#,
+        Oracle::Balanced(38),
+    ),
+    (
         "SI-V01",
         r#"
 fn main() -> i64 {
@@ -1370,30 +1384,6 @@ fn main() -> i64 {
     let p = P{x: 7, y: 2}
     let r = &p.x
     return *r
-}
-"#,
-            7,
-        )),
-    },
-    XRow {
-        id: "SI-X04",
-        code: "E0416",
-        rejected: r#"
-struct Cell { x: i64 }
-fn main() -> i64 {
-    let r = Rc::new(Cell{x: 7})
-    let p = &Rc::get(r).x
-    return *p
-}
-"#,
-        twin: Some((
-            r#"
-struct Cell { x: i64 }
-fn main() -> i64 {
-    let r = Rc::new(Cell{x: 7})
-    let c = Rc::get(r)
-    let p = &c.x
-    return *p
 }
 "#,
             7,

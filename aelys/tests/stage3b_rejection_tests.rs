@@ -300,22 +300,30 @@ fn main() -> i64 {
 }
 
 #[test]
-fn ref_into_rc_payload_field_is_rejected() {
-    let err = reject(
-        r#"
+fn ref_into_rc_payload_field_compiles_and_runs() {
+    let src = r#"
 struct Cell { x: i64 }
+fn read(p: &i64) -> i64 { return *p }
 fn main() -> i64 {
-    let r = Rc::new(Cell{x: 1})
+    let r = Rc::new(Cell{x: 7})
     let p = &Rc::get(r).x
-    return *p
+    let q = Rc::new(Cell{x: 31})
+    return read(p) + Rc::get(q).x
 }
-"#,
-    );
-    assert!(err.contains("[E0416]"), "must carry the E0416 code: {err}");
-    assert!(
-        err.contains("[payload-ref]"),
-        "must carry the payload-ref marker: {err}"
-    );
+"#;
+    accepts(src);
+    for level in [
+        OptimizationLevel::None,
+        OptimizationLevel::Standard,
+        OptimizationLevel::Aggressive,
+    ] {
+        if let Some(code) = run_exit(src, level) {
+            assert_eq!(
+                code, 38,
+                "call-result field reference must run at {level:?}"
+            );
+        }
+    }
 }
 
 #[test]

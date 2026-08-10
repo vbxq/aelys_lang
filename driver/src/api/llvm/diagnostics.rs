@@ -302,12 +302,8 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         TypeErrorKind::MutIndexRefUnsupported => (
             "E0415",
             error.to_string(),
-            "a mutable reference into an element is not supported yet".to_string(),
-        ),
-        TypeErrorKind::PayloadFieldRefUnsupported => (
-            "E0416",
-            error.to_string(),
-            "a reference into a call-result field is not supported yet".to_string(),
+            "a mutable reference through an element or field projection is not supported yet"
+                .to_string(),
         ),
         TypeErrorKind::MutRefImmutableBinding { .. } => (
             "E0417",
