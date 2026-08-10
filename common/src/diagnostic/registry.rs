@@ -342,7 +342,7 @@ write both values as `101`, so the shared-buffer case is rejected.
 
     let mut v = vec[1, 2, 3]
     let r = &mut v[0]      // E0415
-    *r = 9                 // E0415: shared-buffer uniqueness is not proven
+    *r = 9
 
 An immutable `&v[i]` stays valid (a read through it is sound), and so does
 `&mut` of a whole binding. Write the element directly, or reference the
