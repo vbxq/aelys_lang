@@ -1921,7 +1921,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOut(0, "101\n7919\n"),
+        Oracle::ExitOutStats(0, "101\n7919\n", 2, 2),
     ),
     (
         // still be freed exactly once. this is what catches emit_vec_detach's pointer form
