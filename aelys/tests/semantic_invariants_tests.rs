@@ -1,5 +1,6 @@
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
+use std::cell::Cell;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -50,6 +51,8 @@ struct Outcome {
 
 struct Harness {
     dir: TempDir,
+    compiled_legs: Cell<usize>,
+    linker_skips: Cell<usize>,
 }
 
 fn exe_path_for(p: &Path) -> PathBuf {
@@ -98,6 +101,8 @@ impl Harness {
         warm_core_archive();
         Harness {
             dir: tempdir().expect("tempdir"),
+            compiled_legs: Cell::new(0),
+            linker_skips: Cell::new(0),
         }
     }
 
@@ -111,9 +116,10 @@ impl Harness {
     fn compile(&self, id: &str, tag: &str, src: &str, opt: OptimizationLevel) -> Option<PathBuf> {
         let path = self.write(id, tag, src);
         match compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
-            Ok(()) => {}
+            Ok(()) => self.compiled_legs.set(self.compiled_legs.get() + 1),
             Err(err) => {
                 if linker_unavailable(&err.to_string()) {
+                    self.linker_skips.set(self.linker_skips.get() + 1);
                     return None;
                 }
                 panic!("{id} at {tag} must compile:\n{src}\nerror: {err}");
@@ -121,6 +127,14 @@ impl Harness {
         }
         let exe = exe_path_for(&path);
         exe.is_file().then_some(exe)
+    }
+
+    fn assert_measured(&self, group: &str) {
+        assert!(
+            self.compiled_legs.get() > 0,
+            "{group}: no executable leg was measured; linker skips={}",
+            self.linker_skips.get()
+        );
     }
 
     fn run(&self, exe: &Path, alloc: Option<&str>) -> Outcome {
@@ -2549,12 +2563,15 @@ fn main() -> i64 {
     let v: Vec<i64> = vec[7]
     let f = fn () -> i64 {
         Vec::push(v, 101)
-        return v[1]
+        return v[0]
     }
-    return f()
+    let inside = f()
+    println(inside)
+    println(v[0])
+    return 0
 }
 "#,
-        Oracle::ExitOutStats(101, "", 3, 1),
+        Oracle::ExitOutStats(0, "7\n7\n", 3, 1),
     ),
     (
         "SI-PAA04",
@@ -2639,12 +2656,208 @@ fn main() -> i64 {
 "#,
         Oracle::Terminates(20_000, 0, "2\n"),
     ),
+    (
+        "SI-PA57",
+        r#"
+let mut g: i64 = 3
+fn drain() -> i64 {
+    while g > 0 {
+        g--
+    }
+    return g
+}
+fn main() -> i64 {
+    return drain()
+}
+"#,
+        Oracle::Terminates(20_000, 0, ""),
+    ),
+    (
+        "SI-PA58",
+        r#"
+struct Cell { a: [i64; 3] }
+fn drain(r: &mut Cell) -> i64 {
+    while (*r).a[0] > 0 {
+        (*r).a[0]--
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut c: Cell = Cell { a: [3, 0, 0] }
+    let q = drain(&mut c)
+    println(c.a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA59",
+        r#"
+fn main() -> i64 {
+    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+    let r = &mut a
+    (*r)[1][1][1] = 101
+    return a[1][1][1] - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA60",
+        r#"
+struct L3 { d: i64 }
+struct L2 { c: L3 }
+struct L1 { b: L2 }
+fn poke(r: &mut L1) -> i64 {
+    (*r).b.c.d = 101
+    return 0
+}
+fn main() -> i64 {
+    let mut x: L1 = L1 { b: L2 { c: L3 { d: 7 } } }
+    let q = poke(&mut x)
+    return x.b.c.d - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA61",
+        r#"
+struct Mid { g: [i64; 1] }
+struct Top { f: [Mid; 1] }
+fn poke(r: &mut Top) -> i64 {
+    (*r).f[0].g[0] = 101
+    return 0
+}
+fn main() -> i64 {
+    let mut x: Top = Top { f: [Mid { g: [7] }] }
+    let q = poke(&mut x)
+    return x.f[0].g[0] - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA63",
+        r#"
+struct Holder { a: [i64; 3] }
+fn down(r: &mut Holder) -> i64 {
+    if (*r).a[0] > 0 {
+        (*r).a[0] = (*r).a[0] - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut h: Holder = Holder { a: [3, 0, 0] }
+    let q = down(&mut h)
+    println(h.a[0])
+    return q
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA64",
+        r#"
+struct Cell { f: i64, g: i64 }
+fn down(r: &mut Cell) -> i64 {
+    if (*r).f > 0 {
+        (*r).f = (*r).f - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut c: Cell = Cell { f: 3, g: 0 }
+    let q = down(&mut c)
+    println(c.f)
+    return q
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PAA05",
+        r#"
+fn read(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    return t[0]
+}
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    return read(a[..])
+}
+"#,
+        Oracle::AllocAgreeOut(11, ""),
+    ),
+    (
+        "SI-PAA06",
+        r#"
+fn run(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    let mut i = 0
+    while i < 1 {
+        t[0] = 101
+        i = i + 1
+    }
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "101\n"),
+    ),
+    (
+        "SI-PAA07",
+        r#"
+fn run(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    t[0] = 101
+    println(s[0])
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "101\n101\n"),
+    ),
+    (
+        "SI-PAA08",
+        r#"
+fn run(s: &mut [i64]) -> i64 {
+    let t = s[0..2]
+    t[0] = 101
+    println(s[0])
+    return 0
+}
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return q
+}
+"#,
+        Oracle::ExitOut(0, "101\n101\n"),
+    ),
 ];
 
 #[test]
 fn group_pa_place_addressing() {
     let h = Harness::new();
     run_rows(&h, GROUP_PA);
+    h.assert_measured("group_pa_place_addressing");
 }
 
 // the fail-closed half: one row per code stage 1 adds, plus the two c52 legs and the origins
@@ -3082,6 +3295,295 @@ fn main() -> i64 {
         )),
     },
     XRow {
+        id: "SI-PAX22",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX23",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[..2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX24",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..=2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX25",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[..=2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX26",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..0]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX27",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..1]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX28",
+        code: "E0104",
+        rejected: r#"
+fn bad(s: &[i64]) -> i64 {
+    s[0..2]++
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 2, 3]
+    return bad(a[..])
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX29",
+        code: "E0104",
+        rejected: r#"
+struct Cell { a: [i64; 3] }
+fn main() -> i64 {
+    let mut c: Cell = Cell { a: [7, 2, 3] }
+    c.a[..]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX30",
+        code: "E0412",
+        rejected: r#"
+fn main() -> i64 {
+    let mut inner = Vec::new()
+    Vec::push(inner, 1)
+    let mut outer = Vec::new()
+    Vec::push(outer, inner)
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut v = Vec::new()
+    Vec::push(v, 1)
+    Vec::push(v, 2)
+    return v[0] + v[1]
+}
+"#,
+            3,
+        )),
+    },
+    XRow {
+        id: "SI-PAX31",
+        code: "E0414",
+        rejected: r#"
+fn main() -> i64 {
+    let v = vec[1, 2, 3]
+    let mut total = 0
+    for x in v {
+        total = total + x
+    }
+    return total
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let mut total = 0
+    for x in a {
+        total = total + x
+    }
+    return total
+}
+"#,
+            6,
+        )),
+    },
+    XRow {
+        id: "SI-PAX32",
+        code: "E0417",
+        rejected: r#"
+fn main() -> i64 {
+    let x: i64 = 1
+    let a = &mut x
+    *a = 2
+    return x
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut x: i64 = 1
+    let a = &mut x
+    *a = 2
+    return x
+}
+"#,
+            2,
+        )),
+    },
+    XRow {
+        id: "SI-PAX33",
+        code: "E0418",
+        rejected: r#"
+fn pick<A, B>(a: A, b: B) -> A { return a }
+fn other() -> i64 {
+    fn pick<A, B>(a: A, b: B) -> B { return b }
+    return pick(1, 2)
+}
+fn main() -> i64 { return pick(7, 8) }
+"#,
+        twin: Some((
+            r#"
+fn pick<A, B>(a: A, b: B) -> A { return a }
+fn other() -> i64 {
+    fn choose<A, B>(a: A, b: B) -> B { return b }
+    return choose(1, 2)
+}
+fn main() -> i64 { return pick(7, 8) }
+"#,
+            7,
+        )),
+    },
+    XRow {
+        id: "SI-PAX34",
+        code: "E0420",
+        rejected: r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = (b)
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = b
+    return 0
+}
+"#,
+            0,
+        )),
+    },
+    XRow {
+        id: "SI-PAX35",
+        code: "E0424",
+        rejected: r#"
+let mut g: i64 = 3
+fn drain(r: &mut i64) -> i64 {
+    while *r > 0 {
+        (*r)--
+    }
+    return 0
+}
+fn main() -> i64 {
+    let q = drain(&mut g)
+    return g
+}
+"#,
+        twin: Some((
+            r#"
+let mut g: i64 = 3
+fn drain() -> i64 {
+    while g > 0 {
+        g--
+    }
+    return g
+}
+fn main() -> i64 { return drain() }
+"#,
+            0,
+        )),
+    },
+    XRow {
+        id: "SI-PAX36",
+        code: "E0424",
+        rejected: r#"
+let mut g: i64 = 3
+fn down(r: &mut i64) -> i64 {
+    if *r > 0 {
+        *r = *r - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let q = down(&mut g)
+    println(g)
+    return q
+}
+"#,
+        twin: Some((
+            r#"
+let mut g: i64 = 3
+fn down() -> i64 {
+    if g > 0 {
+        g = g - 1
+        let q = down()
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    return down()
+}
+"#,
+            0,
+        )),
+    },
+    XRow {
         id: "SI-PAO01",
         code: "E0721",
         rejected: r#"
@@ -3130,6 +3632,146 @@ fn group_pa_fails_closed() {
             }
             check(&h, &twin_id, twin, exit, None, Memory::Ignore);
         }
+    }
+    h.assert_measured("group_pa_fails_closed");
+}
+
+fn pa_probe_compile(
+    h: &Harness,
+    id: &str,
+    tag: &str,
+    src: &str,
+    opt: OptimizationLevel,
+) -> Option<PathBuf> {
+    let path = h.write(id, tag, src);
+    if compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc).is_err() {
+        return None;
+    }
+    let exe = exe_path_for(&path);
+    exe.is_file().then_some(exe)
+}
+
+fn pa_probe_oracle(h: &Harness, id: &str, src: &str, oracle: Oracle) -> bool {
+    for (name, opt) in LEVELS {
+        let Some(exe) = pa_probe_compile(h, id, name, src, *opt) else {
+            return false;
+        };
+        for (alloc_name, alloc) in ALLOCATORS {
+            let o = match oracle {
+                Oracle::Terminates(_, _, _) => {
+                    h.run_timed(&exe, *alloc, Some(Duration::from_millis(250)))
+                }
+                _ => h.run(&exe, *alloc),
+            };
+            let good = match oracle {
+                Oracle::Exit(exit) => o.exit == exit,
+                Oracle::ExitOut(exit, out) => o.exit == exit && o.stdout == out,
+                Oracle::ExitOutErr(exit, out, err) => {
+                    o.exit == exit && o.stdout == out && o.stderr.contains(err)
+                }
+                Oracle::Terminates(_, exit, out) => {
+                    !o.timed_out && o.exit == exit && o.stdout == out
+                }
+                Oracle::AllocAgreeOut(exit, out) => o.exit == exit && o.stdout == out,
+                Oracle::ExitOutStats(exit, out, allocs, frees) => {
+                    o.exit == exit && o.stdout == out && o.stats == Some((allocs, frees))
+                }
+                Oracle::Balanced(exit) => {
+                    o.exit == exit && o.stats.is_some_and(|(allocs, frees)| allocs == frees)
+                }
+                Oracle::Leaks(exit, _) => {
+                    o.exit == exit && o.stats.is_some_and(|(allocs, frees)| frees < allocs)
+                }
+                Oracle::AllocsAt(_, _, exit, allocs) => {
+                    o.exit == exit && o.stats.is_some_and(|(actual, _)| actual == allocs)
+                }
+            };
+            if !good {
+                eprintln!("PA-MEASURE|{id}|FAIL|{name}|{alloc_name}");
+                return false;
+            }
+        }
+    }
+    true
+}
+
+fn pa_probe_agree(h: &Harness, id: &str, src: &str, exit: i32, out: &str) -> bool {
+    for (name, opt) in LEVELS {
+        let Some(exe) = pa_probe_compile(h, id, name, src, *opt) else {
+            return false;
+        };
+        let legs: Vec<Outcome> = ALLOCATORS
+            .iter()
+            .map(|(_, alloc)| h.run(&exe, *alloc))
+            .collect();
+        if legs.iter().any(|o| o.exit != exit || o.stdout != out) {
+            eprintln!("PA-MEASURE|{id}|FAIL|{name}|alloc");
+            return false;
+        }
+        if legs.windows(2).any(|pair| pair[0].stdout != pair[1].stdout) {
+            eprintln!("PA-MEASURE|{id}|FAIL|{name}|agreement");
+            return false;
+        }
+    }
+    true
+}
+
+fn pa_probe_row(h: &Harness, id: &str, src: &str, oracle: Oracle) -> bool {
+    match oracle {
+        Oracle::AllocAgreeOut(exit, out) => pa_probe_agree(h, id, src, exit, out),
+        _ => pa_probe_oracle(h, id, src, oracle),
+    }
+}
+
+fn pa_probe_xrow(h: &Harness, row: &XRow) -> bool {
+    for (name, opt) in REJECT_LEVELS {
+        let path = h.write(row.id, name, row.rejected);
+        let rendered = match lower_file_to_air(&path, *opt) {
+            Ok(_) => {
+                eprintln!("PAX-MEASURE|{}|FAIL|accepted|{name}", row.id);
+                return false;
+            }
+            Err(rendered) => rendered,
+        };
+        if !(rendered.contains(&format!("[{}]", row.code))
+            || rendered.contains(&format!("error[{}]", row.code)))
+        {
+            eprintln!("PAX-MEASURE|{}|FAIL|reject|{name}", row.id);
+            return false;
+        }
+    }
+    let Some((twin, exit)) = row.twin else {
+        return true;
+    };
+    for (name, opt) in LEVELS {
+        let Some(exe) = pa_probe_compile(h, row.id, &format!("{name}-twin"), twin, *opt) else {
+            return false;
+        };
+        for (alloc_name, alloc) in ALLOCATORS {
+            let o = h.run(&exe, *alloc);
+            if o.exit != exit {
+                eprintln!("PAX-MEASURE|{}|FAIL|twin|{name}|{alloc_name}", row.id);
+                return false;
+            }
+        }
+    }
+    true
+}
+
+#[test]
+fn temporary_group_pa_retro_measure() {
+    let h = Harness::new();
+    for (id, src, oracle) in GROUP_PA {
+        let status = pa_probe_row(&h, id, src, *oracle);
+        println!("PA-MEASURE|{id}|{}", if status { "PASS" } else { "FAIL" });
+    }
+    for row in GROUP_PA_X {
+        let status = pa_probe_xrow(&h, row);
+        println!(
+            "PAX-MEASURE|{}|{}",
+            row.id,
+            if status { "PASS" } else { "FAIL" }
+        );
     }
 }
 
