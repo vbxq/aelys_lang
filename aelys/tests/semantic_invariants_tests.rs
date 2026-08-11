@@ -1,5 +1,7 @@
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
+use std::cell::Cell;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -50,6 +52,8 @@ struct Outcome {
 
 struct Harness {
     dir: TempDir,
+    compiled_legs: Cell<usize>,
+    linker_skips: Cell<usize>,
 }
 
 fn exe_path_for(p: &Path) -> PathBuf {
@@ -98,6 +102,8 @@ impl Harness {
         warm_core_archive();
         Harness {
             dir: tempdir().expect("tempdir"),
+            compiled_legs: Cell::new(0),
+            linker_skips: Cell::new(0),
         }
     }
 
@@ -111,9 +117,10 @@ impl Harness {
     fn compile(&self, id: &str, tag: &str, src: &str, opt: OptimizationLevel) -> Option<PathBuf> {
         let path = self.write(id, tag, src);
         match compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
-            Ok(()) => {}
+            Ok(()) => self.compiled_legs.set(self.compiled_legs.get() + 1),
             Err(err) => {
                 if linker_unavailable(&err.to_string()) {
+                    self.linker_skips.set(self.linker_skips.get() + 1);
                     return None;
                 }
                 panic!("{id} at {tag} must compile:\n{src}\nerror: {err}");
@@ -121,6 +128,14 @@ impl Harness {
         }
         let exe = exe_path_for(&path);
         exe.is_file().then_some(exe)
+    }
+
+    fn assert_measured(&self, group: &str) {
+        assert!(
+            self.compiled_legs.get() > 0,
+            "{group}: no executable leg was measured; linker skips={}",
+            self.linker_skips.get()
+        );
     }
 
     fn run(&self, exe: &Path, alloc: Option<&str>) -> Outcome {
@@ -2549,12 +2564,15 @@ fn main() -> i64 {
     let v: Vec<i64> = vec[7]
     let f = fn () -> i64 {
         Vec::push(v, 101)
-        return v[1]
+        return v[0]
     }
-    return f()
+    let inside = f()
+    println(inside)
+    println(v[0])
+    return 0
 }
 "#,
-        Oracle::ExitOutStats(101, "", 3, 1),
+        Oracle::ExitOutStats(0, "7\n7\n", 3, 1),
     ),
     (
         "SI-PAA04",
@@ -2639,12 +2657,208 @@ fn main() -> i64 {
 "#,
         Oracle::Terminates(20_000, 0, "2\n"),
     ),
+    (
+        "SI-PA57",
+        r#"
+let mut g: i64 = 3
+fn drain() -> i64 {
+    while g > 0 {
+        g--
+    }
+    return g
+}
+fn main() -> i64 {
+    return drain()
+}
+"#,
+        Oracle::Terminates(20_000, 0, ""),
+    ),
+    (
+        "SI-PA58",
+        r#"
+struct Cell { a: [i64; 3] }
+fn drain(r: &mut Cell) -> i64 {
+    while (*r).a[0] > 0 {
+        (*r).a[0]--
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut c: Cell = Cell { a: [3, 0, 0] }
+    let q = drain(&mut c)
+    println(c.a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA59",
+        r#"
+fn main() -> i64 {
+    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
+    let r = &mut a
+    (*r)[1][1][1] = 101
+    return a[1][1][1] - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA60",
+        r#"
+struct L3 { d: i64 }
+struct L2 { c: L3 }
+struct L1 { b: L2 }
+fn poke(r: &mut L1) -> i64 {
+    (*r).b.c.d = 101
+    return 0
+}
+fn main() -> i64 {
+    let mut x: L1 = L1 { b: L2 { c: L3 { d: 7 } } }
+    let q = poke(&mut x)
+    return x.b.c.d - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA61",
+        r#"
+struct Mid { g: [i64; 1] }
+struct Top { f: [Mid; 1] }
+fn poke(r: &mut Top) -> i64 {
+    (*r).f[0].g[0] = 101
+    return 0
+}
+fn main() -> i64 {
+    let mut x: Top = Top { f: [Mid { g: [7] }] }
+    let q = poke(&mut x)
+    return x.f[0].g[0] - 101
+}
+"#,
+        Oracle::ExitOut(0, ""),
+    ),
+    (
+        "SI-PA63",
+        r#"
+struct Holder { a: [i64; 3] }
+fn down(r: &mut Holder) -> i64 {
+    if (*r).a[0] > 0 {
+        (*r).a[0] = (*r).a[0] - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut h: Holder = Holder { a: [3, 0, 0] }
+    let q = down(&mut h)
+    println(h.a[0])
+    return q
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA64",
+        r#"
+struct Cell { f: i64, g: i64 }
+fn down(r: &mut Cell) -> i64 {
+    if (*r).f > 0 {
+        (*r).f = (*r).f - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut c: Cell = Cell { f: 3, g: 0 }
+    let q = down(&mut c)
+    println(c.f)
+    return q
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PAA05",
+        r#"
+fn read(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    return t[0]
+}
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    return read(a[..])
+}
+"#,
+        Oracle::AllocAgreeOut(11, ""),
+    ),
+    (
+        "SI-PAA06",
+        r#"
+fn run(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    let mut i = 0
+    while i < 1 {
+        t[0] = 101
+        i = i + 1
+    }
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "101\n"),
+    ),
+    (
+        "SI-PAA07",
+        r#"
+fn run(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    t[0] = 101
+    println(s[0])
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "101\n101\n"),
+    ),
+    (
+        "SI-PAA08",
+        r#"
+fn run(s: &mut [i64]) -> i64 {
+    let t = s[0..2]
+    t[0] = 101
+    println(s[0])
+    return 0
+}
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 0, 0]
+    let q = run(a[..])
+    println(a[0])
+    return q
+}
+"#,
+        Oracle::ExitOut(0, "101\n101\n"),
+    ),
 ];
 
 #[test]
 fn group_pa_place_addressing() {
     let h = Harness::new();
     run_rows(&h, GROUP_PA);
+    h.assert_measured("group_pa_place_addressing");
 }
 
 // the fail-closed half: one row per code stage 1 adds, plus the two c52 legs and the origins
@@ -3082,6 +3296,295 @@ fn main() -> i64 {
         )),
     },
     XRow {
+        id: "SI-PAX22",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX23",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[..2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX24",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..=2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX25",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[..=2]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX26",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..0]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX27",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0..1]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX28",
+        code: "E0104",
+        rejected: r#"
+fn bad(s: &[i64]) -> i64 {
+    s[0..2]++
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 2, 3]
+    return bad(a[..])
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX29",
+        code: "E0104",
+        rejected: r#"
+struct Cell { a: [i64; 3] }
+fn main() -> i64 {
+    let mut c: Cell = Cell { a: [7, 2, 3] }
+    c.a[..]++
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX30",
+        code: "E0412",
+        rejected: r#"
+fn main() -> i64 {
+    let mut inner = Vec::new()
+    Vec::push(inner, 1)
+    let mut outer = Vec::new()
+    Vec::push(outer, inner)
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut v = Vec::new()
+    Vec::push(v, 1)
+    Vec::push(v, 2)
+    return v[0] + v[1]
+}
+"#,
+            3,
+        )),
+    },
+    XRow {
+        id: "SI-PAX31",
+        code: "E0414",
+        rejected: r#"
+fn main() -> i64 {
+    let v = vec[1, 2, 3]
+    let mut total = 0
+    for x in v {
+        total = total + x
+    }
+    return total
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let a: [i64; 3] = [1, 2, 3]
+    let mut total = 0
+    for x in a {
+        total = total + x
+    }
+    return total
+}
+"#,
+            6,
+        )),
+    },
+    XRow {
+        id: "SI-PAX32",
+        code: "E0417",
+        rejected: r#"
+fn main() -> i64 {
+    let x: i64 = 1
+    let a = &mut x
+    *a = 2
+    return x
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut x: i64 = 1
+    let a = &mut x
+    *a = 2
+    return x
+}
+"#,
+            2,
+        )),
+    },
+    XRow {
+        id: "SI-PAX33",
+        code: "E0418",
+        rejected: r#"
+fn pick<A, B>(a: A, b: B) -> A { return a }
+fn other() -> i64 {
+    fn pick<A, B>(a: A, b: B) -> B { return b }
+    return pick(1, 2)
+}
+fn main() -> i64 { return pick(7, 8) }
+"#,
+        twin: Some((
+            r#"
+fn pick<A, B>(a: A, b: B) -> A { return a }
+fn other() -> i64 {
+    fn choose<A, B>(a: A, b: B) -> B { return b }
+    return choose(1, 2)
+}
+fn main() -> i64 { return pick(7, 8) }
+"#,
+            7,
+        )),
+    },
+    XRow {
+        id: "SI-PAX34",
+        code: "E0420",
+        rejected: r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = (b)
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = b
+    return 0
+}
+"#,
+            0,
+        )),
+    },
+    XRow {
+        id: "SI-PAX35",
+        code: "E0424",
+        rejected: r#"
+let mut g: i64 = 3
+fn drain(r: &mut i64) -> i64 {
+    while *r > 0 {
+        (*r)--
+    }
+    return 0
+}
+fn main() -> i64 {
+    let q = drain(&mut g)
+    return g
+}
+"#,
+        twin: Some((
+            r#"
+let mut g: i64 = 3
+fn drain() -> i64 {
+    while g > 0 {
+        g--
+    }
+    return g
+}
+fn main() -> i64 { return drain() }
+"#,
+            0,
+        )),
+    },
+    XRow {
+        id: "SI-PAX36",
+        code: "E0424",
+        rejected: r#"
+let mut g: i64 = 3
+fn down(r: &mut i64) -> i64 {
+    if *r > 0 {
+        *r = *r - 1
+        let q = down(r)
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    let q = down(&mut g)
+    println(g)
+    return q
+}
+"#,
+        twin: Some((
+            r#"
+let mut g: i64 = 3
+fn down() -> i64 {
+    if g > 0 {
+        g = g - 1
+        let q = down()
+        return q
+    }
+    return 0
+}
+fn main() -> i64 {
+    return down()
+}
+"#,
+            0,
+        )),
+    },
+    XRow {
         id: "SI-PAO01",
         code: "E0721",
         rejected: r#"
@@ -3109,6 +3612,152 @@ fn main() -> i64 {
     },
 ];
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PaRetroClass {
+    DifferVsAnchor,
+    DifferVsPrefix,
+    NeitherControl,
+}
+
+const PA_RETRO_ANCHOR: &[&str] = &[
+    "SI-PA01",
+    "SI-PA02",
+    "SI-PA03",
+    "SI-PA04",
+    "SI-PA05",
+    "SI-PA07",
+    "SI-PA08",
+    "SI-PA09",
+    "SI-PA09b",
+    "SI-PA10",
+    "SI-PA11",
+    "SI-PA12",
+    "SI-PA15",
+    "SI-PA17",
+    "SI-PA19",
+    "SI-PA21",
+    "SI-PA22",
+    "SI-PA23",
+    "SI-PA34",
+    "SI-PA35",
+    "SI-PA36",
+    "SI-PA37",
+    "SI-PA38",
+    "SI-PA39",
+    "SI-PA40",
+    "SI-PAA01",
+    "SI-PAA02",
+    "SI-PAA03",
+    "SI-PAA04",
+    "SI-PA46",
+    "SI-PA47",
+    "SI-PA48",
+    "SI-PA49",
+    "SI-PA50",
+    "SI-PA51",
+    "SI-PA55",
+    "SI-PA56",
+    "SI-PA58",
+    "SI-PA59",
+    "SI-PA60",
+    "SI-PA61",
+    "SI-PA63",
+    "SI-PA64",
+    "SI-PAA05",
+    "SI-PAA06",
+    "SI-PAA07",
+    "SI-PAA08",
+    "SI-PAX01",
+    "SI-PAX02",
+    "SI-PAX03",
+    "SI-PAX04",
+    "SI-PAX05",
+    "SI-PAX06",
+    "SI-PAX06b",
+    "SI-PAX08",
+    "SI-PAX09",
+    "SI-PAX10",
+    "SI-PAX11",
+    "SI-PAX13",
+    "SI-PAX14",
+    "SI-PAX15",
+    "SI-PAX16",
+    "SI-PAX17",
+    "SI-PAX18",
+    "SI-PAX22",
+    "SI-PAX23",
+    "SI-PAX24",
+    "SI-PAX25",
+    "SI-PAX26",
+    "SI-PAX27",
+    "SI-PAX28",
+    "SI-PAX29",
+    "SI-PAX35",
+    "SI-PAX36",
+    "SI-PAO01",
+];
+
+const PA_RETRO_PREFIX: &[&str] = &[
+    "SI-PA26", "SI-PA27", "SI-PA28", "SI-PA29", "SI-PA30", "SI-PA31", "SI-PA32", "SI-PA33",
+    "SI-PAO02",
+];
+
+const PA_RETRO_CONTROLS: &[&str] = &[
+    "SI-PA06", "SI-PA13", "SI-PA13b", "SI-PA14", "SI-PA16", "SI-PA18", "SI-PA20", "SI-PA24",
+    "SI-PA25", "SI-PA41", "SI-PA52", "SI-PA53", "SI-PA54", "SI-PA57", "SI-PAX07", "SI-PAX12",
+    "SI-PAX20", "SI-PAX30", "SI-PAX31", "SI-PAX32", "SI-PAX33", "SI-PAX34",
+];
+
+const PA_RETRO_CENSUS: (usize, usize, usize) = (75, 9, 22);
+
+fn pa_retro_class(id: &str) -> Option<PaRetroClass> {
+    if PA_RETRO_ANCHOR.contains(&id) {
+        Some(PaRetroClass::DifferVsAnchor)
+    } else if PA_RETRO_PREFIX.contains(&id) {
+        Some(PaRetroClass::DifferVsPrefix)
+    } else if PA_RETRO_CONTROLS.contains(&id) {
+        Some(PaRetroClass::NeitherControl)
+    } else {
+        None
+    }
+}
+
+#[test]
+fn group_pa_retro_census_is_tracked() {
+    let mut declared = HashSet::new();
+    let mut counts = (0, 0, 0);
+    for id in PA_RETRO_ANCHOR {
+        assert!(declared.insert(*id), "duplicate retro row {id}");
+        counts.0 += 1;
+        assert_eq!(pa_retro_class(id), Some(PaRetroClass::DifferVsAnchor));
+    }
+    for id in PA_RETRO_PREFIX {
+        assert!(declared.insert(*id), "duplicate retro row {id}");
+        counts.1 += 1;
+        assert_eq!(pa_retro_class(id), Some(PaRetroClass::DifferVsPrefix));
+    }
+    for id in PA_RETRO_CONTROLS {
+        assert!(declared.insert(*id), "duplicate retro row {id}");
+        counts.2 += 1;
+        assert_eq!(pa_retro_class(id), Some(PaRetroClass::NeitherControl));
+    }
+    assert_eq!(counts, PA_RETRO_CENSUS);
+    let mut observed = HashSet::new();
+    for (id, _, _) in GROUP_PA {
+        assert!(observed.insert(*id), "duplicate place row {id}");
+        assert!(pa_retro_class(id).is_some(), "unclassified place row {id}");
+    }
+    for row in GROUP_PA_X {
+        assert!(observed.insert(row.id), "duplicate place row {}", row.id);
+        assert!(
+            pa_retro_class(row.id).is_some(),
+            "unclassified place row {}",
+            row.id
+        );
+    }
+    assert_eq!(declared, observed);
+}
+
 #[test]
 fn group_pa_fails_closed() {
     let h = Harness::new();
@@ -3131,6 +3780,7 @@ fn group_pa_fails_closed() {
             check(&h, &twin_id, twin, exit, None, Memory::Ignore);
         }
     }
+    h.assert_measured("group_pa_fails_closed");
 }
 
 const GROUP_S2: &[(&str, &str, Oracle)] = &[
