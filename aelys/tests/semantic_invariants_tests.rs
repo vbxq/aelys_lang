@@ -16,6 +16,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
 const REJECT_LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
     ("-O2", OptimizationLevel::Standard),
+    ("-O3", OptimizationLevel::Aggressive),
 ];
 
 const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc"))];
@@ -205,8 +206,7 @@ enum Oracle {
     ExitOut(i32, &'static str),
     ExitOutErr(i32, &'static str, &'static str),
     Terminates(u64, i32, &'static str),
-    // cannot express it, because the owed value is an aslr-varying address.
-    AllocAgree(i32),
+    AllocAgreeOut(i32, &'static str),
     // an exact (allocs, frees) pair beside the value. balanced and namedleak both pass on
     ExitOutStats(i32, &'static str, i64, i64),
     Balanced(i32),
@@ -298,7 +298,7 @@ fn run_row(h: &Harness, id: &str, src: &str, oracle: Oracle) {
         Oracle::AllocsAt(name, opt, e, n) => check_allocs(h, id, src, name, opt, e, n),
         Oracle::ExitOutErr(e, out, err) => check_stderr(h, id, src, e, out, err),
         Oracle::Terminates(ms, e, out) => check_terminates(h, id, src, ms, e, out),
-        Oracle::AllocAgree(e) => check_alloc_agree(h, id, src, e),
+        Oracle::AllocAgreeOut(e, out) => check_alloc_agree_out(h, id, src, e, out),
         Oracle::ExitOutStats(e, out, a, f) => check_stats(h, id, src, e, out, a, f),
     }
 }
@@ -390,7 +390,7 @@ fn check_terminates(h: &Harness, id: &str, src: &str, ms: u64, exit: i32, out: &
     }
 }
 
-fn check_alloc_agree(h: &Harness, id: &str, src: &str, exit: i32) {
+fn check_alloc_agree_out(h: &Harness, id: &str, src: &str, exit: i32, out: &str) {
     for (name, opt) in LEVELS {
         let Some(exe) = h.compile(id, name, src, *opt) else {
             eprintln!("{id}: linker unavailable, skipping");
@@ -403,17 +403,19 @@ fn check_alloc_agree(h: &Harness, id: &str, src: &str, exit: i32) {
         for (alloc_name, o) in &legs {
             assert_eq!(
                 o.exit, exit,
-                "{id} at {name}/{alloc_name}: the answer MUST be {exit}\nsource:{src}\n\
-                 stderr:\n{}",
-                o.stderr
+                "{id} at {name}/{alloc_name}: the answer MUST be {exit}\nsource:{src}\nstdout: {:?}\nstderr:\n{}",
+                o.stdout, o.stderr
+            );
+            assert_eq!(
+                o.stdout, out,
+                "{id} at {name}/{alloc_name}: stdout MUST be {out:?}\nsource:{src}"
             );
         }
         let (a_name, a) = &legs[0];
         for (b_name, b) in &legs[1..] {
             assert_eq!(
                 a.stdout, b.stdout,
-                "{id} at {name}: the {a_name} and {b_name} legs MUST agree with each other; no \
-                 absolute value is asserted because the owed value varies with ASLR\nsource:{src}"
+                "{id} at {name}: the {a_name} and {b_name} legs MUST agree\nsource:{src}"
             );
         }
     }
@@ -2052,7 +2054,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::AllocAgree(0),
+        Oracle::AllocAgreeOut(0, "1\n2\n"),
     ),
     (
         // v1: `&v[0]` on a vec compiles and reads right. it never reaches the detach dispatch,
@@ -2250,6 +2252,392 @@ fn main() -> i64 {
 }
 "#,
         Oracle::ExitOutStats(0, "9\n1\n", 3, 1),
+    ),
+    (
+        "SI-PA34",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33, 44]
+    let s = v[0..3]
+    println(s[3])
+    return 0
+}
+"#,
+        Oracle::ExitOutErr(134, "", "index out of bounds"),
+    ),
+    (
+        "SI-PA35",
+        r#"
+fn peek(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    return s[1]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    println(peek(&v))
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "22\n", 1, 1),
+    ),
+    (
+        "SI-PA36",
+        r#"
+fn sum(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    return s[0] + s[1] + s[2]
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[11, 22, 33]
+    println(sum(&v))
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "66\n", 1, 1),
+    ),
+    (
+        "SI-PA37",
+        r#"
+struct Cell { x: i64 }
+fn read(p: &i64) -> i64 { return *p }
+fn main() -> i64 {
+    let r = Rc::new(Cell { x: 7 })
+    let p = &Rc::get(r).x
+    let q = Rc::new(Cell { x: 31 })
+    println(read(p) + Rc::get(q).x)
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "38\n", 2, 2),
+    ),
+    (
+        "SI-PA38",
+        r#"
+struct Cell { f: i64 }
+fn drain(pr: &mut Cell) -> i64 {
+    while (*pr).f > 0 {
+        (*pr).f = (*pr).f - 1
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut c: Cell = Cell { f: 3 }
+    let q = drain(&mut c)
+    println(c.f)
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA39",
+        r#"
+struct Ar { a: [i64; 3] }
+fn main() -> i64 {
+    let mut ar: Ar = Ar { a: [3, 0, 0] }
+    let s = ar.a[..]
+    while s[0] > 0 {
+        s[0] = s[0] - 1
+    }
+    println(ar.a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA40",
+        r#"
+struct Cell { f: i64, g: i64 }
+fn main() -> i64 {
+    let n: Rc<Cell> = Rc::null()
+    println(101)
+    n.f = 101
+    println(7919)
+    return 0
+}
+"#,
+        Oracle::ExitOutErr(134, "101\n", "null pointer dereference"),
+    ),
+    (
+        "SI-PA41",
+        r#"
+struct S { f: i64 }
+let mut ga: [i64; 3] = [1901, 2, 3]
+let mut gs: S = S { f: 1901 }
+fn write_globals() -> i64 {
+    ga[0] = 101
+    gs.f = 101
+    return 0
+}
+fn main() -> i64 {
+    let q = write_globals()
+    println(ga[0])
+    println(gs.f)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "101\n101\n"),
+    ),
+    (
+        "SI-PAA01",
+        r#"
+fn read(s: &[i64]) -> i64 {
+    let t = s[0..2]
+    return t[1]
+}
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    return read(a[..])
+}
+"#,
+        Oracle::AllocAgreeOut(22, ""),
+    ),
+    (
+        "SI-PAA02",
+        r#"
+fn cut(s: &[i64]) -> &[i64] {
+    return s[0..2]
+}
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    let t = cut(a[..])
+    return t[1]
+}
+"#,
+        Oracle::AllocAgreeOut(22, ""),
+    ),
+    (
+        "SI-PAA03",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    let s = a[..]
+    let t = s[0..2]
+    println(t[1])
+    return 0
+}
+"#,
+        Oracle::AllocAgreeOut(0, "22\n"),
+    ),
+    (
+        "SI-PA46",
+        r#"
+fn drain(r: &mut i64) -> i64 {
+    while *r > 0 {
+        (*r)--
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut x: i64 = 3
+    let q = drain(&mut x)
+    println(x)
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA47",
+        r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [3, 0, 0]
+    let r = &mut a
+    while (*r)[0] > 0 {
+        (*r)[0] = (*r)[0] - 1
+    }
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA48",
+        r#"
+struct Cell { f: i64 }
+fn drain(r: Rc<Cell>) -> i64 {
+    while Rc::get(r).f > 0 {
+        Rc::get(r).f = Rc::get(r).f - 1
+    }
+    return 0
+}
+fn main() -> i64 {
+    let r = Rc::new(Cell { f: 3 })
+    let q = drain(r)
+    return q
+}
+"#,
+        Oracle::Balanced(0),
+    ),
+    (
+        "SI-PA49",
+        r#"
+fn fill(r: &mut Vec<i64>) -> i64 {
+    let mut i = 1
+    while i < 4 {
+        Vec::push((*r), i)
+        i = i + 1
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[0]
+    let q = fill(&mut v)
+    println(v[3])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "3\n"),
+    ),
+    (
+        "SI-PA50",
+        r#"
+fn drain(r: &mut i64) -> i64 {
+    if *r > 0 {
+        (*r)--
+        return drain(r)
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut x: i64 = 3
+    let q = drain(&mut x)
+    println(x)
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "0\n"),
+    ),
+    (
+        "SI-PA51",
+        r#"
+fn add(r: &mut Vec<i64>) -> i64 {
+    Vec::push((*r), 101)
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2]
+    let q = add(&mut v)
+    println(v[2])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "101\n"),
+    ),
+    (
+        "SI-PA52",
+        r#"
+fn bump(s: &[i64]) -> i64 {
+    s[0]++
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 3] = [7, 2, 3]
+    let q = bump(a[..])
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "8\n"),
+    ),
+    (
+        "SI-PA53",
+        r#"
+fn main() -> i64 {
+    let v: Vec<i64> = vec[7]
+    let f = fn () -> i64 {
+        Vec::push(v, 101)
+        return v[1]
+    }
+    return f()
+}
+"#,
+        Oracle::ExitOutStats(101, "", 3, 1),
+    ),
+    (
+        "SI-PAA04",
+        r#"
+fn read(s: &[i64]) -> i64 {
+    let t = s[0..3]
+    let u = t[0..1]
+    return u[0]
+}
+fn main() -> i64 {
+    let a: [i64; 4] = [11, 22, 33, 44]
+    return read(a[..])
+}
+"#,
+        Oracle::AllocAgreeOut(11, ""),
+    ),
+    (
+        "SI-PAO02",
+        r#"
+fn make() -> fn() -> fn() -> i64 {
+    let a: i64 = 1
+    return fn () -> fn() -> i64 {
+        let b: i64 = 2
+        return fn () -> i64 { return a + b }
+    }
+}
+fn main() -> i64 {
+    let f = make()
+    let g = f()
+    println(g())
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "3\n"),
+    ),
+    (
+        "SI-PA54",
+        r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = b
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "", 2, 1),
+    ),
+    (
+        "SI-PA55",
+        r#"
+fn grow(r: &mut Vec<i64>) -> i64 {
+    let q = &mut *r
+    Vec::push((*q), 101)
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7]
+    let q = grow(&mut v)
+    println(v[1])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "101\n", 1, 1),
+    ),
+    (
+        "SI-PA56",
+        r#"
+fn grow(r: &mut Vec<i64>, i: i64) -> i64 {
+    if i < 3 {
+        Vec::push((*r), i)
+        return grow(r, i + 1)
+    }
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[0]
+    let q = grow(&mut v, 1)
+    println(v[2])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "2\n"),
     ),
 ];
 
@@ -2490,6 +2878,234 @@ fn main() -> i64 {
 }
 "#,
         twin: None,
+    },
+    XRow {
+        id: "SI-PAX09",
+        code: "E0421",
+        rejected: r#"
+fn main() -> i64 {
+    [337, 0, 0][0] = 101
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [337, 0, 0]
+    a[0] = 101
+    return a[0]
+}
+"#,
+            101,
+        )),
+    },
+    XRow {
+        id: "SI-PAX10",
+        code: "E0421",
+        rejected: r#"
+struct Cell { f: i64, g: i64 }
+fn main() -> i64 {
+    Cell { f: 337, g: 0 }.f = 101
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+struct Cell { f: i64, g: i64 }
+fn main() -> i64 {
+    let mut c: Cell = Cell { f: 337, g: 0 }
+    c.f = 101
+    return c.f
+}
+"#,
+            101,
+        )),
+    },
+    XRow {
+        id: "SI-PAX11",
+        code: "E0423",
+        rejected: r#"
+fn main() -> i64 {
+    let mut cv: [i64; 3] = [619, 2, 3]
+    let f = fn () -> i64 {
+        let r = &cv[0]
+        cv[0] = 101
+        return *r
+    }
+    return f()
+}
+"#,
+        twin: Some((
+            r#"
+fn read(p: &i64) -> i64 { return *p }
+fn main() -> i64 {
+    let x: i64 = 5
+    let f = fn (p: &i64) -> i64 { return read(p) }
+    return f(&x)
+}
+"#,
+            5,
+        )),
+    },
+    XRow {
+        id: "SI-PAX12",
+        code: "E0415",
+        rejected: r#"
+let mut g: [i64; 3] = [1901, 2, 3]
+fn main() -> i64 {
+    let r = &mut g[0]
+    *r = 101
+    return g[0]
+}
+"#,
+        twin: Some((
+            r#"
+let mut g: [i64; 3] = [1901, 2, 3]
+fn main() -> i64 {
+    g[0] = 101
+    return g[0]
+}
+"#,
+            101,
+        )),
+    },
+    XRow {
+        id: "SI-PAX13",
+        code: "E0422",
+        rejected: r#"
+fn poke(r: &i64) -> i64 {
+    let q = &mut *r
+    *q = 101
+    return 0
+}
+fn main() -> i64 {
+    let x: i64 = 7
+    return poke(&x)
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX14",
+        code: "E0422",
+        rejected: r#"
+fn bump(r: &i64) -> i64 {
+    (*r)++
+    return 0
+}
+fn main() -> i64 {
+    let x: i64 = 7
+    return bump(&x)
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX15",
+        code: "E0104",
+        rejected: r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[..]++
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+fn main() -> i64 {
+    let mut a: [i64; 3] = [7, 2, 3]
+    a[0]++
+    return a[0]
+}
+"#,
+            8,
+        )),
+    },
+    XRow {
+        id: "SI-PAX16",
+        code: "E0422",
+        rejected: r#"
+fn grow(r: &Vec<i64>) -> i64 {
+    Vec::push((*r), 101)
+    return 0
+}
+fn main() -> i64 {
+    let v: Vec<i64> = vec[7]
+    return grow(&v)
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX17",
+        code: "E0421",
+        rejected: r#"
+fn main() -> i64 {
+    Vec::push(vec[7], 101)
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX18",
+        code: "E0421",
+        rejected: r#"
+struct Cell { f: i64 }
+fn main() -> i64 {
+    let r = &mut Cell { f: 7 }
+    r.f = 101
+    return 0
+}
+"#,
+        twin: None,
+    },
+    XRow {
+        id: "SI-PAX20",
+        code: "E0419",
+        rejected: r#"
+enum Vec { Empty, One(i64) }
+fn main() -> i64 {
+    let x: Vec = Vec::One(7)
+    return 0
+}
+"#,
+        twin: Some((
+            r#"
+enum MyList { Empty, One(i64) }
+fn main() -> i64 {
+    let x: MyList = MyList::One(7)
+    return match x { MyList::One(v) => v, MyList::Empty => 0 }
+}
+"#,
+            7,
+        )),
+    },
+    XRow {
+        id: "SI-PAO01",
+        code: "E0721",
+        rejected: r#"
+fn bad(x: i64) -> &i64 {
+    return &x
+}
+fn main() -> i64 {
+    let r = bad(7)
+    return *r
+}
+"#,
+        twin: Some((
+            r#"
+fn good(x: &i64) -> &i64 {
+    return x
+}
+fn main() -> i64 {
+    let x: i64 = 7
+    let r = good(&x)
+    return *r
+}
+"#,
+            7,
+        )),
     },
 ];
 
