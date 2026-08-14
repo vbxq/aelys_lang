@@ -3758,6 +3758,96 @@ fn group_pa_retro_census_is_tracked() {
     assert_eq!(declared, observed);
 }
 
+fn rs_sources(dir: &Path, out: &mut Vec<(PathBuf, String)>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            if name == "target" || name.starts_with('.') {
+                continue;
+            }
+            rs_sources(&path, out);
+        } else if name.ends_with(".rs") {
+            if let Ok(text) = fs::read_to_string(&path) {
+                out.push((path, text));
+            }
+        }
+    }
+}
+
+fn occurrences(sources: &[&String], needle: &str) -> usize {
+    sources
+        .iter()
+        .map(|text| text.matches(needle).count())
+        .sum()
+}
+
+#[test]
+fn group_pa_choke_set_is_tracked() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("the workspace root is the parent of this crate");
+
+    let mut lower = Vec::new();
+    rs_sources(&root.join("air/src/lower"), &mut lower);
+    let mut repo = Vec::new();
+    rs_sources(root, &mut repo);
+// this file spells out the patterns it counts, so it cannot be inside its own census
+    let self_path = root.join(file!());
+    repo.retain(|(path, _)| path != &self_path);
+    assert_eq!(
+        repo.len() + 1,
+        {
+            let mut everything = Vec::new();
+            rs_sources(root, &mut everything);
+            everything.len()
+        },
+        "the self-exclusion matched no file, so the census counts its own patterns"
+    );
+
+    assert!(
+        lower.len() >= 5 && repo.len() >= 150,
+        "the scan fired below magnitude: {} lowering files, {} repo files",
+        lower.len(),
+        repo.len()
+    );
+    assert!(
+        lower.iter().any(|(path, _)| path.ends_with("place.rs")),
+        "place.rs must be in scope for the exclusion to mean anything"
+    );
+
+    let all: Vec<&String> = lower.iter().map(|(_, text)| text).collect();
+    let outside: Vec<&String> = lower
+        .iter()
+        .filter(|(path, _)| !path.ends_with("place.rs"))
+        .map(|(_, text)| text)
+        .collect();
+    let repo_all: Vec<&String> = repo.iter().map(|(_, text)| text).collect();
+
+    assert!(
+        occurrences(&outside, "Place::") >= 30,
+        "the exclusion emptied the scope, only {} `Place::` outside place.rs",
+        occurrences(&outside, "Place::")
+    );
+
+    assert_eq!(
+        (
+            occurrences(&outside, "Rvalue::AddressOf("),
+            occurrences(&outside, "Place::Field("),
+            occurrences(&outside, "Place::Index("),
+            occurrences(&all, "Rvalue::Deref("),
+            occurrences(&repo_all, "addr_of_own_temp("),
+        ),
+        (0, 3, 6, 4, 4),
+        "the choke set moved; the first three are counted over air/src/lower minus place.rs, \
+         `Rvalue::Deref(` over all of air/src/lower, and `addr_of_own_temp(` over the repo minus \
+         target as one definition and three callers"
+    );
+}
+
 #[test]
 fn group_pa_fails_closed() {
     let h = Harness::new();
@@ -5193,3 +5283,1261 @@ fn main() -> i64 {
         );
     }
 }
+
+// the twin is the same program with the same `nogc` keyword and a clean body, built by
+// substitution so a hand-copied twin cannot drift away from the program it twins
+const DECL_MARKER: &str = "@DECL@";
+const NOGC_VIOLATING_DECL: &str = "nogc fn bad() -> Vec<i64> { return Vec::new() }";
+const NOGC_CLEAN_DECL: &str = "nogc fn bad() -> i64 { return 42 }";
+
+struct NRow {
+    id: &'static str,
+    template: &'static str,
+}
+
+impl NRow {
+    fn rejected(&self) -> String {
+        self.template.replace(DECL_MARKER, NOGC_VIOLATING_DECL)
+    }
+
+    fn twin(&self) -> String {
+        self.template.replace(DECL_MARKER, NOGC_CLEAN_DECL)
+    }
+}
+
+const GROUP_N_X: &[NRow] = &[
+    NRow {
+        id: "SI-N00",
+        template: r#"@DECL@
+fn main() -> i64 {
+    return 0
+}
+"#,
+    },
+    NRow {
+        id: "SI-N01",
+        template: r#"fn host() -> i64 {
+    @DECL@
+    return 0
+}
+fn main() -> i64 {
+    return host()
+}
+"#,
+    },
+    NRow {
+        id: "SI-N02",
+        template: r#"fn host() -> i64 {
+    {
+        @DECL@
+    }
+    return 0
+}
+fn main() -> i64 { return host() }
+"#,
+    },
+    NRow {
+        id: "SI-N03",
+        template: r#"fn host(c: bool) -> i64 {
+    if c {
+        @DECL@
+    }
+    return 0
+}
+fn main() -> i64 { return host(true) }
+"#,
+    },
+    NRow {
+        id: "SI-N04",
+        template: r#"fn host(c: bool) -> i64 {
+    if c {
+        return 0
+    } else {
+        @DECL@
+    }
+    return 0
+}
+fn main() -> i64 { return host(true) }
+"#,
+    },
+    NRow {
+        id: "SI-N05",
+        template: r#"fn host(n: i64) -> i64 {
+    let mut i = 0
+    while i < n {
+        @DECL@
+        i = i + 1
+    }
+    return 0
+}
+fn main() -> i64 { return host(1) }
+"#,
+    },
+    NRow {
+        id: "SI-N06",
+        template: r#"fn host(n: i64) -> i64 {
+    for i in 0..n {
+        @DECL@
+    }
+    return 0
+}
+fn main() -> i64 { return host(1) }
+"#,
+    },
+    NRow {
+        id: "SI-N07",
+        template: r#"fn host(a: [i64; 2]) -> i64 {
+    for x in a {
+        @DECL@
+    }
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 2] = [1, 2]
+    return host(a)
+}
+"#,
+    },
+    NRow {
+        id: "SI-N08",
+        template: r#"fn host(c: bool, d: bool) -> i64 {
+    if c {
+        if d {
+            @DECL@
+        }
+    }
+    return 0
+}
+fn main() -> i64 { return host(true, true) }
+"#,
+    },
+    NRow {
+        id: "SI-N09",
+        template: r#"fn host(c: bool, n: i64) -> i64 {
+    if c {
+        let mut i = 0
+        while i < n {
+            @DECL@
+            i = i + 1
+        }
+    }
+    return 0
+}
+fn main() -> i64 { return host(true, 1) }
+"#,
+    },
+    NRow {
+        id: "SI-N10",
+        template: r#"fn host() -> i64 {
+    fn mid() -> i64 {
+        {
+            @DECL@
+        }
+        return 0
+    }
+    return mid()
+}
+fn main() -> i64 { return host() }
+"#,
+    },
+    NRow {
+        id: "SI-N11",
+        template: r#"{
+    @DECL@
+}
+fn main() -> i64 { return 0 }
+"#,
+    },
+    NRow {
+        id: "SI-N12",
+        template: r#"fn mk(x: i64) -> bool {
+    if x > 0 {
+        return true
+    }
+    return false
+}
+if mk(1) {
+    @DECL@
+}
+fn main() -> i64 { return 0 }
+"#,
+    },
+    NRow {
+        id: "SI-N13",
+        template: r#"fn host() -> i64 {
+    let f = fn (x: i64) -> i64 {
+        @DECL@
+        return x
+    }
+    return f(0)
+}
+fn main() -> i64 { return host() }
+"#,
+    },
+    NRow {
+        id: "SI-N14",
+        template: r#"fn host(n: i64) -> i64 {
+    let mut i = 0
+    while i < { @DECL@  n } {
+        i = i + 1
+    }
+    return 0
+}
+fn main() -> i64 { return host(1) }
+"#,
+    },
+    NRow {
+        id: "SI-N15",
+        template: r#"fn host(n: i64) -> i64 {
+    for i in 0..{ @DECL@  n } {
+        let q = i
+    }
+    return 0
+}
+fn main() -> i64 { return host(1) }
+"#,
+    },
+    NRow {
+        id: "SI-N16",
+        template: r#"fn host(n: i64) -> i64 {
+    for i in { @DECL@  0 }..n {
+        let q = i
+    }
+    return 0
+}
+fn main() -> i64 { return host(1) }
+"#,
+    },
+    NRow {
+        id: "SI-N17",
+        template: r#"fn host(a: [i64; 2]) -> i64 {
+    for x in { @DECL@  a } {
+        let q = x
+    }
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 2] = [1, 2]
+    return host(a)
+}
+"#,
+    },
+    NRow {
+        id: "SI-N18",
+        template: r#"fn take(x: i64) -> i64 { return x }
+fn host(n: i64) -> i64 {
+    return take({ @DECL@  n })
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N19",
+        template: r#"fn host(n: i64) -> i64 {
+    return { @DECL@  n }
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N20",
+        template: r#"fn host(n: i64) -> i64 {
+    let v = { @DECL@  n }
+    return v
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N21",
+        template: r#"enum Pick { One, Two }
+fn host(p: Pick, n: i64) -> i64 {
+    let v = match p {
+        Pick::One => { @DECL@  n },
+        Pick::Two => n,
+    }
+    return v
+}
+fn main() -> i64 { return host(Pick::One, 0) }
+"#,
+    },
+    NRow {
+        id: "SI-N22",
+        template: r#"enum Pick { One, Two }
+fn host(p: Pick, n: i64) -> i64 {
+    let v = match { @DECL@  p } {
+        Pick::One => n,
+        Pick::Two => n,
+    }
+    return v
+}
+fn main() -> i64 { return host(Pick::One, 0) }
+"#,
+    },
+    NRow {
+        id: "SI-N23",
+        template: r#"fn host(c: bool, n: i64) -> i64 {
+    let v = if c { @DECL@  n } else { n }
+    return v
+}
+fn main() -> i64 { return host(true, 0) }
+"#,
+    },
+    NRow {
+        id: "SI-N24",
+        template: r#"fn host(n: i64) -> i64 {
+    let v = unsafe { @DECL@  n }
+    return v
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N25",
+        template: r#"fn host(n: i64) -> i64 {
+    let v = n + { @DECL@  0 }
+    return v
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N26",
+        template: r#"fn host(n: i64) -> i64 {
+    let a: [i64; 2] = [{ @DECL@  n }, n]
+    return a[0]
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N27",
+        template: r#"fn host(n: i64) -> i64 {
+    let a: [i64; 2] = [n, n]
+    return a[{ @DECL@  0 }]
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N28",
+        template: r#"fn host(n: i64) -> i64 {
+    println("{ 0 + { @DECL@  n } }")
+    return 0
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+    NRow {
+        id: "SI-N29",
+        template: r#"fn host(n: i64) -> i64 {
+    let f = fn (x: i64) -> i64 { return x + { @DECL@  0 } }
+    return f(n)
+}
+fn main() -> i64 { return host(0) }
+"#,
+    },
+];
+
+#[test]
+fn group_n_block_nested_fails_closed() {
+    let h = Harness::new();
+    let mut seen = HashSet::new();
+    for row in GROUP_N_X {
+        assert!(seen.insert(row.id), "duplicate block-form row {}", row.id);
+        assert!(
+            row.template.contains(DECL_MARKER),
+            "{}: the template has no declaration site, so this row proves nothing",
+            row.id
+        );
+        let rejected = row.rejected();
+        let twin = row.twin();
+        assert_ne!(
+            rejected, twin,
+            "{}: the twin must differ from the program it twins",
+            row.id
+        );
+        for (name, opt) in REJECT_LEVELS {
+            let rendered = h.reject(row.id, name, &rejected, *opt);
+            assert!(
+                rendered.contains("[E0727]"),
+                "{} at {name} MUST be rejected with E0727, got:\n{rendered}",
+                row.id
+            );
+        }
+        let twin_id = format!("{}-twin", row.id);
+        for (name, opt) in REJECT_LEVELS {
+            h.accepts(&twin_id, name, &twin, *opt);
+        }
+    }
+    assert_eq!(seen.len(), 30, "the block-form enumeration lost a row");
+}
+
+// counts the marker lines a renderer drew, so a row can pin "exactly one label per definition"
+fn marker_lines(rendered: &str, marker: char) -> usize {
+    rendered
+        .lines()
+        .filter_map(|line| line.splitn(2, '|').nth(1))
+        .filter(|tail| tail.trim_start().starts_with(marker))
+        .count()
+}
+
+#[test]
+fn n30_named_hop_chain_replaces_the_indirect_call() {
+    let h = Harness::new();
+    let src = r#"
+fn host() -> i64 {
+    {
+        fn allocs() -> Vec<i64> {
+            return Vec::new()
+        }
+        nogc fn caller() -> i64 {
+            let v = allocs()
+            return 0
+        }
+    }
+    return 0
+}
+fn main() -> i64 { return host() }
+"#;
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-N30", name, src, *opt);
+        assert!(
+            rendered.contains("[E0727]"),
+            "SI-N30 at {name} MUST be rejected with E0727, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("caller -> allocs -> Vec::new"),
+            "SI-N30 at {name} MUST name every hop, got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("<indirect call>"),
+            "SI-N30 at {name} MUST NOT fall back to an indirect call, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn n40_format_string_interpolation_is_named_not_caret_accurate() {
+    let h = Harness::new();
+    let src = r#"
+fn host(n: i64) -> i64 {
+    println("{ 0 + { nogc fn bad() -> Vec<i64> { return Vec::new() }  n } }")
+    return 0
+}
+fn main() -> i64 { return host(0) }
+"#;
+    // the caret positions are wrong here and stay wrong: func.span is not remapped for a `fn`
+    // inside an interpolation, so this row pins the code and the message only
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-N40", name, src, *opt);
+        assert!(
+            rendered.contains("[E0727]")
+                && rendered.contains("`bad` is declared nogc")
+                && rendered.contains("bad -> Vec::new"),
+            "SI-N40 at {name} MUST name the interpolated declaration, got:\n{rendered}"
+        );
+    }
+}
+
+// the declared over-rejection: base compiles this and prints the correct 1 then 0. the nested
+// body allocates nothing, but it merges with the outer `f` by bare name and is refused.
+const N50_SRC: &str = r#"
+fn f() -> i64 {
+    let mut v = Vec::new()
+    Vec::push(v, 1)
+    return 1
+}
+fn g() -> i64 {
+    {
+        nogc fn f() -> i64 { return 99 }
+    }
+    return 0
+}
+fn main() -> i64 {
+    println(f())
+    println(g())
+    return 0
+}
+"#;
+
+#[test]
+fn n50_declared_over_rejection_is_e0727() {
+    let h = Harness::new();
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-N50", name, N50_SRC, *opt);
+        assert!(
+            rendered.contains("[E0727]"),
+            "SI-N50 at {name} MUST be rejected with E0727, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn n60_e0418_renders_exactly_one_label() {
+    let h = Harness::new();
+    let src = r#"
+fn dup() -> i64 { return 1 }
+fn outer() -> i64 {
+    fn dup() -> i64 {
+        let a = 1
+        let b = 2
+        let c = 3
+        return a + b + c
+    }
+    return dup()
+}
+fn main() -> i64 {
+    println(outer())
+    return 0
+}
+"#;
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-N60", name, src, *opt);
+        assert!(
+            rendered.contains("[E0418]"),
+            "SI-N60 at {name} MUST be rejected with E0418, got:\n{rendered}"
+        );
+        assert_eq!(
+            marker_lines(&rendered, '^'),
+            1,
+            "SI-N60 at {name} MUST draw exactly one label, got:\n{rendered}"
+        );
+    }
+}
+
+const GROUP_N: &[(&str, &str, Oracle)] = &[
+    (
+        "SI-N70",
+        r#"
+fn host(n: i64) -> i64 {
+    let mut i = 0
+    let mut r = 0
+    while i < n {
+        nogc fn clean() -> i64 { return 42 }
+        r = clean()
+        i = i + 1
+    }
+    return r
+}
+fn main() -> i64 {
+    println(host(1))
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "42\n"),
+    ),
+    (
+        "SI-N71",
+        r#"
+fn host(n: i64) -> i64 {
+    let mut i = 0
+    let mut r = 0
+    while i < n {
+        fn grow() -> i64 {
+            let mut v = Vec::new()
+            Vec::push(v, 1)
+            return v[0]
+        }
+        r = grow()
+        i = i + 1
+    }
+    return r
+}
+fn main() -> i64 {
+    println(host(1))
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "1\n", 1, 1),
+    ),
+    (
+        "SI-N72",
+        r#"
+fn host() -> i64 {
+    {
+        fn make() -> Vec<i64> {
+            let mut v = Vec::new()
+            Vec::push(v, 1)
+            return v
+        }
+        let w = make()
+        println(w[0])
+    }
+    return 0
+}
+fn main() -> i64 { return host() }
+"#,
+        Oracle::ExitOutStats(0, "1\n", 1, 1),
+    ),
+];
+
+#[test]
+fn group_n_block_nested_runs() {
+    let h = Harness::new();
+    run_rows(&h, GROUP_N);
+    h.assert_measured("group_n_block_nested_runs");
+}
+
+struct SymRow {
+    id: &'static str,
+    code: &'static str,
+    src: &'static str,
+    // a backend internal error the fence replaces; it must be gone from the rendering
+    absent: Option<&'static str>,
+}
+
+// base behaviour is recorded per row because none of it survives the fence: these programs are
+// refused now, so the wrong answers below can only ever be measured at -o0
+const GROUP_N_SYM: &[SymRow] = &[
+    SymRow {
+        // base prints 1 then 1: the second body is never emitted
+        id: "SI-S01",
+        code: "E0427",
+        src: r#"
+fn p() -> i64 {
+    fn a() -> i64 { return 1 }
+    return a()
+}
+fn q() -> i64 {
+    fn a() -> i64 { return 2 }
+    return a()
+}
+fn main() -> i64 {
+    println(p())
+    println(q())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base prints 0: the call reaches the outer body, not the shadow beside it
+        id: "SI-S02",
+        code: "E0427",
+        src: r#"
+fn dup() -> i64 { return 0 }
+fn outer() -> i64 {
+    {
+        fn dup() -> i64 { return 5 }
+        return dup()
+    }
+}
+fn main() -> i64 {
+    println(outer())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base reaches the backend and fails there with E0901
+        id: "SI-S03",
+        code: "E0427",
+        src: r#"
+fn dup(x: i64) -> i64 { return x }
+fn outer() -> i64 {
+    {
+        fn dup() -> i64 { return 5 }
+        return dup()
+    }
+}
+fn main() -> i64 {
+    println(outer())
+    return 0
+}
+"#,
+        absent: Some("E0901"),
+    },
+    SymRow {
+        // declared over-rejection: base compiles this and prints the correct 1 then 0
+        id: "SI-S04",
+        code: "E0427",
+        src: r#"
+fn f() -> i64 {
+    let mut v = Vec::new()
+    Vec::push(v, 1)
+    return 1
+}
+fn g() -> i64 {
+    {
+        fn f() -> i64 { return 99 }
+    }
+    return 0
+}
+fn main() -> i64 {
+    println(f())
+    println(g())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base compiles this and prints 111 only: main's body is discarded
+        id: "SI-S10",
+        code: "E0428",
+        src: r#"
+fn __aelys_main() -> i64 {
+    println(111)
+    return 0
+}
+fn main() -> i64 {
+    println(222)
+    return __aelys_main()
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base does not terminate: the entry wrapper calls this back into itself, so it segfaults at -o0 and times out at -o1/-o2/-o3
+        id: "SI-S11",
+        code: "E0428",
+        src: r#"
+fn main() -> i64 {
+    println(222)
+    return __aelys_main()
+}
+fn __aelys_main() -> i64 {
+    println(111)
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base reaches the backend and fails there with E0901
+        id: "SI-S12",
+        code: "E0428",
+        src: r#"
+fn __aelys_user_main() -> i64 {
+    println(111)
+    return 0
+}
+fn main() -> i64 {
+    println(222)
+    return __aelys_user_main()
+}
+"#,
+        absent: Some("E0901"),
+    },
+    SymRow {
+        // base prints 2 then 2. this row fails if the pre-monomorphization placement is dropped:
+        // the two instances mangle alike and mono keeps one, so nothing survives to detect.
+        id: "SI-S20",
+        code: "E0427",
+        src: r#"
+fn o1() -> i64 {
+    {
+        fn g<T>(x: T) -> i64 { return 1 }
+        return g(1)
+    }
+}
+fn o2() -> i64 {
+    {
+        fn g<T>(x: T) -> i64 { return 2 }
+        return g(1)
+    }
+}
+fn main() -> i64 {
+    println(o1())
+    println(o2())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base prints 1 then 1
+        id: "SI-S21",
+        code: "E0427",
+        src: r#"
+fn o1() -> i64 {
+    {
+        fn g(x: i64) -> i64 { return 1 }
+        return g(1)
+    }
+}
+fn o2() -> i64 {
+    {
+        fn g(x: i64) -> i64 { return 2 }
+        return g(1)
+    }
+}
+fn main() -> i64 {
+    println(o1())
+    println(o2())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base prints 105 twice: the generic instance lands on the user's name
+        id: "SI-S22",
+        code: "E0428",
+        src: r#"
+fn __mono_ident_i64(x: i64) -> i64 { return 105 }
+fn ident<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    println(__mono_ident_i64(1))
+    println(ident(105))
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+        // base is E0901 at -O0 and compiles at -O2, where the lambda is optimized away before
+        // codegen: an -O-dependent verdict, which is what the invariance property below pins
+        id: "SI-S23",
+        code: "E0428",
+        src: r#"
+fn first() -> i64 {
+    let f = fn (x: i64) -> i64 { return x }
+    return f(5)
+}
+fn __lambda_1(x: i64) -> i64 { return 77 }
+fn main() -> i64 {
+    println(first())
+    println(__lambda_1(77))
+    return 0
+}
+"#,
+        absent: Some("E0901"),
+    },
+    SymRow {
+// -o0 prints 0 then 0. sema does not walk a lambda body for the nested-shadow check, so
+// this is the one collision shape that reaches the fence without e0418 pre-empting it
+        id: "SI-S25",
+        code: "E0427",
+        src: r#"
+fn dup() -> i64 { return 0 }
+fn holder() -> i64 {
+    let g = fn() -> i64 {
+        fn dup() -> i64 { return 5 }
+        return 0
+    }
+    return g()
+}
+fn main() -> i64 {
+    println(dup())
+    println(holder())
+    return 0
+}
+"#,
+        absent: None,
+    },
+    SymRow {
+// mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` mangle
+// alike; neither user name is reserved, so only the post-monomorphization gate sees it
+        id: "SI-S24",
+        code: "E0427",
+        src: r#"
+struct B { v: i64 }
+struct A_B { v: i64 }
+fn f<T>(x: T) -> i64 { return 1 }
+fn f_A<T>(x: T) -> i64 { return 2 }
+fn main() -> i64 {
+    let b = B { v: 0 }
+    let ab = A_B { v: 0 }
+    println(f(ab))
+    println(f_A(b))
+    return 0
+}
+"#,
+        absent: Some("E0901"),
+    },
+    SymRow {
+        // declared over-rejection: base compiles this and prints the correct 42. a private-naming
+        // convention is a legal program today and the namespace rule refuses it.
+        id: "L1",
+        code: "E0428",
+        src: r#"
+fn __helper(x: i64) -> i64 { return x * 2 }
+fn main() -> i64 {
+    println(__helper(21))
+    return 0
+}
+"#,
+        absent: None,
+    },
+];
+
+// the controls: each is the neighbouring row with one name changed, and each must stay green
+const GROUP_N_SYM_CONTROLS: &[(&str, &str, Oracle)] = &[
+    (
+        "SI-S00",
+        r#"
+fn outer() -> i64 {
+    fn a() -> i64 { return 1 }
+    fn b() -> i64 { return 2 }
+    println(a())
+    println(b())
+    return 0
+}
+fn main() -> i64 { return outer() }
+"#,
+        Oracle::ExitOut(0, "1\n2\n"),
+    ),
+    (
+        // the SI-S11 shape with the helper renamed. it asserts termination, not a value: the row
+        // it controls is the only one in this file whose base behaviour is a hang.
+        "SI-S11ctl",
+        r#"
+fn main() -> i64 {
+    println(222)
+    return helper()
+}
+fn helper() -> i64 {
+    println(111)
+    return 0
+}
+"#,
+        Oracle::Terminates(5000, 0, "222\n111\n"),
+    ),
+    (
+        "SI-S20ctl",
+        r#"
+fn o1() -> i64 {
+    {
+        fn ga<T>(x: T) -> i64 { return 1 }
+        return ga(1)
+    }
+}
+fn o2() -> i64 {
+    {
+        fn gb<T>(x: T) -> i64 { return 2 }
+        return gb(1)
+    }
+}
+fn main() -> i64 {
+    println(o1())
+    println(o2())
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "1\n2\n"),
+    ),
+    (
+        "SI-S23ctl",
+        r#"
+fn first() -> i64 {
+    let f = fn (x: i64) -> i64 { return x }
+    return f(5)
+}
+fn helper(x: i64) -> i64 { return 77 }
+fn main() -> i64 {
+    println(first())
+    println(helper(77))
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "5\n77\n"),
+    ),
+    (
+        "L1ctl",
+        r#"
+fn helper(x: i64) -> i64 { return x * 2 }
+fn main() -> i64 {
+    println(helper(21))
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "42\n"),
+    ),
+];
+
+#[test]
+fn group_n_symbol_identity_fails_closed() {
+    let h = Harness::new();
+    let mut seen = HashSet::new();
+    for row in GROUP_N_SYM {
+        assert!(seen.insert(row.id), "duplicate symbol row {}", row.id);
+        for (name, opt) in REJECT_LEVELS {
+            let rendered = h.reject(row.id, name, row.src, *opt);
+            assert!(
+                rendered.contains(&format!("[{}]", row.code)),
+                "{} at {name} MUST be rejected with {}, got:\n{rendered}",
+                row.id,
+                row.code
+            );
+            if let Some(absent) = row.absent {
+                assert!(
+                    !rendered.contains(absent),
+                    "{} at {name} MUST no longer reach {absent}, got:\n{rendered}",
+                    row.id
+                );
+            }
+        }
+    }
+    run_rows(&h, GROUP_N_SYM_CONTROLS);
+    h.assert_measured("group_n_symbol_identity_fails_closed");
+}
+
+#[test]
+fn s05_e0427_renders_one_label_per_definition() {
+    let h = Harness::new();
+    let src = GROUP_N_SYM
+        .iter()
+        .find(|row| row.id == "SI-S20")
+        .expect("SI-S20 must exist")
+        .src;
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-S05", name, src, *opt);
+        assert!(
+            rendered.contains("[E0427]"),
+            "SI-S05 at {name} MUST be rejected with E0427, got:\n{rendered}"
+        );
+        assert_eq!(
+            (marker_lines(&rendered, '^'), marker_lines(&rendered, '-')),
+            (1, 1),
+            "SI-S05 at {name} MUST draw exactly one label per definition, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("inside `o1`") && rendered.contains("inside `o2`"),
+            "SI-S05 at {name} MUST name both parents, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn s07_e0427_sees_through_a_lambda_body_and_names_the_parent() {
+    let h = Harness::new();
+    let src = GROUP_N_SYM
+        .iter()
+        .find(|row| row.id == "SI-S25")
+        .expect("SI-S25 must exist")
+        .src;
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-S07", name, src, *opt);
+        assert!(
+            rendered.contains("same symbol `dup`"),
+            "SI-S07 at {name} MUST name the colliding symbol, got:\n{rendered}"
+        );
+        assert_eq!(
+            (marker_lines(&rendered, '^'), marker_lines(&rendered, '-')),
+            (1, 1),
+            "SI-S07 at {name} MUST draw one label per definition, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("defined here, inside `holder`"),
+            "SI-S07 at {name} MUST resolve the parent through the lambda body, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn s06_e0427_names_the_mangled_symbol_and_both_air_spans() {
+    let h = Harness::new();
+    let src = GROUP_N_SYM
+        .iter()
+        .find(|row| row.id == "SI-S24")
+        .expect("SI-S24 must exist")
+        .src;
+    for (name, opt) in REJECT_LEVELS {
+        let rendered = h.reject("SI-S06", name, src, *opt);
+        assert!(
+            rendered.contains("same symbol `__mono_f_A_B`"),
+            "SI-S06 at {name} MUST name the mangled symbol, got:\n{rendered}"
+        );
+        assert_eq!(
+            (marker_lines(&rendered, '^'), marker_lines(&rendered, '-')),
+            (1, 1),
+            "SI-S06 at {name} MUST draw one label per definition, got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("inside `"),
+            "SI-S06 at {name} has no typed declaration for the symbol, so no parent can be \
+             named, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("type arguments joined by"),
+            "SI-S06 at {name} MUST explain the mangling, not nesting, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn s2_run3_codes_are_registered() {
+    use aelys_common::diagnostic::registry;
+    for code in ["E0427", "E0428"] {
+        let info =
+            registry::lookup(code).unwrap_or_else(|| panic!("{code} must have an --explain entry"));
+        assert!(
+            !info.explanation.trim().is_empty(),
+            "{code}'s --explain entry must not be empty"
+        );
+    }
+}
+
+const O_LEVELS: &[(&str, OptimizationLevel)] = &[
+    ("-O0", OptimizationLevel::None),
+    ("-O1", OptimizationLevel::Basic),
+    ("-O2", OptimizationLevel::Standard),
+    ("-O3", OptimizationLevel::Aggressive),
+];
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+enum Verdict {
+    Accepted,
+    Rejected(String),
+}
+
+// an uncoded rejection is its own bucket, so a renderer change cannot make two different
+// refusals compare equal
+fn first_code(rendered: &str) -> String {
+    let bytes = rendered.as_bytes();
+    for i in 0..bytes.len().saturating_sub(6) {
+        if bytes[i] == b'['
+            && bytes[i + 1] == b'E'
+            && bytes[i + 2..i + 6].iter().all(u8::is_ascii_digit)
+            && bytes[i + 6] == b']'
+        {
+            return rendered[i + 1..i + 6].to_string();
+        }
+    }
+    "UNCODED".to_string()
+}
+
+fn verdict_at(h: &Harness, id: &str, tag: &str, src: &str, opt: OptimizationLevel) -> Verdict {
+    let path = h.write(id, tag, src);
+    match lower_file_to_air(&path, opt) {
+        Ok(_) => Verdict::Accepted,
+        Err(rendered) => Verdict::Rejected(first_code(&rendered)),
+    }
+}
+
+fn verdicts_agree(verdicts: &[Verdict]) -> bool {
+    verdicts.windows(2).all(|pair| pair[0] == pair[1])
+}
+
+// a constant condition whose taken branch is one statement is spliced into the parent at -o2 and
+const GROUP_N_DIV: &[(&str, &str)] = &[
+    (
+        "SI-D01",
+        r#"
+fn main() -> i64 {
+    let c = 1 > 0
+    if c {
+        nogc fn bad() -> Vec<i64> { return Vec::new() }
+    }
+    return 0
+}
+"#,
+    ),
+    (
+        "SI-D02",
+        r#"
+fn main() -> i64 {
+    let c = 1 > 2
+    if c {
+        let q = 1
+    } else {
+        nogc fn bad() -> Vec<i64> { return Vec::new() }
+    }
+    return 0
+}
+"#,
+    ),
+    (
+        "SI-D03",
+        r#"
+fn main() -> i64 {
+    if true {
+        nogc fn bad() -> Vec<i64> { return Vec::new() }
+    }
+    return 0
+}
+"#,
+    ),
+    (
+        "SI-D04",
+        r#"
+fn host() -> i64 {
+    let c = 2 > 1
+    if c {
+        nogc fn bad() -> Vec<i64> { return Vec::new() }
+    }
+    return 0
+}
+fn main() -> i64 { return host() }
+"#,
+    ),
+    (
+        "SI-D05",
+        r#"
+fn main() -> i64 {
+    let c = 1 > 0
+    if c {
+        if c {
+            nogc fn bad() -> Vec<i64> { return Vec::new() }
+        }
+    }
+    return 0
+}
+"#,
+    ),
+];
+
+#[test]
+fn group_n_o_invariance() {
+    // self-test first: without it a "0 divergent" count is unfalsifiable once the defect is fixed
+    let unequal = [
+        Verdict::Accepted,
+        Verdict::Accepted,
+        Verdict::Rejected("E0727".to_string()),
+        Verdict::Rejected("E0727".to_string()),
+    ];
+    assert!(
+        !verdicts_agree(&unequal),
+        "the comparator must detect a divergent 4-tuple"
+    );
+    let unequal_codes = [
+        Verdict::Rejected("E0901".to_string()),
+        Verdict::Rejected("E0428".to_string()),
+    ];
+    assert!(
+        !verdicts_agree(&unequal_codes),
+        "the comparator must detect two different refusals"
+    );
+    assert!(verdicts_agree(&[Verdict::Accepted, Verdict::Accepted]));
+
+    let h = Harness::new();
+    let mut programs: Vec<(String, String)> = Vec::new();
+    for row in GROUP_N_X {
+        programs.push((row.id.to_string(), row.rejected()));
+        programs.push((format!("{}-twin", row.id), row.twin()));
+    }
+    for row in GROUP_N_SYM {
+        programs.push((row.id.to_string(), row.src.to_string()));
+    }
+    for (id, src, _) in GROUP_N_SYM_CONTROLS {
+        programs.push((id.to_string(), src.to_string()));
+    }
+    for (id, src) in GROUP_N_DIV {
+        programs.push((id.to_string(), src.to_string()));
+    }
+    assert!(
+        programs.len() >= 80,
+        "the invariance sweep swept only {} programs",
+        programs.len()
+    );
+
+    let mut divergent = Vec::new();
+    for (id, src) in &programs {
+        let verdicts: Vec<Verdict> = O_LEVELS
+            .iter()
+            .map(|(tag, opt)| verdict_at(&h, id, tag, src, *opt))
+            .collect();
+        if !verdicts_agree(&verdicts) {
+            divergent.push(format!("{id}: {verdicts:?}"));
+        }
+    }
+    assert!(
+        divergent.is_empty(),
+        "every verdict MUST be the same at every optimization level; divergent:\n{}",
+        divergent.join("\n")
+    );
+}
+
