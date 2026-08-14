@@ -10,8 +10,8 @@ use crate::{AirFunction, AirProgram, Span};
 pub const USER_MAIN_SYMBOL: &str = "__aelys_main";
 pub const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 
-// the C runtime exports 33 `__aelys_*` symbols the compiler never sees, so the whole `__` space is
-// reserved rather than any list of names the compiler could enumerate
+// the c runtime names 32 `__aelys_*` symbols and the compiler emits only the entry above, so the
+// whole `__` space is reserved rather than any list of names the compiler could enumerate
 pub const RESERVED_PREFIX: &str = "__";
 
 pub fn function_symbol_name(function: &AirFunction) -> String {
@@ -22,7 +22,7 @@ pub fn function_symbol_name(function: &AirFunction) -> String {
     }
 }
 
-// the source name a user writes for a symbol codegen will emit under a different one
+// maps a source name onto the symbol codegen emits for it, so both sides key alike
 pub fn symbol_for_source_name(name: &str) -> String {
     if name == "main" {
         USER_MAIN_SYMBOL.to_string()
@@ -99,3 +99,4 @@ pub fn reserved_user_names(program: &TypedProgram) -> Vec<ReservedUserName> {
     });
     found
 }
+
