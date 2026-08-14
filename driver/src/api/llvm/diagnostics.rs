@@ -109,6 +109,33 @@ pub(super) fn vec_surface_errors_to_error(
     AelysError::Multiple(diagnostics)
 }
 
+pub(super) fn reserved_name_errors_to_error(
+    names: Vec<aelys_air::symbols::ReservedUserName>,
+    source: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = names
+        .iter()
+        .map(|reserved| {
+            let message = format!(
+                "[reserved-symbol] `{}` starts with `{}`, which is reserved for compiler- and \
+                 runtime-generated symbols",
+                reserved.name,
+                aelys_air::symbols::RESERVED_PREFIX
+            );
+            let mut diag = Diagnostic::new(Severity::Error, &message)
+                .with_code("E0428")
+                .with_primary_label(
+                    source.clone(),
+                    first_line_only(source.as_ref(), reserved.span),
+                    Some("reserved symbol name".to_string()),
+                );
+            diag.add_help("rename the function".to_string());
+            diag
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
 fn numbered(errors: &[String]) -> String {
     errors
         .iter()

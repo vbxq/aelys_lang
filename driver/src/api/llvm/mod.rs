@@ -20,7 +20,7 @@ use std::sync::Arc;
 use diagnostics::{
     backend_diagnostic_error, bir_diagnostics_to_error, fallback_source_span,
     load_source_for_diagnostics, mono_errors_to_error, program_anchor_span,
-    sema_errors_to_diagnostics, vec_surface_errors_to_error,
+    reserved_name_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::compile_air_with_llvm;
 
@@ -91,6 +91,12 @@ fn lower_file_to_air_with_source(
         known_globals,
     )
     .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
+
+    // a reserved name is a naming error, not an effect error, so it is reported before the bir gate
+    let reserved = aelys_air::symbols::reserved_user_names(&inference.program);
+    if !reserved.is_empty() {
+        return Err(reserved_name_errors_to_error(reserved, src.clone()));
+    }
 
     let checked = aelys_air::bir::check(inference.program)
         .map_err(|errors| bir_diagnostics_to_error(errors, src.clone()))?;

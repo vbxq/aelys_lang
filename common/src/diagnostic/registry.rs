@@ -573,6 +573,29 @@ Slicing an array has no such restriction, because an array's elements are
 stored inline and are never shared.",
         severity: Severity::Error,
     },
+    DiagnosticInfo {
+        code: "E0428",
+        title: "function name starts with the reserved `__` prefix",
+        explanation: "\
+Names beginning with `__` belong to the compiler and the runtime. The
+compiler emits `__aelys_main` for your `main`, `__mono_*` for each
+instance of a generic, `__lambda_*` for each lambda and `__closure_env_*`
+for a closure's captured state, and the C runtime exports a further set of
+`__aelys_*` symbols that are linked into every binary.
+
+    fn __aelys_main() -> i64 { return 1 }   // E0428
+    fn __helper(x: i64) -> i64 { return x } // E0428
+
+A user function landing on one of those names produces two definitions of
+the same linker symbol, and a call to one reaches the other. The runtime's
+half of the set lives in another language's object files, so the compiler
+cannot check the names one by one; the whole prefix is reserved instead.
+
+Rename the function. Locals, parameters and struct fields are unaffected:
+
+    let __x = 5                             // ok",
+        severity: Severity::Error,
+    },
     // Control flow (E05xx)
     DiagnosticInfo {
         code: "E0501",
