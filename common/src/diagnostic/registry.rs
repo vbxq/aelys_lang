@@ -574,6 +574,30 @@ stored inline and are never shared.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0427",
+        title: "two functions compile to the same symbol",
+        explanation: "\
+A function's symbol is its bare name, whatever scope it was declared in.
+Two declarations that share a name therefore share a symbol, and the
+backend keeps only one body for it: every call to either reaches whichever
+one was emitted.
+
+    fn outer() -> i64 {
+        fn dup() -> i64 { return 1 }
+        return dup()
+    }
+    fn other() -> i64 {
+        fn dup() -> i64 { return 2 }   // E0427, same symbol as the one above
+        return dup()
+    }
+
+`main` counts here too, because it is emitted as `__aelys_main`.
+
+Nested functions do not get scope-qualified symbols yet, so the fix is to
+rename one of them.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0428",
         title: "function name starts with the reserved `__` prefix",
         explanation: "\

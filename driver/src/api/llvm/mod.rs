@@ -18,8 +18,8 @@ use std::process::Command;
 use std::sync::Arc;
 
 use diagnostics::{
-    backend_diagnostic_error, bir_diagnostics_to_error, fallback_source_span,
-    load_source_for_diagnostics, mono_errors_to_error, program_anchor_span,
+    backend_diagnostic_error, bir_diagnostics_to_error, duplicate_symbol_errors_to_error,
+    fallback_source_span, load_source_for_diagnostics, mono_errors_to_error, program_anchor_span,
     reserved_name_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::compile_air_with_llvm;
@@ -129,9 +129,31 @@ fn lower_file_to_air_with_source(
             )
         }
     })?;
+    // mono is function-destroying as well as function-creating: two block-nested `fn g<T>` in
+    // different parents mangle alike and are deduped, so the collision has to be caught before it
+    let duplicates = aelys_air::symbols::duplicate_symbols(&air);
+    if !duplicates.is_empty() {
+        return Err(duplicate_symbol_errors_to_error(
+            duplicates,
+            &typed_program,
+            &air,
+            src.clone(),
+        ));
+    }
+
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
+    // defence in depth against a future pass that emits a name outside the reserved namespace
+    let duplicates = aelys_air::symbols::duplicate_symbols(&air);
+    if !duplicates.is_empty() {
+        return Err(duplicate_symbol_errors_to_error(
+            duplicates,
+            &typed_program,
+            &air,
+            src.clone(),
+        ));
+    }
     // program: before this point a generic body still hides its instantiations
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
         return Err(vec_surface_errors_to_error(errors, &air, src.clone()));

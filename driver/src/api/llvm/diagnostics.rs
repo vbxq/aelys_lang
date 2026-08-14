@@ -109,6 +109,60 @@ pub(super) fn vec_surface_errors_to_error(
     AelysError::Multiple(diagnostics)
 }
 
+pub(super) fn duplicate_symbol_errors_to_error(
+    duplicates: Vec<aelys_air::symbols::DuplicateSymbol>,
+    typed: &aelys_sema::TypedProgram,
+    air: &aelys_air::AirProgram,
+    source: Arc<Source>,
+) -> AelysError {
+    let sites = aelys_air::symbols::decl_sites_by_symbol(typed);
+    let anchor = program_anchor_span(air, source.as_ref());
+    let diagnostics: Vec<Diagnostic> = duplicates
+        .iter()
+        .map(|dup| {
+            let declared = sites.get(&dup.symbol).map(Vec::as_slice).unwrap_or(&[]);
+            // the typed side can be short of the air side, so every index is an `Option` and the
+            // missing span comes from the air function instead
+            let label = |i: usize| {
+                let span = declared
+                    .get(i)
+                    .map(|site| site.span)
+                    .or_else(|| {
+                        dup.spans
+                            .get(i)
+                            .copied()
+                            .flatten()
+                            .map(|s| air_span_to_syntax_span(s, source.as_ref()))
+                    })
+                    .unwrap_or(anchor);
+                let hint = match declared.get(i).and_then(|site| site.parent.as_deref()) {
+                    Some(parent) => format!("defined here, inside `{}`", parent),
+                    None => "defined here".to_string(),
+                };
+                (first_line_only(source.as_ref(), span), hint)
+            };
+            let (first_span, first_hint) = label(0);
+            let (second_span, second_hint) = label(1);
+            let message = format!(
+                "[symbol] two functions compile to the same symbol `{}`, so a call to one would \
+                 reach the other",
+                dup.symbol
+            );
+            let mut diag = Diagnostic::new(Severity::Error, &message)
+                .with_code("E0427")
+                .with_primary_label(source.clone(), first_span, Some(first_hint));
+            if second_span != first_span {
+                diag.add_secondary_label(source.clone(), second_span, Some(second_hint));
+            }
+            diag.add_help(
+                "rename one of them; nested functions do not get separate symbols yet".to_string(),
+            );
+            diag
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
 pub(super) fn reserved_name_errors_to_error(
     names: Vec<aelys_air::symbols::ReservedUserName>,
     source: Arc<Source>,
