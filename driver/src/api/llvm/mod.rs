@@ -144,7 +144,8 @@ fn lower_file_to_air_with_source(
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
-    // defence in depth against a future pass that emits a name outside the reserved namespace
+// mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
+// symbol that no earlier gate can see; this is the only guard for that
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
         return Err(duplicate_symbol_errors_to_error(
@@ -315,3 +316,4 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
         stderr.trim()
     ))
 }
+
