@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 
 use aelys_sema::{
-    InferType, TypeTable, TypedExpr, TypedExprKind, TypedFunction, TypedMatchArm, TypedProgram,
-    TypedStmt, TypedStmtKind,
+    InferType, TypeTable, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction,
+    TypedMatchArm, TypedProgram, TypedStmt, TypedStmtKind,
 };
 use aelys_syntax::Span;
 
@@ -34,24 +34,277 @@ pub fn build_program(program: &TypedProgram) -> BirProgram {
         .collect();
     bodies.push(build_toplevel(tt, &toplevel, program, &fn_names));
 
-    for stmt in &program.stmts {
-        if let TypedStmtKind::Function(func) = &stmt.kind {
-            bodies.push(build_function(tt, func, &fn_names));
-            collect_nested_functions(tt, &func.body, &mut bodies, &fn_names);
-        }
-    }
+    for_each_fn_decl(&program.stmts, &mut |func, _parent| {
+        bodies.push(build_function(tt, func, &fn_names));
+    });
 
     BirProgram { bodies }
 }
 
-fn gather_fn_names(stmts: &[TypedStmt]) -> HashSet<String> {
-    let mut names = HashSet::new();
+// no `_` arm and no `..` rest pattern below, so a new variant or field is a compile error here
+pub fn for_each_fn_decl<F>(stmts: &[TypedStmt], f: &mut F)
+where
+    F: FnMut(&TypedFunction, Option<&str>),
+{
     for stmt in stmts {
-        if let TypedStmtKind::Function(func) = &stmt.kind {
-            names.insert(func.name.clone());
-            names.extend(gather_fn_names(&func.body));
+        fn_decls_in_stmt(stmt, None, f);
+    }
+}
+
+fn fn_decls_in_stmt<F>(stmt: &TypedStmt, parent: Option<&str>, f: &mut F)
+where
+    F: FnMut(&TypedFunction, Option<&str>),
+{
+    match &stmt.kind {
+        TypedStmtKind::Expression(expr) => fn_decls_in_expr(expr, parent, f),
+        TypedStmtKind::Let {
+            name: _,
+            mutable: _,
+            initializer,
+            var_type: _,
+            is_pub: _,
+        } => fn_decls_in_expr(initializer, parent, f),
+        TypedStmtKind::Block(stmts) => {
+            for s in stmts {
+                fn_decls_in_stmt(s, parent, f);
+            }
+        }
+        TypedStmtKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            fn_decls_in_expr(condition, parent, f);
+            fn_decls_in_stmt(then_branch, parent, f);
+            if let Some(alt) = else_branch {
+                fn_decls_in_stmt(alt, parent, f);
+            }
+        }
+        TypedStmtKind::While { condition, body } => {
+            fn_decls_in_expr(condition, parent, f);
+            fn_decls_in_stmt(body, parent, f);
+        }
+        TypedStmtKind::For {
+            iterator: _,
+            start,
+            end,
+            inclusive: _,
+            step,
+            body,
+        } => {
+            fn_decls_in_expr(start, parent, f);
+            fn_decls_in_expr(end, parent, f);
+            if let Some(step) = step.as_ref() {
+                fn_decls_in_expr(step, parent, f);
+            }
+            fn_decls_in_stmt(body, parent, f);
+        }
+        TypedStmtKind::ForEach {
+            iterator: _,
+            iterable,
+            elem_type: _,
+            body,
+        } => {
+            fn_decls_in_expr(iterable, parent, f);
+            fn_decls_in_stmt(body, parent, f);
+        }
+        TypedStmtKind::Return(value) => {
+            if let Some(expr) = value {
+                fn_decls_in_expr(expr, parent, f);
+            }
+        }
+        TypedStmtKind::Break | TypedStmtKind::Continue => {}
+        TypedStmtKind::Function(func) => {
+            f(func, parent);
+            for s in &func.body {
+                fn_decls_in_stmt(s, Some(&func.name), f);
+            }
+        }
+        TypedStmtKind::Needs(_) => {}
+        TypedStmtKind::StructDecl {
+            name: _,
+            type_params: _,
+            fields: _,
+        } => {}
+        TypedStmtKind::EnumDecl {
+            name: _,
+            type_params: _,
+            variants: _,
+        } => {}
+    }
+}
+
+fn fn_decls_in_expr<F>(expr: &TypedExpr, parent: Option<&str>, f: &mut F)
+where
+    F: FnMut(&TypedFunction, Option<&str>),
+{
+    match &expr.kind {
+        TypedExprKind::Int(_)
+        | TypedExprKind::Float(_)
+        | TypedExprKind::Bool(_)
+        | TypedExprKind::String(_)
+        | TypedExprKind::Null
+        | TypedExprKind::Identifier(_) => {}
+        TypedExprKind::FmtString(parts) => {
+            for part in parts {
+                fn_decls_in_fmt_part(part, parent, f);
+            }
+        }
+        TypedExprKind::Binary { left, op: _, right } => {
+            fn_decls_in_expr(left, parent, f);
+            fn_decls_in_expr(right, parent, f);
+        }
+        TypedExprKind::Unary { op: _, operand } => fn_decls_in_expr(operand, parent, f),
+        TypedExprKind::And { left, right } | TypedExprKind::Or { left, right } => {
+            fn_decls_in_expr(left, parent, f);
+            fn_decls_in_expr(right, parent, f);
+        }
+        TypedExprKind::Call { callee, args } => {
+            fn_decls_in_expr(callee, parent, f);
+            for arg in args {
+                fn_decls_in_expr(arg, parent, f);
+            }
+        }
+        TypedExprKind::Assign { name: _, value } => fn_decls_in_expr(value, parent, f),
+        TypedExprKind::Grouping(inner) => fn_decls_in_expr(inner, parent, f),
+        TypedExprKind::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            fn_decls_in_expr(condition, parent, f);
+            fn_decls_in_expr(then_branch, parent, f);
+            fn_decls_in_expr(else_branch, parent, f);
+        }
+        TypedExprKind::Lambda(inner) => fn_decls_in_expr(inner, parent, f),
+        TypedExprKind::LambdaInner {
+            params: _,
+            return_type: _,
+            body,
+            captures: _,
+        } => {
+            for s in body {
+                fn_decls_in_stmt(s, parent, f);
+            }
+        }
+        TypedExprKind::Member { object, member: _ } => fn_decls_in_expr(object, parent, f),
+        TypedExprKind::ArrayLiteral { elements } => {
+            for e in elements {
+                fn_decls_in_expr(e, parent, f);
+            }
+        }
+        TypedExprKind::ArraySized { size, fill_value } => {
+            fn_decls_in_expr(size, parent, f);
+            if let Some(fill) = fill_value {
+                fn_decls_in_expr(fill, parent, f);
+            }
+        }
+        TypedExprKind::VecLiteral {
+            element_type: _,
+            elements,
+        } => {
+            for e in elements {
+                fn_decls_in_expr(e, parent, f);
+            }
+        }
+        TypedExprKind::Index { object, index } => {
+            fn_decls_in_expr(object, parent, f);
+            fn_decls_in_expr(index, parent, f);
+        }
+        TypedExprKind::IndexAssign {
+            object,
+            index,
+            value,
+        } => {
+            fn_decls_in_expr(object, parent, f);
+            fn_decls_in_expr(index, parent, f);
+            fn_decls_in_expr(value, parent, f);
+        }
+        TypedExprKind::FieldAssign {
+            object,
+            field: _,
+            value,
+        } => {
+            fn_decls_in_expr(object, parent, f);
+            fn_decls_in_expr(value, parent, f);
+        }
+        TypedExprKind::Range {
+            start,
+            end,
+            inclusive: _,
+        } => {
+            if let Some(start) = start {
+                fn_decls_in_expr(start, parent, f);
+            }
+            if let Some(end) = end {
+                fn_decls_in_expr(end, parent, f);
+            }
+        }
+        TypedExprKind::Slice { object, range } => {
+            fn_decls_in_expr(object, parent, f);
+            fn_decls_in_expr(range, parent, f);
+        }
+        TypedExprKind::Reference {
+            mutable: _,
+            operand,
+        } => fn_decls_in_expr(operand, parent, f),
+        TypedExprKind::Deref(inner) => fn_decls_in_expr(inner, parent, f),
+        TypedExprKind::DerefAssign { target, value } => {
+            fn_decls_in_expr(target, parent, f);
+            fn_decls_in_expr(value, parent, f);
+        }
+        TypedExprKind::StructLiteral { name: _, fields } => {
+            for (_, value) in fields {
+                fn_decls_in_expr(value, parent, f);
+            }
+        }
+        TypedExprKind::Cast { expr, target: _ } => fn_decls_in_expr(expr, parent, f),
+        TypedExprKind::EnumVariant {
+            enum_name: _,
+            variant: _,
+            tag: _,
+            args,
+        } => {
+            for arg in args {
+                fn_decls_in_expr(arg, parent, f);
+            }
+        }
+        TypedExprKind::Match { scrutinee, arms } => {
+            fn_decls_in_expr(scrutinee, parent, f);
+            for arm in arms {
+                fn_decls_in_expr(&arm.body, parent, f);
+            }
+        }
+        TypedExprKind::ResultAssert {
+            scrutinee,
+            ok_tag: _,
+            payload_ty: _,
+            on_err: _,
+        } => fn_decls_in_expr(scrutinee, parent, f),
+        TypedExprKind::Block { stmts, tail } => {
+            for s in stmts {
+                fn_decls_in_stmt(s, parent, f);
+            }
+            fn_decls_in_expr(tail, parent, f);
         }
     }
+}
+
+fn fn_decls_in_fmt_part<F>(part: &TypedFmtStringPart, parent: Option<&str>, f: &mut F)
+where
+    F: FnMut(&TypedFunction, Option<&str>),
+{
+    match part {
+        TypedFmtStringPart::Literal(_) | TypedFmtStringPart::Placeholder => {}
+        TypedFmtStringPart::Expr(expr) => fn_decls_in_expr(expr, parent, f),
+    }
+}
+
+fn gather_fn_names(stmts: &[TypedStmt]) -> HashSet<String> {
+    let mut names = HashSet::new();
+    for_each_fn_decl(stmts, &mut |func, _parent| {
+        names.insert(func.name.clone());
+    });
     names
 }
 
@@ -63,20 +316,6 @@ fn gather_global_names(stmts: &[TypedStmt]) -> HashSet<String> {
         }
     }
     names
-}
-
-fn collect_nested_functions(
-    tt: &TypeTable,
-    stmts: &[TypedStmt],
-    out: &mut Vec<BirBody>,
-    fn_names: &HashSet<String>,
-) {
-    for stmt in stmts {
-        if let TypedStmtKind::Function(func) = &stmt.kind {
-            out.push(build_function(tt, func, fn_names));
-            collect_nested_functions(tt, &func.body, out, fn_names);
-        }
-    }
 }
 
 fn build_toplevel(
