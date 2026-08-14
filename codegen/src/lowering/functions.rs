@@ -5,7 +5,7 @@ use crate::types::{air_basic_type_to_llvm, air_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::{
     AirFunction, AirProgram, AirType, CallingConv as AirCallingConv, FunctionAttribs, InlineHint,
-    layout::enum_has_data,
+    layout::enum_has_data, symbols::NATIVE_ENTRY_SYMBOL,
 };
 use inkwell::AddressSpace;
 use inkwell::attributes::{Attribute, AttributeLoc};
@@ -36,9 +36,6 @@ use std::collections::HashMap;
 // At LLVM level, both forms end up with env at param 0, which is what indirect callers expect.
 //
 // The entry wrapper (__aelys_user_main) bridges from C convention to the Aelys main function by passing null as the env argument.
-
-const USER_MAIN_SYMBOL: &str = "__aelys_main";
-const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 
 impl CodegenContext {
     pub(crate) fn declare_functions(&self, program: &AirProgram) -> Result<(), CodegenError> {
@@ -304,11 +301,7 @@ pub(crate) fn llvm_calling_convention(conv: AirCallingConv) -> u32 {
 }
 
 pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
-    if !function.is_extern && function.name == "main" {
-        USER_MAIN_SYMBOL.to_string()
-    } else {
-        function.name.clone()
-    }
+    aelys_air::symbols::function_symbol_name(function)
 }
 
 /// Returns true if the type lowers to an aggregate that we must not pass

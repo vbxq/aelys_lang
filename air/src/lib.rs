@@ -9,6 +9,7 @@ pub mod passes;
 pub mod print;
 pub mod rc_paths;
 pub mod rc_types;
+pub mod symbols;
 
 pub use bir::{Checked, check};
 
