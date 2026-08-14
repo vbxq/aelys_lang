@@ -1,5 +1,5 @@
 use aelys_air::bir::build::build_program;
-use aelys_air::bir::{Step, StepKind, effect_summaries, managed_chain};
+use aelys_air::bir::{Effect, Step, StepKind, effect_summaries, managed_chain};
 use aelys_driver::{compile_to_typed_ast, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -340,15 +340,29 @@ fn mid_chain_collision_truncates_at_the_last_verified_hop() {
     has(&err, "module.aelys:13:29");
 }
 
+fn bodies_named(src: &str, name: &str) -> usize {
+    let program = compile_to_typed_ast(src).expect("source should type-check");
+    build_program(&program)
+        .bodies
+        .iter()
+        .filter(|body| body.name == name)
+        .count()
+}
+
+// e0418 refuses a nested fn that shadows an outer one, so the second colliding body is declared in
+// a lambda body, which sema does not walk for shadowing
 const DIRECT_COLLISION: &str = "\
 fn dup() -> i64 { return 0 }
 fn holder() -> i64 {
-    fn dup() -> i64 {
-        let mut v = Vec::new()
-        Vec::push(v, 1)
+    let g = fn() -> i64 {
+        fn dup() -> i64 {
+            let mut v = Vec::new()
+            Vec::push(v, 1)
+            return 0
+        }
         return 0
     }
-    return 0
+    return g()
 }
 nogc fn f() -> i64 { return dup() }
 fn main() -> i64 { return f() + holder() }
@@ -356,6 +370,12 @@ fn main() -> i64 { return f() + holder() }
 
 #[test]
 fn direct_collision_never_names_the_ambiguous_callee_as_a_hop() {
+    assert_eq!(
+        bodies_named(DIRECT_COLLISION, "dup"),
+        2,
+        "the fixture must produce two bir bodies named `dup`"
+    );
+
     let err = reject(DIRECT_COLLISION);
     assert_e0727(&err);
     lacks(&err, "via `f -> dup`");
@@ -372,22 +392,50 @@ fn direct_collision_never_names_the_ambiguous_callee_as_a_hop() {
     assert!(chain[1].span.is_none());
 }
 
-#[test]
-fn shadowed_nogc_body_says_the_effects_were_merged() {
-    let err = reject(
-        "\
+const SHADOWED_NOGC: &str = "\
 fn holder() -> i64 {
-    fn f() -> i64 {
-        let mut v = Vec::new()
-        Vec::push(v, 1)
+    let g = fn() -> i64 {
+        fn f() -> i64 {
+            let mut v = Vec::new()
+            Vec::push(v, 1)
+            return 0
+        }
         return 0
     }
-    return f()
+    return g()
 }
 nogc fn f() -> i64 { return 0 }
 fn main() -> i64 { return f() + holder() }
-",
+";
+
+#[test]
+fn shadowed_nogc_body_says_the_effects_were_merged() {
+    assert_eq!(
+        bodies_named(SHADOWED_NOGC, "f"),
+        2,
+        "the fixture must produce two bir bodies named `f`"
     );
+
+    let program = compile_to_typed_ast(SHADOWED_NOGC).expect("source should type-check");
+    let bir = build_program(&program);
+    let declared = bir
+        .bodies
+        .iter()
+        .find(|body| body.name == "f" && body.declared_nogc)
+        .expect("one of the two bodies is the nogc declaration");
+    assert!(
+        !declared.intrinsic_effects.contains(Effect::Managed),
+        "the nogc body reaches nothing managed on its own"
+    );
+    assert!(
+        effect_summaries(&bir)
+            .get("f")
+            .expect("a summary for `f`")
+            .contains(Effect::Managed),
+        "the summary must carry the shadowing body's managed effect, which is the merge"
+    );
+
+    let err = reject(SHADOWED_NOGC);
     assert_e0727(&err);
     lacks(&err, " via `");
     has(
@@ -474,3 +522,4 @@ fn main() -> i64 { return f() }
 ",
     );
 }
+
