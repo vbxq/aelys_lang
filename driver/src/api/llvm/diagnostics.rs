@@ -154,9 +154,13 @@ pub(super) fn duplicate_symbol_errors_to_error(
             if second_span != first_span {
                 diag.add_secondary_label(source.clone(), second_span, Some(second_hint));
             }
-            diag.add_help(
-                "rename one of them; nested functions do not get separate symbols yet".to_string(),
-            );
+            let help = if dup.symbol.starts_with("__mono_") {
+                "rename one of them; a generic instance is named from the function name and its \
+                 type arguments joined by `_`, so two different pairs can produce one name"
+            } else {
+                "rename one of them; nested functions do not get separate symbols yet"
+            };
+            diag.add_help(help.to_string());
             diag
         })
         .collect();
@@ -683,3 +687,128 @@ fn native_entry_help(message: &str) -> Option<String> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aelys_air::symbols::DuplicateSymbol;
+
+    fn stack(src: &str) -> (aelys_sema::TypedProgram, aelys_air::AirProgram, Arc<Source>) {
+        let source = Source::new("<unit>", src);
+        let typed = super::super::compile_to_typed_ast(src).expect("fixture must type-check");
+        let air = match aelys_air::lower::try_lower(&typed) {
+            Ok(air) => air,
+            Err(_) => panic!("fixture must lower"),
+        };
+        (typed, air, source)
+    }
+
+    fn render(dup: DuplicateSymbol, src: &str) -> String {
+        let (typed, air, source) = stack(src);
+        duplicate_symbol_errors_to_error(vec![dup], &typed, &air, source).to_string()
+    }
+
+// the source line a label points at, paired with `^` for the primary and `-` for the secondary
+    fn label_lines(rendered: &str) -> Vec<(usize, char)> {
+        let mut found = Vec::new();
+        let mut current = 0usize;
+        for line in rendered.lines() {
+            let Some((gutter, rest)) = line.split_once('|') else {
+                continue;
+            };
+            match gutter.trim().parse::<usize>() {
+                Ok(number) => current = number,
+                Err(_) => match rest.trim_start().chars().next() {
+                    Some(marker @ ('^' | '-')) => found.push((current, marker)),
+                    _ => {}
+                },
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn duplicate_symbol_renders_with_no_matching_typed_declaration() {
+        let rendered = render(
+            DuplicateSymbol {
+                symbol: "__mono_ghost_i64".to_string(),
+                spans: vec![None, None],
+            },
+            "fn main() -> i64 { return 0 }\n",
+        );
+        assert!(
+            rendered.contains("E0427") && rendered.contains("__mono_ghost_i64"),
+            "the zero-declaration fallback must still render a diagnostic, got:\n{rendered}"
+        );
+        assert_eq!(
+            label_lines(&rendered),
+            vec![(1, '^')],
+            "both labels fall to the program anchor, so exactly one is drawn, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("type arguments joined by"),
+            "a mangled symbol must not be explained as a nested function, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn duplicate_symbol_renders_with_one_matching_typed_declaration() {
+        let rendered = render(
+            DuplicateSymbol {
+                symbol: "solo".to_string(),
+                spans: vec![None, None],
+            },
+            "fn solo() -> i64 { return 1 }\nfn main() -> i64 { return solo() }\n",
+        );
+        assert!(
+            rendered.contains("E0427") && rendered.contains("solo"),
+            "the one-declaration fallback must still render a diagnostic, got:\n{rendered}"
+        );
+        assert_eq!(
+            label_lines(&rendered),
+            vec![(1, '^'), (2, '-')],
+            "the declared site draws the primary and the anchor draws the secondary, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("nested functions do not get separate symbols yet"),
+            "a bare symbol keeps the nested-function help, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn duplicate_symbol_renders_both_labels_from_the_air_spans() {
+        let src = "fn one() -> i64 { return 1 }\nfn two() -> i64 { return 2 }\nfn main() -> i64 { return one() + two() }\n";
+        let (typed, air, source) = stack(src);
+        let spans: Vec<Option<aelys_air::Span>> = air
+            .functions
+            .iter()
+            .filter(|function| function.name == "one" || function.name == "two")
+            .map(|function| function.span)
+            .collect();
+        assert_eq!(spans.len(), 2, "the fixture must supply two air spans");
+        let rendered = duplicate_symbol_errors_to_error(
+            vec![DuplicateSymbol {
+                symbol: "__mono_ghost_i64".to_string(),
+                spans,
+            }],
+            &typed,
+            &air,
+            source,
+        )
+        .to_string();
+        assert!(
+            rendered.contains("E0427") && rendered.contains("__mono_ghost_i64"),
+            "the air-span fallback must render a diagnostic, got:\n{rendered}"
+        );
+        assert_eq!(
+            label_lines(&rendered),
+            vec![(1, '^'), (2, '-')],
+            "with no typed declaration both labels come from the air spans, got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("inside `"),
+            "an air-span label has no parent to name, got:\n{rendered}"
+        );
+    }
+}
+
