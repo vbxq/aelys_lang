@@ -47,7 +47,8 @@ pub fn check_program(bir: &BirProgram) -> BirCheck {
     if bir.bodies.iter().any(|b| b.declared_nogc) {
         let effects = super::effects::effect_summaries(bir);
         for body in &bir.bodies {
-            if body.declared_nogc && !effects.get(&body.name).map_or(true, |e| e.is_nogc()) {
+            // a body with no summary is unproven, not proven clean, so it is rejected
+            if body.declared_nogc && !effects.get(&body.name).is_some_and(|e| e.is_nogc()) {
                 errors.push(nogc_diagnostic(bir, &effects, body));
             }
         }
