@@ -577,10 +577,9 @@ stored inline and are never shared.",
         code: "E0427",
         title: "two functions compile to the same symbol",
         explanation: "\
-A function's symbol is its bare name, whatever scope it was declared in.
-Two declarations that share a name therefore share a symbol, and the
-backend keeps only one body for it: every call to either reaches whichever
-one was emitted.
+An ordinary function's symbol is its bare name, whatever scope it was
+declared in. Two declarations that land on one symbol share a single
+emitted body, and every call to either reaches whichever one was emitted.
 
     fn outer() -> i64 {
         fn dup() -> i64 { return 1 }
@@ -591,10 +590,20 @@ one was emitted.
         return dup()
     }
 
+A generic instance is named from the function name and the type arguments
+it was instantiated with, joined by `_`, so two functions that share no
+name at all can still land on one symbol:
+
+    struct B { v: i64 }
+    struct A_B { v: i64 }
+    fn f<T>(x: T) -> i64 { return 1 }     // at T = A_B
+    fn f_A<T>(x: T) -> i64 { return 2 }   // at T = B
+// e0427, both are `__mono_f_a_b`
+
 `main` counts here too, because it is emitted as `__aelys_main`.
 
-Nested functions do not get scope-qualified symbols yet, so the fix is to
-rename one of them.",
+Nested functions do not get scope-qualified symbols yet, and generic
+instances are not disambiguated, so the fix is to rename one of them.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -861,3 +870,4 @@ pub fn lookup(code: &str) -> Option<&'static DiagnosticInfo> {
 pub fn all_codes() -> &'static [DiagnosticInfo] {
     REGISTRY
 }
+
