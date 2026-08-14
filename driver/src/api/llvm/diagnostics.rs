@@ -393,7 +393,7 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         ),
     };
 
-    let clamp = matches!(code, "E0728" | "E0729" | "E0730" | "E0731");
+    let clamp = matches!(code, "E0418" | "E0728" | "E0729" | "E0730" | "E0731");
     let cut = |span| {
         if clamp {
             first_line_only(source.as_ref(), span)
