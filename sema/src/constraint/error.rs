@@ -3,7 +3,6 @@ use crate::types::{InferType, TypeVarId};
 use aelys_syntax::Span;
 use std::fmt;
 
-/// Structured fix suggestion attached to a TypeError
 #[derive(Debug, Clone)]
 pub struct TypeErrorSuggestion {
     pub message: String,
@@ -11,79 +10,68 @@ pub struct TypeErrorSuggestion {
     pub new_text: String,
 }
 
-/// Type error during inference
 #[derive(Debug, Clone)]
 pub struct TypeError {
     pub kind: TypeErrorKind,
     pub span: Span,
     pub reason: ConstraintReason,
-    /// Additional source locations with explanatory labels
     pub secondary_spans: Vec<(Span, String)>,
-    /// Inline help text (rendered as `= help:`)
     pub help: Option<String>,
-    /// Structured fix suggestion (rendered as `help:` with code diff)
     pub suggestion: Option<TypeErrorSuggestion>,
 }
 
 #[derive(Debug, Clone)]
 pub enum TypeErrorKind {
-    /// Two types could not be unified
     Mismatch {
         expected: InferType,
         found: InferType,
     },
-    /// Infinite type (occurs check failed)
     InfiniteType {
         var: TypeVarId,
         ty: InferType,
     },
-    /// Type is not one of the expected options
     NotOneOf {
         ty: InferType,
         options: Vec<InferType>,
     },
-    /// Arity mismatch in function call
     ArityMismatch {
         expected: usize,
         found: usize,
     },
-    /// Tried to call a non-function
+    /// a shared borrow reached a position requiring an exclusive one
+    RefMutability {
+        found: InferType,
+        required: InferType,
+    },
     NotCallable {
         ty: InferType,
     },
-    /// Undefined variable
+    /// undefined variable
     UndefinedVariable {
         name: String,
     },
-    /// Undefined function
+    /// undefined function
     UndefinedFunction {
         name: String,
     },
-    /// Invalid field/member access
     MemberAccess {
         message: String,
     },
-    /// Recursion depth limit exceeded in type inference
     RecursionLimit,
-    /// Assignment to an immutable variable
     AssignToImmutable {
         name: String,
         binding_span: Option<Span>,
     },
-    /// Assignment to a loop-controlled variable
     AssignToLoopVariable {
         name: String,
     },
-    // always rendered with the stable [rc-stage1] marker, which the tests assert on
     RcOutOfSurface {
         detail: String,
     },
     VecOutOfSurface {
         detail: String,
     },
-    // for-each over a vec has no lowering arm, so it is rejected until the buffer-iteration path exists
     VecForeachUnsupported,
-    // a slice form whose lowering has no base offset or no derivable length
     SliceFormUnsupported {
         detail: String,
     },
@@ -104,8 +92,8 @@ pub enum TypeErrorKind {
     },
     SharedMut {
         what: String,
+        view: Option<InferType>,
     },
-    // a reference formed or returned inside a closure body has no bir body to check it
     ClosureRefUnchecked {
         what: String,
     },
@@ -152,6 +140,13 @@ impl fmt::Display for TypeError {
                     f,
                     "type mismatch: expected {}, found {} ({})",
                     expected, found, self.reason
+                )
+            }
+            TypeErrorKind::RefMutability { found, required } => {
+                write!(
+                    f,
+                    "cannot use {} where {} is required ({})",
+                    found, required, self.reason
                 )
             }
             TypeErrorKind::InfiniteType { var, ty } => {
@@ -212,7 +207,24 @@ impl fmt::Display for TypeError {
                 "[no-place] {what} denotes no storage, so it has no address. bind it to a name \
                  first and use that binding"
             ),
-            TypeErrorKind::SharedMut { what } => write!(
+            TypeErrorKind::SharedMut {
+                what,
+                view: Some(view),
+            } => {
+                let mutable = match view {
+                    InferType::Slice { elem, .. } => InferType::Slice {
+                        elem: elem.clone(),
+                        mutable: true,
+                    },
+                    other => other.clone(),
+                };
+                write!(
+                    f,
+                    "[shared-mut] {what} writes through a shared `{view}`, which would break `mut \
+                     XOR shared`. declare the slice `{mutable}`, or take it from a `mut` binding"
+                )
+            }
+            TypeErrorKind::SharedMut { what, view: None } => write!(
                 f,
                 "[shared-mut] {what} writes through a shared `&`, which would break `mut XOR \
                  shared`. take the reference with `&mut` instead"
@@ -233,9 +245,9 @@ impl fmt::Display for TypeError {
             TypeErrorKind::MutIndexRefUnsupported => write!(
                 f,
                 "[mut-index-ref] a mutable reference through an element or field projection is \
-                 not supported yet; the place address works for a unique local, but a shared Vec \
-                 buffer is not proven unique at borrow formation. write `v[i] = x` or `p.f = x`, \
-                 or take `&mut` of the whole binding"
+                 not supported yet; the refusal matches the shape of the operand and reads no \
+                 type, so it covers every base alike. write `v[i] = x` or `p.f = x`, or take \
+                 `&mut` of the whole binding"
             ),
             TypeErrorKind::MutRefImmutableBinding { name } => write!(
                 f,
@@ -388,8 +400,15 @@ impl TypeError {
     }
 
     pub fn shared_mut(what: impl Into<String>, span: Span) -> Self {
+        Self::shared_mut_view(what, None, span)
+    }
+
+    pub fn shared_mut_view(what: impl Into<String>, view: Option<InferType>, span: Span) -> Self {
         TypeError {
-            kind: TypeErrorKind::SharedMut { what: what.into() },
+            kind: TypeErrorKind::SharedMut {
+                what: what.into(),
+                view,
+            },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
@@ -513,7 +532,6 @@ impl TypeError {
         }
     }
 
-    // a `nogc fn` type is only accepted as a bare immutable fn parameter
     pub fn nogc_out_of_position(span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::NogcOutOfPosition {
@@ -762,3 +780,4 @@ impl TypeError {
         }
     }
 }
+
