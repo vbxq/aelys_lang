@@ -7,8 +7,6 @@ use aelys_syntax::{Expr, ExprKind, Span, TypeAnnotation};
 impl TypeInference {
     fn reject_rc_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
         for elem in elements {
-            // contains_rc is blind to a struct that holds an Rc, contains_rc_nominal
-            // resolves it through the type table. keep both, the blind one is cheap
             if elem.ty.is_rc()
                 || elem.ty.contains_rc()
                 || self.type_table.contains_rc_nominal(&elem.ty)
@@ -26,7 +24,6 @@ impl TypeInference {
     }
 
     // same hazard one container down: an aggregate element that owns a vec buffer is copied
-    // flat, so both copies would point at one buffer with no retain
     fn reject_vec_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
         for elem in elements {
             if self.type_table.contains_vec_by_value(&elem.ty) {
@@ -51,8 +48,6 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
 
-        // guard the element values, not just the let: `return [a, b]` builds the array
-        // inline and would release the Rc while the returned array still points at it
         self.reject_rc_aggregate_elements(&typed_elements, "array literal");
         self.reject_vec_aggregate_elements(&typed_elements, "array literal");
 
@@ -95,7 +90,6 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-        // Extract const size for the array length
         let array_len = match &typed_size.kind {
             TypedExprKind::Int(n) if *n >= 0 => Some(*n as u64),
             _ => None,
@@ -157,9 +151,6 @@ impl TypeInference {
 
         let (elem_ty, resolved_elem) = if let Some(ann) = element_type {
             let ty = self.type_from_annotation(ann);
-            // verifies elements of vec<T>[...]
-            // TODO: what if the programmer want to mix up data in Vec
-            // we should probably allow that at some point, make it Dynamic ?
             for elem in &mut typed_elements {
                 self.try_narrow_literal(elem, &ty);
                 self.constraints.push(Constraint::equal(
@@ -212,7 +203,6 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-        // determine element type for error recovery, but actual error reporting happens post-substitution in validate.rs to avoid duplicate diagnostics
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
@@ -291,13 +281,11 @@ impl TypeInference {
             ));
         }
 
-        // actual error reporting non-assignable types happens post-substitution in validate.rs to avoid duplicate diagnostics.
         match &typed_object.ty {
             InferType::Array(elem_ty, _)
             | InferType::Vec(elem_ty)
             | InferType::Slice { elem: elem_ty, .. } => {
                 self.try_narrow_literal(&mut typed_value, elem_ty);
-                // Implicit numeric widening for index assignment
                 if typed_value.ty != **elem_ty && typed_value.ty.can_implicit_widen_to(elem_ty) {
                     let vspan = typed_value.span;
                     let original = std::mem::replace(
@@ -317,7 +305,7 @@ impl TypeInference {
                         span: vspan,
                     };
                 }
-                self.constraints.push(Constraint::equal(
+                self.constraints.push(Constraint::flows(
                     typed_value.ty.clone(),
                     (**elem_ty).clone(),
                     _span,
@@ -325,8 +313,6 @@ impl TypeInference {
                 ));
             }
             InferType::String | InferType::Dynamic | InferType::Var(_) | _ => {
-                // String, Dynamic, Var: permissive during inference
-                // other non-indexable types caught by validate.rs
             }
         }
 
@@ -359,6 +345,10 @@ impl TypeInference {
         };
 
         let typed_range = self.infer_slice_range(range);
+        let mutable = {
+            let env = &self.env;
+            crate::place_spine::place_is_writable(&typed_object, &|n: &str| env.is_mutable(n))
+        };
 
         (
             TypedExprKind::Slice {
@@ -367,7 +357,7 @@ impl TypeInference {
             },
             InferType::Slice {
                 elem: Box::new(elem_ty),
-                mutable: false,
+                mutable,
             },
         )
     }
