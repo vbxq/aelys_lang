@@ -20,7 +20,7 @@ impl TypeInference {
                 self.errors
                     .push(TypeError::undefined_variable(name.to_string(), span));
 
-                // register the variable with Dynamic type to prevent repeated "undefined variable" errors for each subsequent use
+                // register the variable with dynamic type to prevent repeated "undefined variable" errors for each subsequent use
                 let recovery_ty = InferType::Dynamic;
                 self.env.define_local(name.to_string(), recovery_ty.clone());
 
@@ -30,11 +30,6 @@ impl TypeInference {
         (TypedExprKind::Identifier(name.to_string()), ty)
     }
 
-    /// Instantiate type parameter placeholders in an InferType.
-    ///
-    /// Replaces `Struct("T")` (where T is a known type param name) with fresh type vars.
-    /// Uses a shared mapping so the same param name maps to the same fresh var within
-    /// a single instantiation context.
     pub(super) fn instantiate_enum_type_param(
         &mut self,
         ty: &InferType,
@@ -104,7 +99,6 @@ impl TypeInference {
         args: &[Expr],
         span: Span,
     ) -> (TypedExprKind, InferType) {
-        // a `::` path always parses as an EnumVariant, so the Rc and Vec builtins are
         // intercepted here, before the enum lookup that would never find them
         if enum_name == "Rc" && variant == "new" {
             return self.infer_rc_new(args, span);
@@ -112,8 +106,6 @@ impl TypeInference {
         if enum_name == "Rc" && variant == "get" {
             return self.infer_rc_get(args, span);
         }
-        // null is the only way to build cyclic data, since Rc<Node> has no base case.
-        // nothing checks for null yet, so Rc::get(Rc::null()) derefs NULL
         if enum_name == "Rc" && variant == "null" {
             return self.infer_rc_null(args, span);
         }
@@ -150,7 +142,6 @@ impl TypeInference {
                             help: None,
                             suggestion: None,
                         });
-                        // still produce a typed expression for recovery
                         let typed_args: Vec<TypedExpr> =
                             args.iter().map(|a| self.infer_expr(a)).collect();
                         return (
@@ -164,11 +155,9 @@ impl TypeInference {
                         );
                     }
 
-                    // For generic enums, instantiate type params with fresh type vars
                     let is_generic = !def.type_params.is_empty();
                     let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
 
-                    // Type-check each argument against the expected data type
                     let mut typed_args = Vec::with_capacity(args.len());
                     for (i, arg_expr) in args.iter().enumerate() {
                         let mut typed_arg = self.infer_expr(arg_expr);
@@ -180,7 +169,6 @@ impl TypeInference {
                             &format!("payload {i} of enum variant `{enum_name}::{variant}`"),
                         );
 
-                        // Instantiate type params in the expected type if this is a generic enum
                         let expected_ty = if is_generic {
                             self.instantiate_enum_type_param(
                                 &v.data[i],
@@ -191,10 +179,8 @@ impl TypeInference {
                             v.data[i].clone()
                         };
 
-                        // Try literal narrowing first
                         self.try_narrow_literal(&mut typed_arg, &expected_ty);
 
-                        // Implicit numeric widening for enum variant args
                         if typed_arg.ty != expected_ty
                             && typed_arg.ty.can_implicit_widen_to(&expected_ty)
                         {
@@ -217,8 +203,7 @@ impl TypeInference {
                             };
                         }
 
-                        // Push a constraint: arg type == expected field type
-                        self.constraints.push(Constraint::equal(
+                        self.constraints.push(Constraint::flows(
                             typed_arg.ty.clone(),
                             expected_ty,
                             arg_expr.span,
@@ -231,11 +216,7 @@ impl TypeInference {
                         typed_args.push(typed_arg);
                     }
 
-                    // Build the result type with resolved type args so that AIR
                     // lowering can pre-mangle the enum name for monomorphization.
-                    // For generic enums, this uses the fresh type vars from the
-                    // mapping (populated during arg inference above). For
-                    // non-generic enums, type_args stays empty.
                     let type_args: Vec<InferType> = if is_generic {
                         def.type_params
                             .iter()
@@ -382,7 +363,6 @@ impl TypeInference {
         )
     }
 
-    // the inner type is a fresh var so the destination field's Rc<inner> unifies it
     fn infer_rc_null(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
         if !args.is_empty() {
             self.errors.push(TypeError::rc_out_of_surface(
@@ -412,7 +392,6 @@ impl TypeInference {
         )
     }
 
-    // the element type is a fresh var, unified later with the annotation or first use
     fn infer_vec_new(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
         if !args.is_empty() {
             self.errors.push(TypeError::rc_out_of_surface(
@@ -464,7 +443,7 @@ impl TypeInference {
 
         match &typed_vec.ty {
             InferType::Vec(inner) => {
-                self.constraints.push(Constraint::equal(
+                self.constraints.push(Constraint::flows(
                     typed_elem.ty.clone(),
                     (**inner).clone(),
                     args[1].span,
@@ -472,7 +451,6 @@ impl TypeInference {
                 ));
             }
             InferType::Var(_) | InferType::Dynamic => {
-                // stay permissive here, a non-Vec target is caught by validation
                 self.constraints.push(Constraint::equal(
                     typed_vec.ty.clone(),
                     InferType::Vec(Box::new(typed_elem.ty.clone())),
@@ -497,9 +475,6 @@ impl TypeInference {
             }
         }
 
-        // an element carrying an Rc would be memcpy'd by the copy-on-write path without a
-        // retain, so it must be refused; contains_rc_nominal resolves through the type
-        // table, unlike contains_rc which misses a struct holding an Rc field
         if self.type_table.contains_rc_nominal(&typed_elem.ty) {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(
