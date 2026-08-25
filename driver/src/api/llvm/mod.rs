@@ -129,8 +129,7 @@ fn lower_file_to_air_with_source(
             )
         }
     })?;
-    // mono is function-destroying as well as function-creating: two block-nested `fn g<T>` in
-    // different parents mangle alike and are deduped, so the collision has to be caught before it
+    // mono is function-destroying as well as function-creating: two block-nested `fn g<t>` in
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
         return Err(duplicate_symbol_errors_to_error(
@@ -144,8 +143,7 @@ fn lower_file_to_air_with_source(
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
-// mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
-// symbol that no earlier gate can see; this is the only guard for that
+    // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
         return Err(duplicate_symbol_errors_to_error(
@@ -155,7 +153,6 @@ fn lower_file_to_air_with_source(
             src.clone(),
         ));
     }
-    // program: before this point a generic body still hides its instantiations
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
         return Err(vec_surface_errors_to_error(errors, &air, src.clone()));
     }
@@ -171,7 +168,6 @@ fn lower_file_to_air_with_source(
         ));
     }
 
-    // must run after compute_layouts, it reads the filled field offsets
     air.rc_type_table = aelys_air::rc_types::collect_rc_types(&air).map_err(|e| {
         backend_diagnostic_error(
             src.clone(),
@@ -185,8 +181,7 @@ fn lower_file_to_air_with_source(
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
     aelys_air::passes::dead_locals::eliminate_dead_locals(&mut air);
 
-    // must run after copy_elim/dead_locals to see the final call sites; gated at >= Basic
-    // only to keep the -O0 baseline byte-identical, never for soundness
+    // only to keep the -o0 baseline byte-identical, never for soundness
     if opt_level >= OptimizationLevel::Basic {
         aelys_air::passes::rc_elision::eliminate_redundant_rc(&mut air);
     }
@@ -226,7 +221,6 @@ fn lower_file_to_air_with_source(
     })
 }
 
-/// proves a claim about compilation, not about a value. this is the only oracle in the tree
 /// that can execute an air shape the surface language cannot yet produce, which is exactly
 pub fn compile_air_program_to_executable(
     path: &Path,
@@ -248,7 +242,6 @@ pub fn compile_file_with_llvm(
     opt_level: OptimizationLevel,
     emit_llvm_ir: bool,
 ) -> Result<(), AelysError> {
-    // this 3-arg entry point links the default runtime variant, which is real refcounting
     compile_file_with_llvm_variant(path, opt_level, emit_llvm_ir, RuntimeVariant::default())
 }
 
