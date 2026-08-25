@@ -86,7 +86,7 @@ fn main() -> i64 {
 }
 
 #[test]
-fn write_through_a_vec_slice_is_rejected_at_every_opt_level() {
+fn write_through_a_vec_slice_lands_at_every_opt_level() {
     let src = r#"
 fn main() -> i64 {
     let mut v = vec[1, 2, 3]
@@ -95,12 +95,45 @@ fn main() -> i64 {
     return v[0]
 }
 "#;
+    accepts(src);
+    for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
+        if let Some(code) = run_exit(src, level) {
+            assert_eq!(code, 99, "the write must land in `v` at {level:?}");
+        }
+    }
+    let aliased = r#"
+fn main() -> i64 {
+    let mut v = vec[1, 2, 3]
+    let w: Vec<i64> = v
+    let s = v[0..2]
+    s[0] = 99
+    return v[0] - w[0]
+}
+"#;
+    accepts(aliased);
+    for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
+        if let Some(code) = run_exit(aliased, level) {
+            assert_eq!(code, 98, "the alias must still read 1 at {level:?}");
+        }
+    }
+}
+
+#[test]
+fn write_through_a_shared_view_is_rejected_at_every_opt_level() {
+    let src = r#"
+fn main() -> i64 {
+    let v = vec[1, 2, 3]
+    let s = v[0..2]
+    s[0] = 99
+    return v[0]
+}
+"#;
     for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
         let err = reject_at(src, level);
-        assert!(err.contains("[E0426]"), "must reject at {level:?}: {err}");
+        assert!(err.contains("[E0422]"), "must reject at {level:?}: {err}");
         assert!(
-            err.contains("[slice-mut]"),
-            "must carry the slice-mut marker: {err}"
+            err.contains("[shared-mut]"),
+            "must carry the shared-mut marker: {err}"
         );
     }
 }
@@ -263,7 +296,6 @@ fn main() -> i64 {
 
 #[test]
 fn mut_ref_into_struct_field_is_rejected() {
-    // which it did, while silently dropping both writes into stack temps: `p.x` stayed 1 and `p.y`
     let err = reject(
         r#"
 struct Point { x: i64, y: i64 }
@@ -345,3 +377,4 @@ fn main() -> i64 {
         );
     }
 }
+
