@@ -1,5 +1,3 @@
-// move/init analysis: forward fixpoint over a 3-point-plus-bottom lattice, then a post-fixpoint
-// diagnostics pass over converged in-states, then drop-elaboration producing the point-keyed plan.
 
 use std::collections::HashMap;
 
@@ -10,7 +8,6 @@ use super::*;
 
 pub struct BirCheck {
     pub errors: Vec<BirDiagnostic>,
-    // emission-point span -> decl_spans to drop there, one entry per point-sensitive drop marker
     pub drops: HashMap<DropKey, Vec<DropKey>>,
 }
 
@@ -38,16 +35,13 @@ pub fn check_program(bir: &BirProgram) -> BirCheck {
     }
     // origin summaries + the d1/floor return-escape diagnostics
     let summaries = super::origins::summaries(bir, &mut errors);
-    let slice_writes = super::origins::slice_param_writes(bir);
-    errors.extend(super::loans::check(bir, &summaries, &slice_writes));
+    errors.extend(super::loans::check(bir, &summaries));
     for body in &bir.bodies {
         errors.extend(body.build_errors.iter().cloned());
     }
-    // body whose inferred effects reach managed memory is rejected. summaries computed once; the
     if bir.bodies.iter().any(|b| b.declared_nogc) {
         let effects = super::effects::effect_summaries(bir);
         for body in &bir.bodies {
-            // a body with no summary is unproven, not proven clean, so it is rejected
             if body.declared_nogc && !effects.get(&body.name).is_some_and(|e| e.is_nogc()) {
                 errors.push(nogc_diagnostic(bir, &effects, body));
             }
