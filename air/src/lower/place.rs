@@ -1,14 +1,19 @@
 use super::LoweringContext;
 use crate::*;
-use aelys_sema::{TypedExpr, TypedExprKind, deref_is_shared};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, deref_is_shared};
 
-/// where a place chain bottoms out. `pointee` means the chain was entered through a pointer
-/// value, so the storage it names is not a local of this function.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub(super) enum PlaceRoot {
     Local(LocalId),
     Global(String),
     Pointee,
+}
+
+/// managed container owes a cow detach before the address exists. it is decided by the
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum PlaceMode {
+    Read,
+    Store,
 }
 
 pub(super) struct Addr {
@@ -22,11 +27,14 @@ pub(super) struct Addr {
 }
 
 impl<'a> LoweringContext<'a> {
-    /// the canonical place-address computation for user places. `none` iff the expression
     pub(super) fn place_addr(&mut self, e: &TypedExpr) -> Option<Addr> {
+        self.place_addr_mode(e, PlaceMode::Read)
+    }
+
+    pub(super) fn place_addr_mode(&mut self, e: &TypedExpr, mode: PlaceMode) -> Option<Addr> {
         let sp = Some(self.span(&e.span));
         match &e.kind {
-            TypedExprKind::Grouping(inner) => self.place_addr(inner),
+            TypedExprKind::Grouping(inner) => self.place_addr_mode(inner, mode),
 
             TypedExprKind::Identifier(name) => {
                 if let Some(id) = self.lookup_local(name) {
@@ -58,7 +66,6 @@ impl<'a> LoweringContext<'a> {
                 }
             }
 
-            // the loaded pointee would address a stack temp
             TypedExprKind::Deref(inner) => {
                 let op = self.lower_expr(inner);
                 let ptr_ty = self.lower_type_from_infer(&inner.ty);
@@ -91,7 +98,7 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Member { object, member } => {
-                let base = self.projection_base(object)?;
+                let base = self.projection_base_mode(object, mode)?;
                 let pointee = self.lower_type_from_infer(&e.ty);
                 let ptr = self.emit_addr_of(Place::Field(base.ptr, member.clone()), &pointee, sp);
                 Some(Addr {
@@ -104,8 +111,11 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::Index { object, index } => {
                 let idx = self.lower_expr(index);
-                let base = self.projection_base(object)?;
+                let base = self.projection_base_mode(object, mode)?;
                 let pointee = self.lower_type_from_infer(&e.ty);
+                if mode == PlaceMode::Store && Self::roots_a_vec(&object.ty) {
+                    self.emit_cow_detach(base.ptr, sp);
+                }
                 let ptr = self.emit_addr_of(Place::Index(base.ptr, idx), &pointee, sp);
                 Some(Addr {
                     ptr,
@@ -119,8 +129,15 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// pointer an `rc` handle, a reference, an `rc`-typed field the projection auto-derefs
     pub(super) fn projection_base(&mut self, object: &TypedExpr) -> Option<Addr> {
+        self.projection_base_mode(object, PlaceMode::Read)
+    }
+
+    pub(super) fn projection_base_mode(
+        &mut self,
+        object: &TypedExpr,
+        mode: PlaceMode,
+    ) -> Option<Addr> {
         if let AirType::Ptr(inner) = self.lower_type_from_infer(&object.ty) {
             let ptr_ty = AirType::Ptr(inner.clone());
             let op = self.lower_expr(object);
@@ -132,10 +149,28 @@ impl<'a> LoweringContext<'a> {
                 shared: deref_is_shared(&object.ty),
             });
         }
-        self.place_addr(object)
+        self.place_addr_mode(object, mode)
     }
 
-    /// only reason it is not `place_addr(<the capture identifier>)` is that the binding it
+    /// the buffer must be unique *before* the element address exists: the detach repoints
+    pub(super) fn emit_cow_detach(&mut self, vec_addr: LocalId, sp: Option<Span>) {
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_detach".to_string()),
+                args: vec![Operand::Copy(vec_addr)],
+            },
+            sp,
+        );
+    }
+
+    pub(super) fn roots_a_vec(ty: &InferType) -> bool {
+        let mut t = ty;
+        while let InferType::Ref { referent, .. } = t {
+            t = referent;
+        }
+        matches!(t, InferType::Vec(_))
+    }
+
     pub(super) fn addr_of_env_field(
         &mut self,
         env: LocalId,
@@ -145,8 +180,6 @@ impl<'a> LoweringContext<'a> {
         self.emit_addr_of(Place::Field(env, field.to_string()), pointee, None)
     }
 
-    /// a capture reads and writes through the env-field pointer the prologue computed, so its
-    /// address is that pointer, with no second addressof.
     pub(super) fn capture_addr(&mut self, cap_ptr: LocalId, pointee: AirType) -> Addr {
         Addr {
             ptr: cap_ptr,
@@ -156,7 +189,6 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    /// the only other entry point: the address of a temp this lowering just allocated. its
     pub(super) fn addr_of_own_temp(
         &mut self,
         t: LocalId,
@@ -178,3 +210,4 @@ impl<'a> LoweringContext<'a> {
         tmp
     }
 }
+
