@@ -8,23 +8,56 @@ use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_da
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
-// an aelys callee always takes env as its first parameter, so a fat-pointer call passes
-// the captured env and every other aelys call passes null. extern, builtin and ad-hoc
-// functions get no env at all
 
 impl<'a> FunctionCodegen<'a> {
+    /// air lowering always hands the detach the address of the vec, so the argument's own
+    fn generate_vec_detach_call(
+        &mut self,
+        args: &[Operand],
+    ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        let [Operand::Copy(local) | Operand::Move(local)] = args else {
+            return Err(CodegenError::UnsupportedInstruction(
+                "__aelys_vec_detach expects exactly one local operand naming a vec address"
+                    .to_string(),
+            ));
+        };
+        let inner = match self.local_air_type(*local)? {
+            AirType::Ptr(outer) => match outer.as_ref() {
+                AirType::Vec(inner) => (**inner).clone(),
+                other => {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "__aelys_vec_detach argument points at {other:?}, not a Vec"
+                    )));
+                }
+            },
+            other => {
+                return Err(CodegenError::UnsupportedType(format!(
+                    "__aelys_vec_detach argument has type {other:?}, not a pointer to a Vec"
+                )));
+            }
+        };
+        self.emit_vec_detach(*local, &inner, true)?;
+        Ok(None)
+    }
+
     pub(crate) fn generate_call(
         &mut self,
         callee: &Callee,
         args: &[Operand],
         expected_ret: Option<&AirType>,
     ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        // given as `void(ptr,ptr,i64)`, which is push's abi, and it loses the inline `ugt 1`
+        if let Callee::Named(name) = callee {
+            if name == "__aelys_vec_detach" {
+                return self.generate_vec_detach_call(args);
+            }
+        }
+
         let mut arg_values = Vec::with_capacity(args.len());
         for arg in args {
             arg_values.push(self.generate_operand(arg)?);
         }
 
-        // AIR has no first-class global operand yet, so globals arrive as get/set calls
         if let Callee::Named(name) = callee {
             if let Some(global_name) = name.strip_prefix(GLOBAL_GET_PREFIX) {
                 return self.generate_global_get(global_name, args);
@@ -52,8 +85,7 @@ impl<'a> FunctionCodegen<'a> {
                 );
             }
 
-            // intercept here: resolve_callee would synthesize a struct-by-value signature
-            // that does not match the C runtime ABI and fails to link
+            // that does not match the c runtime abi and fails to link
             if name == "__aelys_to_string" {
                 if args.len() != 1 {
                     return Err(CodegenError::UnsupportedInstruction(
@@ -73,8 +105,6 @@ impl<'a> FunctionCodegen<'a> {
                 return Ok(Some(self.emit_str_concat(arg_values[0], arg_values[1])?));
             }
 
-            // force the exact void(ptr) signature instead of letting resolve_callee infer a
-            // pointer element type from the argument
             if name == "__aelys_rc_retain" || name == "__aelys_rc_release" {
                 if args.len() != 1 {
                     return Err(CodegenError::UnsupportedInstruction(format!(
@@ -97,8 +127,7 @@ impl<'a> FunctionCodegen<'a> {
                 return Ok(None);
             }
 
-            // the runtime needs the element size, which AIR cannot compute without program
-            // context, so recover T from the &v argument and splice the size in here
+            // the runtime needs the element size, which air cannot compute without program
             if name == "__aelys_vec_init" || name == "__aelys_vec_push" {
                 return self.generate_vec_runtime_call(name, args, &arg_values);
             }
@@ -314,7 +343,6 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         }
 
-        // println is void, but sema types it Dynamic and the AIR emits a value call, so
         // hand back a zero. the real fix is to type the bootstrap builtins as void in sema
         match expected_ret {
             None | Some(AirType::Void) => Ok(None),
@@ -343,7 +371,6 @@ impl<'a> FunctionCodegen<'a> {
                 self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
             }
             AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 => {
-                // zero-extend, the formatter is signed
                 let int_val = value.into_int_value();
                 let i64_val = if int_val.get_type() == self.context.i64_type() {
                     int_val
@@ -634,7 +661,6 @@ impl<'a> FunctionCodegen<'a> {
         args: &[Operand],
         arg_values: &[BasicValueEnum<'static>],
     ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
-        // arg0 is &v, typed Ptr(Vec(T)), which is where the element size comes from
         let vec_ptr_ty = self.operand_type(&args[0])?;
         let elem_ty = match &vec_ptr_ty {
             AirType::Ptr(inner) => match inner.as_ref() {
@@ -687,3 +713,4 @@ impl<'a> FunctionCodegen<'a> {
         Ok(None)
     }
 }
+
