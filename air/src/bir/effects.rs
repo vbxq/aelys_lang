@@ -55,6 +55,40 @@ const RANK_INTRINSIC: u8 = 1;
 const RANK_LITERAL: u8 = 2;
 const RANK_TYPE: u8 = 3;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Pos {
+    Value,
+    Base,
+}
+
+fn peels_to_vec(ty: &InferType) -> bool {
+    let mut t = ty;
+    while let InferType::Ref { referent, .. } = t {
+        t = referent;
+    }
+    matches!(t, InferType::Vec(_))
+}
+
+fn chain_crosses_vec(e: &TypedExpr) -> bool {
+    match &e.kind {
+        TypedExprKind::Grouping(inner) => chain_crosses_vec(inner),
+        TypedExprKind::Member { object, .. } => chain_crosses_vec(object),
+        TypedExprKind::Index { object, .. } | TypedExprKind::Slice { object, .. } => {
+            peels_to_vec(&object.ty) || chain_crosses_vec(object)
+        }
+        _ => false,
+    }
+}
+
+// fence hygiene rather than soundness: it keeps the effect system, and not e0412, holding a
+fn base_unless_inside_a_buffer(object: &TypedExpr) -> Pos {
+    if chain_crosses_vec(object) {
+        Pos::Value
+    } else {
+        Pos::Base
+    }
+}
+
 #[derive(Default)]
 struct Witness {
     rank: u8,
@@ -111,7 +145,7 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
 
 fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness) {
     match &stmt.kind {
-        TypedStmtKind::Expression(e) => walk_expr(e, tt, set, w),
+        TypedStmtKind::Expression(e) => walk_expr(e, tt, set, w, Pos::Value),
         TypedStmtKind::Let {
             name,
             initializer,
@@ -126,7 +160,7 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                     format!("the managed local `{}`", name),
                 );
             }
-            walk_expr(initializer, tt, set, w);
+            walk_expr(initializer, tt, set, w, Pos::Value);
         }
         TypedStmtKind::Block(stmts) => {
             for s in stmts {
@@ -138,14 +172,14 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             then_branch,
             else_branch,
         } => {
-            walk_expr(condition, tt, set, w);
+            walk_expr(condition, tt, set, w, Pos::Value);
             walk_stmt(then_branch, tt, set, w);
             if let Some(e) = else_branch {
                 walk_stmt(e, tt, set, w);
             }
         }
         TypedStmtKind::While { condition, body } => {
-            walk_expr(condition, tt, set, w);
+            walk_expr(condition, tt, set, w, Pos::Value);
             walk_stmt(body, tt, set, w);
         }
         TypedStmtKind::For {
@@ -155,20 +189,20 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             body,
             ..
         } => {
-            walk_expr(start, tt, set, w);
-            walk_expr(end, tt, set, w);
+            walk_expr(start, tt, set, w, Pos::Value);
+            walk_expr(end, tt, set, w, Pos::Value);
             if let Some(s) = step.as_ref().as_ref() {
-                walk_expr(s, tt, set, w);
+                walk_expr(s, tt, set, w, Pos::Value);
             }
             walk_stmt(body, tt, set, w);
         }
         TypedStmtKind::ForEach { iterable, body, .. } => {
-            walk_expr(iterable, tt, set, w);
+            walk_expr(iterable, tt, set, w, Pos::Value);
             walk_stmt(body, tt, set, w);
         }
         TypedStmtKind::Return(val) => {
             if let Some(e) = val {
-                walk_expr(e, tt, set, w);
+                walk_expr(e, tt, set, w, Pos::Value);
             }
         }
         TypedStmtKind::Break | TypedStmtKind::Continue => {}
@@ -179,8 +213,8 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
     }
 }
 
-fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness) {
-    if category(&expr.ty, tt) == Category::Managed {
+fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness, pos: Pos) {
+    if pos == Pos::Value && category(&expr.ty, tt) == Category::Managed {
         set.insert(Effect::Managed);
         let name = match &expr.kind {
             TypedExprKind::Identifier(n) => format!("the managed value `{}`", n),
@@ -201,7 +235,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             w.record(RANK_LITERAL, expr.span, "a format string".to_string());
             for part in parts {
                 if let TypedFmtStringPart::Expr(e) = part {
-                    walk_expr(e, tt, set, w);
+                    walk_expr(e, tt, set, w, Pos::Value);
                 }
             }
         }
@@ -215,33 +249,33 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 }
                 _ => {}
             }
-            walk_expr(left, tt, set, w);
-            walk_expr(right, tt, set, w);
+            walk_expr(left, tt, set, w, Pos::Value);
+            walk_expr(right, tt, set, w, Pos::Value);
         }
-        TypedExprKind::Unary { operand, .. } => walk_expr(operand, tt, set, w),
+        TypedExprKind::Unary { operand, .. } => walk_expr(operand, tt, set, w, Pos::Value),
         TypedExprKind::And { left, right } | TypedExprKind::Or { left, right } => {
-            walk_expr(left, tt, set, w);
-            walk_expr(right, tt, set, w);
+            walk_expr(left, tt, set, w, Pos::Value);
+            walk_expr(right, tt, set, w, Pos::Value);
         }
 
         TypedExprKind::Call { callee, args } => {
-            walk_expr(callee, tt, set, w);
+            walk_expr(callee, tt, set, w, Pos::Value);
             for a in args {
-                walk_expr(a, tt, set, w);
+                walk_expr(a, tt, set, w, Pos::Value);
             }
         }
 
-        TypedExprKind::Assign { value, .. } => walk_expr(value, tt, set, w),
-        TypedExprKind::Grouping(inner) => walk_expr(inner, tt, set, w),
+        TypedExprKind::Assign { value, .. } => walk_expr(value, tt, set, w, Pos::Value),
+        TypedExprKind::Grouping(inner) => walk_expr(inner, tt, set, w, pos),
 
         TypedExprKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            walk_expr(condition, tt, set, w);
-            walk_expr(then_branch, tt, set, w);
-            walk_expr(else_branch, tt, set, w);
+            walk_expr(condition, tt, set, w, Pos::Value);
+            walk_expr(then_branch, tt, set, w, Pos::Value);
+            walk_expr(else_branch, tt, set, w, Pos::Value);
         }
 
         TypedExprKind::LambdaInner { captures, .. } => {
@@ -250,33 +284,33 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 w.record(RANK_LITERAL, expr.span, "a capturing closure".to_string());
             }
         }
-        TypedExprKind::Lambda(inner) => walk_expr(inner, tt, set, w),
+        TypedExprKind::Lambda(inner) => walk_expr(inner, tt, set, w, Pos::Value),
 
-        TypedExprKind::Member { object, .. } => walk_expr(object, tt, set, w),
+        TypedExprKind::Member { object, .. } => walk_expr(object, tt, set, w, Pos::Base),
 
         TypedExprKind::ArrayLiteral { elements } => {
             for e in elements {
-                walk_expr(e, tt, set, w);
+                walk_expr(e, tt, set, w, Pos::Value);
             }
         }
         TypedExprKind::ArraySized { size, fill_value } => {
-            walk_expr(size, tt, set, w);
+            walk_expr(size, tt, set, w, Pos::Value);
             if let Some(fv) = fill_value {
-                walk_expr(fv, tt, set, w);
+                walk_expr(fv, tt, set, w, Pos::Value);
             }
         }
         TypedExprKind::VecLiteral { elements, .. } => {
             alloc_managed(set);
             w.record(RANK_LITERAL, expr.span, "a vec literal".to_string());
             for e in elements {
-                walk_expr(e, tt, set, w);
+                walk_expr(e, tt, set, w, Pos::Value);
             }
         }
 
         TypedExprKind::Index { object, index } => {
             set.insert(Effect::Panic);
-            walk_expr(object, tt, set, w);
-            walk_expr(index, tt, set, w);
+            walk_expr(object, tt, set, w, base_unless_inside_a_buffer(object));
+            walk_expr(index, tt, set, w, Pos::Value);
         }
         TypedExprKind::IndexAssign {
             object,
@@ -284,39 +318,67 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             value,
         } => {
             set.insert(Effect::Panic);
-            walk_expr(object, tt, set, w);
-            walk_expr(index, tt, set, w);
-            walk_expr(value, tt, set, w);
+            if peels_to_vec(&object.ty) || chain_crosses_vec(object) {
+                set.insert(Effect::Managed);
+                w.record(
+                    RANK_INTRINSIC,
+                    expr.span,
+                    "a store into a buffer that may be shared".to_string(),
+                );
+            }
+            walk_expr(object, tt, set, w, Pos::Base);
+            walk_expr(index, tt, set, w, Pos::Value);
+            walk_expr(value, tt, set, w, Pos::Value);
         }
         TypedExprKind::FieldAssign { object, value, .. } => {
-            walk_expr(object, tt, set, w);
-            walk_expr(value, tt, set, w);
+            if chain_crosses_vec(object) {
+                set.insert(Effect::Managed);
+                w.record(
+                    RANK_INTRINSIC,
+                    expr.span,
+                    "a store into a buffer that may be shared".to_string(),
+                );
+            }
+            walk_expr(object, tt, set, w, Pos::Base);
+            walk_expr(value, tt, set, w, Pos::Value);
         }
         TypedExprKind::Range { start, end, .. } => {
             if let Some(s) = start {
-                walk_expr(s, tt, set, w);
+                walk_expr(s, tt, set, w, Pos::Value);
             }
             if let Some(e) = end {
-                walk_expr(e, tt, set, w);
+                walk_expr(e, tt, set, w, Pos::Value);
             }
         }
         TypedExprKind::Slice { object, range } => {
             set.insert(Effect::Panic);
-            walk_expr(object, tt, set, w);
-            walk_expr(range, tt, set, w);
+            if matches!(expr.ty, InferType::Slice { mutable: true, .. })
+                && (peels_to_vec(&object.ty) || chain_crosses_vec(object))
+            {
+                set.insert(Effect::Managed);
+                w.record(
+                    RANK_INTRINSIC,
+                    expr.span,
+                    "a mutable view of a buffer that may be shared".to_string(),
+                );
+            }
+            walk_expr(object, tt, set, w, base_unless_inside_a_buffer(object));
+            walk_expr(range, tt, set, w, Pos::Value);
         }
-        TypedExprKind::Reference { operand, .. } => walk_expr(operand, tt, set, w),
-        TypedExprKind::Deref(inner) => walk_expr(inner, tt, set, w),
+        TypedExprKind::Reference { operand, .. } => {
+            walk_expr(operand, tt, set, w, base_unless_inside_a_buffer(operand))
+        }
+        TypedExprKind::Deref(inner) => walk_expr(inner, tt, set, w, Pos::Value),
         TypedExprKind::DerefAssign { target, value } => {
-            walk_expr(target, tt, set, w);
-            walk_expr(value, tt, set, w);
+            walk_expr(target, tt, set, w, Pos::Value);
+            walk_expr(value, tt, set, w, Pos::Value);
         }
         TypedExprKind::StructLiteral { fields, .. } => {
             for (_, v) in fields {
-                walk_expr(v, tt, set, w);
+                walk_expr(v, tt, set, w, Pos::Value);
             }
         }
-        TypedExprKind::Cast { expr: inner, .. } => walk_expr(inner, tt, set, w),
+        TypedExprKind::Cast { expr: inner, .. } => walk_expr(inner, tt, set, w, Pos::Value),
 
         TypedExprKind::EnumVariant {
             enum_name,
@@ -333,14 +395,14 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 );
             }
             for a in args {
-                walk_expr(a, tt, set, w);
+                walk_expr(a, tt, set, w, Pos::Value);
             }
         }
 
         TypedExprKind::Match { scrutinee, arms } => {
-            walk_expr(scrutinee, tt, set, w);
+            walk_expr(scrutinee, tt, set, w, Pos::Value);
             for arm in arms {
-                walk_expr(&arm.body, tt, set, w);
+                walk_expr(&arm.body, tt, set, w, Pos::Value);
             }
         }
 
@@ -350,14 +412,14 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             if let ResultAssertOnErr::Panic(_) = on_err {
                 set.insert(Effect::Panic);
             }
-            walk_expr(scrutinee, tt, set, w);
+            walk_expr(scrutinee, tt, set, w, Pos::Value);
         }
 
         TypedExprKind::Block { stmts, tail } => {
             for s in stmts {
                 walk_stmt(s, tt, set, w);
             }
-            walk_expr(tail, tt, set, w);
+            walk_expr(tail, tt, set, w, Pos::Value);
         }
     }
 }
@@ -444,7 +506,6 @@ pub struct Step {
     pub kind: StepKind,
 }
 
-// the e0727 witness, rebuilt after the fixpoint because the fixpoint iterates hash containers
 pub fn managed_chain<'a>(
     bir: &'a BirProgram,
     eff: &HashMap<String, EffectSet>,
@@ -559,3 +620,106 @@ fn next_managed_call<'a>(
     }
     best
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// why an index assignment through this base type cannot hide a store into a shared buffer.
+    #[derive(Debug, PartialEq, Eq)]
+    enum EdgeFive {
+        NotIndexable(&'static str),
+        StoreClauseFires,
+        ElementInheritsTheCategory,
+    }
+
+    fn how_edge_five_is_held(ty: &InferType) -> EdgeFive {
+        match ty {
+            InferType::I8
+            | InferType::I16
+            | InferType::I32
+            | InferType::I64
+            | InferType::U8
+            | InferType::U16
+            | InferType::U32
+            | InferType::U64
+            | InferType::F32
+            | InferType::F64
+            | InferType::Bool
+            | InferType::String
+            | InferType::Null
+            | InferType::Never
+            | InferType::Range
+            | InferType::Function { .. }
+            | InferType::Struct(_)
+            | InferType::Enum(..)
+            | InferType::Tuple(_)
+            | InferType::Var(_)
+            | InferType::Dynamic => EdgeFive::NotIndexable("E0304"),
+            // index base by a type error rather than by a fence on this run's relax list
+            InferType::Rc(_) => EdgeFive::NotIndexable("E0304"),
+            // a reference is never managed, and peels_to_vec looks through it anyway
+            InferType::Ref { .. } => EdgeFive::NotIndexable("E0304"),
+            InferType::Vec(_) => EdgeFive::StoreClauseFires,
+            InferType::Array(..) | InferType::Slice { .. } => EdgeFive::ElementInheritsTheCategory,
+        }
+    }
+
+    fn vec_of_i64() -> InferType {
+        InferType::Vec(Box::new(InferType::I64))
+    }
+
+    #[test]
+    fn peels_to_vec_looks_through_references_and_nothing_else() {
+        assert!(peels_to_vec(&vec_of_i64()));
+        assert!(peels_to_vec(&InferType::Ref {
+            referent: Box::new(vec_of_i64()),
+            mutable: true,
+        }));
+        assert!(peels_to_vec(&InferType::Ref {
+            referent: Box::new(InferType::Ref {
+                referent: Box::new(vec_of_i64()),
+                mutable: false,
+            }),
+            mutable: false,
+        }));
+        assert!(!peels_to_vec(&InferType::Rc(Box::new(vec_of_i64()))));
+        assert!(!peels_to_vec(&InferType::Array(
+            Box::new(vec_of_i64()),
+            Some(2)
+        )));
+        assert!(!peels_to_vec(&InferType::Slice {
+            elem: Box::new(vec_of_i64()),
+            mutable: true,
+        }));
+        assert!(!peels_to_vec(&InferType::I64));
+    }
+
+    #[test]
+    fn no_managed_index_base_escapes_both_the_store_clause_and_the_value_side() {
+        assert_eq!(
+            how_edge_five_is_held(&InferType::Rc(Box::new(vec_of_i64()))),
+            EdgeFive::NotIndexable("E0304")
+        );
+        assert_eq!(
+            how_edge_five_is_held(&vec_of_i64()),
+            EdgeFive::StoreClauseFires
+        );
+        assert_eq!(
+            how_edge_five_is_held(&InferType::Array(Box::new(vec_of_i64()), Some(2))),
+            EdgeFive::ElementInheritsTheCategory
+        );
+        assert_eq!(
+            how_edge_five_is_held(&InferType::Slice {
+                elem: Box::new(vec_of_i64()),
+                mutable: true,
+            }),
+            EdgeFive::ElementInheritsTheCategory
+        );
+        assert_eq!(
+            how_edge_five_is_held(&InferType::Struct("S".to_string())),
+            EdgeFive::NotIndexable("E0304")
+        );
+    }
+}
+
