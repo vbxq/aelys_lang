@@ -121,8 +121,6 @@ pub(super) fn duplicate_symbol_errors_to_error(
         .iter()
         .map(|dup| {
             let declared = sites.get(&dup.symbol).map(Vec::as_slice).unwrap_or(&[]);
-            // the typed side can be short of the air side, so every index is an `Option` and the
-            // missing span comes from the air function instead
             let label = |i: usize| {
                 let span = declared
                     .get(i)
@@ -266,6 +264,7 @@ fn primary_hint(marker: &str) -> String {
         "[move]" => "move occurs here".to_string(),
         "[escape]" => "borrow escapes here".to_string(),
         "[nogc]" => "managed memory reached here".to_string(),
+        "[vec-cow]" => "write occurs here".to_string(),
         _ => "here".to_string(),
     }
 }
@@ -305,6 +304,14 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0301",
             format!("expected `{}`, found `{}`", expected, found),
             format!("expected `{}`, found `{}`", expected, found),
+        ),
+        TypeErrorKind::RefMutability { found, required } => (
+            "E0416",
+            format!(
+                "a shared borrow `{}` cannot be used where the mutable borrow `{}` is required",
+                found, required
+            ),
+            format!("shared borrow `{}` here", found),
         ),
         TypeErrorKind::InfiniteType { var, ty } => (
             "E0305",
@@ -708,7 +715,6 @@ mod tests {
         duplicate_symbol_errors_to_error(vec![dup], &typed, &air, source).to_string()
     }
 
-// the source line a label points at, paired with `^` for the primary and `-` for the secondary
     fn label_lines(rendered: &str) -> Vec<(usize, char)> {
         let mut found = Vec::new();
         let mut current = 0usize;
