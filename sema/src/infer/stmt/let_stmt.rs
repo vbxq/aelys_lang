@@ -27,12 +27,9 @@ impl TypeInference {
             .map(|ann| self.type_from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
-            // try to narrow numeric literal to match declared type.
-            // always push a constraint afterwards so the solver validates the narrowing decision.
             // narrowing alone must never be the sole source of truth for a type
             self.try_narrow_literal(&mut typed_init, decl);
 
-            // Implicit numeric widening for let initializer
             if typed_init.ty != *decl && typed_init.ty.can_implicit_widen_to(decl) {
                 let vspan = typed_init.span;
                 let original = std::mem::replace(
@@ -53,7 +50,7 @@ impl TypeInference {
                 };
             }
 
-            self.constraints.push(Constraint::equal(
+            self.constraints.push(Constraint::flows(
                 typed_init.ty.clone(),
                 decl.clone(),
                 span,
@@ -63,9 +60,6 @@ impl TypeInference {
             ));
             decl.clone()
         } else {
-            // track immutable variables initialized with numeric literals so that try_narrow_literal can narrow through variable references at return/call/assign sites.
-            //
-            // mutable variables are not tracked because they can be reassigned to a different value that might not fit in the target type
             if !mutable {
                 Self::track_literal_init(&mut self.literal_init_vars, name, &typed_init);
             }
@@ -90,8 +84,6 @@ impl TypeInference {
         }
     }
 
-    // an Rc binding must be initialized directly at the let, which is what lets the
-    // release insertion assume a single init site
     fn check_rc_let_surface(
         &mut self,
         name: &str,
@@ -111,8 +103,6 @@ impl TypeInference {
                     ),
                 );
             }
-            // a member clone (`let n = a.next`) is co-ownership: the AIR retains it at the
-            // bind so the scope-exit release stays balanced
             let direct_init = matches!(
                 &initializer.kind,
                 ExprKind::EnumVariant { enum_name, variant, .. }
@@ -146,7 +136,6 @@ impl TypeInference {
     }
 
     // the construction sites already fail closed; this is the honest place to report, and it
-    // mirrors the rc treatment right above
     fn check_vec_let_surface(
         &mut self,
         name: &str,
@@ -177,10 +166,6 @@ impl TypeInference {
         }
     }
 
-    /// Record that a variable was initialized with a numeric literal value.
-    /// That info is used by `try_narrow_literal` to narrow through variable references
-    ///
-    /// we also tracks variable to variable copies, like if `x` is tracked and `let y = x` is encountered, `y` inherits the same literal value
     fn track_literal_init(
         literal_init_vars: &mut std::collections::HashMap<String, LiteralInit>,
         name: &str,
@@ -207,14 +192,11 @@ impl TypeInference {
                 }
                 _ => {}
             },
-            // propagate literal tracking through variable copies
-            // `let y = x` where x was tracked -> y gets the same literal value
             TypedExprKind::Identifier(source_name) => {
                 if let Some(lit) = literal_init_vars.get(source_name).cloned() {
                     literal_init_vars.insert(name.to_string(), lit);
                 }
             }
-            // track if-else expressions where both branches are known integer  or float literals. use the branch with the larger absolute value so narrowing checks the worst case.
             TypedExprKind::If {
                 then_branch,
                 else_branch,
@@ -228,10 +210,6 @@ impl TypeInference {
         }
     }
 
-    /// Extract a LiteralInit from an if-else where both branches are known
-    /// integer or float literals.
-    ///
-    /// Returns the branch with the larger absolute value so that narrowing overflow checks are conservative.
     fn extract_if_else_literal(
         then_branch: &crate::typed_ast::TypedExpr,
         else_branch: &crate::typed_ast::TypedExpr,
@@ -249,7 +227,6 @@ impl TypeInference {
         }
     }
 
-    // only aggregates: copying one duplicates raw Rc pointers with no transitive retain,
     // which double-frees. a bare carrier binding is legal and tracked by carrier_locals
     fn aggregate_embeds_rc_nominal(&self, ty: &crate::types::InferType) -> bool {
         use crate::types::InferType;
@@ -263,7 +240,6 @@ impl TypeInference {
     }
 }
 
-/// tracks the literal value a variable was initialized with.
 #[derive(Debug, Clone)]
 pub enum LiteralInit {
     Int(i64),
