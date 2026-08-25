@@ -6,11 +6,6 @@ use aelys_syntax::{Expr, ExprKind, MatchArm, Pattern, Span};
 use std::collections::HashMap;
 
 impl TypeInference {
-    /// Replace type parameter placeholders (`Struct("T")` where T is not a real struct) with fresh type variables
-    ///
-    /// this way each call site gets its own instantiation.
-    ///
-    /// same params within a single function type share the same fresh var (so (T) -> T becomes (Var(N)) -> Var(N))
     fn instantiate_type_params(&mut self, ty: &InferType) -> InferType {
         let mut mapping: HashMap<String, InferType> = HashMap::new();
         self.instantiate_inner(ty, &mut mapping)
@@ -111,18 +106,15 @@ impl TypeInference {
         let ret_type = if matches!(typed_callee.ty, InferType::Dynamic) {
             InferType::Dynamic
         } else {
-            // instance generic type params so each call site gets fresh vars instead of the shared Struct("T") placeholders
             let callee_ty = self.instantiate_type_params(&typed_callee.ty);
 
             if let InferType::Function { params, .. } = &callee_ty
                 && params.len() == typed_args.len()
             {
-                // try to narrow numeric literals to match parameter types
                 for (arg, param_ty) in typed_args.iter_mut().zip(params.iter()) {
                     self.try_narrow_literal(arg, param_ty);
                 }
 
-                // implicit numeric widening for non-literal arguments
                 for (arg, param_ty) in typed_args.iter_mut().zip(params.iter()) {
                     if arg.ty != *param_ty && arg.ty.can_implicit_widen_to(param_ty) {
                         let span = arg.span;
@@ -157,10 +149,7 @@ impl TypeInference {
                 }
             }
 
-            // When the callee has a known function type, extract the return type
             // directly so that downstream expressions (e.g., match) can inspect
-            // it before constraint solving runs. For unknown callee types, fall
-            // back to a fresh type variable resolved via constraints.
             let ret = if let InferType::Function { ret: fn_ret, .. } = &callee_ty {
                 *fn_ret.clone()
             } else {
@@ -174,7 +163,7 @@ impl TypeInference {
                 nogc: false,
             };
 
-            self.constraints.push(Constraint::equal(
+            self.constraints.push(Constraint::flows_into(
                 callee_ty,
                 expected_fn_type,
                 span,
@@ -405,7 +394,6 @@ impl TypeInference {
     }
 }
 
-// a short phrase for the rejected callback arg, feeding the e0729 "found ..." message
 fn describe_callback_arg(arg: &Expr) -> String {
     match &arg.kind {
         ExprKind::Identifier(name) => format!("`{name}`"),
