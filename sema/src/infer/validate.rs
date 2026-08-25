@@ -1,14 +1,14 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
-use crate::place_spine::{denotes_a_place, spine_is_shared, spine_root_name, target_ptr_is_shared};
+use crate::place_spine::{
+    denotes_a_place, shared_slice_view, spine_is_shared, spine_root_name, target_ptr_is_shared,
+};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::Span;
 use std::collections::HashSet;
 
 impl TypeInference {
-    /// Validate resolved typed AST invariants that are hard to encode with direct unification
-    /// constraints (for example, operations initially inferred on `Var` that become concrete later).
     pub(super) fn validate_resolved_stmts(
         &mut self,
         stmts: &[TypedStmt],
@@ -61,19 +61,25 @@ impl TypeInference {
         }
     }
 
+    fn is_a_live_global(&self, name: &str) -> bool {
+        self.module_globals.contains(name) && !self.shadowed_globals.contains(name)
+    }
+
     fn names_a_global(&self, e: &TypedExpr) -> Option<String> {
         let mut cur = e;
         while let TypedExprKind::Grouping(inner) = &cur.kind {
             cur = inner;
         }
         match &cur.kind {
-            TypedExprKind::Identifier(name)
-                if self.module_globals.contains(name) && !self.shadowed_globals.contains(name) =>
-            {
-                Some(name.clone())
-            }
+            TypedExprKind::Identifier(name) if self.is_a_live_global(name) => Some(name.clone()),
             _ => None,
         }
+    }
+
+    fn roots_at_a_global(&self, e: &TypedExpr) -> Option<String> {
+        spine_root_name(e)
+            .filter(|name| self.is_a_live_global(name))
+            .map(str::to_string)
     }
 
     fn check_write_target(&mut self, target: &TypedExpr, what: &str, span: Span) {
@@ -81,8 +87,11 @@ impl TypeInference {
             self.errors
                 .push(TypeError::no_place(format!("the target of {what}"), span));
         } else if spine_is_shared(target) {
-            self.errors
-                .push(TypeError::shared_mut(what.to_string(), span));
+            self.errors.push(TypeError::shared_mut_view(
+                what.to_string(),
+                shared_slice_view(target),
+                span,
+            ));
         }
     }
 
@@ -224,7 +233,6 @@ impl TypeInference {
             self.validate_type(capture_ty, func.span, &generic_scope, declared_type_params);
         }
         let saved_shadow = std::mem::take(&mut self.shadowed_globals);
-        // counting them would make e0424 unreachable
         let mut bound: HashSet<String> = func.params.iter().map(|p| p.name.clone()).collect();
         Self::collect_bound_names(&func.body, &mut bound);
         self.shadowed_globals = bound;
@@ -522,6 +530,13 @@ impl TypeInference {
                         expr.span,
                     ));
                 }
+                // a global has no borrow-checked local, so two live mutable views of it would alias
+                if matches!(expr.ty, InferType::Slice { mutable: true, .. }) {
+                    if let Some(name) = self.roots_at_a_global(object) {
+                        self.errors
+                            .push(TypeError::global_borrow(name, true, expr.span));
+                    }
+                }
                 // the bir never builds a lambda body, so a borrow of storage outside it is unchecked
                 if self.lambda_depth > 0 && self.slice_in_a_lambda_is_unchecked(object) {
                     self.errors.push(TypeError::closure_ref_unchecked(
@@ -566,7 +581,6 @@ impl TypeInference {
             TypedExprKind::DerefAssign { target, value } => {
                 self.validate_expr(target, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
-                // the target of a derefassign is the pointer itself, so the shared test is one
                 if target_ptr_is_shared(target) {
                     self.errors.push(TypeError::shared_mut(
                         "an assignment through `*p`",
@@ -978,7 +992,6 @@ impl TypeInference {
                 declared_type_params,
             ),
             TypedStmtKind::Function(_) => {
-                // nested functions are validated independently by validate_function
             }
             TypedStmtKind::Expression(_)
             | TypedStmtKind::Let { .. }
@@ -991,3 +1004,4 @@ impl TypeInference {
         }
     }
 }
+

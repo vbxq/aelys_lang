@@ -3,7 +3,44 @@ use super::occurs::occurs_check;
 use super::{Substitution, UnifyError};
 use crate::types::InferType;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Dir {
+    Exact,
+    Flow,
+    FlowRev,
+}
+
+impl Dir {
+    /// `&mut` weakens to `&`; `&` never strengthens to `&mut`
+    fn accepts(self, left_mutable: bool, right_mutable: bool) -> bool {
+        match self {
+            Dir::Exact => left_mutable == right_mutable,
+            Dir::Flow => left_mutable || !right_mutable,
+            Dir::FlowRev => right_mutable || !left_mutable,
+        }
+    }
+
+    fn mismatch(self, left: &InferType, right: &InferType, left_mutable: bool) -> UnifyError {
+        let (found, required) = match self {
+            Dir::Flow => (left, right),
+            Dir::FlowRev => (right, left),
+            Dir::Exact if left_mutable => (right, left),
+            Dir::Exact => (left, right),
+        };
+        UnifyError::RefMutability(found.clone(), required.clone())
+    }
+}
+
 pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyResult<()> {
+    unify_dir(t1, t2, subst, Dir::Exact)
+}
+
+pub fn unify_dir(
+    t1: &InferType,
+    t2: &InferType,
+    subst: &mut Substitution,
+    dir: Dir,
+) -> UnifyResult<()> {
     let t1 = subst.apply(t1);
     let t2 = subst.apply(t2);
 
@@ -24,8 +61,7 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
         (InferType::Enum(a, args_a), InferType::Enum(b, args_b)) if a == b => {
-            // For generic enums, unify type arguments pairwise.
-            // If one side has type args and the other doesn't (e.g., Enum("Option", []) from a variant constructor vs Enum("Option", [I64]) from an annotation), we accept  the match, the type args are informational for monomorphization, not for semantic equality.
+            // if one side has type args and the other doesn't (e.g., enum("option", []) from a variant constructor vs enum("option", [i64]) from an annotation), we accept the match, the type args are informational for monomorphization, not for semantic equality.
             if !args_a.is_empty() && !args_b.is_empty() && args_a.len() == args_b.len() {
                 for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {
                     unify(a_arg, b_arg, subst)?;
@@ -36,11 +72,7 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Dynamic, _) | (_, InferType::Dynamic) => Ok(()),
 
-        // Never is the bottom type (diverging control flow). It unifies with
-        // any type T without binding type variables, because a Never-typed
-        // expression never produces a value.
-        //
-        // So it's placed before the Var arms so that `unify(Never, Var(v))` succeeds without binding v, letting other constraints determine the variable's actual type.
+        // never is the bottom type (diverging control flow). it unifies with
         (InferType::Never, _) | (_, InferType::Never) => Ok(()),
 
         (InferType::Var(id1), InferType::Var(id2)) if id1 == id2 => Ok(()),
@@ -78,14 +110,13 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
             }
 
             for (param1, param2) in p1.iter().zip(p2.iter()) {
-                unify(param1, param2, subst)?;
+                unify_dir(param1, param2, subst, dir)?;
             }
 
-            unify(r1, r2, subst)
+            unify_dir(r1, r2, subst, dir)
         }
 
         (InferType::Array(inner1, len1), InferType::Array(inner2, len2)) => {
-            // both known lengths must match; if either is None (unsized), just unify inner
             match (len1, len2) {
                 (Some(n1), Some(n2)) if n1 != n2 => {
                     return Err(UnifyError::Mismatch(t1.clone(), t2.clone()));
@@ -99,12 +130,36 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
 
         (InferType::Rc(inner1), InferType::Rc(inner2)) => unify(inner1, inner2, subst),
 
-        (InferType::Ref { referent: r1, .. }, InferType::Ref { referent: r2, .. }) => {
-            unify(r1, r2, subst)
+        (
+            InferType::Ref {
+                referent: r1,
+                mutable: m1,
+            },
+            InferType::Ref {
+                referent: r2,
+                mutable: m2,
+            },
+        ) => {
+            if !dir.accepts(*m1, *m2) {
+                return Err(dir.mismatch(&t1, &t2, *m1));
+            }
+            unify_dir(r1, r2, subst, Dir::Exact)
         }
 
-        (InferType::Slice { elem: e1, .. }, InferType::Slice { elem: e2, .. }) => {
-            unify(e1, e2, subst)
+        (
+            InferType::Slice {
+                elem: e1,
+                mutable: m1,
+            },
+            InferType::Slice {
+                elem: e2,
+                mutable: m2,
+            },
+        ) => {
+            if !dir.accepts(*m1, *m2) {
+                return Err(dir.mismatch(&t1, &t2, *m1));
+            }
+            unify_dir(e1, e2, subst, Dir::Exact)
         }
 
         (InferType::Range, InferType::Range) => Ok(()),
@@ -115,7 +170,7 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
             }
 
             for (e1, e2) in elems1.iter().zip(elems2.iter()) {
-                unify(e1, e2, subst)?;
+                unify_dir(e1, e2, subst, dir)?;
             }
 
             Ok(())
@@ -124,3 +179,4 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
         _ => Err(UnifyError::Mismatch(t1.clone(), t2.clone())),
     }
 }
+

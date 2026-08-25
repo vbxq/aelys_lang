@@ -6,7 +6,6 @@ pub fn deref_is_shared(ty: &InferType) -> bool {
     matches!(ty, InferType::Ref { mutable: false, .. })
 }
 
-/// a `.` or `[]` whose object already holds a pointer auto-derefs it: the object's value is
 pub fn projects_through_pointer(ty: &InferType) -> bool {
     matches!(
         ty,
@@ -46,7 +45,32 @@ pub fn denotes_a_place(e: &TypedExpr) -> bool {
     }
 }
 
+/// stops at the first view it crosses, so a re-slice reads the view's own mutability, not its base's
+pub fn place_is_writable(e: &TypedExpr, name_is_mut: &dyn Fn(&str) -> bool) -> bool {
+    match &e.ty {
+        InferType::Ref { mutable, .. } | InferType::Slice { mutable, .. } => return *mutable,
+        _ => {}
+    }
+    match &e.kind {
+        TypedExprKind::Grouping(inner) => place_is_writable(inner, name_is_mut),
+        TypedExprKind::Identifier(name) => name_is_mut(name),
+        TypedExprKind::Deref(inner) => !deref_is_shared(&inner.ty),
+        TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+            if projects_through_pointer(&object.ty) {
+                !deref_is_shared(&object.ty)
+            } else {
+                place_is_writable(object, name_is_mut)
+            }
+        }
+        _ => false,
+    }
+}
+
 pub fn spine_is_shared(e: &TypedExpr) -> bool {
+    // a slice carries its own mutability, so the walk answers from the view and stops there
+    if let InferType::Slice { mutable, .. } = &e.ty {
+        return !*mutable;
+    }
     match &e.kind {
         TypedExprKind::Grouping(inner) => spine_is_shared(inner),
         TypedExprKind::Deref(inner) => deref_is_shared(&inner.ty),
@@ -63,7 +87,23 @@ pub fn spine_is_shared(e: &TypedExpr) -> bool {
     }
 }
 
-/// `derefassign` is the pointer itself, not the place, so it is one level up.
+pub fn shared_slice_view(e: &TypedExpr) -> Option<InferType> {
+    if let InferType::Slice { mutable: false, .. } = &e.ty {
+        return Some(e.ty.clone());
+    }
+    match &e.kind {
+        TypedExprKind::Grouping(inner) => shared_slice_view(inner),
+        TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+            if projects_through_pointer(&object.ty) {
+                None
+            } else {
+                shared_slice_view(object)
+            }
+        }
+        _ => None,
+    }
+}
+
 pub fn target_ptr_is_shared(target: &TypedExpr) -> bool {
     let mut t = target;
     while let TypedExprKind::Grouping(inner) = &t.kind {
@@ -71,3 +111,4 @@ pub fn target_ptr_is_shared(target: &TypedExpr) -> bool {
     }
     deref_is_shared(&t.ty)
 }
+
