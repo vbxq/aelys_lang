@@ -12,7 +12,6 @@ impl TypeInference {
             if let Some(ref mut texpr) = typed_expr {
                 self.try_narrow_literal(texpr, &expected_ret);
 
-                // Implicit numeric widening (e.g. return i32_val from fn -> i64)
                 if texpr.ty != expected_ret && texpr.ty.can_implicit_widen_to(&expected_ret) {
                     let vspan = texpr.span;
                     let original = std::mem::replace(
@@ -39,7 +38,7 @@ impl TypeInference {
                 .map(|e| e.ty.clone())
                 .unwrap_or(InferType::Null);
 
-            self.constraints.push(Constraint::equal(
+            self.constraints.push(Constraint::flows_into(
                 expected_ret,
                 actual_ret,
                 span,
