@@ -1,4 +1,3 @@
-// every move- or control-flow-bearing form so no move is silently dropped from the analysis.
 
 use std::collections::HashSet;
 
@@ -13,7 +12,6 @@ use super::*;
 
 pub fn build_program(program: &TypedProgram) -> BirProgram {
     let tt = &program.type_table;
-    // distinguishable from an indirect call at every call site (mirrors lower_callee)
     let mut fn_names = gather_fn_names(&program.stmts);
     let globals = gather_global_names(&program.stmts);
     fn_names.retain(|n| !globals.contains(n));
@@ -41,7 +39,6 @@ pub fn build_program(program: &TypedProgram) -> BirProgram {
     BirProgram { bodies }
 }
 
-// no `_` arm and no `..` rest pattern below, so a new variant or field is a compile error here
 pub fn for_each_fn_decl<F>(stmts: &[TypedStmt], f: &mut F)
 where
     F: FnMut(&TypedFunction, Option<&str>),
@@ -501,7 +498,6 @@ impl<'a> BodyBuilder<'a> {
         }
     }
 
-    // a closure becomes an opaque const with no bir trace, so a ref capture is rejected here
     fn reject_ref_captures(&mut self, captures: &[(String, InferType)], span: Span) {
         if captures.iter().any(|(_, ty)| is_ref_ty(ty)) {
             self.build_errors.push(BirDiagnostic::new(
@@ -605,7 +601,6 @@ impl<'a> BodyBuilder<'a> {
 
     fn close_scope(&mut self) {
         let frame = self.scopes.pop().expect("balanced scopes");
-        // fallthrough (open) block reaches this point. exit_index is captured before the
         if self.cur_open {
             let exit_index = self.cur_stmts.len();
             // every named non-parameter local declared here dies at this exit (the escape pass
@@ -782,7 +777,6 @@ impl<'a> BodyBuilder<'a> {
                                 return BirOperand::Const;
                             }
                             recv_op => {
-                                // a non-place receiver (vec::push(make(), x)) has no outstanding
                                 // borrow, so the reused single operand is read-modeled, sound either way
                                 let mut ops = vec![recv_op];
                                 ops.extend(rest.iter().map(|a| self.build_operand(a)));
@@ -840,15 +834,11 @@ impl<'a> BodyBuilder<'a> {
             // a slice is a borrow of its base: no e0726 here, a slice of a slice is a kept form
             TypedExprKind::Slice { object, range } => {
                 let _ = self.build_operand(range);
+                let mutable = matches!(expr.ty, InferType::Slice { mutable: true, .. });
                 match self.place_of(object) {
-                    Some(place) => self.emit_to_temp(
-                        BirRvalue::Ref {
-                            place,
-                            mutable: false,
-                        },
-                        expr.ty.clone(),
-                        span,
-                    ),
+                    Some(place) => {
+                        self.emit_to_temp(BirRvalue::Ref { place, mutable }, expr.ty.clone(), span)
+                    }
                     None => {
                         let op = self.build_operand(object);
                         self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
@@ -930,7 +920,6 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Block { stmts, tail } => self.build_block_expr(stmts, tail),
 
             TypedExprKind::ResultAssert { scrutinee, .. } => {
-                // build the scrutinee for its reads; the err arm seals a divergence, modeled
                 let op = self.build_operand(scrutinee);
                 self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
             }
