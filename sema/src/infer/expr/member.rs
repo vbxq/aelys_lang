@@ -5,9 +5,7 @@ use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, Span, StructFieldInit};
 
 impl TypeInference {
-    // an Rc is allowed in a concrete carrier, where the AIR knows its offset and can
     // balance retain/release, but never in a generic slot, where the type erases and the
-    // offset is gone, nor inside an array/vec/tuple, which no single field GEP can reach
     pub(crate) fn reject_rc_out_of_carrier_surface(
         &mut self,
         ty: &InferType,
@@ -62,7 +60,6 @@ impl TypeInference {
     }
 
     pub(super) fn member_result_type(&mut self, object_ty: &InferType, member: &str) -> InferType {
-        // determine the result type for error recovery; actual error reporting happens post-substitution in validate.rs to avoid duplicate diagnostics
         match object_ty {
             InferType::String => {
                 if member == "len" {
@@ -82,7 +79,6 @@ impl TypeInference {
                     InferType::Dynamic
                 }
             }
-            // auto-deref a read through an Rc<Struct> handle, one level only
             InferType::Rc(inner) => {
                 if let InferType::Struct(name) = inner.as_ref() {
                     if let Some(def) = self.type_table.get_struct(name) {
@@ -99,8 +95,7 @@ impl TypeInference {
                 }
             }
             InferType::Dynamic => InferType::Dynamic,
-            // a fresh var, not Dynamic, so the type can still propagate once the solver
-            // resolves it; finalization widens it to Dynamic anyway if it never does
+            // resolves it; finalization widens it to dynamic anyway if it never does
             InferType::Var(_) => self.type_gen.fresh(),
             _other => InferType::Dynamic,
         }
@@ -126,8 +121,6 @@ impl TypeInference {
         let typed_object = self.infer_expr(object);
         let mut typed_value = self.infer_expr(value);
 
-        // writing through an Rc handle mutates the shared heap data, not the binding, so
-        // the handle itself does not need to be `mut`; a struct value still does
         let object_through_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
         if let ExprKind::Identifier(ref name) = object.kind {
             if !object_through_rc_handle && !self.env.is_mutable(name) {
@@ -151,8 +144,6 @@ impl TypeInference {
             }
         }
 
-        // resolve the struct name from either shape, so a store through a handle gets the
-        // same field validation and lift decision as a store on a value
         let object_struct: Option<String> = match &typed_object.ty {
             InferType::Struct(name) => Some(name.clone()),
             InferType::Rc(inner) => match inner.as_ref() {
@@ -166,9 +157,6 @@ impl TypeInference {
             if let Some(def) = self.type_table.get_struct(struct_name) {
                 if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
                     let field_ty = field_def.ty.clone();
-                    // reassigning a directly-Rc field is only allowed through a handle,
-                    // where the AIR balances it; a field that merely carries a nested Rc
-                    // is refused either way, since a plain store would orphan that Rc
                     let field_is_rc = field_ty.is_rc();
                     let field_is_nominal_carrier =
                         !field_is_rc && self.type_table.contains_rc_nominal(&field_ty);
@@ -191,7 +179,6 @@ impl TypeInference {
                             .push(TypeError::rc_field_assign_indirect(typed_value.span));
                     }
                     self.try_narrow_literal(&mut typed_value, &field_ty);
-                    // Implicit numeric widening for field assignment
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
                         let vspan = typed_value.span;
@@ -212,7 +199,7 @@ impl TypeInference {
                             span: vspan,
                         };
                     }
-                    self.constraints.push(Constraint::equal(
+                    self.constraints.push(Constraint::flows(
                         typed_value.ty.clone(),
                         field_ty,
                         span,
@@ -245,7 +232,6 @@ impl TypeInference {
         fields: &[StructFieldInit],
         span: Span,
     ) -> (TypedExprKind, InferType) {
-        // check for duplicate fields in the literal
         {
             let mut seen = std::collections::HashSet::new();
             for f in fields {
@@ -266,11 +252,9 @@ impl TypeInference {
             ));
         }
 
-        // validate struct fields: check for unknown and missing fields
         if let Some(def) = self.type_table.get_struct(name) {
             let def_field_names: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
 
-            // check for unknown fields
             for f in fields {
                 if !def_field_names.contains(&f.name) {
                     self.errors.push(TypeError::member_access(
@@ -285,7 +269,6 @@ impl TypeInference {
                 }
             }
 
-            // check for missing fields only for non-generic structs because generic structs may have partial  initialization patterns
             if def.type_params.is_empty() {
                 let provided: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
                 for def_field in &def_field_names {
@@ -323,7 +306,6 @@ impl TypeInference {
                 {
                     self.try_narrow_literal(&mut typed_value, &field_ty);
 
-                    // Implicit numeric widening for struct field initialization
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
                         let vspan = typed_value.span;
@@ -345,7 +327,7 @@ impl TypeInference {
                         };
                     }
 
-                    self.constraints.push(Constraint::equal(
+                    self.constraints.push(Constraint::flows(
                         typed_value.ty.clone(),
                         field_ty,
                         f.span,
