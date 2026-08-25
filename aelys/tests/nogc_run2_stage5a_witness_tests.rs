@@ -349,8 +349,6 @@ fn bodies_named(src: &str, name: &str) -> usize {
         .count()
 }
 
-// e0418 refuses a nested fn that shadows an outer one, so the second colliding body is declared in
-// a lambda body, which sema does not walk for shadowing
 const DIRECT_COLLISION: &str = "\
 fn dup() -> i64 { return 0 }
 fn holder() -> i64 {
@@ -522,4 +520,3 @@ fn main() -> i64 { return f() }
 ",
     );
 }
-
