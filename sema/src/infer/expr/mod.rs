@@ -17,7 +17,6 @@ use crate::types::InferType;
 use aelys_syntax::{BinaryOp, Expr, ExprKind};
 
 impl TypeInference {
-    /// Infer type for an expression
     pub(super) fn infer_expr(&mut self, expr: &Expr) -> TypedExpr {
         self.depth += 1;
         if self.depth > super::MAX_INFERENCE_DEPTH {
@@ -57,10 +56,6 @@ impl TypeInference {
                 let mut typed_right = self.infer_expr(right);
                 Self::narrow_binop_int_literals(&mut typed_left, &mut typed_right);
                 Self::narrow_binop_float_literals(&mut typed_left, &mut typed_right);
-                // When one operand has a concrete non-default type and the other
-                // is still i64/f64/Var (e.g. a match/if/block containing literals),
-                // narrow the unresolved operand to match. This handles patterns
-                // like `total_i32 + match m { ... => 0 }`.
                 if typed_left.ty.is_integer()
                     && typed_left.ty != InferType::I64
                     && (typed_right.ty == InferType::I64
@@ -86,10 +81,6 @@ impl TypeInference {
                 {
                     self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
                 }
-                // Implicit numeric widening for binary operations: when both
-                // operands are concrete numeric types of different widths
-                // (e.g. i32 + i64), widen the narrower operand.  This mirrors
-                // the implicit widening already done for function call args.
                 if typed_left.ty != typed_right.ty
                     && typed_left.ty.can_implicit_widen_to(&typed_right.ty)
                 {
@@ -248,7 +239,7 @@ impl TypeInference {
                 let typed_target = self.infer_expr(target);
                 let typed_value = self.infer_expr(value);
                 if let InferType::Ref { referent, .. } = &typed_target.ty {
-                    self.constraints.push(Constraint::equal(
+                    self.constraints.push(Constraint::flows_into(
                         (**referent).clone(),
                         typed_value.ty.clone(),
                         expr.span,
@@ -272,8 +263,6 @@ impl TypeInference {
             } => {
                 let typed_inner = self.infer_expr(inner);
                 let target_ty = self.type_from_annotation(target);
-                // Cast validity is checked post-substitution in validate.rs
-                // to avoid duplicate errors and to work on resolved types.
                 (
                     TypedExprKind::Cast {
                         expr: Box::new(typed_inner),
@@ -293,8 +282,6 @@ impl TypeInference {
             ExprKind::Block { stmts, tail } => {
                 let typed_stmts = self.infer_stmts(stmts);
                 let typed_tail = self.infer_expr(tail);
-                // If the block contains a return statement, execution never
-                // reaches the tail — the block diverges and its type is Never.
                 let ty = if typed_stmts
                     .iter()
                     .any(|s| matches!(s.kind, TypedStmtKind::Return(_)))
@@ -409,9 +396,6 @@ impl TypeInference {
         )
     }
 
-    /// Try to extract a constant integer value from a typed expression
-    /// Handles `Int(v)`, `Unary(Neg, Int(v))` (which represents negative literals),
-    /// and `Identifier(name)` when the variable is tracked in `literal_init_vars`
     fn try_extract_int_value(expr: &TypedExpr) -> Option<i64> {
         match &expr.kind {
             TypedExprKind::Int(v) => Some(*v),
@@ -429,9 +413,6 @@ impl TypeInference {
         }
     }
 
-    /// Like `try_extract_int_value` but also resolves identifiers through `literal_init_vars` tracking.
-    /// this allows overflow checks on binary ops, like `x + 28` where `x` was initialized with a known literal
-    // (check for overflow_variable_on_right_side in audit_regression_tests.rs)
     fn try_extract_int_value_tracked(&self, expr: &TypedExpr) -> Option<i64> {
         if let Some(v) = Self::try_extract_int_value(expr) {
             return Some(v);
@@ -444,8 +425,6 @@ impl TypeInference {
         None
     }
 
-    /// Compute the result of a binary operation on two known integer values
-    /// uses checked arithmetic to detect rust level overflow on i64
     fn compute_binop_int_result(op: BinaryOp, left: i64, right: i64) -> Option<i64> {
         match op {
             BinaryOp::Add => left.checked_add(right),
@@ -455,17 +434,16 @@ impl TypeInference {
         }
     }
 
-    /// Try to narrow a numeric literal to the target type.
-    /// Returns true if narrowing succeeded or wasn't needed, false if it failed.
-    /// Pushes an error if the literal doesn't fit in the target type.
-    ///
-    /// Also handles array literals: when the target is `Array(elem_ty, _)` each element is narrowed to `elem_ty`
     pub(super) fn try_narrow_literal(
         &mut self,
         expr: &mut TypedExpr,
         target_ty: &InferType,
     ) -> bool {
-        // Extract values needed for matching before taking mutable borrows.
+        if let InferType::Slice { mutable: false, .. } = target_ty {
+            Self::demote_slice_view(expr);
+        }
+
+        // extract values needed for matching before taking mutable borrows.
         let int_val = if let TypedExprKind::Int(v) = &expr.kind {
             Some(*v)
         } else {
@@ -527,7 +505,6 @@ impl TypeInference {
             }
         }
 
-        // narrow array literal elements when the target type is Array(elem_ty, _)
         if let InferType::Array(elem_ty, _) = target_ty {
             if let TypedExprKind::ArrayLiteral { ref mut elements } = expr.kind {
                 let mut all_narrowed = true;
@@ -536,7 +513,6 @@ impl TypeInference {
                     if !self.try_narrow_literal(elem, elem_ty) {
                         had_error = true;
                     } else if elem.ty != **elem_ty && !matches!(elem.ty, InferType::Var(_)) {
-                        // Try implicit widening for non-literal elements
                         if elem.ty.can_implicit_widen_to(elem_ty) {
                             let vspan = elem.span;
                             let original = std::mem::replace(
@@ -563,14 +539,11 @@ impl TypeInference {
                 if all_narrowed && !had_error {
                     expr.ty = target_ty.clone();
                 }
-                // return false only for real narrowing failures (overflow)
 
-                // for non-narrowable elements, return true so the caller can push a constraint
                 return !had_error;
             }
         }
 
-        // narrow ArraySized fill values: `[0; 3]` in an `[i32; 3]` context.
         if let InferType::Array(elem_ty, _) = target_ty {
             if let TypedExprKind::ArraySized { fill_value, .. } = &mut expr.kind {
                 if let Some(fv) = fill_value {
@@ -583,19 +556,13 @@ impl TypeInference {
             }
         }
 
-        // narrow unary expressions (for eg -1 in an i32 context) recurse into the operand so the whole expression adopts the target type
         if let TypedExprKind::Unary { operand, .. } = &mut expr.kind {
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
                 let ok = self.try_narrow_literal(operand, target_ty);
-                // verify the operand was actually narrowed (type matches target), not just that no error occurred
-                // non-narrowable expressions return true
-                // but don't change their type, so we must check both conditions
                 if ok && operand.ty == *target_ty {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                // if narrowing pushed an error (ok=false), propagate that
-                // if no error but operand wasn't narrowed, return true so caller pushes a constraint
                 return ok;
             }
             if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
@@ -604,13 +571,10 @@ impl TypeInference {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                // If narrowing pushed an error (ok=false), propagate that.
-                // If no error but operand wasn't narrowed, return true so caller pushes a constraint.
                 return ok;
             }
         }
 
-        // narrow binary expressions of all-literal operands (67 + 69 in an i32 context) recursively narrow both sides so the result type matches the target.
         if let TypedExprKind::Binary {
             left, right, op, ..
         } = &mut expr.kind
@@ -619,16 +583,9 @@ impl TypeInference {
                 let binop = *op;
                 let left_ok = self.try_narrow_literal(left, target_ty);
                 let right_ok = self.try_narrow_literal(right, target_ty);
-                // verify that both operands were actually narrowed to the target type.
-                //
-                // non narrowable expressions (identifiers, calls, etc.) return true but don't change their type, so checking only the return value
-                // would incorrectly retype the binary expression. we gotta verify the types match
                 let left_narrowed = left.ty == *target_ty;
                 let right_narrowed = right.ty == *target_ty;
                 if left_ok && right_ok && left_narrowed && right_narrowed {
-                    // when both operands are known integer literals, compute the result and verify it fits in the target type
-                    // each operand individually fitting does not guarantee the result fits
-                    // like, 100 + 100 = 200 overflows i8
                     if let (Some(lv), Some(rv)) = (
                         self.try_extract_int_value_tracked(left),
                         self.try_extract_int_value_tracked(right),
@@ -656,11 +613,9 @@ impl TypeInference {
                     expr.ty = target_ty.clone();
                     return true;
                 }
-                // propagate failure
                 if !left_ok || !right_ok {
                     return false;
                 }
-                // both returned ok but at least one wasn't narrowed: don't retype the binary expression. return true so caller pushes a constraint instead.
                 return true;
             }
             if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
@@ -679,16 +634,12 @@ impl TypeInference {
             }
         }
 
-        // narrow if-else expressions where both branches are narrowable.
-        // recurse into each branch so that `return if cond { 42 } else { 100 }` narrows in an i32 context.
         if let TypedExprKind::If {
             then_branch,
             else_branch,
             ..
         } = &mut expr.kind
         {
-            // Narrow if-else when the target is a generic enum (e.g. Option<i32>).
-            // Recurse into both branches to narrow enum variant constructions.
             if let InferType::Enum(..) = target_ty {
                 if matches!(expr.ty, InferType::Var(_)) || matches!(expr.ty, InferType::Enum(..)) {
                     let then_ok = self.try_narrow_literal(then_branch, target_ty);
@@ -734,9 +685,6 @@ impl TypeInference {
             }
         }
 
-        // narrow match expressions: recurse into every arm body.
-        // Match result types are often Var(_) (unresolved type variable) rather
-        // than concrete I64/F64, so also attempt narrowing when the type is a Var.
         if let TypedExprKind::Match { arms, .. } = &mut expr.kind {
             let is_narrowable = (expr.ty == InferType::I64
                 && target_ty.is_integer()
@@ -769,7 +717,6 @@ impl TypeInference {
             }
         }
 
-        // narrow block expressions: recurse into the tail expression.
         if let TypedExprKind::Block { tail, .. } = &mut expr.kind {
             if (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
                 || (expr.ty == InferType::F64
@@ -788,8 +735,6 @@ impl TypeInference {
             }
         }
 
-        // narrow enum variant args when the target is the same enum with concrete type params.
-        // e.g. `Maybe::Just(2.5)` with target `Maybe<f32>` → narrow 2.5 to f32.
         if let TypedExprKind::EnumVariant {
             args, enum_name, ..
         } = &mut expr.kind
@@ -800,22 +745,12 @@ impl TypeInference {
                         && expr_name == target_name
                         && target_type_args.len() == expr_type_args.len()
                     {
-                        // For each type arg that is Var in expr but concrete in target,
-                        // narrow the corresponding variant args.
-                        // Check if all expr type args are Var (unresolved) and
-                        // all target type args are concrete — if so, we can adopt
-                        // the target type. For unit variants (no args), this is the
-                        // only way to narrow.
                         let all_expr_var = expr_type_args
                             .iter()
                             .all(|t| matches!(t, InferType::Var(_)));
                         let all_target_concrete = target_type_args.iter().all(|t| t.is_concrete());
 
                         if all_expr_var && all_target_concrete {
-                            // Try to narrow data variant args to match target type params.
-                            // Call try_narrow_literal on each arg unconditionally —
-                            // it handles all narrowable cases including nested enums
-                            // (e.g. Result::Ok(Option::None) with target Result<Option<i64>>).
                             for target_ta in target_type_args.iter() {
                                 for arg in args.iter_mut() {
                                     self.try_narrow_literal(arg, target_ta);
@@ -829,14 +764,6 @@ impl TypeInference {
             }
         }
 
-        // narrow through variable references.
-        //
-        // when the expression is an Identifier whose variable was initialized with a numeric literal (tracked in `literal_init_vars`), treat it
-        // as if the literal appeared directly, this allows code like
-        //
-        //   fn f() -> i8 { let x = 100; return x }
-        //
-        // to narrow correctly because we know x holds the value 100
         if let TypedExprKind::Identifier(name) = &expr.kind {
             if let Some(lit) = self.literal_init_vars.get(name).cloned() {
                 match lit {
@@ -892,7 +819,33 @@ impl TypeInference {
             }
         }
 
-        // not a narrowable literal, caller should handle constraint
         true
     }
+
+    fn demote_slice_view(expr: &mut TypedExpr) {
+        if let InferType::Slice { mutable, .. } = &mut expr.ty {
+            *mutable = false;
+        } else {
+            return;
+        }
+        match &mut expr.kind {
+            TypedExprKind::Grouping(inner) => Self::demote_slice_view(inner),
+            TypedExprKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => {
+                Self::demote_slice_view(then_branch);
+                Self::demote_slice_view(else_branch);
+            }
+            TypedExprKind::Match { arms, .. } => {
+                for arm in arms.iter_mut() {
+                    Self::demote_slice_view(&mut arm.body);
+                }
+            }
+            TypedExprKind::Block { tail, .. } => Self::demote_slice_view(tail),
+            _ => {}
+        }
+    }
 }
+
