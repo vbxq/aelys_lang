@@ -14,8 +14,6 @@ impl TypeInference {
         let mut typed_value = self.infer_expr(value);
 
         if let Some(var_type) = self.env.lookup(name).cloned() {
-            // an Rc binding is single-assignment even when mut: a second provenance would
-            // not be tracked by the retain/release insertion and the release would be wrong
             if var_type.is_rc() {
                 self.errors.push(TypeError::rc_out_of_surface(
                     format!(
@@ -29,7 +27,6 @@ impl TypeInference {
             if !self.env.is_mutable(name) {
                 let binding_span = self.env.lookup_binding_span(name);
                 let suggestion = binding_span.map(|bs| {
-                    // create a zero-width insertion span right after `let `, the binding_span starts at `let`, so column + 4 is where the variable name begins, we insert `mut ` there
                     let insert_offset = bs.start + 4; // skip "let "
                     let insert_span =
                         Span::new(insert_offset, insert_offset, bs.line, bs.column + 4);
@@ -49,7 +46,6 @@ impl TypeInference {
 
             self.try_narrow_literal(&mut typed_value, &var_type);
 
-            // Implicit numeric widening (e.g. x: i64 = val: i32)
             if typed_value.ty != var_type && typed_value.ty.can_implicit_widen_to(&var_type) {
                 let vspan = typed_value.span;
                 let original = std::mem::replace(
@@ -70,7 +66,7 @@ impl TypeInference {
                 };
             }
 
-            self.constraints.push(Constraint::equal(
+            self.constraints.push(Constraint::flows(
                 typed_value.ty.clone(),
                 var_type.clone(),
                 span,
@@ -90,7 +86,7 @@ impl TypeInference {
             self.errors
                 .push(TypeError::undefined_variable(name.to_string(), span));
 
-            // register the variable with Dynamic type to prevent repeated "undefined variable" errors for each subsequent use
+            // register the variable with dynamic type to prevent repeated "undefined variable" errors for each subsequent use
             self.env.define_local(name.to_string(), InferType::Dynamic);
 
             (
