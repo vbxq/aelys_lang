@@ -1,14 +1,5 @@
-#!/bin/bash
-# re-runnable evidence for E0428: which names the compiler and the runtime already own, how many
-# tracked declarations the `__` rule refuses, and whether every function symbol the compiler
-# actually emits lands inside the reserved namespace.
-#
-# usage: scripts/reserved_symbols.sh            # enumerate + check the controls
-#        scripts/reserved_symbols.sh sites      # enumeration only
-#        scripts/reserved_symbols.sh emitted    # the emitted-symbol census only
+# # actually emits lands inside the reserved namespace.
 set -u
-# locale-pinned, and every multi-path list is written out rather than held in a variable: inline
-# shells here do not word-split unquoted variables and a silently empty scope reads as a clean run
 export LC_ALL=C
 
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
@@ -16,25 +7,20 @@ cd "$ROOT" || exit 2
 
 RS_DIRS="air/src codegen/src driver/src core/src sema/src common/src frontend/src opt/src"
 
-# gnu grep, not the ugrep wrapper: a recursive search from this root cannot see the gitignored
-# corpora otherwise, and the controls below would read 0 for the wrong reason
+# # gnu grep, not the ugrep wrapper: a recursive search from this root cannot see the gitignored
 GREP=/usr/bin/grep
 [ -x "$GREP" ] || GREP=grep
 
-# the E0428 witness fixtures are aelys sources embedded in this suite and declare fn __* on purpose
 WITNESS_SUITE=aelys/tests/semantic_invariants_tests.rs
 
 sites() {
-    # S-A literals, S-B synthesised names, S-C the C runtime's own exports
     { grep -rhoE '"__[A-Za-z0-9_]+"' --include='*.rs' $RS_DIRS | tr -d '"'
       grep -rhoE 'format!\("__[A-Za-z0-9_]*' --include='*.rs' $RS_DIRS | sed 's/format!("//'
       grep -rhoE '__aelys_[a-z0-9_]+' --include='*.c' --include='*.h' core
     } | sort -u
 }
 
-# taken from the module the compiler writes, so a pass that stops prefixing its names shows up here
-# `twice` captures nothing and so becomes a global constant, which is a second lambda naming site
-# the capturing `add` below never reaches
+# # the capturing `add` below never reaches
 PROBE_SRC='struct Pair { a: i64, b: i64 }
 let twice = fn(x: i64) -> i64 { return x * 2 }
 fn ident<T>(x: T) -> T { return x }
@@ -83,7 +69,6 @@ esac
 SITES=$(sites)
 TOTAL=$(printf '%s\n' "$SITES" | grep -c .)
 
-# an enumeration that lost the two entry symbols enumerated nothing
 for want in __aelys_main __aelys_user_main; do
     printf '%s\n' "$SITES" | grep -qx "$want" || {
         echo "reserved_symbols.sh: enumeration is void, $want missing" >&2
@@ -161,7 +146,7 @@ rc=0
     echo "FAIL: the corpora are present but the fn main control fired below magnitude" >&2
     rc=1
 }
-[ "$DECLS" -eq 0 ] || { echo "FAIL: a tracked .aelys declares fn __*" >&2; rc=1; }
+[ "$DECLS" -eq 0 ] || { echo "FAIL: a .aelys in the working tree declares fn __*" >&2; rc=1; }
 [ "$RUST_FILES" -gt 70 ] || { echo "FAIL: suite scan fired below magnitude" >&2; rc=1; }
 [ "$RUST_DECLS" -eq 0 ] || { echo "FAIL: a suite .rs outside the witness suite embeds an aelys fn __*" >&2; rc=1; }
 [ "$WITNESS_DECLS" -ge 1 ] || { echo "FAIL: the witness suite exclusion is stale" >&2; rc=1; }
