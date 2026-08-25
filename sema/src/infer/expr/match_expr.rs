@@ -25,21 +25,15 @@ impl TypeInference {
         span: Span,
         is_catch: bool,
     ) -> (TypedExprKind, InferType) {
-        // The scrutinee must be an enum type.
-        // It may be a Var if it comes from a match/if-else whose result type
-        // hasn't been solved yet. In that case, extract the enum name from the
-        // first variant pattern and add a constraint.
         let (enum_name, scrutinee_type_args) = match &typed_scrutinee.ty {
             InferType::Enum(name, args) => (name.clone(), args.clone()),
             InferType::Var(_) => {
-                // Try to determine the enum name from the first variant pattern
                 let first_enum = arms.iter().find_map(|arm| match &arm.pattern {
                     Pattern::Variant { enum_name, .. } => Some(enum_name.clone()),
                     _ => None,
                 });
                 match first_enum {
                     Some(name) => {
-                        // Add a constraint so the Var will unify with this enum type
                         self.constraints.push(Constraint::equal(
                             typed_scrutinee.ty.clone(),
                             InferType::Enum(name.clone(), Vec::new()),
@@ -69,7 +63,6 @@ impl TypeInference {
                 }
             }
             InferType::Dynamic => {
-                // Error recovery: type-check arms but don't validate patterns
                 let typed_arms = self.infer_match_arms_dynamic(arms);
                 let result_type = if typed_arms.is_empty() {
                     InferType::Dynamic
@@ -128,17 +121,11 @@ impl TypeInference {
         let mut covered_variants: HashSet<String> = HashSet::new();
         let mut has_wildcard = false;
 
-        // Create a fresh type variable for the result type
         let mut result_type = self.type_gen.fresh();
 
-        // For generic enums, create a shared type param mapping across all arms
-        // so the same type param resolves to the same type var in all arms.
         let is_generic = !enum_def.type_params.is_empty();
         let mut type_param_mapping: HashMap<String, InferType> = HashMap::new();
 
-        // If the scrutinee already has concrete type args (e.g., from a parameter
-        // annotation like `r: Result<i64, string>`), pre-populate the mapping
-        // so bindings get concrete types instead of fresh unresolved vars.
         if is_generic && scrutinee_type_args.len() == enum_def.type_params.len() {
             for (param_name, arg_ty) in enum_def.type_params.iter().zip(scrutinee_type_args.iter())
             {
@@ -154,7 +141,6 @@ impl TypeInference {
                     bindings,
                     span: pat_span,
                 } => {
-                    // Verify enum name matches scrutinee
                     if *pat_enum != enum_name {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
@@ -173,7 +159,6 @@ impl TypeInference {
                         continue;
                     }
 
-                    // Look up the variant
                     let variant_def = enum_def.variants.iter().find(|v| v.name == *variant);
                     let variant_def = match variant_def {
                         Some(v) => v,
@@ -200,7 +185,6 @@ impl TypeInference {
                         }
                     };
 
-                    // Check for duplicate variant patterns
                     if covered_variants.contains(variant) {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
@@ -219,7 +203,6 @@ impl TypeInference {
                     }
                     covered_variants.insert(variant.clone());
 
-                    // Check binding count matches variant data fields
                     let expected_bindings = variant_def.data.len();
                     let actual_bindings = bindings.len();
                     if expected_bindings != actual_bindings {
@@ -244,8 +227,6 @@ impl TypeInference {
                         });
                     }
 
-                    // Introduce bindings as locals and infer the arm body.
-                    // For generic enums, instantiate type params with fresh type vars.
                     let mut typed_bindings: Vec<(String, InferType)> =
                         Vec::with_capacity(bindings.len());
                     for (i, name) in bindings.iter().enumerate() {
@@ -265,7 +246,6 @@ impl TypeInference {
                         typed_bindings.push((name.clone(), ty));
                     }
 
-                    // Push scope for bindings
                     self.env.push_scope();
                     for (name, ty) in &typed_bindings {
                         self.env.define_local(name.clone(), ty.clone());
@@ -275,8 +255,6 @@ impl TypeInference {
 
                     self.env.pop_scope();
 
-                    // Arm body constraints are deferred to after the loop so
-                    // literal arms can be narrowed to match non-literal arms first.
 
                     typed_arms.push(TypedMatchArm {
                         pattern: TypedPattern::Variant {
@@ -322,12 +300,8 @@ impl TypeInference {
             }
         }
 
-        // Harmonize arm types before pushing constraints. When some arms have
-        // a concrete non-default type (e.g. i32 from an enum field) and others
-        // have i64 literals, narrow the literals to match. This avoids stale
-        // constraints that would conflict with later narrowing.
+        // have i64 literals, narrow the literals to match. this avoids stale
         if typed_arms.len() > 1 {
-            // Find a concrete non-default integer or float type from any arm.
             let concrete_int = typed_arms
                 .iter()
                 .map(|a| &a.body.ty)
@@ -353,9 +327,6 @@ impl TypeInference {
                 }
             }
 
-            // Harmonize enum types: when one arm has a concrete enum type
-            // (e.g. Option<i32>) and others have unresolved Var type args,
-            // narrow the unresolved arms to match.
             let concrete_enum = typed_arms.iter()
                 .map(|a| &a.body.ty)
                 .find(|t| matches!(t, InferType::Enum(_, args) if args.iter().all(|a| a.is_concrete())))
@@ -375,9 +346,6 @@ impl TypeInference {
             }
         }
 
-        // Implicit numeric widening between match arms: when arms have
-        // different integer or float sizes, widen narrower arms to the widest.
-        // Find the widest type that all other numeric arms can widen to.
         if typed_arms.len() > 1 {
             let widest = typed_arms
                 .iter()
@@ -416,7 +384,6 @@ impl TypeInference {
             }
         }
 
-        // Now resolve result_type: if all arms agree, use the concrete type directly.
         if !typed_arms.is_empty() {
             let first_ty = &typed_arms[0].body.ty;
             let all_same_concrete =
@@ -426,9 +393,8 @@ impl TypeInference {
             }
         }
 
-        // Push arm body constraints (deferred from the loop above).
         for arm in &typed_arms {
-            self.constraints.push(Constraint::equal(
+            self.constraints.push(Constraint::flows(
                 arm.body.ty.clone(),
                 result_type.clone(),
                 arm.body.span,
@@ -436,7 +402,6 @@ impl TypeInference {
             ));
         }
 
-        // Exhaustiveness check: all variants must be covered, OR wildcard must be present
         if !has_wildcard {
             let all_variants: HashSet<String> =
                 enum_def.variants.iter().map(|v| v.name.clone()).collect();
@@ -477,7 +442,6 @@ impl TypeInference {
         )
     }
 
-    /// Infer match arms when the scrutinee type is Dynamic (error recovery).
     fn infer_match_arms_dynamic(&mut self, arms: &[MatchArm]) -> Vec<TypedMatchArm> {
         arms.iter()
             .map(|arm| {
