@@ -5,7 +5,6 @@ use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, Stmt, StmtKind, UnaryOp};
 
 impl TypeInference {
-    /// Infer statement with implicit return handling
     pub(crate) fn infer_stmt_with_implicit_return(
         &mut self,
         stmt: &Stmt,
@@ -16,7 +15,6 @@ impl TypeInference {
                 let mut typed_expr = self.infer_expr(expr);
                 self.try_narrow_literal(&mut typed_expr, return_type);
 
-                // Implicit numeric widening for tail expressions
                 if typed_expr.ty != *return_type && typed_expr.ty.can_implicit_widen_to(return_type)
                 {
                     let vspan = typed_expr.span;
@@ -38,7 +36,7 @@ impl TypeInference {
                     };
                 }
 
-                self.constraints.push(Constraint::equal(
+                self.constraints.push(Constraint::flows_into(
                     return_type.clone(),
                     typed_expr.ty.clone(),
                     expr.span,
@@ -162,9 +160,6 @@ fn stmt_guarantees_return(stmt: &Stmt) -> bool {
             for_loop_executes_at_least_once(start, end, *inclusive, step.as_ref().as_ref())
                 && stmt_guarantees_return(body)
         }
-        // `while true { ... return ... }` is an infinite loop that can only
-        // exit via `return` (or loop forever).  If the condition is `true`
-        // and the body contains at least one `return` and no `break`, the
         // loop never falls through to the next statement.
         StmtKind::While { condition, body } => {
             is_const_true(condition) && stmt_contains_return(body) && !stmt_contains_break(body)
@@ -181,7 +176,6 @@ fn is_const_true(expr: &Expr) -> bool {
     }
 }
 
-/// Check if a statement contains a `return` anywhere (recursively).
 fn stmt_contains_return(stmt: &Stmt) -> bool {
     match &stmt.kind {
         StmtKind::Return(_) => true,
@@ -203,9 +197,6 @@ fn stmt_contains_return(stmt: &Stmt) -> bool {
     }
 }
 
-/// Check if a statement contains a `break` at the current loop level
-/// (does NOT recurse into nested loops, since break only affects the
-/// innermost loop).
 fn stmt_contains_break(stmt: &Stmt) -> bool {
     match &stmt.kind {
         StmtKind::Break => true,
@@ -218,8 +209,6 @@ fn stmt_contains_break(stmt: &Stmt) -> bool {
             stmt_contains_break(then_branch)
                 || else_branch.as_ref().is_some_and(|e| stmt_contains_break(e))
         }
-        // Don't recurse into nested loops — break in a nested loop
-        // doesn't affect the outer while-true.
         StmtKind::While { .. } | StmtKind::For { .. } | StmtKind::ForEach { .. } => false,
         _ => false,
     }
