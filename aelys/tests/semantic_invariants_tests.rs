@@ -454,9 +454,6 @@ fn run_rejects(h: &Harness, rows: &[(&str, &str, &str)]) {
     }
 }
 
-// completeness argument: the table is organized by the mutation entry-point enumeration in forensics
-// compiler-side entry point that reaches a store is a row here: plain index assign, compound assign,
-// on a shared buffer, self assign, and a call that transfers a share. the deferred entry points
 // (nested vec, vec in an array or a struct, a slice, for-each) fail closed and are pinned in group x.
 
 const GROUP_V: &[(&str, &str, Oracle)] = &[
@@ -959,7 +956,6 @@ fn main() -> i64 {
     ),
 ];
 
-// the anti-vacuity legs: a checker that rejected everything would satisfy si-b01 to si-b04
 const GROUP_B_ACCEPTS: &[(&str, &str, Oracle)] = &[
     (
         "SI-B05",
@@ -1004,7 +1000,6 @@ fn main() -> i64 {
         Oracle::Exit(9),
     ),
     (
-        // `&mut *r` lowered to the address of the loaded pointee, so the write
         "SI-B08",
         r#"
 fn f(r: &mut i64) {
@@ -1225,7 +1220,6 @@ fn group_re_rc_liveness_and_error_handling() {
     run_rows(&h, GROUP_E);
 }
 
-// divergence class an absolute oracle at every level closes.
 
 const GROUP_A: &[(&str, &str, Oracle)] = &[
     (
@@ -1304,33 +1298,10 @@ struct XRow {
     id: &'static str,
     code: &'static str,
     rejected: &'static str,
-    // none where the rejected form has no kept counterpart
     twin: Option<(&'static str, i32)>,
 }
 
 const GROUP_X: &[XRow] = &[
-    XRow {
-        id: "SI-X01",
-        code: "E0426",
-        rejected: r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let s = v[0..2]
-    s[0] = 99
-    return v[0]
-}
-"#,
-        twin: Some((
-            r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let s = v[0..2]
-    return s[0]
-}
-"#,
-            1,
-        )),
-    },
     XRow {
         id: "SI-X02",
         code: "E0414",
@@ -1382,7 +1353,6 @@ fn main() -> i64 {
         )),
     },
     XRow {
-        // stage 5 widened e0415 to a field spine. this program used to compile and silently drop the
         id: "SI-X15",
         code: "E0415",
         rejected: r#"
@@ -1660,7 +1630,6 @@ fn group_x_deferred_surface_fails_closed() {
     }
 }
 
-// p5, p10/p11, and the `rc::get` root the inventory has no row for) and every writer whose target
 // pre-state, so a row cannot pass on a stale-but-equal read.
 
 const GROUP_PA: &[(&str, &str, Oracle)] = &[
@@ -1695,7 +1664,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-        // the m3 root: `rc::get(x)` denotes storage and place_of has no arm for it.
         "SI-PA03",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -1724,7 +1692,6 @@ fn main() -> i64 {
     ),
     (
         // the push target is a place. sigabrt 134 `index out of bounds` at the sentinel,
-        // because the open-coded unwrap named the pointer local as if it were the vec
         "SI-PA05",
         r#"
 fn addone(r: &mut Vec<i64>) -> i64 {
@@ -1846,7 +1813,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-        // w26: compound assignment through a projected pointer target
         "SI-PA12",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -1863,9 +1829,7 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOut(0, "101\n"),
     ),
-    // ---- p10/p11: captures are pointers into the env --
     (
-        // a capture is a pointer into the env, so a projected write into a captured
         // the row exists so deleting the write-back cannot silently break it
         "SI-PA13",
         r#"
@@ -1922,7 +1886,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "2\n3\n1\n"),
     ),
     (
-        // the 389-fixture corpus has zero `&mut` and vec_value_semantics_tests has no
         "SI-PA15",
         r#"
 fn poke(r: &mut Vec<i64>) -> i64 {
@@ -1957,7 +1920,6 @@ fn main() -> i64 {
         Oracle::Balanced(0),
     ),
     (
-        // a write through a pointer into rc payload storage, rc[n/n]
         "SI-PA17",
         r#"
 struct Node { val: i64, next: Rc<Node> }
@@ -2036,7 +1998,6 @@ fn main() -> i64 {
         Oracle::Terminates(20_000, 0, "0\n"),
     ),
     (
-        // the c53 self-call twin: the counter lives behind the pointer across a recursive call
         "SI-PA22",
         r#"
 struct Cell { f: i64, g: i64 }
@@ -2057,7 +2018,6 @@ fn main() -> i64 {
         Oracle::Terminates(20_000, 0, "0\n"),
     ),
     (
-        // the sentinel printed an aslr-varying address that differed per allocator and per run,
         "SI-PA23",
         r#"
 fn main() -> i64 {
@@ -2073,7 +2033,6 @@ fn main() -> i64 {
     ),
     (
         // v1: `&v[0]` on a vec compiles and reads right. it never reaches the detach dispatch,
-        // so retiring e0415/e0413/e0422 must fail a test rather than open the hole silently
         "SI-PA24",
         r#"
 fn main() -> i64 {
@@ -2086,7 +2045,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "1973\n"),
     ),
     (
-        // diii: a triply-nested index spine through a pointer root, rooted at a local because
         "SI-PA09b",
         r#"
 fn main() -> i64 {
@@ -2100,7 +2058,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "101\n"),
     ),
     (
-        // v2: the same through a pointer root
         "SI-PA25",
         r#"
 fn peek(r: &mut Vec<i64>) -> i64 {
@@ -2116,9 +2073,7 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOut(0, "7919\n"),
     ),
-    // a capture is a pointer, so every site that reads a capture's
     (
-        // place against rvalue, so it compiled clean. pre-fix: an aslr-varying integer that
         "SI-PA26",
         r#"
 fn main() -> i64 {
@@ -2171,7 +2126,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "7\n"),
     ),
     (
-        // a 32-byte struct: the store into the inner env field was 8 bytes wide (a pointer)
         "SI-PA29",
         r#"
 struct Big { a: i64, b: i64, c: i64, d: i64 }
@@ -2190,7 +2144,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "10\n"),
     ),
     (
-        // a captured vec: the inner env's {ptr,len,cap} header was overwritten with a pointer,
         // so the read went out of bounds. pre-fix: sigabrt 134 at every level, compile-clean
         "SI-PA30",
         r#"
@@ -2232,7 +2185,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "3\n"),
     ),
     (
-        // a pointer, so the runtime decremented the closure env's own rc header. one iteration
         // only leaked (frees 1 -> 0), which balanced and namedleak both accept; four iterations
         "SI-PA32",
         r#"
@@ -2544,12 +2496,12 @@ fn main() -> i64 {
     (
         "SI-PA52",
         r#"
-fn bump(s: &[i64]) -> i64 {
+fn bump(s: &mut [i64]) -> i64 {
     s[0]++
     return 0
 }
 fn main() -> i64 {
-    let a: [i64; 3] = [7, 2, 3]
+    let mut a: [i64; 3] = [7, 2, 3]
     let q = bump(a[..])
     println(a[0])
     return 0
@@ -2798,7 +2750,7 @@ fn main() -> i64 {
     (
         "SI-PAA06",
         r#"
-fn run(s: &[i64]) -> i64 {
+fn run(s: &mut [i64]) -> i64 {
     let t = s[0..2]
     let mut i = 0
     while i < 1 {
@@ -2808,7 +2760,7 @@ fn run(s: &[i64]) -> i64 {
     return 0
 }
 fn main() -> i64 {
-    let a: [i64; 3] = [7, 0, 0]
+    let mut a: [i64; 3] = [7, 0, 0]
     let q = run(a[..])
     println(a[0])
     return 0
@@ -2819,14 +2771,14 @@ fn main() -> i64 {
     (
         "SI-PAA07",
         r#"
-fn run(s: &[i64]) -> i64 {
+fn run(s: &mut [i64]) -> i64 {
     let t = s[0..2]
     t[0] = 101
     println(s[0])
     return 0
 }
 fn main() -> i64 {
-    let a: [i64; 3] = [7, 0, 0]
+    let mut a: [i64; 3] = [7, 0, 0]
     let q = run(a[..])
     println(a[0])
     return 0
@@ -2854,11 +2806,361 @@ fn main() -> i64 {
     ),
 ];
 
+const GROUP_CA: &[(&str, &str, Oracle)] = &[
+    // loop below never advanced and the program hung with no output
+    (
+        "SI-PACA01",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 0]
+    let mut b: [i64; 2] = [0, 0]
+    while b[0] < 8 {
+        b[0] = a[0] * 1
+    }
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::Terminates(20_000, 0, "9\n"),
+    ),
+    (
+        "SI-PACA02",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 5]
+    let mut b: [i64; 2] = [0, 0]
+    b[0] = a[0] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA03",
+        r#"
+fn main() -> i64 {
+    let a = vec[9, 5]
+    let mut b = vec[0, 0]
+    b[0] = a[0] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA04",
+        r#"
+fn main() -> i64 {
+    let mut a: [i64; 2] = [9, 1]
+    a[0] = a[1] * 2
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "2\n"),
+    ),
+    // the source subscript was dropped whole, so `side` was never called
+    (
+        "SI-PACA05",
+        r#"
+fn side() -> i64 {
+    println(77)
+    return 0
+}
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 5]
+    let mut b: [i64; 2] = [0, 0]
+    b[0] = a[side()] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "77\n18\n"),
+    ),
+    (
+        "SI-PACA06",
+        r#"
+struct P { x: i64 }
+fn main() -> i64 {
+    let p: P = P { x: 9 }
+    let mut q: P = P { x: 0 }
+    q.x = p.x * 2
+    println(q.x)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA07",
+        r#"
+struct Inner { v: i64 }
+struct Outer { i: Inner }
+fn main() -> i64 {
+    let a: Outer = Outer { i: Inner { v: 9 } }
+    let mut b: Outer = Outer { i: Inner { v: 0 } }
+    b.i.v = a.i.v * 2
+    println(b.i.v)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA08",
+        r#"
+fn g(v: i64) -> i64 {
+    return v
+}
+fn main() -> i64 {
+    let s: [i64; 2] = [9, 5]
+    let mut d: [i64; 2] = [0, 0]
+    d[0] = g(s[0] * 2)
+    println(d[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA09",
+        r#"
+struct P { d: [i64; 2] }
+fn main() -> i64 {
+    let p: P = P { d: [9, 5] }
+    let mut b: [i64; 2] = [0, 0]
+    b[0] = p.d[0] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA10",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 5]
+    let mut b: [i64; 2] = [0, 0]
+    let i: i64 = 0
+    b[i] = a[i] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA11",
+        r#"
+fn poke(src: &Vec<i64>, dst: &mut Vec<i64>) -> i64 {
+    (*dst)[0] = (*src)[0] * 2
+    return 0
+}
+fn main() -> i64 {
+    let s: Vec<i64> = vec[9, 2]
+    let mut d: Vec<i64> = vec[0, 0]
+    let q = poke(&s, &mut d)
+    println(d[0])
+    return q
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA12",
+        r#"
+struct P { x: i64 }
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 5]
+    let mut q: P = P { x: 0 }
+    q.x = a[0] * 2
+    println(q.x)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA13",
+        r#"
+struct P { x: i64 }
+fn main() -> i64 {
+    let p: P = P { x: 9 }
+    let mut b: [i64; 2] = [0, 0]
+    b[0] = p.x * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA14",
+        r#"
+fn main() -> i64 {
+    let mut b: [i64; 2] = [1, 0]
+    b[0] += 3
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "4\n"),
+    ),
+    (
+        "SI-PACA15",
+        r#"
+fn main() -> i64 {
+    let mut b: [i64; 2] = [9, 0]
+    b[0] = b[0] * 2
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA16",
+        r#"
+fn main() -> i64 {
+    let a: [i64; 2] = [9, 5]
+    let mut b: [i64; 2] = [0, 0]
+    b[0] = 2 * a[0]
+    println(b[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA17",
+        r#"
+struct P { x: i64 }
+fn main() -> i64 {
+    let mut p: P = P { x: 1 }
+    p.x += 3
+    println(p.x)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "4\n"),
+    ),
+    (
+        "SI-PACA18",
+        r#"
+fn main() -> i64 {
+    let a: i64 = 9
+    let mut b: i64 = 0
+    let pa: &i64 = &a
+    let pb: &mut i64 = &mut b
+    *pb = *pa * 2
+    println(b)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "18\n"),
+    ),
+    (
+        "SI-PACA19",
+        r#"
+fn side() -> i64 {
+    println(77)
+    return 0
+}
+fn main() -> i64 {
+    let mut a: [i64; 2] = [9, 5]
+    a[side()] += 3
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "77\n12\n"),
+    ),
+    (
+        "SI-PACA20",
+        r#"
+struct P { d: [i64; 2] }
+fn main() -> i64 {
+    let mut p: P = P { d: [9, 5] }
+    p.d[0] += 3
+    println(p.d[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "12\n"),
+    ),
+    (
+        "SI-PACA21",
+        r#"
+struct Inner { v: i64 }
+struct Outer { i: Inner }
+fn main() -> i64 {
+    let mut b: Outer = Outer { i: Inner { v: 9 } }
+    b.i.v += 3
+    println(b.i.v)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "12\n"),
+    ),
+    (
+        "SI-PACA22",
+        r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    (*r)[0] += 3
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[9, 2]
+    let q = poke(&mut v)
+    println(v[0])
+    return q
+}
+"#,
+        Oracle::ExitOut(0, "12\n"),
+    ),
+    (
+        "SI-PACA23",
+        r#"
+fn main() -> i64 {
+    let mut a: [i64; 2] = [9, 5]
+    let i: i64 = 0
+    a[i]++
+    println(a[0])
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "10\n"),
+    ),
+    (
+        "SI-PACA24",
+        r#"
+struct P { x: i64 }
+fn main() -> i64 {
+    let mut p: P = P { x: 9 }
+    p.x++
+    println(p.x)
+    return 0
+}
+"#,
+        Oracle::ExitOut(0, "10\n"),
+    ),
+];
+
 #[test]
 fn group_pa_place_addressing() {
     let h = Harness::new();
     run_rows(&h, GROUP_PA);
     h.assert_measured("group_pa_place_addressing");
+}
+
+#[test]
+fn group_ca_compound_assignment_is_place_identity() {
+    let h = Harness::new();
+    run_rows(&h, GROUP_CA);
+    h.assert_measured("group_ca_compound_assignment_is_place_identity");
 }
 
 // the fail-closed half: one row per code stage 1 adds, plus the two c52 legs and the origins
@@ -3795,7 +4097,7 @@ fn group_pa_choke_set_is_tracked() {
     rs_sources(&root.join("air/src/lower"), &mut lower);
     let mut repo = Vec::new();
     rs_sources(root, &mut repo);
-// this file spells out the patterns it counts, so it cannot be inside its own census
+    // this file spells out the patterns it counts, so it cannot be inside its own census
     let self_path = root.join(file!());
     repo.retain(|(path, _)| path != &self_path);
     assert_eq!(
@@ -4237,18 +4539,129 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
     ),
+    // the seven rows e0426 fenced, now correct programs. the aliased ones carry a divergence as
+    (
+        "SI-X01",
+        r#"
+fn main() -> i64 {
+    let mut v = vec[1, 2, 3]
+    let s = v[0..2]
+    s[0] = 99
+    return v[0]
+}
+"#,
+        Oracle::ExitOutStats(99, "", 1, 1),
+    ),
+    (
+        "S2-M01",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let w: Vec<i64> = v
+    let s = v[0..2]
+    s[0] = 99
+    println(v[0])
+    println(w[0])
+    return 0
+}
+"#,
+        Oracle::ExitOutStats(0, "99\n1\n", 2, 2),
+    ),
+    (
+        "S2-M02",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..2]
+    let t = s
+    t[0] = 99
+    return v[0]
+}
+"#,
+        Oracle::ExitOutStats(99, "", 1, 1),
+    ),
+    (
+        "S2-M03",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    let s = v[0..3]
+    let u = s[0..2]
+    u[0] = 99
+    return v[0]
+}
+"#,
+        Oracle::ExitOutStats(99, "", 1, 1),
+    ),
+    (
+        "S2-M11",
+        r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    println(v[0])
+    return z
+}
+"#,
+        Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
+    ),
+    (
+        "S2-M12",
+        r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[..]
+    s[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    return z
+}
+"#,
+        Oracle::ExitOutStats(0, "11\n", 2, 2),
+    ),
+    (
+        // a re-slice inside the callee, so the write's dest is two borrows from the referent
+        "S2-M14",
+        r#"
+fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3]
+    let t = s[0..2]
+    t[0] = 99
+    return 0
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[11, 22, 33]
+    let w: Vec<i64> = v
+    let z = poke(&mut v)
+    println(w[0])
+    return z
+}
+"#,
+        Oracle::ExitOutStats(0, "11\n", 2, 2),
+    ),
     (
         "S2-M16",
         r#"
 struct Ar { a: [i64; 3] }
-fn poke(r: &Ar) -> i64 {
+fn poke(r: &mut Ar) -> i64 {
     let s = (*r).a[0..3]
     s[0] = 99
     return 0
 }
 fn main() -> i64 {
     let mut b = Ar { a: [11, 22, 33] }
-    let z = poke(&b)
+    let z = poke(&mut b)
     println(b.a[0])
     return z
 }
@@ -4556,82 +4969,8 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-        id: "S2-M01",
-        code: "E0426",
-        rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let w: Vec<i64> = v
-    let s = v[0..2]
-    s[0] = 99
-    println(v[0])
-    println(w[0])
-    return 0
-}
-"#,
-        twin: Some((
-            r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let w: Vec<i64> = v
-    let s = v[0..2]
-    return s[0] + w[1]
-}
-"#,
-            3,
-        )),
-    },
-    XRow {
-        id: "S2-M02",
-        code: "E0426",
-        rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    let t = s
-    t[0] = 99
-    return v[0]
-}
-"#,
-        twin: Some((
-            r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    let t = s
-    return t[0]
-}
-"#,
-            1,
-        )),
-    },
-    XRow {
-        id: "S2-M03",
-        code: "E0426",
-        rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..3]
-    let u = s[0..2]
-    u[0] = 99
-    return v[0]
-}
-"#,
-        twin: Some((
-            r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..3]
-    let u = s[0..2]
-    return u[0]
-}
-"#,
-            1,
-        )),
-    },
-    XRow {
         id: "S2-M04",
-        code: "E0426",
+        code: "E0422",
         rejected: r#"
 fn poke(s: &[i64]) -> i64 {
     s[0] = 9
@@ -4647,7 +4986,7 @@ fn main() -> i64 {
     },
     XRow {
         id: "S2-M09",
-        code: "E0426",
+        code: "E0422",
         rejected: r#"
 fn d(s: &[i64]) -> i64 {
     let t = s[0..1]
@@ -4662,7 +5001,7 @@ fn main() -> i64 {
 "#,
         twin: Some((
             r#"
-fn d(s: &[i64]) -> i64 {
+fn d(s: &mut [i64]) -> i64 {
     let t = s[0..1]
     t[0] = 9
     return 0
@@ -4678,7 +5017,7 @@ fn main() -> i64 {
     },
     XRow {
         id: "S2-M10",
-        code: "E0426",
+        code: "E0422",
         rejected: r#"
 fn poke(r: &Vec<i64>) -> i64 {
     let s = (*r)[0..3]
@@ -4696,47 +5035,8 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-        id: "S2-M11",
-        code: "E0426",
-        rejected: r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    s[0] = 99
-    return 0
-}
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    println(v[0])
-    return z
-}
-"#,
-        twin: None,
-    },
-    XRow {
-        id: "S2-M12",
-        code: "E0426",
-        rejected: r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[..]
-    s[0] = 99
-    return 0
-}
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    return z
-}
-"#,
-        twin: None,
-    },
-    XRow {
         id: "S2-M13",
-        code: "E0426",
+        code: "E0422",
         rejected: r#"
 fn wr(s: &[i64]) -> i64 {
     s[0] = 99
@@ -4745,27 +5045,6 @@ fn wr(s: &[i64]) -> i64 {
 fn poke(r: &mut Vec<i64>) -> i64 {
     let s = (*r)[0..3]
     return wr(s)
-}
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    return z
-}
-"#,
-        twin: None,
-    },
-    XRow {
-        // a re-slice inside the callee, so the write's dest is two borrows from the referent
-        id: "S2-M14",
-        code: "E0426",
-        rejected: r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    let t = s[0..2]
-    t[0] = 99
-    return 0
 }
 fn main() -> i64 {
     let mut v: Vec<i64> = vec[11, 22, 33]
@@ -4861,7 +5140,6 @@ fn main() -> i64 {
         twin: None,
     },
     XRow {
-        // the widened gate has not swallowed it
         id: "S2-F10",
         code: "E0725",
         rejected: r#"
@@ -4941,14 +5219,17 @@ fn s2_e0413_is_retired_and_its_heirs_are_registered() {
         registry::lookup("E0413").is_none(),
         "E0413 must be gone from the registry"
     );
-    for code in ["E0425", "E0426"] {
-        let info =
-            registry::lookup(code).unwrap_or_else(|| panic!("{code} must have an --explain entry"));
-        assert!(
-            !info.explanation.trim().is_empty(),
-            "{code}'s --explain entry must not be empty"
-        );
-    }
+    let info =
+        registry::lookup("E0425").unwrap_or_else(|| panic!("E0425 must have an --explain entry"));
+    assert!(
+        !info.explanation.trim().is_empty(),
+        "E0425's --explain entry must not be empty"
+    );
+    assert!(
+        registry::lookup("E0426").is_none(),
+        "E0426 was E0413's other heir and was discharged at the formation of the view; if it is \
+         back, the succession has three live members and this record is wrong"
+    );
     for code in ["E0421", "E0422", "E0423", "E0424"] {
         assert!(
             registry::lookup(code).is_some(),
@@ -5284,7 +5565,6 @@ fn main() -> i64 {
     }
 }
 
-// the twin is the same program with the same `nogc` keyword and a clean body, built by
 // substitution so a hand-copied twin cannot drift away from the program it twins
 const DECL_MARKER: &str = "@DECL@";
 const NOGC_VIOLATING_DECL: &str = "nogc fn bad() -> Vec<i64> { return Vec::new() }";
@@ -5673,7 +5953,6 @@ fn group_n_block_nested_fails_closed() {
     assert_eq!(seen.len(), 30, "the block-form enumeration lost a row");
 }
 
-// counts the marker lines a renderer drew, so a row can pin "exactly one label per definition"
 fn marker_lines(rendered: &str, marker: char) -> usize {
     rendered
         .lines()
@@ -5727,8 +6006,6 @@ fn host(n: i64) -> i64 {
 }
 fn main() -> i64 { return host(0) }
 "#;
-    // the caret positions are wrong here and stay wrong: func.span is not remapped for a `fn`
-    // inside an interpolation, so this row pins the code and the message only
     for (name, opt) in REJECT_LEVELS {
         let rendered = h.reject("SI-N40", name, src, *opt);
         assert!(
@@ -5740,8 +6017,6 @@ fn main() -> i64 { return host(0) }
     }
 }
 
-// the declared over-rejection: base compiles this and prints the correct 1 then 0. the nested
-// body allocates nothing, but it merges with the outer `f` by bare name and is refused.
 const N50_SRC: &str = r#"
 fn f() -> i64 {
     let mut v = Vec::new()
@@ -5888,7 +6163,6 @@ struct SymRow {
 }
 
 // base behaviour is recorded per row because none of it survives the fence: these programs are
-// refused now, so the wrong answers below can only ever be measured at -o0
 const GROUP_N_SYM: &[SymRow] = &[
     SymRow {
         // base prints 1 then 1: the second body is never emitted
@@ -5912,7 +6186,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base prints 0: the call reaches the outer body, not the shadow beside it
         id: "SI-S02",
         code: "E0427",
         src: r#"
@@ -5931,7 +6204,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base reaches the backend and fails there with E0901
         id: "SI-S03",
         code: "E0427",
         src: r#"
@@ -5950,7 +6222,6 @@ fn main() -> i64 {
         absent: Some("E0901"),
     },
     SymRow {
-        // declared over-rejection: base compiles this and prints the correct 1 then 0
         id: "SI-S04",
         code: "E0427",
         src: r#"
@@ -5974,7 +6245,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base compiles this and prints 111 only: main's body is discarded
         id: "SI-S10",
         code: "E0428",
         src: r#"
@@ -5990,7 +6260,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base does not terminate: the entry wrapper calls this back into itself, so it segfaults at -o0 and times out at -o1/-o2/-o3
         id: "SI-S11",
         code: "E0428",
         src: r#"
@@ -6006,7 +6275,6 @@ fn __aelys_main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base reaches the backend and fails there with E0901
         id: "SI-S12",
         code: "E0428",
         src: r#"
@@ -6023,7 +6291,6 @@ fn main() -> i64 {
     },
     SymRow {
         // base prints 2 then 2. this row fails if the pre-monomorphization placement is dropped:
-        // the two instances mangle alike and mono keeps one, so nothing survives to detect.
         id: "SI-S20",
         code: "E0427",
         src: r#"
@@ -6048,7 +6315,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base prints 1 then 1
         id: "SI-S21",
         code: "E0427",
         src: r#"
@@ -6073,7 +6339,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base prints 105 twice: the generic instance lands on the user's name
         id: "SI-S22",
         code: "E0428",
         src: r#"
@@ -6088,8 +6353,6 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-        // base is E0901 at -O0 and compiles at -O2, where the lambda is optimized away before
-        // codegen: an -O-dependent verdict, which is what the invariance property below pins
         id: "SI-S23",
         code: "E0428",
         src: r#"
@@ -6107,8 +6370,7 @@ fn main() -> i64 {
         absent: Some("E0901"),
     },
     SymRow {
-// -o0 prints 0 then 0. sema does not walk a lambda body for the nested-shadow check, so
-// this is the one collision shape that reaches the fence without e0418 pre-empting it
+        // this is the one collision shape that reaches the fence without e0418 pre-empting it
         id: "SI-S25",
         code: "E0427",
         src: r#"
@@ -6129,8 +6391,7 @@ fn main() -> i64 {
         absent: None,
     },
     SymRow {
-// mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` mangle
-// alike; neither user name is reserved, so only the post-monomorphization gate sees it
+        // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` mangle
         id: "SI-S24",
         code: "E0427",
         src: r#"
@@ -6149,8 +6410,6 @@ fn main() -> i64 {
         absent: Some("E0901"),
     },
     SymRow {
-        // declared over-rejection: base compiles this and prints the correct 42. a private-naming
-        // convention is a legal program today and the namespace rule refuses it.
         id: "L1",
         code: "E0428",
         src: r#"
@@ -6164,7 +6423,6 @@ fn main() -> i64 {
     },
 ];
 
-// the controls: each is the neighbouring row with one name changed, and each must stay green
 const GROUP_N_SYM_CONTROLS: &[(&str, &str, Oracle)] = &[
     (
         "SI-S00",
@@ -6181,8 +6439,6 @@ fn main() -> i64 { return outer() }
         Oracle::ExitOut(0, "1\n2\n"),
     ),
     (
-        // the SI-S11 shape with the helper renamed. it asserts termination, not a value: the row
-        // it controls is the only one in this file whose base behaviour is a hang.
         "SI-S11ctl",
         r#"
 fn main() -> i64 {
@@ -6385,7 +6641,6 @@ enum Verdict {
 }
 
 // an uncoded rejection is its own bucket, so a renderer change cannot make two different
-// refusals compare equal
 fn first_code(rendered: &str) -> String {
     let bytes = rendered.as_bytes();
     for i in 0..bytes.len().saturating_sub(6) {
@@ -6412,7 +6667,6 @@ fn verdicts_agree(verdicts: &[Verdict]) -> bool {
     verdicts.windows(2).all(|pair| pair[0] == pair[1])
 }
 
-// a constant condition whose taken branch is one statement is spliced into the parent at -o2 and
 const GROUP_N_DIV: &[(&str, &str)] = &[
     (
         "SI-D01",
@@ -6482,7 +6736,6 @@ fn main() -> i64 {
 
 #[test]
 fn group_n_o_invariance() {
-    // self-test first: without it a "0 divergent" count is unfalsifiable once the defect is fixed
     let unequal = [
         Verdict::Accepted,
         Verdict::Accepted,
