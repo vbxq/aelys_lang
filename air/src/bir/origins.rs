@@ -1,5 +1,4 @@
 // per-body return-origin summaries + the d1 return-ref-to-local escape.
-// a seeded holds fixpoint over origin = param(i) | loan(id): the param seed is what lets a
 
 use std::collections::{HashMap, HashSet};
 
@@ -8,7 +7,6 @@ use super::*;
 // per parameter index (< arg_count): true iff the returned reference may borrow that parameter,
 pub struct ReturnOrigins {
     pub params: Vec<bool>,
-    // (floor): the body is rejected, so its call sites over-approximate rather than trust params
     pub escapes_local: bool,
 }
 
@@ -34,102 +32,6 @@ pub fn summaries(bir: &BirProgram, errors: &mut Vec<BirDiagnostic>) -> Summaries
             .or_insert(SummaryEntry::Unique(ro));
     }
     map
-}
-
-pub enum ParamWrites {
-    Unique(Vec<bool>),
-    Ambiguous,
-}
-
-pub type SliceWrites = HashMap<String, ParamWrites>;
-
-pub fn slice_param_writes(bir: &BirProgram) -> SliceWrites {
-    let mut map: SliceWrites = HashMap::new();
-    for body in &bir.bodies {
-        let w = body_slice_param_writes(body);
-        map.entry(body.name.clone())
-            .and_modify(|e| *e = ParamWrites::Ambiguous)
-            .or_insert(ParamWrites::Unique(w));
-    }
-    map
-}
-
-fn body_slice_param_writes(body: &BirBody) -> Vec<bool> {
-    let n = body.locals.len();
-    let arg_count = body.arg_count.min(n);
-    let mut written = vec![false; body.arg_count];
-    let slice_params: Vec<usize> = (0..arg_count)
-        .filter(|i| matches!(body.locals[*i].ty, InferType::Slice { .. }))
-        .collect();
-    if slice_params.is_empty() {
-        return written;
-    }
-
-    let mut sink = Vec::new();
-    let loans = loans::gen_loans(body, &mut sink);
-    let mut edges: Vec<(usize, usize)> = Vec::new();
-    for block in &body.blocks {
-        for stmt in &block.stmts {
-            if let BirStmtKind::Assign { dest, rvalue } = &stmt.kind {
-                if dest.proj.is_empty() {
-                    if let BirRvalue::Use(BirOperand::Copy(s) | BirOperand::Move(s)) = rvalue {
-                        if s.proj.is_empty() {
-                            edges.push((dest.local.0 as usize, s.local.0 as usize));
-                        }
-                    }
-                }
-            }
-        }
-    }
-    for l in &loans {
-        edges.push((l.holder.0 as usize, l.place.local.0 as usize));
-    }
-
-    let mut derived: Vec<HashSet<usize>> = vec![HashSet::new(); n];
-    for i in &slice_params {
-        derived[*i].insert(*i);
-    }
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for &(dst, src) in &edges {
-            if dst >= n || src >= n || dst == src {
-                continue;
-            }
-            let src_ids: Vec<usize> = derived[src].iter().copied().collect();
-            for id in src_ids {
-                if derived[dst].insert(id) {
-                    changed = true;
-                }
-            }
-        }
-    }
-
-    for block in &body.blocks {
-        for stmt in &block.stmts {
-            let BirStmtKind::Assign { dest, rvalue } = &stmt.kind else {
-                continue;
-            };
-            if !dest.proj.is_empty() {
-                for p in &derived[dest.local.0 as usize] {
-                    written[*p] = true;
-                }
-            }
-            // a one-level closure, not a call-graph fixpoint: any callee handed the view writes
-            if let BirRvalue::Call { args, .. } = rvalue {
-                for arg in args {
-                    if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
-                        if p.proj.is_empty() {
-                            for q in &derived[p.local.0 as usize] {
-                                written[*q] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    written
 }
 
 fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrigins {
@@ -175,7 +77,6 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
                 Origin::Loan(id) => {
                     let root = loans[*id as usize].place.local;
                     let root_is_ref = is_ref_ty(&body.locals[root.0 as usize].ty);
-                    // the guard mirrors its twin below: a by-value parameter is storage the
                     // callee owns and destroys on return, so a reference into it dangles just
                     if (root.0 as usize) < arg_count && root_is_ref {
                         params[root.0 as usize] = true;
@@ -211,7 +112,6 @@ fn summarize_body(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> ReturnOrig
     }
 }
 
-// holds[local] = the origins the local may carry. flow-insensitive union to fixpoint, over the
 // exact inference edge set (whole-local copy/move + reborrow inheritance) and no call edges.
 fn compute_origin_holds(body: &BirBody, loans: &[loans::Loan]) -> Vec<HashSet<Origin>> {
     let n = body.locals.len();
