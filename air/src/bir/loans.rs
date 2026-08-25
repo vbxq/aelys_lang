@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use aelys_syntax::Span;
 
-use super::origins::{ParamWrites, SliceWrites, Summaries, SummaryEntry};
+use super::origins::{Summaries, SummaryEntry};
 use super::*;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -20,7 +20,6 @@ pub(super) struct Loan {
     // the borrowed place, e.g. {v,[index]} for &v[0]
     pub(super) place: BirPlace,
     kind: LoanKind,
-    // creation point: block ...
     block: BirBlockId,
     index: usize,
     // borrow-expression span, for the [borrow] message
@@ -39,14 +38,10 @@ enum Access {
     BorrowMut,
 }
 
-pub fn check(
-    bir: &BirProgram,
-    summaries: &Summaries,
-    slice_writes: &SliceWrites,
-) -> Vec<BirDiagnostic> {
+pub fn check(bir: &BirProgram, summaries: &Summaries) -> Vec<BirDiagnostic> {
     let mut errors = Vec::new();
     for body in &bir.bodies {
-        check_body(body, summaries, slice_writes, &mut errors);
+        check_body(body, summaries, &mut errors);
     }
     errors
 }
@@ -58,12 +53,7 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
         .unwrap_or(false)
 }
 
-fn check_body(
-    body: &BirBody,
-    summaries: &Summaries,
-    slice_writes: &SliceWrites,
-    errors: &mut Vec<BirDiagnostic>,
-) {
+fn check_body(body: &BirBody, summaries: &Summaries, errors: &mut Vec<BirDiagnostic>) {
     let loans = gen_loans(body, errors);
     // no borrows form zero loans, so the whole pass is a no-op (managed byte-identity rests here);
     if loans.is_empty() {
@@ -73,102 +63,6 @@ fn check_body(
     let live = compute_liveness(body);
     check_conflicts(body, &loans, &holds, &live, errors);
     check_scope_deaths(body, &loans, &holds, &live, errors);
-    check_vec_slice_mutation(body, &loans, &holds, slice_writes, errors);
-}
-
-fn roots_a_vec(ty: &InferType) -> bool {
-    let mut ty = ty;
-    while let InferType::Ref { referent, .. } = ty {
-        ty = referent;
-    }
-    matches!(ty, InferType::Vec(_))
-}
-
-fn vec_root_loan<'a>(
-    body: &BirBody,
-    loans: &'a [Loan],
-    holds: &[HashSet<u32>],
-    local: BirLocalId,
-) -> Option<&'a Loan> {
-    if !matches!(body.locals[local.0 as usize].ty, InferType::Slice { .. }) {
-        return None;
-    }
-    let ids = holds.get(local.0 as usize)?;
-    loans
-        .iter()
-        .find(|l| ids.contains(&l.id.0) && roots_a_vec(&body.locals[l.place.local.0 as usize].ty))
-}
-
-fn slice_mut_diagnostic(body: &BirBody, loan: &Loan, span: Span, message: String) -> BirDiagnostic {
-    let root = loan.place.local;
-    BirDiagnostic::new("E0426", "[borrow]", span, message)
-        .with_secondary(loan.span, "slice of a `Vec` created here".to_string())
-        .with_secondary(
-            body.locals[root.0 as usize].decl_span,
-            format!("`{}` declared here", local_name(body, root)),
-        )
-}
-
-fn check_vec_slice_mutation(
-    body: &BirBody,
-    loans: &[Loan],
-    holds: &[HashSet<u32>],
-    slice_writes: &SliceWrites,
-    errors: &mut Vec<BirDiagnostic>,
-) {
-    for block in &body.blocks {
-        for stmt in &block.stmts {
-            let BirStmtKind::Assign { dest, rvalue } = &stmt.kind else {
-                continue;
-            };
-            if !dest.proj.is_empty() {
-                if let Some(loan) = vec_root_loan(body, loans, holds, dest.local) {
-                    let name = local_name(body, dest.local);
-                    errors.push(slice_mut_diagnostic(
-                        body,
-                        loan,
-                        stmt.span,
-                        format!(
-                            "[slice-mut] cannot write through `{name}`: it is a slice of a \
-                             `Vec`, whose buffer may be shared"
-                        ),
-                    ));
-                }
-            }
-            let BirRvalue::Call { callee, args, .. } = rvalue else {
-                continue;
-            };
-            let writes = callee.as_ref().and_then(|name| slice_writes.get(name));
-            for (i, arg) in args.iter().enumerate() {
-                let (BirOperand::Copy(p) | BirOperand::Move(p)) = arg else {
-                    continue;
-                };
-                if !p.proj.is_empty() {
-                    continue;
-                }
-                let may_write = match writes {
-                    Some(ParamWrites::Unique(w)) => w.get(i).copied().unwrap_or(true),
-                    _ => true,
-                };
-                if !may_write {
-                    continue;
-                }
-                if let Some(loan) = vec_root_loan(body, loans, holds, p.local) {
-                    let name = local_name(body, p.local);
-                    let f = callee.as_deref().unwrap_or("this callee");
-                    errors.push(slice_mut_diagnostic(
-                        body,
-                        loan,
-                        stmt.span,
-                        format!(
-                            "[slice-mut] cannot pass `{name}` to `{f}`: `{f}` may write through \
-                             it, and `{name}` is a slice of a `Vec` whose buffer may be shared"
-                        ),
-                    ));
-                }
-            }
-        }
-    }
 }
 
 pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<Loan> {
@@ -196,7 +90,6 @@ pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<
                     });
                 }
                 BirRvalue::Aggregate(ops) => {
-                    // is rejected here, so no aggregate local ever carries a loan to track
                     for op in ops {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = op {
                             if local_is_ref(body, p.local) {
@@ -233,9 +126,8 @@ fn reborrow_base_of(body: &BirBody, place: &BirPlace) -> Option<BirLocalId> {
     }
 }
 
-// ---- provenance: forward monotone points-to over reference copies + reborrow inheritance --
+// ---- provenance: forward monotone points-to over reference copies + reborrow inheritance
 
-// holds[local] = the loan ids the local may hold. flow-insensitive union to fixpoint.
 fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<HashSet<u32>> {
     let n = body.locals.len();
     let mut holds: Vec<HashSet<u32>> = vec![HashSet::new(); n];
@@ -297,7 +189,6 @@ fn compute_holds(body: &BirBody, loans: &[Loan], summaries: &Summaries) -> Vec<H
                 }
                 _ => {
                     // none / ambiguous / a rejected (escapes_local) callee: over-approximate by
-                    // modelling the result as borrowing every reference-typed argument (sound)
                     for arg in args {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = arg {
                             if local_is_ref(body, p.local) {
@@ -447,7 +338,6 @@ fn compute_liveness(body: &BirBody) -> Liveness {
         }
     }
 
-    // one backward sweep per block turns block sets into per-point sets
     let mut live_before: Vec<Vec<HashSet<BirLocalId>>> = Vec::with_capacity(nblocks);
     let mut live_at_term: Vec<HashSet<BirLocalId>> = Vec::with_capacity(nblocks);
     for bi in 0..nblocks {
@@ -513,7 +403,6 @@ fn compatible(access: Access, kind: LoanKind) -> bool {
     }
 }
 
-// ---- the events emitted at a program point --
 
 fn push_operand_event<'a>(o: &'a BirOperand, out: &mut Vec<(&'a BirPlace, Access)>) {
     match o {
@@ -630,7 +519,6 @@ fn check_events(
     if events.is_empty() {
         return;
     }
-    // loan ids live at this point: a loan is live iff one of its holders is live
     let mut live_loan_ids: HashSet<u32> = HashSet::new();
     for l in live_set {
         if let Some(h) = holds.get(l.0 as usize) {
@@ -667,8 +555,6 @@ fn check_events(
     }
 }
 
-// the loan's last use: the max-source-position program point whose live set intersects a holder
-// of the loan (invert holds to the holder set, read the existing liveness, no new fixpoint)
 fn loan_last_use(
     loan: &Loan,
     holds: &[HashSet<u32>],
@@ -702,10 +588,9 @@ fn pick_later(best: Option<Span>, cand: Span) -> Option<Span> {
     }
 }
 
-// a borrow that outlives its referent --
+// a borrow that outlives its referent
 
 // regardless of how the loan was acquired (direct &x, whole-local copy, or reborrow inheritance).
-// temp-repoint uaf and its &*tmp twin reject, while the same-scope borrow and the safe repoint
 fn check_scope_deaths(
     body: &BirBody,
     loans: &[Loan],
@@ -772,7 +657,6 @@ fn scope_death_message(body: &BirBody, x: BirLocalId) -> String {
     )
 }
 
-// the e07xx code + the marker/phrase message; the loan-creation and last-use points become
 fn conflict_message(
     body: &BirBody,
     place: &BirPlace,
