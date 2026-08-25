@@ -8,7 +8,9 @@ A programming language with managed memory by default and explicit opt-out for p
 
 Most languages force a single memory model on the entire program. GC'd languages pay for a runtime on every path; systems languages demand manual control everywhere.
 
-Aelys starts from managed memory, reference counting with an optional cycle collector, and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced zero-allocation with statically checked references, no user-written lifetime annotations.
+Aelys starts from managed memory, reference counting with an optional cycle collector, and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced freedom from *additional* allocation, the caller's buffers are still the caller's, but nothing inside the region allocates, with statically checked references and no user-written lifetime annotations.
+
+The example below is **aspirational**: it shows the language this project is aiming at, and five of the constructs in it do not exist yet, `.len()`, `range()`, `Vec<T>::new(n)`, a `Vec` held inside a struct, and operator overloading on a user type. It is kept because it is the target, not because it compiles.
 
 <!-- ```rust is used for syntax highlighting only, this is Aelys -->
 ```rust
@@ -39,6 +41,28 @@ fn main() {
 ```
 
 `load_mesh` is default mode: GC-backed allocation, Result-based error handling with `?` for propagation and `catch` for recovery. `compute_normals` is `nogc`, meaning no heap allocation, no GC containers, and references checked at compile time. In `main`, `&` at the call site marks the boundary where data is borrowed into `nogc` territory.
+
+The *boundary* that example illustrates, a `nogc` function taking `&[T]` and `&mut [T]` derived from managed containers, writing through the mutable one, does work today. This compiles and runs:
+
+<!-- ```rust is used for syntax highlighting only, this is Aelys -->
+```rust
+nogc fn scale(src: &[i64], dst: &mut [i64]) -> i64 {
+    let mut i: i64 = 0
+    while i < 3 {
+        dst[i] = src[i] * 2
+        i = i + 1
+    }
+    return 0
+}
+
+fn main() -> i64 {
+    let mut input: Vec<i64> = vec[1, 2, 3]
+    let mut output: Vec<i64> = vec[0, 0, 0]
+    let q = scale(input[0..3], output[0..3])
+    println(output[2])
+    return 0
+}
+```
 
 Managed code calls `nogc` freely; the reverse is a compile error.
 
@@ -112,7 +136,7 @@ source → parser → semantic analysis → AIR (Aelys IR) → LLVM IR → nativ
 
 Parser and semantic analysis are partially implemented. The `nogc` checker rules are under active design. Codegen targets LLVM.
 
-Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the collection strategy, iterator design, the managed / `nogc` boundary rules, and whether a freestanding mode is in scope at all.
+Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the collection strategy, iterator design, and whether a freestanding mode is in scope at all. The managed / `nogc` boundary rules are substantially settled: what a `nogc` function may do is decided per operation, and a refusal names the operation and the path that reaches it rather than the type.
 
 ## Contributing
 
