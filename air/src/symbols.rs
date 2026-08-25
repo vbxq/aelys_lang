@@ -5,12 +5,10 @@ use aelys_syntax::Span as SyntaxSpan;
 
 use crate::{AirFunction, AirProgram, Span};
 
-// the two entry symbols are ABI facts about the emitted module; codegen delegates here so the
-// linker-visible names have exactly one definition
+// the two entry symbols are abi facts about the emitted module; codegen delegates here so the
 pub const USER_MAIN_SYMBOL: &str = "__aelys_main";
 pub const NATIVE_ENTRY_SYMBOL: &str = "__aelys_user_main";
 
-// the c runtime names 32 `__aelys_*` symbols and the compiler emits only the entry above, so the
 // whole `__` space is reserved rather than any list of names the compiler could enumerate
 pub const RESERVED_PREFIX: &str = "__";
 
@@ -22,7 +20,6 @@ pub fn function_symbol_name(function: &AirFunction) -> String {
     }
 }
 
-// maps a source name onto the symbol codegen emits for it, so both sides key alike
 pub fn symbol_for_source_name(name: &str) -> String {
     if name == "main" {
         USER_MAIN_SYMBOL.to_string()
@@ -36,8 +33,6 @@ pub struct DuplicateSymbol {
     pub spans: Vec<Option<Span>>,
 }
 
-// keyed on the emitted symbol, not the air name: `main` and `__aelys_main` share an image and a
-// name-keyed check misses exactly that pair
 pub fn duplicate_symbols(air: &AirProgram) -> Vec<DuplicateSymbol> {
     let mut order: Vec<String> = Vec::new();
     let mut by_symbol: HashMap<String, Vec<Option<Span>>> = HashMap::new();
@@ -67,7 +62,6 @@ pub struct DeclSite {
 }
 
 // a symbol can have fewer typed declarations than air functions: mono synthesises instances and the
-// compiler's own lambdas have no `fn` to point at, so the caller must index this with `.get`
 pub fn decl_sites_by_symbol(program: &TypedProgram) -> HashMap<String, Vec<DeclSite>> {
     let mut sites: HashMap<String, Vec<DeclSite>> = HashMap::new();
     crate::bir::build::for_each_fn_decl(&program.stmts, &mut |func, parent| {
@@ -99,4 +93,3 @@ pub fn reserved_user_names(program: &TypedProgram) -> Vec<ReservedUserName> {
     });
     found
 }
-
