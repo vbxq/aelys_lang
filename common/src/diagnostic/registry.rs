@@ -1,5 +1,3 @@
-// TODO: international language support
-// TODO: better messages with code example + a link to the aelys documentation website
 
 use super::Severity;
 
@@ -10,19 +8,9 @@ pub struct DiagnosticInfo {
     pub severity: Severity,
 }
 
-// Error code scheme:
-//   E00xx  lexer
-//   E01xx  parser
-//   E02xx  name resolution
-//   E03xx  types
-//   E04xx  mutability
-//   E05xx  control flow
-// e07xx borrow / ownership
-//   E09xx  backend / internal
-//   W01xx+ warnings
+// e04xx mutability
 
 static REGISTRY: &[DiagnosticInfo] = &[
-    // Lexer (E00xx)
     DiagnosticInfo {
         code: "E0001",
         title: "unterminated string literal",
@@ -85,7 +73,6 @@ A lone `}` appeared in a string without an opening `{`.
 To write a literal `}`, double it: `}}`.",
         severity: Severity::Error,
     },
-    // Parser (E01xx)
     DiagnosticInfo {
         code: "E0101",
         title: "unexpected token",
@@ -132,7 +119,6 @@ stack-overflow guard. The expression needs to be simplified or broken
 into intermediate variables.",
         severity: Severity::Error,
     },
-    // Name resolution (E02xx)
     DiagnosticInfo {
         code: "E0201",
         title: "undefined variable",
@@ -161,7 +147,6 @@ No function with this name exists. Functions must be defined before the
 call site (there is no hoisting).",
         severity: Severity::Error,
     },
-    // Types (E03xx)
     DiagnosticInfo {
         code: "E0301",
         title: "type mismatch",
@@ -243,7 +228,7 @@ or extremely deep type dependency that the inference engine can't
 untangle. Simplify the involved types or add explicit annotations.",
         severity: Severity::Error,
     },
-    // Mutability (E04xx)
+    // mutability (e04xx)
     DiagnosticInfo {
         code: "E0401",
         title: "cannot assign to immutable variable",
@@ -335,17 +320,24 @@ loop.",
         title: "a mutable reference through an element or field projection is not supported yet",
         explanation: "\
 `&mut v[i]`, `&mut a[i]`, or `&mut p.f` forms a mutable reference through a
-projection. Stage 1 now addresses a unique local projection correctly, but a
-Vec can share its buffer and this path does not establish `refcount == 1` at
-borrow formation. With this fence disabled, a copied Vec and `&mut v[0]`
-write both values as `101`, so the shared-buffer case is rejected.
+projection. The refusal matches the shape of the operand and reads no type
+at all, so it fires on every base alike -- on a plain array element and on a
+plain struct field exactly as it fires on a managed container:
 
-    let mut v = vec[1, 2, 3]
-    let r = &mut v[0]      // E0415
-    *r = 9
+    let mut a: [i64; 3] = [1, 2, 3]
+    let r = &mut a[0]      // E0415, and no managed storage is involved
+
+    struct D { n: i64 }
+    let mut d: D = D{n: 1}
+    let r = &mut d.n       // E0415, likewise
+
+What the fence stands in for is therefore not one obligation. Lifting it for
+a projection into a managed container owes a uniqueness proof for that
+container's buffer; lifting it for a disjoint field or an array element owes
+nothing, and that half is a missing feature rather than a soundness fence.
 
 An immutable `&v[i]` stays valid (a read through it is sound), and so does
-`&mut` of a whole binding. Write the element directly, or reference the
+`&mut` of a whole binding. Write the place directly, or reference the
 binding:
 
     let x = v[0]           // ok, read the element
@@ -353,10 +345,34 @@ binding:
     v[0] = 9               // ok, write the element directly
     let r = &mut v         // ok, reference the whole binding
 
-Write the place directly, or wait for the A2(2) guarantee that proves a
-unique managed buffer before forming the mutable projected reference. The
-same fence also covers an indexed global projection, which the whole-global
-check cannot name.",
+The same fence also covers an indexed global projection, which the
+whole-global check cannot name.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0416",
+        title: "a shared borrow where a mutable borrow is required",
+        explanation: "\
+`&T` and `&mut T` are different types. A shared `&` grants read access
+and may be copied; a `&mut` grants exclusive write access and may not.
+Binding a shared borrow to a `&mut` position would hand out write
+access nobody checked, breaking `mut XOR shared`.
+
+    let mut x: i64 = 7919
+    let p: &mut i64 = &x       // E0416
+    let q: &mut i64 = &mut x   // ok
+
+The same refusal applies wherever a value flows into a required type:
+a call argument, a return, an assignment, a field, an array element.
+
+    fn poke(r: &mut i64) { *r = 101 }
+    poke(&x)                   // E0416
+    poke(&mut x)               // ok
+
+The other direction is a safe weakening and stays accepted, because
+dropping write access can never create aliasing:
+
+    let r: &i64 = &mut x       // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -545,35 +561,6 @@ zero.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
-        code: "E0426",
-        title: "write reachable through a slice of a `Vec<T>`",
-        explanation: "\
-A `Vec<T>`'s buffer is reference-counted, so two `Vec` values can share
-it. A write to an element normally copies the buffer first, which is what
-keeps the two values independent. A slice is a bare `{ptr, len}` view: it
-has no way to reach the `Vec` it came from, so a write through it would
-land in a buffer another `Vec` may still be reading.
-
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let w: Vec<i64> = v            // the buffer is now shared
-    let s = v[0..2]
-    s[0] = 99                      // E0426: this would change `w` too
-
-Passing the slice to a function that writes through its slice parameter
-is the same write, one frame down, and is refused for the same reason.
-
-Reading through the slice is fine, and so is writing through the `Vec`
-itself:
-
-    let s = v[0..2]
-    let x = s[0]                   // ok
-    v[0] = 99                      // ok, this copies the buffer first
-
-Slicing an array has no such restriction, because an array's elements are
-stored inline and are never shared.",
-        severity: Severity::Error,
-    },
-    DiagnosticInfo {
         code: "E0427",
         title: "two functions compile to the same symbol",
         explanation: "\
@@ -629,7 +616,6 @@ Rename the function. Locals, parameters and struct fields are unaffected:
     let __x = 5                             // ok",
         severity: Severity::Error,
     },
-    // Control flow (E05xx)
     DiagnosticInfo {
         code: "E0501",
         title: "`break` outside of loop",
@@ -850,7 +836,6 @@ call. Taking it as a value would let it be instantiated somewhere the
 bound is never checked, so only direct calls are allowed.",
         severity: Severity::Error,
     },
-    // Backend / internal (E09xx)
     DiagnosticInfo {
         code: "E0901",
         title: "backend error",
@@ -861,13 +846,10 @@ bug. Please open an issue with the source file that triggered it.",
     },
 ];
 
-/// Look up a diagnostic code in the registry.
 pub fn lookup(code: &str) -> Option<&'static DiagnosticInfo> {
     REGISTRY.iter().find(|info| info.code == code)
 }
 
-/// Get all registered diagnostic codes.
 pub fn all_codes() -> &'static [DiagnosticInfo] {
     REGISTRY
 }
-
