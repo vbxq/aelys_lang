@@ -1297,3 +1297,101 @@ fn the_detach_immediately_precedes_the_view_it_protects() {
     h.assert_legs(8);
 }
 
+const S4_R1_VEC_READS: &str = r#"
+nogc fn read(v: &Vec<i64>) -> i64 {
+    let s: &[i64] = Vec::as_slice(*v)
+    return Vec::len(*v) + s[0] - 7919
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    println(read(&v))
+    println(v[0])
+    return 0
+}
+"#;
+
+#[test]
+fn s4_r1_vec_len_and_as_slice_are_effect_free_reads() {
+    let h = Harness::new();
+    h.value_row("S4-R1", S4_R1_VEC_READS, "3\n7919\n", 1, 1);
+    h.assert_legs(8);
+}
+
+const S4_R2_COMPUTE_NORMALS: &str = r#"
+struct Vec3 { x: i64, y: i64, z: i64 }
+nogc fn compute_normals(vertices: &[Vec3], normals: &mut [Vec3]) -> i64 {
+    normals[0].x = vertices[0].y
+    return 0
+}
+fn main() -> i64 {
+    let mut vertices: Vec<Vec3> = vec[Vec3 { x: 7919, y: 101, z: 3 }]
+    let mut normals: Vec<Vec3> = vec[Vec3 { x: 0, y: 0, z: 0 }]
+    let src: &[Vec3] = Vec::as_slice(vertices)
+    let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals)
+    compute_normals(src, dst)
+    println(normals[0].x)
+    println(vertices[0].x)
+    return 0
+}
+"#;
+
+const S4_N_VEC_TOUCH: &str = r#"
+nogc fn bad(v: &mut Vec<i64>) -> i64 {
+    Vec::push(*v, 101)
+    return 0
+}
+fn main() -> i64 { return 0 }
+"#;
+
+const S4_N_CALLBACK: &str = r#"
+nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+fn inc(x: i64) -> i64 { return x + 1 }
+fn main() -> i64 { return invoke(inc, 1) }
+"#;
+
+const S4_N_VEC_BY_VALUE: &str = r#"
+nogc fn owns(v: Vec<i64>) -> i64 {
+    return Vec::len(v)
+}
+fn main() -> i64 { return 0 }
+"#;
+
+#[test]
+fn s4_r2_compute_normals_uses_vec_read_and_unique_write_views() {
+    let h = Harness::new();
+    h.value_row("S4-R2", S4_R2_COMPUTE_NORMALS, "101\n7919\n", 2, 2);
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root");
+    let primary = fs::read_to_string(root.join("sema/src/infer/expr/primary.rs")).expect("primary");
+    assert!(primary.contains("variant == \"len\" || variant == \"as_slice\""));
+    let lower = fs::read_to_string(root.join("air/src/lower/expr.rs")).expect("lower");
+    assert!(lower.contains("Rvalue::SliceFromParts") && lower.contains("Rvalue::Len"));
+    let build = fs::read_to_string(root.join("air/src/bir/build.rs")).expect("bir build");
+    assert!(build.contains("variant.as_str() == \"as_slice\"") && build.contains("mutable: false"));
+    let effects = fs::read_to_string(root.join("air/src/bir/effects.rs")).expect("effects");
+    assert!(
+        effects.contains("variant == \"len\" || variant == \"as_slice\"")
+            && effects.contains("Pos::Base")
+    );
+    h.assert_legs(8);
+}
+
+#[test]
+fn s4_r3_negative_twins_keep_managed_and_indirect_effect_fences() {
+    let h = Harness::new();
+    h.fenced_row("S4-N-vec-touch", S4_N_VEC_TOUCH, "E0727");
+    h.fenced_row("S4-N-callback", S4_N_CALLBACK, "E0727");
+    for (tag, opt) in LEVELS {
+        let rendered = h.reject("S4-N-vec-by-value", tag, S4_N_VEC_BY_VALUE, *opt);
+        h.legs.set(h.legs.get() + 1);
+        assert!(
+            rendered.contains("[E0727]"),
+            "by-value Vec must remain outside nogc: {rendered}"
+        );
+    }
+    h.assert_legs(12);
+}
+
