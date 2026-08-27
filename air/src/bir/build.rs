@@ -789,6 +789,39 @@ impl<'a> BodyBuilder<'a> {
                         }
                     }
                 }
+                if enum_name.as_str() == "Vec" && variant.as_str() == "len" {
+                    if let Some(recv) = args.first() {
+                        return self.build_operand(recv);
+                    }
+                }
+                if enum_name.as_str() == "Vec" && variant.as_str() == "as_slice" {
+                    if let Some(recv) = args.first() {
+                        if let Some(place) = self.place_of(recv) {
+                            return self.emit_to_temp(
+                                BirRvalue::Ref {
+                                    place,
+                                    mutable: false,
+                                },
+                                expr.ty.clone(),
+                                span,
+                            );
+                        }
+                    }
+                }
+                if enum_name.as_str() == "Vec" && variant.as_str() == "try_as_unique_mut_slice" {
+                    if let Some(recv) = args.first() {
+                        if let Some(place) = self.place_of(recv) {
+                            return self.emit_to_temp(
+                                BirRvalue::Ref {
+                                    place,
+                                    mutable: true,
+                                },
+                                expr.ty.clone(),
+                                span,
+                            );
+                        }
+                    }
+                }
                 let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }

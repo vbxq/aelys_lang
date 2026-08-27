@@ -449,6 +449,15 @@ impl<'a> LoweringContext<'a> {
                 if enum_name == "Vec" && variant == "push" {
                     return self.lower_vec_push(args, sp);
                 }
+                if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
+                    return self.lower_vec_try_as_unique_mut_slice(&expr.ty, args, sp);
+                }
+                if enum_name == "Vec" && variant == "len" {
+                    return self.lower_vec_len(args, sp);
+                }
+                if enum_name == "Vec" && variant == "as_slice" {
+                    return self.lower_vec_as_slice(&expr.ty, args, sp);
+                }
                 let mut payload: Vec<Operand> = Vec::with_capacity(args.len());
                 for arg in args {
                     let op = self.lower_expr(arg);
@@ -1187,6 +1196,86 @@ impl<'a> LoweringContext<'a> {
             sp,
         );
         Operand::Const(AirConst::Null)
+    }
+
+    fn lower_vec_len(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
+        if args.len() != 1 {
+            self.report_error(format!(
+                "ICE: Vec::len expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let Some(addr) = self.projection_base(&args[0]) else {
+            self.report_error(
+                "ICE: Vec::len target denotes no storage at AIR lowering".to_string(),
+            );
+            return Operand::Const(AirConst::Null);
+        };
+        self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(Operand::Copy(addr.ptr)), sp)
+    }
+
+    fn lower_vec_as_slice(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 1 {
+            self.report_error(format!(
+                "ICE: Vec::as_slice expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let Some(addr) = self.projection_base(&args[0]) else {
+            self.report_error(
+                "ICE: Vec::as_slice target denotes no storage at AIR lowering".to_string(),
+            );
+            return Operand::Const(AirConst::Null);
+        };
+        let len = self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(Operand::Copy(addr.ptr)), sp);
+        self.emit_rvalue_to_temp(
+            self.lower_type_from_infer(result_ty),
+            Rvalue::SliceFromParts {
+                ptr: Operand::Copy(addr.ptr),
+                len,
+            },
+            sp,
+        )
+    }
+
+    fn lower_vec_try_as_unique_mut_slice(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 1 {
+            self.report_error(format!(
+                "ICE: Vec::try_as_unique_mut_slice expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let vec_addr = match self.projection_base(&args[0]) {
+            Some(addr) => Operand::Copy(addr.ptr),
+            None => {
+                self.report_error(
+                    "ICE: Vec::try_as_unique_mut_slice target denotes no storage at AIR lowering"
+                        .to_string(),
+                );
+                return Operand::Const(AirConst::Null);
+            }
+        };
+        self.emit_rvalue_to_temp(
+            self.lower_type_from_infer(result_ty),
+            Rvalue::Call {
+                func: Callee::Named("__aelys_vec_try_as_unique_mut_slice".to_string()),
+                args: vec![vec_addr],
+            },
+            sp,
+        )
     }
 
     fn lower_rc_new(&mut self, rc_ty: &InferType, args: &[TypedExpr], sp: Option<Span>) -> Operand {

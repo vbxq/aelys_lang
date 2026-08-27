@@ -386,6 +386,24 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             args,
             ..
         } => {
+            if enum_name == "Vec" && (variant == "len" || variant == "as_slice") {
+                if let Some((recv, rest)) = args.split_first() {
+                    walk_expr(recv, tt, set, w, Pos::Base);
+                    for arg in rest {
+                        walk_expr(arg, tt, set, w, Pos::Value);
+                    }
+                }
+                return;
+            }
+            if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
+                if let Some((recv, rest)) = args.split_first() {
+                    walk_expr(recv, tt, set, w, Pos::Base);
+                    for arg in rest {
+                        walk_expr(arg, tt, set, w, Pos::Value);
+                    }
+                }
+                return;
+            }
             if is_managed_alloc_variant(enum_name, variant) {
                 alloc_managed(set);
                 w.record(

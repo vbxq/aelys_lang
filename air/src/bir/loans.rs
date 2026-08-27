@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::fs::OpenOptions;
+use std::io::Write;
 
 use aelys_syntax::Span;
 
@@ -53,8 +55,128 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RootClass {
+    Managed,
+    Unmanaged,
+    Unknown,
+}
+
+fn classify_loan_root(body: &BirBody, place: &BirPlace) -> RootClass {
+    if place
+        .proj
+        .iter()
+        .any(|projection| matches!(projection, BirProjection::Field(_)))
+    {
+        return RootClass::Unknown;
+    }
+
+    let local = &body.locals[place.local.0 as usize];
+    let mut peeled = false;
+    let mut ty = &local.ty;
+    while let InferType::Ref { referent, .. } = ty {
+        ty = referent;
+        peeled = true;
+    }
+
+    match ty {
+        InferType::Vec(_) | InferType::Rc(_) => RootClass::Managed,
+        InferType::Slice { .. } => RootClass::Unknown,
+        InferType::Struct(_)
+        | InferType::Enum(_, _)
+        | InferType::Tuple(_)
+        | InferType::Array(_, _) => {
+            if peeled {
+                RootClass::Unknown
+            } else if local.category == Category::Managed {
+                RootClass::Managed
+            } else {
+                RootClass::Unmanaged
+            }
+        }
+        InferType::Var(_) | InferType::Dynamic => RootClass::Unknown,
+        InferType::I8
+        | InferType::I16
+        | InferType::I32
+        | InferType::I64
+        | InferType::U8
+        | InferType::U16
+        | InferType::U32
+        | InferType::U64
+        | InferType::F32
+        | InferType::F64
+        | InferType::Bool
+        | InferType::String
+        | InferType::Null
+        | InferType::Never
+        | InferType::Function { .. }
+        | InferType::Range => RootClass::Unmanaged,
+        InferType::Ref { .. } => RootClass::Unknown,
+    }
+}
+
+fn format_loan_projection(projections: &[BirProjection]) -> String {
+    let mut out = String::from("[");
+    for (index, projection) in projections.iter().enumerate() {
+        if index != 0 {
+            out.push(',');
+        }
+        match projection {
+            BirProjection::Field(name) => {
+                out.push_str("Field(");
+                out.push_str(name);
+                out.push(')');
+            }
+            BirProjection::Index => out.push_str("Index"),
+            BirProjection::Deref => out.push_str("Deref"),
+        }
+    }
+    out.push(']');
+    out
+}
+
+fn dump_loan_roots(body: &BirBody, loans: &[Loan]) {
+    let Some(target) = std::env::var_os("AELYS_DUMP_LOAN_ROOTS") else {
+        return;
+    };
+    if target.is_empty() {
+        return;
+    }
+    let path = if target == "1" { None } else { Some(target) };
+    let mut text = String::new();
+    for loan in loans {
+        let Some(local) = body.locals.get(loan.place.local.0 as usize) else {
+            continue;
+        };
+        text.push_str("LOANROOT fn=");
+        text.push_str(&body.name);
+        text.push_str(" loan=");
+        text.push_str(&loan.id.0.to_string());
+        text.push_str(" root=%");
+        text.push_str(&loan.place.local.0.to_string());
+        text.push_str(" proj=");
+        text.push_str(&format_loan_projection(&loan.place.proj));
+        text.push_str(" ty=");
+        text.push_str(&format!("{:?}", local.ty));
+        text.push_str(" class=");
+        text.push_str(&format!("{:?}", classify_loan_root(body, &loan.place)));
+        text.push('\n');
+    }
+    if let Some(path) = path {
+        match OpenOptions::new().create(true).append(true).open(path) {
+            Ok(mut file) => {
+                let _ = file.write_all(text.as_bytes());
+            }
+            Err(error) => eprintln!("loan-root dump unavailable: {error}"),
+        }
+    } else {
+        eprint!("{text}");
+    }
+}
+
 fn check_body(body: &BirBody, summaries: &Summaries, errors: &mut Vec<BirDiagnostic>) {
     let loans = gen_loans(body, errors);
+    dump_loan_roots(body, &loans);
     // no borrows form zero loans, so the whole pass is a no-op (managed byte-identity rests here);
     if loans.is_empty() {
         return;
