@@ -2162,7 +2162,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "7\n"),
     ),
     (
-        // miscompiled. check() walks -o0/-o2/-o3, so the row fails on the -o0 leg
         "SI-PA31",
         r#"
 fn make_f() -> fn() -> fn() -> i64 {
@@ -6792,5 +6791,401 @@ fn group_n_o_invariance() {
         "every verdict MUST be the same at every optimization level; divergent:\n{}",
         divergent.join("\n")
     );
+}
+
+const STAGE3_UNIQUE_MUT_SLICE: &str = r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+    s[0] = 101
+    println(v[0])
+    return 0
+}
+"#;
+
+const STAGE3_SHARED_MUT_SLICE: &str = r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let alias = v
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+    s[0] = 101
+    println(alias[0])
+    return 0
+}
+"#;
+
+const STAGE3_NOGC_MUT_SLICE: &str = r#"
+nogc fn view(r: &mut Vec<i64>) -> &mut [i64] {
+    return Vec::try_as_unique_mut_slice(*r)
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = view(&mut v)
+    s[0] = 101
+    println(v[0])
+    return 0
+}
+"#;
+
+#[test]
+fn stage3_unique_mut_slice_writes_only_a_unique_buffer() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "S3-UMS-unique",
+        STAGE3_UNIQUE_MUT_SLICE,
+        Oracle::ExitOutStats(0, "101\n", 1, 1),
+    );
+    h.assert_measured("S3-UMS-unique");
+}
+
+#[test]
+fn stage3_unique_mut_slice_shared_buffer_is_an_empty_view() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "S3-UMS-shared",
+        STAGE3_SHARED_MUT_SLICE,
+        Oracle::ExitOut(134, ""),
+    );
+    h.assert_measured("S3-UMS-shared");
+}
+
+#[test]
+fn stage3_unique_mut_slice_is_effect_free_inside_nogc() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "S3-UMS-nogc",
+        STAGE3_NOGC_MUT_SLICE,
+        Oracle::ExitOutStats(0, "101\n", 1, 1),
+    );
+    h.assert_measured("S3-UMS-nogc");
+}
+
+const STAGE3_I32_MUT_SLICE: &str = r#"
+fn main() -> i64 {
+    let mut v: Vec<i32> = vec[7919 as i32, 2 as i32, 3 as i32]
+    let mut s: &mut [i32] = Vec::try_as_unique_mut_slice(v)
+    s[0] = 101 as i32
+    println(v[0])
+    return 0
+}
+"#;
+
+#[test]
+fn stage3_unique_mut_slice_splices_non_i64_element_sizes() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "S3-UMS-i32",
+        STAGE3_I32_MUT_SLICE,
+        Oracle::ExitOutStats(0, "101\n", 1, 1),
+    );
+    h.assert_measured("S3-UMS-i32");
+}
+
+const STAGE3_OUT_OF_BOUNDS_MUT_SLICE: &str = r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+    s[3] = 101
+    println(v[0])
+    return 0
+}
+"#;
+
+#[test]
+fn stage3_unique_mut_slice_view_stops_at_the_vec_length() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "S3-UMS-bound",
+        STAGE3_OUT_OF_BOUNDS_MUT_SLICE,
+        Oracle::ExitOut(134, ""),
+    );
+    h.assert_measured("S3-UMS-bound");
+}
+
+// without static exclusivity both of these compile and write through a freed buffer
+const STAGE3_EXCLUSIVITY_REJECTS: &[(&str, &str, &str)] = &[
+    (
+        "S3-UMS-alias-after",
+        "E0713",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+    let alias = v
+    s[0] = 101
+    println(alias[0])
+    return 0
+}
+"#,
+    ),
+    (
+        "S3-UMS-realloc",
+        "E0711",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+    Vec::push(v, 4)
+    s[0] = 101
+    println(v[0])
+    return 0
+}
+"#,
+    ),
+];
+
+#[test]
+fn stage3_unique_mut_slice_rejects_sharing_the_owner_after_the_view() {
+    let h = Harness::new();
+    run_rejects(&h, STAGE3_EXCLUSIVITY_REJECTS);
+}
+
+fn readme_claimed_runnable_example() -> String {
+    let readme = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../README.md"))
+        .expect("README.md must be readable");
+    let claim = readme
+        .find("This compiles and runs:")
+        .expect("README must still carry the runnable boundary claim");
+    // the fence marker also appears inside the html highlighting comment above it
+    let open = readme[claim..]
+        .find("\n```rust\n")
+        .map(|at| claim + at + "\n```rust\n".len())
+        .expect("the claim must be followed by a fenced example");
+    let close = readme[open..]
+        .find("\n```")
+        .map(|at| open + at)
+        .expect("the fenced example must be closed");
+    readme[open..close].to_string()
+}
+
+#[test]
+fn readme_boundary_example_compiles_and_runs_as_claimed() {
+    let h = Harness::new();
+    let program = readme_claimed_runnable_example();
+    run_row(&h, "README-boundary", &program, Oracle::ExitOut(0, "6\n"));
+    h.assert_measured("README-boundary");
+}
+
+const STAGE3_GAP_FORMS: &[(&str, &str, &str)] = &[
+    (
+        "S3-UMS-gap-struct",
+        "E0410",
+        r#"
+struct Box { v: Vec<i64> }
+fn main() -> i64 {
+    let mut b = Box{v: vec[7919, 2, 3]}
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(b.v)
+    s[0] = 101
+    return 0
+}
+"#,
+    ),
+    (
+        "S3-UMS-gap-rc",
+        "E0412",
+        r#"
+fn main() -> i64 {
+    let r = Rc::new(vec[7919, 2, 3])
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(Rc::get(r))
+    s[0] = 101
+    return 0
+}
+"#,
+    ),
+    (
+        "S3-UMS-gap-nested",
+        "E0412",
+        r#"
+fn main() -> i64 {
+    let mut v: Vec<Vec<i64>> = vec[vec[7919, 2, 3]]
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v[0])
+    s[0] = 101
+    return 0
+}
+"#,
+    ),
+];
+
+#[test]
+fn stage3_unique_mut_slice_gap_stays_closed_by_the_vec_surface() {
+    let h = Harness::new();
+    for (id, code, src) in STAGE3_GAP_FORMS {
+        for (tag, opt) in LEVELS {
+            let rendered = h.reject(id, tag, src, *opt);
+            assert!(
+                rendered.contains(&format!("[{code}]")),
+                "{id} at {tag} must stay rejected with {code}. sema accepts a wider set of \
+                 receivers than the BIR place_of that records the mutable loan, and BIR falls \
+                 back to an aggregate instead of failing, so the day this form compiles it \
+                 compiles with no static exclusivity at all. Give BIR a fail-closed path before \
+                 opening it.\n{rendered}"
+            );
+        }
+    }
+}
+
+const STAGE3_SHARED_REF_MUT_SLICE: &str = r#"
+fn view(r: &Vec<i64>) -> &mut [i64] {
+    return Vec::try_as_unique_mut_slice(*r)
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    let mut s: &mut [i64] = view(&v)
+    return 0
+}
+"#;
+
+const STAGE3_NONPLACE_MUT_SLICE: &str = r#"
+fn main() -> i64 {
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(1)
+    return 0
+}
+"#;
+
+#[test]
+fn stage3_unique_mut_slice_runtime_and_splice_guards_are_present() {
+    let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let core = fs::read_to_string(manifest.join("../core/src/aelys_core_common.c"))
+        .expect("core runtime source");
+    let calls = fs::read_to_string(manifest.join("../codegen/src/lowering/calls.rs"))
+        .expect("call lowering source");
+    assert!(core.contains("__aelys_vec_try_as_unique_mut_slice"));
+    assert!(core.contains("__aelys_rc_refcount"));
+    assert!(core.contains("== 1"));
+    assert!(calls.contains("__aelys_vec_try_as_unique_mut_slice"));
+    assert!(calls.contains("AirType::Slice"));
+}
+
+const STAGE6_DEFAULT_R1: &str = r#"
+nogc fn read(v: &Vec<i64>) -> i64 {
+    let s: &[i64] = Vec::as_slice(*v)
+    return Vec::len(*v) + s[0] - 7919
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[7919, 2, 3]
+    println(read(&v))
+    println(v[0])
+    return 0
+}
+"#;
+
+const STAGE6_DEFAULT_R2: &str = r#"
+struct Vec3 { x: i64, y: i64, z: i64 }
+nogc fn compute_normals(vertices: &[Vec3], normals: &mut [Vec3]) -> i64 {
+    normals[0].x = vertices[0].y
+    return 0
+}
+fn main() -> i64 {
+    let mut vertices: Vec<Vec3> = vec[Vec3 { x: 7919, y: 101, z: 3 }]
+    let mut normals: Vec<Vec3> = vec[Vec3 { x: 0, y: 0, z: 0 }]
+    let src: &[Vec3] = Vec::as_slice(vertices)
+    let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals)
+    compute_normals(src, dst)
+    println(normals[0].x)
+    println(vertices[0].x)
+    return 0
+}
+"#;
+
+const STAGE6_DEFAULT_R3: &str = r#"
+nogc fn peek(v: &Vec<i64>) -> i64 { return (*v)[0] }
+fn main() -> i64 {
+    let v: Vec<i64> = vec[7919, 2, 3]
+    println(peek(&v))
+    return 0
+}
+"#;
+
+const STAGE6_DEFAULT_KEEP_CALLBACK: &str = r#"
+nogc fn invoke(x: i64) -> i64 { return x + 1 }
+fn main() -> i64 { println(invoke(1)); return 0 }
+"#;
+
+const STAGE6_DEFAULT_REJECTS: &[(&str, &str, &str)] = &[
+    (
+        "SI-NG-managed",
+        "E0727",
+        r#"
+nogc fn bad(v: &mut Vec<i64>) -> i64 {
+    Vec::push(*v, 101)
+    return 0
+}
+fn main() -> i64 { return 0 }
+"#,
+    ),
+    (
+        "SI-NG-callback",
+        "E0727",
+        r#"
+nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }
+fn inc(x: i64) -> i64 { return x + 1 }
+fn main() -> i64 { return invoke(inc, 1) }
+"#,
+    ),
+    (
+        "SI-NG-by-value",
+        "E0727",
+        r#"
+nogc fn owns(v: Vec<i64>) -> i64 { return Vec::len(v) }
+fn main() -> i64 { return 0 }
+"#,
+    ),
+];
+
+#[test]
+fn stage6_managed_nogc_boundary_is_on_the_default_invariant_path() {
+    let h = Harness::new();
+    run_row(
+        &h,
+        "SI-NG-read",
+        STAGE6_DEFAULT_R1,
+        Oracle::ExitOutStats(0, "3\n7919\n", 1, 1),
+    );
+    run_row(
+        &h,
+        "SI-NG-compute-normals",
+        STAGE6_DEFAULT_R2,
+        Oracle::ExitOutStats(0, "101\n7919\n", 2, 2),
+    );
+    run_row(
+        &h,
+        "SI-NG-shared-index",
+        STAGE6_DEFAULT_R3,
+        Oracle::ExitOutStats(0, "7919\n", 1, 1),
+    );
+    run_row(
+        &h,
+        "SI-NG-kept-callback",
+        STAGE6_DEFAULT_KEEP_CALLBACK,
+        Oracle::ExitOutStats(0, "2\n", 0, 0),
+    );
+    run_rejects(&h, STAGE6_DEFAULT_REJECTS);
+    h.assert_measured("SI-NG-boundary");
+}
+
+#[test]
+fn stage3_unique_mut_slice_keeps_static_exclusivity_fences() {
+    let h = Harness::new();
+    for (tag, opt) in LEVELS {
+        let shared = h.reject("S3-UMS-shared-ref", tag, STAGE3_SHARED_REF_MUT_SLICE, *opt);
+        assert!(
+            shared.contains("E0422"),
+            "shared receiver must keep E0422: {shared}"
+        );
+        let nonplace = h.reject("S3-UMS-nonplace", tag, STAGE3_NONPLACE_MUT_SLICE, *opt);
+        assert!(
+            nonplace.contains("E0421"),
+            "non-place receiver must keep E0421: {nonplace}"
+        );
+        assert!(
+            nonplace.contains("E0301"),
+            "wrong receiver type must keep E0301: {nonplace}"
+        );
+    }
 }
 

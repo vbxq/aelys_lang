@@ -1,5 +1,5 @@
 use aelys_air::bir::build::build_program;
-use aelys_air::bir::{Effect, Step, StepKind, effect_summaries, managed_chain};
+use aelys_air::bir::{effect_summaries, managed_chain, Effect, Step, StepKind};
 use aelys_driver::{compile_to_typed_ast, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
@@ -518,5 +518,105 @@ nogc fn helper(x: i64) -> i64 { return x + 1 }
 nogc fn f() -> i64 { return helper(41) }
 fn main() -> i64 { return f() }
 ",
+    );
+}
+
+const STAGE0_MANAGED_COLLISION: &str = r#"
+fn dup() -> i64 { return 0 }
+fn outer() -> i64 {
+    fn dup() -> i64 {
+        let mut v = Vec::new()
+        Vec::push(v, 1)
+        return 0
+    }
+    return dup()
+}
+nogc fn f() -> i64 { return outer() }
+fn main() -> i64 { return f() }
+"#;
+
+const STAGE0_EFFECT_FREE_SHADOW: &str = r#"
+fn dup() -> i64 { return 0 }
+fn outer() -> i64 {
+    fn dup() -> i64 { return 0 }
+    return dup()
+}
+nogc fn f() -> i64 { return outer() }
+fn main() -> i64 { return f() }
+"#;
+
+const STAGE0_RESERVED_MANAGED: &str = r#"
+nogc fn __f() -> i64 {
+    let mut v = Vec::new()
+    Vec::push(v, 1)
+    return 0
+}
+fn main() -> i64 { return __f() }
+"#;
+
+const STAGE0_MULTIPLE_SHADOWS: &str = r#"
+fn dup() -> i64 { return 0 }
+fn first() -> i64 {
+    fn dup() -> i64 { return 1 }
+    return dup()
+}
+fn second() -> i64 {
+    fn dup() -> i64 { return 2 }
+    return dup()
+}
+fn main() -> i64 { return first() + second() }
+"#;
+
+fn assert_code_before(err: &str, first: &str, second: &str) {
+    let first_pos = err
+        .find(&format!("[{first}]"))
+        .unwrap_or_else(|| panic!("expected [{first}] in:\n{err}"));
+    let second_pos = err
+        .find(&format!("[{second}]"))
+        .unwrap_or_else(|| panic!("expected [{second}] in:\n{err}"));
+    assert!(
+        first_pos < second_pos,
+        "expected [{first}] before [{second}]:\n{err}"
+    );
+}
+
+#[test]
+fn managed_shadow_reports_nogc_before_e0418() {
+    let err = reject(STAGE0_MANAGED_COLLISION);
+    assert_code_before(&err, "E0727", "E0418");
+}
+
+#[test]
+fn effect_free_shadow_stays_e0418_and_typed_ast_rejects() {
+    let err = reject(STAGE0_EFFECT_FREE_SHADOW);
+    has(&err, "[E0418]");
+    lacks(&err, "[E0727]");
+    let typed_err = match compile_to_typed_ast(STAGE0_EFFECT_FREE_SHADOW) {
+        Ok(_) => panic!("compile_to_typed_ast must reject the shadow"),
+        Err(err) => err,
+    };
+    has(&typed_err.to_string(), "[E0418]");
+}
+
+#[test]
+fn reserved_managed_nogc_reports_e0727_before_reserved_name() {
+    let err = reject(STAGE0_RESERVED_MANAGED);
+    assert_code_before(&err, "E0727", "E0428");
+}
+
+#[test]
+fn non_shadow_sema_errors_remain_fatal() {
+    let err = reject("fn main() -> i64 { return missing() }\n");
+    has(&err, "[E0201]");
+    lacks(&err, "[E0418]");
+}
+
+#[test]
+fn multiple_shadow_diagnostics_are_preserved() {
+    let err = reject(STAGE0_MULTIPLE_SHADOWS);
+    assert_eq!(
+        err.matches("[E0418]").count(),
+        2,
+        "both nested shadow diagnostics must survive:\n{err}"
     );
 }

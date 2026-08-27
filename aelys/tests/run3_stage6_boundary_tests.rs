@@ -500,6 +500,88 @@ fn a_managed_element_type_is_not_itself_the_refusal() {
     h.assert_legs(8);
 }
 
+const S6_R1: &str = "nogc fn read(v: &Vec<i64>) -> i64 {\n\
+                     let s: &[i64] = Vec::as_slice(*v)\n\
+                     return Vec::len(*v) + s[0] - 7919\n\
+                     }\n\
+                     fn main() -> i64 {\n\
+                     let mut v: Vec<i64> = vec[7919, 2, 3]\n\
+                     println(read(&v))\n\
+                     println(v[0])\n\
+                     return 0\n\
+                     }\n";
+
+const S6_R2: &str = "struct Vec3 { x: i64, y: i64, z: i64 }\n\
+                     nogc fn compute_normals(vertices: &[Vec3], normals: &mut [Vec3]) -> i64 {\n\
+                     normals[0].x = vertices[0].y\n\
+                     return 0\n\
+                     }\n\
+                     fn main() -> i64 {\n\
+                     let mut vertices: Vec<Vec3> = vec[Vec3 { x: 7919, y: 101, z: 3 }]\n\
+                     let mut normals: Vec<Vec3> = vec[Vec3 { x: 0, y: 0, z: 0 }]\n\
+                     let src: &[Vec3] = Vec::as_slice(vertices)\n\
+                     let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals)\n\
+                     compute_normals(src, dst)\n\
+                     println(normals[0].x)\n\
+                     println(vertices[0].x)\n\
+                     return 0\n\
+                     }\n";
+
+const S6_R3: &str = "nogc fn peek(v: &Vec<i64>) -> i64 { return (*v)[0] }\n\
+                     fn main() -> i64 {\n\
+                     let v: Vec<i64> = vec[7919, 2, 3]\n\
+                     println(peek(&v))\n\
+                     return 0\n\
+                     }\n";
+
+const S6_R4: &str = "nogc fn bad(v: &mut Vec<i64>) -> i64 {\n\
+                     Vec::push(*v, 101)\n\
+                     return 0\n\
+                     }\n\
+                     fn main() -> i64 { return 0 }\n";
+
+const S6_R5: &str = "nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }\n\
+                     fn inc(x: i64) -> i64 { return x + 1 }\n\
+                     fn main() -> i64 { return invoke(inc, 1) }\n";
+
+const S6_R6: &str = "nogc fn owns(v: Vec<i64>) -> i64 { return Vec::len(v) }\n\
+                     fn main() -> i64 { return 0 }\n";
+
+const S6_R4_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 {\n\
+                     let s: &[i64] = Vec::as_slice(*v)\n\
+                     return Vec::len(*v) + s[0] - 7919\n\
+                     }\n\
+                     fn main() -> i64 {\n\
+                     let v: Vec<i64> = vec[7919, 2, 3]\n\
+                     println(read(&v))\n\
+                     return 0\n\
+                     }\n";
+
+const S6_R5_KEEP: &str = "nogc fn invoke(x: i64) -> i64 { return x + 1 }\n\
+                     fn main() -> i64 { println(invoke(1)); return 0 }\n";
+
+const S6_R6_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 { return Vec::len(*v) }\n\
+                     fn main() -> i64 {\n\
+                     let v: Vec<i64> = vec[7919, 2, 3]\n\
+                     println(read(&v))\n\
+                     return 0\n\
+                     }\n";
+
+#[test]
+fn the_vec_read_boundary_is_in_the_stage6_net() {
+    let h = Harness::new();
+    h.value_row("S6-R1", S6_R1, "3\n7919\n", 1, 1);
+    h.value_row("S6-R2", S6_R2, "101\n7919\n", 2, 2);
+    h.value_row("S6-R3", S6_R3, "7919\n", 1, 1);
+    h.fenced_row("S6-R4", S6_R4, "E0727");
+    h.fenced_row("S6-R5", S6_R5, "E0727");
+    h.fenced_row("S6-R6", S6_R6, "E0727");
+    h.value_row("S6-R4-KEEP", S6_R4_KEEP, "3\n", 1, 1);
+    h.value_row("S6-R5-KEEP", S6_R5_KEEP, "2\n", 0, 0);
+    h.value_row("S6-R6-KEEP", S6_R6_KEEP, "3\n", 1, 1);
+    h.assert_legs(60);
+}
+
 // `__aelys_alloc` is served out of the immix arena by default and lsan cannot see it individually.
 #[cfg(feature = "asan-invariants")]
 mod asan {
@@ -614,6 +696,9 @@ mod asan {
             ("S6-E2", S6_H2_NOREGION, "7919\n0\n", 2),
             ("S6-M1", S6_M1, "7919\n101\n7919\n5\n", 4),
             ("S6-M2", S6_M2, "7919\n101\n0\n7919\n", 4),
+            ("S6-R1", S6_R1, "3\n7919\n", 2),
+            ("S6-R2", S6_R2, "101\n7919\n", 2),
+            ("S6-R3", S6_R3, "7919\n", 1),
         ]
     }
 
