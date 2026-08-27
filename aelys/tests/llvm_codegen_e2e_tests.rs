@@ -257,18 +257,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -290,18 +288,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -321,18 +317,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -356,18 +350,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -442,7 +434,6 @@ fn main() -> i32 {
     let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
         .expect_err("llvm backend compilation should fail");
     let rendered = err.to_string();
-    // sema now catches the return type mismatch (i64 literal vs i32 annotation) before codegen can check the native entry constraint <3
     assert!(
         rendered.contains("type mismatch") || rendered.contains("invalid native entry"),
         "expected type mismatch or native entry error, got: {rendered}"
@@ -501,7 +492,6 @@ fn second() -> i64 {
     let err = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true)
         .expect_err("compilation should fail at sema stage");
     let rendered = err.to_string();
-    // each error should be a separate diagnostic with its own error code
     let error_count = rendered.matches("error[E0301]").count();
     assert!(
         error_count >= 2,
@@ -531,18 +521,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -562,18 +550,16 @@ fn main() -> void {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -768,7 +754,6 @@ fn unit_like() -> void {
     assert!(all_i64_stores_align8(&ir));
 }
 
-/// String indexing compiles through full pipeline and delegates to runtime.
 #[test]
 fn llvm_string_index_compiles_and_calls_runtime() {
     let ir = compile_to_verified_ir(
@@ -782,7 +767,6 @@ fn char_at(s: string, i: i64) -> string {
         ir.contains("@__aelys_str_char_at"),
         "string index should call __aelys_str_char_at:\n{ir}"
     );
-    // Return convention varies by platform: by-value on Linux, sret on Windows.
     let char_at_decl = ir
         .lines()
         .find(|l| l.contains("declare") && l.contains("@__aelys_str_char_at"))
@@ -797,7 +781,6 @@ fn char_at(s: string, i: i64) -> string {
     );
 }
 
-/// Array literal creation + index read compiles through full pipeline.
 #[test]
 fn llvm_array_literal_index_read_compiles() {
     let ir = compile_to_verified_ir(
@@ -808,7 +791,6 @@ fn second() -> i64 {
 }
 "#,
     );
-    // stack-allocated array: alloca + stores + GEP
     assert!(
         ir.contains("alloca [3 x i64]"),
         "array literal should use alloca [3 x i64]:\n{ir}"
@@ -835,7 +817,6 @@ fn second() -> i64 {
     );
 }
 
-/// Array index write compiles through full pipeline.
 #[test]
 fn llvm_array_index_write_compiles() {
     let ir = compile_to_verified_ir(
@@ -861,7 +842,6 @@ fn mutate() -> i64 {
     );
 }
 
-/// Index as function argument compiles (indexing in expression position).
 #[test]
 fn llvm_index_in_function_argument_compiles() {
     let ir = compile_to_verified_ir(
@@ -883,7 +863,7 @@ fn use_index() -> i64 {
     );
 }
 
-/// Array index with variable (not constant) generates bounds check.
+/// array index with variable (not constant) generates bounds check.
 #[test]
 fn llvm_array_index_with_variable_has_bounds_check() {
     let ir = compile_to_verified_ir(
@@ -905,8 +885,6 @@ fn at(arr: [i64; 3], i: i64) -> i64 {
     assert!(ir.contains("idx_ok:"), "should have idx_ok block:\n{ir}");
 }
 
-/// Index read + write in a void function (swap pattern)
-/// Check if it does produces `ret void` instead of `ret ptr null`
 #[test]
 fn llvm_array_swap_pattern_compiles() {
     let ir = compile_to_verified_ir(
@@ -918,7 +896,6 @@ fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
 }
 "#,
     );
-    // Multiple GEPs and stores for the swap
     let gep_count = ir.matches("getelementptr").count();
     assert!(
         gep_count >= 3,
@@ -929,14 +906,12 @@ fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
         store_count >= 2,
         "swap should generate at least 2 stores, got {store_count}:\n{ir}"
     );
-    // Void function must emit ret void, not ret ptr null
     assert!(
         ir.contains("ret void"),
         "void function with index assignment should emit ret void:\n{ir}"
     );
 }
 
-/// String indexing on a literal compiles.
 #[test]
 fn llvm_string_literal_index_compiles() {
     let ir = compile_to_verified_ir(
@@ -1018,7 +993,6 @@ fn fill(mut arr: [i64; 3], i: i64, val: i64) -> void {
     );
 }
 
-/// Integer division emits a div-zero check in the IR.
 #[test]
 fn llvm_int_div_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
@@ -1046,7 +1020,6 @@ fn divide(a: i64, b: i64) -> i64 {
     );
 }
 
-/// Integer modulo also emits a div-zero check.
 #[test]
 fn llvm_int_rem_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
@@ -1066,7 +1039,6 @@ fn modulo(a: i64, b: i64) -> i64 {
     );
 }
 
-/// Unsigned division also gets the check.
 #[test]
 fn llvm_unsigned_div_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
@@ -1086,7 +1058,6 @@ fn udivide(a: u64, b: u64) -> u64 {
     );
 }
 
-/// Float division does NOT emit a div-zero check (IEEE 754 well-defined).
 #[test]
 fn llvm_float_div_has_no_div_zero_check() {
     let ir = compile_to_verified_ir(
@@ -1106,7 +1077,7 @@ fn fdivide(a: f64, b: f64) -> f64 {
     );
 }
 
-/// Div-zero check survives -O2 — the panic call must not be optimized away.
+/// div-zero check survives -o2 the panic call must not be optimized away.
 #[test]
 fn llvm_div_zero_check_survives_o2() {
     let ir = compile_to_verified_ir_with_opt(
@@ -1119,11 +1090,10 @@ fn divide(a: i64, b: i64) -> i64 {
     );
     assert!(
         ir.contains("@__aelys_panic"),
-        "div-zero check must survive -O2 — panic must not be eliminated:\n{ir}"
+        "div-zero check must survive -O2 ,  panic must not be eliminated:\n{ir}"
     );
 }
 
-/// Runtime: division by zero actually terminates the process (non-zero exit).
 #[test]
 fn llvm_div_by_zero_runtime_panics() {
     let dir = tempdir().expect("tempdir should be created");
@@ -1139,18 +1109,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1165,7 +1133,6 @@ fn main() -> i64 {
     );
 }
 
-/// Runtime: division by zero also panics at -O2.
 #[test]
 fn llvm_div_by_zero_runtime_panics_at_o2() {
     let dir = tempdir().expect("tempdir should be created");
@@ -1181,18 +1148,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1200,9 +1165,13 @@ fn main() -> i64 {
         !output.status.success(),
         "division by zero at -O2 should cause non-zero exit"
     );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("division by zero"),
+        "-O2 should keep the panic, not merely exit non-zero, got: {stderr}"
+    );
 }
 
-/// Runtime: modulo by zero also panics.
 #[test]
 fn llvm_rem_by_zero_runtime_panics() {
     let dir = tempdir().expect("tempdir should be created");
@@ -1218,18 +1187,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1237,9 +1204,13 @@ fn main() -> i64 {
         !output.status.success(),
         "modulo by zero should cause non-zero exit"
     );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("division by zero"),
+        "modulo by zero should panic, not merely exit non-zero, got: {stderr}"
+    );
 }
 
-/// Runtime: normal division still works correctly (no regression).
 #[test]
 fn llvm_normal_div_still_works() {
     let dir = tempdir().expect("tempdir should be created");
@@ -1255,18 +1226,16 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1277,7 +1246,6 @@ fn main() -> i64 {
     );
 }
 
-/// Runtime: division by runtime-computed zero in a loop panics.
 #[test]
 fn llvm_div_by_zero_in_loop_panics() {
     let dir = tempdir().expect("tempdir should be created");
@@ -1296,24 +1264,26 @@ fn main() -> i64 {
 "#,
     )
     .expect("source should be written");
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, true) {
-        if linker_unavailable(&err.to_string()) {
-            return;
-        }
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::None, false) {
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "native executable should be produced at {}",
+        exe_path.display()
+    );
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    // i=0: 10/2=5, i=1: 10/1=10, i=2: 10/0 → panic
     assert!(
         !output.status.success(),
         "division by zero in loop iteration should panic"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("division by zero"),
+        "the loop must reach the zero divisor and panic, not return a sum, got: {stderr}"
     );
 }
