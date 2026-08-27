@@ -10,7 +10,7 @@ Most languages force a single memory model on the entire program. GC'd languages
 
 Aelys starts from managed memory, reference counting with an optional cycle collector, and lets you leave it behind one function at a time. Default mode gives you heap allocation, type inference, and minimal annotation. `nogc` gives you compiler-enforced freedom from *additional* allocation, the caller's buffers are still the caller's, but nothing inside the region allocates, with statically checked references and no user-written lifetime annotations.
 
-The example below is **aspirational**: it shows the language this project is aiming at, and five of the constructs in it do not exist yet, `.len()`, `range()`, `Vec<T>::new(n)`, a `Vec` held inside a struct, and operator overloading on a user type. It is kept because it is the target, not because it compiles.
+The example below is **aspirational**: it shows the language this project is aiming at, and many of the constructs in it do not exist yet, among them `.len()`, `range()`, `Vec<T>::new(n)`, a `Vec` held inside a struct, operator overloading on a user type, the `fail` operator, unqualified `Ok`/`Err`, named call arguments, `or` as a fallback, nested patterns, and user-defined methods. It is kept because it is the target, not because it compiles.
 
 <!-- ```rust is used for syntax highlighting only, this is Aelys -->
 ```rust
@@ -40,7 +40,7 @@ fn main() {
 }
 ```
 
-`load_mesh` is default mode: GC-backed allocation, Result-based error handling with `?` for propagation and `catch` for recovery. `compute_normals` is `nogc`, meaning no heap allocation, no GC containers, and references checked at compile time. In `main`, `&` at the call site marks the boundary where data is borrowed into `nogc` territory.
+`load_mesh` is default mode: GC-backed allocation, Result-based error handling with `?` for propagation and `catch` for recovery. `compute_normals` is `nogc`, meaning no heap allocation, no GC containers, and references checked at compile time. In `main`, slicing a managed container at the call site marks the boundary where data is borrowed into `nogc` territory.
 
 The *boundary* that example illustrates, a `nogc` function taking `&[T]` and `&mut [T]` derived from managed containers, writing through the mutable one, does work today. This compiles and runs:
 
@@ -64,7 +64,7 @@ fn main() -> i64 {
 }
 ```
 
-Managed code calls `nogc` freely; the reverse is a compile error.
+Managed code calls `nogc` freely; the reverse is a compile error only where the call reaches managed allocation.
 
 Beyond the memory model: inferred types, pattern matching, compilation to native code via LLVM.
 
@@ -72,13 +72,15 @@ Beyond the memory model: inferred types, pattern matching, compilation to native
 
 The language provides two levels of control, each narrowing what the runtime provides.
 
-**Default mode.** Reference counting manages the heap, with an optional cycle collector (`--runtime rc+cycles`). Types are inferred and standard collections are managed. Type annotations are optional. `?` propagates errors and `catch` handles them. This is the intended level for most code.
+**Default mode.** Reference counting manages the heap, with an optional cycle collector (`--runtime rc+cycles`). Types are inferred and standard collections are managed. Type annotations are optional. `?` propagates errors and `catch` handles them, over a `Result` the program declares itself, since there is no prelude yet. This is the intended level for most code.
 
 <br>
 
-**`nogc` functions.** A function-level opt-out from managed allocation. Inside a `nogc` function, managed allocation is rejected at compile time, managed containers cannot be created, references are checked for escape and aliasing violations, and calls into managed code are rejected.
+**`nogc` functions.** A function-level opt-out from managed allocation. Inside a `nogc` function, managed allocation is rejected at compile time, managed containers cannot be created, references are checked for escape and aliasing violations, and calls that reach managed allocation are rejected, naming the path that reaches it.
 
 The compiler proves that the function satisfies these constraints or rejects it. No warnings, no user-written lifetime annotations. `unsafe {}` is reserved; today it permits only `.unwrap_unchecked()`, and it does not re-enable managed allocation.
+
+The FFI example below is **aspirational**: `needs "header.h"`, raw pointer casts, `size_of` and `.as_ptr()` do not exist yet.
 
 ```rust
 needs "GL/glext.h"
@@ -98,7 +100,7 @@ nogc fn upload_normals(buffer_id: u32, normals: &[Vec3]) {
 
 <br>
 
-**`#![no_gc]` `#![no_std]` modules.** At the module level, these attributes remove the garbage collector, runtime, and standard library entirely. The language exposes raw pointers, `extern fn`, and inline assembly, while parsing, typing, and semantic analysis still apply. This mode is intended for kernels, boot code, and freestanding targets.
+**`#![no_gc]` `#![no_std]` modules.** At the module level, these attributes remove the garbage collector, runtime, and standard library entirely. This mode is **planned, not implemented**: module attributes, raw pointers, `extern fn` and inline assembly are not parsed today. It is intended for kernels, boot code, and freestanding targets, and the module below does not compile.
 
 ```rust
 #![no_gc]
@@ -134,7 +136,7 @@ Aelys is an experimental language and compiler project under active rewrite. It 
 source → parser → semantic analysis → AIR (Aelys IR) → LLVM IR → native code
 ```
 
-Parser and semantic analysis are partially implemented. The `nogc` checker rules are under active design. Codegen targets LLVM.
+Parser and semantic analysis are partially implemented; there is no prelude or standard library yet. The `nogc` checker rules are under active design. Codegen targets LLVM.
 
 Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the collection strategy, iterator design, and whether a freestanding mode is in scope at all. The managed / `nogc` boundary rules are substantially settled: what a `nogc` function may do is decided per operation, and a refusal names the operation and the path that reaches it rather than the type.
 
