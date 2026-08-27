@@ -82,7 +82,7 @@ impl TypeInference {
             .map(str::to_string)
     }
 
-    fn check_write_target(&mut self, target: &TypedExpr, what: &str, span: Span) {
+    pub(super) fn check_write_target(&mut self, target: &TypedExpr, what: &str, span: Span) {
         if !denotes_a_place(target) {
             self.errors
                 .push(TypeError::no_place(format!("the target of {what}"), span));

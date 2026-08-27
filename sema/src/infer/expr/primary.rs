@@ -115,6 +115,12 @@ impl TypeInference {
         if enum_name == "Vec" && variant == "push" {
             return self.infer_vec_push(args, span);
         }
+        if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
+            return self.infer_vec_try_as_unique_mut_slice(args, span);
+        }
+        if enum_name == "Vec" && (variant == "len" || variant == "as_slice") {
+            return self.infer_vec_read(variant, args, span);
+        }
 
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
@@ -507,6 +513,162 @@ impl TypeInference {
                 args: vec![typed_vec, typed_elem],
             },
             InferType::Null,
+        )
+    }
+
+    fn infer_vec_read(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Vec::{} expects exactly 1 argument, got {}",
+                    variant,
+                    args.len()
+                ),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: variant.to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::{} expects a `Vec<T>` argument, got `{other}`",
+                        variant
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                return (
+                    TypedExprKind::EnumVariant {
+                        enum_name: "Vec".to_string(),
+                        variant: variant.to_string(),
+                        tag: 0,
+                        args: vec![typed_vec],
+                    },
+                    InferType::Dynamic,
+                );
+            }
+        };
+        let result_ty = if variant == "len" {
+            InferType::I64
+        } else {
+            InferType::Slice {
+                elem: Box::new(inner),
+                mutable: false,
+            }
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            result_ty,
+        )
+    }
+
+    fn infer_vec_try_as_unique_mut_slice(
+        &mut self,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Vec::try_as_unique_mut_slice expects exactly 1 argument, got {}",
+                    args.len()
+                ),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "try_as_unique_mut_slice".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        self.check_write_target(&typed_vec, "Vec::try_as_unique_mut_slice", args[0].span);
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::try_as_unique_mut_slice expects a `Vec<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "try_as_unique_mut_slice".to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            InferType::Slice {
+                elem: Box::new(inner),
+                mutable: true,
+            },
         )
     }
 }

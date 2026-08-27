@@ -1,4 +1,4 @@
-use super::{KNOWN_TYPE_NAMES, TypeInference};
+use super::{TypeInference, KNOWN_TYPE_NAMES};
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::TypedProgram;
 use crate::types::{InferType, TypeTable};
@@ -10,6 +10,7 @@ use std::sync::Arc;
 pub struct InferenceResult {
     pub program: TypedProgram,
     pub warnings: Vec<Warning>,
+    pub deferred_errors: Vec<TypeError>,
     pub type_table: TypeTable,
 }
 
@@ -79,10 +80,6 @@ impl TypeInference {
 
         self.check_type_annotation(ann);
 
-        // Handle function types specially: use enum-aware type_from_annotation
-        // recursively for params and return type, instead of raw from_annotation
-        // which doesn't know about enums and would produce Struct("Option")
-        // instead of Enum("Option", [...]) for types like fn(i64) -> Option<i64>.
         if ann.is_function_type() {
             if ann.nogc && !nogc_ok {
                 self.errors.push(TypeError::nogc_out_of_position(ann.span));
@@ -104,12 +101,6 @@ impl TypeInference {
             };
         }
 
-        // Handle array/vec annotations specially: use enum-aware type_from_annotation
-        // for the inner type. raw from_annotation uses Self::from_annotation which
-        // doesn't know about enums, so [Color; 3] would produce Array(Struct("Color"))
-        // instead of Array(Enum("Color", [])).
-        // Only the bracket syntax [T; N] is supported (array_size is Some).
-        // The legacy Array<T> generic syntax is no longer recognized.
         let name_lower = ann.name.to_lowercase();
         if name_lower == "array" && ann.array_size.is_some() {
             let inner = ann
@@ -127,7 +118,6 @@ impl TypeInference {
                 .unwrap_or(InferType::Dynamic);
             return InferType::Vec(Box::new(inner));
         }
-        // resolve the inner type enum-aware, from_annotation would call an enum a struct
         if ann.name == "Rc" {
             let inner = ann
                 .type_param
@@ -154,7 +144,6 @@ impl TypeInference {
         }
 
         let ty = InferType::from_annotation(ann);
-        // from_annotation maps all uppercase names to Struct(name); remap to Enum if applicable
         if let InferType::Struct(ref name) = ty {
             if self.type_table.has_enum(name) {
                 let type_args = self.collect_enum_type_args(ann);
@@ -164,12 +153,7 @@ impl TypeInference {
         ty
     }
 
-    /// Extract resolved type arguments from a type annotation for generic enums.
-    /// For `Option<i64>`, returns `[InferType::I64]`.
-    /// For `Result<i64, string>`, returns `[InferType::I64, InferType::String]`.
-    /// For non-generic `Color`, returns `[]`.
     fn collect_enum_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
-        // type_params takes precedence (multi-param case like Result<T, E>)
         if !ann.type_params.is_empty() {
             return ann
                 .type_params
@@ -177,7 +161,6 @@ impl TypeInference {
                 .map(|p| self.type_from_annotation(p))
                 .collect();
         }
-        // single type_param case (Option<T>)
         if let Some(ref param) = ann.type_param {
             return vec![self.type_from_annotation(param)];
         }
@@ -189,7 +172,6 @@ impl TypeInference {
             return;
         }
 
-        // function type annotations: fn(T1, T2) -> R
         if ann.is_function_type() {
             if let Some(ref params) = ann.fn_params {
                 for p in params {
@@ -204,7 +186,6 @@ impl TypeInference {
 
         let name_lower = ann.name.to_lowercase();
 
-        // Reject legacy Array<T> syntax, use [T; N] instead.
         if name_lower == "array" && ann.array_size.is_none() {
             self.errors.push(TypeError {
                 kind: TypeErrorKind::Mismatch {
@@ -229,7 +210,6 @@ impl TypeInference {
             return;
         }
 
-        // Rc is known but uppercase, so accept it before the unknown-type reject fires
         if ann.name == "Rc" {
             if let Some(ref param) = ann.type_param {
                 self.check_type_annotation(param);
@@ -289,6 +269,9 @@ impl TypeInference {
     ) -> Result<TypedProgram, Vec<TypeError>> {
         let result =
             Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
+        if !result.deferred_errors.is_empty() {
+            return Err(result.deferred_errors);
+        }
         Ok(result.program)
     }
 
@@ -299,6 +282,9 @@ impl TypeInference {
         known_globals: HashSet<String>,
     ) -> Result<TypedProgram, Vec<TypeError>> {
         let result = Self::infer_program_full(stmts, source, module_aliases, known_globals)?;
+        if !result.deferred_errors.is_empty() {
+            return Err(result.deferred_errors);
+        }
         Ok(result.program)
     }
 
@@ -322,7 +308,6 @@ impl TypeInference {
                     ret: Box::new(InferType::Null),
                     nogc: false,
                 },
-                // the explicit collect builtin, a no-op unless the cycles runtime is linked
                 "__aelys_collect" => InferType::Function {
                     params: vec![],
                     ret: Box::new(InferType::Null),
@@ -337,8 +322,7 @@ impl TypeInference {
         inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
-        // a nominal holding a Vec by value would leak its buffer, since carrier-Vec
-        // retain/release does not exist yet
+        // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
         inf.collect_signatures(&stmts, "");
 
@@ -348,11 +332,6 @@ impl TypeInference {
 
         let resolved_stmts = inf.apply_substitution_stmts(&typed_stmts, &subst);
 
-        // collect all declared type parameter names from the program (functions and struct declarations)
-        //
-        // a name is only treated as a type parameter if it appears in declared_type_params and is not
-        // also a real struct in the type table, this prevents false-positive filtering when a struct
-        // shares a name with a type parameter from an unrelated generic function.
         let declared_type_params = collect_declared_type_params(&stmts);
 
         inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
@@ -363,24 +342,33 @@ impl TypeInference {
         let is_type_param = |ty: &InferType| -> bool {
             matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
         };
-        let fatal_errors: Vec<_> = inf
+        let all_errors: Vec<_> = inf
             .errors
             .iter()
-            .filter(|err| match &err.kind {
-                TypeErrorKind::Mismatch { expected, found } => {
-                    let generic_annotation_mismatch =
-                        matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
-                            && (is_type_param(expected) || is_type_param(found));
-                    !generic_annotation_mismatch
+            .filter_map(|err| {
+                if matches!(&err.kind, TypeErrorKind::NestedFnShadowsOuter { .. }) {
+                    return Some(err.clone());
                 }
-                _ => true,
+                let fatal = match &err.kind {
+                    TypeErrorKind::Mismatch { expected, found } => {
+                        let generic_annotation_mismatch =
+                            matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
+                                && (is_type_param(expected) || is_type_param(found));
+                        !generic_annotation_mismatch
+                    }
+                    _ => true,
+                };
+                fatal.then(|| err.clone())
             })
-            .cloned()
             .collect();
 
-        if !fatal_errors.is_empty() {
-            return Err(fatal_errors);
+        if all_errors
+            .iter()
+            .any(|err| !matches!(&err.kind, TypeErrorKind::NestedFnShadowsOuter { .. }))
+        {
+            return Err(all_errors);
         }
+        let deferred_errors = all_errors;
 
         let type_table = inf.type_table;
 
@@ -391,15 +379,12 @@ impl TypeInference {
                 type_table: type_table.clone(),
             },
             warnings: inf.warnings,
+            deferred_errors,
             type_table,
         })
     }
 }
 
-/// Walk the AST and collect every type parameter name declared by functions
-/// and struct definitions.
-///
-/// Used for the positive `is_type_param` test in the fatal error filter.
 fn collect_declared_type_params(stmts: &[Stmt]) -> HashSet<String> {
     let mut params = HashSet::new();
     collect_type_params_recursive(stmts, &mut params);
