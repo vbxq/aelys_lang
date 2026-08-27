@@ -6,8 +6,8 @@ mod runtime;
 
 pub use runtime::RuntimeVariant;
 
-use aelys_common::Warning;
 use aelys_common::error::AelysError;
+use aelys_common::Warning;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
@@ -19,8 +19,9 @@ use std::sync::Arc;
 
 use diagnostics::{
     backend_diagnostic_error, bir_diagnostics_to_error, duplicate_symbol_errors_to_error,
-    fallback_source_span, load_source_for_diagnostics, mono_errors_to_error, program_anchor_span,
-    reserved_name_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
+    fallback_source_span, load_source_for_diagnostics, mono_errors_to_error, multiple_diagnostics,
+    program_anchor_span, reserved_name_errors_to_error, sema_errors_to_diagnostics,
+    vec_surface_errors_to_error,
 };
 use lower::compile_air_with_llvm;
 
@@ -46,9 +47,17 @@ pub fn compile_to_typed_ast(source_code: &str) -> Result<aelys_sema::TypedProgra
         HashSet::new(),
         known_globals,
     )
-    .map_err(|errors| sema_errors_to_diagnostics(errors, src))?;
+    .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
 
-    Ok(inference.program)
+    let aelys_sema::InferenceResult {
+        program,
+        deferred_errors,
+        ..
+    } = inference;
+    if !deferred_errors.is_empty() {
+        return Err(sema_errors_to_diagnostics(deferred_errors, src));
+    }
+    Ok(program)
 }
 
 pub fn lower_file_to_air(
@@ -92,14 +101,34 @@ fn lower_file_to_air_with_source(
     )
     .map_err(|errors| sema_errors_to_diagnostics(errors, src.clone()))?;
 
-    // a reserved name is a naming error, not an effect error, so it is reported before the bir gate
-    let reserved = aelys_air::symbols::reserved_user_names(&inference.program);
-    if !reserved.is_empty() {
-        return Err(reserved_name_errors_to_error(reserved, src.clone()));
+    let aelys_sema::InferenceResult {
+        program,
+        warnings,
+        deferred_errors,
+        ..
+    } = inference;
+    let reserved = aelys_air::symbols::reserved_user_names(&program);
+    let mut collected_errors = Vec::new();
+    let checked = match aelys_air::bir::check(program) {
+        Ok(checked) => Some(checked),
+        Err(errors) => {
+            collected_errors.push(bir_diagnostics_to_error(errors, src.clone()));
+            None
+        }
+    };
+    if !deferred_errors.is_empty() {
+        collected_errors.push(sema_errors_to_diagnostics(deferred_errors, src.clone()));
     }
-
-    let checked = aelys_air::bir::check(inference.program)
-        .map_err(|errors| bir_diagnostics_to_error(errors, src.clone()))?;
+    if !reserved.is_empty() {
+        collected_errors.push(reserved_name_errors_to_error(reserved, src.clone()));
+    }
+    if !collected_errors.is_empty() {
+        return Err(multiple_diagnostics(collected_errors));
+    }
+    let checked = match checked {
+        Some(checked) => checked,
+        None => return Err(multiple_diagnostics(collected_errors)),
+    };
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(checked);
@@ -202,8 +231,7 @@ fn lower_file_to_air_with_source(
         ));
     }
 
-    let warnings = inference
-        .warnings
+    let warnings = warnings
         .into_iter()
         .map(|warning| {
             if warning.source.is_none() {
@@ -309,4 +337,3 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
         stderr.trim()
     ))
 }
-

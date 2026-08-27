@@ -34,6 +34,15 @@ pub(super) fn backend_diagnostic_error(
     ))
 }
 
+pub(super) fn multiple_diagnostics(errors: Vec<AelysError>) -> AelysError {
+    AelysError::Multiple(
+        errors
+            .into_iter()
+            .flat_map(|error| error.to_diagnostics())
+            .collect(),
+    )
+}
+
 const VEC_SURFACE_ANNOTATION: &str = "Vec used outside the guaranteed value-semantics surface";
 
 pub(super) fn mono_errors_to_error(
@@ -817,4 +826,3 @@ mod tests {
         );
     }
 }
-
