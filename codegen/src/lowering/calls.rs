@@ -128,7 +128,10 @@ impl<'a> FunctionCodegen<'a> {
             }
 
             // the runtime needs the element size, which air cannot compute without program
-            if name == "__aelys_vec_init" || name == "__aelys_vec_push" {
+            if name == "__aelys_vec_init"
+                || name == "__aelys_vec_push"
+                || name == "__aelys_vec_try_as_unique_mut_slice"
+            {
                 return self.generate_vec_runtime_call(name, args, &arg_values);
             }
         }
@@ -683,7 +686,32 @@ impl<'a> FunctionCodegen<'a> {
         let i64_ty = self.context.i64_type();
 
         let (fn_ty, call_args): (FunctionType<'static>, Vec<BasicMetadataValueEnum<'static>>) =
-            if name == "__aelys_vec_init" {
+            if name == "__aelys_vec_try_as_unique_mut_slice" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_vec_try_as_unique_mut_slice expects exactly one argument"
+                            .to_string(),
+                    ));
+                }
+                let slice_ty = air_basic_type_to_llvm(
+                    &AirType::Slice(Box::new(elem_ty.clone())),
+                    self.context,
+                )?;
+                let fn_ty = slice_ty.fn_type(&[ptr_ty.into(), i64_ty.into()], false);
+                let function = self
+                    .module
+                    .get_function(name)
+                    .unwrap_or_else(|| self.module.add_function(name, fn_ty, None));
+                let call = self
+                    .builder
+                    .build_call(
+                        function,
+                        &[arg_values[0].into_pointer_value().into(), size_val.into()],
+                        "try_unique_mut_slice",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(call.try_as_basic_value().basic());
+            } else if name == "__aelys_vec_init" {
                 let vec_ptr = arg_values[0].into_pointer_value();
                 let count = arg_values[1].into_int_value();
                 (
