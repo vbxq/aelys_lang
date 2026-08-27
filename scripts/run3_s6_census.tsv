@@ -156,3 +156,12 @@ run3_stage6_boundary__S6_T3_KEPT	CTRL-INERT	allocs=0: the row reaches no managed
 run3_stage6_boundary__S6_T4	CTRL-FENCE	refused by E0727
 run3_stage6_boundary__S6_T5	CTRL-ABLATION	E_PARAM
 run3_stage6_boundary__S6_T6	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R1	ANCHOR	run3_base
+run3_stage6_boundary__S6_R2	ANCHOR	run3_base
+run3_stage6_boundary__S6_R3	ANCHOR	run3_base
+run3_stage6_boundary__S6_R4	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R4_KEEP	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_R5	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R5_KEEP	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_R6	ANCHOR	run3_base
+run3_stage6_boundary__S6_R6_KEEP	ANCHOR	run3_base

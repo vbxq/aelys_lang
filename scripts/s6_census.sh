@@ -49,7 +49,7 @@ fi
 echo "   $(wc -l < "$WORK/ids") rows, and the table names exactly those"
 
 build() { ( cd "$ROOT" && cargo build --release --bin aelys-cli ) >/dev/null 2>&1; }
-sweep() { "$ROOT/scripts/s6_row_sweep.sh" "$ROOT/target/release/aelys-cli" "$FIX" "$1"; }
+sweep() { bash "$ROOT/scripts/s6_row_sweep.sh" "$ROOT/target/release/aelys-cli" "$FIX" "$1"; }
 
 echo "== HEAD =="
 build || fail "the HEAD build failed"
