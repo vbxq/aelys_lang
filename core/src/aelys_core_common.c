@@ -170,6 +170,25 @@ typedef struct {
     long long cap;
 } AelysVec;
 
+typedef struct {
+    void *ptr;
+    long long len;
+} AelysMutSlice;
+
+AelysMutSlice __aelys_vec_try_as_unique_mut_slice(void *vecptr, long long elem_size) {
+    (void)elem_size;
+    AelysMutSlice out = {NULL, 0};
+    if (!vecptr) {
+        return out;
+    }
+    AelysVec *v = (AelysVec *)vecptr;
+    if (__aelys_rc_refcount(v->ptr) == 1) {
+        out.ptr = v->ptr;
+        out.len = v->len;
+    }
+    return out;
+}
+
 void __aelys_vec_init(void *vecptr, long long elem_size, long long count) {
     AelysVec *v = (AelysVec *)vecptr;
     v->ptr = __aelys_vec_new(elem_size, count);
