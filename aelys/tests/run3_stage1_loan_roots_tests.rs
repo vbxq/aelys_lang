@@ -1133,6 +1133,315 @@ fn main() -> i64 {{
     );
 }
 
+fn dump(src: &str) -> Vec<String> {
+    let dir = tempdir().expect("tempdir");
+    let source_path = dir.path().join("module.aelys");
+    let dump_path = dir.path().join("loanroots.txt");
+    fs::write(&source_path, src).expect("write source");
+
+    let guard = lock();
+    unsafe { std::env::set_var("AELYS_DUMP_LOAN_ROOTS", &dump_path) };
+    let outcome = lower_file_to_air(&source_path, OptimizationLevel::None);
+    unsafe { std::env::remove_var("AELYS_DUMP_LOAN_ROOTS") };
+    drop(guard);
+
+    let text = fs::read_to_string(&dump_path).expect("the dump file must exist");
+    let raw: Vec<String> = text
+        .lines()
+        .filter(|l| l.starts_with("LOANROOT"))
+        .map(str::to_string)
+        .collect();
+    let mut distinct = raw.clone();
+    distinct.sort();
+    distinct.dedup();
+    assert!(!distinct.is_empty(), "the dump must not be empty:\n{text}");
+    let expected = if outcome.is_err() {
+        distinct.len()
+    } else {
+        2 * distinct.len()
+    };
+    assert_eq!(
+        raw.len(),
+        expected,
+        "raw lines vs distinct lines; the dump was:\n{text}"
+    );
+    distinct
+}
+
+fn assert_class(src: &str, expected: &[&str]) {
+    assert_eq!(dump(src), expected, "loan root classification");
+}
+
+#[test]
+fn dump_stays_off_without_the_env_var() {
+    let dir = tempdir().expect("tempdir");
+    let source_path = dir.path().join("module.aelys");
+    let dump_path = dir.path().join("loanroots.txt");
+    fs::write(
+        &source_path,
+        r#"
+fn main() -> i64 {
+    let a: [i64;3] = [1,2,3]
+    let s = a[..]
+    return s[0]
+}
+"#,
+    )
+    .expect("write source");
+    let guard = lock();
+    let outcome = lower_file_to_air(&source_path, OptimizationLevel::None);
+    drop(guard);
+    assert!(outcome.is_ok(), "the control program must compile");
+    assert!(
+        !dump_path.exists(),
+        "the dump must write nothing when the env var is unset"
+    );
+}
+
+#[test]
+fn c1r_an_rc_root_with_no_projection_is_managed() {
+    assert_class(
+        r#"
+fn take(p: &Rc<i64>) -> i64 { return 0 }
+fn main() -> i64 {
+    let r: Rc<i64> = Rc::new(5)
+    let q = take(&r)
+    println(q)
+    return 0
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Rc(I64) class=Managed"#],
+    );
+}
+
+#[test]
+fn c2r_a_slice_root_is_unknown() {
+    assert_class(
+        &format!(
+            r#"{STRUCT_S}
+fn main() -> i64 {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
+    let s = x.a[..]
+    let t = s[..]
+    println(t[0])
+    return 0
+}}
+"#
+        ),
+        &[
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S") class=Unknown"#,
+            r#"LOANROOT fn=main loan=1 root=%5 proj=[] ty=Slice { elem: I64, mutable: false } class=Unknown"#,
+        ],
+    );
+}
+
+#[test]
+fn c3r_an_array_of_scalars_and_a_scalar_are_unmanaged() {
+    assert_class(
+        r#"
+fn main() -> i64 {
+    let a: [i64;3] = [1,2,3]
+    let s = a[..]
+    return s[0]
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Array(I64, Some(3)) class=Unmanaged"#],
+    );
+    assert_class(
+        r#"
+fn main() -> i64 {
+    let x: i64 = 1
+    let r = &x
+    return *r
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%0 proj=[] ty=I64 class=Unmanaged"#],
+    );
+}
+
+#[test]
+fn u1_class_a_field_projection_is_unknown() {
+    assert_class(
+        &format!(
+            r#"{STRUCT_S}
+fn main() -> i64 {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
+    let s = x.a[..]
+    println(s[0])
+    return 0
+}}
+"#
+        ),
+        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[Field(a)] ty=Struct("S") class=Unknown"#],
+    );
+}
+
+#[test]
+fn u5_class_the_unmanaged_twin_is_unknown_too() {
+    assert_class(
+        r#"
+struct T { b: i64, a: [i64;3] }
+fn main() -> i64 {
+    let x: T = T { b: 1, a: [4,5,6] }
+    let s = x.a[..]
+    println(s[0])
+    return 0
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%2 proj=[Field(a)] ty=Struct("T") class=Unknown"#],
+    );
+}
+
+#[test]
+fn u9_class_agrees_across_the_reference_boundary() {
+    assert_class(
+        &format!(
+            r#"{STRUCT_S}
+fn f(w: &S) -> i64 {{
+    let s = (*w).a[..]
+    println(s[0])
+    return 0
+}}
+fn main() -> i64 {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
+    return f(&x)
+}}
+"#
+        ),
+        &[
+            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#,
+        ],
+    );
+}
+
+#[test]
+fn u10_class_the_whole_struct_is_managed() {
+    assert_class(
+        &format!(
+            r#"{STRUCT_S}
+fn take(w: &S) -> i64 {{ return 0 }}
+fn main() -> i64 {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
+    let q = take(&x)
+    println(q)
+    return 0
+}}
+"#
+        ),
+        &[r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#],
+    );
+}
+
+#[test]
+fn u11_class_a_peeled_ref_with_no_field_is_unknown() {
+    assert_class(
+        &format!(
+            r#"{STRUCT_S}
+fn f(w: &S) -> i64 {{
+    let q = &*w
+    return 0
+}}
+fn main() -> i64 {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
+    return f(&x)
+}}
+"#
+        ),
+        &[
+            r#"LOANROOT fn=f loan=0 root=%0 proj=[Deref] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=main loan=0 root=%3 proj=[] ty=Struct("S") class=Managed"#,
+        ],
+    );
+}
+
+#[test]
+fn i1_class_the_rc_loan_is_managed_and_the_program_still_compiles() {
+    assert_class(
+        r#"
+struct S { a: [i64;3] }
+fn pick(p: &Rc<i64>, x: &S) -> &S { return x }
+fn go(g: fn(&Rc<i64>, &S) -> &S) -> i64 {
+    let r: Rc<i64> = Rc::new(5)
+    let x: S = S { a: [4,5,6] }
+    let w = g(&r, &x)
+    let s = (*w).a[..]
+    println(s[0])
+    return 0
+}
+fn main() -> i64 { return go(pick) }
+"#,
+        &[
+            r#"LOANROOT fn=go loan=0 root=%2 proj=[] ty=Rc(I64) class=Managed"#,
+            r#"LOANROOT fn=go loan=1 root=%5 proj=[] ty=Struct("S") class=Unmanaged"#,
+            r#"LOANROOT fn=go loan=2 root=%9 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
+        ],
+    );
+}
+
+#[test]
+fn e1_class_an_enum_holding_an_rc_is_managed() {
+    assert_class(
+        r#"
+enum E { A(Rc<i64>) }
+fn f(e: &E) -> i64 { return 0 }
+fn main() -> i64 {
+    let e: E = E::A(Rc::new(7))
+    let q = f(&e)
+    println(q)
+    return 0
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%2 proj=[] ty=Enum("E", []) class=Managed"#],
+    );
+}
+
+#[test]
+fn e2_class_the_plain_enum_twin_is_unmanaged() {
+    assert_class(
+        r#"
+enum E { A(i64), B(i64) }
+fn f(e: &E) -> i64 { return 0 }
+fn main() -> i64 {
+    let e: E = E::A(1)
+    let q = f(&e)
+    println(q)
+    return 0
+}
+"#,
+        &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Enum("E", []) class=Unmanaged"#],
+    );
+}
+
+#[test]
+fn f1_class_an_array_of_a_managed_struct_is_managed() {
+    assert_class(
+        r#"
+struct S { r: Rc<i64> }
+fn f(a: [S;2]) -> i64 {
+    let p = &a
+    return 0
+}
+fn main() -> i64 { return 0 }
+"#,
+        &[r#"LOANROOT fn=f loan=0 root=%0 proj=[] ty=Array(Struct("S"), Some(2)) class=Managed"#],
+    );
+}
+
+#[test]
+fn a_rejected_program_dumps_each_loan_once() {
+    assert_class(
+        r#"
+nogc fn f() -> i64 {
+    let v: Vec<i64> = vec[1,2,3]
+    let s = v[..]
+    return s[0]
+}
+fn main() -> i64 { return f() }
+"#,
+        &[r#"LOANROOT fn=f loan=0 root=%1 proj=[] ty=Vec(I64) class=Managed"#],
+    );
+}
 #[cfg(feature = "asan-invariants")]
 mod asan {
     use super::*;

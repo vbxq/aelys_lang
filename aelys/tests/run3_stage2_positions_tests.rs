@@ -1728,6 +1728,35 @@ const GROUP_C: &[Row] = &[
               }\n",
         twin: None,
     },
+    Row {
+        id: "C38",
+        position: "Reference.operand through an Index into a Vec, then a read-only local",
+        class: Class::MustNotMoveAccepted,
+        src: "nogc fn peek_local(r: &Vec<i64>) -> i64 {\n\
+              \x20   let p: &i64 = &(*r)[0]\n\
+              \x20   return *p\n\
+              }\n\
+              fn main() -> i64 {\n\
+              \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
+              \x20   println(peek_local(&v))\n\
+              \x20   return 0\n\
+              }\n",
+        twin: Some(Twin {
+            src: "nogc fn peek_local(r: &Vec<i64>) -> i64 {\n\
+                  \x20   let p: &i64 = &(*r)[0]\n\
+                  \x20   return *p\n\
+                  }\n\
+                  fn main() -> i64 {\n\
+                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
+                  \x20   println(peek_local(&v))\n\
+                  \x20   return 0\n\
+                  }\n",
+            stdout: "7919\n",
+            exit: 0,
+            allocs: 1,
+            frees: 1,
+        }),
+    },
 ];
 
 const F3_GENERIC_STRUCT_BY_VALUE: &str = "struct G<T> { n: T }\n\
@@ -2009,7 +2038,7 @@ fn group_b_must_stay_rejected() {
 
 #[test]
 fn group_c_must_not_move() {
-    run_rows(GROUP_C, 21);
+    run_rows(GROUP_C, 24);
 }
 
 // the a6 hook, re-aimed rather than retired. the fence is gone because its obligation was
@@ -2310,7 +2339,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 15, 30, 4, 1, 0, 108),
+        (31, 27, 0, 0, 16, 30, 4, 1, 0, 109),
         "the class split changed"
     );
 }
@@ -2381,7 +2410,7 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
     ("Slice", "A08 A26 A34 A35 B26 B27 C19"),
     (
         "Reference",
-        "A21 A22 A25 B29 B30 B31 B32 B33 B34 B35 B36 C24",
+        "A21 A22 A25 B29 B30 B31 B32 B33 B34 B35 B36 C24 C38",
     ),
     ("Deref", "A01 C12"),
     ("DerefAssign", "B03 B04 B29 B32 C15"),
