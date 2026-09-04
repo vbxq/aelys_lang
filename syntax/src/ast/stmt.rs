@@ -39,7 +39,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
-    // for i in start..end { } or start..=end (inclusive)
     For {
         iterator: String,
         start: Expr,
@@ -49,7 +48,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
-    // for item in collection { }
     ForEach {
         iterator: String,
         iterable: Expr,
@@ -81,6 +79,7 @@ pub enum StmtKind {
 pub struct StructFieldDecl {
     pub name: String,
     pub type_annotation: TypeAnnotation,
+    pub is_pub: bool,
     pub span: Span,
 }
 
@@ -91,12 +90,16 @@ pub struct EnumVariantDecl {
     pub span: Span,
 }
 
-// module import - `needs utils.helpers` or `needs cos, sin from std.math`
 #[derive(Debug, Clone)]
 pub struct NeedsStmt {
-    pub path: Vec<String>, // ["utils", "helpers"]
-    pub kind: ImportKind,
+    pub target: NeedsTarget,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum NeedsTarget {
+    Module { path: Vec<String>, kind: ImportKind },
+    Foreign { header: String },
 }
 
 #[derive(Debug, Clone)]
