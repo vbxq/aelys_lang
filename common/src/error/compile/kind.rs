@@ -1,6 +1,5 @@
 #[derive(Debug)]
 pub enum CompileErrorKind {
-    // Lexer errors
     UnterminatedString,
     InvalidCharacter(char),
     InvalidNumber(String),
@@ -8,7 +7,6 @@ pub enum CompileErrorKind {
     UnterminatedFmtExpr,
     UnmatchedCloseBrace,
 
-    // Parser errors
     UnexpectedToken {
         expected: String,
         found: String,
@@ -23,12 +21,10 @@ pub enum CompileErrorKind {
         max: usize,
     },
 
-    // Name resolution errors
     UndefinedVariable(String),
     VariableAlreadyDefined(String),
     UndefinedFunction(String),
 
-    // Type errors (individual variants, replacing TypeInferenceError catch-all)
     TypeMismatch {
         expected: String,
         found: String,
@@ -57,16 +53,14 @@ pub enum CompileErrorKind {
     },
     RecursionLimitExceeded,
 
-    // Mutability errors
+    // mutability errors
     AssignToImmutable(String),
     AssignToLoopVariable(String),
 
-    // Control flow errors
     BreakOutsideLoop,
     ContinueOutsideLoop,
     ReturnOutsideFunction,
 
-    // Module errors
     ModuleNotFound {
         module_path: String,
         searched_paths: Vec<String>,
@@ -78,8 +72,16 @@ pub enum CompileErrorKind {
         symbol: String,
         module: String,
     },
-    StdlibNotAvailable {
-        module: String,
+    ReservedModuleSegment {
+        module_path: String,
+        segment: String,
+    },
+    ForeignHeaderImport {
+        header: String,
+    },
+    NeedsOutsidePrologue,
+    WildcardImport {
+        module_path: String,
     },
     SymbolNotFound {
         symbol: String,
@@ -90,7 +92,6 @@ pub enum CompileErrorKind {
         modules: Vec<String>,
     },
 
-    /// Legacy catch-all for sema type errors (being phased out in favor of individual variants)
     TypeInferenceError(String),
 
     BackendDiagnostic {

@@ -56,23 +56,30 @@ impl CompileError {
                 diag.add_help("make the binding mutable: `let mut`".to_string());
             }
             CompileErrorKind::ModuleNotFound { searched_paths, .. } => {
-                // FIXME: legacy VM code, clean up
                 if !searched_paths.is_empty() {
                     diag.add_note(format!("searched in: {}", searched_paths.join(", ")));
                 }
             }
             CompileErrorKind::SymbolNotPublic { module, .. } => {
                 diag.add_help(format!(
-                    "add 'pub' before the declaration in {}.aelys",
+                    "add `pub` before the declaration in module '{}'",
                     module
                 ));
             }
-            CompileErrorKind::StdlibNotAvailable { .. } => {
-                // TODO: clean up when std is done
-                diag.add_note("standard library will be available in a future version".to_string());
-            }
             CompileErrorKind::SymbolConflict { .. } => {
-                diag.add_help("use 'as' alias to disambiguate".to_string());
+                diag.add_help("use 'as' to bind one of them to another name".to_string());
+            }
+            CompileErrorKind::ForeignHeaderImport { .. } => {
+                diag.add_note(
+                    "C headers are reached by the same `needs` keyword, but nothing reads them yet"
+                        .to_string(),
+                );
+            }
+            CompileErrorKind::WildcardImport { module_path } => {
+                diag.add_help(format!(
+                    "name what you need: `needs <symbol> from {}`",
+                    module_path
+                ));
             }
             _ => {}
         }

@@ -1,4 +1,3 @@
-
 use super::Severity;
 
 pub struct DiagnosticInfo {
@@ -834,6 +833,104 @@ the bound could not be proven there.",
 A generic function with a `nogc` bound was referenced outside a direct
 call. Taking it as a value would let it be instantiated somewhere the
 bound is never checked, so only direct calls are allowed.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0601",
+        title: "module not found",
+        explanation: "\
+A `needs` names a module whose file does not exist. A module path
+`a.b.c` resolves to exactly one file, `<root>/a/b/c.aelys`, where
+`<root>` is the directory of the file named on the command line.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0602",
+        title: "circular module dependency",
+        explanation: "\
+Two or more modules import each other, directly or through a chain.
+Each module is type-checked on its own, in dependency order, so a cycle
+has no order to check it in. Break the cycle by moving the shared items
+into a third module that both can import.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0603",
+        title: "conflicting import name",
+        explanation: "\
+Two `needs` declarations introduce the same name into one module, or an
+import introduces a name the module already defines. Use `as` to bind
+one of them to another name.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0604",
+        title: "reserved module path segment",
+        explanation: "\
+A segment of a module path starts with `__`, which is reserved for
+compiler- and runtime-generated symbols. Module paths become part of
+symbol names, so a reserved segment could collide with them.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0605",
+        title: "item is not public",
+        explanation: "\
+A module exports only the items it declares `pub`. Everything else is
+private to the file that defines it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0606",
+        title: "no such item in module",
+        explanation: "\
+The named module exists and compiles, but exports nothing under that
+name. Note that a private item is reported as E0605, not as this code.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0607",
+        title: "C header import is not implemented",
+        explanation: "\
+`needs \"some/header.h\"` is the foreign form of the import keyword: the
+target is a string literal rather than a module path. The form is
+reserved and parsed, but nothing reads C headers yet.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0608",
+        title: "`needs` outside the module prologue",
+        explanation: "\
+Every `needs` belongs at the top of the file, before any other
+top-level declaration, and never inside a function or a block. Imports
+bind for the whole module, so a position further down would suggest a
+scope the language does not have.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0609",
+        title: "wildcard import is not implemented",
+        explanation: "\
+`needs a.b.*` would bind every exported name of `a.b` at once. Name
+what you need instead: `needs alpha, beta from a.b`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0610",
+        title: "field is not public",
+        explanation: "\
+A struct exports only the fields it declares `pub`. Everything else is
+private to the module that defines the struct, whether it is read,
+written, or supplied in a struct literal.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0611",
+        title: "private type in a public signature",
+        explanation: "\
+A `pub` item names a type its own module keeps private, so an importer
+would receive a value of a type it can never name. Make the type `pub`,
+or stop exporting the item that mentions it.",
         severity: Severity::Error,
     },
     DiagnosticInfo {

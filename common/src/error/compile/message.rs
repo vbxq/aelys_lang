@@ -77,10 +77,27 @@ impl CompileErrorKind {
             Self::SymbolNotPublic { symbol, module } => {
                 format!("'{}' is not public in module '{}'", symbol, module)
             }
-            Self::StdlibNotAvailable { module } => {
+            Self::ReservedModuleSegment {
+                module_path,
+                segment,
+            } => format!(
+                "module path '{}' uses the reserved segment '{}'",
+                module_path, segment
+            ),
+            Self::ForeignHeaderImport { header } => {
                 format!(
-                    "standard library module '{}' is not yet implemented",
-                    module
+                    "importing the C header \"{}\" is not implemented yet",
+                    header
+                )
+            }
+            Self::NeedsOutsidePrologue => {
+                "a `needs` declaration may only appear before any other top-level declaration"
+                    .to_string()
+            }
+            Self::WildcardImport { module_path } => {
+                format!(
+                    "wildcard import of '{}' is not implemented yet",
+                    module_path
                 )
             }
             Self::SymbolNotFound { symbol, module } => {
@@ -88,7 +105,7 @@ impl CompileErrorKind {
             }
             Self::SymbolConflict { symbol, modules } => {
                 format!(
-                    "symbol '{}' is exported by multiple modules: {}",
+                    "the import name '{}' is introduced more than once, by: {}",
                     symbol,
                     modules.join(", ")
                 )
