@@ -1,14 +1,13 @@
-
 use std::collections::HashMap;
 
 use aelys_syntax::Span;
 
-use super::category::Category;
 use super::*;
 
 pub struct BirCheck {
     pub errors: Vec<BirDiagnostic>,
     pub drops: HashMap<DropKey, Vec<DropKey>>,
+    pub effects: HashMap<String, super::EffectSet>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -28,6 +27,21 @@ fn join_state(a: &[Lat], b: &[Lat]) -> Vec<Lat> {
 }
 
 pub fn check_program(bir: &BirProgram) -> BirCheck {
+    check_program_with_imports(bir, &HashMap::new())
+}
+
+pub fn check_program_with_imports(
+    bir: &BirProgram,
+    imported: &HashMap<String, super::EffectSet>,
+) -> BirCheck {
+    check_program_with_chains(bir, imported, &HashMap::new())
+}
+
+pub fn check_program_with_chains(
+    bir: &BirProgram,
+    imported: &HashMap<String, super::EffectSet>,
+    chains: &HashMap<String, Vec<super::Step>>,
+) -> BirCheck {
     let mut errors: Vec<BirDiagnostic> = Vec::new();
     let mut drops: HashMap<DropKey, Vec<DropKey>> = HashMap::new();
     for body in &bir.bodies {
@@ -39,15 +53,17 @@ pub fn check_program(bir: &BirProgram) -> BirCheck {
     for body in &bir.bodies {
         errors.extend(body.build_errors.iter().cloned());
     }
-    if bir.bodies.iter().any(|b| b.declared_nogc) {
-        let effects = super::effects::effect_summaries(bir);
-        for body in &bir.bodies {
-            if body.declared_nogc && !effects.get(&body.name).is_some_and(|e| e.is_nogc()) {
-                errors.push(nogc_diagnostic(bir, &effects, body));
-            }
+    let effects = super::effects::effect_summaries_with_imports(bir, imported);
+    for body in &bir.bodies {
+        if body.declared_nogc && !effects.get(&body.name).is_some_and(|e| e.is_nogc()) {
+            errors.push(nogc_diagnostic(bir, &effects, chains, body));
         }
     }
-    BirCheck { errors, drops }
+    BirCheck {
+        errors,
+        drops,
+        effects,
+    }
 }
 
 const CHAIN_HEAD: usize = 3;
@@ -57,6 +73,7 @@ const MAX_SECONDARY: usize = 4;
 fn nogc_diagnostic(
     bir: &BirProgram,
     effects: &HashMap<String, EffectSet>,
+    chains: &HashMap<String, Vec<super::Step>>,
     body: &BirBody,
 ) -> BirDiagnostic {
     use super::effects::StepKind;
@@ -65,7 +82,7 @@ fn nogc_diagnostic(
         "[nogc] function `{}` is declared nogc but its inferred effects reach managed memory",
         body.name
     );
-    let chain = super::effects::managed_chain(bir, effects, body);
+    let chain = super::effects::managed_chain_with(bir, effects, chains, body);
     let stopped = chain.last().filter(|s| s.kind == StepKind::Ambiguous);
     let path: Vec<&str> = chain
         .iter()
@@ -165,7 +182,7 @@ struct UseSite {
 }
 
 fn is_affine(body: &BirBody, l: BirLocalId) -> bool {
-    body.locals[l.0 as usize].category == Category::Affine
+    body.locals[l.0 as usize].category.is_affine()
 }
 
 fn rvalue_uses(rv: &BirRvalue, out: &mut Vec<UseSite>) {
@@ -270,7 +287,7 @@ fn check_body(
 
     let mut entry = vec![Lat::Uninit; n_locals];
     for i in 0..body.arg_count.min(n_locals) {
-        if body.locals[i].category == Category::Affine {
+        if body.locals[i].category.is_affine() {
             entry[i] = Lat::Live;
         }
     }

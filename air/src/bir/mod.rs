@@ -11,7 +11,7 @@ use aelys_sema::{InferType, TypedProgram};
 
 pub use category::{Category, category};
 pub use effects::{Effect, EffectSet, Step, StepKind, effect_summaries, managed_chain};
-pub use moves::{BirCheck, check_program};
+pub use moves::{BirCheck, check_program, check_program_with_imports};
 
 // the private field is the seal: check is the only constructor, so optimize cannot run unchecked
 pub struct Checked(TypedProgram);
@@ -26,13 +26,48 @@ impl Checked {
 }
 
 pub fn check(program: TypedProgram) -> Result<Checked, Vec<BirDiagnostic>> {
-    let bir = build::build_program(&program);
-    let result = check_program(&bir);
-    if result.errors.is_empty() {
-        Ok(Checked(program))
-    } else {
-        Err(result.errors)
+    check_with_imports(program, &Imports::default()).map(|(checked, _)| checked)
+}
+
+#[derive(Default, Clone)]
+pub struct Imports {
+    pub effects: std::collections::HashMap<String, EffectSet>,
+    pub chains: std::collections::HashMap<String, Vec<Step>>,
+}
+
+impl Imports {
+    // a name resolves exactly when a summary arrived for it, so the two cannot drift apart
+    pub fn names(&self) -> std::collections::HashSet<String> {
+        self.effects.keys().cloned().collect()
     }
+}
+
+pub struct Published {
+    pub effects: std::collections::HashMap<String, EffectSet>,
+    pub chains: std::collections::HashMap<String, Vec<Step>>,
+}
+
+pub fn check_with_imports(
+    program: TypedProgram,
+    imports: &Imports,
+) -> Result<(Checked, Published), Vec<BirDiagnostic>> {
+    let bir = build::build_program_with_imports(&program, &imports.names());
+    let result = moves::check_program_with_chains(&bir, &imports.effects, &imports.chains);
+    if !result.errors.is_empty() {
+        return Err(result.errors);
+    }
+    let own: std::collections::HashSet<&str> = bir.bodies.iter().map(|b| b.name.as_str()).collect();
+    let mut effects = result.effects;
+    let mut chains = std::collections::HashMap::new();
+    for body in &bir.bodies {
+        if own.contains(body.name.as_str()) && effects.get(&body.name).is_some_and(|e| !e.is_nogc())
+        {
+            let steps = effects::managed_chain_with(&bir, &effects, &imports.chains, body);
+            chains.insert(body.name.clone(), steps);
+        }
+    }
+    effects.retain(|name, _| own.contains(name.as_str()));
+    Ok((Checked(program), Published { effects, chains }))
 }
 
 // a borrow or a slice (the single source for param/loan/store seeding)
@@ -40,7 +75,6 @@ pub(crate) fn is_ref_ty(ty: &InferType) -> bool {
     matches!(ty, InferType::Ref { .. } | InferType::Slice { .. })
 }
 
-// byte range identifies a program point (build and lowering read the same spans)
 pub type DropKey = (usize, usize);
 
 pub fn drop_key(span: &aelys_syntax::Span) -> DropKey {
@@ -182,7 +216,6 @@ pub enum BirStmtKind {
     Assign { dest: BirPlace, rvalue: BirRvalue },
     StorageLive(BirLocalId),
     StorageDead(BirLocalId),
-    // affine destruction, inserted point-sensitively by drop-elaboration, lowered 1:1
     Drop(BirLocalId),
 }
 

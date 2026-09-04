@@ -6,7 +6,7 @@ use aelys_sema::{
 };
 use aelys_syntax::{BinaryOp, Span};
 
-use super::category::{Category, category};
+use super::category::category;
 use super::{BirBody, BirProgram, BirRvalue, BirStmtKind};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -112,7 +112,7 @@ pub fn intrinsic_effects(
     let mut set = EffectSet::EMPTY;
     let mut w = Witness::default();
     for p in params {
-        if category(&p.ty, tt) == Category::Managed {
+        if category(&p.ty, tt).is_managed() {
             set.insert(Effect::Managed);
             w.record(
                 RANK_TYPE,
@@ -152,7 +152,7 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
             var_type,
             ..
         } => {
-            if category(var_type, tt) == Category::Managed {
+            if category(var_type, tt).is_managed() {
                 set.insert(Effect::Managed);
                 w.record(
                     RANK_TYPE,
@@ -214,7 +214,7 @@ fn walk_stmt(stmt: &TypedStmt, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
 }
 
 fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witness, pos: Pos) {
-    if pos == Pos::Value && category(&expr.ty, tt) == Category::Managed {
+    if pos == Pos::Value && category(&expr.ty, tt).is_managed() {
         set.insert(Effect::Managed);
         let name = match &expr.kind {
             TypedExprKind::Identifier(n) => format!("the managed value `{}`", n),
@@ -447,7 +447,14 @@ const TOP: EffectSet = EffectSet(
 );
 
 pub fn effect_summaries(bir: &BirProgram) -> HashMap<String, EffectSet> {
-    let mut seed: HashMap<String, EffectSet> = HashMap::new();
+    effect_summaries_with_imports(bir, &HashMap::new())
+}
+
+pub fn effect_summaries_with_imports(
+    bir: &BirProgram,
+    imported: &HashMap<String, EffectSet>,
+) -> HashMap<String, EffectSet> {
+    let mut seed: HashMap<String, EffectSet> = imported.clone();
     let mut edges: HashMap<String, Vec<(HashSet<String>, bool)>> = HashMap::new();
     for body in &bir.bodies {
         let s = seed.entry(body.name.clone()).or_insert(EffectSet::EMPTY);
@@ -529,6 +536,15 @@ pub fn managed_chain<'a>(
     eff: &HashMap<String, EffectSet>,
     start: &'a BirBody,
 ) -> Vec<Step> {
+    managed_chain_with(bir, eff, &HashMap::new(), start)
+}
+
+pub fn managed_chain_with<'a>(
+    bir: &'a BirProgram,
+    eff: &HashMap<String, EffectSet>,
+    imported: &HashMap<String, Vec<Step>>,
+    start: &'a BirBody,
+) -> Vec<Step> {
     let mut steps = vec![Step {
         name: start.name.clone(),
         span: Some(start.span),
@@ -564,6 +580,17 @@ pub fn managed_chain<'a>(
                 body = next;
             }
             (Some(_), true) => return close_on_witness(steps, &frames, Some(name)),
+            (None, _) if eff.contains_key(name) => {
+                steps.push(Step {
+                    name: name.to_string(),
+                    span: Some(span),
+                    kind: StepKind::Callee,
+                });
+                if let Some(tail) = imported.get(name) {
+                    steps.extend(tail.iter().skip(1).cloned());
+                }
+                return steps;
+            }
             (None, _) => return close_on_witness(steps, &frames, None),
         }
     }
@@ -740,4 +767,3 @@ mod tests {
         );
     }
 }
-

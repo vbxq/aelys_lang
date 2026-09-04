@@ -1,9 +1,9 @@
-// AIR, the Aelys Intermediate Representation
 
 pub mod analysis;
 pub mod bir;
 pub mod layout;
 pub mod lower;
+pub mod modules;
 pub mod mono;
 pub mod passes;
 pub mod print;
@@ -48,15 +48,13 @@ pub enum AirType {
     F32,
     F64,
     Bool,
-    /// Byte string slice ABI: (ptr, len), never NUL-terminated.
-    /// Payload may contain internal '\0' bytes.
+    /// byte string slice abi: (ptr, len), never nul-terminated.
     Str,
     Ptr(Box<AirType>),
     Struct(String),
     Enum(String),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
-    // a 24-byte {ptr,len,cap} over a refcounted buffer, kept distinct from Slice so the
     // extra cap field never perturbs immutable array views
     Vec(Box<AirType>),
     FnPtr {
@@ -65,7 +63,7 @@ pub enum AirType {
         conv: CallingConv,
     },
     Param(TypeParamId),
-    // mono must eliminate this, validation rejects any Opaque that survives
+    // mono must eliminate this, validation rejects any opaque that survives
     Opaque,
     Void,
 }
@@ -144,7 +142,6 @@ pub struct AirProgram {
     pub source_files: Vec<String>,
     pub mono_instances: Vec<MonoInstance>,
     pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
-    // empty until collect_rc_types runs, codegen serializes it as __aelys_rc_type_table
     pub rc_type_table: rc_types::RcTypeTable,
 }
 
@@ -256,10 +253,6 @@ pub enum AirStmtKind {
         local: LocalId,
         ty: AirType,
     },
-    // `ty` is the data type, not the pointer: codegen adds the 16-byte header itself
-    // and hands back base + 16 (the pointer the
-    /// program sees). This is a statement variant, not a new AIR *type* variant;
-    /// `local`'s type is `Ptr(ty)` exactly like a plain `Alloc`.
     RcAlloc {
         local: LocalId,
         ty: AirType,
@@ -315,20 +308,16 @@ pub enum Rvalue {
         tag: u32,
         payload: Vec<Operand>, // empty for unit variants
     },
-    /// Extract the i32 tag from an enum value.
     EnumTag {
         enum_name: String,
         operand: Operand,
     },
-    /// Extract a payload field from an enum value by variant tag and field index.
     EnumPayload {
         enum_name: String,
         tag: u32,
         operand: Operand,
         field_index: u32,
     },
-    /// Build a fat pointer `{ fn_ptr, env_ptr }` from a function name and
-    /// an environment pointer (or Null for non-capturing closures / named fns).
     ClosureCreate {
         fn_name: String,
         env: Operand,
@@ -364,7 +353,6 @@ pub enum AirConst {
     Bool(bool),
     Str(String),
     Null,
-    /// Reference to a named function as a pointer value (for lambdas / first-class functions).
     FnRef(String),
     Enum {
         enum_name: String,
@@ -373,9 +361,7 @@ pub enum AirConst {
     },
     ZeroInit(AirType),
     Undef(AirType),
-    /// Compile-time constant array (all elements must also be constants).
     Array(Vec<AirConst>),
-    /// Compile-time constant struct literal (fields in canonical declaration order).
     Struct {
         name: String,
         fields: Vec<(String, AirConst)>,
@@ -385,7 +371,6 @@ pub enum AirConst {
 #[derive(Clone)]
 pub enum Place {
     Local(LocalId),
-    /// module-level storage; it has no localid, so every root walk must answer `none` for it
     Global(String),
     Field(LocalId, String),
     Deref(LocalId),

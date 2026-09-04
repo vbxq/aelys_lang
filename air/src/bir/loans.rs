@@ -88,7 +88,7 @@ fn classify_loan_root(body: &BirBody, place: &BirPlace) -> RootClass {
         | InferType::Array(_, _) => {
             if peeled {
                 RootClass::Unknown
-            } else if local.category == Category::Managed {
+            } else if local.category.is_managed() {
                 RootClass::Managed
             } else {
                 RootClass::Unmanaged
@@ -524,7 +524,6 @@ fn compatible(access: Access, kind: LoanKind) -> bool {
         LoanKind::Shared => matches!(access, Access::Read | Access::BorrowShared),
     }
 }
-
 
 fn push_operand_event<'a>(o: &'a BirOperand, out: &mut Vec<(&'a BirPlace, Access)>) {
     match o {

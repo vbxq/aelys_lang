@@ -1,4 +1,3 @@
-
 use std::collections::HashSet;
 
 use aelys_sema::{
@@ -11,10 +10,18 @@ use super::category::{Category, category};
 use super::*;
 
 pub fn build_program(program: &TypedProgram) -> BirProgram {
+    build_program_with_imports(program, &HashSet::new())
+}
+
+pub fn build_program_with_imports(
+    program: &TypedProgram,
+    imported_fns: &HashSet<String>,
+) -> BirProgram {
     let tt = &program.type_table;
     let mut fn_names = gather_fn_names(&program.stmts);
     let globals = gather_global_names(&program.stmts);
     fn_names.retain(|n| !globals.contains(n));
+    fn_names.extend(imported_fns.iter().cloned());
     let mut bodies = Vec::new();
 
     let toplevel: Vec<&TypedStmt> = program
@@ -122,11 +129,13 @@ where
             name: _,
             type_params: _,
             fields: _,
+            is_pub: _,
         } => {}
         TypedStmtKind::EnumDecl {
             name: _,
             type_params: _,
             variants: _,
+            is_pub: _,
         } => {}
     }
 }
@@ -583,7 +592,7 @@ impl<'a> BodyBuilder<'a> {
             mutable,
         });
         self.name_map.push((name.to_string(), id));
-        if category == Category::Affine {
+        if category.is_affine() {
             if let Some(frame) = self.scopes.last_mut() {
                 frame.affine.push(id);
             }
@@ -700,7 +709,7 @@ impl<'a> BodyBuilder<'a> {
                         local,
                         proj: Vec::new(),
                     };
-                    if self.locals[local.0 as usize].category == Category::Affine {
+                    if self.locals[local.0 as usize].category.is_affine() {
                         BirOperand::Move(place)
                     } else {
                         BirOperand::Copy(place)
@@ -1085,7 +1094,7 @@ impl<'a> BodyBuilder<'a> {
     fn build_assign(&mut self, name: &str, value: &TypedExpr, span: Span) {
         let v = self.build_operand(value);
         if let Some(local) = self.lookup(name) {
-            let is_affine = self.locals[local.0 as usize].category == Category::Affine;
+            let is_affine = self.locals[local.0 as usize].category.is_affine();
             if is_affine && self.cur_open {
                 self.reassigns.push(Reassign {
                     span,
