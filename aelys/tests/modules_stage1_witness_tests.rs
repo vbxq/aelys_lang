@@ -80,7 +80,42 @@ fn run_module_row(id: &str, files: Files, root: &str, exit: i32, stdout: &str) {
     }
 }
 
-fn reject_module_row(id: &str, files: Files, root: &str, present: &[&str], absent: &[&str]) {
+fn message_only(rendered: &str) -> String {
+    split_rendering(rendered).0
+}
+
+fn location_only(rendered: &str) -> String {
+    split_rendering(rendered).1
+}
+
+fn split_rendering(rendered: &str) -> (String, String) {
+    let (mut message, mut location) = (Vec::new(), Vec::new());
+    for line in rendered.lines() {
+        let t = line.trim_start();
+        if t.starts_with("-->") || t.starts_with('|') || first_field_is_a_gutter(t) {
+            location.push(line);
+        } else {
+            message.push(line);
+        }
+    }
+    (message.join("\n"), location.join("\n"))
+}
+
+fn first_field_is_a_gutter(line: &str) -> bool {
+    match line.split_once('|') {
+        Some((head, _)) => !head.is_empty() && head.trim().chars().all(|c| c.is_ascii_digit()),
+        None => false,
+    }
+}
+
+fn reject_module_row(
+    id: &str,
+    files: Files,
+    root: &str,
+    says: &[&str],
+    points_at: &[&str],
+    absent: &[&str],
+) {
     for (level, opt) in LEVELS {
         let dir = stage(files);
         let root_path = dir.path().join(root);
@@ -88,10 +123,18 @@ fn reject_module_row(id: &str, files: Files, root: &str, present: &[&str], absen
             Ok(_) => panic!("{id} at {level}: MUST be rejected, but it was accepted"),
             Err(rendered) => rendered,
         };
-        for needle in present {
+        let message = message_only(&rendered);
+        for needle in says {
             assert!(
-                rendered.contains(needle),
-                "{id} at {level}: the diagnostic MUST contain {needle:?}\nrendered:\n{rendered}"
+                message.contains(needle),
+                "{id} at {level}: the diagnostic MUST say {needle:?}\nrendered:\n{rendered}"
+            );
+        }
+        let location = location_only(&rendered);
+        for needle in points_at {
+            assert!(
+                location.contains(needle),
+                "{id} at {level}: the diagnostic MUST point at {needle:?}\nrendered:\n{rendered}"
             );
         }
         for needle in absent {
@@ -430,11 +473,13 @@ fn group_mod_t4_imported_module_is_compiled_and_named() {
         "T-4",
         &[("m.aelys", TYPE_ERROR_MODULE), ("root.aelys", "needs m\n")],
         "root.aelys",
-        &["m.aelys", "return \"x\"", "[E0301]"],
+        &["[E0301]"],
+        &["m.aelys", "return \"x\""],
         &[],
     );
 }
 
+// non discriminating against modules/base, where a root without `main` produced no executable
 #[test]
 fn group_mod_t4b_valid_import_only_root_produces_no_executable() {
     accept_without_executable(
@@ -459,7 +504,8 @@ fn group_mod_x1_module_borrow_error_names_its_own_file() {
             ),
         ],
         "root.aelys",
-        &["m.aelys", "return a.id", "[E0701]"],
+        &["[E0701]"],
+        &["m.aelys", "return a.id"],
         &[],
     );
 }
@@ -476,6 +522,7 @@ fn group_mod_x2_topological_order_reports_the_dependency_first() {
             ),
         ],
         "root.aelys",
+        &["[E0301]"],
         &["m.aelys", "return \"x\""],
         &["root.aelys", "return \"y\""],
     );
@@ -493,11 +540,13 @@ fn group_mod_x2b_discovery_order_reports_the_root_first() {
             ),
         ],
         "root.aelys",
-        &["root.aelys", "[E0102]"],
+        &["[E0102]"],
+        &["root.aelys"],
         &["m.aelys", "return \"x\""],
     );
 }
 
+// `needs` was a no-op and an unused import compiled just as silently
 #[test]
 fn group_mod_t1_empty_module_imported_and_unused() {
     run_module_row(
