@@ -28,10 +28,18 @@ impl TypeInference {
         let (enum_name, scrutinee_type_args) = match &typed_scrutinee.ty {
             InferType::Enum(name, args) => (name.clone(), args.clone()),
             InferType::Var(_) => {
-                let first_enum = arms.iter().find_map(|arm| match &arm.pattern {
-                    Pattern::Variant { enum_name, .. } => Some(enum_name.clone()),
-                    _ => None,
-                });
+                let mut first_enum = None;
+                for arm in arms {
+                    if let Pattern::Variant {
+                        enum_name,
+                        span: pat_span,
+                        ..
+                    } = &arm.pattern
+                    {
+                        first_enum = Some(self.air_type_name(enum_name, *pat_span));
+                        break;
+                    }
+                }
                 match first_enum {
                     Some(name) => {
                         self.constraints.push(Constraint::equal(
@@ -141,6 +149,7 @@ impl TypeInference {
                     bindings,
                     span: pat_span,
                 } => {
+                    let pat_enum = &self.air_type_name(pat_enum, *pat_span);
                     if *pat_enum != enum_name {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
@@ -254,7 +263,6 @@ impl TypeInference {
                     let typed_body = self.infer_expr(&arm.body);
 
                     self.env.pop_scope();
-
 
                     typed_arms.push(TypedMatchArm {
                         pattern: TypedPattern::Variant {

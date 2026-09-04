@@ -57,6 +57,20 @@ impl TypeInference {
     }
 
     fn arg_is_nogc_ref(&self, arg: &Expr) -> bool {
+        if let ExprKind::Member { object, member } = &arg.kind
+            && let ExprKind::Identifier(namespace) = &object.kind
+            && self.is_module_namespace(namespace)
+        {
+            return self
+                .module_imports
+                .namespaces
+                .get(namespace)
+                .and_then(|exports| match exports.value(member) {
+                    crate::modules::Lookup::Found(item) => Some(item),
+                    _ => None,
+                })
+                .is_some_and(|item| matches!(item.ty, InferType::Function { nogc: true, .. }));
+        }
         let ExprKind::Identifier(name) = &arg.kind else {
             return false;
         };
@@ -70,6 +84,13 @@ impl TypeInference {
         )
     }
 
+    fn member_names_a_module(&self, object: &Expr) -> bool {
+        match &object.kind {
+            ExprKind::Identifier(name) => self.is_module_namespace(name),
+            _ => false,
+        }
+    }
+
     pub(super) fn infer_call_expr(
         &mut self,
         callee: &Expr,
@@ -80,7 +101,9 @@ impl TypeInference {
             && matches!(
                 member.as_str(),
                 "unwrap" | "expect" | "map_error" | "into_ok" | "unwrap_unchecked"
-            ) {
+            )
+            && !self.member_names_a_module(object)
+        {
             let typed_object = self.infer_expr(object);
             if let InferType::Enum(name, targs) = &typed_object.ty
                 && name == "Result"
@@ -277,7 +300,6 @@ impl TypeInference {
                 }
                 ResultAssertOnErr::Unreachable
             }
-            // unwrap_unchecked is ub on err, so it is gated behind an unsafe block and err seals unreachable
             "unwrap_unchecked" => {
                 if !args.is_empty() {
                     self.errors.push(TypeError::member_access(

@@ -394,6 +394,9 @@ impl TypeInference {
                                     format!("unknown field '{}' on struct '{}'", member, name),
                                     expr.span,
                                 ));
+                            } else {
+                                let (name, member) = (name.clone(), member.clone());
+                                self.reject_private_field(&name, &member, expr.span);
                             }
                         } else if self.is_active_generic_placeholder_type(
                             &object.ty,
@@ -422,6 +425,9 @@ impl TypeInference {
                                         format!("unknown field '{}' on struct '{}'", member, name),
                                         expr.span,
                                     ));
+                                } else {
+                                    let (name, member) = (name.clone(), member.clone());
+                                    self.reject_private_field(&name, &member, expr.span);
                                 }
                             }
                         } else {
@@ -991,8 +997,7 @@ impl TypeInference {
                 generic_scope,
                 declared_type_params,
             ),
-            TypedStmtKind::Function(_) => {
-            }
+            TypedStmtKind::Function(_) => {}
             TypedStmtKind::Expression(_)
             | TypedStmtKind::Let { .. }
             | TypedStmtKind::Return(None)
@@ -1004,4 +1009,3 @@ impl TypeInference {
         }
     }
 }
-

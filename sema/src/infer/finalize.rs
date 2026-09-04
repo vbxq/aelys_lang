@@ -6,10 +6,7 @@ use crate::typed_ast::{
 use crate::types::{InferType, ResolvedType};
 
 impl TypeInference {
-    /// Finalize types: walk the entire typed AST and convert any remaining unresolved `Var` to `Dynamic`
-    ///
-    /// after constraint solving+substitution, some type variables may remain unbound (for example empty arrays, unused generics, error recovery etc)
-    /// without finalization these survive as InferType::Var(N) which AIR maps them to AirType::Void which causes miscompilation
+    /// finalize types: walk the entire typed ast and convert any remaining unresolved `var` to `dynamic`
     pub(super) fn finalize_stmts(&self, stmts: Vec<TypedStmt>) -> Vec<TypedStmt> {
         stmts.into_iter().map(|s| self.finalize_stmt(s)).collect()
     }
@@ -92,9 +89,11 @@ impl TypeInference {
                 name,
                 type_params,
                 fields,
+                is_pub,
             } => TypedStmtKind::StructDecl {
                 name,
                 type_params,
+                is_pub,
                 fields: fields
                     .into_iter()
                     .map(|(n, ty)| (n, Self::finalize_type(ty)))
@@ -105,9 +104,11 @@ impl TypeInference {
                 name,
                 type_params,
                 variants,
+                is_pub,
             } => TypedStmtKind::EnumDecl {
                 name,
                 type_params,
+                is_pub,
                 variants: variants
                     .into_iter()
                     .map(|(vname, tag, data)| {
@@ -241,7 +242,6 @@ impl TypeInference {
                 element_type: _,
                 elements,
             } => {
-                // regenerate element_type from the finalized outer Vec type,
                 // since the original snapshot may be stale after substitution.
                 let finalized_outer = Self::finalize_type(expr.ty.clone());
                 let new_elem_type = match &finalized_outer {
@@ -410,8 +410,6 @@ impl TypeInference {
         }
     }
 
-    /// Convert any remaining `Var` to `Dynamic` in a type.
-    /// Recurses into compound types (Array, Vec, Function, Tuple).
     fn finalize_type(ty: InferType) -> InferType {
         match ty {
             InferType::Var(_) => InferType::Dynamic,
@@ -440,7 +438,6 @@ impl TypeInference {
                 name,
                 type_args.into_iter().map(Self::finalize_type).collect(),
             ),
-            // concrete types pass through unchanged
             other => other,
         }
     }

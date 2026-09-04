@@ -79,7 +79,6 @@ pub enum TypeErrorKind {
     MutRefImmutableBinding {
         name: String,
     },
-    // a nested fn reusing an outer fn's bare name clobbers its dispatch slot, a silent miscompile
     NestedFnShadowsOuter {
         name: String,
     },
@@ -129,6 +128,22 @@ pub enum TypeErrorKind {
     },
     NogcGenericAsValue {
         detail: String,
+    },
+    ModuleItemNotPublic {
+        module: String,
+        item: String,
+    },
+    ModuleItemNotFound {
+        module: String,
+        item: String,
+    },
+    FieldNotPublic {
+        field: String,
+        ty: String,
+    },
+    PrivateTypeInPublicApi {
+        item: String,
+        ty: String,
     },
 }
 
@@ -286,6 +301,18 @@ impl fmt::Display for TypeError {
             TypeErrorKind::NogcBoundUnresolved { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcBoundGenericStruct { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcGenericAsValue { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::ModuleItemNotPublic { module, item } => {
+                write!(f, "`{item}` is not public in module `{module}`")
+            }
+            TypeErrorKind::ModuleItemNotFound { module, item } => {
+                write!(f, "module `{module}` has no item named `{item}`")
+            }
+            TypeErrorKind::FieldNotPublic { field, ty } => {
+                write!(f, "field `{field}` of `{ty}` is not public")
+            }
+            TypeErrorKind::PrivateTypeInPublicApi { item, ty } => {
+                write!(f, "`{item}` is public but names the private type `{ty}`")
+            }
         }
     }
 }
@@ -780,4 +807,3 @@ impl TypeError {
         }
     }
 }
-

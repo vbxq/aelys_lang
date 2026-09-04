@@ -1,5 +1,6 @@
-use super::{TypeInference, KNOWN_TYPE_NAMES};
+use super::{KNOWN_TYPE_NAMES, TypeInference};
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
+use crate::modules::ModuleImports;
 use crate::typed_ast::TypedProgram;
 use crate::types::{InferType, TypeTable};
 use aelys_common::Warning;
@@ -36,6 +37,11 @@ impl Default for TypeInference {
             shadowed_globals: HashSet::new(),
             lambda_depth: 0,
             lambda_captures: HashSet::new(),
+            module_imports: crate::modules::ModuleImports::default(),
+            import_aliases: HashMap::new(),
+            imported_globals: HashSet::new(),
+            imported_types: HashSet::new(),
+            module_is_importable: false,
         }
     }
 }
@@ -143,6 +149,25 @@ impl TypeInference {
             return InferType::Never;
         }
 
+        if let Some(qualified) = self.imported_type_name(&ann.name) {
+            if self.type_table.has_enum(&qualified) {
+                let type_args = self.collect_enum_type_args(ann);
+                return InferType::Enum(qualified, type_args);
+            }
+            return InferType::Struct(qualified);
+        }
+
+        if ann.name.contains('.') {
+            if let Some(qualified) = self.resolve_module_type_name(&ann.name, ann.span) {
+                if self.type_table.has_enum(&qualified) {
+                    let type_args = self.collect_enum_type_args(ann);
+                    return InferType::Enum(qualified, type_args);
+                }
+                return InferType::Struct(qualified);
+            }
+            return InferType::Dynamic;
+        }
+
         let ty = InferType::from_annotation(ann);
         if let InferType::Struct(ref name) = ty {
             if self.type_table.has_enum(name) {
@@ -169,6 +194,10 @@ impl TypeInference {
 
     fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
         if self.type_params_in_scope.iter().any(|tp| tp == &ann.name) {
+            return;
+        }
+
+        if ann.name.contains('.') || self.import_aliases.contains_key(&ann.name) {
             return;
         }
 
@@ -268,7 +297,7 @@ impl TypeInference {
         source: Arc<Source>,
     ) -> Result<TypedProgram, Vec<TypeError>> {
         let result =
-            Self::infer_program_full(stmts, source, Default::default(), Default::default())?;
+            Self::infer_program_full(stmts, source, ModuleImports::default(), Default::default())?;
         if !result.deferred_errors.is_empty() {
             return Err(result.deferred_errors);
         }
@@ -278,10 +307,10 @@ impl TypeInference {
     pub fn infer_program_with_imports(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-        module_aliases: HashSet<String>,
+        imports: ModuleImports,
         known_globals: HashSet<String>,
     ) -> Result<TypedProgram, Vec<TypeError>> {
-        let result = Self::infer_program_full(stmts, source, module_aliases, known_globals)?;
+        let result = Self::infer_program_full(stmts, source, imports, known_globals)?;
         if !result.deferred_errors.is_empty() {
             return Err(result.deferred_errors);
         }
@@ -291,15 +320,12 @@ impl TypeInference {
     pub fn infer_program_full(
         stmts: Vec<Stmt>,
         source: Arc<Source>,
-        module_aliases: HashSet<String>,
+        imports: ModuleImports,
         known_globals: HashSet<String>,
     ) -> Result<InferenceResult, Vec<TypeError>> {
         let mut inf = TypeInference::new();
-
-        for alias in &module_aliases {
-            inf.env
-                .define_function_owned(alias.clone(), InferType::Dynamic);
-        }
+        inf.module_is_importable = imports.is_importable;
+        inf.install_imports(imports);
 
         for global in &known_globals {
             let ty = match global.as_str() {
@@ -336,6 +362,7 @@ impl TypeInference {
 
         inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
         inf.check_vec_producing_forms(&resolved_stmts);
+        inf.reject_private_types_in_public_api(&resolved_stmts);
 
         let final_stmts = inf.finalize_stmts(resolved_stmts);
 

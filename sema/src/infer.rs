@@ -5,6 +5,7 @@ mod enums;
 mod expr;
 mod finalize;
 mod functions;
+mod imports;
 mod lambda;
 mod nogc_bound;
 mod returns;
@@ -14,6 +15,7 @@ mod structs;
 mod substitute;
 mod validate;
 mod vec_form;
+mod visibility;
 
 use crate::constraint::{Constraint, TypeError};
 use crate::env::TypeEnv;
@@ -41,12 +43,8 @@ pub struct TypeInference {
     warnings: Vec<Warning>,
     pub(crate) type_table: TypeTable,
     type_params_in_scope: Vec<String>,
-    // tracks variables initialized with numeric literal values (without type annotation).
-    //
-    // used by `try_narrow_literal` to narrow Identifier expressions whose original value is a known literal
     literal_init_vars: HashMap<String, LiteralInit>,
     try_counter: usize,
-    // lexical nesting depth of `unsafe` blocks; gates `.unwrap_unchecked()`
     unsafe_depth: usize,
     catch_match_pending: bool,
     nogc_fn_params: HashSet<String>,
@@ -55,4 +53,9 @@ pub struct TypeInference {
     pub(crate) shadowed_globals: HashSet<String>,
     pub(crate) lambda_depth: usize,
     pub(crate) lambda_captures: HashSet<String>,
+    pub(crate) module_imports: crate::modules::ModuleImports,
+    pub(crate) import_aliases: HashMap<String, String>,
+    pub(crate) imported_globals: HashSet<String>,
+    pub(crate) imported_types: HashSet<String>,
+    pub(crate) module_is_importable: bool,
 }

@@ -1,4 +1,3 @@
-//! Statement inference.
 
 mod block;
 mod implicit;
@@ -14,12 +13,10 @@ use crate::types::InferType;
 use aelys_syntax::{Stmt, StmtKind};
 
 impl TypeInference {
-    /// Infer types for a list of statements
     pub(super) fn infer_stmts(&mut self, stmts: &[Stmt]) -> Vec<TypedStmt> {
         stmts.iter().map(|s| self.infer_stmt(s)).collect()
     }
 
-    /// Infer type for a single statement
     pub(super) fn infer_stmt(&mut self, stmt: &Stmt) -> TypedStmt {
         let kind = match &stmt.kind {
             StmtKind::Expression(expr) => {
@@ -92,10 +89,8 @@ impl TypeInference {
                 name,
                 type_params,
                 fields,
-                ..
+                is_pub,
             } => {
-                // temporarily set type_params_in_scope so that generic struct field types like `T` don't trigger unknown-type errors
-                // TODO: !
                 let saved = std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
                 let typed_fields = fields
                     .iter()
@@ -109,15 +104,15 @@ impl TypeInference {
                     name: name.clone(),
                     type_params: type_params.clone(),
                     fields: typed_fields,
+                    is_pub: *is_pub,
                 }
             }
             StmtKind::EnumDecl {
                 name,
                 type_params,
                 variants,
-                ..
+                is_pub,
             } => {
-                // Look up the data types from the type table (populated by collect_enums)
                 let enum_def = self.type_table.get_enum(name).cloned();
                 TypedStmtKind::EnumDecl {
                     name: name.clone(),
@@ -134,6 +129,7 @@ impl TypeInference {
                             (v.name.clone(), i as u32, data)
                         })
                         .collect(),
+                    is_pub: *is_pub,
                 }
             }
         };

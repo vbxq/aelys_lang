@@ -11,6 +11,12 @@ impl TypeInference {
         name: &str,
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if self.env.lookup(name).is_none() && self.env.lookup_function_ref(name).is_none() {
+            if let Some((qualified, ty)) = self.resolve_import_alias(name) {
+                return (TypedExprKind::Identifier(qualified), ty);
+            }
+        }
+
         let ty = self
             .env
             .lookup(name)
@@ -122,6 +128,8 @@ impl TypeInference {
             return self.infer_vec_read(variant, args, span);
         }
 
+        let resolved = self.air_type_name(enum_name, span);
+        let enum_name = resolved.as_str();
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
             Some(def) => {

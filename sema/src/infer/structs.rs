@@ -6,9 +6,6 @@ use aelys_syntax::{Stmt, StmtKind};
 use std::collections::HashSet;
 
 impl TypeInference {
-    /// Register all struct names (without fields) so that forward references
-    /// between structs and enums are valid. Must be called before collect_enums
-    /// so that enum variant fields can reference struct types.
     pub(super) fn register_struct_names(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
             if let StmtKind::StructDecl {
@@ -54,9 +51,6 @@ impl TypeInference {
         ) && ty.contains_rc()
     }
 
-    /// Validate field type annotations and populate struct fields.
-    /// Must be called after collect_enums so that struct fields can reference
-    /// enum types.
     pub(super) fn resolve_struct_fields(&mut self, stmts: &[Stmt]) {
         let mut processed = HashSet::new();
         for stmt in stmts {
@@ -67,12 +61,10 @@ impl TypeInference {
                 ..
             } = &stmt.kind
             {
-                // skip duplicates (already warned in pass 1)
                 if !processed.insert(name.clone()) {
                     continue;
                 }
 
-                // check for duplicate field names
                 let mut seen_fields = HashSet::new();
                 for f in fields {
                     if !seen_fields.insert(&f.name) {
@@ -93,7 +85,6 @@ impl TypeInference {
                     }
                 }
 
-                // set type params in scope so generic struct fields like `T` are recognized
                 let saved_type_params =
                     std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
 
@@ -115,6 +106,7 @@ impl TypeInference {
                         StructField {
                             name: f.name.clone(),
                             ty,
+                            is_pub: f.is_pub,
                         }
                     })
                     .collect();

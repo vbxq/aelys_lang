@@ -47,6 +47,13 @@ impl TypeInference {
         member: &str,
         _span: Span,
     ) -> (TypedExprKind, InferType) {
+        if let ExprKind::Identifier(namespace) = &object.kind {
+            if self.is_module_namespace(namespace) {
+                let (qualified, ty) = self.resolve_module_member(namespace, member, _span);
+                return (TypedExprKind::Identifier(qualified), ty);
+            }
+        }
+
         let typed_object = self.infer_expr(object);
         let ty = self.member_result_type(&typed_object.ty, member);
 
@@ -153,6 +160,9 @@ impl TypeInference {
             _ => None,
         };
         let object_is_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
+        if let Some(struct_name) = object_struct.clone() {
+            self.reject_private_field(&struct_name, field, span);
+        }
         if let Some(ref struct_name) = object_struct {
             if let Some(def) = self.type_table.get_struct(struct_name) {
                 if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
@@ -244,12 +254,19 @@ impl TypeInference {
             }
         }
 
+        let resolved = self.air_type_name(name, span);
+        let name = resolved.as_str();
         let struct_exists = self.type_table.has_struct(name);
         if !struct_exists {
             self.errors.push(TypeError::member_access(
                 format!("unknown struct '{}'", name),
                 span,
             ));
+        }
+
+        for f in fields {
+            let (owner, field) = (name.to_string(), f.name.clone());
+            self.reject_private_field(&owner, &field, f.span);
         }
 
         if let Some(def) = self.type_table.get_struct(name) {

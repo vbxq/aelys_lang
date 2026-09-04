@@ -4,7 +4,6 @@ use crate::types::InferType;
 use std::collections::HashSet;
 
 impl TypeInference {
-    /// Collect captures from a list of statements
     pub(super) fn collect_captures_from_stmts(
         &self,
         stmts: &[TypedStmt],
@@ -36,13 +35,10 @@ impl TypeInference {
             TypedStmtKind::Let {
                 name, initializer, ..
             } => {
-                // we process the initializer before adding the name, so that `let x = x + 1` captures `x` from the outer scope
                 self.collect_captures_inner(initializer, local_names, captures, seen);
-                // add the let-bound name so subsequent uses don't get captured
                 local_names.insert(name.clone());
             }
             TypedStmtKind::Block(stmts) => {
-                // Save/restore so let bindings inside the block don't
                 // leak into the enclosing scope's capture analysis.
                 let saved = local_names.clone();
                 for s in stmts {
@@ -121,6 +117,7 @@ impl TypeInference {
             TypedExprKind::Identifier(name) => {
                 if !locals.contains(name)
                     && !seen.contains(name)
+                    && !self.imported_globals.contains(name)
                     && let Some(ty) = self.env.captures().get(name)
                 {
                     captures.push((name.clone(), ty.clone()));
@@ -145,10 +142,9 @@ impl TypeInference {
                 }
             }
             TypedExprKind::Assign { name, value } => {
-                // The assignment target name may itself need to be captured
-                // (write-only capture: `x = 42` where x is from outer scope).
                 if !locals.contains(name)
                     && !seen.contains(name)
+                    && !self.imported_globals.contains(name)
                     && let Some(ty) = self.env.captures().get(name)
                 {
                     captures.push((name.clone(), ty.clone()));
@@ -176,8 +172,6 @@ impl TypeInference {
                 body: stmts,
                 ..
             } => {
-                // Build a NEW local names set for the inner lambda using its
-                // own parameters, not the outer lambda's locals/params.
                 let mut inner_locals: HashSet<String> =
                     inner_params.iter().map(|p| p.name.clone()).collect();
                 for stmt in stmts {
@@ -274,7 +268,6 @@ impl TypeInference {
             TypedExprKind::Match { scrutinee, arms } => {
                 self.collect_captures_inner(scrutinee, locals, captures, seen);
                 for arm in arms {
-                    // Bindings in pattern introduce local names
                     let mut arm_locals = locals.clone();
                     if let crate::typed_ast::TypedPattern::Variant { bindings, .. } = &arm.pattern {
                         for (name, _) in bindings {
