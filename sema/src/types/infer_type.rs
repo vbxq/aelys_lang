@@ -17,10 +17,7 @@ pub enum InferType {
     String,
     Null,
 
-    /// The bottom type: represents diverging control flow (return, break, etc.).
-    /// Never is a subtype of every type — `unify(Never, T)` always succeeds
-    /// without constraining T. This is safe because a Never-typed expression
-    /// never produces a value, so any expected type is vacuously compatible.
+    /// never is a subtype of every type `unify(never, t)` always succeeds
     Never,
 
     Function {
@@ -31,7 +28,6 @@ pub enum InferType {
 
     Array(Box<InferType>, Option<u64>),
     Vec(Box<InferType>),
-    // the only reference type, every other constructor is a value type
     Rc(Box<InferType>),
     // stage 1 borrows, erased to a raw ptr / fat {ptr,len} in air
     Ref {
@@ -46,8 +42,6 @@ pub enum InferType {
     Range,
 
     Struct(std::string::String),
-    /// Enum type with optional type arguments for generic enums.
-    /// Non-generic enums have an empty Vec.
     Enum(std::string::String, Vec<InferType>),
 
     Var(TypeVarId),
@@ -115,7 +109,6 @@ impl InferType {
             | InferType::String
             | InferType::Null
             | InferType::Struct(_) => true,
-            // An Enum is only concrete if all its type args are also concrete.
             InferType::Enum(_, args) => args.iter().all(|a| a.is_concrete()),
             InferType::Ref { referent, .. } => referent.is_concrete(),
             InferType::Slice { elem, .. } => elem.is_concrete(),
@@ -127,7 +120,6 @@ impl InferType {
         matches!(self, InferType::Rc(_))
     }
 
-    // blind to nominals: a struct holding an Rc field reads as false here
     pub fn contains_rc(&self) -> bool {
         match self {
             InferType::Rc(_) => true,
@@ -181,7 +173,6 @@ impl InferType {
                 nogc: ann.nogc,
             };
         }
-        // must come before the uppercase guard, which would read it as Struct("Rc")
         if ann.name == "Rc" {
             let inner = ann
                 .type_param
@@ -190,9 +181,6 @@ impl InferType {
                 .unwrap_or(InferType::Dynamic);
             return InferType::Rc(Box::new(inner));
         }
-        // Uppercase-starting names are always user-defined types (structs/enums).
-        // Check this first so that names like "Void", "String", etc. are not
-        // shadowed by the case-insensitive built-in type matching below.
         if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
             return InferType::Struct(ann.name.clone());
         }
@@ -308,8 +296,6 @@ impl InferType {
         types
     }
 
-    /// Returns `(bit_width, is_signed)` for numeric types, or just `None` for non-numeric
-    /// floats use negative bit widths to separate them from integers in rank comp
     fn numeric_rank(&self) -> Option<(i16, bool)> {
         match self {
             InferType::I8 => Some((8, true)),
@@ -326,18 +312,6 @@ impl InferType {
         }
     }
 
-    /// Returns `true` if `self` can be implicitly go to `target` without loss
-    ///
-    /// here's the rules
-    ///
-    /// - Signed -> wider signed: i8 -> i16, i8 -> i32, i8 -> i64, i16 -> i32, i16 -> i64, i32 -> i64
-    /// - Unsigned -> wider unsigned: u8 -> u16, u8 -> u32, u8 -> u64, u16 -> u32, u16 -> u64, u32 -> u64
-    /// - Unsigned -> wider signed (always fits): u8 -> i16, u8 - > i32, u8 -> i64, u16 -> i32, u16 -> i64, u32 -> i64
-    /// - smoll int → float (exact): i8/u8/i16/u16 -> f32, any int <(or egal) 32 bits -> f64
-    ///
-    /// not allowed (because their lossy or they change sema)
-    /// - signed to unsigned, unsigned to same-size signed, wider to narrower
-    /// - i64/u64->f64, i32/u32->f32, float->int
     pub fn can_implicit_widen_to(&self, target: &InferType) -> bool {
         if self == target {
             return false;
@@ -353,35 +327,26 @@ impl InferType {
             None => return false,
         };
 
-        // le source must be an integer (not a float)
         if src_rank < 0 {
             return false;
         }
 
-        // le target is a float
         if tgt_rank < 0 {
             let tgt_bits = -tgt_rank; // 32 or 64
             return if tgt_bits == 32 {
-                // f32 has 24bit mantissa, exact for <(or egal) 16bit int
                 src_rank <= 16
             } else {
-                // f64 has 53bit mantissa, also exact for <(or equal) 32bit int
                 src_rank <= 32
             };
         }
 
-        // if they both are integers
         if src_signed && tgt_signed {
-            // signed -> wider signed
             tgt_rank > src_rank
         } else if !src_signed && !tgt_signed {
-            // unsigned -> wider unsigned
             tgt_rank > src_rank
         } else if !src_signed && tgt_signed {
-            // unsigned -> wider signed (need strictly more bits to fit all values)
             tgt_rank > src_rank
         } else {
-            // signed -> unsigned: nuh huh.
             false
         }
     }
@@ -435,9 +400,11 @@ impl fmt::Display for InferType {
                 write!(f, ")")
             }
             InferType::Range => write!(f, "range"),
-            InferType::Struct(name) => write!(f, "{}", name),
+            InferType::Struct(name) => {
+                write!(f, "{}", crate::modules::strip_type_head(name))
+            }
             InferType::Enum(name, type_args) => {
-                write!(f, "{}", name)?;
+                write!(f, "{}", crate::modules::strip_type_head(name))?;
                 if !type_args.is_empty() {
                     write!(f, "<")?;
                     for (i, arg) in type_args.iter().enumerate() {

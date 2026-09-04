@@ -5,6 +5,7 @@ use std::collections::HashMap;
 pub struct StructField {
     pub name: String,
     pub ty: InferType,
+    pub is_pub: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -91,7 +92,6 @@ impl TypeTable {
             InferType::Vec(_) => true,
             InferType::Array(inner, _) => self.scan_vec_by_value(inner, visited),
             InferType::Tuple(elems) => elems.iter().any(|e| self.scan_vec_by_value(e, visited)),
-            // behind an Rc the Vec is a pointer, not held by value
             InferType::Rc(_) => false,
             // a reference is a non-owning boundary, never owns its referent
             InferType::Ref { .. } | InferType::Slice { .. } => false,
@@ -153,7 +153,6 @@ impl TypeTable {
                     // unresolvable here, the construction site guards this instead
                     return false;
                 };
-                // fields are erased type params, so recursing would miss or false-positive
                 if !def.type_params.is_empty() {
                     return false;
                 }
@@ -168,7 +167,6 @@ impl TypeTable {
                 found
             }
             InferType::Enum(name, args) => {
-                // a generic enum keeps its concrete args, which already carry the Rc-ness
                 if args.iter().any(|a| self.scan_rc_nominal(a, visited)) {
                     return true;
                 }

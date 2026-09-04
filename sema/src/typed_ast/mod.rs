@@ -1,4 +1,3 @@
-// AST with type annotations for codegen
 
 use std::sync::Arc;
 
@@ -16,14 +15,12 @@ pub struct TypedProgram {
     pub type_table: TypeTable,
 }
 
-/// A typed statement
 #[derive(Debug, Clone)]
 pub struct TypedStmt {
     pub kind: TypedStmtKind,
     pub span: Span,
 }
 
-/// Typed statement kinds
 #[derive(Debug, Clone)]
 pub enum TypedStmtKind {
     Expression(TypedExpr),
@@ -78,16 +75,17 @@ pub enum TypedStmtKind {
         name: String,
         type_params: Vec<String>,
         fields: Vec<(String, InferType)>,
+        is_pub: bool,
     },
 
     EnumDecl {
         name: String,
         type_params: Vec<String>,
         variants: Vec<(String, u32, Vec<InferType>)>, // (variant_name, tag, data_types)
+        is_pub: bool,
     },
 }
 
-/// A typed function
 #[derive(Debug, Clone)]
 pub struct TypedFunction {
     pub name: String,
@@ -97,14 +95,11 @@ pub struct TypedFunction {
     pub body: Vec<TypedStmt>,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
-    /// from the `nogc` keyword; carried to the bir where the effect check consumes it
     pub declared_nogc: bool,
     pub span: Span,
-    /// Captured variables from enclosing scopes (for closures)
     pub captures: Vec<(String, InferType)>,
 }
 
-/// A typed parameter
 #[derive(Debug, Clone)]
 pub struct TypedParam {
     pub name: String,
@@ -113,7 +108,6 @@ pub struct TypedParam {
     pub span: Span,
 }
 
-/// A typed expression
 #[derive(Debug, Clone)]
 pub struct TypedExpr {
     pub kind: TypedExprKind,
@@ -121,7 +115,6 @@ pub struct TypedExpr {
     pub span: Span,
 }
 
-/// Part of a typed format string
 #[derive(Debug, Clone)]
 pub enum TypedFmtStringPart {
     Literal(String),
@@ -129,7 +122,6 @@ pub enum TypedFmtStringPart {
     Placeholder,
 }
 
-/// Typed expression kinds
 #[derive(Debug, Clone)]
 pub enum TypedExprKind {
     Int(i64),
@@ -182,7 +174,6 @@ pub enum TypedExprKind {
 
     Lambda(Box<TypedExpr>),
 
-    /// Inner lambda structure (params + body + captures)
     LambdaInner {
         params: Vec<TypedParam>,
         return_type: InferType,
@@ -269,7 +260,6 @@ pub enum TypedExprKind {
         arms: Vec<TypedMatchArm>,
     },
 
-    // assert family node for `.unwrap()`/`.expect(lit)`, err arm seals a divergence
     ResultAssert {
         scrutinee: Box<TypedExpr>,
         ok_tag: u32,
@@ -277,7 +267,6 @@ pub enum TypedExprKind {
         on_err: ResultAssertOnErr,
     },
 
-    /// Block expression: `{ stmts...; tail_expr }`
     Block {
         stmts: Vec<TypedStmt>,
         tail: Box<TypedExpr>,
@@ -287,7 +276,6 @@ pub enum TypedExprKind {
 #[derive(Debug, Clone)]
 pub enum ResultAssertOnErr {
     Panic(String),
-    // statically impossible err, lowered to airterminator::unreachable
     Unreachable,
 }
 
@@ -309,12 +297,10 @@ pub enum TypedPattern {
 }
 
 impl TypedExpr {
-    /// Create a new typed expression
     pub fn new(kind: TypedExprKind, ty: InferType, span: Span) -> Self {
         Self { kind, ty, span }
     }
 
-    /// Check if this expression has a known concrete type
     pub fn has_concrete_type(&self) -> bool {
         !matches!(self.ty, InferType::Var(_) | InferType::Dynamic)
     }
