@@ -3,15 +3,11 @@ use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_common::{Diagnostic, Replacement, Severity, Suggestion};
 use aelys_sema::{TypeError, TypeErrorKind};
 use aelys_syntax::{Source, Span as SyntaxSpan};
-use std::path::Path;
 use std::sync::Arc;
 
-pub(super) fn load_source_for_diagnostics(path: &Path) -> Arc<Source> {
-    let name = path.display().to_string();
-    match std::fs::read_to_string(path) {
-        Ok(content) => Source::new(name, content),
-        Err(_) => Source::new(name, ""),
-    }
+// the qualification head is unspellable in source, so it may never reach a user
+fn user_facing(message: impl Into<String>) -> String {
+    message.into().replace(aelys_sema::modules::TYPE_HEAD, "")
 }
 
 pub(super) fn backend_diagnostic_error(
@@ -25,7 +21,7 @@ pub(super) fn backend_diagnostic_error(
     AelysError::Compile(CompileError::new(
         CompileErrorKind::BackendDiagnostic {
             backend: backend.to_string(),
-            message: message.into(),
+            message: user_facing(message),
             note,
             help,
         },
@@ -68,7 +64,7 @@ pub(super) fn mono_errors_to_error(
     let mut diagnostics: Vec<Diagnostic> = surface
         .iter()
         .map(|message| {
-            Diagnostic::new(Severity::Error, message)
+            Diagnostic::new(Severity::Error, &user_facing(message.as_str()))
                 .with_code("E0412")
                 .with_primary_label(
                     source.clone(),
@@ -81,7 +77,7 @@ pub(super) fn mono_errors_to_error(
         diagnostics.push(
             Diagnostic::new(
                 Severity::Error,
-                &format!("[monomorphization] {}", numbered(&other)),
+                &user_facing(format!("[monomorphization] {}", numbered(&other))),
             )
             .with_code("E0901")
             .with_primary_label(
@@ -106,7 +102,7 @@ pub(super) fn vec_surface_errors_to_error(
                 .span
                 .map(|s| air_span_to_syntax_span(s, source.as_ref()))
                 .unwrap_or_else(|| program_anchor_span(air, source.as_ref()));
-            Diagnostic::new(Severity::Error, &err.message)
+            Diagnostic::new(Severity::Error, &user_facing(err.message.as_str()))
                 .with_code("E0412")
                 .with_primary_label(
                     source.clone(),
@@ -227,17 +223,21 @@ pub(super) fn bir_diagnostics_to_error(
                 }
             };
             let hint = d.hint.clone().unwrap_or_else(|| primary_hint(d.marker));
-            let mut diag = Diagnostic::new(Severity::Error, &d.primary.1)
+            let mut diag = Diagnostic::new(Severity::Error, &user_facing(d.primary.1.as_str()))
                 .with_code(d.code)
                 .with_primary_label(source.clone(), cut(d.primary.0), Some(hint));
             for (span, label) in &d.secondaries {
-                diag.add_secondary_label(source.clone(), cut(*span), Some(label.clone()));
+                diag.add_secondary_label(
+                    source.clone(),
+                    cut(*span),
+                    Some(user_facing(label.as_str())),
+                );
             }
             if let Some(note) = &d.note {
-                diag.add_note(note.clone());
+                diag.add_note(user_facing(note.as_str()));
             }
             if let Some(help) = &d.help {
-                diag.add_help(help.clone());
+                diag.add_help(user_facing(help.as_str()));
             }
             diag
         })
@@ -492,9 +492,30 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "`nogc` generic used as a value".to_string(),
         ),
+        TypeErrorKind::ModuleItemNotPublic { .. } => {
+            ("E0605", error.to_string(), "item is not public".to_string())
+        }
+        TypeErrorKind::ModuleItemNotFound { .. } => (
+            "E0606",
+            error.to_string(),
+            "no such item in that module".to_string(),
+        ),
+        TypeErrorKind::FieldNotPublic { .. } => (
+            "E0610",
+            error.to_string(),
+            "field is not public".to_string(),
+        ),
+        TypeErrorKind::PrivateTypeInPublicApi { .. } => (
+            "E0611",
+            error.to_string(),
+            "private type in a public signature".to_string(),
+        ),
     };
 
-    let clamp = matches!(code, "E0418" | "E0728" | "E0729" | "E0730" | "E0731");
+    let clamp = matches!(
+        code,
+        "E0418" | "E0611" | "E0728" | "E0729" | "E0730" | "E0731"
+    );
     let cut = |span| {
         if clamp {
             first_line_only(source.as_ref(), span)
@@ -503,12 +524,20 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         }
     };
 
-    let mut diag = Diagnostic::new(Severity::Error, &message)
+    let mut diag = Diagnostic::new(Severity::Error, &user_facing(message))
         .with_code(code)
-        .with_primary_label(source.clone(), cut(error.span), Some(annotation));
+        .with_primary_label(
+            source.clone(),
+            cut(error.span),
+            Some(user_facing(annotation)),
+        );
 
     for (span, label) in &error.secondary_spans {
-        diag.add_secondary_label(source.clone(), cut(*span), Some(label.clone()));
+        diag.add_secondary_label(
+            source.clone(),
+            cut(*span),
+            Some(user_facing(label.as_str())),
+        );
     }
 
     if let TypeErrorKind::AssignToImmutable {
@@ -528,14 +557,14 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         TypeErrorKind::Mismatch { .. } => {
             let reason_str = error.reason.to_string();
             if !reason_str.is_empty() {
-                diag.add_note(reason_str);
+                diag.add_note(user_facing(reason_str));
             }
         }
         _ => {}
     }
 
     if let Some(help) = &error.help {
-        diag.add_help(help.clone());
+        diag.add_help(user_facing(help.as_str()));
     }
 
     if let Some(suggestion) = &error.suggestion {

@@ -379,6 +379,9 @@ mod tests {
             &mut |_| {},
         );
 
-        assert!(resolved.is_err(), "resolved to a stale archive: {resolved:?}");
+        assert!(
+            resolved.is_err(),
+            "resolved to a stale archive: {resolved:?}"
+        );
     }
 }

@@ -1,5 +1,5 @@
-// composition root: frontend -> sema -> opt -> LLVM codegen
 
 pub mod api;
+mod modules;
 
 pub use api::*;
