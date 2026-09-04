@@ -4,7 +4,7 @@ use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_body(&mut self, stmts: &[TypedStmt], scope_span: aelys_syntax::Span) {
-        // Save the current scope depth so inner `let` bindings don't leak out.
+        // save the current scope depth so inner `let` bindings don't leak out.
         let scope_depth = self.locals_by_name.len();
         for stmt in stmts {
             self.lower_stmt(stmt);
@@ -14,7 +14,6 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name.truncate(scope_depth);
     }
 
-    // passing the pointer as a use is what keeps copy_elim and dead_locals off the local
     pub(super) fn emit_rc_retain(&mut self, ptr: Operand, sp: Option<Span>) {
         self.emit(
             AirStmtKind::CallVoid {
@@ -57,8 +56,6 @@ impl<'a> LoweringContext<'a> {
         self.emit_cow_buffer_call("__aelys_vec_release", local, sp);
     }
 
-    // release the buffer a pointer already points at. the pointer is the aelysvec address, so this
-    // skips the addressof that emit_cow_release does. used by `*p = <vec>` to drop the pointee's
     pub(super) fn emit_cow_release_through_ptr(&mut self, ptr: Operand, sp: Option<Span>) {
         self.emit(
             AirStmtKind::CallVoid {
@@ -70,8 +67,6 @@ impl<'a> LoweringContext<'a> {
     }
 
     // a slot whose type is vec<t> owns exactly one counted share of its buffer. a value
-    // only ever sees a bare identifier. fail closed: an unrecognised shape retains (a leak), it
-    // never skips (a use-after-free).
     pub(super) fn emit_vec_slot_acquire(
         &mut self,
         slot_is_vec: bool,
@@ -115,7 +110,6 @@ impl<'a> LoweringContext<'a> {
         if !has_rc && !has_carrier && !has_cow {
             return;
         }
-        // the scope is already terminated, so anything emitted here would be dead code
         let terminated = self.last_block_is_terminated();
         let to_release: Vec<LocalId> = self
             .rc_locals
@@ -151,7 +145,6 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals.retain(|(_, d)| *d <= scope_depth);
     }
 
-    // affine scope-end drops: 1:1 images of the point-sensitive drop markers the elaboration
     pub(super) fn emit_scope_affine_drops(
         &mut self,
         scope_depth: usize,
@@ -185,9 +178,7 @@ impl<'a> LoweringContext<'a> {
         self.affine_locals.retain(|a| a.depth != 0);
     }
 
-    // point-sensitive: the plan lists exactly the affine locals live on this return edge, so a
     // local moved earlier on the path is absent. it must not copy emit_rc_releases_for_return's
-    // escaped-only filter, whose drop-everything-registered structure is the double-drop source.
     pub(super) fn emit_affine_drops_for_return(&mut self, return_span: aelys_syntax::Span) {
         let key = crate::bir::drop_key(&return_span);
         let to_drop = self.collect_affine_drops(key, |_| true);
@@ -196,7 +187,6 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    // the returned value keeps its count, it travels to the caller
     pub(super) fn emit_rc_releases_for_return(&mut self, returned: Option<&Operand>) {
         let escaped: Option<LocalId> = match returned {
             Some(Operand::Copy(id) | Operand::Move(id)) => Some(*id),
@@ -307,7 +297,11 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn air_struct_field_type(&self, ty: &AirType, field: &str) -> AirType {
         if let AirType::Struct(name) = ty {
-            if let Some(def) = self.structs.iter().find(|s| &s.name == name) {
+            let mine = self.structs.iter();
+            if let Some(def) = mine
+                .chain(self.imported.structs.iter())
+                .find(|s| &s.name == name)
+            {
                 if let Some(f) = def.fields.iter().find(|f| f.name == field) {
                     return f.ty.clone();
                 }
@@ -317,7 +311,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn air_enum_payload_type(&self, enum_name: &str, tag: u32, field_index: u32) -> AirType {
-        if let Some(def) = self.enums.iter().find(|e| e.name == enum_name) {
+        let mine = self.enums.iter();
+        if let Some(def) = mine
+            .chain(self.imported.enums.iter())
+            .find(|e| e.name == enum_name)
+        {
             if let Some(v) = def.variants.iter().find(|v| v.tag == tag) {
                 if let Some(ty) = v.payload.get(field_index as usize) {
                     return ty.clone();
@@ -375,7 +373,6 @@ impl<'a> LoweringContext<'a> {
             crate::rc_paths::RcScan::None => None,
             crate::rc_paths::RcScan::Paths(paths) => Some((air_ty, paths)),
             // skipping is only sound while generic structs never reach codegen; once they
-            // monomorphize, an Rc carrier will slip through here and leak or UAF
             crate::rc_paths::RcScan::Undecidable(_) => None,
             crate::rc_paths::RcScan::RejectedMultiVariant(why) => {
                 self.report_error(format!("[rc-stage1] {why}"));
@@ -385,7 +382,6 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn finalize_function_body(&mut self) {
-        // seal any pending block (for example loop exit blocks) or unsealed statements with implicit return
         if self.pending_block_id.is_some()
             || (self.current_stmts.is_empty() && self.current_blocks.is_empty())
             || !self.current_stmts.is_empty()
@@ -408,13 +404,9 @@ impl<'a> LoweringContext<'a> {
                 ..
             } => {
                 let ty = self.lower_type_from_infer(var_type);
-                // Optimization: for array initializers, emit stores directly to the named local
-                // instead of going through a temp + copy
                 if matches!(ty, AirType::Array(_, _)) {
                     match &initializer.kind {
                         TypedExprKind::ArrayLiteral { elements, .. } => {
-                            // Evaluate all elements before registering the name so that
-                            // `let arr = [arr[0], 1, 2]` reads the *outer* arr, not itself.
                             let elem_ops: Vec<Operand> =
                                 elements.iter().map(|e| self.lower_expr(e)).collect();
                             let local = self.alloc_named_local(name, ty, true, sp);
@@ -451,7 +443,6 @@ impl<'a> LoweringContext<'a> {
                                 _ => AirType::I64,
                             };
                             self.check_stack_array_size(&elem_air_ty, n);
-                            // Evaluate fill value before registering the name.
                             let fill_op = if let Some(fv) = fill_value {
                                 self.lower_expr(fv)
                             } else {
@@ -479,8 +470,6 @@ impl<'a> LoweringContext<'a> {
                         _ => {}
                     }
                 }
-                // Evaluate the initializer before registering the name so that
-                // `let x = x + 1` reads the *outer* x, not the new binding.
                 let operand = self.lower_expr(initializer);
 
                 let is_rc_binding = matches!(var_type, InferType::Rc(_));
@@ -542,7 +531,7 @@ impl<'a> LoweringContext<'a> {
                     self.cow_locals.push((local, depth));
                 }
 
-                if matches!(self.affine_category(var_type), crate::bir::Category::Affine) {
+                if self.affine_category(var_type).is_affine() {
                     let depth = self.locals_by_name.len();
                     self.affine_locals.push(crate::lower::AffineLocal {
                         local,
@@ -586,8 +575,7 @@ impl<'a> LoweringContext<'a> {
             TypedStmtKind::Return(val) => {
                 if let Some(e) = val {
                     let ret_ty = self.lower_type_from_infer(&e.ty);
-                    // opaque means the return type is unresolved Dynamic (e.g. an implicit return of a print/println call).
-                    // lower the expression for side effects only and emit a void return.
+                    // opaque means the return type is unresolved dynamic (e.g. an implicit return of a print/println call).
                     if matches!(ret_ty, AirType::Opaque) {
                         self.lower_expr_discard(e);
                         self.emit_rc_releases_for_return(None);
@@ -624,7 +612,6 @@ impl<'a> LoweringContext<'a> {
                     }
                 } else {
                     // break outside loop: sema should have rejected this, but
-                    // seal the block to prevent malformed AIR during error recovery.
                     self.report_error("break statement outside of loop".to_string());
                     self.seal_block(AirTerminator::Unreachable);
                 }
@@ -664,7 +651,6 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    // control flow desugaring
     pub(super) fn lower_if(
         &mut self,
         condition: &aelys_sema::TypedExpr,
@@ -739,10 +725,6 @@ impl<'a> LoweringContext<'a> {
         self.fixup_block_id_noop(exit_id);
     }
 
-    /// the old fixup_block_id(X) renamed the last sealed block to X
-    /// With nested control flow that creates multiple blocks, the last block is
-    /// some inner merge, not the branch entry. This nuked entire loop bodies.
-    /// Now we set the pending id *before* lowering so the first seal_block picks it up.
     pub(super) fn fixup_block_id_noop(&mut self, target: BlockId) {
         if let Some(old) = self.pending_block_id {
             if old != target {
@@ -804,9 +786,6 @@ impl<'a> LoweringContext<'a> {
         if self.pending_block_id.is_some() {
             return false;
         }
-        // a block is terminated if it has a terminator than Goto
-        // Goto is a fallthrough to a merge block, not a definitive exit
-        // other terminator return, unreachable, branch etc are definitive exits.
         self.current_stmts.is_empty()
             && self
                 .current_blocks

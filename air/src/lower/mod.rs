@@ -20,12 +20,13 @@ pub enum LowerFailure {
 
 fn build_and_check_bir(
     program: &TypedProgram,
+    imports: &crate::bir::Imports,
 ) -> Result<
     std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
     Vec<crate::bir::BirDiagnostic>,
 > {
-    let bir = crate::bir::build::build_program(program);
-    let check = crate::bir::check_program(&bir);
+    let bir = crate::bir::build::build_program_with_imports(program, &imports.names());
+    let check = crate::bir::check_program_with_imports(&bir, &imports.effects);
     if check.errors.is_empty() {
         Ok(check.drops)
     } else {
@@ -33,9 +34,25 @@ fn build_and_check_bir(
     }
 }
 
+#[derive(Default)]
+pub struct Imported {
+    pub globals: std::collections::HashSet<String>,
+    pub structs: Vec<AirStructDef>,
+    pub enums: Vec<AirEnumDef>,
+    pub bir: crate::bir::Imports,
+}
+
 pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, LowerFailure> {
-    let drops = build_and_check_bir(program).map_err(LowerFailure::Borrow)?;
+    try_lower_with_imports(program, Imported::default())
+}
+
+pub fn try_lower_with_imports(
+    program: &TypedProgram,
+    imported: Imported,
+) -> Result<AirProgram, LowerFailure> {
+    let drops = build_and_check_bir(program, &imported.bir).map_err(LowerFailure::Borrow)?;
     let mut cx = LoweringContext::new(program);
+    cx.imported = imported;
     cx.affine_drops = drops;
     cx.lower_program();
     cx.finish().map_err(LowerFailure::Lowering)
@@ -50,7 +67,8 @@ pub fn try_lower_with_gc_mode(
     program: &TypedProgram,
     file_gc_mode: GcMode,
 ) -> Result<AirProgram, LowerFailure> {
-    let drops = build_and_check_bir(program).map_err(LowerFailure::Borrow)?;
+    let drops = build_and_check_bir(program, &crate::bir::Imports::default())
+        .map_err(LowerFailure::Borrow)?;
     let mut cx = LoweringContext::new(program);
     cx.file_gc_mode = file_gc_mode;
     cx.affine_drops = drops;
@@ -64,6 +82,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) structs: Vec<AirStructDef>,
     pub(super) enums: Vec<AirEnumDef>,
     pub(super) globals: Vec<AirGlobal>,
+    pub(super) imported: Imported,
     pub(super) source_files: Vec<String>,
     pub(super) next_function_id: u32,
     pub(super) next_local_id: u32,
@@ -74,14 +93,11 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) current_params: Vec<AirParam>,
     pub(super) current_stmts: Vec<AirStmt>,
     pub(super) locals_by_name: Vec<(String, LocalId)>,
-    // these three registries are all fed from the sema type, never the AIR type, which
-    // erases an Rc into a plain Ptr indistinguishable from a closure env or a null
+    // these three registries are all fed from the sema type, never the air type, which
     pub(super) rc_locals: Vec<(LocalId, usize)>,
     // never fed from lower_params: releasing a borrowed carrier param callee-side would
-    // hand the caller a use-after-free
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
-    // no drop bool: the point-keyed plan below decides every drop, read per program point.
     pub(super) affine_locals: Vec<AffineLocal>,
     pub(super) affine_drops:
         std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
@@ -101,7 +117,6 @@ pub(super) struct CarrierLocal {
     pub(super) depth: usize,
 }
 
-// a live affine local, dropped point-sensitively per the plan; decl_key is the cross-ir key
 pub(super) struct AffineLocal {
     pub(super) local: LocalId,
     pub(super) depth: usize,
@@ -112,7 +127,6 @@ pub(super) struct AffineLocal {
 pub(super) struct LoopBlocks {
     pub(super) header: BlockId,
     pub(super) exit: BlockId,
-    // captured at loop entry, to catch an Rc born in the body that a break would abandon
     pub(super) body_scope_depth: usize,
 }
 
@@ -124,6 +138,7 @@ impl<'a> LoweringContext<'a> {
             structs: Vec::new(),
             enums: Vec::new(),
             globals: Vec::new(),
+            imported: Imported::default(),
             source_files: vec![program.source.name.clone()],
             next_function_id: 0,
             next_local_id: 0,
@@ -165,6 +180,12 @@ impl<'a> LoweringContext<'a> {
         })
     }
 
+    // module-level storage defined elsewhere is read through an accessor, never inlined
+    pub(super) fn is_global_name(&self, name: &str) -> bool {
+        self.globals.iter().any(|global| global.name == name)
+            || self.imported.globals.contains(name)
+    }
+
     pub(super) fn alloc_function_id(&mut self) -> FunctionId {
         let id = FunctionId(self.next_function_id);
         self.next_function_id += 1;
@@ -195,8 +216,6 @@ impl<'a> LoweringContext<'a> {
         id
     }
 
-    // codegen keeps a flat value map that ignores SSA dominance, so anything written from
-    // two or more blocks needs a real alloca, which is what mut gives it
     pub(super) fn alloc_temp_mut(&mut self, ty: AirType) -> LocalId {
         let id = self.alloc_local_id();
         self.current_locals.push(AirLocal {
@@ -355,9 +374,7 @@ impl<'a> LoweringContext<'a> {
             InferType::Array(inner, None) => {
                 AirType::Slice(Box::new(self.lower_type_from_infer(inner)))
             }
-            // a Vec is its own 24-byte type, not the 16-byte array-view Slice
             InferType::Vec(inner) => AirType::Vec(Box::new(self.lower_type_from_infer(inner))),
-            // an Rc erases to a plain data pointer, the refcount machinery lives in the
             // lowering and the runtime, never in the type
             InferType::Rc(inner) => AirType::Ptr(Box::new(self.lower_type_from_infer(inner))),
             // references erase to raw ptr / fat {ptr,len}, mutability is dropped
@@ -367,7 +384,6 @@ impl<'a> LoweringContext<'a> {
             InferType::Slice { elem, .. } => {
                 AirType::Slice(Box::new(self.lower_type_from_infer(elem)))
             }
-            // TODO: add support for InferType::Tuple in the backend
             InferType::Tuple(_) => {
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -376,7 +392,6 @@ impl<'a> LoweringContext<'a> {
                 );
                 AirType::Opaque
             }
-            // TODO: add support for InferType::Range in the backend
             InferType::Range => {
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -402,7 +417,6 @@ impl<'a> LoweringContext<'a> {
                         .map(|a| self.lower_type_from_infer(a))
                         .collect();
                     // only when every arg is concrete: an unresolved or generic arg would
-                    // mangle to a name monomorphization cannot rewrite
                     let all_concrete = lowered_args
                         .iter()
                         .all(|t| !matches!(t, AirType::Opaque | AirType::Param(_)));
@@ -418,8 +432,6 @@ impl<'a> LoweringContext<'a> {
                     }
                 }
             }
-            // a Var reaching lowering is a compiler bug, finalize should have widened it;
-            // map it to Opaque so validation rejects it with a clear message
             InferType::Var(_id) => {
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -429,8 +441,7 @@ impl<'a> LoweringContext<'a> {
                 AirType::Opaque
             }
             InferType::Never => AirType::Void,
-            // mono patches this for generic call results; anything else stays Opaque and is
-            // rejected by validation
+            // mono patches this for generic call results; anything else stays opaque and is
             InferType::Dynamic => AirType::Opaque,
         }
     }
@@ -487,7 +498,6 @@ impl<'a> LoweringContext<'a> {
             rc_type_table: crate::rc_types::RcTypeTable::default(),
         };
 
-        // layout_of is context-free and undersizes data enums to 4 bytes, so probe instead
         probe = crate::mono::monomorphize(probe)
             .expect("invariant: the compiler-built layout probe always monomorphizes");
         let _ = crate::layout::compute_layouts(&mut probe);
@@ -532,7 +542,6 @@ impl<'a> LoweringContext<'a> {
         );
     }
 
-    // collect (local, id_field) to drop at a point: registered affines whose decl is listed by
     pub(super) fn collect_affine_drops(
         &self,
         point_key: crate::bir::DropKey,

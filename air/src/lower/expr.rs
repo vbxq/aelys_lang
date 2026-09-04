@@ -97,12 +97,12 @@ impl<'a> LoweringContext<'a> {
                             sp,
                         );
                     }
-                    if matches!(self.affine_category(&expr.ty), crate::bir::Category::Affine) {
+                    if self.affine_category(&expr.ty).is_affine() {
                         Operand::Move(id)
                     } else {
                         Operand::Copy(id)
                     }
-                } else if self.globals.iter().any(|global| global.name == *name) {
+                } else if self.is_global_name(name) {
                     self.emit_rvalue_to_temp(
                         self.lower_type_from_infer(&expr.ty),
                         Rvalue::Call {
@@ -983,7 +983,7 @@ impl<'a> LoweringContext<'a> {
                         return Callee::FnPtr(self.operand_to_local(op, &ty));
                     }
                     Callee::FnPtr(id)
-                } else if self.globals.iter().any(|global| global.name == *name) {
+                } else if self.is_global_name(name) {
                     let op = self.lower_expr(callee);
                     let ty = self.lower_type_from_infer(&callee.ty);
                     Callee::FnPtr(self.operand_to_local(op, &ty))
@@ -1694,4 +1694,3 @@ impl<'a> LoweringContext<'a> {
         acc
     }
 }
-

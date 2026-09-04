@@ -9,6 +9,7 @@ impl<'a> LoweringContext<'a> {
                 name,
                 type_params,
                 fields,
+                ..
             } = &stmt.kind
             {
                 if type_params.is_empty() {
@@ -17,12 +18,12 @@ impl<'a> LoweringContext<'a> {
             }
         }
 
-        // Collect enum definitions
         for stmt in &self.program.stmts {
             if let TypedStmtKind::EnumDecl {
                 name,
                 type_params,
                 variants,
+                ..
             } = &stmt.kind
             {
                 self.lower_enum_decl(name, type_params, variants, &stmt.span);
@@ -146,7 +147,6 @@ impl<'a> LoweringContext<'a> {
     fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
         let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
-        // retain each Vec param's buffer at entry, see emit_cow_param_entry_retains
         self.retain_vec_params(&func.params, &params);
         self.register_affine_params(&func.params, &params);
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
@@ -158,14 +158,11 @@ impl<'a> LoweringContext<'a> {
             ));
             ret_ty = AirType::Void;
         }
-        // sema uses Null for both the null literal and an implicit void return, and only
-        // the literal should become Ptr(Void)
         if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
             ret_ty = AirType::Void;
         }
 
         self.lower_body(&func.body, func.span);
-        // explicit returns already released these, this covers the fall-through exit
         self.emit_param_cow_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
@@ -260,7 +257,6 @@ impl<'a> LoweringContext<'a> {
         self.finalize_function_body();
         self.resolve_block_aliases();
 
-        // Restore outer closure context (supports nested closures)
         self.closure_env_param = saved_env_param;
         self.capture_slots = saved_capture_slots;
 
@@ -285,7 +281,6 @@ impl<'a> LoweringContext<'a> {
         self.type_params_map.clear();
     }
 
-    // every lambda gets an __env param, capturing or not, so the calling convention at a
     // call site never depends on whether the callee captures
     pub(super) fn lower_function_as_closure(&mut self, func: &TypedFunction) {
         let saved_locals = std::mem::take(&mut self.current_locals);
@@ -309,7 +304,6 @@ impl<'a> LoweringContext<'a> {
         let gc_mode = self.gc_mode_for_function(func);
         let captures = self.runtime_captures(&func.captures);
 
-        // Always take the closure path
         self.lower_closure(func, &captures, func_id, gc_mode);
 
         self.current_locals = saved_locals;
@@ -331,10 +325,9 @@ impl<'a> LoweringContext<'a> {
         &self,
         captures: &[(String, InferType)],
     ) -> Vec<(String, InferType)> {
-        // File-scope lets live in global storage, not in closure environments.
         captures
             .iter()
-            .filter(|(name, _)| !self.globals.iter().any(|global| global.name == *name))
+            .filter(|(name, _)| !self.is_global_name(name))
             .cloned()
             .collect()
     }
@@ -360,11 +353,8 @@ impl<'a> LoweringContext<'a> {
             .collect()
     }
 
-    // a Vec param aliases the caller's buffer, so without this retain the callee would see
-    // refcount 1, take the in-place push path and mutate the caller's Vec. unlike an Rc
-    // param, which is borrowed and never touched, a Vec param has value semantics
+    // a vec param aliases the caller's buffer, so without this retain the callee would see
     pub(super) fn retain_vec_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
-        // depth 0 keeps them function-level, so no inner scope releases them
         for (p, air) in params.iter().zip(air_params.iter()) {
             if matches!(p.ty, InferType::Vec(_)) {
                 self.emit_cow_retain(air.id, Some(self.span(&p.span)));
@@ -379,7 +369,7 @@ impl<'a> LoweringContext<'a> {
         air_params: &[AirParam],
     ) {
         for (p, air) in params.iter().zip(air_params.iter()) {
-            if matches!(self.affine_category(&p.ty), crate::bir::Category::Affine) {
+            if self.affine_category(&p.ty).is_affine() {
                 self.affine_locals.push(crate::lower::AffineLocal {
                     local: air.id,
                     depth: 0,
@@ -429,7 +419,6 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    // unlike try_const_expr this can emit, so it also folds non-capturing lambdas
     pub(super) fn try_global_const_expr(
         &mut self,
         expr: &aelys_sema::TypedExpr,
@@ -499,8 +488,6 @@ impl<'a> LoweringContext<'a> {
             ));
         };
         if matches!(ty, AirType::Enum(_)) && Self::enum_payload_needs_runtime_storage(init) {
-            // globals are raw constant bytes, so a payload holding a runtime address must
-            // fail here rather than drift into a backend-only error
             return Some(format!(
                 "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
             ));
@@ -530,7 +517,7 @@ impl<'a> LoweringContext<'a> {
             let global = self.globals.iter().find(|global| global.name == current)?;
             let init = global.init.as_ref()?.clone();
             match init {
-                // Follow fnptr aliases through prior globals until we reach the real symbol.
+                // follow fnptr aliases through prior globals until we reach the real symbol.
                 AirConst::FnRef(target)
                     if self.globals.iter().any(|global| global.name == target) =>
                 {
@@ -594,7 +581,7 @@ impl<'a> LoweringContext<'a> {
                     .iter()
                     .map(|arg| self.try_const_expr(arg))
                     .collect::<Option<Vec<_>>>()?;
-                // globals skip EnumInit, so carry the monomorphized name here
+                // globals skip enuminit, so carry the monomorphized name here
                 let AirType::Enum(enum_name) = self.lower_type_from_infer(&expr.ty) else {
                     return None;
                 };
@@ -610,7 +597,6 @@ impl<'a> LoweringContext<'a> {
                 consts.map(AirConst::Array)
             }
             TypedExprKind::ArraySized { size, fill_value } => {
-                // [val; N] is constant if val is constant and N is a literal
                 let n = if let TypedExprKind::Int(n) = &size.kind {
                     Some(*n as usize)
                 } else {
