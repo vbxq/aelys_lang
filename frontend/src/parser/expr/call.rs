@@ -4,7 +4,6 @@ use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{BinaryOp, CatchHandler, Expr, ExprKind, TokenKind};
 
 impl Parser {
-    // calls and member access (highest precedence after atoms)
     pub(super) fn call(&mut self) -> Result<Expr> {
         let mut expr = self.primary()?;
 
@@ -18,7 +17,6 @@ impl Parser {
                         if !self.match_token(&TokenKind::Comma) {
                             break;
                         }
-                        // Allow trailing comma: `f(a, b,)`
                         if self.check(&TokenKind::RParen) {
                             break;
                         }
@@ -39,6 +37,14 @@ impl Parser {
                 let member = self.consume_identifier("member name")?;
                 let span = expr.span.merge(self.previous().span);
 
+                if let ExprKind::Identifier(namespace) = &expr.kind
+                    && self.starts_a_qualified_struct_literal(&member)
+                {
+                    let qualified = format!("{}.{}", namespace, member);
+                    expr = self.struct_literal(qualified, span)?;
+                    continue;
+                }
+
                 expr = Expr::new(
                     ExprKind::Member {
                         object: Box::new(expr),
@@ -50,9 +56,23 @@ impl Parser {
                 let variant = self.consume_path_segment("variant name")?;
                 let span = expr.span.merge(self.previous().span);
 
-                match &expr.kind {
-                    ExprKind::Identifier(enum_name) => {
-                        // Parse optional construction args: EnumName::Variant(arg1, arg2, ...)
+                let path = match &expr.kind {
+                    ExprKind::Identifier(name) => Some(name.clone()),
+                    ExprKind::Member { object, member }
+                        if matches!(object.kind, ExprKind::Identifier(_)) =>
+                    {
+                        match &object.kind {
+                            ExprKind::Identifier(namespace) => {
+                                Some(format!("{}.{}", namespace, member))
+                            }
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                };
+
+                match &path {
+                    Some(enum_name) => {
                         let args = if self.check(&TokenKind::LParen) {
                             self.advance(); // consume '('
                             let mut args = Vec::new();
@@ -90,7 +110,7 @@ impl Parser {
                             span,
                         );
                     }
-                    _ => {
+                    None => {
                         return Err(self.error(CompileErrorKind::UnexpectedToken {
                             expected: "enum name before ::".to_string(),
                             found: format!("{:?}", expr.kind),
@@ -120,7 +140,6 @@ impl Parser {
                     );
                 }
             } else if self.check(&TokenKind::PlusPlus) || self.check(&TokenKind::MinusMinus) {
-                // on désucre x++ → x = x + 1, x-- → x = x - 1
                 let op = if self.match_token(&TokenKind::PlusPlus) {
                     BinaryOp::Add
                 } else {
@@ -152,7 +171,6 @@ impl Parser {
                     ref index,
                 } = expr.kind
                 {
-                    // arr[i]++ → arr[i] = arr[i] + 1
                     let binary = Expr::new(
                         ExprKind::Binary {
                             left: Box::new(expr.clone()),
@@ -174,7 +192,6 @@ impl Parser {
                     ref member,
                 } = expr.kind
                 {
-                    // s.field++ → s.field = s.field + 1
                     let binary = Expr::new(
                         ExprKind::Binary {
                             left: Box::new(expr.clone()),
@@ -261,19 +278,15 @@ impl Parser {
         Ok(expr)
     }
 
-    /// Parse index or range expression inside brackets.
-    /// Handles: arr[i], arr[1..3], arr[1..], arr[..3], arr[1..=3]
     fn parse_index_or_range(&mut self) -> Result<Expr> {
         let start_span = self.peek().span;
 
-        // Check if range starts with .. or ..= (no start expression)
         if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
             let inclusive = self.match_token(&TokenKind::DotDotEq);
             if !inclusive {
                 self.advance(); // consume DotDot
             }
 
-            // Check for end expression
             let end = if !self.check(&TokenKind::RBracket) {
                 Some(Box::new(self.expression()?))
             } else {
@@ -291,17 +304,14 @@ impl Parser {
             ));
         }
 
-        // Parse the first expression (could be index or start of range)
         let first = self.expression()?;
 
-        // Check if this is a range
         if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
             let inclusive = self.match_token(&TokenKind::DotDotEq);
             if !inclusive {
                 self.advance(); // consume DotDot
             }
 
-            // Check for end expression
             let end = if !self.check(&TokenKind::RBracket) {
                 Some(Box::new(self.expression()?))
             } else {
@@ -319,7 +329,6 @@ impl Parser {
             ));
         }
 
-        // Just a simple index expression
         Ok(first)
     }
 }

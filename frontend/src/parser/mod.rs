@@ -1,4 +1,3 @@
-// recursive descent parser
 
 mod decl;
 mod expr;
@@ -35,19 +34,26 @@ impl Parser {
     pub fn parse(mut self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
 
+        let mut prologue_open = true;
+
         while !self.is_at_end() {
             if self.match_token(&TokenKind::Semicolon) {
                 continue;
             }
 
-            match self.declaration() {
+            let parsed = if prologue_open && self.check(&TokenKind::Needs) {
+                self.needs_declaration()
+            } else {
+                prologue_open = false;
+                self.declaration()
+            };
+
+            match parsed {
                 Ok(stmt) => statements.push(stmt),
                 Err(err) => {
-                    // Convert error to diagnostic and accumulate
                     let diag = match &err {
                         AelysError::Compile(e) => e.to_diagnostic(),
                         AelysError::Multiple(diags) => {
-                            // Take first diagnostic
                             if let Some(d) = diags.first() {
                                 d.clone()
                             } else {
@@ -68,16 +74,13 @@ impl Parser {
         }
     }
 
-    /// Skip tokens until we find a statement boundary for error recovery.
     fn synchronize(&mut self) {
         while !self.is_at_end() {
-            // Consume semicolons as statement boundaries
             if self.peek().kind == TokenKind::Semicolon {
                 self.advance();
                 return;
             }
 
-            // These tokens typically start a new statement
             match &self.peek().kind {
                 TokenKind::Let
                 | TokenKind::Fn
@@ -127,15 +130,11 @@ impl Parser {
         }
     }
 
-    /// Consume a `>` token, splitting `>>` (Shr) into two `>` (Gt) tokens if needed.
-    /// This is required for nested generic type annotations like `Option<Option<i64>>`.
     fn consume_gt(&mut self) -> Result<()> {
         if self.check(&TokenKind::Gt) {
             self.advance();
             Ok(())
         } else if self.check(&TokenKind::Shr) {
-            // Split >> into > + >: replace Shr with Gt (for the second >),
-            // then insert a Gt before it (for the first >) so advance works normally.
             let span = self.tokens[self.current].span;
             let first_gt_span = aelys_syntax::Span {
                 start: span.start,
@@ -176,7 +175,6 @@ impl Parser {
         }
     }
 
-    // `null` is reinterpreted as a name only right after `::`, so that Rc::null() parses
     // while null stays a reserved keyword everywhere else
     fn consume_path_segment(&mut self, expected: &str) -> Result<String> {
         if matches!(self.peek().kind, TokenKind::Null) {

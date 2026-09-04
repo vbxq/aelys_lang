@@ -14,7 +14,7 @@ mod types;
 impl Parser {
     pub fn declaration(&mut self) -> Result<Stmt> {
         if self.check(&TokenKind::Needs) {
-            return self.needs_declaration();
+            return Err(self.error(CompileErrorKind::NeedsOutsidePrologue));
         }
 
         let decorators = self.decorators()?;

@@ -64,7 +64,17 @@ impl Parser {
             );
         }
 
-        let name = self.consume_identifier("type name")?;
+        let mut name = self.consume_identifier("type name")?;
+
+        // a module-qualified type is one name, and `.` is not an identifier character
+        while self.check(&TokenKind::Dot)
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            let segment = self.consume_identifier("type name segment")?;
+            name.push('.');
+            name.push_str(&segment);
+        }
 
         if self.match_token(&TokenKind::Lt) {
             let mut type_params = Vec::new();
@@ -75,7 +85,6 @@ impl Parser {
             self.consume_gt()?;
             let end_span = self.previous().span;
             if type_params.len() == 1 {
-                // SAFETY: length was just checked to be exactly 1.
                 let single = type_params.into_iter().next().expect("len == 1");
                 Ok(TypeAnnotation::with_param(
                     name,
@@ -108,8 +117,6 @@ impl Parser {
             }
         }
         self.consume(&TokenKind::RParen, ")")?;
-        // `fn(args) -> RetType` has an explicit return type.
-        // `fn(args)` without `->` is a void function type.
         let (ret, end_span) = if self.match_token(&TokenKind::Arrow) {
             let ret = self.parse_type_annotation()?;
             (ret, self.previous().span)

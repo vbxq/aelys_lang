@@ -98,7 +98,6 @@ impl Parser {
     pub(super) fn match_arms(&mut self) -> Result<Vec<MatchArm>> {
         let mut arms = Vec::new();
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-            // Skip any stray semicolons between arms
             if self.match_token(&TokenKind::Semicolon) {
                 continue;
             }
@@ -116,9 +115,7 @@ impl Parser {
                 body: Box::new(body),
                 span: arm_start.merge(arm_end),
             });
-            // Arms are separated by commas or semicolons (auto-inserted)
             if !self.match_token(&TokenKind::Comma) {
-                // Allow semicolons as arm separators too (from auto-semicolon insertion)
                 self.match_token(&TokenKind::Semicolon);
             }
         }
@@ -126,13 +123,10 @@ impl Parser {
         Ok(arms)
     }
 
-    /// Parse `return <expr>` in match arm position.
-    /// Wraps the return in a Block so it fits the Expr slot the arm expects.
     fn match_arm_return(&mut self) -> Result<Expr> {
         let ret_span = self.peek().span;
         self.advance(); // consume `return`
 
-        // Bare `return` (no value) or `return <expr>`
         let value = if self.check(&TokenKind::Comma)
             || self.check(&TokenKind::Semicolon)
             || self.check(&TokenKind::RBrace)
@@ -156,7 +150,6 @@ impl Parser {
     fn parse_pattern(&mut self) -> Result<Pattern> {
         let span = self.peek().span;
 
-        // Check for wildcard `_`
         if let TokenKind::Identifier(name) = &self.peek().kind {
             if name == "_" {
                 self.advance();
@@ -164,8 +157,15 @@ impl Parser {
             }
         }
 
-        // Enum variant pattern: EnumName::Variant or EnumName::Variant(x, y)
-        let enum_name = self.consume_identifier("enum name or _")?;
+        let mut enum_name = self.consume_identifier("enum name or _")?;
+        while self.check(&TokenKind::Dot)
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            let segment = self.consume_identifier("enum path segment")?;
+            enum_name.push('.');
+            enum_name.push_str(&segment);
+        }
         self.consume(&TokenKind::ColonColon, "::")?;
         let variant = self.consume_identifier("variant name")?;
         let variant_end_span = self.previous().span;
@@ -194,16 +194,11 @@ impl Parser {
         })
     }
 
-    // block expr: last expr is the value (like Rust)
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
         let block_start = self.previous().span;
         let mut stmts = Vec::new();
 
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-            // `if` without `else` is a valid statement but not a valid
-            // expression (if-expression requires else).  Try as expression
-            // first (handles if-else in tail position); on failure backtrack
-            // and parse as statement so that guard-style `if cond { return }` works.
             if self.check(&TokenKind::If) {
                 let saved = self.current;
                 match self.expression() {
@@ -267,10 +262,6 @@ impl Parser {
         self.consume(&TokenKind::RBrace, "}")?;
         let end_span = self.previous().span;
 
-        // If the last stmt is an expression statement, promote it to the tail
-        // expression (Rust-style block value). This handles auto-semicolon
-        // insertion: `w * h\n}` gets a `;` inserted by the lexer, but the
-        // user intent is for it to be the block's return value.
         let tail = if let Some(last) = stmts.last() {
             if matches!(&last.kind, StmtKind::Expression(_)) {
                 let last = stmts.pop().unwrap();
@@ -337,8 +328,6 @@ impl Parser {
             TokenKind::True => ExprKind::Bool(true),
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
-            // only a `[` or a type-arg list makes `vec` the literal keyword; a `Vec::` path
-            // must fall through to the identifier path so `::` can build an EnumVariant
             TokenKind::Identifier(ref name)
                 if name.eq_ignore_ascii_case("vec")
                     && (self.check(&TokenKind::LBracket) || self.check(&TokenKind::Lt)) =>
@@ -346,13 +335,7 @@ impl Parser {
                 let name = name.clone();
                 return self.vec_literal(name, span);
             }
-            TokenKind::Identifier(ref name)
-                if name.chars().next().is_some_and(|c| c.is_uppercase())
-                    && self.check(&TokenKind::LBrace)
-                    && (matches!(self.peek_at(1).kind, TokenKind::RBrace)
-                        || (matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
-                            && matches!(self.peek_at(2).kind, TokenKind::Colon))) =>
-            {
+            TokenKind::Identifier(ref name) if self.starts_a_struct_literal(name) => {
                 let name = name.clone();
                 return self.struct_literal(name, span);
             }
@@ -411,9 +394,7 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// Parse array literal: [1, 2, 3] or sized array: [; 10] or [val; 10]
     fn array_literal(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
-        // Check for sized array syntax: [; size] (zero-initialized)
         if self.match_token(&TokenKind::Semicolon) {
             let size = self.expression()?;
             self.consume(&TokenKind::RBracket, "]")?;
@@ -427,7 +408,6 @@ impl Parser {
             ));
         }
 
-        // empty array
         if self.check(&TokenKind::RBracket) {
             self.consume(&TokenKind::RBracket, "]")?;
             let end_span = self.previous().span;
@@ -439,7 +419,6 @@ impl Parser {
             ));
         }
         let first = self.expression()?;
-        // check for [val; N] syntax
         if self.match_token(&TokenKind::Semicolon) {
             let size = self.expression()?;
             self.consume(&TokenKind::RBracket, "]")?;
@@ -453,7 +432,6 @@ impl Parser {
             ));
         }
 
-        // regular array literal: collect remaining elements
         let mut elements = vec![first];
         while self.match_token(&TokenKind::Comma) {
             if self.check(&TokenKind::RBracket) {
@@ -471,7 +449,6 @@ impl Parser {
         ))
     }
 
-    /// Parse typed vec literal: Vec<Float>[1.0, 2.0]
     fn vec_literal(
         &mut self,
         _collection_name: String,
@@ -512,7 +489,31 @@ impl Parser {
         ))
     }
 
-    fn struct_literal(&mut self, name: String, start_span: aelys_syntax::Span) -> Result<Expr> {
+    pub(super) fn starts_a_struct_literal(&self, name: &str) -> bool {
+        self.struct_literal_head(name)
+            && (matches!(self.peek_at(1).kind, TokenKind::RBrace)
+                || self.struct_literal_first_field())
+    }
+
+    // `m.p { }` would swallow the empty block of `if s.x { }`, which parsed before modules
+    pub(super) fn starts_a_qualified_struct_literal(&self, name: &str) -> bool {
+        self.struct_literal_head(name) && self.struct_literal_first_field()
+    }
+
+    fn struct_literal_head(&self, name: &str) -> bool {
+        name.chars().next().is_some_and(|c| c.is_uppercase()) && self.check(&TokenKind::LBrace)
+    }
+
+    fn struct_literal_first_field(&self) -> bool {
+        matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+            && matches!(self.peek_at(2).kind, TokenKind::Colon)
+    }
+
+    pub(super) fn struct_literal(
+        &mut self,
+        name: String,
+        start_span: aelys_syntax::Span,
+    ) -> Result<Expr> {
         self.consume(&TokenKind::LBrace, "{")?;
 
         let mut fields = Vec::new();
@@ -529,23 +530,13 @@ impl Parser {
                 span: field_span.merge(end_span),
             });
 
-            // Accept comma or semicolon (injected by lexer after newlines) as
-            // a field separator. A multi-line struct literal like:
-            //   Foo {
-            //       field: lambda_with_block_body,   <- '}' sets pending_semi
-            //       other: val                        <- \n injects ';' here
-            //   }
-            // produces a ';' token between fields that we must accept.
             if !self.match_token(&TokenKind::Comma) {
-                // Consume any injected semicolons before the closing brace.
                 while self.match_token(&TokenKind::Semicolon) {}
                 break;
             }
-            // Skip any semicolons injected by newlines after the comma.
             while self.match_token(&TokenKind::Semicolon) {}
         }
 
-        // Also discard any trailing semicolons before '}'.
         while self.match_token(&TokenKind::Semicolon) {}
         self.consume(&TokenKind::RBrace, "}")?;
         let end_span = self.previous().span;
@@ -604,9 +595,6 @@ impl Parser {
     }
 }
 
-// recursively remap all spans in an expression tree to a single span.
-// used to fix format string interpolation spans so errors point to the
-// string literal rather than a synthetic `<fmt-expr>` source
 fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
     expr.span = span;
     match &mut expr.kind {
@@ -718,7 +706,6 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                 remap_expr_spans(&mut arm.body, span);
             }
         }
-        // Leaf nodes: Int, Float, String, Bool, Null, Identifier
         _ => {}
     }
 }
