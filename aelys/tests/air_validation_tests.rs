@@ -26,7 +26,7 @@ fn lower_with_globals(code: &str, globals: &[&str]) -> AirProgram {
         .parse()
         .expect("parse failed");
     let known: HashSet<String> = globals.iter().map(|s| s.to_string()).collect();
-    let typed = TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known)
+    let typed = TypeInference::infer_program_with_imports(stmts, src, Default::default(), known)
         .expect("sema failed");
     lower(&typed)
 }
@@ -380,7 +380,6 @@ fn caller() -> i32 {
     );
 
     // verify that monomorphization patched the caller's local type
-    // to match the monomorphized return type (was I64 placeholder from Dynamic).
     let call_result_local = caller.blocks.iter().find_map(|b| {
         b.stmts.iter().find_map(|s| match &s.kind {
             AirStmtKind::Assign {
@@ -660,7 +659,6 @@ fn caller() -> i64 {
     compute_layouts(&mut program);
     let program = monomorphize(program).unwrap();
 
-    // Both instantiations should exist
     let mono_i32 = program
         .functions
         .iter()
@@ -688,7 +686,6 @@ fn caller() -> i64 {
             .collect::<Vec<_>>()
     );
 
-    // verify the i32 instance has i32 param/return, and the i64 instance has i64
     let mono_i32 = mono_i32.unwrap();
     assert_eq!(mono_i32.params[0].ty, AirType::I32);
     assert_eq!(mono_i32.ret_ty, AirType::I32);
@@ -741,9 +738,7 @@ fn caller() -> i64 {
     );
 }
 
-// AIR validation pass tests
 
-/// helper: build a minimal valid AirProgram with one function
 fn make_valid_program() -> AirProgram {
     AirProgram {
         functions: vec![AirFunction {
@@ -791,7 +786,6 @@ fn make_valid_program() -> AirProgram {
 #[test]
 fn validate_rejects_void_local_non_return() {
     let mut program = make_valid_program();
-    // add a Void-typed local that is not the return position.
     program.functions[0].locals.push(AirLocal {
         id: LocalId(1),
         ty: AirType::Void,
@@ -1031,7 +1025,6 @@ fn validate_rejects_undeclared_block_reference() {
             blocks: vec![AirBlock {
                 id: BlockId(0),
                 stmts: vec![],
-                // References block bb99 which does not exist.
                 terminator: AirTerminator::Goto(BlockId(99)),
             }],
             is_extern: false,
@@ -1089,7 +1082,6 @@ fn validate_rejects_undeclared_local_reference() {
             blocks: vec![AirBlock {
                 id: BlockId(0),
                 stmts: vec![],
-                // returns a reference to local %42 which doesn't exist
                 terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(42)))),
             }],
             is_extern: false,
@@ -1129,7 +1121,6 @@ fn validate_rejects_undeclared_local_reference() {
 
 #[test]
 fn validate_accepts_valid_lowered_program() {
-    // real program lowered from source should pass validation.
     let air = lower_source(
         r#"
 fn add(a: i64, b: i64) -> i64 {
@@ -1174,7 +1165,6 @@ fn caller() -> i32 {
 
 #[test]
 fn validate_collects_multiple_errors() {
-    // a program with multiple violations should report all of them
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -1246,7 +1236,6 @@ fn validate_collects_multiple_errors() {
 
 #[test]
 fn validate_skips_extern_functions() {
-    // Extern functions have no body and should not be validated.
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -1289,7 +1278,6 @@ fn validate_skips_extern_functions() {
     );
 }
 
-// opaque type validation tests
 
 #[test]
 fn validate_rejects_opaque_local() {
@@ -1415,10 +1403,8 @@ fn validate_rejects_opaque_struct_field() {
 
 #[test]
 fn validate_opaque_does_not_appear_after_monomorphization() {
-    // a generic function's return type starts as Dynamic -> Opaque in AIR,
     // but monomorphization should replace it with the concrete type
 
-    // After the full pipeline, validation should pass
     let mut air = lower_source(
         r#"
 fn identity<T>(x: T) -> T {
@@ -1444,8 +1430,6 @@ fn caller() -> i64 {
 
 #[test]
 fn validate_print_builtin_does_not_produce_opaque_local() {
-    // print/println returns Dynamic, but AIR lowering should emit CallVoid
-    // for their calls instead of creating an Opaque-typed temp local.
     let mut air = lower_with_globals(
         r#"
 fn main() {
@@ -1466,7 +1450,6 @@ fn main() {
         result.err()
     );
 
-    // verify no locals have Opaque type.
     let f = func(&air, "main");
     for local in &f.locals {
         assert_ne!(
@@ -1478,12 +1461,8 @@ fn main() {
     }
 }
 
-// Tuple/Range -> Opaque (caught by validation)
 
-/// Simulates what happens when a Tuple type survives to AIR:
-///
-/// the lowering now produces Opaque instead of Void. if such a local ever reaches the validation pass, it should be rejected with an OpaqueType error
-/// here we constructs a synthetic AIR program with an Opaque local representing a Tuple or Range that leaked through sema)
+/// the lowering now produces opaque instead of void. if such a local ever reaches the validation pass, it should be rejected with an opaquetype error
 #[test]
 fn validate_rejects_opaque_from_tuple_or_range() {
     let program = AirProgram {
@@ -1544,7 +1523,6 @@ fn validate_rejects_opaque_from_tuple_or_range() {
     );
 }
 
-/// verifies that null-typed locals pass validation (they are Ptr(Void), not bare Void, so they have a valid non-zero size)
 #[test]
 fn validate_accepts_null_typed_local() {
     let air = lower_source(

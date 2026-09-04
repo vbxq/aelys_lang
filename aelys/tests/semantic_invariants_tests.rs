@@ -65,7 +65,10 @@ fn exe_path_for(p: &Path) -> PathBuf {
 }
 
 fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
+    error
+        .lines()
+        .filter(|line| line.contains("[llvm-linker]"))
+        .any(|line| line.contains("program not found") || line.contains("failed to run"))
 }
 
 fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
@@ -1220,7 +1223,6 @@ fn group_re_rc_liveness_and_error_handling() {
     run_rows(&h, GROUP_E);
 }
 
-
 const GROUP_A: &[(&str, &str, Oracle)] = &[
     (
         "SI-A01",
@@ -2144,7 +2146,6 @@ fn main() -> i64 {
         Oracle::ExitOut(0, "10\n"),
     ),
     (
-        // so the read went out of bounds. pre-fix: sigabrt 134 at every level, compile-clean
         "SI-PA30",
         r#"
 fn main() -> i64 {
@@ -7189,3 +7190,658 @@ fn stage3_unique_mut_slice_keeps_static_exclusivity_fences() {
     }
 }
 
+
+type ModuleFiles = &'static [(&'static str, &'static str)];
+
+impl Harness {
+    fn write_modules(&self, id: &str, tag: &str, files: ModuleFiles) -> PathBuf {
+        let dir = self.dir.path().join(slug(id, tag));
+        for (name, body) in files {
+            let path = dir.join(name);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).expect("create module directory");
+            }
+            fs::write(&path, body).expect("write module fixture");
+        }
+        dir.join("root.aelys")
+    }
+
+    fn compile_modules(
+        &self,
+        id: &str,
+        tag: &str,
+        files: ModuleFiles,
+        opt: OptimizationLevel,
+    ) -> Option<PathBuf> {
+        let path = self.write_modules(id, tag, files);
+        if let Err(err) = compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
+            if linker_unavailable(&err.to_string()) {
+                self.linker_skips.set(self.linker_skips.get() + 1);
+                return None;
+            }
+            panic!(
+                "{id} at {tag} must compile:\n{}\nerror: {err}",
+                render(files)
+            );
+        }
+        let exe = exe_path_for(&path);
+        // every row here holds a `main`, so a missing executable is a failure and not a skip
+        assert!(
+            exe.is_file(),
+            "{id} at {tag}: compiled but produced no executable\n{}",
+            render(files)
+        );
+        self.compiled_legs.set(self.compiled_legs.get() + 1);
+        Some(exe)
+    }
+
+    fn reject_modules(
+        &self,
+        id: &str,
+        tag: &str,
+        files: ModuleFiles,
+        opt: OptimizationLevel,
+    ) -> String {
+        let path = self.write_modules(id, tag, files);
+        match lower_file_to_air(&path, opt) {
+            Ok(_) => panic!(
+                "{id} at {tag} must be rejected, but it was accepted:\n{}",
+                render(files)
+            ),
+            Err(rendered) => rendered,
+        }
+    }
+}
+
+fn render(files: ModuleFiles) -> String {
+    files
+        .iter()
+        .map(|(name, body)| format!("--- {name}\n{body}"))
+        .collect::<Vec<_>>()
+        .join("")
+}
+
+#[derive(Clone, Copy)]
+enum ModOracle {
+    ExitOut(i32, &'static str),
+    Balanced(i32, &'static str),
+    Stats(i32, &'static str, i64, i64),
+}
+
+fn run_module_row(h: &Harness, id: &str, files: ModuleFiles, oracle: ModOracle) {
+    let (exit, out) = match oracle {
+        ModOracle::ExitOut(e, o) | ModOracle::Balanced(e, o) | ModOracle::Stats(e, o, _, _) => {
+            (e, o)
+        }
+    };
+    for (name, opt) in LEVELS {
+        let Some(exe) = h.compile_modules(id, name, files, *opt) else {
+            eprintln!("{id}: linker unavailable, skipping");
+            return;
+        };
+        for (alloc_name, alloc) in ALLOCATORS {
+            let o = h.run(&exe, *alloc);
+            assert_eq!(
+                o.exit,
+                exit,
+                "{id} at {name} under {alloc_name}: the answer MUST be {exit}\n{}\nstdout: {:?}\nstderr:\n{}",
+                render(files),
+                o.stdout,
+                o.stderr
+            );
+            assert_eq!(
+                o.stdout,
+                out,
+                "{id} at {name} under {alloc_name}: stdout MUST be {out:?}\n{}",
+                render(files)
+            );
+            let stats = || {
+                o.stats.unwrap_or_else(|| {
+                    panic!(
+                        "{id} at {name}/{alloc_name}: no [rc] stats line\n{}",
+                        render(files)
+                    )
+                })
+            };
+            match oracle {
+                ModOracle::ExitOut(..) => {}
+                ModOracle::Balanced(..) => {
+                    let (allocs, frees) = stats();
+                    assert_eq!(
+                        allocs, frees,
+                        "{id} at {name}/{alloc_name}: every buffer freed exactly once \
+                         (allocs={allocs} frees={frees})"
+                    );
+                }
+                ModOracle::Stats(_, _, a, f) => {
+                    assert_eq!(
+                        stats(),
+                        (a, f),
+                        "{id} at {name}/{alloc_name}: the exact pair MUST be ({a}, {f})"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn run_module_rows(h: &Harness, rows: &[(&str, ModuleFiles, ModOracle)]) {
+    let before = h.linker_skips.get();
+    for (id, files, oracle) in rows {
+        run_module_row(h, id, files, *oracle);
+    }
+    let skipped = h.linker_skips.get() - before;
+    assert!(
+        skipped == 0 || skipped == rows.len(),
+        "{} of {} rows were skipped: the toolchain is either there or it is not",
+        skipped,
+        rows.len()
+    );
+}
+
+fn run_module_rejects(h: &Harness, rows: &[(&str, &str, ModuleFiles)]) {
+    for (id, code, files) in rows {
+        for (name, opt) in REJECT_LEVELS {
+            let rendered = h.reject_modules(id, name, files, *opt);
+            assert!(
+                rendered.contains(&format!("[{code}]")),
+                "{id} at {name} MUST be rejected with {code}, got:\n{rendered}"
+            );
+        }
+    }
+}
+
+const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
+    (
+        "SI-MOD-value",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.seven()\n}\n",
+            ),
+            ("m.aelys", "pub fn seven() -> i64 {\n    return 7\n}\n"),
+        ],
+        ModOracle::Stats(7, "", 0, 0),
+    ),
+    (
+        "SI-MOD-string",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    println(m.greet())\n    return 0\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub fn greet() -> string {\n    return \"hello\"\n}\n",
+            ),
+        ],
+        ModOracle::ExitOut(0, "hello\n"),
+    ),
+    (
+        "SI-MOD-vec-across",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    let xs = m.build(4)\n    return Vec::len(xs)\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub fn build(n: i64) -> vec<i64> {\n    let mut xs: vec<i64> = Vec::new()\n    Vec::push(xs, n)\n    return xs\n}\n",
+            ),
+        ],
+        ModOracle::Balanced(1, ""),
+    ),
+    // nogc across a module boundary. this row cannot witness the nogc check itself, since its
+    (
+        "SI-MOD-nogc-across",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nnogc fn pure() -> i64 {\n    return m.clean(6) + m.plain(2)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub nogc fn clean(n: i64) -> i64 {\n    return n + 1\n}\n\npub fn plain(n: i64) -> i64 {\n    return n + 1\n}\n\npub fn unreached() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+            ),
+        ],
+        ModOracle::Stats(10, "", 0, 0),
+    ),
+    (
+        "SI-MOD-struct",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    let p = m.make(3, 4)\n    return p.a + p.b\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct P { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> P {\n    return P { a: x, b: y }\n}\n",
+            ),
+        ],
+        ModOracle::Stats(7, "", 0, 0),
+    ),
+    (
+        "SI-MOD-enum",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return match m.pick() {\n        m.T::Some(n) => n\n        m.T::None => 0\n    }\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub enum T { None, Some(i64) }\n\npub fn pick() -> T {\n    return T::Some(8)\n}\n",
+            ),
+        ],
+        ModOracle::Stats(8, "", 0, 0),
+    ),
+    // two modules, one struct name, two layouts: the answer proves neither borrowed the other
+    (
+        "SI-MOD-same-name",
+        &[
+            (
+                "root.aelys",
+                "needs x\nneeds y\n\nfn main() -> i64 {\n    return x.make() + y.make()\n}\n",
+            ),
+            (
+                "x.aelys",
+                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 10 }\n    return h.v\n}\n",
+            ),
+            (
+                "y.aelys",
+                "struct Holder { hi: i64, lo: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { hi: 20, lo: 3 }\n    return h.hi + h.lo\n}\n",
+            ),
+        ],
+        ModOracle::Stats(33, "", 0, 0),
+    ),
+    (
+        "SI-MOD-lambdas",
+        &[
+            (
+                "root.aelys",
+                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.run() + q.run()\n}\n",
+            ),
+            (
+                "p.aelys",
+                "pub fn run() -> i64 {\n    let base: i64 = 10\n    let f = fn(a: i64) -> i64 { return a + base }\n    return f(1)\n}\n",
+            ),
+            (
+                "q.aelys",
+                "pub fn run() -> i64 {\n    let base: i64 = 20\n    let g = fn(a: i64) -> i64 { return a + base }\n    return g(1)\n}\n",
+            ),
+        ],
+        ModOracle::ExitOut(32, ""),
+    ),
+    (
+        "SI-MOD-nested-path",
+        &[
+            (
+                "root.aelys",
+                "needs app.util\nneeds app\n\nnogc fn pure() -> i64 {\n    return util.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            ),
+            (
+                "util.aelys",
+                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 1\n}\n",
+            ),
+            (
+                "app.aelys",
+                "needs util\n\npub fn go() -> i64 {\n    return util.helper()\n}\n",
+            ),
+            (
+                "app/util.aelys",
+                "pub nogc fn helper() -> i64 {\n    return 40\n}\n",
+            ),
+        ],
+        ModOracle::Stats(40, "", 0, 0),
+    ),
+    (
+        "SI-MOD-transitive",
+        &[
+            (
+                "root.aelys",
+                "needs mid\n\nfn main() -> i64 {\n    let p = mid.pass(41)\n    return mid.take(p)\n}\n",
+            ),
+            (
+                "mid.aelys",
+                "needs a\n\npub fn pass(x: i64) -> a.P {\n    return a.make(x)\n}\n\npub fn take(p: a.P) -> i64 {\n    return a.read(p)\n}\n",
+            ),
+            (
+                "a.aelys",
+                "pub struct P { pub v: i64 }\n\npub fn make(x: i64) -> P {\n    return P { v: x }\n}\n\npub fn read(p: P) -> i64 {\n    return p.v\n}\n",
+            ),
+        ],
+        ModOracle::Stats(41, "", 0, 0),
+    ),
+];
+
+const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
+    (
+        "SI-MOD-E0601",
+        "E0601",
+        &[(
+            "root.aelys",
+            "needs nope\n\nfn main() -> i64 {\n    return 0\n}\n",
+        )],
+    ),
+    (
+        "SI-MOD-E0602",
+        "E0602",
+        &[
+            (
+                "root.aelys",
+                "needs a\n\nfn main() -> i64 {\n    return 0\n}\n",
+            ),
+            (
+                "a.aelys",
+                "needs b\n\npub fn f() -> i64 {\n    return 1\n}\n",
+            ),
+            (
+                "b.aelys",
+                "needs a\n\npub fn g() -> i64 {\n    return 2\n}\n",
+            ),
+        ],
+    ),
+    (
+        "SI-MOD-E0603",
+        "E0603",
+        &[
+            (
+                "root.aelys",
+                "needs m\nneeds n as m\n\nfn main() -> i64 {\n    return 0\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+        ],
+    ),
+    (
+        "SI-MOD-E0604",
+        "E0604",
+        &[(
+            "root.aelys",
+            "needs __hidden\n\nfn main() -> i64 {\n    return 0\n}\n",
+        )],
+    ),
+    (
+        "SI-MOD-E0605",
+        "E0605",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.secret()\n}\n",
+            ),
+            ("m.aelys", "fn secret() -> i64 {\n    return 1\n}\n"),
+        ],
+    ),
+    (
+        "SI-MOD-E0606",
+        "E0606",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.absent()\n}\n",
+            ),
+            ("m.aelys", "pub fn seven() -> i64 {\n    return 7\n}\n"),
+        ],
+    ),
+    (
+        "SI-MOD-E0607",
+        "E0607",
+        &[(
+            "root.aelys",
+            "needs \"GL/glext.h\"\n\nfn main() -> i64 {\n    return 0\n}\n",
+        )],
+    ),
+    (
+        "SI-MOD-E0608",
+        "E0608",
+        &[
+            (
+                "root.aelys",
+                "fn main() -> i64 {\n    return 0\n}\n\nneeds m\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+    ),
+    (
+        "SI-MOD-E0609",
+        "E0609",
+        &[
+            (
+                "root.aelys",
+                "needs m.*\n\nfn main() -> i64 {\n    return 0\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+    ),
+    (
+        "SI-MOD-E0610",
+        "E0610",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.make(3).v\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+            ),
+        ],
+    ),
+    (
+        "SI-MOD-E0611",
+        "E0611",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    let p = m.make(1)\n    return 0\n}\n",
+            ),
+            (
+                "m.aelys",
+                "struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+            ),
+        ],
+    ),
+    (
+        "SI-MOD-E0727",
+        "E0727",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nnogc fn pure() -> i64 {\n    return m.allocates()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+            ),
+        ],
+    ),
+    (
+        "SI-MOD-E0701",
+        "E0701",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn leak() -> i64 {\n    let a = m.make(1)\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n",
+            ),
+        ],
+    ),
+];
+
+const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
+    (
+        "SI-MOD-E0601-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.f()\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0603-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\nneeds n as k\n\nfn main() -> i64 {\n    return m.f() + k.g()\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+        ],
+        ModOracle::Stats(3, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0605-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.shown()\n}\n",
+            ),
+            ("m.aelys", "pub fn shown() -> i64 {\n    return 1\n}\n"),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0610-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.make(3).v\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+            ),
+        ],
+        ModOracle::Stats(3, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0611-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.make(1).v\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+            ),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0727-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nnogc fn pure() -> i64 {\n    return m.clean()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            ),
+            ("m.aelys", "pub fn clean() -> i64 {\n    return 4\n}\n"),
+        ],
+        ModOracle::Stats(4, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0701-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    let a = m.make(9)\n    let b = a\n    return b.id\n}\n",
+            ),
+            (
+                "m.aelys",
+                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n",
+            ),
+        ],
+        ModOracle::Stats(9, "9\n", 0, 0),
+    ),
+    (
+        "SI-MOD-E0602-kept",
+        &[
+            (
+                "root.aelys",
+                "needs a\n\nfn main() -> i64 {\n    return a.f()\n}\n",
+            ),
+            (
+                "a.aelys",
+                "needs b\n\npub fn f() -> i64 {\n    return b.g()\n}\n",
+            ),
+            ("b.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+        ],
+        ModOracle::Stats(2, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0604-kept",
+        &[
+            (
+                "root.aelys",
+                "needs hidden\n\nfn main() -> i64 {\n    return hidden.f()\n}\n",
+            ),
+            ("hidden.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0606-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\n\nfn main() -> i64 {\n    return m.present()\n}\n",
+            ),
+            ("m.aelys", "pub fn present() -> i64 {\n    return 7\n}\n"),
+        ],
+        ModOracle::Stats(7, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0607-kept",
+        &[
+            (
+                "root.aelys",
+                "needs gl\n\nfn main() -> i64 {\n    return gl.f()\n}\n",
+            ),
+            ("gl.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0608-kept",
+        &[
+            (
+                "root.aelys",
+                "needs m\nneeds n\n\nfn main() -> i64 {\n    return m.f() + n.g()\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    return 5\n}\n"),
+        ],
+        ModOracle::Stats(6, "", 0, 0),
+    ),
+    (
+        "SI-MOD-E0609-kept",
+        &[
+            (
+                "root.aelys",
+                "needs f from m\n\nfn main() -> i64 {\n    return f()\n}\n",
+            ),
+            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+        ],
+        ModOracle::Stats(1, "", 0, 0),
+    ),
+];
+
+#[test]
+fn group_mod_multi_file_programs_run_and_account_for_their_memory() {
+    let h = Harness::new();
+    run_module_rows(&h, MOD_ROWS);
+    h.assert_measured("group_mod");
+}
+
+#[test]
+fn group_mod_every_rejection_has_a_kept_twin() {
+    let h = Harness::new();
+    run_module_rejects(&h, MOD_REJECTS);
+    run_module_rows(&h, MOD_KEPT);
+    h.assert_measured("group_mod_kept");
+}

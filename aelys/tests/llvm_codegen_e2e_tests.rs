@@ -683,7 +683,6 @@ fn main() -> i64 {
 }
 
 #[test]
-#[ignore = "multi-module compilation not yet supported by LLVM backend"]
 fn llvm_multi_module_strings_compile_and_run() {
     let dir = tempdir().expect("tempdir should be created");
     let module_path = dir.path().join("strings.aelys");
@@ -709,33 +708,35 @@ pub fn beta() -> string {
 needs strings
 
 fn main() -> i64 {
-    strings.alpha()
-    strings.beta()
+    println(strings.alpha())
+    println(strings.beta())
     return 0
 }
 "#,
     )
     .expect("main source should be written");
 
-    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, true) {
+    if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         if linker_unavailable(&err.to_string()) {
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
     }
 
-    if !executable_path_for(&source_path).is_file() {
-        return;
-    }
-
     let exe_path = executable_path_for(&source_path);
+    assert!(
+        exe_path.is_file(),
+        "a linked multi-module program must leave an executable at {}",
+        exe_path.display()
+    );
+
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
-    assert!(
-        output.stdout.is_empty(),
-        "unexpected stdout: {:?}",
-        output.stdout
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "A\nB\n",
+        "both strings must be the ones strings.aelys defines"
     );
     assert_eq!(output.status.code().unwrap_or(-1), 0);
 }

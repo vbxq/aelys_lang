@@ -65,7 +65,7 @@ fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
     let inference = TypeInference::infer_program_full(
         stmts,
         src,
-        HashSet::new(),
+        Default::default(),
         HashSet::from(["print".to_string(), "println".to_string()]),
     )
     .expect("sema failed");
@@ -91,7 +91,6 @@ fn main() -> i64 {
         ir.contains("@__aelys_global_g = internal global i64 7"),
         "{ir}"
     );
-    // Aelys-convention main receives an implicit env ptr; check the function exists with fastcc.
     let main_decl = ir
         .lines()
         .find(|l| l.contains("define fastcc i64 @__aelys_main"))
@@ -114,7 +113,6 @@ fn main() -> i64 {
 }
 "#,
     );
-    // Aelys FnPtr globals are fat pointers { fn_ptr, env_ptr }; named fns have null env.
     assert!(
         ir.contains(
             "@__aelys_global_f = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"
@@ -142,7 +140,7 @@ fn main() -> i64 {
 }
 "#,
     );
-    // Both aliases should resolve to the same fat pointer { fn_ptr, null_env }.
+    // both aliases should resolve to the same fat pointer { fn_ptr, null_env }.
     assert!(
         ir.contains(
             "@__aelys_global_g = internal global { ptr, ptr } { ptr @__aelys_main, ptr null }"
