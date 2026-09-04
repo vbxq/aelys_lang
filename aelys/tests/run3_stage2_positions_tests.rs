@@ -864,7 +864,6 @@ const CONTROL_PLAIN_ELEMENT: (&str, &str, i64, i64) = (
     1,
 );
 
-
 const GROUP_B: &[Row] = &[
     // second allocation is the cow detach that a04's twin does not have
     Row {
@@ -1638,7 +1637,6 @@ const GROUP_C: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
-    // and e0304 is a type error rather than a fence on this run's relax list
     Row {
         id: "C28",
         position: "IndexAssign.object of Rc type",
@@ -2593,8 +2591,10 @@ fn the_effect_decision_surface_is_one_file() {
          mentions read or shift the bit"
     );
     assert!(
-        effects.contains("if pos == Pos::Value && category(&expr.ty, tt) == Category::Managed {"),
-        "the per-node type test this corpus is written against is gone or reshaped"
+        effects.contains("if pos == Pos::Value && category(&expr.ty, tt).is_managed() {"),
+        "the per-node type test this corpus is written against is gone or reshaped. it asks a \
+         predicate rather than an equality since a type can be affine and managed at once, and \
+         the equality answered no to a type that was both"
     );
     assert!(
         effects.contains("TypedExprKind::LambdaInner { captures, .. }"),
@@ -2940,4 +2940,3 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
          now, so a second mechanism refusing the same form is a double hold, not a fence"
     );
 }
-
