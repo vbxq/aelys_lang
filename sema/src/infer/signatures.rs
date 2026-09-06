@@ -6,25 +6,17 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 impl TypeInference {
-    /// Collect function signatures before inference (pre-pass)
-    ///
-    /// only registers functions at the current scope level.
-    ///
-    /// Does not recurse into nested blocks/if/while/for/for-each bodies, because
-    /// functions defined inside those constructs belong to inner lexical scopes.
     pub(super) fn collect_signatures(&mut self, stmts: &[Stmt], prefix: &str) {
         for stmt in stmts {
             match &stmt.kind {
                 StmtKind::Function(func) => {
                     self.collect_function_signature(func, prefix);
                 }
-                // nested scopes are collected when those scopes are inferred
                 _ => {}
             }
         }
     }
 
-    /// Collect a single function's signature
     fn collect_function_signature(&mut self, func: &Function, prefix: &str) {
         let full_name = if prefix.is_empty() {
             func.name.clone()
@@ -32,7 +24,6 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
-        // check for duplicate function definitions at the same scope level
         if self.env.has_function(&full_name) {
             self.errors.push(TypeError {
                 kind: TypeErrorKind::Mismatch {
@@ -50,7 +41,6 @@ impl TypeInference {
             });
         }
 
-        // check for duplicate parameter names
         {
             let mut seen_params = HashSet::new();
             for p in &func.params {
@@ -87,6 +77,8 @@ impl TypeInference {
 
         let ret_type = match &func.return_type {
             Some(ann) => self.type_from_annotation(ann),
+            // an external declaration has no body, so nothing downstream would ever resolve a variable here
+            None if func.foreign.is_some() => InferType::Null,
             None => self.type_gen.fresh(),
         };
 
@@ -100,9 +92,8 @@ impl TypeInference {
 
         self.env.define_function(full_name.clone(), fn_type.clone());
         self.record_nogc_generic_sig(&full_name, func);
+        self.record_foreign_sig(&full_name, func);
 
-        // Also register with unqualified name so nested functions are
-        // reachable by local lookup (e.g. `inner(41)` inside `outer`).
         if !prefix.is_empty() {
             if self.env.has_function(&func.name) {
                 self.errors.push(TypeError::nested_fn_shadows_outer(
@@ -112,6 +103,7 @@ impl TypeInference {
             } else {
                 self.env.define_function(func.name.clone(), fn_type);
                 self.record_nogc_generic_sig(&func.name, func);
+                self.record_foreign_sig(&func.name, func);
             }
         }
     }

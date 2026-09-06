@@ -5,7 +5,6 @@ use crate::types::InferType;
 use aelys_syntax::{Parameter, Span, Stmt, TypeAnnotation};
 
 impl TypeInference {
-    /// Infer lambda (anonymous function)
     pub(super) fn infer_lambda(
         &mut self,
         params: &[Parameter],
@@ -36,6 +35,7 @@ impl TypeInference {
         };
 
         let saved_env = std::mem::replace(&mut self.env, closure_env);
+        let saved_unsafe = std::mem::replace(&mut self.unsafe_depth, 0);
 
         for param in &typed_params {
             self.env.define_local(param.name.clone(), param.ty.clone());
@@ -47,7 +47,6 @@ impl TypeInference {
         self.push_return_type(return_type.clone());
 
         let typed_stmts = if body.is_empty() {
-            // empty lambda body implicitly returns null
             self.constraints.push(Constraint::equal(
                 InferType::Null,
                 return_type.clone(),
@@ -74,6 +73,7 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.unsafe_depth = saved_unsafe;
         self.literal_init_vars = saved_literal_inits;
 
         let param_types: Vec<InferType> = typed_params.iter().map(|p| p.ty.clone()).collect();

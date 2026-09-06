@@ -685,12 +685,13 @@ impl TypeInference {
                     self.validate_expr(&arm.body, generic_scope, declared_type_params);
                 }
             }
-            // no member node reaches here, so e0304 cannot fire on the intercepted call
+            // no member node reaches here, so cannot fire on the intercepted call
             TypedExprKind::ResultAssert { scrutinee, .. } => {
                 self.validate_expr(scrutinee, generic_scope, declared_type_params);
             }
             TypedExprKind::Identifier(name) => {
                 self.check_nogc_generic_value(name, expr);
+                self.check_foreign_as_value(name, expr);
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

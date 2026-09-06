@@ -35,11 +35,7 @@ fn annotation_mentions(ann: &TypeAnnotation, type_param: &str) -> bool {
 }
 
 impl TypeInference {
-    /// binds only what it wrote as `<t: nogc>`. nothing is recorded when nothing is bound, so the
     /// a name is a list of candidates, never a single entry: the same bare name is registered for
-    /// every scope (`signatures.rs`), and the post-solve check has no scope state, so an entry that
-    /// could be overwritten would let a weaker same-named signature erase a bound. recording only
-    /// ever appends, and a call must satisfy every candidate, so an insert cannot weaken the table.
     pub(super) fn record_nogc_generic_sig(&mut self, key: &str, func: &Function) {
         if func.type_params.is_empty() {
             return;
@@ -80,7 +76,6 @@ impl TypeInference {
         });
     }
 
-    /// at a call instantiating a nogc-bound generic, every bound type param must resolve to a
     /// concrete nogc value. fail-closed: a binding the matcher cannot recover is a reject.
     pub(super) fn check_nogc_bound_call(&mut self, callee: &TypedExpr, args: &[TypedExpr]) {
         // any other callee form reaches the name through a value use, already rejected as one
@@ -143,7 +138,6 @@ impl TypeInference {
         }
     }
 
-    /// only a slot the declaration ties to the param qualifies, and only when there is exactly one,
     fn generic_struct_culprit(
         &self,
         slots: &[usize],
@@ -232,7 +226,12 @@ impl TypeInference {
         }
     }
 
-    /// the bound, so only a direct call is allowed.
+    pub(super) fn record_foreign_sig(&mut self, key: &str, func: &Function) {
+        if func.foreign.is_some() {
+            self.foreign_sigs.insert(key.to_string());
+        }
+    }
+
     pub(super) fn check_nogc_generic_value(&mut self, name: &str, expr: &TypedExpr) {
         if !matches!(expr.ty, InferType::Function { .. }) {
             return;
@@ -241,6 +240,27 @@ impl TypeInference {
             return;
         }
         let err = TypeError::nogc_generic_as_value(name, expr.span);
+        self.errors.push(err);
+    }
+
+    pub(super) fn foreign_sigs_shadowed_by_local(&self, name: &str) -> bool {
+        self.foreign_sigs.contains(name) && self.env.lookup_local(name).is_some()
+    }
+
+    pub(super) fn check_foreign_as_value(&mut self, name: &str, expr: &TypedExpr) {
+        if !matches!(expr.ty, InferType::Function { .. }) {
+            return;
+        }
+        if !self.foreign_sigs.contains(name) {
+            return;
+        }
+        if self
+            .foreign_shadowed_spans
+            .contains(&(expr.span.start, expr.span.end))
+        {
+            return;
+        }
+        let err = TypeError::foreign_as_value(name, expr.span);
         self.errors.push(err);
     }
 }

@@ -5,7 +5,6 @@ use crate::types::InferType;
 use aelys_syntax::Function;
 
 impl TypeInference {
-    /// Infer function type
     pub(super) fn infer_function(&mut self, func: &Function) -> TypedFunction {
         let fn_signature = self.env.lookup_function(&func.name).cloned();
 
@@ -72,12 +71,13 @@ impl TypeInference {
         }
 
         let saved_env = std::mem::replace(&mut self.env, func_env);
+        let saved_unsafe = std::mem::replace(&mut self.unsafe_depth, 0);
 
         self.collect_signatures(&func.body, &func.name);
 
         self.push_return_type(return_type.clone());
 
-        let typed_body = if func.body.is_empty() {
+        let typed_body = if func.body.is_empty() && func.foreign.is_none() {
             // empty body implicitly returns null, constrain against the declared return type so fn f()->i64 {} is rejected
             self.constraints.push(Constraint::equal(
                 InferType::Null,
@@ -87,6 +87,8 @@ impl TypeInference {
                     func_name: func.name.clone(),
                 },
             ));
+            vec![]
+        } else if func.body.is_empty() {
             vec![]
         } else {
             let mut stmts: Vec<_> = func.body[..func.body.len() - 1]
@@ -105,6 +107,7 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.unsafe_depth = saved_unsafe;
         self.type_params_in_scope = saved_type_params;
         self.literal_init_vars = saved_literal_inits;
         self.nogc_fn_params = saved_nogc_fn_params;
@@ -118,6 +121,7 @@ impl TypeInference {
             decorators: func.decorators.clone(),
             is_pub: func.is_pub,
             declared_nogc: func.is_nogc,
+            foreign: func.foreign.clone(),
             span: func.span,
             captures,
         }

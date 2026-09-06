@@ -11,6 +11,9 @@ impl TypeInference {
         name: &str,
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if self.foreign_sigs_shadowed_by_local(name) {
+            self.foreign_shadowed_spans.insert((span.start, span.end));
+        }
         if self.env.lookup(name).is_none() && self.env.lookup_function_ref(name).is_none() {
             if let Some((qualified, ty)) = self.resolve_import_alias(name) {
                 return (TypedExprKind::Identifier(qualified), ty);

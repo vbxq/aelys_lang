@@ -97,6 +97,14 @@ impl TypeInference {
         args: &[Expr],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if let ExprKind::Identifier(name) = &callee.kind
+            && self.unsafe_depth == 0
+            && self.foreign_sigs.contains(name)
+            && !self.foreign_sigs_shadowed_by_local(name)
+        {
+            self.errors
+                .push(TypeError::foreign_call_outside_unsafe(name, span));
+        }
         let typed_callee = if let ExprKind::Member { object, member } = &callee.kind
             && matches!(
                 member.as_str(),

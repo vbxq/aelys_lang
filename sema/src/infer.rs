@@ -49,6 +49,8 @@ pub struct TypeInference {
     catch_match_pending: bool,
     nogc_fn_params: HashSet<String>,
     nogc_generic_sigs: HashMap<String, Vec<nogc_bound::NogcGenericSig>>,
+    foreign_sigs: HashSet<String>,
+    foreign_shadowed_spans: HashSet<(usize, usize)>,
     pub(crate) module_globals: HashSet<String>,
     pub(crate) shadowed_globals: HashSet<String>,
     pub(crate) lambda_depth: usize,

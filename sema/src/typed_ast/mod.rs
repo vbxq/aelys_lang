@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use aelys_syntax::Source;
 use aelys_syntax::Span;
-use aelys_syntax::{BinaryOp, Decorator, NeedsStmt, UnaryOp};
+use aelys_syntax::{BinaryOp, Decorator, ForeignDecl, NeedsStmt, UnaryOp};
 
 use crate::types::InferType;
 use crate::types::TypeTable;
@@ -96,6 +96,7 @@ pub struct TypedFunction {
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
     pub declared_nogc: bool,
+    pub foreign: Option<ForeignDecl>,
     pub span: Span,
     pub captures: Vec<(String, InferType)>,
 }

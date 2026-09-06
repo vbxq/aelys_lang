@@ -33,6 +33,8 @@ impl Default for TypeInference {
             catch_match_pending: false,
             nogc_fn_params: HashSet::new(),
             nogc_generic_sigs: HashMap::new(),
+            foreign_sigs: HashSet::new(),
+            foreign_shadowed_spans: HashSet::new(),
             module_globals: HashSet::new(),
             shadowed_globals: HashSet::new(),
             lambda_depth: 0,

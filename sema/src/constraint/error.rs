@@ -129,6 +129,12 @@ pub enum TypeErrorKind {
     NogcGenericAsValue {
         detail: String,
     },
+    ForeignAsValue {
+        detail: String,
+    },
+    ForeignCallOutsideUnsafe {
+        detail: String,
+    },
     ModuleItemNotPublic {
         module: String,
         item: String,
@@ -301,6 +307,8 @@ impl fmt::Display for TypeError {
             TypeErrorKind::NogcBoundUnresolved { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcBoundGenericStruct { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcGenericAsValue { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::ForeignAsValue { detail } => write!(f, "{detail}"),
+            TypeErrorKind::ForeignCallOutsideUnsafe { detail } => write!(f, "{detail}"),
             TypeErrorKind::ModuleItemNotPublic { module, item } => {
                 write!(f, "`{item}` is not public in module `{module}`")
             }
@@ -718,6 +726,43 @@ impl TypeError {
                 "call it directly, or drop the `nogc` bound if the callee need not be nogc"
                     .to_string(),
             ),
+            suggestion: None,
+        }
+    }
+
+    pub fn foreign_as_value(fn_name: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ForeignAsValue {
+                detail: format!(
+                    "`{fn_name}` is an external declaration, so it may only be called directly, \
+                     never used as a value"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "call it directly; Aelys has no spelling for a C function pointer".to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn foreign_call_outside_unsafe(fn_name: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ForeignCallOutsideUnsafe {
+                detail: format!(
+                    "calling `{fn_name}` is an external call, so it must appear inside an \
+                     `unsafe {{ }}` block"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "wrap the call: `unsafe {{ {fn_name}(…) }}`; the declaration's `unsafe` is the \
+                 binding author's claim, the block is the caller's"
+            )),
             suggestion: None,
         }
     }
