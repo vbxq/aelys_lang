@@ -13,6 +13,8 @@ Flags:
   -o, --output <path>        Output path
   --emit-air                 Print AIR instead of compiling
   --emit-llvm-ir             Emit LLVM IR to <source>.ll
+  -L, --library-path <dir>   Add a directory to the link search path
+  -l, --library <name>       Link against a library, after the aelys runtime
   --explain <code>           Show detailed explanation for an error code (e.g., E0401)
   --color <auto|always|never>  Control color output (default: auto)
   --no-color                 Disable color output

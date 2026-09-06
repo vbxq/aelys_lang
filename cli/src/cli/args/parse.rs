@@ -1,8 +1,8 @@
-// hand-rolled recursive descent, clap felt overkill for this
 
 use super::{ColorChoice, Command, ParsedArgs};
-use aelys_driver::RuntimeVariant;
+use aelys_driver::{LinkRequirement, RuntimeVariant};
 use aelys_opt::OptimizationLevel;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CommandName {
@@ -30,6 +30,7 @@ struct Parser<'a> {
     warning_flags: Vec<String>,
     color: ColorChoice,
     explain_code: Option<String>,
+    link: LinkRequirement,
 }
 
 impl<'a> Parser<'a> {
@@ -48,6 +49,7 @@ impl<'a> Parser<'a> {
             warning_flags: Vec::new(),
             color: ColorChoice::Auto,
             explain_code: None,
+            link: LinkRequirement::default(),
         }
     }
 
@@ -157,6 +159,14 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if let Some(consumed_next) = self.parse_link_option(token_str)? {
+                self.advance();
+                if consumed_next {
+                    self.advance();
+                }
+                continue;
+            }
+
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
                 self.advance();
@@ -218,6 +228,7 @@ impl<'a> Parser<'a> {
             runtime: self.runtime,
             warning_flags: self.warning_flags,
             color: self.color,
+            link: self.link,
         })
     }
 
@@ -228,6 +239,7 @@ impl<'a> Parser<'a> {
             runtime: RuntimeVariant::default(),
             warning_flags: Vec::new(),
             color: self.color,
+            link: LinkRequirement::default(),
         }
     }
 
@@ -238,6 +250,7 @@ impl<'a> Parser<'a> {
             runtime: RuntimeVariant::default(),
             warning_flags: Vec::new(),
             color: self.color,
+            link: LinkRequirement::default(),
         }
     }
 
@@ -327,7 +340,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_warning_flag(&self, token: &str) -> Result<Option<(String, bool)>, String> {
-        // -Wall, -Wno-inline, -Werror, etc
+        // -wall, -wno-inline, -werror, etc
         if let Some(rest) = token.strip_prefix("-W") {
             if rest.is_empty() {
                 return Err("-W requires a category (e.g. -Wall, -Werror)".into());
@@ -335,7 +348,6 @@ impl<'a> Parser<'a> {
             return Ok(Some((rest.to_string(), false)));
         }
 
-        // --warn=error, --warn=all
         if let Some(rest) = token.strip_prefix("--warn=") {
             if rest.is_empty() {
                 return Err("--warn requires a value".into());
@@ -366,6 +378,39 @@ impl<'a> Parser<'a> {
                 .ok_or_else(|| format!("missing value for {}", token))?;
             self.output = Some(next.to_string());
             return Ok(Some(true));
+        }
+        Ok(None)
+    }
+
+    fn parse_link_option(&mut self, token: &str) -> Result<Option<bool>, String> {
+        for (long, short) in [("--library-path", "-L"), ("--library", "-l")] {
+            let is_path = long == "--library-path";
+            let (value, consumed_next) = if token == long || token == short {
+                let next = self
+                    .peek_next()
+                    .ok_or_else(|| format!("{} requires a value", token))?;
+                if next.starts_with('-') {
+                    return Err(format!(
+                        "{token} requires a value and `{next}` looks like an option; write `{short}{next}` or `{long}={next}` to pass it as a value"
+                    ));
+                }
+                (next.to_string(), true)
+            } else if let Some(rest) = token.strip_prefix(&format!("{}=", long)) {
+                (rest.to_string(), false)
+            } else if token.len() > short.len() && token.starts_with(short) {
+                (token[short.len()..].to_string(), false)
+            } else {
+                continue;
+            };
+            if value.is_empty() || value == "=" {
+                return Err(format!("{} requires a non-empty value", short));
+            }
+            if is_path {
+                self.link.search_paths.push(PathBuf::from(value));
+            } else {
+                self.link.libraries.push(value);
+            }
+            return Ok(Some(consumed_next));
         }
         Ok(None)
     }

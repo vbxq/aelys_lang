@@ -1,7 +1,8 @@
-// LLVM native compiler
 
 use aelys_common::{ColorConfig, WarningConfig, format_warnings, render_summary};
-use aelys_driver::{RuntimeVariant, compile_file_with_llvm_with_warnings, lower_file_to_air};
+use aelys_driver::{
+    LinkRequirement, RuntimeVariant, compile_file_with_llvm_linked, lower_file_to_air,
+};
 use aelys_opt::OptimizationLevel;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +15,7 @@ pub fn run_with_options(
     emit_air: bool,
     emit_llvm_ir: bool,
     color: &ColorConfig,
+    link: &LinkRequirement,
 ) -> Result<i32, String> {
     if emit_air {
         return emit_air_program(path, opt_level);
@@ -23,7 +25,7 @@ pub fn run_with_options(
         return Err("--output is not supported yet".to_string());
     }
 
-    match compile_file_with_llvm_with_warnings(Path::new(path), opt_level, emit_llvm_ir, runtime) {
+    match compile_file_with_llvm_linked(Path::new(path), opt_level, emit_llvm_ir, runtime, link) {
         Ok(warnings) => {
             let filtered: Vec<_> = warnings
                 .into_iter()
@@ -49,7 +51,6 @@ pub fn run_with_options(
             Ok(0)
         }
         Err(err) => {
-            // render each diagnostic individually (for multi-error display)
             let diagnostics = err.to_diagnostics();
             for diag in &diagnostics {
                 eprint!("{}", diag.render(color));

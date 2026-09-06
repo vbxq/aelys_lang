@@ -59,6 +59,7 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
     let warn_config = parse_warning_config(&parsed.warning_flags)?;
     let color = color_config_from_choice(&parsed.color);
     let runtime = parsed.runtime;
+    let link = parsed.link;
 
     match parsed.command {
         args::Command::Help => Ok(0),
@@ -83,6 +84,7 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
             emit_air,
             emit_llvm_ir,
             &color,
+            &link,
         ),
     }
 }
