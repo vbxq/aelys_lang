@@ -1,4 +1,3 @@
-
 mod expr;
 mod stmt;
 
@@ -7,6 +6,6 @@ pub use expr::{
     StructFieldInit, TypeAnnotation, UnaryOp,
 };
 pub use stmt::{
-    Decorator, EnumVariantDecl, Function, ImportKind, NeedsStmt, NeedsTarget, Stmt, StmtKind,
-    StructFieldDecl,
+    Decorator, EnumVariantDecl, ForeignConv, ForeignDecl, Function, ImportKind, NeedsStmt,
+    NeedsTarget, Stmt, StmtKind, StructFieldDecl,
 };

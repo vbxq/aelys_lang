@@ -109,6 +109,19 @@ pub enum ImportKind {
     Wildcard,                         // needs foo.bar.*
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignConv {
+    C,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForeignDecl {
+    pub symbol: String,
+    pub calling_conv: ForeignConv,
+    pub is_unsafe: bool,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
@@ -120,6 +133,7 @@ pub struct Function {
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
     pub is_nogc: bool,
+    pub foreign: Option<ForeignDecl>,
     pub span: Span,
 }
 

@@ -12,7 +12,6 @@ impl Token {
     }
 }
 
-/// Part of a format string: either literal text, a placeholder {}, or an expression {expr}
 #[derive(Debug, Clone, PartialEq)]
 pub enum FmtPart {
     Literal(String),
@@ -22,7 +21,6 @@ pub enum FmtPart {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    // literals
     Int(i64),
     Float(f64),
     String(String),
@@ -33,7 +31,6 @@ pub enum TokenKind {
 
     Identifier(String),
 
-    // keywords
     Let,
     Mut,
     Fn,
@@ -60,8 +57,8 @@ pub enum TokenKind {
     Catch,
     Unsafe,
     Nogc,
+    Extern,
 
-    // operators
     Plus,
     Minus,
     Star,
@@ -87,7 +84,6 @@ pub enum TokenKind {
     MinusMinus, // --
     Question,   // ?
 
-    // bitwise
     Shl,
     Shr,       // << >>
     Ampersand, // &
@@ -95,7 +91,6 @@ pub enum TokenKind {
     Caret, // | ^
     Tilde, // ~
 
-    // delimiters
     LParen,
     RParen,
     LBrace,
@@ -108,7 +103,6 @@ pub enum TokenKind {
     DotDot,   // ..
     DotDotEq, // ..=
 
-    // special
     At,      // @ for decorators
     Newline, // for auto-semicolon insertion
     Eof,
@@ -128,7 +122,6 @@ impl TokenKind {
         )
     }
 
-    // semicolon insertion (Go-style, roughly)
     pub fn can_end_statement(&self) -> bool {
         matches!(
             self,
@@ -191,6 +184,7 @@ impl std::fmt::Display for TokenKind {
             Self::Catch => write!(f, "catch"),
             Self::Unsafe => write!(f, "unsafe"),
             Self::Nogc => write!(f, "nogc"),
+            Self::Extern => write!(f, "extern"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),
