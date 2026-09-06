@@ -4,6 +4,8 @@ mod link;
 mod lower;
 mod runtime;
 
+pub use core_lib::resolve_aelys_core_lib;
+pub use link::LinkRequirement;
 pub use runtime::RuntimeVariant;
 
 use aelys_common::Warning;
@@ -19,13 +21,15 @@ use std::sync::Arc;
 
 use diagnostics::{
     backend_diagnostic_error, bir_diagnostics_to_error, duplicate_symbol_errors_to_error,
-    fallback_source_span, mono_errors_to_error, multiple_diagnostics, program_anchor_span,
-    reserved_name_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
+    fallback_source_span, foreign_clash_errors_to_error, foreign_signature_errors_to_error,
+    mono_errors_to_error, multiple_diagnostics, program_anchor_span,
+    reserved_name_errors_to_error, runtime_symbol_errors_to_error, sema_errors_to_diagnostics,
+    vec_surface_errors_to_error,
 };
-use lower::compile_air_with_llvm;
+use lower::{compile_air_with_llvm, compile_air_with_llvm_linked};
 
 // todo: find a better way, clean this up once we have a proper bootstrap
-const BOOTSTRAP_BUILTINS: &[&str] = &["print", "println", "__aelys_collect"];
+use aelys_air::symbols::BOOTSTRAP_BUILTIN_SYMBOLS as BOOTSTRAP_BUILTINS;
 
 struct LoweringArtifacts {
     air: aelys_air::AirProgram,
@@ -68,7 +72,6 @@ pub fn lower_file_to_air(
     Ok(artifacts.air)
 }
 
-/// a post-merge diagnostic names a qualified symbol, and the module path it carries is the one
 struct ModuleSources {
     by_path: Vec<(String, Arc<Source>)>,
     root: Arc<Source>,
@@ -119,9 +122,9 @@ struct CompiledModule {
     air: aelys_air::AirProgram,
     typed: aelys_sema::TypedProgram,
     exports: Arc<aelys_sema::ModuleExports>,
-    // its own bodies only, under the qualified names an importer writes
     effects: std::collections::HashMap<String, aelys_air::bir::EffectSet>,
     chains: std::collections::HashMap<String, Vec<aelys_air::bir::Step>>,
+    externs: std::collections::HashMap<String, aelys_air::bir::ForeignSig>,
     warnings: Vec<Warning>,
 }
 
@@ -259,9 +262,11 @@ fn compile_module(
         ..
     } = inference;
     let reserved = aelys_air::symbols::reserved_user_names(&program);
+    let foreign_types = aelys_air::symbols::foreign_signature_violations(&program);
     let mut collected_errors = Vec::new();
     let mut effects = std::collections::HashMap::new();
     let mut chains = std::collections::HashMap::new();
+    let mut externs = std::collections::HashMap::new();
     let checked = match aelys_air::bir::check_with_imports(program, bir_imports) {
         Ok((checked, published)) => {
             let qualify = |name: &str| aelys_sema::modules::qualify_value(&unit.dotted, name);
@@ -275,6 +280,13 @@ fn compile_module(
                 .into_iter()
                 .map(|(name, steps)| (qualify(&name), qualify_chain(&unit.dotted, steps)))
                 .collect();
+            if !published.foreign_clashes.is_empty() {
+                collected_errors.push(foreign_clash_errors_to_error(
+                    published.foreign_clashes,
+                    src.clone(),
+                ));
+            }
+            externs = published.externs;
             Some(checked)
         }
         Err(errors) => {
@@ -287,6 +299,9 @@ fn compile_module(
     }
     if !reserved.is_empty() {
         collected_errors.push(reserved_name_errors_to_error(reserved, src.clone()));
+    }
+    if !foreign_types.is_empty() {
+        collected_errors.push(foreign_signature_errors_to_error(foreign_types, src.clone()));
     }
     if !collected_errors.is_empty() {
         return Err(multiple_diagnostics(collected_errors));
@@ -346,6 +361,15 @@ fn compile_module(
 
     aelys_air::modules::qualify(&mut air, &unit.dotted);
 
+    let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
+    if !runtime_claims.is_empty() {
+        return Err(runtime_symbol_errors_to_error(
+            runtime_claims,
+            &air,
+            src.clone(),
+        ));
+    }
+
     let warnings = warnings
         .into_iter()
         .map(|warning| {
@@ -363,6 +387,7 @@ fn compile_module(
         exports,
         effects,
         chains,
+        externs,
         warnings,
     })
 }
@@ -407,6 +432,9 @@ fn lower_file_to_air_with_source(
         }
         for (name, steps) in &compiled.chains {
             bir_imports.chains.insert(name.clone(), steps.clone());
+        }
+        for (name, sig) in &compiled.externs {
+            bir_imports.externs.insert(name.clone(), sig.clone());
         }
         exports.push(compiled.exports);
         programs.push(compiled.air);
@@ -549,20 +577,52 @@ pub fn compile_file_with_llvm_with_warnings(
     emit_llvm_ir: bool,
     runtime: RuntimeVariant,
 ) -> Result<Vec<Warning>, AelysError> {
+    compile_file_with_llvm_linked(
+        path,
+        opt_level,
+        emit_llvm_ir,
+        runtime,
+        &LinkRequirement::default(),
+    )
+}
+
+pub fn compile_file_with_llvm_linked(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    emit_llvm_ir: bool,
+    runtime: RuntimeVariant,
+    link: &LinkRequirement,
+) -> Result<Vec<Warning>, AelysError> {
     let artifacts = lower_file_to_air_with_source(path, opt_level)?;
-    compile_air_with_llvm(
+    compile_air_with_llvm_linked(
         path,
         &artifacts.air,
         opt_level,
         emit_llvm_ir,
         runtime,
         artifacts.source,
+        link,
     )?;
     Ok(artifacts.warnings)
 }
 
-fn run_process(program: &str, args: &[String]) -> Result<(), String> {
-    run_process_in_dir(program, args, None)
+fn run_process_c_locale(program: &str, args: &[String]) -> Result<(), String> {
+    let mut command = Command::new(program);
+    command.args(args);
+    command.env("LC_ALL", "C");
+    finish_process(program, command)
+}
+
+fn capture_process(program: &str, args: &[String]) -> Option<String> {
+    let output = Command::new(program)
+        .args(args)
+        .env("LC_ALL", "C")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Result<(), String> {
@@ -571,7 +631,10 @@ fn run_process_in_dir(program: &str, args: &[String], dir: Option<&Path>) -> Res
     if let Some(path) = dir {
         command.current_dir(path);
     }
+    finish_process(program, command)
+}
 
+fn finish_process(program: &str, mut command: Command) -> Result<(), String> {
     let output = command
         .output()
         .map_err(|err| format!("failed to run `{}`: {}", program, err))?;

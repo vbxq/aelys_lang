@@ -126,18 +126,17 @@ pub(super) fn duplicate_symbol_errors_to_error(
         .iter()
         .map(|dup| {
             let declared = sites.get(&dup.symbol).map(Vec::as_slice).unwrap_or(&[]);
+            let site = |i: usize| {
+                declared.get(i).map(|site| site.span).or_else(|| {
+                    dup.spans
+                        .get(i)
+                        .copied()
+                        .flatten()
+                        .map(|s| air_span_to_syntax_span(s, source.as_ref()))
+                })
+            };
             let label = |i: usize| {
-                let span = declared
-                    .get(i)
-                    .map(|site| site.span)
-                    .or_else(|| {
-                        dup.spans
-                            .get(i)
-                            .copied()
-                            .flatten()
-                            .map(|s| air_span_to_syntax_span(s, source.as_ref()))
-                    })
-                    .unwrap_or(anchor);
+                let span = site(i).unwrap_or(anchor);
                 let hint = match declared.get(i).and_then(|site| site.parent.as_deref()) {
                     Some(parent) => format!("defined here, inside `{}`", parent),
                     None => "defined here".to_string(),
@@ -146,6 +145,25 @@ pub(super) fn duplicate_symbol_errors_to_error(
             };
             let (first_span, first_hint) = label(0);
             let (second_span, second_hint) = label(1);
+            if dup.has_extern {
+                let mut diag = CompileError::new(
+                    CompileErrorKind::ConflictingExternalSymbol {
+                        symbol: dup.symbol.clone(),
+                    },
+                    first_span,
+                    source.clone(),
+                )
+                .to_diagnostic();
+                let second = site(1).map(|span| first_line_only(source.as_ref(), span));
+                if let Some(second) = second.filter(|span| *span != first_span) {
+                    diag.add_secondary_label(
+                        source.clone(),
+                        second,
+                        Some("and claimed again here".to_string()),
+                    );
+                }
+                return diag;
+            }
             let message = format!(
                 "[symbol] two functions compile to the same symbol `{}`, so a call to one would \
                  reach the other",
@@ -192,6 +210,76 @@ pub(super) fn reserved_name_errors_to_error(
                 );
             diag.add_help("rename the function".to_string());
             diag
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
+pub(super) fn foreign_clash_errors_to_error(
+    clashes: Vec<aelys_air::bir::ForeignClash>,
+    source: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = clashes
+        .iter()
+        .map(|clash| {
+            CompileError::new(
+                CompileErrorKind::ConflictingForeignDeclarations {
+                    symbol: clash.name.clone(),
+                    reason: clash.reason.clone(),
+                },
+                first_line_only(source.as_ref(), clash.span),
+                source.clone(),
+            )
+            .to_diagnostic()
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
+pub(super) fn foreign_signature_errors_to_error(
+    violations: Vec<aelys_air::symbols::ForeignSignatureViolation>,
+    source: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = violations
+        .iter()
+        .map(|violation| {
+            CompileError::new(
+                CompileErrorKind::ForeignSignatureType {
+                    function: violation.function.clone(),
+                    what: violation.what.clone(),
+                    spelling: violation.spelling.clone(),
+                    reason: violation.reason.to_string(),
+                },
+                first_line_only(source.as_ref(), violation.span),
+                source.clone(),
+            )
+            .to_diagnostic()
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
+pub(super) fn runtime_symbol_errors_to_error(
+    claims: Vec<aelys_air::symbols::ReservedRuntimeSymbol>,
+    air: &aelys_air::AirProgram,
+    source: Arc<Source>,
+) -> AelysError {
+    let anchor = program_anchor_span(air, source.as_ref());
+    let diagnostics: Vec<Diagnostic> = claims
+        .iter()
+        .map(|claim| {
+            let span = claim
+                .span
+                .map(|s| air_span_to_syntax_span(s, source.as_ref()))
+                .unwrap_or(anchor);
+            CompileError::new(
+                CompileErrorKind::ReservedRuntimeSymbol {
+                    symbol: claim.symbol.clone(),
+                },
+                first_line_only(source.as_ref(), span),
+                source.clone(),
+            )
+            .to_diagnostic()
         })
         .collect();
     AelysError::Multiple(diagnostics)
@@ -492,6 +580,16 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "`nogc` generic used as a value".to_string(),
         ),
+        TypeErrorKind::ForeignAsValue { .. } => (
+            "E0616",
+            error.to_string(),
+            "external declaration used as a value".to_string(),
+        ),
+        TypeErrorKind::ForeignCallOutsideUnsafe { .. } => (
+            "E0617",
+            error.to_string(),
+            "external call outside an `unsafe` block".to_string(),
+        ),
         TypeErrorKind::ModuleItemNotPublic { .. } => {
             ("E0605", error.to_string(), "item is not public".to_string())
         }
@@ -777,6 +875,7 @@ mod tests {
             DuplicateSymbol {
                 symbol: "__mono_ghost_i64".to_string(),
                 spans: vec![None, None],
+                has_extern: false,
             },
             "fn main() -> i64 { return 0 }\n",
         );
@@ -796,11 +895,37 @@ mod tests {
     }
 
     #[test]
+    fn conflicting_external_symbol_leaves_an_unplaced_second_site_undrawn() {
+        let rendered = render(
+            DuplicateSymbol {
+                symbol: "solo".to_string(),
+                spans: vec![None, None],
+                has_extern: true,
+            },
+            "fn solo() -> i64 { return 1 }\nfn main() -> i64 { return solo() }\n",
+        );
+        assert!(
+            rendered.contains("E0612") && rendered.contains("solo"),
+            "the extern route must still render, got:\n{rendered}"
+        );
+        assert_eq!(
+            label_lines(&rendered),
+            vec![(1, '^')],
+            "the declaration draws the primary and nothing draws on `fn main`, got:\n{rendered}"
+        );
+        assert!(
+            !rendered.contains("and claimed again here"),
+            "an unplaced second site must not be announced, got:\n{rendered}"
+        );
+    }
+
+    #[test]
     fn duplicate_symbol_renders_with_one_matching_typed_declaration() {
         let rendered = render(
             DuplicateSymbol {
                 symbol: "solo".to_string(),
                 spans: vec![None, None],
+                has_extern: false,
             },
             "fn solo() -> i64 { return 1 }\nfn main() -> i64 { return solo() }\n",
         );
@@ -834,6 +959,7 @@ mod tests {
             vec![DuplicateSymbol {
                 symbol: "__mono_ghost_i64".to_string(),
                 spans,
+                has_extern: false,
             }],
             &typed,
             &air,

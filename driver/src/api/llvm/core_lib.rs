@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use super::runtime::RuntimeVariant;
 
-pub(super) fn resolve_aelys_core_lib(variant: RuntimeVariant) -> Result<PathBuf, String> {
+pub fn resolve_aelys_core_lib(variant: RuntimeVariant) -> Result<PathBuf, String> {
     if let Ok(raw) = std::env::var("AELYS_CORE_LIB") {
         let path = PathBuf::from(&raw);
         if path.is_file() {
