@@ -32,7 +32,13 @@ impl CompileErrorKind {
             Self::ForeignHeaderImport { .. } => "C header import is not implemented yet",
             Self::NeedsOutsidePrologue => "`needs` out of the module prologue",
             Self::WildcardImport { .. } => "wildcard import is not implemented yet",
+            Self::ConflictingExternalSymbol { .. } => "this symbol is claimed here",
+            Self::ConflictingForeignDeclarations { .. } => "this declaration disagrees",
+            Self::ReservedRuntimeSymbol { .. } => "this name belongs to the runtime",
+            Self::MalformedForeignDecl { .. } => "not a well formed external declaration",
+            Self::ForeignSignatureType { .. } => "outside the external type surface",
             Self::TypeInferenceError(_) => "type inference failed",
+            Self::LinkedLibraryClaimsRuntimeSymbol { .. } => "this program is linked against it",
             Self::BackendDiagnostic { .. } => "backend error",
             _ => "",
         }

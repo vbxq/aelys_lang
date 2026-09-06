@@ -91,8 +91,32 @@ pub enum CompileErrorKind {
         symbol: String,
         modules: Vec<String>,
     },
+    ConflictingExternalSymbol {
+        symbol: String,
+    },
+    ConflictingForeignDeclarations {
+        symbol: String,
+        reason: String,
+    },
+    ReservedRuntimeSymbol {
+        symbol: String,
+    },
+    MalformedForeignDecl {
+        reason: String,
+    },
+    ForeignSignatureType {
+        function: String,
+        what: String,
+        spelling: String,
+        reason: String,
+    },
 
     TypeInferenceError(String),
+
+    LinkedLibraryClaimsRuntimeSymbol {
+        symbol: String,
+        libraries: Vec<String>,
+    },
 
     BackendDiagnostic {
         backend: String,

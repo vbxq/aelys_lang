@@ -66,12 +66,72 @@ impl CompileError {
                     module
                 ));
             }
+            CompileErrorKind::ConflictingExternalSymbol { .. } => {
+                diag.add_note("one symbol has one body: the linker keeps a single one".to_string());
+                diag.add_help(
+                    "rename the Aelys function, or drop the external declaration".to_string(),
+                );
+            }
+            CompileErrorKind::ConflictingForeignDeclarations { .. } => {
+                diag.add_note(
+                    "one symbol has one signature: the declarations that name it have to say the \
+                     same thing about it"
+                        .to_string(),
+                );
+                diag.add_help(
+                    "make the declarations agree, or keep a single one and import it".to_string(),
+                );
+            }
+            CompileErrorKind::ReservedRuntimeSymbol { .. } => {
+                diag.add_note(
+                    "the runtime archive either defines this symbol or imports it from libc"
+                        .to_string(),
+                );
+                diag.add_help("rename the function".to_string());
+            }
+            CompileErrorKind::MalformedForeignDecl { .. } => {
+                diag.add_help(
+                    "the only accepted form is `unsafe extern [nogc] fn NAME(PARAMS) [-> T]`, \
+                     with no `pub`, no decorator, no type parameter and no body, at the top level"
+                        .to_string(),
+                );
+            }
+            CompileErrorKind::ForeignSignatureType { .. } => {
+                diag.add_note(
+                    "a foreign signature is an abi promise, so every type in it has to have a c \
+                     meaning the compiler can hold"
+                        .to_string(),
+                );
+                diag.add_help(
+                    "the surface is the integers, `f32`, `f64`, `bool` and `&T`; `void` is \
+                     accepted as a return type and nowhere else"
+                        .to_string(),
+                );
+            }
+            CompileErrorKind::LinkedLibraryClaimsRuntimeSymbol { .. } => {
+                diag.add_note(
+                    "the runtime's own calls would be resolved against the library's definition, \
+                     which is a crash or a wrong answer rather than a link error"
+                        .to_string(),
+                );
+                diag.add_help(
+                    "drop the `-l` that carries this symbol, or link a build of it that does not \
+                     define it"
+                        .to_string(),
+                );
+            }
             CompileErrorKind::SymbolConflict { .. } => {
                 diag.add_help("use 'as' to bind one of them to another name".to_string());
             }
             CompileErrorKind::ForeignHeaderImport { .. } => {
                 diag.add_note(
                     "C headers are reached by the same `needs` keyword, but nothing reads them yet"
+                        .to_string(),
+                );
+                diag.add_help(
+                    "declare the functions you need by hand with `unsafe extern fn NAME(...) -> T`; \
+                     the parameter and return types must be integers, floats, `bool` or references, \
+                     see E0615"
                         .to_string(),
                 );
             }

@@ -103,6 +103,34 @@ impl CompileErrorKind {
             Self::SymbolNotFound { symbol, module } => {
                 format!("symbol '{}' not found in module '{}'", symbol, module)
             }
+            Self::ConflictingExternalSymbol { symbol } => format!(
+                "the external symbol '{}' is also defined in this program, so a call meant for \
+                 the foreign function would reach the Aelys body",
+                symbol
+            ),
+            Self::ConflictingForeignDeclarations { symbol, reason } => format!(
+                "the external symbol '{}' is declared more than once and the declarations do not \
+                 agree: {}",
+                symbol, reason
+            ),
+            Self::ReservedRuntimeSymbol { symbol } => format!(
+                "'{}' is a symbol the Aelys runtime links, so the linker would resolve the \
+                 runtime's own calls to this function",
+                symbol
+            ),
+            Self::MalformedForeignDecl { reason } => {
+                format!("malformed external declaration: {}", reason)
+            }
+            Self::ForeignSignatureType {
+                function,
+                what,
+                spelling,
+                reason,
+            } => format!(
+                "the external declaration '{}' names the type '{}' for {}, which is outside the \
+                 external type surface: {}",
+                function, spelling, what, reason
+            ),
             Self::SymbolConflict { symbol, modules } => {
                 format!(
                     "the import name '{}' is introduced more than once, by: {}",
@@ -118,6 +146,13 @@ impl CompileErrorKind {
                     .trim();
                 format!("type error: {}", headline)
             }
+            Self::LinkedLibraryClaimsRuntimeSymbol { symbol, libraries } => format!(
+                "the linked executable defines '{}', a symbol the Aelys runtime links, and the \
+                 aelys-core archive does not define it; it comes from one of the requested \
+                 libraries: {}",
+                symbol,
+                libraries.join(", ")
+            ),
             Self::BackendDiagnostic {
                 backend, message, ..
             } => format!("[{}] {}", backend, message),

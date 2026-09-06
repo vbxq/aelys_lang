@@ -47,6 +47,12 @@ impl CompileErrorKind {
             Self::ForeignHeaderImport { .. } => 607,
             Self::NeedsOutsidePrologue => 608,
             Self::WildcardImport { .. } => 609,
+            Self::ConflictingExternalSymbol { .. } => 612,
+            Self::ConflictingForeignDeclarations { .. } => 612,
+            Self::ReservedRuntimeSymbol { .. } => 613,
+            Self::MalformedForeignDecl { .. } => 614,
+            Self::ForeignSignatureType { .. } => 615,
+            Self::LinkedLibraryClaimsRuntimeSymbol { .. } => 618,
 
             Self::TypeInferenceError(_) => 301,
 

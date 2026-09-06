@@ -584,7 +584,7 @@ name at all can still land on one symbol:
     struct A_B { v: i64 }
     fn f<T>(x: T) -> i64 { return 1 }     // at T = A_B
     fn f_A<T>(x: T) -> i64 { return 2 }   // at T = B
-// e0427, both are `__mono_f_a_b`
+// , both are `__mono_f_a_b`
 
 `main` counts here too, because it is emitted as `__aelys_main`.
 
@@ -894,7 +894,12 @@ name. Note that a private item is reported as E0605, not as this code.",
         explanation: "\
 `needs \"some/header.h\"` is the foreign form of the import keyword: the
 target is a string literal rather than a module path. The form is
-reserved and parsed, but nothing reads C headers yet.",
+reserved and parsed, but nothing reads C headers yet.
+
+The route that does work is to declare by hand what you need:
+`unsafe extern fn NAME(...) -> T`. It carries no header, so the types are
+yours to get right, and the surface it accepts is narrow: integers,
+floats, `bool` and references, and nothing else, as E0615 spells out.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -931,6 +936,160 @@ written, or supplied in a struct literal.",
 A `pub` item names a type its own module keeps private, so an importer
 would receive a value of a type it can never name. Make the type `pub`,
 or stop exporting the item that mentions it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0612",
+        title: "conflicting declarations of the same external symbol",
+        explanation: "\
+One symbol has one signature, and this code fires when the program says
+two things about it.
+
+Either an external declaration names a symbol that this program also
+defines, and only one of the two survives the link, so a call written
+against the foreign function can silently reach the Aelys body; or two
+external declarations name the same symbol and disagree about its types,
+its calling convention or its `nogc` claim, which the lowered ir cannot
+tell apart because it carries neither the claim nor the difference
+between a borrow and a reference counted pointer.
+
+Make the declarations agree, or rename the Aelys function.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0613",
+        title: "a definition claims a symbol the runtime links",
+        explanation: "\
+The Aelys runtime is a C archive. It defines some symbols of its own and
+imports others from libc, and the linker matches both against whatever
+else the program defines under the same name.
+
+A body named `malloc`, `free` or `main` therefore captures the runtime's
+own calls, which is a crash or a wrong answer rather than a link error.
+Rename the function.
+
+An `unsafe extern` declaration is held to the narrower half: it claims no
+symbol, so it may name `malloc` or any other name the runtime merely
+imports, and only the five the runtime defines itself stay closed to it,
+because calling one of those would reach the runtime's own code.
+
+Within one compilation unit the duplicate check runs first, so a
+declaration that names a symbol the program also defines under that name
+is reported as E0301 and never reaches this check. `unsafe extern fn
+main` in a program that also writes `fn main` is the reachable case: both
+lower to `__aelys_main`, and the verdict is E0301.
+
+A library named by `-l` is not source, so E0613 never sees it. The link
+line puts the user libraries after `-laelys-core-*`, which keeps an
+archive from capturing the five the runtime defines, and by the same
+mechanism exposes the sixteen it imports: `malloc` is still undefined
+when the user archive is searched, so its member is pulled in. E0618 is
+the check that answers there, after the link, and it sees only what
+entered the executable statically.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0614",
+        title: "malformed external declaration",
+        explanation: "\
+An external declaration names a function that lives outside this program,
+so it has a signature and no body, and calling it is unchecked.
+
+The only accepted form is `unsafe extern [nogc] fn NAME(PARAMS) [-> T]`,
+written at the top level, without `pub`, without a decorator and without
+a type parameter.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0615",
+        title: "type outside the external type surface",
+        explanation: "\
+An external declaration is an abi promise, so every parameter type and
+the return type must have a meaning in C that the compiler can hold to.
+
+The surface is the eight integer widths, `f32`, `f64`, `bool` and `&T`;
+`void` is accepted as a return type and nowhere else. Everything else,
+a string, an `Rc<T>`, a struct, an enum, an array, a `vec`, a slice or a
+function type, is an Aelys value whose layout is not promised to C.
+
+The verdict is on the type itself, not on how it is spelled: `sTRING`
+names the same type as `string`.
+
+`&T` is admitted as a parameter and refused as a return type. A returned
+`&T` would be a reference the compiler did not prove, safe to dereference
+outside any `unsafe` block, and its value has been measured to change with
+the optimization level. An opaque foreign handle is a `u64`: it carries a
+pointer on x86-64 and aarch64, it cannot be dereferenced from Aelys, and
+it costs no grammar. It is not exact on an ILP32 target.
+
+A C `char *` argument is `&buf[0]` on a `[u8; N]` whose last byte is zero,
+and the pointer+length pair of a C prototype is two parameters, `&T` and
+an integer, never a slice. That form is only sound while the callee does
+not keep the pointer: a `[u8; N]` local is stack memory, and a C library
+that stores the address and reads it after the call reads a dead frame,
+which has been measured to answer differently at `-O0` and at `-O1`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0616",
+        title: "an external declaration is not a value",
+        explanation: "\
+An external declaration names a symbol that lives outside this program.
+Naming it anywhere but in the callee position of a call would build an
+Aelys closure over it, which passes an environment pointer the foreign
+function never expects and calls it under the wrong convention.
+
+Call it directly. Aelys has no spelling for a C function pointer, so
+there is no type an external declaration could be held under.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0617",
+        title: "an external call requires an `unsafe` block",
+        explanation: "\
+An external declaration is a promise about code the compiler cannot see.
+Its `unsafe` is the binding author's claim that the signature matches the
+symbol; it says nothing about any particular call site.
+
+Every call of an external function must therefore be written inside an
+`unsafe { }` block, which is the caller's own claim that the arguments,
+the lifetimes and the aliasing the foreign code expects are honoured here.
+
+The block is a gate on the call site, not a proof about its contents, and
+it removes no effect: once the block is written, a `nogc` body calling a
+managed external is still rejected by E0727. That second rejection is
+decided after this one is cleared, so the two are never reported together.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0618",
+        title: "a linked library claims a symbol the runtime links",
+        explanation: "\
+The Aelys runtime is a C archive. It defines five symbols of its own and
+imports sixteen from libc, and the linker matches both against whatever
+else lands on the link line.
+
+The user libraries are placed after `-laelys-core-*`, so an archive
+cannot capture the five the runtime defines. That same order exposes the
+sixteen it imports: when the user archive is searched, `malloc` is still
+undefined, so a member defining it is pulled in and the runtime's own
+allocation calls go there.
+
+After a successful link the compiler reads the defined symbols of the
+executable and of the aelys-core archive. A reserved symbol defined in
+the executable that the core does not define came from a requested
+library, and the program is rejected here rather than left to crash.
+
+The check covers what entered the executable statically, and nothing
+else. `-lfoo` takes `libfoo.so` over `libfoo.a` when both sit in the
+same directory, which is what a distribution package ships: the symbol
+is then bound by the dynamic linker at load time, it is not defined in
+the executable, and this check says nothing. The same library refused as
+an archive is accepted as a shared object. Interposition by `LD_PRELOAD`
+is outside the check for the same reason.
+
+The check runs only when `-l` is given, and it needs `nm`. Without `nm`
+it cannot conclude and it does not reject.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
