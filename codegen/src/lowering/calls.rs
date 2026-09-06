@@ -4,10 +4,25 @@ use crate::lowering::functions::{function_has_implicit_env, llvm_calling_convent
 use crate::lowering::globals::{GLOBAL_GET_PREFIX, GLOBAL_SET_PREFIX};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
+use aelys_air::symbols::BOOTSTRAP_BUILTIN_SYMBOLS;
 use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_data};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
+const RUNTIME_SYMBOL_PREFIX: &str = "__aelys_";
+
+pub(crate) const AD_HOC_RUNTIME_SYMBOLS: &[&str] = &[
+    "__aelys_vec_retain",
+    "__aelys_vec_release",
+    "__aelys_len",
+    // the range constructor, whose arity follows the written bounds
+    "__aelys_range",
+];
+
+// a bootstrap builtin is written by the user and reaches the same guess, but sema pins its type
+pub(crate) fn ad_hoc_symbol_is_admitted(name: &str) -> bool {
+    AD_HOC_RUNTIME_SYMBOLS.contains(&name) || BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name)
+}
 
 impl<'a> FunctionCodegen<'a> {
     /// air lowering always hands the detach the address of the vec, so the argument's own
@@ -254,6 +269,14 @@ impl<'a> FunctionCodegen<'a> {
             Callee::Named(name) => {
                 if let Some(function) = self.module.get_function(name) {
                     return Ok(function);
+                }
+                if name.starts_with(RUNTIME_SYMBOL_PREFIX) && !ad_hoc_symbol_is_admitted(name) {
+                    return Err(CodegenError::UnsupportedInstruction(format!(
+                        "runtime symbol '{}' is neither declared in this module nor admitted by \
+                         AD_HOC_RUNTIME_SYMBOLS or BOOTSTRAP_BUILTIN_SYMBOLS, so its type would \
+                         be guessed from the call site",
+                        name
+                    )));
                 }
                 let fn_ty = self.ad_hoc_function_type(arg_types, expected_ret)?;
                 Ok(self.module.add_function(name, fn_ty, None))
@@ -741,4 +764,3 @@ impl<'a> FunctionCodegen<'a> {
         Ok(None)
     }
 }
-

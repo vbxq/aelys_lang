@@ -14,38 +14,16 @@ use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::FunctionValue;
 use std::collections::HashMap;
 
-// Calling convention for Aelys function values
-//
-// All Aelys-convention function values (closures, lambdas, named functions used as values) share a uniform fat pointer representation:
-//
-// { fn_ptr, env_ptr }.
-//
-// Non-capturing forms have env_ptr = null. C-convention FnPtrs stay as bare
-// pointers; the C ABI has no notion of an env, and extern functions don't
-// need one
-//
-// To make indirect calls uniform, every non-extern Aelys function receives an
-// implicit `env: ptr` as its first LLVM parameter.
-//
-// Named functions ignore it (callers pass null); closure bodies use it to access captured values.
-// The cost is zero under fastcc: it's just an unused register not a stack push
-//
-// Exception: closure functions already have `__env` as an explicit AIR-level parameter (added during lower_closure).
-// These do not get the implicit env on top; function_has_implicit_env excludes them.
-//
-// At LLVM level, both forms end up with env at param 0, which is what indirect callers expect.
-//
-// The entry wrapper (__aelys_user_main) bridges from C convention to the Aelys main function by passing null as the env argument.
+// pointers; the c abi has no notion of an env, and extern functions don't
 
 impl CodegenContext {
     pub(crate) fn declare_functions(&self, program: &AirProgram) -> Result<(), CodegenError> {
         self.ensure_no_reserved_bootstrap_builtins(program)?;
 
         for function in &program.functions {
-            // Any C-convention entry point crosses the platform ABI boundary, even when
-            // the function body lives in this module and is called via a fnptr later.
+            // any c-convention entry point crosses the platform abi boundary, even when
             if matches!(function.calling_conv, AirCallingConv::C) {
-                reject_struct_abi_on_c_function(function, program)?;
+                reject_struct_abi_on_c_function(function, program, self.target_is_windows())?;
             }
 
             let symbol_name = function_symbol_name(function);
@@ -59,17 +37,22 @@ impl CodegenContext {
             fn_value.set_call_conventions(llvm_calling_convention(function.calling_conv));
             self.apply_function_attributes(fn_value, &function.attributes)?;
 
-            if needs_sret(
+            let use_sret = needs_sret(
                 &function.ret_ty,
                 function.calling_conv,
                 self.target_is_windows(),
                 program,
-            ) {
+            );
+            if use_sret {
                 let ret_any_ty = air_type_to_llvm(&function.ret_ty, self.context)?;
                 let sret_attr = self
                     .context
                     .create_type_attribute(Attribute::get_named_enum_kind_id("sret"), ret_any_ty);
                 fn_value.add_attribute(AttributeLoc::Param(0), sret_attr);
+            }
+
+            if function.is_extern && matches!(function.calling_conv, AirCallingConv::C) {
+                self.apply_c_integer_extension(fn_value, function, use_sret)?;
             }
         }
 
@@ -170,7 +153,6 @@ impl CodegenContext {
         let builder = self.context.create_builder();
         let entry = self.context.append_basic_block(wrapper, "entry");
         builder.position_at_end(entry);
-        // __aelys_main has an implicit env parameter; pass null.
         let null_env = self.context.ptr_type(AddressSpace::default()).const_null();
         let call = builder
             .build_call(user_fn, &[null_env.into()], "user_main")
@@ -216,7 +198,6 @@ impl CodegenContext {
             params.push(self.context.ptr_type(AddressSpace::default()).into());
         }
         if has_implicit_env {
-            // Implicit env pointer (ptr) as first user-visible param
             params.push(self.context.ptr_type(AddressSpace::default()).into());
         }
         for param in &function.params {
@@ -230,6 +211,40 @@ impl CodegenContext {
         }
 
         Ok(air_basic_type_to_llvm(&function.ret_ty, self.context)?.fn_type(&params, false))
+    }
+
+    // the c abi extends anything narrower than a register, and a callee compiled by clang relies on it
+    fn apply_c_integer_extension(
+        &self,
+        fn_value: FunctionValue<'static>,
+        function: &AirFunction,
+        use_sret: bool,
+    ) -> Result<(), CodegenError> {
+        let offset = u32::from(use_sret);
+        for (index, param) in function.params.iter().enumerate() {
+            if let Some(name) = c_integer_extension(&param.ty) {
+                let attr = self.named_enum_attribute(name)?;
+                fn_value.add_attribute(AttributeLoc::Param(index as u32 + offset), attr);
+            }
+        }
+        if !use_sret
+            && let Some(name) = c_integer_extension(&function.ret_ty)
+        {
+            let attr = self.named_enum_attribute(name)?;
+            fn_value.add_attribute(AttributeLoc::Return, attr);
+        }
+        Ok(())
+    }
+
+    fn named_enum_attribute(&self, attribute_name: &str) -> Result<Attribute, CodegenError> {
+        let kind_id = Attribute::get_named_enum_kind_id(attribute_name);
+        if kind_id == 0 {
+            return Err(CodegenError::LlvmError(format!(
+                "unknown LLVM function attribute: {}",
+                attribute_name
+            )));
+        }
+        Ok(self.context.create_enum_attribute(kind_id, 0))
     }
 
     fn apply_function_attributes(
@@ -259,37 +274,25 @@ impl CodegenContext {
         function: FunctionValue<'static>,
         attribute_name: &str,
     ) -> Result<(), CodegenError> {
-        let kind_id = Attribute::get_named_enum_kind_id(attribute_name);
-        if kind_id == 0 {
-            return Err(CodegenError::LlvmError(format!(
-                "unknown LLVM function attribute: {}",
-                attribute_name
-            )));
-        }
-
-        let attr = self.context.create_enum_attribute(kind_id, 0);
+        let attr = self.named_enum_attribute(attribute_name)?;
         function.add_attribute(AttributeLoc::Function, attr);
         Ok(())
     }
 }
 
-/// Returns true if a function gets an implicit `env: ptr` prepended to its
-/// LLVM parameter list.
-///
-/// This is every non-extern Aelys-convention function that doesn't already have `__env` as its first AIR parameter (closures)
-///
-/// The distinction matters ::
-///
-/// named functions get env added here (codegen-only, invisible in AIR), while closures already have it in their AIR param list
-/// (added by lower_closure).
-///
-/// Both end up with env at LLVM param 0. Without this check, closures would get env twice and indirect calls would pass the wrong number of arguments.
 pub(crate) fn function_has_implicit_env(function: &AirFunction) -> bool {
     if function.is_extern || !matches!(function.calling_conv, AirCallingConv::Aelys) {
         return false;
     }
-    // Closures already declare __env as their first AIR param.
     !function.params.first().is_some_and(|p| p.name == "__env")
+}
+
+fn c_integer_extension(ty: &AirType) -> Option<&'static str> {
+    match ty {
+        AirType::I8 | AirType::I16 => Some("signext"),
+        AirType::U8 | AirType::U16 | AirType::Bool => Some("zeroext"),
+        _ => None,
+    }
 }
 
 pub(crate) fn llvm_calling_convention(conv: AirCallingConv) -> u32 {
@@ -304,9 +307,7 @@ pub(crate) fn function_symbol_name(function: &AirFunction) -> String {
     aelys_air::symbols::function_symbol_name(function)
 }
 
-/// Returns true if the type lowers to an aggregate that we must not pass
-/// by value across the C ABI on Windows/MSVC.
-/// Data enums count here because LLVM sees them as structs, not i32 tags.
+/// returns true if the type lowers to an aggregate that we must not pass
 pub(crate) fn is_abi_unsafe_type(ty: &AirType, program: &AirProgram) -> bool {
     matches!(
         ty,
@@ -322,9 +323,6 @@ pub(crate) fn is_abi_unsafe_type(ty: &AirType, program: &AirProgram) -> bool {
         .is_some_and(enum_has_data))
 }
 
-/// True when a function with this return type + calling convention needs sret
-/// on the current target. Only C-convention functions need sret because
-/// fastcc (Aelys-internal) is handled consistently by LLVM itself
 pub(crate) fn needs_sret(
     ret_ty: &AirType,
     conv: AirCallingConv,
@@ -337,6 +335,7 @@ pub(crate) fn needs_sret(
 fn reject_struct_abi_on_c_function(
     function: &AirFunction,
     program: &AirProgram,
+    is_windows: bool,
 ) -> Result<(), CodegenError> {
     for param in &function.params {
         if matches!(&param.ty, AirType::Enum(name) if program
@@ -359,7 +358,15 @@ fn reject_struct_abi_on_c_function(
             )));
         }
     }
-    // struct returns are handled via sret in function_type() + declare_functions()
+    if is_abi_unsafe_type(&function.ret_ty, program)
+        && !needs_sret(&function.ret_ty, function.calling_conv, is_windows, program)
+    {
+        return Err(CodegenError::UnsupportedType(format!(
+            "C-convention function '{}' returns {:?}, and this target has no sret path for it, \
+             so the aggregate would cross the C ABI in a shape the compiler does not promise",
+            function.name, function.ret_ty
+        )));
+    }
     Ok(())
 }
 
