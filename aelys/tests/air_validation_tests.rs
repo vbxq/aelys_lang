@@ -1979,3 +1979,121 @@ fn validate_rejects_len_into_a_pointer_place() {
         "expected a ptrness mismatch, got: {errors:?}"
     );
 }
+
+fn bool_local(id: u32) -> AirLocal {
+    AirLocal {
+        id: LocalId(id),
+        ty: AirType::Bool,
+        name: Some(format!("c{id}")),
+        is_mut: false,
+        span: None,
+    }
+}
+
+fn ret_zero() -> AirTerminator {
+    AirTerminator::Return(Some(Operand::Const(AirConst::Int(0, AirIntSize::I64))))
+}
+
+#[test]
+fn validate_rejects_a_branch_on_a_local_no_statement_writes() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks = vec![
+        AirBlock {
+            id: BlockId(0),
+            stmts: vec![],
+            terminator: AirTerminator::Branch {
+                cond: Operand::Copy(LocalId(1)),
+                then_block: BlockId(1),
+                else_block: BlockId(2),
+            },
+        },
+        AirBlock {
+            id: BlockId(1),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+        AirBlock {
+            id: BlockId(2),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+    ];
+
+    let errors = validate_air(&program).expect_err("a branch on an unwritten local is malformed");
+    assert_eq!(errors.len(), 1, "expected exactly 1 error, got {errors:?}");
+    assert!(
+        matches!(
+            &errors[0].detail,
+            AirValidationDetail::UnwrittenTerminatorOperand { local_id: 1, .. }
+        ),
+        "expected UnwrittenTerminatorOperand for local %1, got: {:?}",
+        errors[0].detail
+    );
+}
+
+#[test]
+fn validate_accepts_a_branch_on_a_local_a_statement_writes() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks = vec![
+        AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::Use(Operand::Const(AirConst::Bool(true))),
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Branch {
+                cond: Operand::Copy(LocalId(1)),
+                then_block: BlockId(1),
+                else_block: BlockId(2),
+            },
+        },
+        AirBlock {
+            id: BlockId(1),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+        AirBlock {
+            id: BlockId(2),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+    ];
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "the assignment is the whole difference with the rejected twin"
+    );
+}
+
+#[test]
+fn validate_leaves_an_unreachable_terminator_operand_alone() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks.push(AirBlock {
+        id: BlockId(9),
+        stmts: vec![],
+        terminator: AirTerminator::Branch {
+            cond: Operand::Copy(LocalId(1)),
+            then_block: BlockId(10),
+            else_block: BlockId(10),
+        },
+    });
+    f.blocks.push(AirBlock {
+        id: BlockId(10),
+        stmts: vec![],
+        terminator: ret_zero(),
+    });
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "no path from the entry reaches bb9, so the rule has nothing to say about it"
+    );
+}

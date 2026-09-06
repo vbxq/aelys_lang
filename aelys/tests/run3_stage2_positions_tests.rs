@@ -1153,7 +1153,7 @@ const GROUP_B: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
-    // projection chain: index cannot repeat through a vec of vecs because e0412 stands behind it
+    // projection chain: index cannot repeat through a vec of vecs because stands behind it
     Row {
         id: "B24",
         position: "Index.object over a Vec of Vecs",
@@ -1209,7 +1209,7 @@ const GROUP_B: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
-    // a reference's mutability, so `&t` reaching a `&mut t` position is e0416. the eight rows stay
+    // a reference's mutability, so `&t` reaching a `&mut t` position is . the eight rows stay
     Row {
         id: "B29",
         position: "Reference into a Vec element, mutable by let annotation",
@@ -2070,7 +2070,7 @@ fn the_fence_is_discharged_and_what_replaced_it_is_named() {
         .lines()
         .filter(|l| l.starts_with("    ") && !l.trim_start().starts_with("//"))
         .count();
-    // false: e0429 retired with the place still flat at 5 variants, because the detach is
+    // false: retired with the place still flat at 5 variants, because the detach is
     assert_eq!(
         variants, 5,
         "the air place gained or lost a variant. a place that carries the chain would let the \
@@ -2171,7 +2171,7 @@ fn group_l_the_same_stores_inside_a_lambda_body() {
     run_stores(GROUP_L, (1, 4), 12);
 }
 
-// const with no bir trace (`air/src/bir/build.rs:504`), so the fence cannot see a store written
+// const with no bir trace (`.rs:504`), so the fence cannot see a store written
 
 const GROUP_L: &[Store] = &[
     Store {
@@ -2579,7 +2579,7 @@ fn the_effect_decision_surface_is_one_file() {
     let effects = fs::read_to_string(root.join("air/src/bir/effects.rs")).expect("effects.rs");
     assert_eq!(
         effects.matches("Effect::Managed").count(),
-        10,
+        12,
         "the number of mentions of the managed effect changed. this is a drift detector over the \
          whole file, not a count of inserting sites"
     );
@@ -2587,7 +2587,7 @@ fn the_effect_decision_surface_is_one_file() {
         effects.matches("set.insert(Effect::Managed)").count(),
         7,
         "the inserting sites are the parameter rule, alloc_managed, the managed-local rule, the \
-         node rule, the store clause's two arms and the mutable-view clause. the other three \
+         node rule, the store clause's two arms and the mutable-view clause. the other five \
          mentions read or shift the bit"
     );
     assert!(

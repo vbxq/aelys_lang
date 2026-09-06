@@ -1,5 +1,15 @@
-use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
+use aelys_air::bir::effects::{EXTERN_DEFAULT, EXTERN_NOGC, effect_summaries_with_imports};
+use aelys_air::bir::{
+    BirBlock, BirBlockId, BirBody, BirExtern, BirLocalId, BirOperand, BirPlace, BirProgram,
+    BirRvalue, BirStmt, BirStmtKind, BirTerminator, Effect, EffectSet,
+};
+use aelys_driver::{
+    LinkRequirement, RuntimeVariant, compile_file_with_llvm_linked,
+    compile_file_with_llvm_variant, lower_file_to_air,
+};
 use aelys_opt::OptimizationLevel;
+use aelys_sema::InferType;
+use aelys_syntax::{ForeignConv, ForeignDecl, Span};
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::fs;
@@ -25,7 +35,7 @@ const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("
 
 static WARM: Once = Once::new();
 
-// exactly once and its spurious e0901 cannot be attributed to a fixture
+// exactly once and its spurious cannot be attributed to a fixture
 fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
@@ -3163,7 +3173,7 @@ fn group_ca_compound_assignment_is_place_identity() {
     h.assert_measured("group_ca_compound_assignment_is_place_identity");
 }
 
-// the fail-closed half: one row per code stage 1 adds, plus the two c52 legs and the origins
+// the fail-closed half: one row per code adds, plus the two c52 legs and the origins
 const GROUP_PA_X: &[XRow] = &[
     XRow {
         id: "SI-PAX01",
@@ -3311,7 +3321,7 @@ fn main() -> i64 {
     XRow {
         id: "SI-PAX06",
         code: "E0721",
-        // pass as if it borrowed the caller. stage 1 makes that address real
+        // pass as if it borrowed the caller. makes that address real
         rejected: r#"
 struct Cell { f: i64, g: i64 }
 fn leak(c: Cell) -> &i64 {
@@ -4443,7 +4453,7 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "22\n", 1, 1),
     ),
     (
-        // the read shape e0426's interprocedural half must not cost
+        // the read shape 's interprocedural half must not cost
         "S2-A11",
         r#"
 fn sum(s: &[i64]) -> i64 {
@@ -4539,7 +4549,7 @@ fn main() -> i64 {
 "#,
         Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
     ),
-    // the seven rows e0426 fenced, now correct programs. the aliased ones carry a divergence as
+    // the seven rows fenced, now correct programs. the aliased ones carry a divergence as
     (
         "SI-X01",
         r#"
@@ -6370,7 +6380,7 @@ fn main() -> i64 {
         absent: Some("E0901"),
     },
     SymRow {
-        // this is the one collision shape that reaches the fence without e0418 pre-empting it
+        // this is the one collision shape that reaches the fence without pre-empting it
         id: "SI-S25",
         code: "E0427",
         src: r#"
@@ -6908,7 +6918,6 @@ fn stage3_unique_mut_slice_view_stops_at_the_vec_length() {
     h.assert_measured("S3-UMS-bound");
 }
 
-// without static exclusivity both of these compile and write through a freed buffer
 const STAGE3_EXCLUSIVITY_REJECTS: &[(&str, &str, &str)] = &[
     (
         "S3-UMS-alias-after",
@@ -7225,7 +7234,6 @@ impl Harness {
             );
         }
         let exe = exe_path_for(&path);
-        // every row here holds a `main`, so a missing executable is a failure and not a skip
         assert!(
             exe.is_file(),
             "{id} at {tag}: compiled but produced no executable\n{}",
@@ -7844,4 +7852,472 @@ fn group_mod_every_rejection_has_a_kept_twin() {
     run_module_rejects(&h, MOD_REJECTS);
     run_module_rows(&h, MOD_KEPT);
     h.assert_measured("group_mod_kept");
+}
+
+const FFI_LEVELS: &[(&str, OptimizationLevel)] = &[
+    ("-O0", OptimizationLevel::None),
+    ("-O1", OptimizationLevel::Basic),
+    ("-O2", OptimizationLevel::Standard),
+    ("-O3", OptimizationLevel::Aggressive),
+];
+
+const FFI_HEAD: &str =
+    "unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n";
+
+const FFI_AUDITED_NOGC: &str = "unsafe extern nogc fn ffsl(x: i64) -> i64\n\nnogc fn probe(x: i64) -> i64 {\n    unsafe { return ffsl(x) }\n}\n\nfn main() -> i64 {\n    return probe(1024)\n}\n";
+
+const FFI_TWIN_FFSL: &str = "unsafe extern fn malloc(n: i64) -> i64\nunsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n";
+
+const FFI_TWIN_LABS: &str =
+    "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return labs(-7) }\n}\n";
+
+fn ffi_run_everywhere(h: &Harness, id: &str, src: &str, exit: i32, allocs: i64, frees: i64) {
+    for (level, opt) in FFI_LEVELS {
+        let Some(exe) = h.compile(id, level, src, *opt) else {
+            eprintln!("{id}: linker unavailable, skipping");
+            return;
+        };
+        for (alloc_name, alloc) in ALLOCATORS {
+            let o = h.run(&exe, *alloc);
+            assert_eq!(
+                o.exit, exit,
+                "{id} at {level} under {alloc_name}: the answer MUST be {exit}\n{src}\nstderr:\n{}",
+                o.stderr
+            );
+            assert_eq!(o.stdout, "", "{id} at {level} under {alloc_name}: stdout");
+            let stats = o.stats.unwrap_or_else(|| {
+                panic!("{id} at {level}/{alloc_name}: no [rc] stats line\nstderr:\n{}", o.stderr)
+            });
+            assert_eq!(
+                stats,
+                (allocs, frees),
+                "{id} at {level}/{alloc_name}: the exact pair MUST be ({allocs}, {frees})"
+            );
+        }
+    }
+}
+
+#[test]
+fn group_ffi_aelys_calls_c_at_four_levels_under_both_allocators() {
+    let h = Harness::new();
+    ffi_run_everywhere(&h, "SI-FFI-HEAD", FFI_HEAD, 11, 0, 0);
+    h.assert_measured("group_ffi_head");
+}
+
+// (id, code, the refused spelling, the twin, the twin's answer)
+const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
+    (
+        "SI-FFI-E0613-decl",
+        "E0613",
+        "unsafe extern fn aelys_immix_alloc(n: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_TWIN_FFSL,
+        11,
+    ),
+    (
+        "SI-FFI-E0613-def",
+        "E0613",
+        "fn malloc(n: i64) -> i64 {\n    return n\n}\n\nfn main() -> i64 {\n    return malloc(3)\n}\n",
+        "fn mallocate(n: i64) -> i64 {\n    return n\n}\n\nfn main() -> i64 {\n    return mallocate(3)\n}\n",
+        3,
+    ),
+    (
+        "SI-FFI-E0614-pub",
+        "E0614",
+        "pub unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_HEAD,
+        11,
+    ),
+    (
+        "SI-FFI-E0614-safe",
+        "E0614",
+        "extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_HEAD,
+        11,
+    ),
+    (
+        "SI-FFI-E0614-body",
+        "E0614",
+        "unsafe extern fn ffsl(x: i64) -> i64 { return x }\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_HEAD,
+        11,
+    ),
+    (
+        "SI-FFI-E0615-string",
+        "E0615",
+        "unsafe extern fn f(x: string) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_HEAD,
+        11,
+    ),
+    // the verdict is on the type and not on how it is spelled
+    (
+        "SI-FFI-E0615-case",
+        "E0615",
+        "unsafe extern fn f(x: sTRING) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        FFI_HEAD,
+        11,
+    ),
+    (
+        "SI-FFI-E0615-return-ref",
+        "E0615",
+        "unsafe extern fn f(x: i64) -> &i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "unsafe extern fn takes_ref(x: &i64) -> i64\nunsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n",
+        11,
+    ),
+    (
+        "SI-FFI-E0616-let",
+        "E0616",
+        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    let g = labs\n    return 0\n}\n",
+        FFI_TWIN_LABS,
+        7,
+    ),
+    (
+        "SI-FFI-E0616-argument",
+        "E0616",
+        "unsafe extern fn labs(x: i64) -> i64\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    return g(-7)\n}\n\nfn main() -> i64 {\n    return apply(labs)\n}\n",
+        "fn neg(x: i64) -> i64 {\n    return 0 - x\n}\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    return g(-7)\n}\n\nfn main() -> i64 {\n    return apply(neg)\n}\n",
+        7,
+    ),
+    (
+        "SI-FFI-E0617-bare",
+        "E0617",
+        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    return labs(-7)\n}\n",
+        FFI_TWIN_LABS,
+        7,
+    ),
+    (
+        "SI-FFI-E0617-condition",
+        "E0617",
+        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    if labs(-7) > 0 { return 1 }\n    return 0\n}\n",
+        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    if unsafe { labs(-7) } > 0 { return 1 }\n    return 0\n}\n",
+        1,
+    ),
+];
+
+const FFI_E0612_REFUSED: ModuleFiles = &[
+    (
+        "root.aelys",
+        "needs a\nneeds b\n\nfn main() -> i64 {\n    return a.use_a(-20) + b.use_b(-17)\n}\n",
+    ),
+    (
+        "a.aelys",
+        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+    ),
+    (
+        "b.aelys",
+        "unsafe extern nogc fn labs(x: i64) -> i64\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+    ),
+];
+
+const FFI_E0612_TWIN: ModuleFiles = &[
+    (
+        "root.aelys",
+        "needs a\nneeds b\n\nfn main() -> i64 {\n    return a.use_a(-20) + b.use_b(-17)\n}\n",
+    ),
+    (
+        "a.aelys",
+        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+    ),
+    (
+        "b.aelys",
+        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+    ),
+];
+
+const FFI_LIB_C: &str = "long aelys_si_ffi_triple(long x) { return 3 * x; }\n";
+
+const FFI_LIB_AE: &str = "unsafe extern fn aelys_si_ffi_triple(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return aelys_si_ffi_triple(14) }\n}\n";
+
+// the allocating shape, so a member defining a reserved symbol is actually pulled in
+const FFI_LIB_ALLOCATING_AE: &str = "unsafe extern fn aelys_si_ffi_triple(x: i64) -> i64\n\nfn main() -> i64 {\n    let mut v = Vec::new()\n    Vec::push(v, 11)\n    unsafe { return aelys_si_ffi_triple(14) }\n}\n";
+
+const FFI_HOSTILE_MEMCPY_C: &str = "#include <stddef.h>\nvoid *memcpy(void *d, const void *s, size_t n) {\n    unsigned char *a = d; const unsigned char *b = s;\n    while (n--) *a++ = *b++;\n    return d;\n}\n";
+
+// a missing toolchain must redden the row, never skip it
+fn ffi_tool(name: &str) -> String {
+    let found = Command::new(name).arg("--version").output();
+    assert!(
+        found.map(|out| out.status.success()).unwrap_or(false),
+        "group_ffi builds a real library, so `{name}` is required and its absence is a failure"
+    );
+    name.to_string()
+}
+
+fn ffi_tool_run(program: &str, args: &[&str], dir: &Path) -> std::process::Output {
+    Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap_or_else(|err| panic!("failed to run `{program}`: {err}"))
+}
+
+fn ffi_object(dir: &Path, source: &str, body: &str) {
+    fs::write(dir.join(source), body).expect("write c source");
+    let object = source.replace(".c", ".o");
+    let out = ffi_tool_run(&ffi_tool("clang"), &["-fPIC", "-c", "-o", &object, source], dir);
+    assert!(out.status.success(), "clang failed: {out:?}");
+}
+
+fn ffi_archive(dir: &Path, name: &str, objects: &[&str]) {
+    fs::create_dir_all(dir.join("lib")).expect("lib dir");
+    let path = format!("lib/lib{name}.a");
+    let mut args = vec!["rcs", path.as_str()];
+    args.extend_from_slice(objects);
+    let out = ffi_tool_run(&ffi_tool("ar"), &args, dir);
+    assert!(out.status.success(), "ar failed: {out:?}");
+}
+
+fn ffi_link_to(dir: &Path, libraries: &[&str]) -> LinkRequirement {
+    LinkRequirement {
+        search_paths: vec![dir.join("lib")],
+        libraries: libraries.iter().map(|name| (*name).to_string()).collect(),
+    }
+}
+
+fn ffi_compile_linked(
+    dir: &Path,
+    stem: &str,
+    source: &str,
+    link: &LinkRequirement,
+    opt: OptimizationLevel,
+) -> Result<PathBuf, String> {
+    let path = dir.join(format!("{stem}.aelys"));
+    fs::write(&path, source).expect("write aelys source");
+    compile_file_with_llvm_linked(&path, opt, false, RuntimeVariant::Rc, link)
+        .map(|_| dir.join(stem))
+        .map_err(|err| err.to_string())
+}
+
+#[test]
+fn group_ffi_a_third_party_archive_built_by_this_row_links_and_answers_forty_two() {
+    let dir = tempdir().expect("tempdir");
+    ffi_object(dir.path(), "sitriple.c", FFI_LIB_C);
+    ffi_archive(dir.path(), "sifftriple", &["sitriple.o"]);
+    let link = ffi_link_to(dir.path(), &["sifftriple"]);
+    for (level, opt) in FFI_LEVELS {
+        let exe = ffi_compile_linked(dir.path(), "sil1", FFI_LIB_AE, &link, *opt)
+            .unwrap_or_else(|err| panic!("SI-FFI-LIB at {level}: the link MUST succeed: {err}"));
+        let out = Command::new(&exe).output().expect("run the linked program");
+        assert_eq!(
+            exit_code(&out.status),
+            42,
+            "SI-FFI-LIB at {level}: 3 x 14 is the answer no accident gives"
+        );
+    }
+}
+
+fn ffi_reject_everywhere(h: &Harness, id: &str, code: &str, src: &str) {
+    for (level, opt) in FFI_LEVELS {
+        let rendered = h.reject(id, level, src, *opt);
+        assert!(
+            rendered.contains(&format!("[{code}]")),
+            "{id} at {level} MUST be rejected with {code}, got:\n{rendered}"
+        );
+    }
+}
+
+#[test]
+fn group_ffi_every_rejection_has_a_kept_twin() {
+    let h = Harness::new();
+    let mut codes: HashSet<&str> = HashSet::new();
+    for (id, code, refused, twin, answer) in FFI_PAIRS {
+        ffi_reject_everywhere(&h, id, code, refused);
+        ffi_run_everywhere(&h, id, twin, *answer, 0, 0);
+        codes.insert(code);
+    }
+
+    for (level, opt) in FFI_LEVELS {
+        let rendered = h.reject_modules("SI-FFI-E0612", level, FFI_E0612_REFUSED, *opt);
+        assert!(
+            rendered.contains("[E0612]") && rendered.contains("nogc"),
+            "SI-FFI-E0612 at {level} MUST be rejected with E0612 naming the claim, got:\n{rendered}"
+        );
+    }
+    run_module_row(
+        &h,
+        "SI-FFI-E0612-kept",
+        FFI_E0612_TWIN,
+        ModOracle::Stats(37, "", 0, 0),
+    );
+    codes.insert("E0612");
+
+    let dir = tempdir().expect("tempdir");
+    ffi_object(dir.path(), "sitriple.c", FFI_LIB_C);
+    ffi_archive(dir.path(), "sifftriple", &["sitriple.o"]);
+    ffi_object(dir.path(), "simemcpy.c", FFI_HOSTILE_MEMCPY_C);
+    ffi_archive(dir.path(), "sihostile", &["simemcpy.o"]);
+    let hostile = ffi_link_to(dir.path(), &["sifftriple", "sihostile"]);
+    let err = ffi_compile_linked(
+        dir.path(),
+        "si618",
+        FFI_LIB_ALLOCATING_AE,
+        &hostile,
+        OptimizationLevel::None,
+    )
+    .expect_err("SI-FFI-E0618: memcpy is one of the sixteen the runtime imports");
+    assert!(
+        err.contains("E0618") && err.contains("memcpy"),
+        "SI-FFI-E0618: the verdict MUST name the symbol, got:\n{err}"
+    );
+    assert!(
+        !dir.path().join("si618").exists(),
+        "SI-FFI-E0618: no executable may survive the rejection"
+    );
+    let clean = ffi_link_to(dir.path(), &["sifftriple"]);
+    let exe = ffi_compile_linked(
+        dir.path(),
+        "si618k",
+        FFI_LIB_ALLOCATING_AE,
+        &clean,
+        OptimizationLevel::None,
+    )
+    .unwrap_or_else(|err| panic!("SI-FFI-E0618-kept: the same program MUST link: {err}"));
+    let out = Command::new(&exe).output().expect("run the linked program");
+    assert_eq!(
+        exit_code(&out.status),
+        42,
+        "SI-FFI-E0618-kept: the same program, one library short of the claim"
+    );
+    codes.insert("E0618");
+
+    let mut seen: Vec<&str> = codes.into_iter().collect();
+    seen.sort_unstable();
+    assert_eq!(
+        seen,
+        vec!["E0612", "E0613", "E0614", "E0615", "E0616", "E0617", "E0618"],
+        "group_ffi: every code the run introduced MUST hold a pair here"
+    );
+    h.assert_measured("group_ffi_kept");
+}
+
+fn ffi_declared(symbol: &str, declared_nogc: bool) -> BirExtern {
+    BirExtern {
+        foreign: ForeignDecl {
+            symbol: symbol.to_string(),
+            calling_conv: ForeignConv::C,
+            is_unsafe: true,
+            span: Span::dummy(),
+        },
+        declared_nogc,
+    }
+}
+
+const FFI_SIX: [Effect; 6] = [
+    Effect::Managed,
+    Effect::Alloc,
+    Effect::Panic,
+    Effect::Unwind,
+    Effect::Block,
+    Effect::Io,
+];
+
+fn ffi_call(callee: Option<&str>) -> BirStmt {
+    BirStmt {
+        kind: BirStmtKind::Assign {
+            dest: BirPlace {
+                local: BirLocalId(0),
+                proj: Vec::new(),
+            },
+            rvalue: BirRvalue::Call {
+                callee: callee.map(str::to_string),
+                args: vec![BirOperand::Const],
+                indirect_nogc: false,
+            },
+        },
+        span: Span::dummy(),
+    }
+}
+
+fn ffi_body(name: &str, stmts: Vec<BirStmt>) -> BirBody {
+    BirBody {
+        name: name.to_string(),
+        locals: Vec::new(),
+        arg_count: 0,
+        blocks: vec![BirBlock {
+            id: BirBlockId(0),
+            stmts,
+            term: BirTerminator::Return(None),
+            term_span: Span::dummy(),
+        }],
+        entry: BirBlockId(0),
+        span: Span::dummy(),
+        scope_exits: Vec::new(),
+        returns: Vec::new(),
+        reassigns: Vec::new(),
+        is_toplevel: false,
+        return_type: InferType::I64,
+        build_errors: Vec::new(),
+        scope_deaths: Vec::new(),
+        intrinsic_effects: EffectSet::EMPTY,
+        managed_witness: None,
+        declared_nogc: false,
+    }
+}
+
+fn ffi_summaries() -> std::collections::HashMap<String, EffectSet> {
+    let mut externs = std::collections::HashMap::new();
+    externs.insert("c_ext".to_string(), ffi_declared("c_ext", false));
+    externs.insert("c_ext_nogc".to_string(), ffi_declared("c_ext_nogc", true));
+    let program = BirProgram {
+        bodies: vec![
+            ffi_body("caller_of_unknown", vec![ffi_call(Some("c_absent"))]),
+            ffi_body("caller_of_known", vec![ffi_call(Some("leaf"))]),
+            ffi_body("leaf", Vec::new()),
+            ffi_body("caller_of_extern", vec![ffi_call(Some("c_ext"))]),
+            ffi_body("caller_of_nogc_extern", vec![ffi_call(Some("c_ext_nogc"))]),
+        ],
+        externs,
+    };
+    effect_summaries_with_imports(&program, &std::collections::HashMap::new())
+}
+
+fn ffi_pin(summaries: &std::collections::HashMap<String, EffectSet>, name: &str, want: [bool; 6]) -> EffectSet {
+    let eff = *summaries
+        .get(name)
+        .unwrap_or_else(|| panic!("no summary for `{name}`"));
+    for (effect, expected) in FFI_SIX.iter().zip(want) {
+        assert_eq!(
+            eff.contains(*effect),
+            expected,
+            "{name}: {effect:?} should be {expected}"
+        );
+    }
+    eff
+}
+
+#[test]
+fn group_ffi_the_inherited_barrier_stays_readable_from_here() {
+    let summaries = ffi_summaries();
+    let barrier = ffi_pin(&summaries, "caller_of_unknown", [true, true, true, false, false, false]);
+    ffi_pin(&summaries, "caller_of_known", [false; 6]);
+    assert_ne!(
+        barrier,
+        summaries["caller_of_known"],
+        "an absent callee and a known one must not summarise alike"
+    );
+    assert_ne!(
+        barrier, EXTERN_DEFAULT,
+        "the barrier and the declared default must stay distinguishable"
+    );
+}
+
+#[test]
+fn group_ffi_the_extern_defaults_are_six_bits_and_the_audited_nogc_claim_allocates_nothing() {
+    let summaries = ffi_summaries();
+    let plain = ffi_pin(&summaries, "caller_of_extern", [true; 6]);
+    assert_eq!(plain, EXTERN_DEFAULT, "the plain default is the six bits");
+    let nogc = ffi_pin(
+        &summaries,
+        "caller_of_nogc_extern",
+        [false, true, true, true, true, true],
+    );
+    assert_eq!(nogc, EXTERN_NOGC, "the nogc default is derived, not carried");
+    assert!(nogc.is_nogc(), "a nogc extern leaves its caller nogc");
+    assert!(
+        nogc.contains(Effect::Alloc),
+        "nogc is managed free, it never promises the callee allocates nothing"
+    );
+
+    let h = Harness::new();
+    ffi_run_everywhere(&h, "SI-FFI-NOGC", FFI_AUDITED_NOGC, 11, 0, 0);
+    h.assert_measured("group_ffi_nogc");
 }

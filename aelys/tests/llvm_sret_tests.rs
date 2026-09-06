@@ -30,6 +30,14 @@ fn compile_air_to_verified_ir(program: &AirProgram) -> String {
     ir
 }
 
+fn compile_air_rejection(program: &AirProgram) -> String {
+    let mut codegen = CodegenContext::new("sret_test");
+    match codegen.compile(program) {
+        Ok(()) => panic!("codegen should have rejected the aggregate return"),
+        Err(err) => format!("{err:?}"),
+    }
+}
+
 fn default_attribs() -> FunctionAttribs {
     FunctionAttribs {
         inline: InlineHint::Default,
@@ -40,10 +48,9 @@ fn default_attribs() -> FunctionAttribs {
 }
 
 #[test]
-fn extern_c_struct_return_compiles_and_verifies() {
+fn extern_c_struct_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
         functions: vec![
-            // extern "C" fn get_name() -> Str
             AirFunction {
                 id: FunctionId(0),
                 name: "get_name".to_string(),
@@ -58,7 +65,6 @@ fn extern_c_struct_return_compiles_and_verifies() {
                 attributes: default_attribs(),
                 span: None,
             },
-            // fn caller() -> i64 { let s = get_name(); s.len }
             AirFunction {
                 id: FunctionId(1),
                 name: "caller".to_string(),
@@ -123,10 +129,8 @@ fn extern_c_struct_return_compiles_and_verifies() {
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
-    let ir = compile_air_to_verified_ir(&program);
-
     if cfg!(target_os = "windows") {
-        // declaration should be void with sret ptr as first param
+        let ir = compile_air_to_verified_ir(&program);
         assert!(
             ir.contains("declare void @get_name(ptr"),
             "sret extern should be declared as void(ptr sret(...)): {ir}"
@@ -135,23 +139,21 @@ fn extern_c_struct_return_compiles_and_verifies() {
             ir.contains("sret"),
             "sret attribute should be present on Windows: {ir}"
         );
-        // should not return %__aelys_string directly
         assert!(
             !ir.contains("declare %__aelys_string @get_name()"),
             "sret extern should not return struct directly on Windows: {ir}"
         );
     } else {
-        // on non-Windows, struct is returned directly
+        let err = compile_air_rejection(&program);
         assert!(
-            ir.contains("declare %__aelys_string @get_name()"),
-            "non-sret extern should return struct directly: {ir}"
+            err.contains("get_name") && err.contains("no sret path"),
+            "the return half of the abi barrier should name the function: {err}"
         );
     }
 }
 
-/// An Aelys function with C calling convention returning a struct should usen, sret on Windows: the return is stored via the sret pointer and the function, returns void at the LLVM level.
 #[test]
-fn c_convention_aelys_fn_returning_struct_uses_sret() {
+fn c_convention_aelys_fn_returning_struct_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -192,10 +194,8 @@ fn c_convention_aelys_fn_returning_struct_uses_sret() {
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
-    let ir = compile_air_to_verified_ir(&program);
-
     if cfg!(target_os = "windows") {
-        // definition should be void with sret param
+        let ir = compile_air_to_verified_ir(&program);
         assert!(
             ir.contains("define void @make_greeting(ptr"),
             "sret function should be defined as void(ptr sret(...)): {ir}"
@@ -204,21 +204,20 @@ fn c_convention_aelys_fn_returning_struct_uses_sret() {
             ir.contains("sret"),
             "sret attribute should be present on Windows: {ir}"
         );
-        // the return should be `ret void`, not `ret %__aelys_string ...`
         assert!(
             ir.contains("ret void"),
             "sret function should return void: {ir}"
         );
     } else {
+        let err = compile_air_rejection(&program);
         assert!(
-            ir.contains("define %__aelys_string @make_greeting()"),
-            "non-sret function should return struct directly: {ir}"
+            err.contains("make_greeting") && err.contains("no sret path"),
+            "a defined c-convention function is held to the same barrier: {err}"
         );
     }
 }
 
-/// fastcc (Aelys-internal) functions returning structs should not use sret
-/// LLVM handles the ABI internally for fastcc within the same module.
+/// llvm handles the abi internally for fastcc within the same module.
 #[test]
 fn fastcc_struct_return_does_not_use_sret() {
     let program = AirProgram {
@@ -264,7 +263,6 @@ fn fastcc_struct_return_does_not_use_sret() {
     let ir = compile_air_to_verified_ir(&program);
 
     // fastcc should return struct directly, never sret.
-    // Aelys-convention functions have an implicit env ptr at param 0.
     let fn_decl = ir
         .lines()
         .find(|l| l.contains("define fastcc %__aelys_string @internal_fn"))
@@ -273,7 +271,6 @@ fn fastcc_struct_return_does_not_use_sret() {
         fn_decl.contains("%__aelys_string"),
         "fastcc function should return struct directly: {fn_decl}"
     );
-    // sret should not appear anywhere for internal functions
     let sret_on_internal = ir
         .lines()
         .any(|l| l.contains("internal_fn") && l.contains("sret"));
@@ -281,7 +278,7 @@ fn fastcc_struct_return_does_not_use_sret() {
 }
 
 #[test]
-fn extern_c_data_enum_return_uses_sret() {
+fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
         functions: vec![
             AirFunction {
@@ -384,9 +381,8 @@ fn extern_c_data_enum_return_uses_sret() {
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
-    let ir = compile_air_to_verified_ir(&program);
-
     if cfg!(target_os = "windows") {
+        let ir = compile_air_to_verified_ir(&program);
         assert!(
             ir.contains("declare void @get_opt(ptr"),
             "data enum extern should use sret on Windows: {ir}"
@@ -398,6 +394,12 @@ fn extern_c_data_enum_return_uses_sret() {
         assert!(
             !ir.contains("declare %__aelys_enum_Opt @get_opt()"),
             "data enum extern must not return aggregate directly on Windows: {ir}"
+        );
+    } else {
+        let err = compile_air_rejection(&program);
+        assert!(
+            err.contains("get_opt") && err.contains("no sret path"),
+            "a data enum return crosses the c abi with no promised shape: {err}"
         );
     }
 }
@@ -464,7 +466,7 @@ fn extern_c_data_enum_param_is_rejected() {
 }
 
 #[test]
-fn indirect_c_fnptr_data_enum_return_uses_sret() {
+fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
         functions: vec![
             AirFunction {
@@ -586,6 +588,15 @@ fn indirect_c_fnptr_data_enum_return_uses_sret() {
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
+
+    if !cfg!(target_os = "windows") {
+        let err = compile_air_rejection(&program);
+        assert!(
+            err.contains("get_opt") && err.contains("no sret path"),
+            "the declared callee is what the barrier answers on: {err}"
+        );
+        return;
+    }
 
     let ir = compile_air_to_verified_ir(&program);
 
