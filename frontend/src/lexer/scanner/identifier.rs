@@ -39,6 +39,7 @@ impl Lexer {
             "catch" => TokenKind::Catch,
             "unsafe" => TokenKind::Unsafe,
             "nogc" => TokenKind::Nogc,
+            "extern" => TokenKind::Extern,
             _ => TokenKind::Identifier(text),
         };
 

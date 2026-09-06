@@ -40,6 +40,16 @@ impl Parser {
             return self.enum_declaration(is_pub);
         }
 
+        if self.check(&TokenKind::Unsafe) && self.peek_at(1).kind == TokenKind::Extern {
+            return self.foreign_declaration(decorators, is_pub);
+        }
+
+        if self.check(&TokenKind::Extern) {
+            return Err(self.error(CompileErrorKind::MalformedForeignDecl {
+                reason: "an external declaration must be `unsafe`".to_string(),
+            }));
+        }
+
         let is_nogc = self.match_token(&TokenKind::Nogc);
 
         if self.check(&TokenKind::Fn) {

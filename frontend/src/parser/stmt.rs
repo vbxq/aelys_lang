@@ -100,7 +100,6 @@ impl Parser {
         let first_expr = self.expression()?;
 
         if self.check(&TokenKind::DotDot) || self.check(&TokenKind::DotDotEq) {
-            // Range-based for: for i in start..end { }
             let inclusive = if self.match_token(&TokenKind::DotDotEq) {
                 true
             } else {
@@ -131,7 +130,6 @@ impl Parser {
                 start_span.merge(end_span),
             ))
         } else {
-            // ForEach: for item in collection { }
             self.consume(&TokenKind::LBrace, "{")?;
             let body = self.block_statement()?;
             let end_span = self.previous().span;
@@ -197,12 +195,18 @@ impl Parser {
     pub(crate) fn block_statements(&mut self) -> Result<Vec<Stmt>> {
         let mut stmts = Vec::new();
 
-        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
-            if self.match_token(&TokenKind::Semicolon) {
-                continue;
+        self.block_depth += 1;
+        let collected = (|this: &mut Self| -> Result<()> {
+            while !this.check(&TokenKind::RBrace) && !this.is_at_end() {
+                if this.match_token(&TokenKind::Semicolon) {
+                    continue;
+                }
+                stmts.push(this.declaration()?);
             }
-            stmts.push(self.declaration()?);
-        }
+            Ok(())
+        })(self);
+        self.block_depth -= 1;
+        collected?;
 
         self.consume(&TokenKind::RBrace, "}")?;
         Ok(stmts)

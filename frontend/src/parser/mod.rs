@@ -1,4 +1,3 @@
-
 mod decl;
 mod expr;
 mod stmt;
@@ -17,6 +16,7 @@ pub struct Parser {
     current: usize,
     pub(crate) source: Arc<Source>,
     recursion_depth: usize,
+    pub(crate) block_depth: usize,
     errors: Vec<Diagnostic>,
 }
 
@@ -27,6 +27,7 @@ impl Parser {
             current: 0,
             source,
             recursion_depth: 0,
+            block_depth: 0,
             errors: Vec::new(),
         }
     }
