@@ -585,6 +585,10 @@ impl<'a> LoweringContext<'a> {
                     }
                 }
                 let operand = val.as_ref().map(|e| self.lower_expr(e));
+                if self.position_is_dead() {
+                    self.seal_block(AirTerminator::Unreachable);
+                    return;
+                }
                 self.emit_rc_releases_for_return(operand.as_ref());
                 self.emit_affine_drops_for_return(stmt.span);
                 self.seal_block(AirTerminator::Return(operand));
@@ -659,6 +663,10 @@ impl<'a> LoweringContext<'a> {
         _sp: Option<Span>,
     ) {
         let cond = self.lower_expr(condition);
+        // seal_block never passes through emit, so a dead condition would still build its branch
+        if self.position_is_dead() {
+            return;
+        }
         let then_id = self.alloc_block_id();
         let else_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
@@ -704,6 +712,9 @@ impl<'a> LoweringContext<'a> {
 
         self.fixup_block_id_noop(header_id);
         let cond = self.lower_expr(condition);
+        if self.position_is_dead() {
+            return;
+        }
         self.seal_block(AirTerminator::Branch {
             cond,
             then_block: body_id,
@@ -780,6 +791,14 @@ impl<'a> LoweringContext<'a> {
             }
         }
         self.block_aliases.clear();
+    }
+
+    pub(super) fn position_is_dead(&self) -> bool {
+        self.pending_block_id.is_none()
+            && self
+                .current_blocks
+                .last()
+                .is_some_and(|b| !matches!(b.terminator, AirTerminator::Goto(_)))
     }
 
     pub(super) fn last_block_is_terminated(&self) -> bool {

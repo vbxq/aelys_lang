@@ -8,6 +8,7 @@ pub mod moves;
 pub mod origins;
 
 use aelys_sema::{InferType, TypedProgram};
+use aelys_syntax::ForeignConv;
 
 pub use category::{Category, category};
 pub use effects::{Effect, EffectSet, Step, StepKind, effect_summaries, managed_chain};
@@ -29,10 +30,115 @@ pub fn check(program: TypedProgram) -> Result<Checked, Vec<BirDiagnostic>> {
     check_with_imports(program, &Imports::default()).map(|(checked, _)| checked)
 }
 
+#[derive(Clone)]
+pub struct ForeignSig {
+    pub symbol: String,
+    pub calling_conv: ForeignConv,
+    pub params: Vec<InferType>,
+    pub ret: InferType,
+    pub declared_nogc: bool,
+    pub span: aelys_syntax::Span,
+}
+
+pub struct ForeignClash {
+    pub name: String,
+    pub reason: String,
+    pub span: aelys_syntax::Span,
+    pub same_unit: bool,
+}
+
+pub fn foreign_conflict(a: &ForeignSig, b: &ForeignSig) -> Option<String> {
+    if a.symbol != b.symbol {
+        return Some(format!(
+            "one names the symbol `{}` and the other names `{}`",
+            a.symbol, b.symbol
+        ));
+    }
+    if a.calling_conv != b.calling_conv {
+        return Some("the two declarations claim different calling conventions".to_string());
+    }
+    if a.declared_nogc != b.declared_nogc {
+        return Some(
+            "one declaration claims `nogc` and the other does not, so the two promise different \
+             effects for one symbol"
+                .to_string(),
+        );
+    }
+    if a.params.len() != b.params.len() {
+        return Some(format!(
+            "one declaration takes {} parameters and the other takes {}",
+            a.params.len(),
+            b.params.len()
+        ));
+    }
+    if a.params != b.params || a.ret != b.ret {
+        return Some("the two declarations give the symbol different types".to_string());
+    }
+    None
+}
+
+pub fn foreign_signatures(
+    program: &TypedProgram,
+) -> (std::collections::HashMap<String, ForeignSig>, Vec<ForeignClash>) {
+    let mut sigs: std::collections::HashMap<String, ForeignSig> = Default::default();
+    let mut clashes = Vec::new();
+    build::for_each_fn_decl(&program.stmts, &mut |func, _parent| {
+        let Some(foreign) = &func.foreign else {
+            return;
+        };
+        let sig = ForeignSig {
+            symbol: foreign.symbol.clone(),
+            calling_conv: foreign.calling_conv,
+            params: func.params.iter().map(|p| p.ty.clone()).collect(),
+            ret: func.return_type.clone(),
+            declared_nogc: func.declared_nogc,
+            span: func.span,
+        };
+        if let Some(seen) = sigs.get(&func.name) {
+            let reason = foreign_conflict(seen, &sig).unwrap_or_else(|| {
+                "the symbol is declared twice in one unit".to_string()
+            });
+            clashes.push(ForeignClash {
+                name: func.name.clone(),
+                reason,
+                span: func.span,
+                same_unit: true,
+            });
+            return;
+        }
+        sigs.insert(func.name.clone(), sig);
+    });
+    (sigs, clashes)
+}
+
+// two units may declare one symbol, and they agree or the merge is refused
+pub fn foreign_merge_clashes(
+    own: &std::collections::HashMap<String, ForeignSig>,
+    imported: &std::collections::HashMap<String, ForeignSig>,
+) -> Vec<ForeignClash> {
+    let mut names: Vec<&String> = own.keys().collect();
+    names.sort();
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let mine = own.get(name)?;
+            let theirs = imported.get(name)?;
+            let reason = foreign_conflict(mine, theirs)?;
+            Some(ForeignClash {
+                name: name.clone(),
+                reason,
+                span: mine.span,
+                same_unit: false,
+            })
+        })
+        .collect()
+}
+
 #[derive(Default, Clone)]
 pub struct Imports {
     pub effects: std::collections::HashMap<String, EffectSet>,
     pub chains: std::collections::HashMap<String, Vec<Step>>,
+    pub externs: std::collections::HashMap<String, ForeignSig>,
 }
 
 impl Imports {
@@ -45,6 +151,8 @@ impl Imports {
 pub struct Published {
     pub effects: std::collections::HashMap<String, EffectSet>,
     pub chains: std::collections::HashMap<String, Vec<Step>>,
+    pub externs: std::collections::HashMap<String, ForeignSig>,
+    pub foreign_clashes: Vec<ForeignClash>,
 }
 
 pub fn check_with_imports(
@@ -67,7 +175,17 @@ pub fn check_with_imports(
         }
     }
     effects.retain(|name, _| own.contains(name.as_str()));
-    Ok((Checked(program), Published { effects, chains }))
+    let (externs, mut foreign_clashes) = foreign_signatures(&program);
+    foreign_clashes.extend(foreign_merge_clashes(&externs, &imports.externs));
+    Ok((
+        Checked(program),
+        Published {
+            effects,
+            chains,
+            externs,
+            foreign_clashes,
+        },
+    ))
 }
 
 // a borrow or a slice (the single source for param/loan/store seeding)
@@ -140,6 +258,13 @@ pub struct BirBlockId(pub u32);
 
 pub struct BirProgram {
     pub bodies: Vec<BirBody>,
+    pub externs: std::collections::HashMap<String, BirExtern>,
+}
+
+// holds the declaration and not its effect set, so the seed derives the set and a false nogc claim cannot survive
+pub struct BirExtern {
+    pub foreign: aelys_syntax::ForeignDecl,
+    pub declared_nogc: bool,
 }
 
 pub struct BirBody {

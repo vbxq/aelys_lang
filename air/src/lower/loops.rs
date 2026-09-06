@@ -16,15 +16,11 @@ impl<'a> LoweringContext<'a> {
         let start_span = Some(self.span(&start.span));
         let iter_ty = self.lower_type_from_infer(&start.ty);
 
-        // Evaluate range bounds BEFORE allocating the iterator local so that
-        // any reference to `iterator` in the bounds resolves to the outer
-        // binding (e.g. `for n in 0..n` where the bound `n` is a param).
+        // evaluate range bounds before allocating the iterator local so that
         let start_op = self.lower_expr(start);
         let end_op = self.lower_expr(end);
 
-        // Save scope so the iterator variable doesn't leak into the enclosing
-        // scope after the loop (e.g. `let i = 999; for i in 0..5 { ... }; use(i)`
-        // should still see i=999 after the loop).
+        // save scope so the iterator variable doesn't leak into the enclosing
         let scope_depth = self.locals_by_name.len();
 
         let iter_local = self.alloc_named_local(iterator, iter_ty.clone(), true, start_span);
@@ -45,9 +41,6 @@ impl<'a> LoweringContext<'a> {
             Some(self.span(&end.span)),
         );
 
-        // Evaluate the step operand ONCE in the entry block so it is not
-        // re-read on every iteration (the variable might be mutated in the
-        // loop body).
         let step_operand = if let Some(step_expr) = step {
             self.lower_expr(step_expr)
         } else {
@@ -66,6 +59,11 @@ impl<'a> LoweringContext<'a> {
             None,
         );
 
+        if self.position_is_dead() {
+            self.locals_by_name.truncate(scope_depth);
+            return;
+        }
+
         let header_id = self.alloc_block_id();
         let body_id = self.alloc_block_id();
         let incr_id = self.alloc_block_id();
@@ -74,12 +72,6 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
-        // For negative steps the iteration condition is reversed:
-        //   positive step: iter < end (or <= for inclusive)
-        //   negative step: iter > end (or >= for inclusive)
-        //
-        // If the step is a compile-time constant we pick the direction
-        // statically.  Otherwise we emit a runtime sign check.
         let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
         let step_is_const = step.as_ref().map_or(true, |s| {
             step_expr_is_negative(s) || step_expr_is_positive(s)
@@ -87,7 +79,6 @@ impl<'a> LoweringContext<'a> {
 
         let cond_local = self.alloc_temp(AirType::Bool);
         if step_is_const {
-            // Static direction — single comparison.
             let cmp_op = if step_is_negative {
                 if inclusive { BinOp::Ge } else { BinOp::Gt }
             } else {
@@ -105,11 +96,6 @@ impl<'a> LoweringContext<'a> {
                 None,
             );
         } else {
-            // Dynamic step: emit runtime sign check.
-            //   step_neg = step < 0
-            //   fwd_cmp  = iter < end  (or <=)
-            //   bwd_cmp  = iter > end  (or >=)
-            //   cond     = step_neg ? bwd_cmp : fwd_cmp
             let zero = Operand::Const(
                 iter_ty
                     .int_size()
@@ -150,8 +136,6 @@ impl<'a> LoweringContext<'a> {
                 },
                 None,
             );
-            // cond = if step_neg { bwd } else { fwd }
-            // Lowered as: cond = (step_neg & bwd) | (!step_neg & fwd)
             let neg_and_bwd = self.alloc_temp(AirType::Bool);
             self.emit(
                 AirStmtKind::Assign {
@@ -229,7 +213,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
-        // iterator locals are never Rc today, this just keeps the registry honest
+        // iterator locals are never rc today, this just keeps the registry honest
         self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
     }
@@ -282,7 +266,11 @@ impl<'a> LoweringContext<'a> {
             None,
         );
 
-        // Save scope so the iterator variable doesn't leak after the loop.
+        if self.position_is_dead() {
+            return;
+        }
+
+        // save scope so the iterator variable doesn't leak after the loop.
         let scope_depth = self.locals_by_name.len();
 
         let elem_air_ty = self.lower_type_from_infer(elem_type);
@@ -357,7 +345,6 @@ impl<'a> LoweringContext<'a> {
     }
 }
 
-/// Returns true if the step expression is a compile-time negative constant.
 fn step_expr_is_negative(step: &TypedExpr) -> bool {
     match &step.kind {
         TypedExprKind::Int(v) => *v < 0,
@@ -372,7 +359,6 @@ fn step_expr_is_negative(step: &TypedExpr) -> bool {
     }
 }
 
-/// Returns true if the step expression is a compile-time positive constant.
 fn step_expr_is_positive(step: &TypedExpr) -> bool {
     match &step.kind {
         TypedExprKind::Int(v) => *v > 0,

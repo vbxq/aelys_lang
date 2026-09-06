@@ -264,6 +264,9 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn emit(&mut self, kind: AirStmtKind, span: Option<Span>) {
+        if self.position_is_dead() {
+            return;
+        }
         self.current_stmts.push(AirStmt { kind, span });
     }
 

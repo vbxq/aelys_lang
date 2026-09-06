@@ -1,17 +1,4 @@
-//! AIR validation pass
-//!
-//! checks structural invariants of the AIR program before codegen
-//!
-//! this pass does not mutate the program, we just inspects it and
-//! collects all violations found
-//!
-//! some stuff enforced:
-//!
-//! - no `AirType::Void` on a local unless it is the return position of a void returning function (i.e. only the implicit, so `_0` return local of a `ret_ty == Void` function may be Void)
-//! - eo `AirType::Opaque` anywhere, because this means an unresolved Dynamic type survived past monomorphization
-//! - every basic block has a structurally valid terminator, guaranteed by construction, but we double-check !
-//! - every local referenced in operands/places is declared in the function's params or locals list
-//! - every block referenced by terminators exists in the function.
+//! - eo `airtype::opaque` anywhere, because this means an unresolved dynamic type survived past monomorphization
 
 use crate::{
     AirBlock, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BlockId, Callee,
@@ -20,7 +7,6 @@ use crate::{
 use std::collections::HashSet;
 use std::fmt;
 
-/// A single validation error with context about where it was found.
 #[derive(Debug, Clone)]
 pub struct AirValidationError {
     pub function_name: String,
@@ -29,46 +15,42 @@ pub struct AirValidationError {
 
 #[derive(Debug, Clone)]
 pub enum AirValidationDetail {
-    /// A local has type Void but is not the return local of a void function.
     VoidLocal {
         local_id: u32,
         local_name: Option<String>,
     },
-    /// A local referenced in the body is not declared.
     UndeclaredLocal { local_id: u32, context: String },
-    /// A block referenced by a terminator does not exist.
     UndeclaredBlock { block_id: u32, context: String },
-    /// A local or param has type Opaque (unresolved Dynamic that survived monomorphization).
+    /// a local or param has type opaque (unresolved dynamic that survived monomorphization).
     OpaqueType {
         local_id: u32,
         local_name: Option<String>,
     },
-    /// A struct field has type Opaque.
     OpaqueStructField {
         struct_name: String,
         field_name: String,
     },
-    /// A local or param references an enum definition that is not present in the AIR program.
     UnknownEnumType {
         local_id: u32,
         local_name: Option<String>,
         enum_name: String,
     },
-    /// A struct field references an enum definition that is not present in the AIR program.
     UnknownStructFieldEnum {
         struct_name: String,
         field_name: String,
         enum_name: String,
     },
-    /// An enum operation references an enum definition that is not present in the AIR program.
     UnknownEnumReference { enum_name: String, context: String },
-    /// a place names a global that is not present in the air program.
     UnknownGlobalReference {
         global_name: String,
         context: String,
     },
-    /// A function has no blocks (non-extern function with empty body).
     EmptyBody,
+    UnwrittenTerminatorOperand {
+        local_id: u32,
+        local_name: Option<String>,
+        context: String,
+    },
     PtrnessMismatch {
         context: String,
         rvalue: &'static str,
@@ -170,6 +152,20 @@ impl fmt::Display for AirValidationError {
             AirValidationDetail::EmptyBody => {
                 write!(f, "non-extern function has no basic blocks")
             }
+            AirValidationDetail::UnwrittenTerminatorOperand {
+                local_id,
+                local_name,
+                context,
+            } => {
+                write!(f, "local %{local_id}")?;
+                if let Some(name) = local_name {
+                    write!(f, " (`{name}`)")?;
+                }
+                write!(
+                    f,
+                    " is read by a terminator but is never assigned in the function ({context})"
+                )
+            }
             AirValidationDetail::PtrnessMismatch {
                 context,
                 rvalue,
@@ -244,7 +240,6 @@ fn check_function_ptrness(
     }
 }
 
-/// Returns true if the type contains Opaque anywhere (including nested in compound types like Array, Ptr, FnPtr, Slice)
 fn contains_opaque(ty: &AirType) -> bool {
     match ty {
         AirType::Opaque => true,
@@ -286,13 +281,11 @@ fn collect_unknown_enum_names(
     }
 }
 
-/// Validate the entire AIR program. Returns `Ok(())` if all invariants hold, or `Err(errors)` with every violation found
 pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>> {
     let mut errors = Vec::new();
     let known_enums: HashSet<String> = program.enums.iter().map(|def| def.name.clone()).collect();
     let known_globals: HashSet<String> = program.globals.iter().map(|g| g.name.clone()).collect();
 
-    // Check struct fields for Opaque types.
     for def in &program.structs {
         for field in &def.fields {
             if contains_opaque(&field.ty) {
@@ -337,33 +330,22 @@ fn validate_function(
     known_globals: &HashSet<String>,
     errors: &mut Vec<AirValidationError>,
 ) {
-    // Skip extern declarations, they have no body by design.
     if function.is_extern {
         return;
     }
 
-    // non-extern function must have at least one block check
     if function.blocks.is_empty() {
         errors.push(AirValidationError {
             function_name: function.name.clone(),
             detail: AirValidationDetail::EmptyBody,
         });
-        // No point checking locals/blocks if the body is empty
         return;
     }
 
-    // no Void-typed locals except void return position check
-    //
-    // Convention: the return local is local %0 when ret_ty != Void
-    //
-    // When ret_ty == Void, local %0 may be Void (it's the implicit return slot)
-    //
-    // Any other local with Void type is a bug.
     let is_void_return = function.ret_ty == AirType::Void;
 
     for local in &function.locals {
         if local.ty == AirType::Void {
-            // Allow the return local (%0) of a void-returning function
             if is_void_return && local.id == LocalId(0) {
                 continue;
             }
@@ -375,7 +357,7 @@ fn validate_function(
                 },
             });
         }
-        // Reject Opaque types that survived past monomorphization.
+        // reject opaque types that survived past monomorphization.
         if contains_opaque(&local.ty) {
             errors.push(AirValidationError {
                 function_name: function.name.clone(),
@@ -399,7 +381,6 @@ fn validate_function(
         }
     }
 
-    // Also check params for Void and Opaque types.
     for param in &function.params {
         if param.ty == AirType::Void {
             errors.push(AirValidationError {
@@ -433,7 +414,6 @@ fn validate_function(
         }
     }
 
-    // check return type for Opaque.
     if contains_opaque(&function.ret_ty) {
         errors.push(AirValidationError {
             function_name: function.name.clone(),
@@ -456,7 +436,6 @@ fn validate_function(
         });
     }
 
-    // build declared-locals and declared-blocks sets
     let declared_locals: HashSet<LocalId> = function
         .params
         .iter()
@@ -466,7 +445,6 @@ fn validate_function(
 
     let declared_blocks: HashSet<BlockId> = function.blocks.iter().map(|b| b.id).collect();
 
-    // all referenced locals exist check
     for block in &function.blocks {
         let block_ctx = format!("bb{}", block.id.0);
         check_block_locals(
@@ -479,6 +457,137 @@ fn validate_function(
             errors,
         );
         check_block_target_blocks(block, &declared_blocks, &function.name, &block_ctx, errors);
+    }
+
+    check_terminator_operand_writes(function, errors);
+}
+
+fn place_base_local(place: &Place) -> Option<LocalId> {
+    match place {
+        Place::Local(id) | Place::Field(id, _) | Place::Deref(id) | Place::Index(id, _) => Some(*id),
+        Place::Global(_) => None,
+    }
+}
+
+fn collect_written_locals(function: &AirFunction) -> HashSet<LocalId> {
+    let mut written: HashSet<LocalId> = function.params.iter().map(|p| p.id).collect();
+    for block in &function.blocks {
+        for stmt in &block.stmts {
+            match &stmt.kind {
+                AirStmtKind::Assign { place, rvalue } => {
+                    written.extend(place_base_local(place));
+                    // an address handed to a callee is an initialization this pass cannot see
+                    if let Rvalue::AddressOf(inner) = rvalue {
+                        written.extend(place_base_local(inner));
+                    }
+                }
+                AirStmtKind::GcAlloc { local, .. }
+                | AirStmtKind::Alloc { local, .. }
+                | AirStmtKind::RcAlloc { local, .. } => {
+                    written.insert(*local);
+                }
+                AirStmtKind::GcDrop(_)
+                | AirStmtKind::Free(_)
+                | AirStmtKind::CallVoid { .. }
+                | AirStmtKind::ArenaCreate(_)
+                | AirStmtKind::ArenaDestroy(_)
+                | AirStmtKind::MemoryFence(_) => {}
+            }
+        }
+        if let AirTerminator::Invoke { ret, .. } = &block.terminator {
+            written.extend(place_base_local(ret));
+        }
+    }
+    written
+}
+
+fn terminator_targets(term: &AirTerminator) -> Vec<BlockId> {
+    match term {
+        AirTerminator::Goto(target) => vec![*target],
+        AirTerminator::Branch {
+            then_block,
+            else_block,
+            ..
+        } => vec![*then_block, *else_block],
+        AirTerminator::Switch {
+            targets, default, ..
+        } => targets
+            .iter()
+            .map(|(_, target)| *target)
+            .chain(std::iter::once(*default))
+            .collect(),
+        AirTerminator::Invoke { normal, unwind, .. } => vec![*normal, *unwind],
+        AirTerminator::Return(_)
+        | AirTerminator::Unwind
+        | AirTerminator::Unreachable
+        | AirTerminator::Panic { .. } => Vec::new(),
+    }
+}
+
+fn reachable_blocks(function: &AirFunction) -> HashSet<BlockId> {
+    let mut has_predecessors: HashSet<BlockId> = HashSet::new();
+    for block in &function.blocks {
+        has_predecessors.extend(terminator_targets(&block.terminator));
+    }
+    let entry = function
+        .blocks
+        .iter()
+        .find(|b| !has_predecessors.contains(&b.id))
+        .or_else(|| function.blocks.first())
+        .map(|b| b.id);
+    let mut reachable = HashSet::new();
+    let mut work: Vec<BlockId> = entry.into_iter().collect();
+    while let Some(id) = work.pop() {
+        if !reachable.insert(id) {
+            continue;
+        }
+        if let Some(block) = function.blocks.iter().find(|b| b.id == id) {
+            work.extend(terminator_targets(&block.terminator));
+        }
+    }
+    reachable
+}
+
+fn check_terminator_operand_writes(function: &AirFunction, errors: &mut Vec<AirValidationError>) {
+    let written = collect_written_locals(function);
+    let reachable = reachable_blocks(function);
+    for block in &function.blocks {
+        if !reachable.contains(&block.id) {
+            continue;
+        }
+        let mut operands: Vec<&Operand> = Vec::new();
+        match &block.terminator {
+            AirTerminator::Return(Some(op)) => operands.push(op),
+            AirTerminator::Branch { cond, .. } => operands.push(cond),
+            AirTerminator::Switch { discr, .. } => operands.push(discr),
+            AirTerminator::Invoke { args, .. } => operands.extend(args.iter()),
+            AirTerminator::Return(None)
+            | AirTerminator::Goto(_)
+            | AirTerminator::Unwind
+            | AirTerminator::Unreachable
+            | AirTerminator::Panic { .. } => {}
+        }
+        for op in operands {
+            let id = match op {
+                Operand::Copy(id) | Operand::Move(id) => *id,
+                Operand::Const(_) => continue,
+            };
+            if written.contains(&id) {
+                continue;
+            }
+            errors.push(AirValidationError {
+                function_name: function.name.clone(),
+                detail: AirValidationDetail::UnwrittenTerminatorOperand {
+                    local_id: id.0,
+                    local_name: function
+                        .locals
+                        .iter()
+                        .find(|l| l.id == id)
+                        .and_then(|l| l.name.clone()),
+                    context: format!("bb{}, terminator", block.id.0),
+                },
+            });
+        }
     }
 }
 
@@ -758,7 +867,6 @@ fn check_local(
     }
 }
 
-// block reference checking
 fn check_block_target_blocks(
     block: &AirBlock,
     declared: &HashSet<BlockId>,

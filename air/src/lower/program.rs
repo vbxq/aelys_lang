@@ -1,6 +1,7 @@
 use super::LoweringContext;
 use crate::*;
 use aelys_sema::{InferType, TypedFunction, TypedParam, TypedStmtKind};
+use aelys_syntax::ForeignConv;
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_program(&mut self) {
@@ -123,7 +124,12 @@ impl<'a> LoweringContext<'a> {
         let gc_mode = self.gc_mode_for_function(func);
         let captures = self.runtime_captures(&func.captures);
 
-        if !captures.is_empty() {
+        if let Some(foreign) = &func.foreign {
+            let conv = match foreign.calling_conv {
+                ForeignConv::C => CallingConv::C,
+            };
+            self.lower_extern_function(func, func_id, gc_mode, conv);
+        } else if !captures.is_empty() {
             self.lower_closure(func, &captures, func_id, gc_mode);
         } else {
             self.lower_plain_function(func, func_id, gc_mode);
@@ -144,23 +150,58 @@ impl<'a> LoweringContext<'a> {
         self.next_block_id = saved_next_block;
     }
 
-    fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
-        let type_params = self.lower_type_params(&func.type_params);
-        let params = self.lower_params(&func.params);
-        self.retain_vec_params(&func.params, &params);
-        self.register_affine_params(&func.params, &params);
+    fn lowered_return_type(&mut self, func: &TypedFunction, noun: &str) -> AirType {
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
             self.report_error(format!(
-                "function `{}` has unresolved return type (Opaque); \
+                "{} `{}` has unresolved return type (Opaque); \
                  treating as void — this indicates a type inference failure",
-                func.name
+                noun, func.name
             ));
             ret_ty = AirType::Void;
         }
         if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
             ret_ty = AirType::Void;
         }
+        ret_ty
+    }
+
+    fn lower_extern_function(
+        &mut self,
+        func: &TypedFunction,
+        func_id: FunctionId,
+        gc_mode: GcMode,
+        calling_conv: CallingConv,
+    ) {
+        let type_params = self.lower_type_params(&func.type_params);
+        let params = self.lower_params(&func.params);
+        let ret_ty = self.lowered_return_type(func, "function");
+
+        let air_func = AirFunction {
+            id: func_id,
+            name: func.name.clone(),
+            gc_mode,
+            type_params,
+            params,
+            ret_ty,
+            locals: Vec::new(),
+            blocks: Vec::new(),
+            is_extern: true,
+            calling_conv,
+            attributes: self.func_attribs(func),
+            span: Some(self.span(&func.span)),
+        };
+        self.functions.push(air_func);
+        self.current_locals.clear();
+        self.type_params_map.clear();
+    }
+
+    fn lower_plain_function(&mut self, func: &TypedFunction, func_id: FunctionId, gc_mode: GcMode) {
+        let type_params = self.lower_type_params(&func.type_params);
+        let params = self.lower_params(&func.params);
+        self.retain_vec_params(&func.params, &params);
+        self.register_affine_params(&func.params, &params);
+        let ret_ty = self.lowered_return_type(func, "function");
 
         self.lower_body(&func.body, func.span);
         self.emit_param_cow_releases_on_fallthrough();
@@ -238,18 +279,7 @@ impl<'a> LoweringContext<'a> {
         let user_params = self.lower_params(&func.params);
         self.retain_vec_params(&func.params, &user_params);
         self.register_affine_params(&func.params, &user_params);
-        let mut ret_ty = self.lower_type_from_infer(&func.return_type);
-        if ret_ty == AirType::Opaque {
-            self.report_error(format!(
-                "closure `{}` has unresolved return type (Opaque); \
-                 treating as void — this indicates a type inference failure",
-                func.name
-            ));
-            ret_ty = AirType::Void;
-        }
-        if ret_ty == AirType::Ptr(Box::new(AirType::Void)) {
-            ret_ty = AirType::Void;
-        }
+        let ret_ty = self.lowered_return_type(func, "closure");
 
         self.lower_body(&func.body, func.span);
         self.emit_param_cow_releases_on_fallthrough();
@@ -446,6 +476,7 @@ impl<'a> LoweringContext<'a> {
                     decorators: Vec::new(),
                     is_pub: false,
                     declared_nogc: false,
+                    foreign: None,
                     span: expr.span,
                     captures: Vec::new(),
                 };

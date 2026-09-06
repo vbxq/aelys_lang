@@ -39,11 +39,22 @@ pub fn build_program_with_imports(
         .collect();
     bodies.push(build_toplevel(tt, &toplevel, program, &fn_names));
 
+    let mut externs = std::collections::HashMap::new();
     for_each_fn_decl(&program.stmts, &mut |func, _parent| {
+        if let Some(foreign) = &func.foreign {
+            externs.insert(
+                func.name.clone(),
+                BirExtern {
+                    foreign: foreign.clone(),
+                    declared_nogc: func.declared_nogc,
+                },
+            );
+            return;
+        }
         bodies.push(build_function(tt, func, &fn_names));
     });
 
-    BirProgram { bodies }
+    BirProgram { bodies, externs }
 }
 
 pub fn for_each_fn_decl<F>(stmts: &[TypedStmt], f: &mut F)
@@ -873,7 +884,7 @@ impl<'a> BodyBuilder<'a> {
                 }
             }
 
-            // a slice is a borrow of its base: no e0726 here, a slice of a slice is a kept form
+            // a slice is a borrow of its base: no here, a slice of a slice is a kept form
             TypedExprKind::Slice { object, range } => {
                 let _ = self.build_operand(range);
                 let mutable = matches!(expr.ty, InferType::Slice { mutable: true, .. });

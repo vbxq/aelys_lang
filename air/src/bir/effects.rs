@@ -80,7 +80,7 @@ fn chain_crosses_vec(e: &TypedExpr) -> bool {
     }
 }
 
-// fence hygiene rather than soundness: it keeps the effect system, and not e0412, holding a
+// fence hygiene rather than soundness: it keeps the effect system, and not , holding a
 fn base_unless_inside_a_buffer(object: &TypedExpr) -> Pos {
     if chain_crosses_vec(object) {
         Pos::Value
@@ -446,6 +446,18 @@ const TOP: EffectSet = EffectSet(
     (1 << Effect::Managed as u8) | (1 << Effect::Alloc as u8) | (1 << Effect::Panic as u8),
 );
 
+pub const EXTERN_DEFAULT: EffectSet = EffectSet(
+    (1 << Effect::Managed as u8)
+        | (1 << Effect::Alloc as u8)
+        | (1 << Effect::Panic as u8)
+        | (1 << Effect::Unwind as u8)
+        | (1 << Effect::Block as u8)
+        | (1 << Effect::Io as u8),
+);
+
+// alloc stays lit: nogc is managed-free, it never promises the callee allocates nothing
+pub const EXTERN_NOGC: EffectSet = EffectSet(EXTERN_DEFAULT.0 & !(1 << Effect::Managed as u8));
+
 pub fn effect_summaries(bir: &BirProgram) -> HashMap<String, EffectSet> {
     effect_summaries_with_imports(bir, &HashMap::new())
 }
@@ -455,6 +467,15 @@ pub fn effect_summaries_with_imports(
     imported: &HashMap<String, EffectSet>,
 ) -> HashMap<String, EffectSet> {
     let mut seed: HashMap<String, EffectSet> = imported.clone();
+    for (name, decl) in &bir.externs {
+        let declared = if decl.declared_nogc {
+            EXTERN_NOGC
+        } else {
+            EXTERN_DEFAULT
+        };
+        let s = seed.entry(name.clone()).or_insert(EffectSet::EMPTY);
+        *s = s.union(declared);
+    }
     let mut edges: HashMap<String, Vec<(HashSet<String>, bool)>> = HashMap::new();
     for body in &bir.bodies {
         let s = seed.entry(body.name.clone()).or_insert(EffectSet::EMPTY);

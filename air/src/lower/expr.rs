@@ -1033,6 +1033,10 @@ impl<'a> LoweringContext<'a> {
             None,
         );
 
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
+
         let eval_right_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
 
@@ -1081,6 +1085,9 @@ impl<'a> LoweringContext<'a> {
         };
 
         let cond = self.lower_expr(condition);
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
         let then_id = self.alloc_block_id();
         let else_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
@@ -1354,6 +1361,7 @@ impl<'a> LoweringContext<'a> {
             decorators: Vec::new(),
             is_pub: false,
             declared_nogc: false,
+            foreign: None,
             span: parent.span,
             captures: captures.to_vec(),
         };
@@ -1451,6 +1459,9 @@ impl<'a> LoweringContext<'a> {
         };
 
         let scrutinee_op = self.lower_expr(scrutinee);
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
 
         let enum_name = match &scrutinee.ty {
             InferType::Enum(name, _) => name.clone(),
@@ -1583,6 +1594,9 @@ impl<'a> LoweringContext<'a> {
         };
 
         let scrutinee_op = self.lower_expr(scrutinee);
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
         let enum_name = match &scrutinee.ty {
             InferType::Enum(name, _) => name.clone(),
             _ => {
