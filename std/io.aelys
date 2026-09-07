@@ -1,0 +1,60 @@
+// an extern keeps its literal symbol name and cannot be `pub`, so every wrapper below is renamed
+
+// claims: write touches no managed memory, does not retain buf past the call, and returns a count, never a pointer
+unsafe extern nogc fn write(fd: i32, buf: &u8, n: u64) -> i64
+
+// claims: getenv touches no managed memory, does not retain name past the call, and returns a pointer into the environment block, never into aelys storage
+unsafe extern nogc fn getenv(name: &u8) -> u64
+
+// claims: strlen touches no managed memory, does not retain s, and reads only up to the first zero at a pointer this module itself got from getenv
+unsafe extern nogc fn strlen(s: u64) -> u64
+
+// claims: exit touches no managed memory, never returns, and flushes only c stdio, so an aelys buffer is not its business
+unsafe extern nogc fn exit(code: i32)
+
+// claims: abort touches no managed memory and never returns
+unsafe extern nogc fn abort()
+
+// claims: time touches no managed memory and, given the handle zero, writes nothing through it
+unsafe extern nogc fn time(slot: u64) -> i64
+
+// a short write is legal, so the loop is the contract the name promises
+pub nogc fn write_all(fd: i64, bytes: &[u8]) -> i64 {
+    let mut done: i64 = 0
+    while done < bytes.len {
+        let mut k: i64 = 0
+        unsafe { k = write(fd as i32, &bytes[done], (bytes.len - done) as u64) }
+        if k <= 0 { return done }
+        done = done + k
+    }
+    return done
+}
+
+pub nogc fn write_out(bytes: &[u8]) -> i64 { return write_all(1, bytes) }
+
+pub nogc fn write_err(bytes: &[u8]) -> i64 { return write_all(2, bytes) }
+
+// getenv reads to the first zero, so a name the caller did not terminate would read past the slice
+pub nogc fn env_len(name: &[u8]) -> i64 {
+    if name.len == 0 { return -1 }
+    if name[name.len - 1] != 0 { return -1 }
+    unsafe {
+        let p: u64 = getenv(&name[0])
+        if p == 0 { return -1 }
+        return strlen(p) as i64
+    }
+}
+
+pub nogc fn env_is_set(name: &[u8]) -> bool { return env_len(name) >= 0 }
+
+pub nogc fn unix_time() -> i64 {
+    unsafe { return time(0) }
+}
+
+pub nogc fn exit_with(code: i64) {
+    unsafe { exit(code as i32) }
+}
+
+pub nogc fn abort_now() {
+    unsafe { abort() }
+}

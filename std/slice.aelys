@@ -1,0 +1,83 @@
+needs std.result
+
+pub nogc fn sum(s: &[i64]) -> i64 {
+    let mut acc: i64 = 0
+    for i in 0..s.len { acc = acc + s[i] }
+    return acc
+}
+
+pub nogc fn first(s: &[i64]) -> result.Option<i64> {
+    if s.len == 0 { return result.Option::None }
+    let v: i64 = s[0]
+    return result.Option::Some(v)
+}
+
+pub nogc fn last(s: &[i64]) -> result.Option<i64> {
+    if s.len == 0 { return result.Option::None }
+    let v: i64 = s[s.len - 1]
+    return result.Option::Some(v)
+}
+
+pub nogc fn max(s: &[i64]) -> result.Option<i64> {
+    if s.len == 0 { return result.Option::None }
+    let mut m: i64 = s[0]
+    for i in 1..s.len {
+        if s[i] > m { m = s[i] }
+    }
+    return result.Option::Some(m)
+}
+
+pub nogc fn min(s: &[i64]) -> result.Option<i64> {
+    if s.len == 0 { return result.Option::None }
+    let mut m: i64 = s[0]
+    for i in 1..s.len {
+        if s[i] < m { m = s[i] }
+    }
+    return result.Option::Some(m)
+}
+
+pub nogc fn index_of(s: &[i64], x: i64) -> i64 {
+    for i in 0..s.len {
+        if s[i] == x { return i }
+    }
+    return -1
+}
+
+pub nogc fn contains(s: &[i64], x: i64) -> bool {
+    return index_of(s, x) >= 0
+}
+
+pub nogc fn eq(a: &[i64], b: &[i64]) -> bool {
+    if a.len != b.len { return false }
+    for i in 0..a.len {
+        if a[i] != b[i] { return false }
+    }
+    return true
+}
+
+pub nogc fn is_sorted(s: &[i64]) -> bool {
+    for i in 1..s.len {
+        if s[i] < s[i - 1] { return false }
+    }
+    return true
+}
+
+pub nogc fn fill(s: &mut [i64], x: i64) {
+    for i in 0..s.len { s[i] = x }
+}
+
+pub nogc fn swap(s: &mut [i64], i: i64, j: i64) {
+    let t: i64 = s[i]
+    s[i] = s[j]
+    s[j] = t
+}
+
+pub nogc fn reverse(s: &mut [i64]) {
+    let mut i: i64 = 0
+    let mut j: i64 = s.len - 1
+    while i < j {
+        swap(s, i, j)
+        i = i + 1
+        j = j - 1
+    }
+}

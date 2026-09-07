@@ -1,0 +1,177 @@
+needs std.result
+
+pub nogc fn is_empty(s: string) -> bool { return s.len == 0 }
+
+pub nogc fn char_at(s: string, i: i64) -> result.Option<string> {
+    if i < 0 { return result.Option::None }
+    if i >= s.len { return result.Option::None }
+    let c: string = s[i]
+    return result.Option::Some(c)
+}
+
+// a string is built only by concatenation, so this copies the whole prefix once per character
+pub fn substring(s: string, start: i64, end: i64) -> string {
+    let mut lo: i64 = start
+    let mut hi: i64 = end
+    if lo < 0 { lo = 0 }
+    if hi > s.len { hi = s.len }
+    let mut out: string = ""
+    let mut i: i64 = lo
+    while i < hi {
+        out = out + s[i]
+        i = i + 1
+    }
+    return out
+}
+
+pub nogc fn starts_with(s: string, p: string) -> bool {
+    if p.len > s.len { return false }
+    for i in 0..p.len {
+        if s[i] != p[i] { return false }
+    }
+    return true
+}
+
+pub nogc fn ends_with(s: string, p: string) -> bool {
+    if p.len > s.len { return false }
+    let off: i64 = s.len - p.len
+    for i in 0..p.len {
+        if s[off + i] != p[i] { return false }
+    }
+    return true
+}
+
+pub nogc fn index_of(s: string, needle: string) -> i64 {
+    if needle.len == 0 { return 0 }
+    if needle.len > s.len { return -1 }
+    let last: i64 = s.len - needle.len
+    let mut i: i64 = 0
+    while i <= last {
+        let mut j: i64 = 0
+        let mut hit: bool = true
+        while j < needle.len {
+            if s[i + j] != needle[j] {
+                hit = false
+                break
+            }
+            j = j + 1
+        }
+        if hit { return i }
+        i = i + 1
+    }
+    return -1
+}
+
+pub nogc fn contains(s: string, needle: string) -> bool { return index_of(s, needle) >= 0 }
+
+pub fn repeat(s: string, n: i64) -> string {
+    let mut out: string = ""
+    let mut i: i64 = 0
+    while i < n {
+        out = out + s
+        i = i + 1
+    }
+    return out
+}
+
+pub nogc fn is_space(c: string) -> bool {
+    return c == " " or c == "\t" or c == "\n" or c == "\r"
+}
+
+pub fn trim(s: string) -> string {
+    let mut lo: i64 = 0
+    while lo < s.len and is_space(s[lo]) { lo = lo + 1 }
+    let mut hi: i64 = s.len
+    while hi > lo and is_space(s[hi - 1]) { hi = hi - 1 }
+    return substring(s, lo, hi)
+}
+
+// an empty separator would never advance, so the whole string comes back as one part
+pub fn split(s: string, sep: string) -> Vec<string> {
+    let mut out = Vec::new()
+    if sep.len == 0 {
+        Vec::push(out, s)
+        return out
+    }
+    let mut start: i64 = 0
+    let mut i: i64 = 0
+    let last: i64 = s.len - sep.len
+    while i <= last {
+        let mut j: i64 = 0
+        let mut hit: bool = true
+        while j < sep.len {
+            if s[i + j] != sep[j] {
+                hit = false
+                break
+            }
+            j = j + 1
+        }
+        if hit {
+            let part: string = substring(s, start, i)
+            Vec::push(out, part)
+            i = i + sep.len
+            start = i
+        } else {
+            i = i + 1
+        }
+    }
+    let tail: string = substring(s, start, s.len)
+    Vec::push(out, tail)
+    return out
+}
+
+pub fn join(parts: &Vec<string>, sep: string) -> string {
+    let mut out: string = ""
+    for i in 0..Vec::len(*parts) {
+        if i > 0 { out = out + sep }
+        out = out + (*parts)[i]
+    }
+    return out
+}
+
+// there is no char type and no byte access, so a digit is recognised by comparing one-character strings
+nogc fn digit_of(c: string) -> i64 {
+    if c == "0" { return 0 }
+    if c == "1" { return 1 }
+    if c == "2" { return 2 }
+    if c == "3" { return 3 }
+    if c == "4" { return 4 }
+    if c == "5" { return 5 }
+    if c == "6" { return 6 }
+    if c == "7" { return 7 }
+    if c == "8" { return 8 }
+    if c == "9" { return 9 }
+    return -1
+}
+
+// err codes: 1 empty, 2 sign with no digits, 3 non-digit, 4 out of i64 range
+pub nogc fn parse_int(s: string) -> result.Result<i64, i64> {
+    if s.len == 0 { return result.Result::Err(1) }
+    let mut i: i64 = 0
+    let mut neg: bool = false
+    if s[0] == "-" {
+        neg = true
+        i = 1
+    }
+    if i >= s.len { return result.Result::Err(2) }
+    // the least i64 is unspellable as a literal
+    let min: i64 = 0 - 9223372036854775807 - 1
+    let limit: i64 = min / 10
+    let mut acc: i64 = 0
+    // + and * wrap silently, so the magnitude accumulates negative and every step is checked before it runs
+    while i < s.len {
+        let d: i64 = digit_of(s[i])
+        if d < 0 { return result.Result::Err(3) }
+        if acc < limit { return result.Result::Err(4) }
+        acc = acc * 10
+        if acc < min + d { return result.Result::Err(4) }
+        acc = acc - d
+        i = i + 1
+    }
+    if neg { return result.Result::Ok(acc) }
+    if acc == min { return result.Result::Err(4) }
+    let v: i64 = 0 - acc
+    return result.Result::Ok(v)
+}
+
+pub fn from_int(n: i64) -> string { return "{n}" }
