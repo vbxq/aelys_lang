@@ -78,7 +78,7 @@ The language provides two levels of control, each narrowing what the runtime pro
 
 **`nogc` functions.** A function-level opt-out from managed allocation. Inside a `nogc` function, managed allocation is rejected at compile time, managed containers cannot be created, references are checked for escape and aliasing violations, and calls that reach managed allocation are rejected, naming the path that reaches it.
 
-The compiler proves that the function satisfies these constraints or rejects it. No warnings, no user-written lifetime annotations. `unsafe {}` is reserved; today it permits only `.unwrap_unchecked()`, and it does not re-enable managed allocation.
+The compiler proves that the function satisfies these constraints or rejects it. No warnings, no user-written lifetime annotations. `unsafe {}` is narrow: today it permits `.unwrap_unchecked()` and gates every call of an `extern fn`, and it does not re-enable managed allocation.
 
 The FFI example below is **aspirational**: `needs "header.h"`, raw pointer casts, `size_of` and `.as_ptr()` do not exist yet.
 
@@ -100,7 +100,7 @@ nogc fn upload_normals(buffer_id: u32, normals: &[Vec3]) {
 
 <br>
 
-**`#![no_gc]` `#![no_std]` modules.** At the module level, these attributes remove the garbage collector, runtime, and standard library entirely. This mode is **planned, not implemented**: module attributes, raw pointers, `extern fn` and inline assembly are not parsed today. It is intended for kernels, boot code, and freestanding targets, and the module below does not compile.
+**`#![no_gc]` `#![no_std]` modules.** At the module level, these attributes remove the garbage collector, runtime, and standard library entirely. This mode is **planned, not implemented**: module attributes, raw pointers and inline assembly are not parsed today. `extern fn` is the exception, and it is real: an `unsafe extern fn` declaration parses, links, and is what `std/io.aelys` is built on. It is intended for kernels, boot code, and freestanding targets, and the module below does not compile.
 
 ```rust
 #![no_gc]
@@ -136,9 +136,11 @@ Aelys is an experimental language and compiler project under active rewrite. It 
 source → parser → semantic analysis → AIR (Aelys IR) → LLVM IR → native code
 ```
 
-Parser and semantic analysis are partially implemented; there is no prelude or standard library yet. The `nogc` checker rules are under active design. Codegen targets LLVM.
+Parser and semantic analysis are partially implemented. There is now a standard library, 586 lines of Aelys across seven modules under `std/`, but **there is still no prelude**: nothing is in scope without a `needs`, `Result` and `Option` included. The `nogc` checker rules are under active design. Codegen targets LLVM.
 
-Language semantics, the IR, and parts of the standard library are not stable. Open design questions include the collection strategy, iterator design, and whether a freestanding mode is in scope at all. The managed / `nogc` boundary rules are substantially settled: what a `nogc` function may do is decided per operation, and a refusal names the operation and the path that reaches it rather than the type.
+The library is written in Aelys, not in the compiler. It is reached by sitting next to the root file, because a `needs` resolves to exactly one path and there is no module search path. It cannot print a `string`: `string` is outside the external type surface, so `std/io` writes bytes, and printing a string still goes through the `println` builtin. All of `math`, `slice` and `sort`, and the whole of `str`'s reading surface, are callable from `nogc` with the managed allocator untouched.
+
+Language semantics and the IR are not stable, and neither is the standard library: it is one run old, every container function is fixed to `i64`, `Vec` is append-only because that is the whole builtin surface, and there is no ordering on strings. Open design questions include the collection strategy, iterator design, and whether a freestanding mode is in scope at all. The managed / `nogc` boundary rules are substantially settled: what a `nogc` function may do is decided per operation, and a refusal names the operation and the path that reaches it rather than the type.
 
 ## Contributing
 
