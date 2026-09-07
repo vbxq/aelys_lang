@@ -25,6 +25,3 @@ asan-invariants = []
 
 [build-dependencies]
 regex = "1"
-
-[lib]
-doctest = false

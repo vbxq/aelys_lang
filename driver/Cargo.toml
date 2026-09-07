@@ -12,6 +12,3 @@ aelys-opt = { path = "../opt" }
 aelys-air = { path = "../air" }
 aelys-codegen = { path = "../codegen" }
 semver = "1"
-
-[lib]
-doctest = false

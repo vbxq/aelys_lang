@@ -9,6 +9,3 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", defa
 
 [dev-dependencies]
 tempfile = "3"
-
-[lib]
-doctest = false

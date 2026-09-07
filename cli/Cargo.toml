@@ -11,6 +11,3 @@ aelys-air = { path = "../air" }
 semver = "1.0"
 
 [dev-dependencies]
-
-[lib]
-doctest = false
