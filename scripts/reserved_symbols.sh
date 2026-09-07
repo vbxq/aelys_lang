@@ -11,7 +11,16 @@ RS_DIRS="air/src codegen/src driver/src core/src sema/src common/src frontend/sr
 GREP=/usr/bin/grep
 [ -x "$GREP" ] || GREP=grep
 
-WITNESS_SUITE=aelys/tests/semantic_invariants_tests.rs
+# # an extern names a foreign symbol and does not define it, so its `fn __` is neutralised before the scan
+STRIP_EXTERN='s/(^|[^A-Za-z0-9_])extern[[:space:]]+fn[[:space:]]+__/\1extern DECL __/g'
+DEF_RE='(^|[^A-Za-z0-9_])(nogc[[:space:]]+)?fn[[:space:]]+__[A-Za-z0-9_]*\('
+EXTERN_RE='(^|[^A-Za-z0-9_])extern[[:space:]]+fn[[:space:]]+__[A-Za-z0-9_]*\('
+# # the diagnostic a fixture must assert for its reserved-name definition to be a proof of rejection
+REJECTION_CODE=E0428
+
+def_sites() {
+    sed -E "$STRIP_EXTERN" "$1" | "$GREP" -nE "$DEF_RE" | sed "s|^|$1:|"
+}
 
 sites() {
     { grep -rhoE '"__[A-Za-z0-9_]+"' --include='*.rs' $RS_DIRS | tr -d '"'
@@ -106,9 +115,23 @@ UNCLASSIFIED=$(printf '%s\n' $UNCLASSIFIED_SYMS | grep -c . )
 TRACKED=$(git ls-files '*.aelys' | wc -l)
 DECLS=$(find . -path ./target -prune -o -name '*.aelys' -print0 \
         | xargs -0 "$GREP" -lE '^[[:space:]]*(nogc[[:space:]]+)?fn[[:space:]]+__' 2>/dev/null | wc -l)
-RUST_DECLS=$(find aelys/tests driver/tests cli/tests -name '*.rs' ! -path "$WITNESS_SUITE" -print0 \
-        | xargs -0 "$GREP" -lE '(nogc[[:space:]]+)?fn[[:space:]]+__[A-Za-z0-9_]*\(' 2>/dev/null | wc -l)
-WITNESS_DECLS=$("$GREP" -cE '(nogc[[:space:]]+)?fn[[:space:]]+__[A-Za-z0-9_]*\(' "$WITNESS_SUITE" 2>/dev/null)
+RUST_EXTERN=0
+RUST_DEF_FILES=0
+RUST_PROVEN=0
+RUST_DECLS=0
+RUST_SMUGGLED=
+while IFS= read -r f; do
+    RUST_EXTERN=$((RUST_EXTERN + $("$GREP" -cE "$EXTERN_RE" "$f")))
+    hits=$(def_sites "$f")
+    [ -n "$hits" ] || continue
+    RUST_DEF_FILES=$((RUST_DEF_FILES + 1))
+    if "$GREP" -q "$REJECTION_CODE" "$f"; then
+        RUST_PROVEN=$((RUST_PROVEN + 1))
+    else
+        RUST_DECLS=$((RUST_DECLS + 1))
+        RUST_SMUGGLED="$RUST_SMUGGLED$hits"$'\n'
+    fi
+done < <(find aelys/tests driver/tests cli/tests -name '*.rs' | sort)
 RUST_FILES=$(git ls-files 'aelys/tests/*.rs' 'driver/tests/*.rs' 'cli/tests/*.rs' | wc -l)
 CORPUS=$(find . -path ./target -prune -o -name '*.aelys' -print | wc -l)
 MAIN=$(find . -path ./target -prune -o -name '*.aelys' -print0 \
@@ -125,8 +148,10 @@ echo ".aelys files present in this working tree    : $CORPUS   (the corpora are 
 echo ".aelys declaring fn main                     : $MAIN   (magnitude control, must be >0 and >400 once the corpora are present)"
 echo ".aelys declaring fn __*                      : $DECLS   (over-rejection, must be 0)"
 echo "suite .rs files tracked                      : $RUST_FILES   (magnitude control, must be >70)"
-echo "suite .rs declaring an aelys fn __*          : $RUST_DECLS   (over-rejection, must be 0, witness suite excluded)"
-echo "fn __* fixtures inside the witness suite     : $WITNESS_DECLS   (the exclusion is stale below 1)"
+echo "suite .rs reserved-prefix extern declarations: $RUST_EXTERN   (a declaration, not a definition; magnitude control, must be >=1)"
+echo "suite .rs defining an aelys fn __*           : $RUST_DEF_FILES   (magnitude control, must be >=1)"
+echo "  of those proving the $REJECTION_CODE rejection      : $RUST_PROVEN   (negative fixtures, the rule is stale below 1)"
+echo "  of those smuggling a definition in         : $RUST_DECLS   (over-rejection, must be 0)"
 
 rc=0
 [ "$UNCLASSIFIED" -eq 0 ] || {
@@ -148,6 +173,15 @@ rc=0
 }
 [ "$DECLS" -eq 0 ] || { echo "FAIL: a .aelys in the working tree declares fn __*" >&2; rc=1; }
 [ "$RUST_FILES" -gt 70 ] || { echo "FAIL: suite scan fired below magnitude" >&2; rc=1; }
-[ "$RUST_DECLS" -eq 0 ] || { echo "FAIL: a suite .rs outside the witness suite embeds an aelys fn __*" >&2; rc=1; }
-[ "$WITNESS_DECLS" -ge 1 ] || { echo "FAIL: the witness suite exclusion is stale" >&2; rc=1; }
+[ "$RUST_EXTERN" -ge 1 ] || {
+    echo "FAIL: no suite .rs holds a reserved-prefix extern declaration, the carve-out is asserted by nothing" >&2
+    rc=1
+}
+[ "$RUST_DEF_FILES" -ge 1 ] || { echo "FAIL: the definition scan matched nothing at all" >&2; rc=1; }
+[ "$RUST_PROVEN" -ge 1 ] || { echo "FAIL: no suite .rs proves the $REJECTION_CODE rejection, the negative fixture rule is stale" >&2; rc=1; }
+[ "$RUST_DECLS" -eq 0 ] || {
+    echo "FAIL: a suite .rs defines an aelys fn __* without proving the compiler rejects it:" >&2
+    printf '%s' "$RUST_SMUGGLED" >&2
+    rc=1
+}
 exit $rc
