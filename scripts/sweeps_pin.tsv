@@ -1,0 +1,22 @@
+corpus_sweep.sh	run	measured green in xo mode at this revision: 407 files (389 local + 18 cow), divergent=0, nondeterministic=1 correctly classified, compile-fail-legs=52, exit 0 in 219s; it stands in for the ignored cross_o_differential_tests row; its diff mode is not run because that mode needs a compiler binary from an earlier revision
+cow_probes.py	excluded	a fixture generator with no verdict of its own, corpus_sweep.sh invokes it and exits 5 when it yields fewer than 18 probes
+empty_targets.tsv	excluded	pin data read by verify_suites.sh, not an executable check
+extract_corpus.py	excluded	a fixture generator with no verdict of its own, run3_stage2_positions_tests.rs and the s4 harnesses invoke it
+extract_rows.py	excluded	a fixture generator with no verdict of its own, s6_census.sh invokes it
+features_pin.tsv	excluded	pin data read by verify_suites.sh, not an executable check
+ir_neutrality_allowlist.tsv	excluded	divergences recorded by hand from an m_neutral.sh comparison between two revisions, read by no script, not an executable check
+m_neutral.sh	excluded	exits 2 without --base and --head, and the base binary comes from an earlier revision this checkout cannot build
+over_narrow_s4.py	excluded	an ablation helper that rewrites the tracked air/src/bir/effects.rs in place, s4_retro_discrimination.sh and s6_census.sh drive it
+place_addressing_sweep.sh	run	measured green at this revision: 336 generated files, divergent=0, nondeterministic=0, asan-failures=0, critical=0, exit 0 in 40s, and it generates its own corpus so it needs no gitignored input
+reserved_symbols.sh	run	measured green at this revision once the predicate learned that an extern declares rather than defines, exit 0 in under a second
+run3_s6_census.tsv	excluded	census data read by s6_census.sh, not an executable check
+s4_neutrality_sweep.sh	excluded	overwrites the tracked air/src/bir/effects.rs with the base revision copy, rebuilds and restores by cp, an interrupted run leaves the tree dirty
+s4_retro_discrimination.sh	excluded	overwrites the tracked air/src/bir/effects.rs through over_narrow_s4.py, rebuilds and restores by cp, an interrupted run leaves the tree dirty
+s6_ablate.py	excluded	an ablation helper that rewrites the tracked air/src/lower/place.rs, air/src/lower/expr.rs and air/src/bir/effects.rs in place, s6_census.sh drives it
+s6_census.sh	excluded	overwrites three tracked compiler sources, rebuilds, restores with git checkout and checks out other refs, an interrupted run leaves the tree dirty or on another branch
+s6_row_sweep.sh	excluded	a per row runner with no verdict of its own, s6_census.sh invokes it with a cli path and a fixture dir
+sweeps_pin.tsv	excluded	this pin, read by verify_suites.sh, not an executable check
+target_pin.tsv	excluded	pin data read by verify_suites.sh, not an executable check
+test_name_pin.tsv	excluded	pin data read by verify_suites.sh, not an executable check
+use-msvc.ps1	excluded	a windows powershell shim that imports the msvc toolchain into the environment, it asserts nothing and cannot run on this host
+verify_suites.sh	excluded	the harness itself, it is the caller of every run row

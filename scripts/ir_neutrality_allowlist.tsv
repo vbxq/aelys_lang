@@ -1,0 +1,13 @@
+# fixture	level	class	reason
+# baseline pinned between ffi/base 684a314 and stdlib/base 0a94422, 10 of 1347 comparisons
+# an eleventh divergence is a finding, not noise
+evil50_extern_c	O0	parse-message	extern became a keyword, the parse message changed
+evil50_extern_c	O2	parse-message	extern became a keyword, the parse message changed
+evil50_extern_c	O3	parse-message	extern became a keyword, the parse message changed
+deep39_match_in_loop	O0	dead-position-store	store ptr null removed from a block with no predecessors
+evil97_match_all_early_return	O0	dead-position-store	store ptr null removed from a block with no predecessors
+field_return_in_match_01	O0	dead-position-store	store ptr null removed from a block with no predecessors
+field_return_in_match_03	O0	dead-position-store	store ptr null removed from a block with no predecessors
+field_return_in_match_10	O0	dead-position-store	store ptr null removed from a block with no predecessors
+never04_nested_return	O0	dead-position-store	store ptr null removed from a block with no predecessors
+never06_match_return_with_data_enum	O0	dead-position-store	store ptr null removed from a block with no predecessors
