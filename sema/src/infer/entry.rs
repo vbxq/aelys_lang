@@ -135,7 +135,31 @@ impl TypeInference {
             return InferType::Rc(Box::new(inner));
         }
 
-        if ann.name == "Result" && self.type_table.has_enum("Result") && ann.type_params.len() == 2
+        // map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
+        if ann.name == "Never" {
+            return InferType::Never;
+        }
+
+        // resolved once, so the `result` special case and the generic path name the same enum
+        let qualified = match self.imported_type_name(&ann.name) {
+            Some(q) => Some(q),
+            None if ann.name.contains('.') => {
+                match self.resolve_module_type_name(&ann.name, ann.span) {
+                    Some(q) => Some(q),
+                    None => return InferType::Dynamic,
+                }
+            }
+            None => None,
+        };
+
+        let result_carrier = match &qualified {
+            Some(q) => (crate::modules::source_type_name(q) == "Result").then(|| q.clone()),
+            None => (ann.name == "Result" && self.type_table.has_enum("Result"))
+                .then(|| ann.name.clone()),
+        };
+        if let Some(carrier) = result_carrier
+            && self.type_table.has_enum(&carrier)
+            && ann.type_params.len() == 2
         {
             let t = self.type_from_annotation(&ann.type_params[0]);
             let e = if ann.type_params[1].name == "Never" && !ann.type_params[1].is_function_type()
@@ -144,30 +168,15 @@ impl TypeInference {
             } else {
                 self.type_from_annotation(&ann.type_params[1])
             };
-            return InferType::Enum("Result".to_string(), vec![t, e]);
-        }
-        // map never so into_ok can read it, a plain never annotation is still rejected by check_type_annotation
-        if ann.name == "Never" {
-            return InferType::Never;
+            return InferType::Enum(carrier, vec![t, e]);
         }
 
-        if let Some(qualified) = self.imported_type_name(&ann.name) {
+        if let Some(qualified) = qualified {
             if self.type_table.has_enum(&qualified) {
                 let type_args = self.collect_enum_type_args(ann);
                 return InferType::Enum(qualified, type_args);
             }
             return InferType::Struct(qualified);
-        }
-
-        if ann.name.contains('.') {
-            if let Some(qualified) = self.resolve_module_type_name(&ann.name, ann.span) {
-                if self.type_table.has_enum(&qualified) {
-                    let type_args = self.collect_enum_type_args(ann);
-                    return InferType::Enum(qualified, type_args);
-                }
-                return InferType::Struct(qualified);
-            }
-            return InferType::Dynamic;
         }
 
         let ty = InferType::from_annotation(ann);

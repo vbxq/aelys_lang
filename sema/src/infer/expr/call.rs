@@ -1,5 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::modules::source_type_name;
 use crate::typed_ast::{ResultAssertOnErr, TypedExpr, TypedExprKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, MatchArm, Pattern, Span};
@@ -114,7 +115,7 @@ impl TypeInference {
         {
             let typed_object = self.infer_expr(object);
             if let InferType::Enum(name, targs) = &typed_object.ty
-                && name == "Result"
+                && source_type_name(name) == "Result"
                 && targs.len() == 2
             {
                 let payload_ty = targs[0].clone();
@@ -225,17 +226,22 @@ impl TypeInference {
             return self.infer_map_error(typed_object, payload_ty, args, span);
         }
 
+        let receiver_enum = match &typed_object.ty {
+            InferType::Enum(name, _) => name.clone(),
+            _ => unreachable!("the seam only routes a Result<T, E> receiver here"),
+        };
         let ok_tag = match self
             .type_table
-            .get_enum("Result")
+            .get_enum(&receiver_enum)
             .and_then(|def| def.variants.iter().find(|v| v.name == "Ok"))
         {
             Some(v) => v.tag,
             None => {
-                self.errors.push(TypeError::member_access(
+                self.errors.push(TypeError::error_handling(
                     format!(
                         "[eh-stage3] `.{member}()` needs a declared `enum Result<T, E> {{ Ok(T), Err(E) }}`"
                     ),
+                    "no `Ok` variant on this type",
                     span,
                 ));
                 return (TypedExprKind::Null, InferType::Dynamic);
@@ -245,11 +251,12 @@ impl TypeInference {
         let on_err = match member {
             "unwrap" => {
                 if !args.is_empty() {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         format!(
                             "[eh-stage3] `.unwrap()` takes no arguments, found {}",
                             args.len()
                         ),
+                        "`.unwrap()` takes no arguments",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
@@ -258,11 +265,12 @@ impl TypeInference {
             }
             "expect" => {
                 if args.len() != 1 {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         format!(
                             "[eh-stage3] `.expect()` takes one string literal argument, found {}",
                             args.len()
                         ),
+                        "`.expect()` takes one string literal",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
@@ -270,9 +278,10 @@ impl TypeInference {
                 match &args[0].kind {
                     ExprKind::String(msg) => ResultAssertOnErr::Panic(msg.clone()),
                     _ => {
-                        self.errors.push(TypeError::member_access(
+                        self.errors.push(TypeError::error_handling(
                             "[eh-stage3] `.expect(...)` takes a string literal message in V1"
                                 .to_string(),
+                            "not a string literal",
                             args[0].span,
                         ));
                         return (TypedExprKind::Null, InferType::Dynamic);
@@ -282,26 +291,30 @@ impl TypeInference {
             // into_ok is a compile-time proof that the error is uninhabited, so err seals unreachable
             "into_ok" => {
                 if !args.is_empty() {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         format!(
                             "[eh-stage3] `.into_ok()` takes no arguments, found {}",
                             args.len()
                         ),
+                        "`.into_ok()` takes no arguments",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
                 }
                 let e = match &typed_object.ty {
-                    InferType::Enum(name, targs) if name == "Result" && targs.len() == 2 => {
+                    InferType::Enum(name, targs)
+                        if source_type_name(name) == "Result" && targs.len() == 2 =>
+                    {
                         targs[1].clone()
                     }
                     _ => unreachable!("the seam only routes a Result<T, E> receiver here"),
                 };
                 if !matches!(e, InferType::Never) {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         format!(
                             "[eh-stage3] `.into_ok()` requires `Result<T, Never>`; this Result can fail with error type `{e}`"
                         ),
+                        "this `Result` can still fail",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
@@ -310,18 +323,20 @@ impl TypeInference {
             }
             "unwrap_unchecked" => {
                 if !args.is_empty() {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         format!(
                             "[eh-stage3] `.unwrap_unchecked()` takes no arguments, found {}",
                             args.len()
                         ),
+                        "`.unwrap_unchecked()` takes no arguments",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
                 }
                 if self.unsafe_depth == 0 {
-                    self.errors.push(TypeError::member_access(
+                    self.errors.push(TypeError::error_handling(
                         "[eh-stage3] `.unwrap_unchecked()` requires an `unsafe` block".to_string(),
+                        "unchecked assert outside an `unsafe` block",
                         span,
                     ));
                     return (TypedExprKind::Null, InferType::Dynamic);
@@ -350,19 +365,22 @@ impl TypeInference {
         span: Span,
     ) -> (TypedExprKind, InferType) {
         if args.len() != 1 {
-            self.errors.push(TypeError::member_access(
+            self.errors.push(TypeError::error_handling(
                 format!(
                     "[eh-stage3] `.map_error()` takes one function argument, found {}",
                     args.len()
                 ),
+                "`.map_error()` takes one function",
                 span,
             ));
             return (TypedExprKind::Null, InferType::Dynamic);
         }
 
-        let e = match &typed_object.ty {
-            InferType::Enum(name, targs) if name == "Result" && targs.len() == 2 => {
-                targs[1].clone()
+        let (enum_name, e) = match &typed_object.ty {
+            InferType::Enum(name, targs)
+                if source_type_name(name) == "Result" && targs.len() == 2 =>
+            {
+                (name.clone(), targs[1].clone())
             }
             _ => unreachable!("the seam only routes a Result<T, E> receiver here"),
         };
@@ -372,10 +390,11 @@ impl TypeInference {
             InferType::Function { params, ret, .. } if params.len() == 1 => (**ret).clone(),
             InferType::Dynamic => return (TypedExprKind::Null, InferType::Dynamic),
             other => {
-                self.errors.push(TypeError::member_access(
+                self.errors.push(TypeError::error_handling(
                     format!(
                         "[eh-stage3] `.map_error(f)` needs `f: fn({e}) -> E2`, found `{other}`"
                     ),
+                    "not a one-argument function",
                     args[0].span,
                 ));
                 return (TypedExprKind::Null, InferType::Dynamic);
@@ -387,9 +406,9 @@ impl TypeInference {
         let e_name = self.next_map_error_binding('e');
 
         let ok_arm = MatchArm {
-            pattern: variant_pattern("Result", "Ok", vec![v_name.clone()], span),
+            pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], span),
             body: Box::new(variant_construct(
-                "Result",
+                &enum_name,
                 "Ok",
                 vec![ident_expr(&v_name, span)],
                 span,
@@ -397,9 +416,9 @@ impl TypeInference {
             span,
         };
         let err_arm = MatchArm {
-            pattern: variant_pattern("Result", "Err", vec![e_name.clone()], span),
+            pattern: variant_pattern(&enum_name, "Err", vec![e_name.clone()], span),
             body: Box::new(variant_construct(
-                "Result",
+                &enum_name,
                 "Err",
                 vec![call_expr(
                     args[0].clone(),
@@ -413,7 +432,7 @@ impl TypeInference {
 
         let arms = vec![ok_arm, err_arm];
         let (kind, _) = self.infer_match_typed(typed_object, obj_span, &arms, span, false);
-        (kind, InferType::Enum("Result".to_string(), vec![t, e2]))
+        (kind, InferType::Enum(enum_name, vec![t, e2]))
     }
 
     // $ is rejected by the scanner, so these hygienic names never collide with user code

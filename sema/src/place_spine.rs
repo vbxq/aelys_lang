@@ -32,13 +32,34 @@ pub fn spine_root_name(e: &TypedExpr) -> Option<&str> {
     }
 }
 
+pub fn is_computed_len(object_ty: &InferType, member: &str) -> bool {
+    member == "len"
+        && matches!(
+            object_ty,
+            InferType::String | InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
+        )
+}
+
+pub fn computed_len_receiver(e: &TypedExpr) -> Option<&InferType> {
+    match &e.kind {
+        TypedExprKind::Member { object, member } if is_computed_len(&object.ty, member) => {
+            Some(&object.ty)
+        }
+        _ => None,
+    }
+}
+
 pub fn denotes_a_place(e: &TypedExpr) -> bool {
     match &e.kind {
         TypedExprKind::Grouping(inner) => denotes_a_place(inner),
         TypedExprKind::Identifier(_) => true,
         TypedExprKind::Deref(_) => true,
         _ if is_rc_get(e) => true,
-        TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+        TypedExprKind::Member { object, member } => {
+            !is_computed_len(&object.ty, member)
+                && (projects_through_pointer(&object.ty) || denotes_a_place(object))
+        }
+        TypedExprKind::Index { object, .. } => {
             projects_through_pointer(&object.ty) || denotes_a_place(object)
         }
         _ => false,
@@ -55,6 +76,7 @@ pub fn place_is_writable(e: &TypedExpr, name_is_mut: &dyn Fn(&str) -> bool) -> b
         TypedExprKind::Grouping(inner) => place_is_writable(inner, name_is_mut),
         TypedExprKind::Identifier(name) => name_is_mut(name),
         TypedExprKind::Deref(inner) => !deref_is_shared(&inner.ty),
+        TypedExprKind::Member { object, member } if is_computed_len(&object.ty, member) => false,
         TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
             if projects_through_pointer(&object.ty) {
                 !deref_is_shared(&object.ty)

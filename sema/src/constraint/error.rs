@@ -57,6 +57,15 @@ pub enum TypeErrorKind {
     MemberAccess {
         message: String,
     },
+    ErrorHandling {
+        message: String,
+        annotation: String,
+    },
+    CarrierMismatch {
+        carrier: String,
+        operand: InferType,
+        ret: InferType,
+    },
     RecursionLimit,
     AssignToImmutable {
         name: String,
@@ -86,6 +95,10 @@ pub enum TypeErrorKind {
         name: String,
     },
     RcFieldAssignIndirect,
+    ComputedLen {
+        ty: InferType,
+        assignment: bool,
+    },
     NoPlace {
         what: String,
     },
@@ -197,6 +210,17 @@ impl fmt::Display for TypeError {
                 write!(f, "undefined function: {}", name)
             }
             TypeErrorKind::MemberAccess { message } => write!(f, "{message}"),
+            TypeErrorKind::ErrorHandling { message, .. } => write!(f, "{message}"),
+            TypeErrorKind::CarrierMismatch {
+                carrier,
+                operand,
+                ret,
+            } => write!(
+                f,
+                "[?-stage1] `?` cannot bridge `{operand}` and `{ret}`: they are two distinct \
+                 `{carrier}` types, and their variant tags need not agree. use one of the two on \
+                 both sides, by importing it or by annotating this function with it"
+            ),
             TypeErrorKind::RecursionLimit => {
                 write!(f, "type inference recursion limit exceeded")
             }
@@ -222,6 +246,24 @@ impl fmt::Display for TypeError {
                 f,
                 "[slice-form] {detail}. a slice is built from the address of element zero plus a \
                  length, so it needs a base that carries a length and a range that starts at 0"
+            ),
+            TypeErrorKind::ComputedLen {
+                ty,
+                assignment: false,
+            } => write!(
+                f,
+                "cannot take the address of `.len` on `{ty}`: `.len` is a length the compiler \
+                 computes on demand, not a field stored in the value, so there is no address to \
+                 take. bind the length to a name first and borrow that binding"
+            ),
+            TypeErrorKind::ComputedLen {
+                ty,
+                assignment: true,
+            } => write!(
+                f,
+                "cannot assign to `.len` on `{ty}`: `.len` is a length the compiler computes on \
+                 demand, not a field stored in the value, so writing it would change nothing. \
+                 change the value itself, or bind the length to a `mut` name and write that"
             ),
             TypeErrorKind::NoPlace { what } => write!(
                 f,
@@ -415,6 +457,17 @@ impl TypeError {
             kind: TypeErrorKind::VecOutOfSurface {
                 detail: detail.into(),
             },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn computed_len(ty: InferType, assignment: bool, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ComputedLen { ty, assignment },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
@@ -794,6 +847,35 @@ impl TypeError {
             kind: TypeErrorKind::UndefinedFunction { name },
             span,
             reason: ConstraintReason::Other("function call".to_string()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn error_handling(message: String, annotation: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ErrorHandling {
+                message,
+                annotation: annotation.to_string(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn carrier_mismatch(carrier: &str, operand: InferType, ret: InferType, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::CarrierMismatch {
+                carrier: carrier.to_string(),
+                operand,
+                ret,
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,

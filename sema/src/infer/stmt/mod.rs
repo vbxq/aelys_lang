@@ -22,7 +22,7 @@ impl TypeInference {
             StmtKind::Expression(expr) => {
                 let typed_expr = self.infer_expr(expr);
                 if let InferType::Enum(name, args) = &typed_expr.ty {
-                    if name == "Result" && args.len() == 2 {
+                    if crate::modules::source_type_name(name) == "Result" && args.len() == 2 {
                         self.errors
                             .push(TypeError::must_use(expr.span, args[1].clone()));
                     }

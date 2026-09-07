@@ -80,7 +80,6 @@ use crate::typed_ast::{TypedProgram, TypedStmtKind};
 use crate::types::{EnumVariant, StructField};
 use std::collections::HashSet;
 
-// the `.` is outside the identifier alphabet, so a qualified name collides with no user name
 pub fn qualify_value(path: &str, name: &str) -> String {
     if path.is_empty() {
         return name.to_string();
@@ -110,6 +109,11 @@ pub fn qualify_type_name(path: &str, name: &str) -> String {
 
 pub fn strip_type_head(name: &str) -> &str {
     name.strip_prefix(TYPE_HEAD).unwrap_or(name)
+}
+
+pub fn source_type_name(name: &str) -> &str {
+    let bare = strip_type_head(name);
+    bare.rsplit('.').next().unwrap_or(bare)
 }
 
 pub fn qualify_infer_type(ty: &InferType, path: &str, owned: &HashSet<String>) -> InferType {

@@ -1,7 +1,8 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::place_spine::{
-    denotes_a_place, shared_slice_view, spine_is_shared, spine_root_name, target_ptr_is_shared,
+    computed_len_receiver, denotes_a_place, is_computed_len, shared_slice_view, spine_is_shared,
+    spine_root_name, target_ptr_is_shared,
 };
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
@@ -387,6 +388,17 @@ impl TypeInference {
                             ));
                         }
                     }
+                    InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..) => {
+                        if member != "len" {
+                            self.errors.push(TypeError::member_access(
+                                format!(
+                                    "unknown field '{}' on {}; supported: 'len'",
+                                    member, object.ty
+                                ),
+                                expr.span,
+                            ));
+                        }
+                    }
                     InferType::Struct(name) => {
                         if let Some(def) = self.type_table.get_struct(name) {
                             if !def.fields.iter().any(|f| f.name == *member) {
@@ -502,12 +514,17 @@ impl TypeInference {
             }
             TypedExprKind::FieldAssign {
                 object,
-                field: _,
+                field,
                 value,
             } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
-                self.check_write_target(object, "a field assignment", expr.span);
+                if is_computed_len(&object.ty, field) {
+                    self.errors
+                        .push(TypeError::computed_len(object.ty.clone(), true, expr.span));
+                } else {
+                    self.check_write_target(object, "a field assignment", expr.span);
+                }
             }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(start) = start {
@@ -554,7 +571,10 @@ impl TypeInference {
             }
             TypedExprKind::Reference { mutable, operand } => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
-                if !denotes_a_place(operand) {
+                if let Some(ty) = computed_len_receiver(operand) {
+                    self.errors
+                        .push(TypeError::computed_len(ty.clone(), false, expr.span));
+                } else if !denotes_a_place(operand) {
                     self.errors
                         .push(TypeError::no_place("the operand of `&`", expr.span));
                 }

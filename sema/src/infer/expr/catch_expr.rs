@@ -1,5 +1,6 @@
 use super::TypeInference;
 use crate::constraint::TypeError;
+use crate::modules::source_type_name;
 use crate::typed_ast::TypedExprKind;
 use crate::types::InferType;
 use aelys_syntax::{CatchHandler, Expr, ExprKind, MatchArm, Pattern, Span};
@@ -17,13 +18,16 @@ impl TypeInference {
             return (TypedExprKind::Null, InferType::Dynamic);
         }
 
-        let t = match &typed_scrutinee.ty {
-            InferType::Enum(name, targs) if name == "Result" && targs.len() == 2 => {
-                targs[0].clone()
+        let (enum_name, t) = match &typed_scrutinee.ty {
+            InferType::Enum(name, targs)
+                if source_type_name(name) == "Result" && targs.len() == 2 =>
+            {
+                (name.clone(), targs[0].clone())
             }
             other => {
-                self.errors.push(TypeError::member_access(
+                self.errors.push(TypeError::error_handling(
                     format!("[eh-stage3] `catch` requires a `Result<T, E>` value, found `{other}`"),
+                    "not a `Result` value",
                     scrutinee.span,
                 ));
                 return (TypedExprKind::Null, InferType::Dynamic);
@@ -33,14 +37,14 @@ impl TypeInference {
         let obj_span = typed_scrutinee.span;
         let v_name = self.next_catch_binding('v');
         let ok_arm = MatchArm {
-            pattern: variant_pattern("Result", "Ok", vec![v_name.clone()], span),
+            pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], span),
             body: Box::new(ident_expr(&v_name, span)),
             span,
         };
 
         let err_arm = match handler {
             CatchHandler::Binding { name, body } => MatchArm {
-                pattern: variant_pattern("Result", "Err", vec![name.clone()], span),
+                pattern: variant_pattern(&enum_name, "Err", vec![name.clone()], span),
                 body: body.clone(),
                 span,
             },
@@ -55,7 +59,7 @@ impl TypeInference {
                     span,
                 );
                 MatchArm {
-                    pattern: variant_pattern("Result", "Err", vec![e_name], span),
+                    pattern: variant_pattern(&enum_name, "Err", vec![e_name], span),
                     body: Box::new(inner),
                     span,
                 }

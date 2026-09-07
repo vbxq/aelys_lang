@@ -369,6 +369,16 @@ impl TypeInference {
                 InferType::Dynamic
             }
         };
+        if result_ty.is_rc() {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "`Rc::get` here reads an `Rc<T>` out of an `{}`; a nested `Rc` payload is \
+                     not supported yet, store one `Rc<T>` layer instead",
+                    typed_arg.ty
+                ),
+                span,
+            ));
+        }
         (
             TypedExprKind::EnumVariant {
                 enum_name: "Rc".to_string(),
@@ -555,6 +565,12 @@ impl TypeInference {
         }
 
         let typed_vec = self.infer_expr(&args[0]);
+        if variant == "as_slice" && !crate::place_spine::denotes_a_place(&typed_vec) {
+            self.errors.push(TypeError::no_place(
+                "the receiver of Vec::as_slice",
+                args[0].span,
+            ));
+        }
         let inner = match &typed_vec.ty {
             InferType::Vec(inner) => inner.as_ref().clone(),
             InferType::Var(_) | InferType::Dynamic => {

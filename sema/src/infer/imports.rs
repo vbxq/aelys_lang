@@ -201,3 +201,28 @@ fn module_item_error(kind: TypeErrorKind, span: Span) -> TypeError {
         suggestion: None,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::TypeInference;
+    use aelys_syntax::Span;
+
+    #[test]
+    fn a_qualified_type_name_passes_through_air_type_name_unchanged() {
+        let mut infer = TypeInference::new();
+        let span = Span::new(0, 0, 1, 1);
+        for name in [
+            "__q.res.Result",
+            "__q.res.Option",
+            "__q.a.b.Result",
+            "__q.deeply.nested.path.Carrier",
+        ] {
+            assert_eq!(infer.air_type_name(name, span), name);
+            assert!(
+                infer.errors.is_empty(),
+                "air_type_name({name}) must push no error, got {:?}",
+                infer.errors
+            );
+        }
+    }
+}

@@ -75,6 +75,13 @@ impl TypeInference {
                     InferType::Dynamic
                 }
             }
+            InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..) => {
+                if member == "len" {
+                    InferType::I64
+                } else {
+                    InferType::Dynamic
+                }
+            }
             InferType::Struct(name) => {
                 if let Some(def) = self.type_table.get_struct(name) {
                     def.fields
