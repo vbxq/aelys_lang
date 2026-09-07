@@ -1,3 +1,4 @@
+pub use aelys_sema::modules::source_type_name;
 use aelys_sema::{InferType, TypeTable};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -32,9 +33,4 @@ pub fn category(ty: &InferType, tt: &TypeTable) -> Category {
 
 pub fn is_affine(ty: &InferType) -> bool {
     matches!(ty, InferType::Struct(name) if source_type_name(name) == AFFINE_TEST_TYPE)
-}
-
-pub fn source_type_name(name: &str) -> &str {
-    let bare = aelys_sema::modules::strip_type_head(name);
-    bare.rsplit('.').next().unwrap_or(bare)
 }

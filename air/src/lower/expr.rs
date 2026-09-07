@@ -185,6 +185,14 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::FmtString(parts) => self.lower_fmt_string(parts, sp),
 
             TypedExprKind::Member { object, member } => {
+                if member == "len"
+                    && matches!(
+                        object.ty,
+                        InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
+                    )
+                {
+                    return self.lower_len_member(object, sp);
+                }
                 let base = self.lower_expr(object);
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
@@ -1205,6 +1213,25 @@ impl<'a> LoweringContext<'a> {
         Operand::Const(AirConst::Null)
     }
 
+    fn lower_len_member(&mut self, object: &TypedExpr, sp: Option<Span>) -> Operand {
+        if let Some(addr) = self.projection_base(object) {
+            return self.emit_rvalue_to_temp(
+                AirType::I64,
+                Rvalue::Len(Operand::Copy(addr.ptr)),
+                sp,
+            );
+        }
+        let base = self.lower_expr(object);
+        self.emit_rvalue_to_temp(
+            AirType::I64,
+            Rvalue::FieldAccess {
+                base,
+                field: "len".to_string(),
+            },
+            sp,
+        )
+    }
+
     fn lower_vec_len(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
         if args.len() != 1 {
             self.report_error(format!(
@@ -1213,13 +1240,7 @@ impl<'a> LoweringContext<'a> {
             ));
             return Operand::Const(AirConst::Null);
         }
-        let Some(addr) = self.projection_base(&args[0]) else {
-            self.report_error(
-                "ICE: Vec::len target denotes no storage at AIR lowering".to_string(),
-            );
-            return Operand::Const(AirConst::Null);
-        };
-        self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(Operand::Copy(addr.ptr)), sp)
+        self.lower_len_member(&args[0], sp)
     }
 
     fn lower_vec_as_slice(

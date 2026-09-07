@@ -9,9 +9,7 @@ impl MonoContext {
             return;
         }
 
-        // Collect return types of monomorphized functions so we can patch
-        // caller locals that store generic call results (before, their type was
-        // a placeholder i64 from Dynamic, but needs to become the real type)
+        // collect return types of monomorphized functions so we can patch
         let mono_ret_types: HashMap<String, AirType> = self
             .instantiated
             .values()
@@ -66,8 +64,6 @@ impl MonoContext {
                 );
             }
 
-            // apply collected type patches to the caller's locals
-            // this fixes the type mismatch between the placeholder i64 and
             // the actual return type of the monomorphized callee
             for (local_id, new_ty) in local_type_patches {
                 if let Some(local) = func.locals.iter_mut().find(|l| l.id == local_id) {
@@ -100,7 +96,6 @@ impl MonoContext {
                     generic_sigs,
                     generic_names,
                 );
-                // after rewriting, patch the destination local's type to match
                 // the monomorphized function's return type
                 if let Place::Local(local_id) = place {
                     if let Callee::Named(name) = callee {
@@ -149,7 +144,6 @@ impl MonoContext {
                 generic_sigs,
                 generic_names,
             );
-            // patch destination local for Invoke too
             if let Place::Local(local_id) = ret {
                 if let Callee::Named(name) = callee {
                     if let Some(ret_ty) = mono_ret_types.get(name.as_str()) {
@@ -173,7 +167,6 @@ impl MonoContext {
             && generic_names.contains(name.as_str())
         {
             if let Some((gen_params, gen_type_params)) = generic_sigs.get(name.as_str()) {
-                // re-infer type arguments from the call site's actual operand types
                 if let Some(type_args) = self.infer_type_args_from_sig(
                     gen_params,
                     gen_type_params,
@@ -202,7 +195,7 @@ impl MonoContext {
 
         for (param, arg) in generic_params.iter().zip(args.iter()) {
             let arg_ty = operand_type_from(arg, caller_params, caller_locals);
-            self.unify_param(&param.ty, &arg_ty, &mut resolved);
+            self.unify_param(&param.ty, &arg_ty, type_params, &mut resolved);
         }
 
         let mut type_args = Vec::with_capacity(type_params.len());
