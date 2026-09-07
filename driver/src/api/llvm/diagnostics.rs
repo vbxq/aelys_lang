@@ -458,6 +458,15 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             message.clone(),
             "invalid member access".to_string(),
         ),
+        TypeErrorKind::ErrorHandling {
+            message,
+            annotation,
+        } => ("E0620", message.clone(), annotation.clone()),
+        TypeErrorKind::CarrierMismatch { carrier, .. } => (
+            "E0619",
+            error.to_string(),
+            format!("two distinct `{carrier}` types meet here"),
+        ),
         TypeErrorKind::RecursionLimit => (
             "E0309",
             "type inference recursion limit exceeded".to_string(),
@@ -513,6 +522,15 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0420",
             error.to_string(),
             "indirect right-hand side of an `Rc` field assignment".to_string(),
+        ),
+        TypeErrorKind::ComputedLen { assignment, .. } => (
+            "E0621",
+            error.to_string(),
+            if *assignment {
+                "`.len` is computed, not stored".to_string()
+            } else {
+                "`.len` has no address".to_string()
+            },
         ),
         TypeErrorKind::NoPlace { .. } => (
             "E0421",

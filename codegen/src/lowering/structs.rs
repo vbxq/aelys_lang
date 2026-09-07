@@ -5,21 +5,16 @@ use crate::types::air_basic_type_to_llvm;
 use aelys_air::layout::{enum_has_data, enum_max_payload_size};
 use aelys_air::{AirProgram, AirType, Operand};
 use inkwell::types::StructType;
-use inkwell::values::{BasicValueEnum, PointerValue};
+use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
 
 impl CodegenContext {
     pub(crate) fn declare_struct_types(&self, program: &AirProgram) -> Result<(), CodegenError> {
-        // Declare opaque struct types first (forward declarations)
         for struct_def in &program.structs {
             if self.context.get_struct_type(&struct_def.name).is_none() {
                 self.context.opaque_struct_type(&struct_def.name);
             }
         }
 
-        // Declare named struct types for data enums BEFORE setting struct bodies,
-        // because struct fields may reference enum types and air_basic_type_to_llvm
-        // needs the enum LLVM type to be registered to return the correct type
-        // (otherwise it falls back to bare i32 instead of { i32, [N x i8] }).
         for enum_def in &program.enums {
             if enum_has_data(enum_def) {
                 let max_payload = enum_max_payload_size(enum_def, &program.struct_sizes);
@@ -31,7 +26,6 @@ impl CodegenContext {
             }
         }
 
-        // Now set struct bodies — enum LLVM types are available for field resolution
         for struct_def in &program.structs {
             let llvm_struct = self
                 .context
@@ -107,6 +101,41 @@ impl<'a> FunctionCodegen<'a> {
                 .builder
                 .build_extract_value(str_value.into_struct_value(), 1, "str_len_extract")
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?);
+        }
+
+        match self.operand_type(base)? {
+            AirType::Slice(_) | AirType::Vec(_) => {
+                if field != "len" {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "unknown field `{}` on a slice/vec header",
+                        field
+                    )));
+                }
+                let header = self.generate_operand(base)?;
+                if !header.is_struct_value() {
+                    return Err(CodegenError::UnsupportedType(
+                        "expected a {ptr,len} header value for field access".to_string(),
+                    ));
+                }
+                return Ok(self
+                    .builder
+                    .build_extract_value(header.into_struct_value(), 1, "hdr_len_extract")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?);
+            }
+            AirType::Array(_, n) => {
+                if field != "len" {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "unknown field `{}` on an array",
+                        field
+                    )));
+                }
+                return Ok(self
+                    .context
+                    .i64_type()
+                    .const_int(n, false)
+                    .as_basic_value_enum());
+            }
+            _ => {}
         }
 
         if let Operand::Copy(local) | Operand::Move(local) = base {

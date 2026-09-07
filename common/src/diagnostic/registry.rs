@@ -461,15 +461,19 @@ an `Rc`-field read, or a call. Bind an indirect value to a name first:
         code: "E0421",
         title: "this expression denotes no storage",
         explanation: "\
-`&`, `&mut`, `Vec::push`'s target and the left-hand side of an
-assignment all need an ADDRESS. A call result, an aggregate literal or
-an arithmetic expression is a value, not a place: it lives in a
-temporary the compiler is free to discard, so a write through it would
-land nowhere.
+`&`, `&mut`, `Vec::push`'s target, the receiver of a `Vec` view
+(`Vec::as_slice`, `Vec::try_as_unique_mut_slice`) and the left-hand
+side of an assignment all need an ADDRESS. A call result, an aggregate
+literal or an arithmetic expression is a value, not a place: it lives
+in a temporary the compiler is free to discard, so a write through it
+would land nowhere and a view into it would outlive what it views.
 
-    let r = &make_cell()        // E0421
-    make_cell().f = 101         // E0421
-    Vec::push(make_vec(), 1)    // E0421
+    let r = &make_cell()          // E0421
+    make_cell().f = 101           // E0421
+    Vec::push(make_vec(), 1)      // E0421
+    Vec::as_slice(make_vec())     // E0421
+
+A length is a value, not a view, so `Vec::len(make_vec())` is fine.
 
 Bind the value to a name first, then use the binding:
 
@@ -1090,6 +1094,116 @@ is outside the check for the same reason.
 
 The check runs only when `-l` is given, and it needs `nm`. Without `nm`
 it cannot conclude and it does not reject.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0619",
+        title: "`?` between two distinct carrier types",
+        explanation: "\
+`Result` and `Option` are ordinary enums declared in source. A library
+that owns its own `enum Result<T, E>` and a program that declares another
+one are two different nominal types, even when they are spelled the same
+and hold the same variants.
+
+`?` propagates the operand's error into the enclosing function's return
+value. When the operand's carrier and the return type's carrier are two
+different declarations, that propagation would silently swap one nominal
+type for the other, and the tags of the two enums need not even agree:
+
+    pub enum Result<T, E> { Ok(T), Err(E) }
+    pub fn half(n: i64) -> Result<i64, i64> { ... }
+
+    needs res
+    enum Result<T, E> { Ok(T), Err(E) }   // a second, unrelated Result
+
+    fn run(n: i64) -> Result<i64, i64> {
+        let v: i64 = res.half(n)?         // E0619
+        return Result::Ok(v)
+    }
+
+Bridging the two without saying so is the wrong-answer class, so it is
+refused rather than guessed. Import the library's carrier and use it on
+both sides (`needs Result from res`, or annotate the return type as
+`res.Result<...>`), or convert explicitly at the boundary.
+
+The same rule holds for `Option`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0620",
+        title: "error handling used outside the shape it requires",
+        explanation: "\
+This code covers the error-handling surface: `?`, `catch`, and the
+`Result` methods `.unwrap()`, `.expect()`, `.into_ok()`,
+`.unwrap_unchecked()` and `.map_error()`. Each one is defined on a
+particular shape, and a program that steps outside that shape is refused
+here rather than compiled into a guess.
+
+`?` needs a carrier on both sides. The operand must be a `Result<T, E>`
+or an `Option<T>`, and the enclosing function must return the same one:
+
+    fn run() -> i64 {
+        let v: i64 = half(4)?     // E0620, the function returns `i64`
+        return v
+    }
+
+`?` on a `Result` inside a function returning `Option<_>` is refused for
+the same reason, and so is the reverse. A `?` between two carriers that
+are both spelled `Result` but declared in two different modules is a
+different case, reported as E0619.
+
+`catch` is a `Result` form. Its scrutinee must be a `Result<T, E>`; any
+other type is refused here.
+
+`.unwrap()`, `.expect(\"...\")`, `.into_ok()` and `.unwrap_unchecked()`
+read the `Ok` payload out of a `Result`, so the enum behind the receiver
+must declare an `Ok` variant, and the arity of each call is fixed:
+`.expect()` takes one string literal, the other three take nothing.
+
+`.into_ok()` is a compile-time proof, not a check. It is accepted only
+on a `Result<T, Never>`, whose error type is uninhabited; on a `Result`
+that can still fail it is refused here.
+
+`.unwrap_unchecked()` skips the tag test, so a wrong assertion is
+undefined behaviour rather than a panic. It is accepted only inside an
+`unsafe` block.
+
+`.map_error(f)` takes exactly one argument and it must be a
+one-argument function.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0621",
+        title: "`.len` is a computed value, not storage",
+        explanation: "\
+`.len` reads a length off four types: `string`, `&[T]` and `&mut [T]`,
+`Vec<T>`, and a sized array `[T; N]`. On each of them the length is
+produced when it is asked for, not held in a field the program can point
+at: a string and a slice carry it in a `{ptr, len}` header the compiler
+unpacks, a `Vec` reads it out of its own header, and an array's length is
+a constant fixed by its type.
+
+So `.len` denotes a value and never a place. Two spellings assume the
+opposite and are refused here:
+
+    let n = &s.len      // E0621, there is no address to take
+    s.len = 9           // E0621, the write would change nothing
+
+Neither has a meaning the compiler could give it. `&s.len` would need an
+address for a number that lives in no allocation, and `s.len = 9` would
+name a field that does not exist, leaving the value it claims to describe
+untouched.
+
+Read the length instead, and bind it if you need a place:
+
+    let mut n: i64 = s.len
+    let r = &n
+
+To change a length, change the value: push or pop a `Vec`, or take a
+different view of the base.
+
+The rule is the same on all four types, so `.len` behaves identically
+whichever one it is written on.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
