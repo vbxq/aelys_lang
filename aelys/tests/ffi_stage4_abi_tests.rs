@@ -132,7 +132,7 @@ fn the_malloc_free_dereference_program_is_now_rejected() {
 
 #[test]
 #[ignore = "the origin model of the reference design (charter section 4) is outside this run; \
-            measured here, a `&buf[0]` on a local kept by the callee answers 125 at -O0 and 124 at -O1..3"]
+            measured here, a `&buf[0]` on a local kept by the callee answers 123 at -O0 and 124 at -O1..3"]
 fn a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level() {
     let dir = tempdir().expect("tempdir");
     let root = dir.path();

@@ -430,7 +430,7 @@ fn fixtures() -> Vec<PathBuf> {
 #[test]
 fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let files = fixtures();
-    assert_eq!(files.len(), 450, "the fixture corpus MUST hold 450 files");
+    assert_eq!(files.len(), 457, "the fixture corpus MUST hold 457 files");
     let mut ok = Vec::new();
     let mut rejected = Vec::new();
     for path in &files {
@@ -441,8 +441,8 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     }
     assert_eq!(
         (ok.len(), rejected.len()),
-        (404, 46),
-        "the surface MUST answer 404 accepted and 46 rejected, unchanged by the new keyword\n\
+        (408, 49),
+        "the surface MUST answer 408 accepted and 49 rejected; std/io.aelys is the one added\n\
          rejected:\n{}",
         rejected
             .iter()
@@ -472,19 +472,25 @@ fn fixtures_spelling(word: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_fixture_spells_unsafe() {
-    assert!(
-        fixtures_spelling("unsafe").is_empty(),
-        "the fixture sweep is blind to the `unsafe` class, so it cannot stand alone as the guard"
+fn the_library_module_is_the_only_tracked_fixture_that_spells_unsafe() {
+    assert_eq!(
+        fixtures_spelling("unsafe"),
+        vec!["std/io.aelys".to_string()],
+        "std/io.aelys is the one corpus file that spells `unsafe`; the sweep is blind to the \
+         `unsafe` class, so it still cannot stand alone as the guard"
     );
 }
 
 #[test]
-fn one_fixture_spells_extern_and_it_was_already_rejected() {
+fn the_library_module_and_the_already_rejected_fixture_are_the_two_that_spell_extern() {
     assert_eq!(
         fixtures_spelling("extern"),
-        vec!["tests_e2e/evil50_extern_c.aelys".to_string()],
-        "the corpus holds exactly one spelling of the new keyword"
+        vec![
+            "std/io.aelys".to_string(),
+            "tests_e2e/evil50_extern_c.aelys".to_string()
+        ],
+        "the corpus holds two spellings of the keyword: the io module that uses it and the \
+         fixture that must stay rejected"
     );
     let path = repo_root().join("tests_e2e/evil50_extern_c.aelys");
     let rendered = aelys_driver::lower_file_to_air(&path, OptimizationLevel::None)

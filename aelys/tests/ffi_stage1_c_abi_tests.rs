@@ -248,7 +248,7 @@ fn f4_4_an_aelys_body_is_never_given_an_extension() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "float constant folding at the f32 argument site emits the folded value as a double, so llvm rejects `call i64 @probe_f32(double ...)` against the float signature"]
 fn f4_5_an_f32_argument_computed_by_arithmetic_reaches_the_callee() {
     if !cc_can_build_c() {
         eprintln!("F4-5: clang unavailable, skipping the executed abi row");

@@ -1,0 +1,3 @@
+aelys/tests/cross_o_differential_tests.rs	the_aelys_corpus_produces_the_same_answer_at_every_opt_level	always	STAGE GATE: run scripts/corpus_sweep.sh instead -- in-process this is OOM-killed
+aelys/tests/ffi_stage1_c_abi_tests.rs	f4_5_an_f32_argument_computed_by_arithmetic_reaches_the_callee	always	float constant folding at the f32 argument site emits the folded value as a double, so llvm rejects `call i64 @probe_f32(double ...)` against the float signature
+aelys/tests/ffi_stage4_abi_tests.rs	a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level	always	the origin model of the reference design (charter section 4) is outside this run; measured here, a `&buf[0]` on a local kept by the callee answers 123 at -O0 and 124 at -O1..3

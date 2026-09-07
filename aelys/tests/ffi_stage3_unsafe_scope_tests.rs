@@ -16,8 +16,8 @@ fn rejected(id: &str, body: &str) {
         Err(rendered) => rendered,
     };
     assert!(
-        rendered.contains("E0304"),
-        "{id}: the rejection MUST be E0304\n{source}\nrendered:\n{rendered}"
+        rendered.contains("[E0620]"),
+        "{id}: the rejection MUST be E0620\n{source}\nrendered:\n{rendered}"
     );
     assert!(
         rendered.contains("`.unwrap_unchecked()` requires an `unsafe` block"),
