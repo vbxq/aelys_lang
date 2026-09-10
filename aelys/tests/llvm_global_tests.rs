@@ -182,15 +182,19 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        ir.contains(
+            "@__aelys_global_g = internal global %\"__aelys_enum___mono_Option$1$i64\" { i32 1"
+        ),
         "{ir}"
     );
     assert!(
-        ir.contains("@__aelys_global_h = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        ir.contains(
+            "@__aelys_global_h = internal global %\"__aelys_enum___mono_Option$1$i64\" { i32 1"
+        ),
         "{ir}"
     );
     assert!(
-        ir.contains("load %__aelys_enum___mono_Option_i64, ptr @__aelys_global_h"),
+        ir.contains("load %\"__aelys_enum___mono_Option$1$i64\", ptr @__aelys_global_h"),
         "{ir}"
     );
 }
@@ -305,7 +309,9 @@ fn read_option() -> i64 {
 "#,
     );
     assert!(
-        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 1"),
+        ir.contains(
+            "@__aelys_global_g = internal global %\"__aelys_enum___mono_Option$1$i64\" { i32 1"
+        ),
         "{ir}"
     );
     assert!(ir.contains("zeroinitializer"), "{ir}");
@@ -331,7 +337,9 @@ fn read_option() -> i64 {
 "#,
     );
     assert!(
-        ir.contains("@__aelys_global_g = internal global %__aelys_enum___mono_Option_i64 { i32 0"),
+        ir.contains(
+            "@__aelys_global_g = internal global %\"__aelys_enum___mono_Option$1$i64\" { i32 0"
+        ),
         "{ir}"
     );
     assert!(
@@ -401,8 +409,8 @@ fn read_option() -> i64 {
         .expect("global g should exist");
     assert!(matches!(
         global.init,
-        Some(aelys_air::AirConst::Enum { ref enum_name, tag: 0, ref payload })
-            if enum_name == "__mono_Option_i64"
+        Some(aelys_air::AirConst::Enum { ref enum_ref, tag: 0, ref payload })
+            if enum_ref.symbol() == "__mono_Option$1$i64"
                 && matches!(
                     payload.as_slice(),
                     [aelys_air::AirConst::Int(7, aelys_air::AirIntSize::I64)]

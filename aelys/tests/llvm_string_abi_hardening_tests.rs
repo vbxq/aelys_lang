@@ -42,7 +42,7 @@ fn compile_source_expect_error(source: &str) -> String {
     }
 }
 
-// TODO: remove when stdlib bootstrap
+// todo: remove when stdlib bootstrap
 #[test]
 fn llvm_rejects_user_defined_reserved_bootstrap_println() {
     let error = compile_source_expect_error(
@@ -52,7 +52,7 @@ fn println(s: string) {
 }
 "#,
     );
-    // either "reserved builtin" (from AIR lowering) or "duplicate function definition" from sema, since println is registered as a bootstrap builtin
+    // either "reserved builtin" (from air lowering) or "duplicate function definition" from sema, since println is registered as a bootstrap builtin
     assert!(
         (error.contains("reserved builtin during bootstrap")
             || error.contains("duplicate function definition"))
@@ -101,7 +101,6 @@ fn caller() -> i64 {
         OptimizationLevel::None,
     );
 
-    // Aelys-convention functions prepend an implicit env ptr; the string param follows.
     let sink_decl = ir
         .lines()
         .find(|l| l.contains("define fastcc i64 @sink"))
@@ -127,7 +126,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        error.contains("unknown field 'foo' on Str; supported: 'len'"),
+        error.contains(
+            "unknown field 'foo' on Str; supported: 'len' (the byte length) and 'bytes' (a \
+             shared `&[u8]` view); there is no character count"
+        ),
         "{error}"
     );
 }

@@ -1,3 +1,4 @@
+use aelys_air::EnumRef;
 use aelys_air::{
     AirBlock, AirConst, AirFunction, AirLocal, AirProgram, AirStmt, AirStmtKind, AirTerminator,
     AirType, BlockId, Callee, CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint,
@@ -287,7 +288,7 @@ fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
                 gc_mode: GcMode::Managed,
                 type_params: vec![],
                 params: vec![],
-                ret_ty: AirType::Enum("Opt".to_string()),
+                ret_ty: AirType::Enum(EnumRef::plain("Opt")),
                 locals: vec![],
                 blocks: vec![],
                 is_extern: true,
@@ -305,7 +306,7 @@ fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
                 locals: vec![
                     AirLocal {
                         id: LocalId(0),
-                        ty: AirType::Enum("Opt".to_string()),
+                        ty: AirType::Enum(EnumRef::plain("Opt")),
                         name: None,
                         is_mut: false,
                         span: None,
@@ -335,7 +336,7 @@ fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
                             kind: AirStmtKind::Assign {
                                 place: Place::Local(LocalId(1)),
                                 rvalue: Rvalue::EnumTag {
-                                    enum_name: "Opt".to_string(),
+                                    enum_ref: EnumRef::plain("Opt"),
                                     operand: Operand::Copy(LocalId(0)),
                                 },
                             },
@@ -414,7 +415,7 @@ fn extern_c_data_enum_param_is_rejected() {
             type_params: vec![],
             params: vec![aelys_air::AirParam {
                 id: LocalId(0),
-                ty: AirType::Enum("Opt".to_string()),
+                ty: AirType::Enum(EnumRef::plain("Opt")),
                 name: "opt".to_string(),
                 span: None,
             }],
@@ -475,7 +476,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
                 gc_mode: GcMode::Managed,
                 type_params: vec![],
                 params: vec![],
-                ret_ty: AirType::Enum("Opt".to_string()),
+                ret_ty: AirType::Enum(EnumRef::plain("Opt")),
                 locals: vec![],
                 blocks: vec![],
                 is_extern: true,
@@ -495,7 +496,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
                         id: LocalId(0),
                         ty: AirType::FnPtr {
                             params: vec![],
-                            ret: Box::new(AirType::Enum("Opt".to_string())),
+                            ret: Box::new(AirType::Enum(EnumRef::plain("Opt"))),
                             conv: CallingConv::C,
                         },
                         name: None,
@@ -504,7 +505,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
                     },
                     AirLocal {
                         id: LocalId(1),
-                        ty: AirType::Enum("Opt".to_string()),
+                        ty: AirType::Enum(EnumRef::plain("Opt")),
                         name: None,
                         is_mut: false,
                         span: None,
@@ -543,7 +544,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
                             kind: AirStmtKind::Assign {
                                 place: Place::Local(LocalId(2)),
                                 rvalue: Rvalue::EnumTag {
-                                    enum_name: "Opt".to_string(),
+                                    enum_ref: EnumRef::plain("Opt"),
                                     operand: Operand::Copy(LocalId(1)),
                                 },
                             },
@@ -632,7 +633,7 @@ fn c_convention_defined_data_enum_param_is_rejected() {
             type_params: vec![],
             params: vec![aelys_air::AirParam {
                 id: LocalId(0),
-                ty: AirType::Enum("Opt".to_string()),
+                ty: AirType::Enum(EnumRef::plain("Opt")),
                 name: "opt".to_string(),
                 span: None,
             }],

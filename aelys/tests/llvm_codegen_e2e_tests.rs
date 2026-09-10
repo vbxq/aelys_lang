@@ -17,6 +17,9 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for as executable_path_for, linker_unavailable};
+
 fn compile_to_verified_ir(source: &str) -> String {
     compile_to_verified_ir_with_opt(source, OptimizationLevel::None)
 }
@@ -136,20 +139,6 @@ fn parse_branch_targets(line: &str) -> Vec<u32> {
     targets
 }
 
-fn executable_path_for(source_path: &std::path::Path) -> std::path::PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("failed to run `lld-link`: program not found")
-        || error.contains("failed to run `link`: program not found")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
 #[test]
 fn llvm_returns_integer_constant() {
     let ir = compile_to_verified_ir("fn constant() -> i64 { return 42 }");
@@ -244,6 +233,7 @@ fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
 
 #[test]
 fn echo_example() {
+    let _pin = common::pin_legs("echo_example", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -267,6 +257,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -276,6 +267,7 @@ fn main() -> i64 {
 
 #[test]
 fn internal_nul_preserved() {
+    let _pin = common::pin_legs("internal_nul_preserved", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -298,6 +290,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -306,6 +299,7 @@ fn main() -> i64 {
 
 #[test]
 fn len_on_temporary_literal_expression() {
+    let _pin = common::pin_legs("len_on_temporary_literal_expression", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -327,6 +321,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -335,6 +330,7 @@ fn main() -> i64 {
 
 #[test]
 fn len_in_callee_on_string_parameter() {
+    let _pin = common::pin_legs("len_in_callee_on_string_parameter", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -360,6 +356,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -510,6 +507,7 @@ fn second() -> i64 {
 
 #[test]
 fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
+    let _pin = common::pin_legs("llvm_native_entry_maps_negative_i64_main_exit_code_to_u8", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -531,6 +529,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -539,6 +538,7 @@ fn main() -> i64 {
 
 #[test]
 fn llvm_native_entry_returns_zero_for_void_main() {
+    let _pin = common::pin_legs("llvm_native_entry_returns_zero_for_void_main", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -560,6 +560,7 @@ fn main() -> void {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -592,7 +593,7 @@ fn first_from_box(b: Boxed<Pair<i64, string>>) -> i64 {
 "#,
     );
     assert!(
-        ir.contains("__mono_Boxed_enum___mono_Pair_i64$str"),
+        ir.contains("__mono_Boxed$1$enum___mono_Pair$2$i64$str"),
         "nested generic enum monomorphization should survive into IR:\n{ir}"
     );
 }
@@ -617,11 +618,11 @@ fn get_empty() -> Boxed<Pair<i64, string>> {
 "#,
     );
     assert!(
-        ir.contains("__mono_Boxed_enum___mono_Pair_i64$str"),
+        ir.contains("__mono_Boxed$1$enum___mono_Pair$2$i64$str"),
         "unit-only nested generic enum should still monomorphize parent enum:\n{ir}"
     );
     assert!(
-        ir.contains("__mono_Pair_i64$str"),
+        ir.contains("__mono_Pair$2$i64$str"),
         "unit-only nested generic enum should also synthesize nested enum def:\n{ir}"
     );
 }
@@ -641,7 +642,7 @@ fn apply_default() -> Holder<fn(i64) -> i64> {
 "#,
     );
     assert!(
-        ir.contains("__mono_Holder_fnptr$i64$Ri64"),
+        ir.contains("__mono_Holder$1$fnptr$i64$Ri64"),
         "fnptr-instantiated generic enum should survive into IR:\n{ir}"
     );
 }
@@ -673,17 +674,18 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        ir.contains("__mono_Holder_fnptr$i64$Ri64"),
+        ir.contains("__mono_Holder$1$fnptr$i64$Ri64"),
         "named function payload enum should use fnptr mono in IR:\n{ir}"
     );
     assert!(
-        !ir.contains("__mono_Holder_ptr_void"),
+        !ir.contains("__mono_Holder$1$ptr_void"),
         "named function payload enum must not use ptr_void mono in IR:\n{ir}"
     );
 }
 
 #[test]
 fn llvm_multi_module_strings_compile_and_run() {
+    let _pin = common::pin_legs("llvm_multi_module_strings_compile_and_run", 1);
     let dir = tempdir().expect("tempdir should be created");
     let module_path = dir.path().join("strings.aelys");
     let source_path = dir.path().join("main.aelys");
@@ -718,6 +720,7 @@ fn main() -> i64 {
 
     if let Err(err) = compile_file_with_llvm(&source_path, OptimizationLevel::Standard, false) {
         if linker_unavailable(&err.to_string()) {
+            common::require_linker_skip("a skipped value row carries no runtime evidence at all");
             return;
         }
         panic!("llvm backend compilation should succeed: {err}");
@@ -730,6 +733,7 @@ fn main() -> i64 {
         exe_path.display()
     );
 
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1097,6 +1101,7 @@ fn divide(a: i64, b: i64) -> i64 {
 
 #[test]
 fn llvm_div_by_zero_runtime_panics() {
+    let _pin = common::pin_legs("llvm_div_by_zero_runtime_panics", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -1120,6 +1125,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1136,6 +1142,7 @@ fn main() -> i64 {
 
 #[test]
 fn llvm_div_by_zero_runtime_panics_at_o2() {
+    let _pin = common::pin_legs("llvm_div_by_zero_runtime_panics_at_o2", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -1159,6 +1166,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1175,6 +1183,7 @@ fn main() -> i64 {
 
 #[test]
 fn llvm_rem_by_zero_runtime_panics() {
+    let _pin = common::pin_legs("llvm_rem_by_zero_runtime_panics", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -1198,6 +1207,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1214,6 +1224,7 @@ fn main() -> i64 {
 
 #[test]
 fn llvm_normal_div_still_works() {
+    let _pin = common::pin_legs("llvm_normal_div_still_works", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -1237,6 +1248,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");
@@ -1249,6 +1261,7 @@ fn main() -> i64 {
 
 #[test]
 fn llvm_div_by_zero_in_loop_panics() {
+    let _pin = common::pin_legs("llvm_div_by_zero_in_loop_panics", 1);
     let dir = tempdir().expect("tempdir should be created");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -1275,6 +1288,7 @@ fn main() -> i64 {
         "native executable should be produced at {}",
         exe_path.display()
     );
+    common::note_leg();
     let output = Command::new(&exe_path)
         .output()
         .expect("compiled executable should run");

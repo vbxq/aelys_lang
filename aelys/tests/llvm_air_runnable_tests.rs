@@ -1,6 +1,4 @@
 // it is the only oracle in the tree that can exercise an air shape the surface language cannot yet
-// the arm has no head
-// hygiene: the owed value is 101 and every plausible wrong answer (7, 0, 2) is also < 256, so the
 
 use aelys_air::{
     AirBlock, AirConst, AirFunction, AirLocal, AirParam, AirProgram, AirStmt, AirStmtKind,
@@ -9,9 +7,11 @@ use aelys_air::{
 };
 use aelys_driver::{RuntimeVariant, compile_air_program_to_executable};
 use aelys_opt::OptimizationLevel;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
@@ -28,21 +28,9 @@ fn attribs() -> FunctionAttribs {
     }
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
-
-/// emit, link and run a hand-built air program at every optimization level. `none` means the
 /// toolchain cannot link here, which is a skip and not a failure.
 fn run_air_program(name: &str, program: &AirProgram) -> Option<Vec<(&'static str, i32)>> {
+    let _pin = common::pin_legs("run_air_program", LEVELS.len());
     let mut out: Vec<(&'static str, i32)> = Vec::new();
     let dir = tempdir().expect("tempdir");
     for (level, opt) in LEVELS {
@@ -53,7 +41,9 @@ fn run_air_program(name: &str, program: &AirProgram) -> Option<Vec<(&'static str
             Ok(()) => {}
             Err(err) => {
                 if linker_unavailable(&err.to_string()) {
-                    eprintln!("{name}: linker unavailable, skipping");
+                    common::require_linker_skip(
+                        "a skipped value row carries no runtime evidence at all",
+                    );
                     return None;
                 }
                 panic!("{name} at {level} must compile:\n{err}");
@@ -61,9 +51,10 @@ fn run_air_program(name: &str, program: &AirProgram) -> Option<Vec<(&'static str
         }
         let exe = exe_path_for(&path);
         if !exe.is_file() {
-            eprintln!("{name}: no executable produced, skipping");
+            common::require_linker_skip("a skipped value row carries no runtime evidence at all");
             return None;
         }
+        common::note_leg();
         let status = Command::new(&exe).status().expect("run exe");
         out.push((*level, status.code().unwrap_or(-1)));
     }
@@ -169,7 +160,6 @@ fn index_through_a_pointer_to_an_array_writes_the_owner() {
     }
 }
 
-/// `place::field(ptr(struct))` on a stack-derived pointer. this is the shape the design's
 #[test]
 fn field_through_a_stack_derived_pointer_writes_the_owner() {
     let cell = AirType::Struct("Cell".to_string());
@@ -331,4 +321,33 @@ fn a_chained_address_of_a_field_writes_the_owner() {
             "a chained AddressOf(Place::Field(..)) must write the owner at {level}"
         );
     }
+}
+
+// codegen used to lower an enum it had never heard of as a bare i32, which silently narrows a
+#[test]
+fn an_enum_with_no_definition_is_refused_by_codegen_instead_of_becoming_an_i32() {
+    let ghost = AirType::Enum(aelys_air::EnumRef::plain("Ghost"));
+    let program = program_with(
+        vec![local(0, ghost.clone(), Some("g"), false)],
+        vec![assign(
+            Place::Local(LocalId(0)),
+            Rvalue::Use(Operand::Const(AirConst::Int(1, aelys_air::AirIntSize::I32))),
+        )],
+        Operand::Const(AirConst::Int(0, aelys_air::AirIntSize::I64)),
+    );
+
+    let dir = tempdir().expect("tempdir");
+    let path = dir.path().join("ghost_enum.aelys");
+    let err = compile_air_program_to_executable(
+        &path,
+        &program,
+        OptimizationLevel::None,
+        RuntimeVariant::Rc,
+    )
+    .expect_err("an enum with no definition must not reach the object file")
+    .to_string();
+    assert!(
+        err.contains("Ghost") && err.contains("has no definition"),
+        "the refusal must name the enum that has no definition, got:\n{err}"
+    );
 }
