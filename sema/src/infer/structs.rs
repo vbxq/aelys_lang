@@ -1,7 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::types::{InferType, StructDef, StructField};
-use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{Stmt, StmtKind};
 use std::collections::HashSet;
 
@@ -13,12 +12,6 @@ impl TypeInference {
             } = &stmt.kind
             {
                 if self.type_table.has_struct(name) {
-                    self.warnings.push(Warning::new(
-                        WarningKind::UnknownType {
-                            name: format!("duplicate struct '{}'", name),
-                        },
-                        stmt.span,
-                    ));
                     continue;
                 }
 

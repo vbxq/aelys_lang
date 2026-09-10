@@ -35,6 +35,17 @@ pub fn unify(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyR
     unify_dir(t1, t2, subst, Dir::Exact)
 }
 
+// never is bottom for control flow, but as a type argument it is a slot the instantiation has to name
+fn unify_type_arg(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> UnifyResult<()> {
+    match (subst.apply(t1), subst.apply(t2)) {
+        (InferType::Var(v), InferType::Never) | (InferType::Never, InferType::Var(v)) => {
+            subst.bind(v, InferType::Never);
+            Ok(())
+        }
+        _ => unify(t1, t2, subst),
+    }
+}
+
 pub fn unify_dir(
     t1: &InferType,
     t2: &InferType,
@@ -64,7 +75,7 @@ pub fn unify_dir(
             // if one side has type args and the other doesn't (e.g., enum("option", []) from a variant constructor vs enum("option", [i64]) from an annotation), we accept the match, the type args are informational for monomorphization, not for semantic equality.
             if !args_a.is_empty() && !args_b.is_empty() && args_a.len() == args_b.len() {
                 for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {
-                    unify(a_arg, b_arg, subst)?;
+                    unify_type_arg(a_arg, b_arg, subst)?;
                 }
             }
             Ok(())
@@ -179,4 +190,3 @@ pub fn unify_dir(
         _ => Err(UnifyError::Mismatch(t1.clone(), t2.clone())),
     }
 }
-

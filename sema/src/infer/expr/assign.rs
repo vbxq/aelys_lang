@@ -83,8 +83,19 @@ impl TypeInference {
                 InferType::Null,
             )
         } else {
-            self.errors
-                .push(TypeError::undefined_variable(name.to_string(), span));
+            match self.module_bound_elsewhere(name) {
+                Some((module, binding)) => {
+                    self.errors.push(TypeError::module_bound_elsewhere(
+                        name.to_string(),
+                        module,
+                        binding,
+                        span,
+                    ));
+                }
+                None => self
+                    .errors
+                    .push(TypeError::undefined_variable(name.to_string(), span)),
+            }
 
             // register the variable with dynamic type to prevent repeated "undefined variable" errors for each subsequent use
             self.env.define_local(name.to_string(), InferType::Dynamic);

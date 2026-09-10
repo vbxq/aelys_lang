@@ -120,6 +120,20 @@ impl TypeInference {
         name.to_string()
     }
 
+    pub(crate) fn module_bound_elsewhere(&self, name: &str) -> Option<(String, String)> {
+        let mut hits: Vec<(String, String)> = self
+            .module_imports
+            .namespaces
+            .iter()
+            .filter(|(binding, exports)| {
+                binding.as_str() != name && exports.path.split('.').any(|seg| seg == name)
+            })
+            .map(|(binding, exports)| (exports.path.clone(), binding.clone()))
+            .collect();
+        hits.sort();
+        hits.into_iter().next()
+    }
+
     pub(crate) fn is_module_namespace(&self, name: &str) -> bool {
         self.module_imports.namespaces.contains_key(name)
             && self.env.lookup(name).is_none()

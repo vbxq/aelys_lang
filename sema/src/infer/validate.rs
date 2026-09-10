@@ -167,11 +167,8 @@ impl TypeInference {
                         declared_type_params,
                     )
                 {
-                    self.errors.push(TypeError::member_access(
-                        format!(
-                            "for-each requires an iterable (array or string), got {}",
-                            iterable.ty
-                        ),
+                    self.errors.push(TypeError::foreach_not_iterable(
+                        iterable.ty.to_string(),
                         iterable.span,
                     ));
                 }
@@ -381,9 +378,14 @@ impl TypeInference {
                 self.validate_type(&expr.ty, expr.span, generic_scope, declared_type_params);
                 match &object.ty {
                     InferType::String => {
-                        if member != "len" {
+                        if member != "len" && member != "bytes" {
                             self.errors.push(TypeError::member_access(
-                                format!("unknown field '{}' on Str; supported: 'len'", member),
+                                format!(
+                                    "unknown field '{}' on Str; supported: 'len' (the byte \
+                                     length) and 'bytes' (a shared `&[u8]` view); there is no \
+                                     character count",
+                                    member
+                                ),
                                 expr.span,
                             ));
                         }
@@ -654,6 +656,9 @@ impl TypeInference {
                 if enum_name == "Vec" && variant == "push" && !args.is_empty() {
                     self.check_write_target(&args[0], "a `Vec::push`", expr.span);
                 }
+                if enum_name == "Vec" && variant == "pop" && !args.is_empty() {
+                    self.check_write_target(&args[0], "a `Vec::pop`", expr.span);
+                }
                 if args.is_empty() {
                     if let InferType::Enum(name, type_args) = &expr.ty {
                         if let Some(def) = self.type_table.get_enum(name) {
@@ -876,6 +881,7 @@ impl TypeInference {
         matches!(
             ty,
             InferType::Array(_, _)
+                | InferType::Slice { .. }
                 | InferType::Vec(_)
                 | InferType::String
                 | InferType::Dynamic

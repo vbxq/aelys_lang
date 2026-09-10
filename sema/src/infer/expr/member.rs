@@ -68,13 +68,14 @@ impl TypeInference {
 
     pub(super) fn member_result_type(&mut self, object_ty: &InferType, member: &str) -> InferType {
         match object_ty {
-            InferType::String => {
-                if member == "len" {
-                    InferType::I64
-                } else {
-                    InferType::Dynamic
-                }
-            }
+            InferType::String => match member {
+                "len" => InferType::I64,
+                "bytes" => InferType::Slice {
+                    elem: Box::new(InferType::U8),
+                    mutable: false,
+                },
+                _ => InferType::Dynamic,
+            },
             InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..) => {
                 if member == "len" {
                     InferType::I64

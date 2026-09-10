@@ -26,8 +26,19 @@ impl TypeInference {
             .or_else(|| self.env.lookup_function_ref(name))
             .cloned()
             .unwrap_or_else(|| {
-                self.errors
-                    .push(TypeError::undefined_variable(name.to_string(), span));
+                match self.module_bound_elsewhere(name) {
+                    Some((module, binding)) => {
+                        self.errors.push(TypeError::module_bound_elsewhere(
+                            name.to_string(),
+                            module,
+                            binding,
+                            span,
+                        ));
+                    }
+                    None => self
+                        .errors
+                        .push(TypeError::undefined_variable(name.to_string(), span)),
+                }
 
                 // register the variable with dynamic type to prevent repeated "undefined variable" errors for each subsequent use
                 let recovery_ty = InferType::Dynamic;
@@ -124,11 +135,42 @@ impl TypeInference {
         if enum_name == "Vec" && variant == "push" {
             return self.infer_vec_push(args, span);
         }
+        if enum_name == "Vec" && variant == "pop" {
+            return self.infer_vec_pop(args, span);
+        }
         if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
             return self.infer_vec_try_as_unique_mut_slice(args, span);
         }
         if enum_name == "Vec" && (variant == "len" || variant == "as_slice") {
             return self.infer_vec_read(variant, args, span);
+        }
+        // the parser refuses a lowercase struct or enum name, so this head can never shadow a user type
+        if enum_name == "string" && variant == "substring_bytes" {
+            return self.infer_substring_bytes(args, span);
+        }
+
+        if let Some(known) = intrinsic_methods(enum_name) {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Dynamic,
+                },
+                span,
+                reason: ConstraintReason::Other(format!(
+                    "unknown method '{}' on {}; supported: {}",
+                    variant,
+                    enum_name,
+                    known
+                        .iter()
+                        .map(|m| format!("'{m}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return (TypedExprKind::Null, InferType::Dynamic);
         }
 
         let resolved = self.air_type_name(enum_name, span);
@@ -537,6 +579,107 @@ impl TypeInference {
         )
     }
 
+    fn infer_vec_pop(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        if args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!("Vec::pop expects exactly 1 argument, got {}", args.len()),
+                span,
+            ));
+            let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+            return (
+                TypedExprKind::EnumVariant {
+                    enum_name: "Vec".to_string(),
+                    variant: "pop".to_string(),
+                    tag: 0,
+                    args: typed_args,
+                },
+                InferType::Dynamic,
+            );
+        }
+
+        let typed_vec = self.infer_expr(&args[0]);
+        let inner = match &typed_vec.ty {
+            InferType::Vec(inner) => inner.as_ref().clone(),
+            InferType::Var(_) | InferType::Dynamic => {
+                let elem = self.type_gen.fresh();
+                self.constraints.push(Constraint::equal(
+                    typed_vec.ty.clone(),
+                    InferType::Vec(Box::new(elem.clone())),
+                    args[0].span,
+                    ConstraintReason::ArrayElement,
+                ));
+                elem
+            }
+            other => {
+                self.errors.push(TypeError {
+                    kind: TypeErrorKind::Mismatch {
+                        expected: InferType::Vec(Box::new(InferType::Dynamic)),
+                        found: other.clone(),
+                    },
+                    span: args[0].span,
+                    reason: ConstraintReason::Other(format!(
+                        "Vec::pop expects a `Vec<T>` argument, got `{other}`"
+                    )),
+                    secondary_spans: Vec::new(),
+                    help: None,
+                    suggestion: None,
+                });
+                InferType::Dynamic
+            }
+        };
+
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Vec".to_string(),
+                variant: "pop".to_string(),
+                tag: 0,
+                args: vec![typed_vec],
+            },
+            inner,
+        )
+    }
+
+    fn infer_substring_bytes(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 3 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "string::substring_bytes expects exactly 3 arguments, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::String,
+                args[0].span,
+                ConstraintReason::Other(
+                    "string::substring_bytes takes the string it slices".to_string(),
+                ),
+            ));
+            for i in 1..3 {
+                self.constraints.push(Constraint::equal(
+                    typed_args[i].ty.clone(),
+                    InferType::I64,
+                    args[i].span,
+                    ConstraintReason::Other(
+                        "string::substring_bytes takes byte offsets".to_string(),
+                    ),
+                ));
+            }
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "string".to_string(),
+                variant: "substring_bytes".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::String,
+        )
+    }
+
     fn infer_vec_read(
         &mut self,
         variant: &str,
@@ -697,5 +840,21 @@ impl TypeInference {
                 mutable: true,
             },
         )
+    }
+}
+
+fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
+    match head {
+        "Vec" => Some(&[
+            "new",
+            "push",
+            "pop",
+            "len",
+            "as_slice",
+            "try_as_unique_mut_slice",
+        ]),
+        "Rc" => Some(&["new", "get", "null"]),
+        "string" => Some(&["substring_bytes"]),
+        _ => None,
     }
 }

@@ -81,6 +81,9 @@ pub enum TypeErrorKind {
         detail: String,
     },
     VecForeachUnsupported,
+    ForeachNotIterable {
+        ty: String,
+    },
     SliceFormUnsupported {
         detail: String,
     },
@@ -156,6 +159,11 @@ pub enum TypeErrorKind {
         module: String,
         item: String,
     },
+    ModuleBoundElsewhere {
+        name: String,
+        module: String,
+        binding: String,
+    },
     FieldNotPublic {
         field: String,
         ty: String,
@@ -206,6 +214,15 @@ impl fmt::Display for TypeError {
             TypeErrorKind::UndefinedVariable { name } => {
                 write!(f, "undefined variable: {}", name)
             }
+            TypeErrorKind::ModuleBoundElsewhere {
+                name,
+                module,
+                binding,
+            } => write!(
+                f,
+                "`{name}` names nothing here: the module `{module}` is imported under the name \
+                 `{binding}`"
+            ),
             TypeErrorKind::UndefinedFunction { name } => {
                 write!(f, "undefined function: {}", name)
             }
@@ -241,6 +258,11 @@ impl fmt::Display for TypeError {
                 "[vec-foreach] iterating a `Vec<T>` with `for` is not supported yet. iterate an \
                  array (`[T; N]`) or a string instead, or index the `Vec` by hand with a counting \
                  `for i in 0..n` loop"
+            ),
+            TypeErrorKind::ForeachNotIterable { ty } => write!(
+                f,
+                "[for-each] `for x in <collection>` iterates an array (`[T; N]`), a slice \
+                 (`&[T]` or `&mut [T]`) or a string, and `{ty}` is none of those"
             ),
             TypeErrorKind::SliceFormUnsupported { detail } => write!(
                 f,
@@ -535,6 +557,17 @@ impl TypeError {
             kind: TypeErrorKind::SliceFormUnsupported {
                 detail: detail.into(),
             },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn foreach_not_iterable(ty: String, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ForeachNotIterable { ty },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
@@ -838,6 +871,26 @@ impl TypeError {
             reason: ConstraintReason::Other("variable lookup".to_string()),
             secondary_spans: Vec::new(),
             help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn module_bound_elsewhere(
+        name: String,
+        module: String,
+        binding: String,
+        span: Span,
+    ) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ModuleBoundElsewhere {
+                name,
+                module,
+                binding: binding.clone(),
+            },
+            span,
+            reason: ConstraintReason::Other("variable lookup".to_string()),
+            secondary_spans: Vec::new(),
+            help: Some(format!("write `{binding}` here")),
             suggestion: None,
         }
     }

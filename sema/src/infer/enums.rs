@@ -1,6 +1,5 @@
 use super::TypeInference;
 use crate::types::{EnumDef, EnumVariant};
-use aelys_common::{Warning, WarningKind};
 use aelys_syntax::{Stmt, StmtKind};
 
 impl TypeInference {
@@ -14,16 +13,10 @@ impl TypeInference {
             } = &stmt.kind
             {
                 if self.type_table.has_enum(name) {
-                    self.warnings.push(Warning::new(
-                        WarningKind::UnknownType {
-                            name: format!("duplicate enum '{}'", name),
-                        },
-                        stmt.span,
-                    ));
                     continue;
                 }
 
-                // set type params in scope so generic enum fields like `T` are recognized
+                // set type params in scope so generic enum fields like `t` are recognized
                 let saved_type_params =
                     std::mem::replace(&mut self.type_params_in_scope, type_params.clone());
 
@@ -35,8 +28,7 @@ impl TypeInference {
                             .fields
                             .iter()
                             .map(|ann| {
-                                // an enum may carry an Rc payload directly, but not one
-                                // buried in an aggregate, which has no single offset
+                                // an enum may carry an rc payload directly, but not one
                                 let ty = self.type_from_annotation(ann);
                                 if Self::is_transparent_aggregate_of_rc(&ty) {
                                     self.errors.push(
