@@ -51,8 +51,6 @@ impl<'a> FunctionCodegen<'a> {
                 .const_null()
                 .into()),
             AirConst::FnRef(name) => {
-                // FnRef keeps the source-level function name, so resolve it through
-                // the same symbol mapping as direct calls before touching LLVM.
                 let symbol_name = self
                     .program
                     .functions
@@ -98,9 +96,7 @@ impl<'a> FunctionCodegen<'a> {
             Operand::Const(AirConst::Str(_)) => Ok(AirType::Str),
             Operand::Const(AirConst::Null) => Ok(AirType::Ptr(Box::new(AirType::Void))),
             Operand::Const(AirConst::FnRef(_)) => Ok(AirType::Ptr(Box::new(AirType::Void))),
-            Operand::Const(AirConst::Enum { enum_name, .. }) => {
-                Ok(AirType::Enum(enum_name.clone()))
-            }
+            Operand::Const(AirConst::Enum { enum_ref, .. }) => Ok(AirType::Enum(enum_ref.clone())),
             Operand::Const(AirConst::ZeroInit(ty)) | Operand::Const(AirConst::Undef(ty)) => {
                 Ok(ty.clone())
             }

@@ -50,18 +50,20 @@ impl<'a> FunctionCodegen<'a> {
             Rvalue::Cast { operand, from, to } => self.generate_cast(operand, from, to),
             Rvalue::Index { base, index } => self.generate_index(base, index),
             Rvalue::EnumInit {
-                enum_name,
+                enum_ref,
                 tag,
                 payload,
                 ..
-            } => self.generate_enum_init(enum_name, *tag, payload),
-            Rvalue::EnumTag { enum_name, operand } => self.generate_enum_tag(enum_name, operand),
+            } => self.generate_enum_init(&enum_ref.symbol(), *tag, payload),
+            Rvalue::EnumTag { enum_ref, operand } => {
+                self.generate_enum_tag(&enum_ref.symbol(), operand)
+            }
             Rvalue::EnumPayload {
-                enum_name,
+                enum_ref,
                 tag,
                 operand,
                 field_index,
-            } => self.generate_enum_payload(enum_name, *tag, operand, *field_index),
+            } => self.generate_enum_payload(&enum_ref.symbol(), *tag, operand, *field_index),
             Rvalue::ClosureCreate { fn_name, env } => self.generate_closure_create(fn_name, env),
             Rvalue::SliceFromParts { ptr, len } => self.generate_slice_from_parts(ptr, len),
         }
@@ -123,7 +125,6 @@ impl<'a> FunctionCodegen<'a> {
                 let elem_ty = air_basic_type_to_llvm(inner, self.context)?;
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
-            // a Vec indexes through fields 0 and 1 exactly like a Slice
             AirType::Slice(ref inner) | AirType::Vec(ref inner) => {
                 let slice_val = self.generate_operand(base)?.into_struct_value();
                 let data_ptr = self
@@ -146,7 +147,7 @@ impl<'a> FunctionCodegen<'a> {
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
             AirType::Str => {
-                // UTF-8 char indexing, runtime handles multi-byte scanning
+                // utf-8 char indexing, runtime handles multi-byte scanning
                 let str_val = self.generate_operand(base)?.into_struct_value();
                 let (str_ptr, str_len) = self.string_parts_from_value(str_val)?;
                 let char_at_fn = self.ensure_str_char_at_function();
@@ -169,14 +170,12 @@ impl<'a> FunctionCodegen<'a> {
         tag: u32,
         payload: &[Operand],
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        // Look up the enum def to decide simple vs data
         let enum_def = self.program.enums.iter().find(|e| e.name == enum_name);
 
         let is_data_enum = enum_def.is_some_and(|d| enum_has_data(d));
 
         if !is_data_enum || payload.is_empty() {
-            // Simple enum or unit variant of a data enum: still need to produce
-            // the right type. For data enums, we must produce a { i32, [N x i8] } value.
+            // the right type. for data enums, we must produce a { i32, [n x i8] } value.
             if is_data_enum {
                 let def = enum_def.expect("invariant: is_data_enum implies the enum def exists");
                 let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
@@ -197,7 +196,6 @@ impl<'a> FunctionCodegen<'a> {
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.align_alloca(tmp, enum_ty.into())?;
 
-                // Store the tag
                 let tag_ptr = self
                     .builder
                     .build_struct_gep(enum_ty, tmp, 0, "enum_tag_ptr")
@@ -205,7 +203,6 @@ impl<'a> FunctionCodegen<'a> {
                 let tag_val = self.context.i32_type().const_int(tag as u64, false);
                 self.store_value(tag_ptr, tag_val.into())?;
 
-                // Zero-init the payload area
                 if max_payload > 0 {
                     let payload_ptr = self
                         .builder
@@ -218,11 +215,9 @@ impl<'a> FunctionCodegen<'a> {
 
                 self.load_value(enum_ty.into(), tmp, "enum_value")
             } else {
-                // Pure simple enum: just an i32 tag
                 Ok(self.context.i32_type().const_int(tag as u64, false).into())
             }
         } else {
-            // Data variant construction: build { i32 tag, [N x i8] payload }
             let def = enum_def.expect("invariant: is_data_enum implies the enum def exists");
             let max_payload = enum_max_payload_size(def, &self.program.struct_sizes);
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
@@ -242,7 +237,6 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             self.align_alloca(tmp, enum_ty.into())?;
 
-            // Store the tag at index 0
             let tag_ptr = self
                 .builder
                 .build_struct_gep(enum_ty, tmp, 0, "enum_tag_ptr")
@@ -250,7 +244,6 @@ impl<'a> FunctionCodegen<'a> {
             let tag_val = self.context.i32_type().const_int(tag as u64, false);
             self.store_value(tag_ptr, tag_val.into())?;
 
-            // Zero-init the full payload area first so trailing bytes are clean
             if max_payload > 0 {
                 let payload_ptr = self
                     .builder
@@ -261,13 +254,11 @@ impl<'a> FunctionCodegen<'a> {
                 self.store_value(payload_ptr, zero.into())?;
             }
 
-            // Store each payload field at the right offset within the byte array
             let payload_base_ptr = self
                 .builder
                 .build_struct_gep(enum_ty, tmp, 1, "enum_payload_base")
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-            // Find the variant definition to get the field types
             let variant_def = def.variants.iter().find(|v| v.tag == tag).ok_or_else(|| {
                 CodegenError::LlvmError(format!(
                     "unknown variant tag {} for enum {}",
@@ -283,10 +274,8 @@ impl<'a> FunctionCodegen<'a> {
                 let field_layout =
                     aelys_air::layout::resolved_layout(field_air_ty, &self.program.struct_sizes);
 
-                // Align the offset
                 byte_offset = (byte_offset + field_layout.align - 1) & !(field_layout.align - 1);
 
-                // GEP into the byte array at the current offset, then bitcast to field type pointer
                 let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
                 let field_ptr = unsafe {
                     self.builder.build_in_bounds_gep(
@@ -300,10 +289,7 @@ impl<'a> FunctionCodegen<'a> {
 
                 let value = self.generate_operand(operand)?;
 
-                // The payload byte array sits at struct offset 4 (after the i32
-                // tag) inside the non-packed struct { i32, [N x i8] }.  The struct
-                // alignment is 4, so the payload base is 4-byte aligned.  We must
-                // not claim a higher alignment than the address actually has.
+                // alignment is 4, so the payload base is 4-byte aligned. we must
                 let field_align = alignment_of(field_llvm_ty).min(4);
                 let store = self
                     .builder
@@ -330,7 +316,6 @@ impl<'a> FunctionCodegen<'a> {
         let is_data_enum = enum_def.is_some_and(|d| enum_has_data(d));
 
         if is_data_enum {
-            // Data enum: { i32 tag, [N x i8] payload } -- extract field 0
             let enum_struct_name = format!("__aelys_enum_{}", enum_name);
             let enum_ty = self
                 .context
@@ -342,7 +327,6 @@ impl<'a> FunctionCodegen<'a> {
                     ))
                 })?;
 
-            // The operand is a struct value. We need it on the stack to GEP into it.
             let val = self.generate_operand(operand)?;
             let tmp = self
                 .builder
@@ -357,7 +341,6 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
             self.load_value(self.context.i32_type().into(), tag_ptr, "match_tag")
         } else {
-            // Simple enum: the value IS the i32 tag
             self.generate_operand(operand)
         }
     }
@@ -405,7 +388,6 @@ impl<'a> FunctionCodegen<'a> {
                 ))
             })?;
 
-        // Store the operand on the stack so we can GEP into it
         let val = self.generate_operand(operand)?;
         let tmp = self
             .builder
@@ -414,25 +396,21 @@ impl<'a> FunctionCodegen<'a> {
         self.align_alloca(tmp, enum_ty.into())?;
         self.store_value(tmp, val)?;
 
-        // GEP to the payload byte array (field 1 of the enum struct)
         let payload_base_ptr = self
             .builder
             .build_struct_gep(enum_ty, tmp, 1, "match_payload_base")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        // Calculate the byte offset of the requested field, matching the layout used in EnumInit
         let mut byte_offset: u32 = 0;
         for i in 0..=field_index {
             let ty = &variant_def.payload[i as usize];
             let layout = aelys_air::layout::resolved_layout(ty, &self.program.struct_sizes);
-            // Align before this field
             byte_offset = (byte_offset + layout.align - 1) & !(layout.align - 1);
             if i < field_index {
                 byte_offset += layout.size;
             }
         }
 
-        // GEP into the byte array at the computed offset
         let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
         let field_ptr = unsafe {
             self.builder.build_in_bounds_gep(
@@ -444,8 +422,6 @@ impl<'a> FunctionCodegen<'a> {
         }
         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        // The payload byte array sits at struct offset 4 — see comment in
-        // generate_enum_init for why alignment is capped at 4.
         let field_align = alignment_of(field_llvm_ty).min(4);
         let load = self
             .builder
@@ -462,9 +438,6 @@ impl<'a> FunctionCodegen<'a> {
         Ok(load)
     }
 
-    // Builds a fat pointer { fn_ptr, env_ptr } for a closure or a named
-    // function used as a value. env is either a heap-allocated env struct
-    // pointer (capturing closure) or null (non-capturing lambda, named fn).
     fn generate_closure_create(
         &mut self,
         fn_name: &str,
@@ -482,10 +455,8 @@ impl<'a> FunctionCodegen<'a> {
         })?;
         let fn_ptr = func.as_global_value().as_pointer_value();
 
-        // generate the env operand (pointer or null)
         let env_ptr = self.generate_operand(env)?;
 
-        // Build { ptr fn_ptr, ptr env_ptr } struct
         let fat_ty = closure_fat_ptr_type(self.context);
         let mut fat = fat_ty.get_undef();
         fat = self
@@ -501,7 +472,6 @@ impl<'a> FunctionCodegen<'a> {
         Ok(fat.into())
     }
 
-    // fat slice { ptr, i64 }, layout matches airtype::slice, built like the closure fat pointer
     fn generate_slice_from_parts(
         &mut self,
         ptr: &Operand,

@@ -64,8 +64,6 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Ptr(_) => Ok((8, 8)),
             AirType::FnPtr { conv, .. } => {
                 if matches!(conv, aelys_air::CallingConv::Aelys) {
-                    // Fat pointer { fn_ptr, env_ptr }: two pointers.
-                    // C/Rust FnPtrs are bare pointers (single ptr, 8 bytes).
                     Ok((16, 8))
                 } else {
                     Ok((8, 8))
@@ -79,13 +77,10 @@ impl<'a> FunctionCodegen<'a> {
                 let (size, align) = self.type_size_align(inner)?;
                 Ok((size.saturating_mul(*n as u32), align))
             }
-            AirType::Enum(name) => {
-                // Look up pre-computed enum size from AIR layout pass.
-                // Data enums are larger than 4 bytes (tag + payload).
-                if let Some(layout) = self.program.struct_sizes.get(name.as_str()) {
+            AirType::Enum(r) => {
+                if let Some(layout) = self.program.struct_sizes.get(r.symbol().as_str()) {
                     Ok((layout.size, layout.align))
                 } else {
-                    // Simple enum (no data variants): just the i32 tag
                     Ok((4, 4))
                 }
             }
@@ -101,8 +96,7 @@ impl<'a> FunctionCodegen<'a> {
                 if def.fields.is_empty() {
                     return Ok((0, 1));
                 }
-                // Codegen must never compute layout, that's AIR's job.
-                // If offsets are missing, the AIR is just malformed
+                // codegen must never compute layout, that's air's job.
                 if !def.fields.iter().all(|f| f.offset.is_some()) {
                     return Err(CodegenError::UnsupportedType(format!(
                         "struct `{}` has uncomputed field offsets; AIR layout pass was not run",

@@ -18,11 +18,16 @@ impl CodegenContext {
         for enum_def in &program.enums {
             if enum_has_data(enum_def) {
                 let max_payload = enum_max_payload_size(enum_def, &program.struct_sizes);
-                let enum_struct_name = format!("__aelys_enum_{}", enum_def.name);
-                let enum_ty = self.context.opaque_struct_type(&enum_struct_name);
+                let name = crate::types::enum_struct_name(&enum_def.name);
+                let enum_ty = self.context.opaque_struct_type(&name);
                 let tag_ty = self.context.i32_type().into();
                 let payload_ty = self.context.i8_type().array_type(max_payload).into();
                 enum_ty.set_body(&[tag_ty, payload_ty], false);
+            } else {
+                let marker = crate::types::enum_tag_marker_name(&enum_def.name);
+                if self.context.get_struct_type(&marker).is_none() {
+                    self.context.opaque_struct_type(&marker);
+                }
             }
         }
 
@@ -85,7 +90,7 @@ impl<'a> FunctionCodegen<'a> {
         field: &str,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         if matches!(self.operand_type(base)?, AirType::Str) {
-            if field != "len" {
+            if field != "len" && field != "bytes" {
                 return Err(CodegenError::UnsupportedType(format!(
                     "unknown field `{}` on `Str`",
                     field
@@ -96,6 +101,9 @@ impl<'a> FunctionCodegen<'a> {
                 return Err(CodegenError::UnsupportedType(
                     "expected Str fat pointer value for field access".to_string(),
                 ));
+            }
+            if field == "bytes" {
+                return self.generate_str_bytes_view(str_value.into_struct_value());
             }
             return Ok(self
                 .builder
@@ -160,6 +168,33 @@ impl<'a> FunctionCodegen<'a> {
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         let llvm_field_ty = air_basic_type_to_llvm(field_ty, self.context)?;
         self.load_value(llvm_field_ty, field_ptr, "field_load")
+    }
+
+    // `%__aelys_string` is a named struct and `slice(u8)` a literal one, so llvm forbids a bitcast and this repack is the only route
+    fn generate_str_bytes_view(
+        &mut self,
+        str_value: inkwell::values::StructValue<'static>,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let ptr = self
+            .builder
+            .build_extract_value(str_value, 0, "str_bytes_ptr")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let len = self
+            .builder
+            .build_extract_value(str_value, 1, "str_bytes_len")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let slice_ty =
+            air_basic_type_to_llvm(&AirType::Slice(Box::new(AirType::U8)), self.context)?
+                .into_struct_type();
+        let with_ptr = self
+            .builder
+            .build_insert_value(slice_ty.get_undef(), ptr, 0, "str_bytes_hdr_ptr")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        let header = self
+            .builder
+            .build_insert_value(with_ptr, len, 1, "str_bytes_hdr")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        Ok(header.as_basic_value_enum())
     }
 
     pub(crate) fn struct_pointer_from_operand(

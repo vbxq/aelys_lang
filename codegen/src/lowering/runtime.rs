@@ -67,9 +67,7 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_vec_detach", fn_ty, None)
     }
 
-    /// buffer if it is shared. inline fast path (a pointer load, a null test, a u32 refcount load
     /// itself in an out-of-line cold block, so an unshared write pays no call and never allocates.
-    /// `elem_base` walks, so the two cannot disagree about the root's storage class.
     pub(crate) fn emit_vec_detach(
         &mut self,
         local: LocalId,
@@ -78,7 +76,6 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<(), CodegenError> {
         let detach_fn = self.ensure_vec_detach_function();
         let elem_size = self.air_type_size(inner)? as u64;
-        // the fat struct {ptr,len,cap} alloca; field 0 (the data pointer) sits at offset 0
         let v_alloca = if through_ptr {
             let p = self.load_local(local)?.into_pointer_value();
             self.emit_null_check(p)?;
@@ -182,9 +179,7 @@ impl<'a> FunctionCodegen<'a> {
             ],
             false,
         );
-        // Trivial optimization, LLVM declaration doesn't add `noreturn` attribute, so it basically
         // can't optimize based on the fact that panic never returns
-        // yeah I be fixing up the most useless stuff possible
         let function = self.module.add_function("__aelys_panic", fn_ty, None);
         let noreturn_id = inkwell::attributes::Attribute::get_named_enum_kind_id("noreturn");
         let noreturn_attr = self.context.create_enum_attribute(noreturn_id, 0);
@@ -192,13 +187,9 @@ impl<'a> FunctionCodegen<'a> {
         function
     }
 
-    // sret-returning runtime functions (return %__aelys_string)
 
-    // on windows x64 MSVC, struct returns use sret (first param = ptr to result slot)
-    // because LLVM and MSVC disagree on 16-byte struct lowering (ce7dd07)
 
-    /// Helper: declare a runtime function that returns %__aelys_string.
-    /// Handles the windows sret ABI automatically.
+    /// handles the windows sret abi automatically.
     fn declare_string_returning_fn(
         &self,
         name: &str,
@@ -234,6 +225,17 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_str_char_at", &[ptr_ty, i64_ty, i64_ty])
     }
 
+    pub(crate) fn ensure_str_char_count_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_char_count") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self.context.i64_type().fn_type(&[ptr_ty, i64_ty], false);
+        self.module
+            .add_function("__aelys_str_char_count", fn_ty, None)
+    }
+
     pub(crate) fn ensure_to_string_i64_function(&self) -> FunctionValue<'static> {
         self.declare_string_returning_fn("__aelys_to_string_i64", &[self.context.i64_type().into()])
     }
@@ -242,16 +244,30 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_to_string_f64", &[self.context.f64_type().into()])
     }
 
+    pub(crate) fn ensure_to_string_i64_into_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        self.declare_string_returning_fn(
+            "__aelys_to_string_i64_into",
+            &[ptr_ty, self.context.i64_type().into()],
+        )
+    }
+
+    pub(crate) fn ensure_to_string_f64_into_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        self.declare_string_returning_fn(
+            "__aelys_to_string_f64_into",
+            &[ptr_ty, self.context.f64_type().into()],
+        )
+    }
+
     pub(crate) fn ensure_to_string_bool_function(&self) -> FunctionValue<'static> {
-        // bool is passed as i64 (0 or 1) to the C runtime
         self.declare_string_returning_fn(
             "__aelys_to_string_bool",
             &[self.context.i64_type().into()],
         )
     }
 
-    /// `__aelys_str_eq(ptr, i64, ptr, i64) -> i64`
-    /// flat ABI: (a_ptr, a_len, b_ptr, b_len) to avoid struct passing on windows x64
+    /// flat abi: (a_ptr, a_len, b_ptr, b_len) to avoid struct passing on windows x64
     pub(crate) fn ensure_str_eq_function(&self) -> FunctionValue<'static> {
         if let Some(function) = self.module.get_function("__aelys_str_eq") {
             return function;
@@ -272,8 +288,15 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_str_concat", &[ptr_ty, i64_ty, ptr_ty, i64_ty])
     }
 
-    /// Emit a division-by-zero check: if `divisor == 0`, branch to a panic
-    /// block; otherwise continue in a new `div_ok` block.
+    pub(crate) fn ensure_str_substring_bytes_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn(
+            "__aelys_str_substring_bytes",
+            &[ptr_ty, i64_ty, i64_ty, i64_ty],
+        )
+    }
+
     pub(crate) fn emit_div_zero_check(
         &mut self,
         divisor: IntValue<'static>,
@@ -311,8 +334,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 
-    /// Emit a bounds check: if `index >= length` (unsigned), branch to a panic
-    /// block; otherwise continue in a new `idx_ok` block.
+    /// emit a bounds check: if `index >= length` (unsigned), branch to a panic
     pub(crate) fn emit_bounds_check(
         &mut self,
         index: IntValue<'static>,
@@ -425,7 +447,6 @@ impl<'a> FunctionCodegen<'a> {
         Ok(())
     }
 
-    /// emit a null-pointer check before a dereference: if `ptr` is null, branch to a panic
     pub(crate) fn emit_null_check(
         &mut self,
         ptr: PointerValue<'static>,
