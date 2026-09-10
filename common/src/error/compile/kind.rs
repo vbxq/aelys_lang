@@ -1,3 +1,6 @@
+use crate::error::fault::Fault;
+use aelys_syntax::Span;
+
 #[derive(Debug)]
 pub enum CompileErrorKind {
     UnterminatedString,
@@ -6,6 +9,10 @@ pub enum CompileErrorKind {
     InvalidEscape(char),
     UnterminatedFmtExpr,
     UnmatchedCloseBrace,
+    SourceUnreadable {
+        path: String,
+        io: String,
+    },
 
     UnexpectedToken {
         expected: String,
@@ -23,6 +30,12 @@ pub enum CompileErrorKind {
 
     UndefinedVariable(String),
     VariableAlreadyDefined(String),
+    DuplicateDefinition {
+        name: String,
+        form: &'static str,
+        previous_form: &'static str,
+        previous: Span,
+    },
     UndefinedFunction(String),
 
     TypeMismatch {
@@ -64,6 +77,10 @@ pub enum CompileErrorKind {
     ModuleNotFound {
         module_path: String,
         searched_paths: Vec<String>,
+    },
+    AmbiguousModule {
+        module_path: String,
+        roots: Vec<String>,
     },
     CircularDependency {
         chain: Vec<String>,
@@ -123,5 +140,6 @@ pub enum CompileErrorKind {
         message: String,
         note: Option<String>,
         help: Option<String>,
+        fault: Fault,
     },
 }

@@ -27,6 +27,21 @@ impl CompileErrorKind {
             Self::VariableAlreadyDefined(name) => {
                 format!("variable `{}` already defined in this scope", name)
             }
+            Self::DuplicateDefinition {
+                name,
+                form,
+                previous_form,
+                ..
+            } => {
+                if form == previous_form {
+                    format!("the name `{}` is defined twice as {}", name, form)
+                } else {
+                    format!(
+                        "the name `{}` is defined twice, once as {} and once as {}",
+                        name, previous_form, form
+                    )
+                }
+            }
             Self::UndefinedFunction(name) => format!("undefined function `{}`", name),
             Self::TypeMismatch {
                 expected,
@@ -71,6 +86,11 @@ impl CompileErrorKind {
             Self::ModuleNotFound { module_path, .. } => {
                 format!("module not found: '{}'", module_path,)
             }
+            Self::AmbiguousModule { module_path, roots } => format!(
+                "module '{}' resolves in {} search roots",
+                module_path,
+                roots.len()
+            ),
             Self::CircularDependency { chain } => {
                 format!("circular dependency detected: {}", chain.join(" -> "))
             }
@@ -153,6 +173,9 @@ impl CompileErrorKind {
                 symbol,
                 libraries.join(", ")
             ),
+            Self::SourceUnreadable { path, io } => {
+                format!("could not read {}: {}", path, io)
+            }
             Self::BackendDiagnostic {
                 backend, message, ..
             } => format!("[{}] {}", backend, message),

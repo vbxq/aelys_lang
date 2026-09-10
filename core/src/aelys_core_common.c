@@ -28,6 +28,10 @@ extern long long __aelys_user_main(void);
 long long __aelys_alloc_count = 0;
 long long __aelys_free_count = 0;
 
+/* raw libc malloc done by this unit, invisible to the managed counters above */
+long long __aelys_raw_alloc_count = 0;
+long long __aelys_raw_free_count = 0;
+
 /* only the rc+cycles unit ever assigns this; it stays NULL under rc and leak, so a
    program calling __aelys_collect() still links and simply does nothing */
 void (*__aelys_collect_hook)(void) = 0;
@@ -49,12 +53,54 @@ void __aelys_write_err(const char *ptr, long long len) {
     fwrite(ptr, 1, (size_t)len, stderr);
 }
 
+/* the width walk must match __aelys_str_char_at or a loop bounded by this count runs past its last index */
+long long __aelys_str_char_count(const char *str_ptr, long long str_len) {
+    const unsigned char *data = (const unsigned char *)str_ptr;
+    long long chars = 0;
+    long long pos = 0;
+    while (pos < str_len) {
+        unsigned char byte = data[pos];
+        long long step = 1;
+        if ((byte & 0xE0) == 0xC0) {
+            step = 2;
+        } else if ((byte & 0xF0) == 0xE0) {
+            step = 3;
+        } else if ((byte & 0xF8) == 0xF0) {
+            step = 4;
+        }
+        pos += step;
+        chars++;
+    }
+    return chars;
+}
+
+/* the byte length is what `.len` reports, so the message must say both counts or the reader trusts the wrong one */
+static AELYS_NORETURN void __aelys_str_index_panic(const char *str_ptr,
+                                                   long long str_len,
+                                                   long long index) {
+    long long chars = __aelys_str_char_count(str_ptr, str_len);
+
+    char message[192];
+    int written = snprintf(message, sizeof message,
+                           "string index %lld out of bounds: the string has %lld character%s "
+                           "and %lld byte%s, and `.len` reports the byte count",
+                           index, chars, chars == 1 ? "" : "s", str_len,
+                           str_len == 1 ? "" : "s");
+    if (written < 0) {
+        __aelys_panic("string index out of bounds", 26);
+    }
+    if (written > (int)sizeof message - 1) {
+        written = (int)sizeof message - 1;
+    }
+    __aelys_panic(message, written);
+}
+
 /* strings cross the ABI as a flat (ptr, len) pair, not a struct, because 16-byte struct
    passing does not agree between MSVC and LLVM on windows x64 */
 AelysString __aelys_str_char_at(const char *str_ptr, long long str_len,
                                 long long index) {
     if (index < 0) {
-        __aelys_panic("index out of bounds", 20);
+        __aelys_str_index_panic(str_ptr, str_len, index);
     }
 
     const unsigned char *data = (const unsigned char *)str_ptr;
@@ -80,7 +126,7 @@ AelysString __aelys_str_char_at(const char *str_ptr, long long str_len,
     }
 
     if (char_index < index || byte_pos >= str_len) {
-        __aelys_panic("index out of bounds", 20);
+        __aelys_str_index_panic(str_ptr, str_len, index);
     }
 
     unsigned char start_byte = data[byte_pos];
@@ -244,6 +290,17 @@ void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
     v->len += 1;
 }
 
+/* the length must match the 21-byte literal */
+void __aelys_vec_pop(void *vecptr, void *outptr, long long elem_size) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->len == 0) {
+        __aelys_panic("pop from an empty Vec", 21);
+    }
+    __aelys_vec_detach(vecptr, elem_size, 0);
+    v->len -= 1;
+    memcpy(outptr, (char *)v->ptr + v->len * elem_size, (size_t)elem_size);
+}
+
 /* arc is reserved, not implemented; the length must match the 19-byte literal */
 void __aelys_arc_retain(void *ptr) {
     (void)ptr;
@@ -268,16 +325,35 @@ AELYS_NORETURN void __aelys_exit(int code) {
 
 /////////////////////////////////////////////////////
 
+/* codegen sizes the caller's stack slot from these, keep both sides in step */
+#define AELYS_I64_STR_BUF 21
+#define AELYS_F64_STR_BUF 64
+
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
 AelysString __aelys_to_string_i64(long long value) {
-    char *buffer = (char *)malloc(21);
+    char *buffer = (char *)malloc(AELYS_I64_STR_BUF);
     if (!buffer) {
         __aelys_panic("malloc failed in to_string_i64", 31);
     }
+    __aelys_raw_alloc_count++;
 
-    int len = snprintf(buffer, 21, "%lld", value);
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%lld", value);
     if (len < 0) {
         free(buffer);
+        __aelys_raw_free_count++;
+        __aelys_panic("snprintf failed in to_string_i64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* buffer is the caller's frame and must hold AELYS_I64_STR_BUF bytes; nothing here allocates */
+AelysString __aelys_to_string_i64_into(char *buffer, long long value) {
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%lld", value);
+    if (len < 0) {
         __aelys_panic("snprintf failed in to_string_i64", 33);
     }
 
@@ -289,14 +365,29 @@ AelysString __aelys_to_string_i64(long long value) {
 
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
 AelysString __aelys_to_string_f64(double value) {
-    char *buffer = (char *)malloc(64);
+    char *buffer = (char *)malloc(AELYS_F64_STR_BUF);
     if (!buffer) {
         __aelys_panic("malloc failed in to_string_f64", 31);
     }
+    __aelys_raw_alloc_count++;
 
-    int len = snprintf(buffer, 64, "%.17g", value);
+    int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
     if (len < 0) {
         free(buffer);
+        __aelys_raw_free_count++;
+        __aelys_panic("snprintf failed in to_string_f64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* buffer is the caller's frame and must hold AELYS_F64_STR_BUF bytes; nothing here allocates */
+AelysString __aelys_to_string_f64_into(char *buffer, double value) {
+    int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
+    if (len < 0) {
         __aelys_panic("snprintf failed in to_string_f64", 33);
     }
 
@@ -340,6 +431,52 @@ AelysString __aelys_str_concat(const char *a_ptr, long long a_len,
     return result;
 }
 
+/* the range comes from a string that is already valid utf-8, so only the two ends need a test and validity holds by induction */
+AelysString __aelys_str_substring_bytes(const char *s_ptr, long long s_len,
+                                        long long lo, long long hi) {
+    char message[224];
+    int written;
+
+    if (lo < 0 || hi < lo || hi > s_len) {
+        written = snprintf(message, sizeof message,
+                           "string::substring_bytes: the byte range %lld..%lld is not inside "
+                           "a string of %lld byte%s",
+                           lo, hi, s_len, s_len == 1 ? "" : "s");
+        if (written < 0) {
+            __aelys_panic("string::substring_bytes: byte range out of bounds", 49);
+        }
+        if (written > (int)sizeof message - 1) {
+            written = (int)sizeof message - 1;
+        }
+        __aelys_panic(message, written);
+    }
+
+    const unsigned char *data = (const unsigned char *)s_ptr;
+    long long cut = -1;
+    if (lo < s_len && (data[lo] & 0xC0) == 0x80) {
+        cut = lo;
+    } else if (hi < s_len && (data[hi] & 0xC0) == 0x80) {
+        cut = hi;
+    }
+    if (cut >= 0) {
+        written = snprintf(message, sizeof message,
+                           "string::substring_bytes: byte %lld is not a character boundary; "
+                           "it holds 0x%02x, a utf-8 continuation byte, so the range %lld..%lld "
+                           "would cut a character in half",
+                           cut, (unsigned)data[cut], lo, hi);
+        if (written < 0) {
+            __aelys_panic("string::substring_bytes: byte range splits a character", 53);
+        }
+        if (written > (int)sizeof message - 1) {
+            written = (int)sizeof message - 1;
+        }
+        __aelys_panic(message, written);
+    }
+
+    /* concat already allocates a_len + b_len and copies both operands, and it floors a zero total at one byte */
+    return __aelys_str_concat(s_ptr + lo, hi - lo, "", 0);
+}
+
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
 long long __aelys_str_eq(const char *a_ptr, long long a_len,
                          const char *b_ptr, long long b_len) {
@@ -365,6 +502,8 @@ int main(int argc, char **argv) {
     if (getenv("AELYS_RC_STATS")) {
         fprintf(stderr, "[rc] allocs=%lld frees=%lld\n", __aelys_alloc_count,
                 __aelys_free_count);
+        fprintf(stderr, "[raw] allocs=%lld frees=%lld\n", __aelys_raw_alloc_count,
+                __aelys_raw_free_count);
     }
     return code;
 }

@@ -4,6 +4,7 @@
 /* freelist[class] holds only slots of exactly class*16 bytes, so a reuse pop can never
    hand back a slot that is too small */
 /* single-threaded: the runtime spawns no threads, so these globals need no lock */
+/* every malloc below is this allocator's own substrate, counting it would double-count __aelys_alloc */
 
 #include <stdlib.h>
 #include <string.h>

@@ -73,6 +73,19 @@ To write a literal `}`, double it: `}}`.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0008",
+        title: "the input file could not be read",
+        explanation: "\
+The compiler was handed a path it could not read: the file does not exist,
+it is a directory, or the permissions refuse it. The message carries the
+operating system's own words, and the help names the path as it was given.
+
+This is about reading a file, never about resolving a module. A `needs`
+that does not resolve is E0601, and it lists the paths that were searched:
+a module is looked up, while the file on the command line is given.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0101",
         title: "unexpected token",
         explanation: "\
@@ -139,6 +152,45 @@ or assign to the existing variable if it's `mut`.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0204",
+        title: "a top-level name is defined twice",
+        explanation: "\
+Functions, globals, structs and enums share a single top-level namespace
+within one file. A name may be bound in it once.
+
+    pub let g: i64 = 1
+    pub let g: i64 = 2      // E0204, `g` is already defined
+
+    fn P() -> i64 { return 1 }
+    struct P { x: i64 }     // E0204, same name, different form
+
+All four binding forms are checked against each other, so a struct and a
+global, or a function and an enum, collide as readily as two functions.
+`unsafe extern fn` is a function and is checked with them. An `unsafe
+extern` declaration that names a symbol the program also defines is this
+error, not E0613.
+
+The check runs before type inference, so the second definition is never
+checked against the first one's shape: E0204 is the whole answer and no
+consequence error follows it.
+
+Two definitions under one name used to compile. One of them won, and
+which one won was not stable: a duplicated global was read as the second
+initializer at -O0 and constant-folded to the first at -O2, so a write
+through the mutable definition could be executed and never observed.
+
+`needs` bindings share the namespace too, but an import that collides
+with a definition is reported as E0603, which can suggest `as`.
+
+E0427 is the later, narrower check: it names two definitions that reach a
+single linker symbol after monomorphization, which it can only spell in
+mangled form. Where both apply, E0204 answers, because it has both source
+spans.
+
+Rename one of the definitions.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0203",
         title: "undefined function",
         explanation: "\
@@ -154,8 +206,12 @@ The compiler expected one type but got another. This shows up in many
 situations: return values, function arguments, variable assignments,
 binary operators, cast targets, etc.
 
-The error message tells you the two types that conflict. Read it
-carefully, the fix is almost always in the surrounding expression.",
+Where the message names two types, they are the ones that conflict, and
+the fix is almost always in the surrounding expression.
+
+E0301 is also the carrier for a handful of checks that have no second
+type to report. Those name no types at all: the headline is the reason
+itself, and there is nothing to compare.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -254,6 +310,63 @@ and can't be overwritten inside the body.
     for i in 0..10 {
         i = 99    // E0402
     }",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0410",
+        title: "`Rc<T>` used outside the Stage 1 supported surface",
+        explanation: "\
+`Rc<T>` is reference counted, and every retain has to be matched by a
+release the compiler can point at. Forms where that accounting cannot be
+proven are refused rather than silently miscompiled, and the message
+carries `[rc-stage1]`.
+
+Three shapes are refused today.
+
+An `Rc` binding declared `mut`, because an Rc is single-assignment for
+now and the overwrite would drop a retain:
+
+    let mut r = Rc::new(1)      // E0410
+    let r = Rc::new(1)          // ok
+
+An indirect initializer. The right-hand side has to be `Rc::new(..)`,
+`Rc::null()`, another Rc binding, or a read of an Rc field:
+
+    let r = if c { a } else { b }   // E0410
+    let r = a                       // ok
+
+An `Rc` embedded in a value that is copied as bytes, which loses the
+inner count: an array, a `Vec`, a tuple, a struct field of one of those,
+or a generic payload erased at the AIR boundary.
+
+    let xs = [r, r]             // E0410
+    Rc::get(Rc::get(rr))        // E0410, a nested Rc payload
+
+Keep the `Rc` in a direct local and read through it where you need it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0411",
+        title: "unused `Result`",
+        explanation: "\
+A call whose type is `Result<T, E>` was used as a statement, so the error
+half would be dropped where it is produced and the program would carry on
+as if the call had succeeded.
+
+    fn main() -> i64 {
+        risky(5)                // E0411
+        return 0
+    }
+
+Four ways to consume it, and each says something different about intent:
+
+    let n = risky(5)?           // propagate to the caller
+    match risky(5) { .. }       // handle it here, `catch` also works
+    let n = risky(5).expect(\"…\")  // assert it cannot fail, abort if it does
+    discard risky(5)            // ignore it on purpose
+
+`discard` is the one that keeps the old behaviour, and it is spelled out
+so the choice is visible in the source rather than implied by silence.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -565,7 +678,7 @@ zero.",
     },
     DiagnosticInfo {
         code: "E0427",
-        title: "two functions compile to the same symbol",
+        title: "two definitions compile to the same symbol",
         explanation: "\
 An ordinary function's symbol is its bare name, whatever scope it was
 declared in. Two declarations that land on one symbol share a single
@@ -592,6 +705,13 @@ name at all can still land on one symbol:
 
 `main` counts here too, because it is emitted as `__aelys_main`.
 
+Enums and structs carry the same check, but it can no longer be reached
+from source: a generic type instance is named from its arity as well as
+its arguments, which makes the derivation injective, so `enum Q<T>` and
+`enum Q_ptr<T>` in one file are both legal and reach `__mono_Q$1$i64` and
+`__mono_Q_ptr$1$i64`. Two type definitions landing on one symbol is an
+internal invariant break and is reported as a compiler bug, not here.
+
 Nested functions do not get scope-qualified symbols yet, and generic
 instances are not disambiguated, so the fix is to rename one of them.",
         severity: Severity::Error,
@@ -617,6 +737,63 @@ cannot check the names one by one; the whole prefix is reserved instead.
 Rename the function. Locals, parameters and struct fields are unaffected:
 
     let __x = 5                             // ok",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0430",
+        title: "a lowered type has no definition",
+        explanation: "\
+The lowered program names a struct or an enum and no definition in the
+program carries that name.
+
+    struct G<T> { n: Vec<T> }
+    nogc fn f(g: G<i64>) -> i64 { return 0 }   // E0430
+
+A generic struct declaration is not lowered at all yet, so every mention
+of one names a definition that is not there. Write the struct out at the
+type you need it at, without the parameter, and the mention resolves.
+
+The other way in is a generic enum instance whose name the compiler
+derived and then emitted no definition for. Nothing in the source spells
+that name, and nothing in the source avoids it: that one is a defect in
+the compiler.
+
+This is separate from E0412, which is about `Vec<T>` held outside the
+surface where its value semantics are guaranteed. The two shared a code,
+so `--explain` answered one of them with a page about the other.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0431",
+        title: "this expression cannot be iterated",
+        explanation: "\
+`for x in <collection>` walks an array (`[T; N]`), a slice (`&[T]` or
+`&mut [T]`) or a string. Every other type is refused here.
+
+    fn f(n: i64) -> i64 {
+        for x in n { }         // E0431, an `i64` has no elements
+        return 0
+    }
+
+    struct D { n: i64 }
+    fn g(d: D) -> i64 {
+        for x in d { }         // E0431, a struct has no elements
+        return 0
+    }
+
+A slice iterates, so a `&[T]` parameter is walked directly and the loop
+holds a shared borrow of it for the whole loop:
+
+    fn total(s: &[i64]) -> i64 {
+        let mut t: i64 = 0
+        for x in s { t = t + x }   // ok
+        return t
+    }
+
+A `Vec<T>` is refused by E0414 instead, which names the counting-loop
+workaround. This code was carried by E0304 `invalid member access` until
+it was split out: a `for` header is not a field access, and the page it
+sent the reader to described one.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -844,8 +1021,51 @@ bound is never checked, so only direct calls are allowed.",
         title: "module not found",
         explanation: "\
 A `needs` names a module whose file does not exist. A module path
-`a.b.c` resolves to exactly one file, `<root>/a/b/c.aelys`, where
-`<root>` is the directory of the file named on the command line.",
+`a.b.c` names the file `a/b/c.aelys` under a search root. The roots are
+the directory of the file named on the command line, first, then every
+`-I <dir>` given on the command line, in the order they were written.
+There is no default root and no environment variable: a module outside
+the program's own directory is reachable only through `-I`.
+
+The note lists every candidate path that was tried.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0622",
+        title: "module found in more than one search root",
+        explanation: "\
+A module path resolved to a file under two or more `-I` roots. The roots
+given with `-I` are peers, so there is no rule that could pick one, and
+choosing the first would compile a different library than the next
+invocation with the roots written the other way round.
+
+The directory of the file named on the command line is not a peer: it
+outranks every `-I` root, so a copy sitting next to the program shadows
+the library on the search path and is never ambiguous.
+
+Drop one of the roots, or delete the copy that duplicates the module.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0623",
+        title: "module bound under another name",
+        explanation: "\
+A name that resolves to nothing is a segment of a module path that this
+file imports under a different binding. `needs std.math as m` introduces
+exactly one name, `m`; it does not introduce `std`, and it does not
+introduce `math`.
+
+    needs std.math as m
+
+    m.abs(-7)           // this is the one that resolves
+    math.abs(-7)        // E0623, the last segment is not a binding
+    std.math.abs(-7)    // E0623, the first segment is not one either
+
+The message names the binding that does exist. Write it, or change the
+`needs` to bind the module under the name the code already uses.
+
+A name that matches no imported module path at all is not this code: it
+is reported as E0201, an undefined variable.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -979,9 +1199,9 @@ because calling one of those would reach the runtime's own code.
 
 Within one compilation unit the duplicate check runs first, so a
 declaration that names a symbol the program also defines under that name
-is reported as E0301 and never reaches this check. `unsafe extern fn
+is reported as E0204 and never reaches this check. `unsafe extern fn
 main` in a program that also writes `fn main` is the reachable case: both
-lower to `__aelys_main`, and the verdict is E0301.
+are functions named `main`, and the verdict is E0204.
 
 A library named by `-l` is not source, so E0613 never sees it. The link
 line puts the user libraries after `-laelys-core-*`, which keeps an
@@ -1208,10 +1428,53 @@ whichever one it is written on.",
     },
     DiagnosticInfo {
         code: "E0901",
-        title: "backend error",
+        title: "internal compiler error",
         explanation: "\
-Something went wrong during LLVM code generation. This is a compiler
-bug. Please open an issue with the source file that triggered it.",
+An invariant inside the compiler broke. Your program is not at fault and
+there is nothing in it to change.
+
+The failure can come from any phase, not only from code generation: AIR
+lowering, layout, the AIR validator and monomorphization all report here,
+and they all run before a single instruction is generated.
+
+Please open an issue with the source file that triggered it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0902",
+        title: "not supported yet",
+        explanation: "\
+The compiler understood the program and has no lowering for this form.
+It is a missing feature, not a defect in your program.
+
+A different spelling of the same intent may well work today, and this
+form is expected to be accepted in a later version. The message says
+which form was met.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0903",
+        title: "the toolchain refused",
+        explanation: "\
+Something outside the compiler refused: the linker, the filesystem, or
+the target. The compiler produced its output and could not complete the
+step after it.
+
+Look at the tool's own words in the message. A missing library, a search
+path that does not exist, a directory that cannot be written and a target
+the installed backend does not know all arrive here.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0904",
+        title: "the program is not well formed for the backend",
+        explanation: "\
+The program is well formed everywhere earlier and the backend cannot
+represent it. No version of this compiler will accept it as written.
+
+That last sentence is what separates E0904 from E0902: E0902 is a form
+the compiler has not learned yet, and waiting or rephrasing helps, while
+E0904 is a program that has to change. The message says what to change.",
         severity: Severity::Error,
     },
 ];

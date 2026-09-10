@@ -34,6 +34,7 @@ static size_t g_capacity = 0;
 /* the pointer map emitted by the compiler, indexed by type_id */
 extern const uint32_t __aelys_rc_type_table[];
 
+/* collector scratch, never counted: a bookkeeping bump would falsify every balanced row */
 static void candidates_push(void *ptr) {
     if (g_count == g_capacity) {
         size_t new_cap = g_capacity ? g_capacity * 2 : 16;

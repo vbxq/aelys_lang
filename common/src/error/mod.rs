@@ -1,15 +1,16 @@
 use std::fmt;
 
 pub mod compile;
+pub mod fault;
 
 use crate::diagnostic::Diagnostic;
 
 pub use compile::{CompileError, CompileErrorKind};
+pub use fault::Fault;
 
 #[derive(Debug)]
 pub enum AelysError {
     Compile(CompileError),
-    /// Multiple diagnostics (used when sema produces multiple independent errors)
     Multiple(Vec<Diagnostic>),
 }
 
@@ -40,7 +41,6 @@ impl AelysError {
         match self {
             AelysError::Compile(e) => e.to_diagnostic(),
             AelysError::Multiple(diagnostics) => {
-                // return first diagnostic; callers should use to_diagnostics() instead
                 diagnostics.first().cloned().unwrap_or_else(|| {
                     Diagnostic::new(crate::diagnostic::Severity::Error, "unknown error")
                 })
@@ -48,7 +48,6 @@ impl AelysError {
         }
     }
 
-    /// Get all diagnostics from this error (for multi-error rendering)
     pub fn to_diagnostics(&self) -> Vec<Diagnostic> {
         match self {
             AelysError::Multiple(diagnostics) => diagnostics.clone(),

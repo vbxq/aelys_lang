@@ -44,6 +44,9 @@ impl CompileError {
                     }
                 }
             }
+            CompileErrorKind::SourceUnreadable { path, .. } => {
+                diag.add_help(format!("check that `{}` exists and is readable", path));
+            }
             CompileErrorKind::BackendDiagnostic { note, help, .. } => {
                 if let Some(note) = note {
                     diag.add_note(note.clone());
@@ -59,6 +62,12 @@ impl CompileError {
                 if !searched_paths.is_empty() {
                     diag.add_note(format!("searched in: {}", searched_paths.join(", ")));
                 }
+            }
+            CompileErrorKind::AmbiguousModule { roots, .. } => {
+                diag.add_note(format!("resolved in: {}", roots.join(", ")));
+                diag.add_help(
+                    "drop one of the `-I` roots, or delete the copy that duplicates it".to_string(),
+                );
             }
             CompileErrorKind::SymbolNotPublic { module, .. } => {
                 diag.add_help(format!(
@@ -122,6 +131,26 @@ impl CompileError {
             }
             CompileErrorKind::SymbolConflict { .. } => {
                 diag.add_help("use 'as' to bind one of them to another name".to_string());
+            }
+            CompileErrorKind::DuplicateDefinition {
+                name,
+                previous_form,
+                previous,
+                ..
+            } => {
+                diag.add_secondary_label(
+                    self.source.clone(),
+                    *previous,
+                    Some(format!(
+                        "`{}` is first defined here, as {}",
+                        name, previous_form
+                    )),
+                );
+                diag.add_note(
+                    "functions, globals, structs and enums share one top level namespace"
+                        .to_string(),
+                );
+                diag.add_help("rename one of them".to_string());
             }
             CompileErrorKind::ForeignHeaderImport { .. } => {
                 diag.add_note(

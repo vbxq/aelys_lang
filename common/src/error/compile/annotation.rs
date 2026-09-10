@@ -5,6 +5,7 @@ impl CompileErrorKind {
         match self {
             Self::UndefinedVariable(_) => "not found in this scope",
             Self::VariableAlreadyDefined(_) => "already defined here",
+            Self::DuplicateDefinition { .. } => "this name is already defined",
             Self::UndefinedFunction(_) => "not found in this scope",
             Self::AssignToImmutable(_) => "variable is not mutable",
             Self::AssignToLoopVariable(_) => "controlled by the for loop",
@@ -24,6 +25,7 @@ impl CompileErrorKind {
             Self::InvalidCast { .. } => "invalid cast",
             Self::RecursionLimitExceeded => "recursion limit",
             Self::ModuleNotFound { .. } => "module not found",
+            Self::AmbiguousModule { .. } => "found in more than one search root",
             Self::CircularDependency { .. } => "creates circular dependency",
             Self::SymbolNotPublic { .. } => "symbol is not public",
             Self::ReservedModuleSegment { .. } => "reserved module path segment",
@@ -39,7 +41,8 @@ impl CompileErrorKind {
             Self::ForeignSignatureType { .. } => "outside the external type surface",
             Self::TypeInferenceError(_) => "type inference failed",
             Self::LinkedLibraryClaimsRuntimeSymbol { .. } => "this program is linked against it",
-            Self::BackendDiagnostic { .. } => "backend error",
+            Self::SourceUnreadable { .. } => "this file could not be read",
+            Self::BackendDiagnostic { fault, .. } => fault.annotation(),
             _ => "",
         }
     }

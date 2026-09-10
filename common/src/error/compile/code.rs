@@ -10,6 +10,7 @@ impl CompileErrorKind {
             Self::InvalidEscape(_) => 5,
             Self::UnterminatedFmtExpr => 6,
             Self::UnmatchedCloseBrace => 7,
+            Self::SourceUnreadable { .. } => 8,
 
             Self::UnexpectedToken { .. } => 101,
             Self::ExpectedExpression => 102,
@@ -19,6 +20,7 @@ impl CompileErrorKind {
 
             Self::UndefinedVariable(_) => 201,
             Self::VariableAlreadyDefined(_) => 202,
+            Self::DuplicateDefinition { .. } => 204,
 
             Self::TypeMismatch { .. } => 301,
             Self::ArityMismatch { .. } => 302,
@@ -39,6 +41,7 @@ impl CompileErrorKind {
             Self::ReturnOutsideFunction => 503,
 
             Self::ModuleNotFound { .. } => 601,
+            Self::AmbiguousModule { .. } => 622,
             Self::CircularDependency { .. } => 602,
             Self::SymbolConflict { .. } => 603,
             Self::ReservedModuleSegment { .. } => 604,
@@ -56,7 +59,7 @@ impl CompileErrorKind {
 
             Self::TypeInferenceError(_) => 301,
 
-            Self::BackendDiagnostic { .. } => 901,
+            Self::BackendDiagnostic { fault, .. } => fault.code(),
         }
     }
 }
