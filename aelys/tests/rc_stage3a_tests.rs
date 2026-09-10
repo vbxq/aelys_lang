@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for, linker_unavailable};
+
 fn rc_ir(src: &str) -> String {
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
@@ -23,18 +26,6 @@ fn rc_reject(src: &str) -> String {
         .to_string()
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
-
 fn call_count(ir: &str, needle: &str) -> usize {
     ir.lines()
         .filter(|l| l.contains(needle) && !l.trim_start().starts_with("declare"))
@@ -42,6 +33,7 @@ fn call_count(ir: &str, needle: &str) -> usize {
 }
 
 fn run_with_stats(src: &str) -> Option<(i32, String)> {
+    let _pin = common::pin_legs("run_with_stats", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -55,7 +47,9 @@ fn run_with_stats(src: &str) -> Option<(i32, String)> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -64,10 +58,11 @@ fn run_with_stats(src: &str) -> Option<(i32, String)> {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
 
+    common::note_leg();
     let output = Command::new(&exe)
         .env("AELYS_RC_STATS", "1")
         .output()
@@ -511,7 +506,9 @@ fn asan_probe(src: &str, expected_exit: i32, label: &str) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("[{label}] linker unavailable; skipping ASan probe");
+                common::require_linker_skip(
+                    "a skipped asan probe proves nothing about memory cleanliness",
+                );
                 return;
             }
             panic!("[{label}] compilation should succeed: {err}");

@@ -5,17 +5,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 fn run_with_env_opt(
     src: &str,
@@ -23,6 +14,7 @@ fn run_with_env_opt(
     opt: OptimizationLevel,
     env: &[(&str, &str)],
 ) -> Option<(i32, String, String)> {
+    let _pin = common::pin_legs("run_with_env_opt", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -31,7 +23,9 @@ fn run_with_env_opt(
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -40,7 +34,7 @@ fn run_with_env_opt(
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
 
@@ -48,6 +42,7 @@ fn run_with_env_opt(
     for (k, v) in env {
         cmd.env(k, v);
     }
+    common::note_leg();
     let output = cmd.output().expect("run compiled exe");
     let code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -222,24 +217,14 @@ fn use_vec(v: Vec<i64>) -> i64 {
     return v[0]
 }
 fn main() -> i64 {
-    // (a) a real cycle so type_id 0 = Node (1 Rc child @ offset 0), and so the
-    //     collector has real work to do.
     let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
     let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
     a.next = b
     b.next = a
-    // (b) a Vec passed by value: the callee retains on entry, releases on exit →
-    //     the buffer's refcount returns to 1 (>0) → registered as a cycle candidate
-    //     (with the bug). The first element is 7 (a non-NULL, non-pointer value the
-    //     mis-trace would read as an Rc child and NULL).
     let data = vec[7, 8, 9]
     let first = use_vec(data)
-    // Now collect: with the bug, the Vec buffer (a stale candidate) is mis-traced
-    // via the Node pointer-map → its element[0] (7) is read as a child pointer and
-    // P4 NULLs it (or dereferences/frees garbage → UAF/ASan trap).
+    // now collect: with the bug, the vec buffer (a stale candidate) is mis-traced
     __aelys_collect()
-    // Read element[0] AFTER the collect. Correct: still 7. Corrupted: 0 (NULLed)
-    // or a crash. We also fold in `first` (7) so a silent mis-read is visible.
     return data[0] + first
 }
 "#;
@@ -375,7 +360,6 @@ fn seam3_collector_free_reclaimed_by_immix_no_uaf() {
     let src = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn main() -> i64 {
-    // Build and collect a cycle (frees 2 nodes into the Immix free-list).
     let a: Rc<Node> = Rc::new(Node { val: 11, next: Rc::null() })
     let b: Rc<Node> = Rc::new(Node { val: 22, next: Rc::null() })
     a.next = b
@@ -424,21 +408,17 @@ fn use_vec(v: Vec<i64>) -> i64 {
     return v[0] + v[1]
 }
 fn main() -> i64 {
-    // A plain shared Rc.
     let r: Rc<i64> = Rc::new(5)
     let r2: Rc<i64> = r
-    // A cycle.
     let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
     let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
     a.next = b
     b.next = a
-    // A Vec, a CoW share, a slow-path push, and a by-value pass.
     let v = vec[10, 20, 30]
     let w = v
     Vec::push(w, 40)
     let s = use_vec(v)
     __aelys_collect()
-    // r2 reads 5; v unchanged [10,20,30] so v[0]=10; w[3]=40; s = v[0]+v[1] = 30.
     return Rc::get(r2) + v[0] + w[3] + s
 }
 "#;

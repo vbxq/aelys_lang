@@ -1,3 +1,4 @@
+use aelys_air::EnumRef;
 use aelys_air::layout::compute_layouts;
 use aelys_air::rc_paths::{RcLeafPath, RcPathStep};
 use aelys_air::rc_types::{collect_rc_types, compute_offset_for_path};
@@ -138,10 +139,10 @@ fn unit_enum_payload_head_is_four_not_eight() {
     };
     let p = program_with(vec![], vec![holder]);
     let off = compute_offset_for_path(
-        &AirType::Enum("Holder".into()),
+        &AirType::Enum(EnumRef::plain("Holder")),
         &RcLeafPath {
             steps: vec![RcPathStep::EnumPayload {
-                enum_name: "Holder".into(),
+                enum_ref: EnumRef::plain("Holder"),
                 tag: 0,
                 field_index: 0,
             }],
@@ -169,7 +170,7 @@ fn unit_mixed_carrier_composes_struct_then_enum() {
     };
     let wrap = struct_def(
         "Wrap",
-        &[("tag", AirType::I64), ("h", AirType::Enum("Holder".into()))],
+        &[("tag", AirType::I64), ("h", AirType::Enum(EnumRef::plain("Holder")))],
     );
     let p = program_with(vec![wrap], vec![holder]);
     let off = compute_offset_for_path(
@@ -178,7 +179,7 @@ fn unit_mixed_carrier_composes_struct_then_enum() {
             steps: vec![
                 RcPathStep::Field("h".into()),
                 RcPathStep::EnumPayload {
-                    enum_name: "Holder".into(),
+                    enum_ref: EnumRef::plain("Holder"),
                     tag: 0,
                     field_index: 0,
                 },

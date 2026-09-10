@@ -6,24 +6,15 @@ use std::process::Command;
 use std::time::Instant;
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for, linker_unavailable};
+
 fn bench_guard() -> bool {
     std::env::var_os("AELYS_BENCH").is_some()
 }
 
 fn record_mode() -> bool {
     std::env::var_os("AELYS_BENCH_RECORD").is_some()
-}
-
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
 }
 
 fn core_src_dir() -> PathBuf {
@@ -54,7 +45,7 @@ fn build_exe(
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping bench dimension");
+                common::require_linker_skip("a skipped bench dimension measures nothing");
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -62,7 +53,7 @@ fn build_exe(
     }
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped bench dimension measures nothing");
         return None;
     }
     Some((dir, exe))
@@ -184,11 +175,13 @@ fn time_loop_ungated(label: &str, mut f: impl FnMut() -> f64) -> Stats {
 }
 
 fn time_run(exe: &Path, env: &[(&str, &str)]) -> (f64, i32, String) {
+    let _pin = common::pin_legs("time_run", 1);
     let mut cmd = Command::new(exe);
     for (k, v) in env {
         cmd.env(k, v);
     }
     let t = Instant::now();
+    common::note_leg();
     let out = cmd.output().expect("run bench exe");
     let ms = t.elapsed().as_secs_f64() * 1000.0;
     let code = out.status.code().expect("process must terminate");
@@ -317,7 +310,7 @@ fn count_rc_calls(src: &str, opt: OptimizationLevel) -> Option<(usize, usize)> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("compile unavailable; skipping static count");
+                common::require_linker_skip("a skipped ir row counts nothing");
                 return None;
             }
             panic!("emit_llvm_ir compile should succeed: {err}");

@@ -4,6 +4,9 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for, linker_unavailable};
+
 fn rc_ir(src: &str) -> String {
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
@@ -20,18 +23,6 @@ fn rc_reject(src: &str) -> String {
     compile_file_with_llvm(&source_path, OptimizationLevel::None, true)
         .expect_err("compilation should be rejected")
         .to_string()
-}
-
-fn exe_path_for(p: &std::path::Path) -> std::path::PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
 }
 
 fn call_count(ir: &str, needle: &str) -> usize {
@@ -198,6 +189,7 @@ fn p7_arc_stubs_present_and_inert() {
 
 #[test]
 fn p8_rc_program_compiles_links_and_runs() {
+    let _pin = common::pin_legs("p8_rc_program_compiles_links_and_runs", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -220,7 +212,9 @@ fn main() -> i64 {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return;
             }
             panic!("compilation/link should succeed: {err}");
@@ -229,9 +223,10 @@ fn main() -> i64 {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return;
     }
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     assert_eq!(
         output.status.code(),
@@ -333,6 +328,7 @@ fn main() -> i64 {
 
 #[test]
 fn p12_rc_get_reads_value_through_handle() {
+    let _pin = common::pin_legs("p12_rc_get_reads_value_through_handle", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -350,7 +346,9 @@ fn main() -> i64 {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return;
             }
             panic!("compilation/link should succeed: {err}");
@@ -359,9 +357,10 @@ fn main() -> i64 {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return;
     }
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     assert_eq!(
         output.status.code(),
@@ -401,6 +400,7 @@ fn main() -> i64 {
 
 #[test]
 fn p14_rc_get_reads_through_borrowed_param() {
+    let _pin = common::pin_legs("p14_rc_get_reads_through_borrowed_param", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(
@@ -419,7 +419,9 @@ fn main() -> i64 {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return;
             }
             panic!("compilation/link should succeed: {err}");
@@ -428,9 +430,10 @@ fn main() -> i64 {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return;
     }
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     assert_eq!(
         output.status.code(),
