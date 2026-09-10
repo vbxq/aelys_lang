@@ -1,39 +1,37 @@
-needs std.result
+needs Option from std.result
 
 pub nogc fn sum(s: &[i64]) -> i64 {
     let mut acc: i64 = 0
-    for i in 0..s.len { acc = acc + s[i] }
+    for x in s { acc = acc + x }
     return acc
 }
 
-pub nogc fn first(s: &[i64]) -> result.Option<i64> {
-    if s.len == 0 { return result.Option::None }
-    let v: i64 = s[0]
-    return result.Option::Some(v)
+pub nogc fn first(s: &[i64]) -> Option<i64> {
+    if s.len == 0 { return Option::None }
+    return Option::Some(s[0])
 }
 
-pub nogc fn last(s: &[i64]) -> result.Option<i64> {
-    if s.len == 0 { return result.Option::None }
-    let v: i64 = s[s.len - 1]
-    return result.Option::Some(v)
+pub nogc fn last(s: &[i64]) -> Option<i64> {
+    if s.len == 0 { return Option::None }
+    return Option::Some(s[s.len - 1])
 }
 
-pub nogc fn max(s: &[i64]) -> result.Option<i64> {
-    if s.len == 0 { return result.Option::None }
+pub nogc fn max(s: &[i64]) -> Option<i64> {
+    if s.len == 0 { return Option::None }
     let mut m: i64 = s[0]
-    for i in 1..s.len {
-        if s[i] > m { m = s[i] }
+    for x in s {
+        if x > m { m = x }
     }
-    return result.Option::Some(m)
+    return Option::Some(m)
 }
 
-pub nogc fn min(s: &[i64]) -> result.Option<i64> {
-    if s.len == 0 { return result.Option::None }
+pub nogc fn min(s: &[i64]) -> Option<i64> {
+    if s.len == 0 { return Option::None }
     let mut m: i64 = s[0]
-    for i in 1..s.len {
-        if s[i] < m { m = s[i] }
+    for x in s {
+        if x < m { m = x }
     }
-    return result.Option::Some(m)
+    return Option::Some(m)
 }
 
 pub nogc fn index_of(s: &[i64], x: i64) -> i64 {
@@ -41,6 +39,12 @@ pub nogc fn index_of(s: &[i64], x: i64) -> i64 {
         if s[i] == x { return i }
     }
     return -1
+}
+
+pub nogc fn find(s: &[i64], x: i64) -> Option<i64> {
+    let i: i64 = index_of(s, x)
+    if i < 0 { return Option::None }
+    return Option::Some(i)
 }
 
 pub nogc fn contains(s: &[i64], x: i64) -> bool {

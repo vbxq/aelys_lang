@@ -34,6 +34,12 @@ pub nogc fn write_out(bytes: &[u8]) -> i64 { return write_all(1, bytes) }
 
 pub nogc fn write_err(bytes: &[u8]) -> i64 { return write_all(2, bytes) }
 
+pub nogc fn write_str(fd: i64, s: string) -> i64 { return write_all(fd, s.bytes) }
+
+pub nogc fn print_out(s: string) -> i64 { return write_str(1, s) }
+
+pub nogc fn print_err(s: string) -> i64 { return write_str(2, s) }
+
 // getenv reads to the first zero, so a name the caller did not terminate would read past the slice
 pub nogc fn env_len(name: &[u8]) -> i64 {
     if name.len == 0 { return -1 }

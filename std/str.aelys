@@ -1,33 +1,85 @@
-needs std.result
+needs Option, Result from std.result
 
 pub nogc fn is_empty(s: string) -> bool { return s.len == 0 }
 
-pub nogc fn char_at(s: string, i: i64) -> result.Option<string> {
-    if i < 0 { return result.Option::None }
-    if i >= s.len { return result.Option::None }
-    let c: string = s[i]
-    return result.Option::Some(c)
+// s[i] counts characters and s.len counts bytes, so these two speak the byte offsets s.bytes takes
+pub nogc fn is_char_boundary(s: string, i: i64) -> bool {
+    if i < 0 { return false }
+    if i > s.len { return false }
+    if i == s.len { return true }
+    let b: u8 = s.bytes[i]
+    return (b & 192) != 128
 }
 
-// a string is built only by concatenation, so this copies the whole prefix once per character
+pub nogc fn char_len(s: string, i: i64) -> i64 {
+    if i < 0 { return -1 }
+    if i >= s.len { return -1 }
+    let b: u8 = s.bytes[i]
+    if b < 128 { return 1 }
+    if b < 192 { return -1 }
+    if b < 224 { return 2 }
+    if b < 240 { return 3 }
+    if b < 248 { return 4 }
+    return -1
+}
+
+pub nogc fn char_count(s: string) -> i64 {
+    let mut n: i64 = 0
+    for b in s.bytes {
+        if (b & 192) != 128 { n = n + 1 }
+    }
+    return n
+}
+
+nogc fn byte_offset(s: string, k: i64) -> i64 {
+    if k <= 0 { return 0 }
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < s.len {
+        i = i + 1
+        while i < s.len and (s.bytes[i] & 192) == 128 { i = i + 1 }
+        n = n + 1
+        if n == k { return i }
+    }
+    return s.len
+}
+
+pub nogc fn char_at(s: string, i: i64) -> Option<string> {
+    if i < 0 { return Option::None }
+    if i >= char_count(s) { return Option::None }
+    return Option::Some(s[i])
+}
+
 pub fn substring(s: string, start: i64, end: i64) -> string {
     let mut lo: i64 = start
-    let mut hi: i64 = end
     if lo < 0 { lo = 0 }
-    if hi > s.len { hi = s.len }
-    let mut out: string = ""
-    let mut i: i64 = lo
-    while i < hi {
-        out = out + s[i]
+    let mut hi: i64 = end
+    if hi < lo { hi = lo }
+    return string::substring_bytes(s, byte_offset(s, lo), byte_offset(s, hi))
+}
+
+pub nogc fn compare(a: string, b: string) -> i64 {
+    let mut n: i64 = a.len
+    if b.len < n { n = b.len }
+    let mut i: i64 = 0
+    while i < n {
+        let x: u8 = a.bytes[i]
+        let y: u8 = b.bytes[i]
+        if x != y {
+            if x < y { return -1 }
+            return 1
+        }
         i = i + 1
     }
-    return out
+    if a.len < b.len { return -1 }
+    if a.len > b.len { return 1 }
+    return 0
 }
 
 pub nogc fn starts_with(s: string, p: string) -> bool {
     if p.len > s.len { return false }
     for i in 0..p.len {
-        if s[i] != p[i] { return false }
+        if s.bytes[i] != p.bytes[i] { return false }
     }
     return true
 }
@@ -36,27 +88,32 @@ pub nogc fn ends_with(s: string, p: string) -> bool {
     if p.len > s.len { return false }
     let off: i64 = s.len - p.len
     for i in 0..p.len {
-        if s[off + i] != p[i] { return false }
+        if s.bytes[off + i] != p.bytes[i] { return false }
     }
     return true
 }
 
+// the answer is a character index, so the byte scan counts the characters it walks past
 pub nogc fn index_of(s: string, needle: string) -> i64 {
     if needle.len == 0 { return 0 }
     if needle.len > s.len { return -1 }
     let last: i64 = s.len - needle.len
     let mut i: i64 = 0
+    let mut n: i64 = 0
     while i <= last {
-        let mut j: i64 = 0
-        let mut hit: bool = true
-        while j < needle.len {
-            if s[i + j] != needle[j] {
-                hit = false
-                break
+        if (s.bytes[i] & 192) != 128 {
+            let mut j: i64 = 0
+            let mut hit: bool = true
+            while j < needle.len {
+                if s.bytes[i + j] != needle.bytes[j] {
+                    hit = false
+                    break
+                }
+                j = j + 1
             }
-            j = j + 1
+            if hit { return n }
+            n = n + 1
         }
-        if hit { return i }
         i = i + 1
     }
     return -1
@@ -78,12 +135,16 @@ pub nogc fn is_space(c: string) -> bool {
     return c == " " or c == "\t" or c == "\n" or c == "\r"
 }
 
+nogc fn space_byte(b: u8) -> bool {
+    return b == 32 or b == 9 or b == 10 or b == 13
+}
+
 pub fn trim(s: string) -> string {
     let mut lo: i64 = 0
-    while lo < s.len and is_space(s[lo]) { lo = lo + 1 }
+    while lo < s.len and space_byte(s.bytes[lo]) { lo = lo + 1 }
     let mut hi: i64 = s.len
-    while hi > lo and is_space(s[hi - 1]) { hi = hi - 1 }
-    return substring(s, lo, hi)
+    while hi > lo and space_byte(s.bytes[hi - 1]) { hi = hi - 1 }
+    return string::substring_bytes(s, lo, hi)
 }
 
 // an empty separator would never advance, so the whole string comes back as one part
@@ -96,18 +157,19 @@ pub fn split(s: string, sep: string) -> Vec<string> {
     let mut start: i64 = 0
     let mut i: i64 = 0
     let last: i64 = s.len - sep.len
+    // utf-8 is self synchronising, so a byte run equal to sep can only begin on a character boundary
     while i <= last {
         let mut j: i64 = 0
         let mut hit: bool = true
         while j < sep.len {
-            if s[i + j] != sep[j] {
+            if s.bytes[i + j] != sep.bytes[j] {
                 hit = false
                 break
             }
             j = j + 1
         }
         if hit {
-            let part: string = substring(s, start, i)
+            let part: string = string::substring_bytes(s, start, i)
             Vec::push(out, part)
             i = i + sep.len
             start = i
@@ -115,63 +177,55 @@ pub fn split(s: string, sep: string) -> Vec<string> {
             i = i + 1
         }
     }
-    let tail: string = substring(s, start, s.len)
+    let tail: string = string::substring_bytes(s, start, s.len)
     Vec::push(out, tail)
     return out
 }
 
 pub fn join(parts: &Vec<string>, sep: string) -> string {
     let mut out: string = ""
-    for i in 0..Vec::len(*parts) {
-        if i > 0 { out = out + sep }
-        out = out + (*parts)[i]
+    let mut lead: bool = true
+    for p in Vec::as_slice(*parts) {
+        if lead { lead = false } else { out = out + sep }
+        out = out + p
     }
     return out
 }
 
-// there is no char type and no byte access, so a digit is recognised by comparing one-character strings
-nogc fn digit_of(c: string) -> i64 {
-    if c == "0" { return 0 }
-    if c == "1" { return 1 }
-    if c == "2" { return 2 }
-    if c == "3" { return 3 }
-    if c == "4" { return 4 }
-    if c == "5" { return 5 }
-    if c == "6" { return 6 }
-    if c == "7" { return 7 }
-    if c == "8" { return 8 }
-    if c == "9" { return 9 }
-    return -1
+nogc fn digit_of(b: u8) -> i64 {
+    if b < 48 { return -1 }
+    if b > 57 { return -1 }
+    return (b as i64) - 48
 }
 
 // err codes: 1 empty, 2 sign with no digits, 3 non-digit, 4 out of i64 range
-pub nogc fn parse_int(s: string) -> result.Result<i64, i64> {
-    if s.len == 0 { return result.Result::Err(1) }
+pub nogc fn parse_int(s: string) -> Result<i64, i64> {
+    if s.len == 0 { return Result::Err(1) }
     let mut i: i64 = 0
     let mut neg: bool = false
-    if s[0] == "-" {
+    if s.bytes[0] == 45 {
         neg = true
         i = 1
     }
-    if i >= s.len { return result.Result::Err(2) }
+    if i >= s.len { return Result::Err(2) }
     // the least i64 is unspellable as a literal
     let min: i64 = 0 - 9223372036854775807 - 1
     let limit: i64 = min / 10
     let mut acc: i64 = 0
     // + and * wrap silently, so the magnitude accumulates negative and every step is checked before it runs
     while i < s.len {
-        let d: i64 = digit_of(s[i])
-        if d < 0 { return result.Result::Err(3) }
-        if acc < limit { return result.Result::Err(4) }
+        let d: i64 = digit_of(s.bytes[i])
+        if d < 0 { return Result::Err(3) }
+        if acc < limit { return Result::Err(4) }
         acc = acc * 10
-        if acc < min + d { return result.Result::Err(4) }
+        if acc < min + d { return Result::Err(4) }
         acc = acc - d
         i = i + 1
     }
-    if neg { return result.Result::Ok(acc) }
-    if acc == min { return result.Result::Err(4) }
+    if neg { return Result::Ok(acc) }
+    if acc == min { return Result::Err(4) }
     let v: i64 = 0 - acc
-    return result.Result::Ok(v)
+    return Result::Ok(v)
 }
 
 pub fn from_int(n: i64) -> string { return "{n}" }

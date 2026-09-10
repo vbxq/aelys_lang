@@ -1,3 +1,5 @@
+needs std.str
+
 pub nogc fn insertion_sort(s: &mut [i64]) {
     let mut i: i64 = 1
     while i < s.len {
@@ -21,4 +23,18 @@ pub nogc fn binary_search(s: &[i64], x: i64) -> i64 {
         if s[mid] < x { lo = mid + 1 } else { hi = mid - 1 }
     }
     return -1
+}
+
+pub nogc fn strings(s: &mut [string]) {
+    let mut i: i64 = 1
+    while i < s.len {
+        let x: string = s[i]
+        let mut j: i64 = i - 1
+        while j >= 0 and str.compare(s[j], x) > 0 {
+            s[j + 1] = s[j]
+            j = j - 1
+        }
+        s[j + 1] = x
+        i = i + 1
+    }
 }

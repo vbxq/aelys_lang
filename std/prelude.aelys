@@ -1,0 +1,2 @@
+// re-exported, never redefined: a second Option would be a type std.result's own could not meet
+needs Option, Result from std.result
