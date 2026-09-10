@@ -193,9 +193,19 @@ impl MonoContext {
     ) -> Option<Vec<AirType>> {
         let mut resolved: HashMap<u32, AirType> = HashMap::new();
 
+        let mut conflicts = Vec::new();
         for (param, arg) in generic_params.iter().zip(args.iter()) {
             let arg_ty = operand_type_from(arg, caller_params, caller_locals);
-            self.unify_param(&param.ty, &arg_ty, type_params, &mut resolved);
+            self.unify_param(
+                &param.ty,
+                &arg_ty,
+                type_params,
+                &mut resolved,
+                &mut conflicts,
+            );
+        }
+        if !conflicts.is_empty() {
+            return None;
         }
 
         let mut type_args = Vec::with_capacity(type_params.len());

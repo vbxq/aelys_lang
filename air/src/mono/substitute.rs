@@ -16,20 +16,17 @@ pub(crate) fn type_to_string(ty: &AirType) -> String {
         AirType::Str => "str".to_string(),
         AirType::Ptr(inner) => format!("ptr_{}", type_to_string(inner)),
         AirType::Struct(name) => name.clone(),
-        AirType::Enum(name) => format!("enum_{}", name),
+        AirType::Enum(r) => format!("enum_{}", r.symbol()),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
         AirType::Vec(inner) => format!("vec_{}", type_to_string(inner)),
-        // was using _ as separator everywhere, so fn(i32, f64)->bool and
-        // fn(i32)->f64 with a bool from somewhere else both gave "fnptr_i32_f64_bool"
         AirType::FnPtr { params, ret, conv } => {
             let params_str = params
                 .iter()
                 .map(type_to_string)
                 .collect::<Vec<_>>()
                 .join("$");
-            // Calling convention is part of the fnptr type; omitting it aliases
-            // distinct ABI shapes onto the same monomorphized enum/function name.
+            // calling convention is part of the fnptr type; omitting it aliases
             let prefix = match conv {
                 CallingConv::Aelys => "fnptr",
                 CallingConv::C => "fnptrC",
@@ -84,25 +81,10 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
             }
             substitute_type(ret, type_params, type_args);
         }
-        AirType::Enum(name) if !name.contains("__mono_") && !type_args.is_empty() => {
-            let suffix = type_args
-                .iter()
-                .map(type_to_string)
-                .collect::<Vec<_>>()
-                .join("$");
-            *ty = AirType::Enum(format!("__mono_{}_{}", name, suffix));
-        }
-        AirType::Struct(name)
-            if !name.contains("__mono_")
-                && !name.starts_with("__closure_env_")
-                && !type_args.is_empty() =>
-        {
-            let suffix = type_args
-                .iter()
-                .map(type_to_string)
-                .collect::<Vec<_>>()
-                .join("$");
-            *ty = AirType::Struct(format!("__mono_{}_{}", name, suffix));
+        AirType::Enum(r) => {
+            for arg in &mut r.args {
+                substitute_type(arg, type_params, type_args);
+            }
         }
         _ => {}
     }
@@ -128,28 +110,11 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
             substitute_type(from, type_params, type_args);
             substitute_type(to, type_params, type_args);
         }
-        // old code looped over type_params and renamed one at a time
-        // second iteration saw __mono_ prefix and bailed, which meant that only first param got encoded
-        Rvalue::StructInit { name, .. } => {
-            if !name.contains("__mono_") && !type_args.is_empty() {
-                let suffix = type_args
-                    .iter()
-                    .map(type_to_string)
-                    .collect::<Vec<_>>()
-                    .join("$");
-                *name = format!("__mono_{}_{}", name, suffix);
-            }
-        }
-        Rvalue::EnumInit { enum_name, .. }
-        | Rvalue::EnumTag { enum_name, .. }
-        | Rvalue::EnumPayload { enum_name, .. } => {
-            if !enum_name.contains("__mono_") && !type_args.is_empty() {
-                let suffix = type_args
-                    .iter()
-                    .map(type_to_string)
-                    .collect::<Vec<_>>()
-                    .join("$");
-                *enum_name = format!("__mono_{}_{}", enum_name, suffix);
+        Rvalue::EnumInit { enum_ref, .. }
+        | Rvalue::EnumTag { enum_ref, .. }
+        | Rvalue::EnumPayload { enum_ref, .. } => {
+            for arg in &mut enum_ref.args {
+                substitute_type(arg, type_params, type_args);
             }
         }
         Rvalue::ClosureCreate { .. } => {}
@@ -163,8 +128,6 @@ fn substitute_terminator(
     _type_params: &[TypeParamId],
     _type_args: &[AirType],
 ) {
-    // Callee rewriting happens in rewrite_call_sites (after all instances exist).
-    // Operand/place types come from locals, which are already substituted.
 }
 
 pub(super) fn operand_type_from(
@@ -193,7 +156,7 @@ pub(super) fn operand_type_from(
             AirConst::Str(_) => AirType::Str,
             AirConst::Null => AirType::Ptr(Box::new(AirType::Void)),
             AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
-            AirConst::Enum { enum_name, .. } => AirType::Enum(enum_name.clone()),
+            AirConst::Enum { enum_ref, .. } => AirType::Enum(enum_ref.clone()),
             AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
             AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
             AirConst::Struct { name, .. } => AirType::Struct(name.clone()),

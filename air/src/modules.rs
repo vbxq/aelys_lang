@@ -1,6 +1,6 @@
 use crate::{
     AirBlock, AirConst, AirEnumDef, AirFunction, AirGlobal, AirProgram, AirStmtKind, AirTerminator,
-    AirType, Callee, FunctionId, Operand, Place, Rvalue,
+    AirType, Callee, EnumRef, FunctionId, Operand, Place, Rvalue,
 };
 use std::collections::HashSet;
 
@@ -255,22 +255,18 @@ fn qualify_rvalue(rvalue: &mut Rvalue, q: &Qualifier) {
             qualify_operand(index, q);
         }
         Rvalue::EnumInit {
-            enum_name, payload, ..
+            enum_ref, payload, ..
         } => {
-            if let Some(renamed) = q.type_ref(enum_name) {
-                *enum_name = renamed;
-            }
+            qualify_enum_ref(enum_ref, q);
             for op in payload {
                 qualify_operand(op, q);
             }
         }
-        Rvalue::EnumTag { enum_name, operand }
+        Rvalue::EnumTag { enum_ref, operand }
         | Rvalue::EnumPayload {
-            enum_name, operand, ..
+            enum_ref, operand, ..
         } => {
-            if let Some(renamed) = q.type_ref(enum_name) {
-                *enum_name = renamed;
-            }
+            qualify_enum_ref(enum_ref, q);
             qualify_operand(operand, q);
         }
         Rvalue::ClosureCreate { fn_name, env } => {
@@ -320,11 +316,9 @@ fn qualify_const(value: &mut AirConst, q: &Qualifier) {
             }
         }
         AirConst::Enum {
-            enum_name, payload, ..
+            enum_ref, payload, ..
         } => {
-            if let Some(renamed) = q.type_ref(enum_name) {
-                *enum_name = renamed;
-            }
+            qualify_enum_ref(enum_ref, q);
             for item in payload {
                 qualify_const(item, q);
             }
@@ -347,13 +341,23 @@ fn qualify_const(value: &mut AirConst, q: &Qualifier) {
     }
 }
 
+fn qualify_enum_ref(r: &mut EnumRef, q: &Qualifier) {
+    if let Some(renamed) = q.type_ref(&r.name) {
+        r.name = renamed;
+    }
+    for arg in &mut r.args {
+        qualify_type(arg, q);
+    }
+}
+
 fn qualify_type(ty: &mut AirType, q: &Qualifier) {
     match ty {
-        AirType::Struct(name) | AirType::Enum(name) => {
+        AirType::Struct(name) => {
             if let Some(renamed) = q.type_ref(name) {
                 *name = renamed;
             }
         }
+        AirType::Enum(r) => qualify_enum_ref(r, q),
         AirType::Ptr(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
