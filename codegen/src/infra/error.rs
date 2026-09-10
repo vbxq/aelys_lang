@@ -17,6 +17,8 @@ pub struct AirNodeLocation {
 #[derive(Debug)]
 pub enum LlvmBackendError {
     LlvmError(String),
+    // the host toolchain refused: no target for the triple, no machine, or no write
+    Toolchain(String),
     UnsupportedType(String),
     UnsupportedInstruction(String),
     InvalidNativeEntry(String),
@@ -52,7 +54,9 @@ impl LlvmBackendError {
 impl Display for LlvmBackendError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::LlvmError(message) => write!(f, "llvm error: {message}"),
+            Self::LlvmError(message) | Self::Toolchain(message) => {
+                write!(f, "llvm error: {message}")
+            }
             Self::UnsupportedType(message) => write!(f, "unsupported type: {message}"),
             Self::UnsupportedInstruction(message) => {
                 write!(f, "unsupported instruction: {message}")

@@ -7,6 +7,17 @@ use inkwell::types::{
 
 const AELYS_STRING_STRUCT_NAME: &str = "__aelys_string";
 
+// a dataless enum registers no body, so this marker separates it from a name codegen never heard of, and `$` keeps it out of the `__aelys_enum_` space
+pub const ENUM_TAG_MARKER_PREFIX: &str = "__aelys_enumtag$";
+
+pub fn enum_struct_name(name: &str) -> String {
+    format!("__aelys_enum_{}", name)
+}
+
+pub fn enum_tag_marker_name(name: &str) -> String {
+    format!("{ENUM_TAG_MARKER_PREFIX}{name}")
+}
+
 pub fn air_type_to_llvm<'ctx>(
     ty: &AirType,
     context: &'ctx inkwell::context::Context,
@@ -21,13 +32,19 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::Bool => Ok(context.bool_type().into()),
         AirType::Str => Ok(aelys_string_type(context).into()),
         AirType::Ptr(inner) => Ok(pointer_to_air_type(inner, context)?.into()),
-        AirType::Enum(name) => {
-            // Data enums have a named struct type registered; simple enums use i32.
-            let enum_struct_name = format!("__aelys_enum_{}", name);
-            if let Some(st) = context.get_struct_type(&enum_struct_name) {
+        AirType::Enum(r) => {
+            let name = r.symbol();
+            if let Some(st) = context.get_struct_type(&enum_struct_name(&name)) {
                 Ok(st.into())
-            } else {
+            } else if context
+                .get_struct_type(&enum_tag_marker_name(&name))
+                .is_some()
+            {
                 Ok(context.i32_type().into())
+            } else {
+                Err(CodegenError::UnsupportedType(format!(
+                    "enum `{name}` has no definition in the program"
+                )))
             }
         }
         AirType::Struct(name) => context
@@ -66,14 +83,8 @@ pub fn air_type_to_llvm<'ctx>(
             conv,
         } => {
             if matches!(conv, aelys_air::CallingConv::Aelys) {
-                // Aelys function values are fat pointers { fn_ptr, env_ptr },
-                // regardless of whether they capture anything.
-                //
-                // This makes the representation uniform at call sites.
-                // See the comment block in codegen/src/lowering/functions.rs if you wanna see everything
                 Ok(closure_fat_ptr_type(context).into())
             } else {
-                // C/Rust convention: bare function pointer
                 let mut llvm_params: Vec<BasicMetadataTypeEnum<'ctx>> =
                     Vec::with_capacity(params.len());
                 for param in params {
@@ -164,7 +175,6 @@ fn struct_alignment(ty: inkwell::types::StructType<'_>) -> u32 {
         .unwrap_or(1)
 }
 
-/// Fat pointer type for Aelys closures: `{ ptr fn_ptr, ptr env_ptr }`.
 pub fn closure_fat_ptr_type(context: &'_ inkwell::context::Context) -> StructType<'_> {
     let ptr_ty = context.ptr_type(AddressSpace::default());
     context.struct_type(&[ptr_ty.into(), ptr_ty.into()], false)

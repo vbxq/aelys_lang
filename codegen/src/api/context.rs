@@ -22,9 +22,7 @@ impl CodegenContext {
         let module = context.create_module(module_name);
         let builder = context.create_builder();
 
-        // Set target triple and data layout immediately so ABI decisions
-        // (for eg sret, struct sizes/alignments) are correct during codegen
-        // a working native llvm backend is required, so this is fatal by design
+        // set target triple and data layout immediately so abi decisions
         Target::initialize_native(&InitializationConfig::default())
             .expect("LLVM native target initialization failed");
         let triple = TargetMachine::get_default_triple();
@@ -70,7 +68,7 @@ impl CodegenContext {
     pub fn optimize(&self, pass_pipeline: &str, opt_numeric: u8) -> Result<(), CodegenError> {
         let triple = TargetMachine::get_default_triple();
         let target =
-            Target::from_triple(&triple).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            Target::from_triple(&triple).map_err(|e| CodegenError::Toolchain(e.to_string()))?;
         let cpu = TargetMachine::get_host_cpu_name().to_string();
         let features = TargetMachine::get_host_cpu_features().to_string();
         let machine = target
@@ -79,12 +77,11 @@ impl CodegenContext {
                 &cpu,
                 &features,
                 inkwell_opt_level(opt_numeric),
-                // PIC so it works on Linux
                 RelocMode::PIC,
                 CodeModel::Default,
             )
             .ok_or_else(|| {
-                CodegenError::LlvmError("failed to create target machine".to_string())
+                CodegenError::Toolchain("failed to create target machine".to_string())
             })?;
 
         self.module
@@ -94,10 +91,10 @@ impl CodegenContext {
 
     pub fn emit_object(&self, path: &str, opt_numeric: u8) -> Result<(), CodegenError> {
         Target::initialize_native(&InitializationConfig::default())
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            .map_err(|e| CodegenError::Toolchain(e.to_string()))?;
         let triple = TargetMachine::get_default_triple();
         let target =
-            Target::from_triple(&triple).map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            Target::from_triple(&triple).map_err(|e| CodegenError::Toolchain(e.to_string()))?;
         let cpu = TargetMachine::get_host_cpu_name().to_string();
         let features = TargetMachine::get_host_cpu_features().to_string();
         let target_machine = target
@@ -110,18 +107,18 @@ impl CodegenContext {
                 CodeModel::Default,
             )
             .ok_or_else(|| {
-                CodegenError::LlvmError("failed to create target machine".to_string())
+                CodegenError::Toolchain("failed to create target machine".to_string())
             })?;
 
         target_machine
             .write_to_file(&self.module, FileType::Object, Path::new(path))
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            .map_err(|e| CodegenError::Toolchain(e.to_string()))
     }
 
     pub fn emit_ir(&self, path: &str) -> Result<(), CodegenError> {
         self.module
             .print_to_file(path)
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))
+            .map_err(|e| CodegenError::Toolchain(e.to_string()))
     }
 }
 
