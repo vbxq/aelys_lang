@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -u
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 MODE="$1"; shift

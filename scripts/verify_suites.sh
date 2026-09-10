@@ -449,6 +449,7 @@ sweep_argv() {
         reserved_symbols.sh)       SWEEP_ARGS=() ;;
         place_addressing_sweep.sh) SWEEP_ARGS=() ;;
         corpus_sweep.sh)           SWEEP_ARGS=(xo "$RELEASE_CLI") ;;
+        m_neutral.sh)              SWEEP_ARGS=(--selftest) ;;
         *) return 1 ;;
     esac
     return 0
@@ -477,7 +478,8 @@ if [ "$N_SWEEP_RUNS" -gt 0 ]; then
         slog="$RESULTS_DIR/logs/sweep__${sname}.log"
         printf '[sweep %d/%d] %s %s\n' "$sidx" "$N_SWEEP_RUNS" "$sname" "${SWEEP_ARGS[*]}"
         st0=$(date +%s)
-        bash "$ROOT/scripts/$sname" "${SWEEP_ARGS[@]}" >"$slog" 2>&1 </dev/null
+        # direct, not bash <path>: a missing exec bit has to surface as a 126 here rather than run anyway
+        "$ROOT/scripts/$sname" "${SWEEP_ARGS[@]}" >"$slog" 2>&1 </dev/null
         src=$?
         sdt=$(( $(date +%s) - st0 ))
         sweep_seconds=$((sweep_seconds + sdt))

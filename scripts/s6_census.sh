@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -u
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 TABLE="$ROOT/scripts/run3_s6_census.tsv"
@@ -10,7 +11,10 @@ FULL=0
 [ "${1:-}" = "--full" ] && FULL=1
 
 BRANCH="$(cd "$ROOT" && git rev-parse --abbrev-ref HEAD)"
+# the restore is a git checkout, so it discards work; it must not run before this script has ablated anything
+ABLATED=0
 restore() {
+  [ "$ABLATED" = 1 ] || return 0
   ( cd "$ROOT" && git checkout -q -- "$EFFECTS" "$PLACE" "$EXPR" 2>/dev/null )
   if [ "$FULL" = 1 ]; then
     ( cd "$ROOT" && git checkout -q "$BRANCH" 2>/dev/null )
@@ -20,6 +24,10 @@ restore() {
 trap 'restore' EXIT INT TERM
 
 fail() { echo "s6_census.sh: $*" >&2; exit 1; }
+
+if [ -n "$(cd "$ROOT" && git status --porcelain -- "$EFFECTS" "$PLACE" "$EXPR")" ]; then
+  fail "one of the three ablated sources is already modified; refusing to patch over uncommitted work"
+fi
 
 ROW_FILES="\
 $ROOT/aelys/tests/run3_stage1_loan_roots_tests.rs \
@@ -90,6 +98,7 @@ moved() { # <sweep file> -> the ids whose reading differs from HEAD
   LC_ALL=C join "$WORK/HEAD.txt" "$1" | LC_ALL=C awk '$2 != $3 {print $1}' | LC_ALL=C sort
 }
 : > "$WORK/moved_any"
+ABLATED=1
 for rule in detach k9 E_PARAM; do
   ( cd "$ROOT" && git checkout -q -- "$EFFECTS" "$PLACE" "$EXPR" )
   case "$rule" in

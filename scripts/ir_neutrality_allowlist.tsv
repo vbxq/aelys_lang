@@ -1,13 +1,39 @@
+# The expected divergence set of scripts/m_neutral.sh, read by that script and by nothing else.
+#
+# Key: fixture, level, class, separated by tabs, with the reason as a fourth field.
+# A row without a reason is a parse error, not a row.
+#
+# Population. The fixtures are the 39 programs m_neutral.sh generates inline, named
+# o1_a_vec_slice_write through o11_d_peeled_ref_no_field. No other name can appear here.
+# That population is reproducible from any commit because the script carries its own
+# corpus; it does not read the gitignored 449 file corpus and never has.
+#
+# Level is spelled O0, O1, O2 or O3, matching the O$level label compile_leg gives each leg.
+# A bare 0, 1, 2 or 3 is rejected by the parser, so the two spellings cannot be mixed.
+#
+# Class is ir for a divergence between the two emitted prog.ll files, and text for a
+# divergence between the two rejection messages. m_neutral.sh counts and asserts those two
+# separately, so one fixture at one level can carry at most one row of each class.
+#
+# Only 16 of the 39 programs are accepted by the compiler, which is 64 accept legs over the
+# 4 levels, and only an accept leg reaches the IR comparison. The other 23 are rejected at
+# every level and can contribute text rows only. The class axis is partitioned by
+# construction, not by convention.
+#
+# m_neutral.sh asserts set equality in both directions. A divergence that is not listed here
+# fails the sweep, and a row listed here that is not observed fails it too, so a repair that
+# silently removes a divergence cannot hide behind a list that only fails one way.
+#
+# The expected row count is pinned in m_neutral.sh as EXPECT_ALLOWLIST_ROWS and is 0. A
+# missing, unreadable or unparseable file is a hard failure of the sweep; an empty read is
+# not a pass.
+#
+# Measured at this revision with the compiler of this commit on both sides: 64 accept legs,
+# 92 reject legs, IR_DIFF 0, TEXT_DIFF 0. There are no rows.
+#
+# Ten rows keyed to a different population were held here until this revision. They were
+# produced by an ad hoc 449 by 3 corpus sweep that exists as no tracked script, not by
+# m_neutral.sh, and no commit reproduces them. They are recorded in the claims file with
+# their reasons verbatim.
+#
 # fixture	level	class	reason
-# baseline pinned between ffi/base 684a314 and stdlib/base 0a94422, 10 of 1347 comparisons
-# an eleventh divergence is a finding, not noise
-evil50_extern_c	O0	parse-message	extern became a keyword, the parse message changed
-evil50_extern_c	O2	parse-message	extern became a keyword, the parse message changed
-evil50_extern_c	O3	parse-message	extern became a keyword, the parse message changed
-deep39_match_in_loop	O0	dead-position-store	store ptr null removed from a block with no predecessors
-evil97_match_all_early_return	O0	dead-position-store	store ptr null removed from a block with no predecessors
-field_return_in_match_01	O0	dead-position-store	store ptr null removed from a block with no predecessors
-field_return_in_match_03	O0	dead-position-store	store ptr null removed from a block with no predecessors
-field_return_in_match_10	O0	dead-position-store	store ptr null removed from a block with no predecessors
-never04_nested_return	O0	dead-position-store	store ptr null removed from a block with no predecessors
-never06_match_return_with_data_enum	O0	dead-position-store	store ptr null removed from a block with no predecessors

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # # swept and reported but never asserted on. `git ls-files '*.aelys'` returns 1, which is why a
 set -u
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"

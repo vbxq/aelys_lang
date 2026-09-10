@@ -132,6 +132,7 @@ aelys	stage3d_tests	test
 aelys	string_interpolation_tests	test
 aelys-syntax	aelys_syntax	doc
 aelys-syntax	aelys_syntax	lib
+aelys	surface_stage3_tests	test
 aelys	syntax_span_test	test
 aelys	vec_surface_tests	test
 aelys	vec_value_semantics_tests	test

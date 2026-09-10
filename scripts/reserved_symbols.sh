@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # # actually emits lands inside the reserved namespace.
 set -u
 export LC_ALL=C

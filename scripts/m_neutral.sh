@@ -1,4 +1,4 @@
-
+#!/usr/bin/env bash
 set -uo pipefail
 
 GREP=grep
@@ -6,19 +6,44 @@ GREP=grep
 export LC_ALL=C
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SELF="$ROOT/scripts/$(basename "${BASH_SOURCE[0]}")"
 WORK="${TMPDIR:-/tmp}/m_neutral.$$"
+CHECKOUT_CLI="$ROOT/target/release/aelys-cli"
+ALLOWLIST="$ROOT/scripts/ir_neutrality_allowlist.tsv"
+EXPECT_ALLOWLIST_ROWS=0
+PLANT_LEG="o5_a_rc_arg.O0"
 BASE=""
 HEAD_BIN=""
 SELFTEST=0
+SELF_MODE=0
+
+usage() {
+    echo "usage: m_neutral.sh --base BIN --head BIN | --self | --selftest [--head BIN]" >&2
+    echo "       [--allowlist PATH --expect-allowlist-rows N]" >&2
+}
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --base) BASE="$2"; shift 2 ;;
         --head) HEAD_BIN="$2"; shift 2 ;;
+        --self) SELF_MODE=1; shift ;;
         --selftest) SELFTEST=1; shift ;;
-        *) echo "unknown argument: $1" >&2; exit 2 ;;
+        --allowlist) ALLOWLIST="$2"; shift 2 ;;
+        --expect-allowlist-rows) EXPECT_ALLOWLIST_ROWS="$2"; shift 2 ;;
+        *) echo "unknown argument: $1" >&2; usage; exit 2 ;;
     esac
 done
+
+# self mode is a regression detector for emission nondeterminism, it cannot see a runtime one since no leg here runs a program
+if [ "$SELF_MODE" -eq 1 ]; then
+    if [ "$SELFTEST" -eq 1 ] || [ -n "$BASE" ] || [ -n "$HEAD_BIN" ]; then
+        echo "--self takes no binary, it is the binary of this checkout on both sides" >&2
+        usage
+        exit 2
+    fi
+    BASE="$CHECKOUT_CLI"
+    HEAD_BIN="$CHECKOUT_CLI"
+fi
 
 mkdir -p "$WORK/corpus" "$WORK/base" "$WORK/head"
 trap 'rm -rf "$WORK"' EXIT
@@ -426,6 +451,9 @@ EOF
 declare -A EXPECT_COUNT=( [o1]=4 [o2]=4 [o3]=4 [o4]=4 [o5]=4 [o6]=4 [o7]=5 [o8]=2 [o9]=2 [o10]=2 [o11]=4 )
 EXPECT_PROGRAMS=39
 EXPECT_LEGS=156
+# 16 of the 39 programs compile, the other 23 are rejected at every level
+EXPECT_ACCEPT_LEGS=64
+EXPECT_REJECT_LEGS=92
 
 origin_fail=0
 for o in "${!EXPECT_COUNT[@]}"; do
@@ -442,6 +470,65 @@ if [ "$programs" -ne "$EXPECT_PROGRAMS" ]; then
 fi
 
 
+declare -A ALLOW_ROW=()
+declare -A ALLOW_HIT=()
+ALLOW_ROWS=0
+ABSORBED=0
+ALLOW_UNOBSERVED=0
+UNOBSERVED_LINES=""
+
+allow_key() { printf '%s\t%s\t%s' "$1" "$2" "$3"; }
+
+load_allowlist() {
+    local f l c r n=0 key
+    if [ ! -f "$ALLOWLIST" ]; then
+        echo "ALLOWLIST MISSING   $ALLOWLIST"
+        return 1
+    fi
+    if [ ! -r "$ALLOWLIST" ]; then
+        echo "ALLOWLIST UNREADABLE $ALLOWLIST"
+        return 1
+    fi
+    while IFS=$'\t' read -r f l c r || [ -n "$f" ]; do
+        case "$f" in ''|'#'*) continue ;; esac
+        n=$((n + 1))
+        case "$l" in
+            O0|O1|O2|O3) ;;
+            *) echo "ALLOWLIST PARSE     row $n: level \`$l\` is not spelled O0 O1 O2 or O3"; return 1 ;;
+        esac
+        case "$c" in
+            ir|text) ;;
+            *) echo "ALLOWLIST PARSE     row $n: class \`$c\` is neither ir nor text"; return 1 ;;
+        esac
+        if [ -z "${r//[[:space:]]/}" ]; then
+            echo "ALLOWLIST PARSE     row $n: $f $l $c carries no reason"
+            return 1
+        fi
+        key="$(allow_key "$f" "$l" "$c")"
+        if [ -n "${ALLOW_ROW[$key]:-}" ]; then
+            echo "ALLOWLIST PARSE     row $n: $f $l $c is listed twice"
+            return 1
+        fi
+        ALLOW_ROW[$key]=1
+    done < "$ALLOWLIST"
+    ALLOW_ROWS=$n
+    if [ "$n" -ne "$EXPECT_ALLOWLIST_ROWS" ]; then
+        echo "ALLOWLIST ROWS      $ALLOWLIST holds $n rows, expected $EXPECT_ALLOWLIST_ROWS"
+        return 1
+    fi
+    return 0
+}
+
+sweep_unobserved() {
+    [ "${#ALLOW_ROW[@]}" -gt 0 ] || return 0
+    local key
+    for key in "${!ALLOW_ROW[@]}"; do
+        [ -z "${ALLOW_HIT[$key]:-}" ] || continue
+        ALLOW_UNOBSERVED=$((ALLOW_UNOBSERVED + 1))
+        UNOBSERVED_LINES="${UNOBSERVED_LINES}ALLOWLIST UNOBSERVED $(printf '%s' "$key" | tr '\t' ' ')"$'\n'
+    done
+}
+
 compile_leg() {
     local bin="$1" out="$2" src="$3" level="$4" name="$5"
     local work="$out/$name.O$level"
@@ -452,6 +539,7 @@ compile_leg() {
 }
 
 IDENTICAL=0; IR_DIFF=0; VERDICT_FLIP=0; BOTH_REJECT=0; TEXT_DIFF=0
+IR_DIFF_NEW=0; TEXT_DIFF_NEW=0
 UNCLASSIFIED=0; LEGS=0
 ACCEPT_LEGS=0; REJECT_LEGS=0
 FAILED_LEGS=""
@@ -464,7 +552,7 @@ run_matrix() {
             compile_leg "$BASE" "$WORK/base" "$src" "$level" "$name"
             compile_leg "$HEAD_BIN" "$WORK/head" "$src" "$level" "$name"
             local b="$WORK/base/$name.O$level" h="$WORK/head/$name.O$level"
-            local be he
+            local be he key
             be=$(cat "$b/exit"); he=$(cat "$h/exit")
 
             if [ "$be" != "0" ] && [ "$be" != "1" ]; then
@@ -488,7 +576,15 @@ run_matrix() {
                 fi
                 if ! diff -q "$b/prog.ll" "$h/prog.ll" > /dev/null; then
                     IR_DIFF=$((IR_DIFF + 1))
-                    FAILED_LEGS="$FAILED_LEGS ir:$name.O$level"; continue
+                    key="$(allow_key "$name" "O$level" ir)"
+                    if [ -n "${ALLOW_ROW[$key]:-}" ]; then
+                        ALLOW_HIT[$key]=1
+                        ABSORBED=$((ABSORBED + 1))
+                    else
+                        IR_DIFF_NEW=$((IR_DIFF_NEW + 1))
+                        FAILED_LEGS="$FAILED_LEGS ir:$name.O$level"
+                    fi
+                    continue
                 fi
                 IDENTICAL=$((IDENTICAL + 1))
             else
@@ -497,7 +593,15 @@ run_matrix() {
                 sed "s#$WORK/base/##" < "$b/text" > "$b/text.norm"
                 sed "s#$WORK/head/##" < "$h/text" > "$h/text.norm"
                 if ! diff -q "$b/text.norm" "$h/text.norm" > /dev/null; then
-                    TEXT_DIFF=$((TEXT_DIFF + 1)); FAILED_LEGS="$FAILED_LEGS text:$name.O$level"
+                    TEXT_DIFF=$((TEXT_DIFF + 1))
+                    key="$(allow_key "$name" "O$level" text)"
+                    if [ -n "${ALLOW_ROW[$key]:-}" ]; then
+                        ALLOW_HIT[$key]=1
+                        ABSORBED=$((ABSORBED + 1))
+                    else
+                        TEXT_DIFF_NEW=$((TEXT_DIFF_NEW + 1))
+                        FAILED_LEGS="$FAILED_LEGS text:$name.O$level"
+                    fi
                 fi
             fi
 
@@ -512,48 +616,94 @@ assert_accounting() {
     return 1
 }
 
+ST_LEGS=0
+ST_ASSERTS=0
+ST_MET=0
+
+st_assert() {
+    local label="$1" want="$2" body="$3"
+    ST_ASSERTS=$((ST_ASSERTS + 1))
+    if $GREP -qxF -- "$want" <<< "$body"; then
+        ST_MET=$((ST_MET + 1))
+        echo "SELFTEST $label: reads \`$want\`"
+        return 0
+    fi
+    echo "SELFTEST $label: expected \`$want\`, absent from the run"
+    return 1
+}
+
 selftest() {
     local fails=0
+    local cli="$HEAD_BIN"
+    [ -n "$cli" ] || cli="$CHECKOUT_CLI"
+    if [ ! -x "$cli" ]; then
+        echo "SELFTEST: no compiler to drive at $cli"
+        return 1
+    fi
+
     local d="$WORK/st"
-    mkdir -p "$d/base/p.O0" "$d/head/p.O0"
-    plant_leg() {
-        printf '0' > "$d/base/p.O0/exit"; printf '0' > "$d/head/p.O0/exit"
-        printf 'ir\n' > "$d/base/p.O0/prog.ll"; printf 'ir\n' > "$d/head/p.O0/prog.ll"
-        : > "$d/base/p.O0/text"; : > "$d/head/p.O0/text"
-    }
-    plant_leg; printf 'ir changed\n' > "$d/head/p.O0/prog.ll"
-    if diff -q "$d/base/p.O0/prog.ll" "$d/head/p.O0/prog.ll" > /dev/null; then
-        echo "SELFTEST leg IR read clean"; fails=1
-    else echo "SELFTEST leg IR detected"; fi
-    plant_leg; printf '1' > "$d/head/p.O0/exit"
-    if [ "$(cat "$d/base/p.O0/exit")" = "$(cat "$d/head/p.O0/exit")" ]; then
-        echo "SELFTEST leg VERDICT read clean"; fails=1
-    else echo "SELFTEST leg VERDICT detected"; fi
-    plant_leg; rm -f "$d/head/p.O0/prog.ll"
-    if [ -f "$d/head/p.O0/prog.ll" ]; then
-        echo "SELFTEST leg UNCLASSIFIED read clean"; fails=1
-    else echo "SELFTEST leg UNCLASSIFIED detected"; fi
-    if assert_accounting selftest "$((EXPECT_LEGS - 1))" "$EXPECT_LEGS" >/dev/null; then
-        echo "SELFTEST leg ACCOUNTING read clean"; fails=1
-    else echo "SELFTEST leg ACCOUNTING detected"; fi
-    assert_accounting selftest "$EXPECT_LEGS" "$EXPECT_LEGS" >/dev/null || {
-        echo "SELFTEST leg ACCOUNTING rejects a correct sum"; fails=1; }
+    mkdir -p "$d"
+    local wrap="$d/planting-cli"
+    # the wrapper keys on the leg directory because compile_leg always names the source prog.aelys
+    cat > "$wrap" <<EOF
+#!/usr/bin/env bash
+"$cli" "\$@"
+rc=\$?
+src="\${@: -1}"
+d="\$(dirname "\$src")"
+if [ "\$(basename "\$d")" = "$PLANT_LEG" ] && [ -f "\$d/prog.ll" ]; then
+    printf '; planted divergence\n' >> "\$d/prog.ll"
+fi
+exit \$rc
+EOF
+    chmod 755 "$wrap"
+
+    local listed="$d/allowlist_listed.tsv" empty="$d/allowlist_empty.tsv"
+    {
+        echo "# the planted divergence, listed"
+        printf '%s\tO0\tir\tplanted by the selftest wrapper\n' "${PLANT_LEG%.O0}"
+    } > "$listed"
+    echo "# no rows" > "$empty"
+
+    local out
+
+    ST_LEGS=$((ST_LEGS + 1))
+    out="$("$SELF" --base "$cli" --head "$wrap" --allowlist "$listed" --expect-allowlist-rows 1 2>&1)"
+    st_assert "a listed-divergence IR_DIFF" "IR_DIFF         1" "$out" || fails=1
+    st_assert "a listed-divergence IR_DIFF_NEW" "IR_DIFF_NEW     0" "$out" || fails=1
+    st_assert "a listed-divergence absorption" "allowlist       rows 1, absorbed 1, unobserved 0" "$out" || fails=1
+    st_assert "a listed-divergence verdict" "M-NEUTRAL: OK" "$out" || fails=1
+
+    ST_LEGS=$((ST_LEGS + 1))
+    out="$("$SELF" --base "$cli" --head "$wrap" --allowlist "$empty" --expect-allowlist-rows 0 2>&1)"
+    st_assert "an unlisted-divergence IR_DIFF_NEW" "IR_DIFF_NEW     1" "$out" || fails=1
+    st_assert "an unlisted-divergence failed leg" "FAILED LEGS: ir:$PLANT_LEG" "$out" || fails=1
+    st_assert "an unlisted-divergence verdict" "M-NEUTRAL: FAILED" "$out" || fails=1
+
+    ST_LEGS=$((ST_LEGS + 1))
+    out="$("$SELF" --base "$cli" --head "$cli" --allowlist "$listed" --expect-allowlist-rows 1 2>&1)"
+    st_assert "an unobserved-row report" "ALLOWLIST UNOBSERVED ${PLANT_LEG%.O0} O0 ir" "$out" || fails=1
+    st_assert "an unobserved-row count" "allowlist       rows 1, absorbed 0, unobserved 1" "$out" || fails=1
+    st_assert "an unobserved-row verdict" "M-NEUTRAL: FAILED" "$out" || fails=1
+
     return $fails
 }
 
 if [ "$SELFTEST" -eq 1 ]; then
     selftest
     st=$?
+    echo "SELFTEST: $ST_LEGS legs, $ST_ASSERTS assertions, $ST_MET met"
     if [ "$st" -ne 0 ]; then
         echo "SELFTEST: FAILED"
         exit 1
     fi
-    echo "SELFTEST: 4 legs, 4 detected"
+    echo "SELFTEST: OK"
     exit 0
 fi
 
 if [ -z "$BASE" ] || [ -z "$HEAD_BIN" ]; then
-    echo "both --base and --head are required (or --selftest)" >&2
+    echo "both --base and --head are required (or --self, or --selftest)" >&2
+    usage
     exit 2
 fi
 if [ ! -x "$BASE" ] || [ ! -x "$HEAD_BIN" ]; then
@@ -561,32 +711,46 @@ if [ ! -x "$BASE" ] || [ ! -x "$HEAD_BIN" ]; then
     exit 2
 fi
 
+if ! load_allowlist; then
+    echo "M-NEUTRAL: FAILED"
+    exit 1
+fi
+
 run_matrix
+sweep_unobserved
 
 PRIMARY_SUM=$((IDENTICAL + IR_DIFF + VERDICT_FLIP + BOTH_REJECT + UNCLASSIFIED))
 
 echo "root            $ROOT"
+echo "base            $BASE"
+echo "head            $HEAD_BIN"
 echo "programs        $programs (expected $EXPECT_PROGRAMS)"
 echo "legs            $LEGS (expected $EXPECT_LEGS)"
-echo "accept legs     $ACCEPT_LEGS"
-echo "reject legs     $REJECT_LEGS"
+echo "accept legs     $ACCEPT_LEGS (expected $EXPECT_ACCEPT_LEGS)"
+echo "reject legs     $REJECT_LEGS (expected $EXPECT_REJECT_LEGS)"
 echo "IDENTICAL       $IDENTICAL"
 echo "IR_DIFF         $IR_DIFF"
+echo "IR_DIFF_NEW     $IR_DIFF_NEW"
 echo "VERDICT_FLIP    $VERDICT_FLIP"
 echo "BOTH_REJECT     $BOTH_REJECT"
 echo "TEXT_DIFF       $TEXT_DIFF"
+echo "TEXT_DIFF_NEW   $TEXT_DIFF_NEW"
 echo "UNCLASSIFIED    $UNCLASSIFIED"
+echo "allowlist       rows $ALLOW_ROWS, absorbed $ABSORBED, unobserved $ALLOW_UNOBSERVED"
 echo "accounting      primary $PRIMARY_SUM/$LEGS"
+[ -z "$UNOBSERVED_LINES" ] || printf '%s' "$UNOBSERVED_LINES"
 
 status=0
 [ "$origin_fail" -eq 0 ] || status=1
 [ "$LEGS" -eq "$EXPECT_LEGS" ] || { echo "LEGS magnitude control failed"; status=1; }
-[ "$ACCEPT_LEGS" -ge 96 ] || { echo "accept legs below the expected magnitude"; status=1; }
-[ "$REJECT_LEGS" -ge 32 ] || { echo "reject legs below the expected magnitude"; status=1; }
-[ "$IR_DIFF" -eq 0 ] || status=1
+[ "$ACCEPT_LEGS" -eq "$EXPECT_ACCEPT_LEGS" ] || { echo "accept legs $ACCEPT_LEGS, expected exactly $EXPECT_ACCEPT_LEGS"; status=1; }
+[ "$REJECT_LEGS" -eq "$EXPECT_REJECT_LEGS" ] || { echo "reject legs $REJECT_LEGS, expected exactly $EXPECT_REJECT_LEGS"; status=1; }
+[ "$((ACCEPT_LEGS + REJECT_LEGS))" -eq "$EXPECT_LEGS" ] || { echo "accept plus reject $((ACCEPT_LEGS + REJECT_LEGS)), expected exactly $EXPECT_LEGS"; status=1; }
+[ "$IR_DIFF_NEW" -eq 0 ] || status=1
 [ "$VERDICT_FLIP" -eq 0 ] || status=1
-[ "$TEXT_DIFF" -eq 0 ] || status=1
+[ "$TEXT_DIFF_NEW" -eq 0 ] || status=1
 [ "$UNCLASSIFIED" -eq 0 ] || status=1
+[ "$ALLOW_UNOBSERVED" -eq 0 ] || status=1
 assert_accounting primary "$PRIMARY_SUM" "$LEGS" || status=1
 
 if [ "$status" -ne 0 ]; then

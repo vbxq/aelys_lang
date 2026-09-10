@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # # by construction and a fixture cannot drift from the row it stands for.
 set -u
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"

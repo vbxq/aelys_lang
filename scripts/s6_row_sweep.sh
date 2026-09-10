@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 set -u
 CLI="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 FIX="$2"; OUT="$3"
