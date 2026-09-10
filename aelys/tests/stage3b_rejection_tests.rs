@@ -1,9 +1,11 @@
 use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 fn reject_at(body: &str, level: OptimizationLevel) -> String {
     let dir = tempdir().expect("tempdir");
@@ -28,21 +30,8 @@ fn accepts(body: &str) {
         .unwrap_or_else(|err| panic!("this program must compile: {err}"));
 }
 
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn exe_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
 fn run_exit(body: &str, level: OptimizationLevel) -> Option<i32> {
+    let _pin = common::pin_legs("run_exit", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, body).expect("write source");
@@ -50,7 +39,9 @@ fn run_exit(body: &str, level: OptimizationLevel) -> Option<i32> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -58,9 +49,10 @@ fn run_exit(body: &str, level: OptimizationLevel) -> Option<i32> {
     }
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     Some(output.status.code().expect("exit code"))
 }

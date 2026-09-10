@@ -1,10 +1,12 @@
 use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, MutexGuard};
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 const LEVELS: [OptimizationLevel; 4] = [
     OptimizationLevel::None,
@@ -56,20 +58,6 @@ fn rejects(src: &str) -> String {
     first.expect("one level at least")
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
 const RUN_LEVELS: [OptimizationLevel; 3] = [
     OptimizationLevel::None,
     OptimizationLevel::Standard,
@@ -77,6 +65,7 @@ const RUN_LEVELS: [OptimizationLevel; 3] = [
 ];
 
 fn run(src: &str, level: OptimizationLevel, allocator: &str) -> Option<(i32, String, String)> {
+    let _pin = common::pin_legs("run", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -87,7 +76,9 @@ fn run(src: &str, level: OptimizationLevel, allocator: &str) -> Option<(i32, Str
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -95,9 +86,10 @@ fn run(src: &str, level: OptimizationLevel, allocator: &str) -> Option<(i32, Str
     }
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     let out = Command::new(&exe)
         .env("AELYS_RC_STATS", "1")
         .env("AELYS_ALLOC", allocator)

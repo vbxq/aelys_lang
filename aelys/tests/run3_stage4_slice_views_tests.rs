@@ -1395,3 +1395,119 @@ fn s4_r3_negative_twins_keep_managed_and_indirect_effect_fences() {
     h.assert_legs(12);
 }
 
+const S2B_FE_SHARED: &str = "fn sum(s: &[i64]) -> i64 {\n\
+                             \x20   let mut t: i64 = 0\n\
+                             \x20   for x in s { t = t + x }\n\
+                             \x20   return t\n\
+                             }\n\
+                             fn main() -> i64 {\n\
+                             \x20   let a: [i64; 3] = [1, 2, 3]\n\
+                             \x20   println(sum(a[..]))\n\
+                             \x20   return 0\n\
+                             }\n";
+
+const S2B_FE_MUT: &str = "fn sum(s: &mut [i64]) -> i64 {\n\
+                          \x20   let mut t: i64 = 0\n\
+                          \x20   for x in s { t = t + x }\n\
+                          \x20   return t\n\
+                          }\n\
+                          fn main() -> i64 {\n\
+                          \x20   let mut a: [i64; 3] = [1, 2, 3]\n\
+                          \x20   println(sum(a[..]))\n\
+                          \x20   return 0\n\
+                          }\n";
+
+const S2B_FE_EMPTY: &str = "fn count(s: &[i64]) -> i64 {\n\
+                            \x20   let mut t: i64 = 0\n\
+                            \x20   for x in s { t = t + 100 }\n\
+                            \x20   return t\n\
+                            }\n\
+                            fn main() -> i64 {\n\
+                            \x20   let a: [i64; 3] = [1, 2, 3]\n\
+                            \x20   println(count(a[0..0]))\n\
+                            \x20   return 0\n\
+                            }\n";
+
+const S2B_FE_RESLICE: &str = "fn sum(s: &[i64]) -> i64 {\n\
+                              \x20   let mut t: i64 = 0\n\
+                              \x20   for x in s { t = t + x }\n\
+                              \x20   return t\n\
+                              }\n\
+                              fn main() -> i64 {\n\
+                              \x20   let a: [i64; 4] = [1, 2, 3, 4]\n\
+                              \x20   let s: &[i64] = a[0..3]\n\
+                              \x20   let t: &[i64] = s[0..2]\n\
+                              \x20   println(sum(t))\n\
+                              \x20   return 0\n\
+                              }\n";
+
+const S2B_FE_BYTES: &str = "fn main() -> i64 {\n\
+                            \x20   let s: string = \"abc\"\n\
+                            \x20   let mut t: i64 = 0\n\
+                            \x20   for b in s.bytes { t = t + (b as i64) }\n\
+                            \x20   println(t)\n\
+                            \x20   return 0\n\
+                            }\n";
+
+const S2B_FE_ESCAPES: &str = "fn main() -> i64 {\n\
+                              \x20   let anchor: [i64; 1] = [9]\n\
+                              \x20   let mut s: &[i64] = anchor[..]\n\
+                              \x20   {\n\
+                              \x20       let base: [i64; 3] = [1, 2, 3]\n\
+                              \x20       s = base[..]\n\
+                              \x20   }\n\
+                              \x20   let mut t: i64 = 0\n\
+                              \x20   for x in s { t = t + x }\n\
+                              \x20   println(t)\n\
+                              \x20   return 0\n\
+                              }\n";
+
+const S2B_FE_SCALAR: &str = "fn main() -> i64 {\n\
+                             \x20   let n: i64 = 3\n\
+                             \x20   for x in n { println(x) }\n\
+                             \x20   return 0\n\
+                             }\n";
+
+const S2B_FE_VEC: &str = "fn main() -> i64 {\n\
+                          \x20   let v: Vec<i64> = vec[1, 2, 3]\n\
+                          \x20   let mut t: i64 = 0\n\
+                          \x20   for x in v { t = t + x }\n\
+                          \x20   println(t)\n\
+                          \x20   return 0\n\
+                          }\n";
+
+#[test]
+fn s2b_a_slice_iterates_by_value_at_every_level() {
+    let h = Harness::new();
+    h.value_row("S2B-FE-shared", S2B_FE_SHARED, "6\n", 0, 0);
+    h.value_row("S2B-FE-mut", S2B_FE_MUT, "6\n", 0, 0);
+    h.value_row("S2B-FE-empty", S2B_FE_EMPTY, "0\n", 0, 0);
+    h.value_row("S2B-FE-reslice", S2B_FE_RESLICE, "3\n", 0, 0);
+    h.value_row("S2B-FE-bytes", S2B_FE_BYTES, "294\n", 0, 0);
+    h.assert_legs(40);
+}
+
+#[test]
+fn s2b_iterating_a_slice_takes_a_loan_on_it() {
+    let h = Harness::new();
+    h.fenced_row("S2B-FE-escapes", S2B_FE_ESCAPES, "E0722");
+    h.assert_legs(4);
+}
+
+// a `for` header is not a member access, so the refusal left e0304's family
+#[test]
+fn s2b_a_non_iterable_for_header_names_its_own_code() {
+    let h = Harness::new();
+    let rendered = h.fenced_row("S2B-FE-scalar", S2B_FE_SCALAR, "E0431");
+    assert!(
+        rendered.contains("this expression cannot be iterated") && !rendered.contains("E0304"),
+        "the refusal must carry its own label rather than `invalid member access`:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("(`&[T]` or `&mut [T]`)"),
+        "the message must name the slice forms that do iterate now:\n{rendered}"
+    );
+    // parked: a vec keeps its own code and does not fall out of the slice lowering
+    h.fenced_row("S2B-FE-vec", S2B_FE_VEC, "E0414");
+    h.assert_legs(8);
+}

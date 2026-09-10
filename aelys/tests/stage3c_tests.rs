@@ -1,9 +1,11 @@
 use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 const LEVELS: &[OptimizationLevel] = &[
     OptimizationLevel::None,
@@ -13,27 +15,6 @@ const LEVELS: &[OptimizationLevel] = &[
 ];
 
 const REJECT_LEVELS: &[OptimizationLevel] = &[OptimizationLevel::None, OptimizationLevel::Standard];
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn exe_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
-fn skip(reason: &str) {
-    if std::env::var_os("AELYS_REQUIRE_RUNTIME").is_some() {
-        panic!("[stage3c] SKIP-AS-FAILURE (AELYS_REQUIRE_RUNTIME=1): {reason}");
-    }
-    eprintln!("[stage3c] SKIPPED: {reason}");
-}
 
 fn lower_err(src: &str, level: OptimizationLevel) -> Result<(), String> {
     let dir = tempdir().expect("tempdir");
@@ -57,6 +38,7 @@ fn assert_rejects_with(src: &str, code: &str) {
 }
 
 fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
+    let _pin = common::pin_legs("run", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -65,7 +47,9 @@ fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                skip("native linker unavailable");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed at {level:?}: {err}");
@@ -74,9 +58,10 @@ fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        skip("executable not produced");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     Some(Command::new(&exe).output().expect("run compiled exe"))
 }
 
@@ -93,6 +78,7 @@ fn abort_signal(_out: &Output) -> Option<i32> {
 
 // every -o level so the old 136-vs-232 / 139-vs-0 cross-o divergence cannot come back.
 fn assert_traps_every_level(label: &str, src: &str) {
+    let _pin = common::pin_legs(label, LEVELS.len());
     for level in LEVELS {
         let Some(out) = run(src, *level) else { return };
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -114,6 +100,7 @@ fn assert_traps_every_level(label: &str, src: &str) {
 }
 
 fn assert_returns_every_level(label: &str, src: &str, expected: i32) {
+    let _pin = common::pin_legs(label, LEVELS.len());
     for level in LEVELS {
         let Some(out) = run(src, *level) else { return };
         assert_eq!(

@@ -3,9 +3,11 @@
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 fn try_reject(src: &str) -> String {
     let dir = tempdir().expect("tempdir");
@@ -24,24 +26,13 @@ fn try_accept(src: &str) {
         .expect("compilation should succeed");
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
-
 fn run_native(
     src: &str,
     variant: RuntimeVariant,
     opt: OptimizationLevel,
     env: &[(&str, &str)],
 ) -> Option<(i32, String, String)> {
+    let _pin = common::pin_legs("run_native", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -50,7 +41,9 @@ fn run_native(
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -59,7 +52,7 @@ fn run_native(
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
 
@@ -67,6 +60,7 @@ fn run_native(
     for (k, v) in env {
         cmd.env(k, v);
     }
+    common::note_leg();
     let output = cmd.output().expect("run compiled exe");
     let code = output.status.code().unwrap_or(-1);
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();

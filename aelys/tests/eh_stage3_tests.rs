@@ -3,21 +3,11 @@
 use aelys_driver::compile_file_with_llvm;
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::tempdir;
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 fn reject(src: &str) -> String {
     let dir = tempdir().expect("tempdir");
@@ -29,6 +19,7 @@ fn reject(src: &str) -> String {
 }
 
 fn run(src: &str) -> Option<Output> {
+    let _pin = common::pin_legs("run", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -36,7 +27,9 @@ fn run(src: &str) -> Option<Output> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping run assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -44,9 +37,10 @@ fn run(src: &str) -> Option<Output> {
     }
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     Some(Command::new(&exe).output().expect("run compiled exe"))
 }
 
@@ -611,7 +605,6 @@ fn main() -> i64 { return maybe().into_ok() }
     );
 }
 
-// 3d: unwrap_unchecked inside an unsafe block reads the ok payload
 #[test]
 fn unwrap_unchecked_in_unsafe_runs() {
     let src = r#"
@@ -630,7 +623,6 @@ fn main() -> i64 { return unsafe { mk_ok().unwrap_unchecked() } }
     );
 }
 
-// 3d: unwrap_unchecked outside an unsafe block is a compile error
 #[test]
 fn unwrap_unchecked_outside_unsafe_is_rejected() {
     let src = r#"
@@ -648,7 +640,6 @@ fn main() -> i64 { return mk_ok().unwrap_unchecked() }
     );
 }
 
-// 3d: an unsafe block is transparent, it yields the value of its inner block
 #[test]
 fn unsafe_block_is_transparent() {
     let src = r#"
@@ -662,7 +653,6 @@ fn main() -> i64 { return unsafe { 6 + 6 } }
     );
 }
 
-// 3d: nesting unsafe keeps the counter positive throughout, so the inner unwrap_unchecked compiles
 #[test]
 fn nested_unsafe_still_compiles_and_runs() {
     let src = r#"

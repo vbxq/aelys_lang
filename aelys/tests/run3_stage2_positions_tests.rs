@@ -1,5 +1,9 @@
-use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
+use aelys_driver::{
+    RuntimeVariant, compile_file_with_llvm_variant, compile_to_typed_ast, lower_file_to_air,
+};
+use aelys_sema::{InferType, TypedExpr, TypedFmtStringPart, TypedStmt};
 use aelys_opt::OptimizationLevel;
+use std::collections::{BTreeMap, BTreeSet};
 use std::cell::Cell;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -659,17 +663,6 @@ const GROUP_A: &[Row] = &[
         }),
     },
     Row {
-        id: "A23",
-        position: "ArraySized.fill_value",
-        class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let a: [i64; 3] = [(*r)[0]; 3]\n\
-              \x20   return a[0]\n\
-              }\n\
-              fn main() -> i64 { return 0 }\n",
-        twin: None,
-    },
-    Row {
         id: "A24",
         position: "Member.object over Index over Deref",
         class: Class::MustBecomeAccepted,
@@ -822,6 +815,17 @@ const GROUP_A: &[Row] = &[
         src: "nogc fn peek(r: &Vec<Vec<i64>>) -> i64 {\n\
               \x20   let s: &[Vec<i64>] = (*r)[0..2]\n\
               \x20   return s[0][1]\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "A36",
+        position: "ArraySized.fill_value, a scalar copied out of a reference",
+        class: Class::MustBecomeAccepted,
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
+              \x20   let a: [i64; 3] = [(*r)[0]; 3]\n\
+              \x20   return a[0]\n\
               }\n\
               fn main() -> i64 { return 0 }\n",
         twin: None,
@@ -1561,10 +1565,11 @@ const GROUP_C: &[Row] = &[
               }\n",
         twin: None,
     },
+    // reclassified: the projection yields i64, so e0714 was over-rejecting and c39 pins the closure
     Row {
         id: "C21",
         position: "ArrayLiteral.elements, projected",
-        class: Class::MustNotMoveRejected("E0714"),
+        class: Class::MustNotMoveAccepted,
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
               \x20   let a: [i64; 2] = [(*r)[0], 1]\n\
               \x20   return a[0]\n\
@@ -1572,10 +1577,11 @@ const GROUP_C: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
+    // reclassified: the projection yields i64, so e0714 was over-rejecting and c40 pins the closure
     Row {
         id: "C22",
         position: "StructLiteral.fields, projected",
-        class: Class::MustNotMoveRejected("E0714"),
+        class: Class::MustNotMoveAccepted,
         src: "struct P { n: i64 }\n\
               nogc fn f(r: &Vec<i64>) -> i64 {\n\
               \x20   let p = P{n: (*r)[0]}\n\
@@ -1700,7 +1706,8 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C35",
         position: "F3 callable, a concrete signature over a managed carrier",
-        class: Class::MustNotMoveRejected("E0412"),
+        // the `no definition` family left e0412 for its own code, the refusal itself is unmoved
+        class: Class::MustNotMoveRejected("E0430"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1754,6 +1761,189 @@ const GROUP_C: &[Row] = &[
             allocs: 1,
             frees: 1,
         }),
+    },
+    Row {
+        id: "A23",
+        position: "ArraySized.fill_value, a stored reference",
+        class: Class::MustNotMoveRejected("E0714"),
+        src: "nogc fn f(x: &i64) -> i64 {\n\
+              \x20   let a: [&i64; 2] = [x; 2]\n\
+              \x20   return 0\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "C39",
+        position: "ArrayLiteral.elements, a reference reached through an array of references",
+        class: Class::MustNotMoveRejected("E0714"),
+        src: "nogc fn f(a: [&i64; 2]) -> i64 {\n\
+              \x20   let b: [&i64; 1] = [a[0]]\n\
+              \x20   return 0\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "C40",
+        position: "StructLiteral.fields, a reference reached through an array of references",
+        class: Class::MustNotMoveRejected("E0714"),
+        src: "struct Q { p: &i64 }\n\
+              nogc fn f(a: [&i64; 2]) -> i64 {\n\
+              \x20   let q = Q{p: a[0]}\n\
+              \x20   return 0\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "C41",
+        position: "FmtString.parts, a reference that outlives its referent",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "fn main() -> i64 {\n\
+              \x20   let anchor: i64 = 3\n\
+              \x20   let mut r: &i64 = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: i64 = 7\n\
+              \x20       r = &inner\n\
+              \x20   }\n\
+              \x20   println(\"{*r}\")\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C42",
+        position: "If.then_branch, a reference that outlives its referent",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "struct P { n: i64 }\n\
+              fn pick() -> bool { return true }\n\
+              fn main() -> i64 {\n\
+              \x20   let anchor: P = P{n: 7}\n\
+              \x20   let c: bool = pick()\n\
+              \x20   let mut r: &P = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: P = P{n: 42}\n\
+              \x20       r = if c { &inner } else { &anchor }\n\
+              \x20   }\n\
+              \x20   println((*r).n)\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C43",
+        position: "Match.arms, a reference that outlives its referent",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "struct P { n: i64 }\n\
+              enum Pick { A, B }\n\
+              fn main() -> i64 {\n\
+              \x20   let anchor: P = P{n: 7}\n\
+              \x20   let k: Pick = Pick::A\n\
+              \x20   let mut r: &P = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: P = P{n: 77}\n\
+              \x20       r = match k { Pick::A => &inner, Pick::B => &anchor }\n\
+              \x20   }\n\
+              \x20   println((*r).n)\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C44",
+        position: "stmt.ForEach.iterable, a slice that outlives its base",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "fn main() -> i64 {\n\
+              \x20   let anchor: [i64; 1] = [9]\n\
+              \x20   let mut s: &[i64] = anchor[..]\n\
+              \x20   {\n\
+              \x20       let base: [i64; 3] = [1, 2, 3]\n\
+              \x20       s = base[..]\n\
+              \x20   }\n\
+              \x20   let mut t: i64 = 0\n\
+              \x20   for x in s { t = t + x }\n\
+              \x20   println(t)\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C45",
+        position: "EnumVariant.args, a stored reference",
+        class: Class::MustNotMoveRejected("E0714"),
+        src: "enum OptR { Some(&i64), None }\n\
+              nogc fn f(r: &i64) -> i64 {\n\
+              \x20   let o: OptR = OptR::Some(r)\n\
+              \x20   return 0\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "C46",
+        position: "Block.tail, a reference propagated out of a block",
+        class: Class::MustNotMoveAccepted,
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
+              \x20   let p: &i64 = { let q: &i64 = &(*r)[0]\n\
+              \x20   q }\n\
+              \x20   return *p\n\
+              }\n\
+              fn main() -> i64 { return 0 }\n",
+        twin: None,
+    },
+    Row {
+        id: "C47",
+        position: "Index.index, a subscript read through a reference",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "fn main() -> i64 {\n\
+              \x20   let a: [i64; 3] = [1, 2, 3]\n\
+              \x20   let anchor: i64 = 0\n\
+              \x20   let mut r: &i64 = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: i64 = 1\n\
+              \x20       r = &inner\n\
+              \x20   }\n\
+              \x20   println(a[*r])\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C48",
+        position: "stmt.For.end, a bound read through a reference",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "fn main() -> i64 {\n\
+              \x20   let anchor: i64 = 0\n\
+              \x20   let mut r: &i64 = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: i64 = 2\n\
+              \x20       r = &inner\n\
+              \x20   }\n\
+              \x20   let mut t: i64 = 0\n\
+              \x20   for i in 0..*r { t = t + 1 }\n\
+              \x20   println(t)\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
+    },
+    Row {
+        id: "C49",
+        position: "And.right, a side read through a reference",
+        class: Class::MustNotMoveRejected("E0722"),
+        src: "fn pick() -> bool { return true }\n\
+              fn main() -> i64 {\n\
+              \x20   let anchor: bool = false\n\
+              \x20   let mut r: &bool = &anchor\n\
+              \x20   {\n\
+              \x20       let inner: bool = true\n\
+              \x20       r = &inner\n\
+              \x20   }\n\
+              \x20   let c: bool = pick() && *r\n\
+              \x20   println(1)\n\
+              \x20   return 0\n\
+              }\n",
+        twin: None,
     },
 ];
 
@@ -2285,6 +2475,555 @@ const GROUP_L: &[Store] = &[
     },
 ];
 
+const VALUE_BUILDER_EXCLUSIONS: &[(&str, &str)] = &[
+    ("Int", "a literal is its own value and carries no sub-expression"),
+    ("Float", "a literal is its own value and carries no sub-expression"),
+    ("Bool", "a literal is its own value and carries no sub-expression"),
+    ("String", "a literal is its own value and carries no sub-expression"),
+    ("Null", "a literal is its own value and carries no sub-expression"),
+    (
+        "FmtString",
+        "the value is a freshly allocated string that aliases none of its parts, and every \
+         interpolated expression is read into a temporary",
+    ),
+    (
+        "And",
+        "the value is a bool, which cannot be a reference, and both sides are read",
+    ),
+    (
+        "Or",
+        "the value is a bool, which cannot be a reference, and both sides are read",
+    ),
+    (
+        "Range",
+        "the value is a range over i64 bounds, and both bounds are read",
+    ),
+    (
+        "FieldAssign",
+        "the value is unit, and the stored operand reaches the destination place",
+    ),
+    (
+        "IndexAssign",
+        "the value is unit, and the stored operand reaches the destination place",
+    ),
+    (
+        "DerefAssign",
+        "the value is unit, and the stored operand reaches the destination place",
+    ),
+    (
+        "Lambda",
+        "the value is a closure, and a reference capture is refused by E0423",
+    ),
+    (
+        "LambdaInner",
+        "the value is a closure, and a reference capture is refused by E0423",
+    ),
+    (
+        "EnumVariant.Vec::push",
+        "push assigns its receiver in place and yields nothing",
+    ),
+    (
+        "Identifier.unresolved",
+        "a name the builder cannot resolve is a program sema has already refused",
+    ),
+    (
+        "Member.unplaceable",
+        "a member, index or deref the builder cannot turn into a place is a program sema has \
+         already refused",
+    ),
+    (
+        "Assign.unresolved",
+        "a name the builder cannot resolve is a program sema has already refused",
+    ),
+];
+
+#[test]
+fn no_value_producing_builder_drops_its_operand() {
+    let root = repo_root();
+    let build = fs::read_to_string(root.join("air/src/bir/build.rs")).expect("bir build");
+    assert_eq!(
+        build.matches("let _ = self.build_operand").count(),
+        0,
+        "a built operand that nothing consumes is a read the ir drops, and a dropped read is a \
+         loan the escape pass never sees. four gates of this shape each laundered a borrow past \
+         E0722. every such site reads through `read_operand` or reaches a value instead"
+    );
+    assert_eq!(
+        build.matches("Aggregate(Vec::new())").count(),
+        0,
+        "an aggregate built from an empty operand list names nothing it was built from, so \
+         E0714's loop, liveness, the conflict events and the move check all walk past it"
+    );
+    assert_eq!(
+        build.matches("BirOperand::Const").count(),
+        16,
+        "the number of mentions of the constant operand moved. thirteen are value-producing \
+         arms, each of which owes a row in VALUE_BUILDER_EXCLUSIONS; one is the guard in \
+         `observe` and two are loop-header discriminants. a new mention is a new builder that \
+         yields no local, so it is listed with its reason or it reaches a value"
+    );
+
+    let ast = fs::read_to_string(root.join("sema/src/typed_ast/mod.rs")).expect("typed_ast");
+    let variants = variant_names(&ast, "TypedExprKind");
+    let mut seen: Vec<&str> = Vec::new();
+    for (site, reason) in VALUE_BUILDER_EXCLUSIONS {
+        assert!(
+            !reason.trim().is_empty(),
+            "{site} is excluded without a reason, which is the hand-maintained list this table \
+             replaces, one entry long"
+        );
+        let head = site.split('.').next().expect("a site names a variant");
+        assert!(
+            variants.iter().any(|v| v == head),
+            "{site} names {head}, which is not a TypedExprKind variant"
+        );
+        assert!(!seen.contains(site), "{site} is listed twice");
+        seen.push(site);
+    }
+    assert_eq!(
+        VALUE_BUILDER_EXCLUSIONS.len(),
+        18,
+        "the exclusion list changed size, which is a deliberate edit here"
+    );
+}
+
+fn ref_typed(ty: &InferType) -> bool {
+    matches!(ty, InferType::Ref { .. } | InferType::Slice { .. })
+}
+
+fn expr_children(e: &TypedExpr) -> (&'static str, Vec<&TypedExpr>) {
+    use aelys_sema::TypedExprKind as K;
+    match &e.kind {
+        K::Int(_) => ("Int", Vec::new()),
+        K::Float(_) => ("Float", Vec::new()),
+        K::Bool(_) => ("Bool", Vec::new()),
+        K::String(_) => ("String", Vec::new()),
+        K::Null => ("Null", Vec::new()),
+        K::FmtString(parts) => (
+            "FmtString",
+            parts
+                .iter()
+                .filter_map(|p| match p {
+                    TypedFmtStringPart::Expr(x) => Some(&**x),
+                    _ => None,
+                })
+                .collect(),
+        ),
+        K::Identifier(_) => ("Identifier", Vec::new()),
+        K::Binary { left, right, .. } => ("Binary", vec![&**left, &**right]),
+        K::Unary { operand, .. } => ("Unary", vec![&**operand]),
+        K::And { left, right } => ("And", vec![&**left, &**right]),
+        K::Or { left, right } => ("Or", vec![&**left, &**right]),
+        K::Call { callee, args } => {
+            let mut v = vec![&**callee];
+            v.extend(args.iter());
+            ("Call", v)
+        }
+        K::Assign { value, .. } => ("Assign", vec![&**value]),
+        K::Grouping(inner) => ("Grouping", vec![&**inner]),
+        K::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => ("If", vec![&**condition, &**then_branch, &**else_branch]),
+        K::Lambda(inner) => ("Lambda", vec![&**inner]),
+        K::LambdaInner { .. } => ("LambdaInner", Vec::new()),
+        K::Member { object, .. } => ("Member", vec![&**object]),
+        K::ArrayLiteral { elements } => ("ArrayLiteral", elements.iter().collect()),
+        K::ArraySized { size, fill_value } => {
+            let mut v = vec![&**size];
+            if let Some(f) = fill_value {
+                v.push(&**f);
+            }
+            ("ArraySized", v)
+        }
+        K::VecLiteral { elements, .. } => ("VecLiteral", elements.iter().collect()),
+        K::Index { object, index } => ("Index", vec![&**object, &**index]),
+        K::IndexAssign {
+            object,
+            index,
+            value,
+        } => ("IndexAssign", vec![&**object, &**index, &**value]),
+        K::FieldAssign { object, value, .. } => ("FieldAssign", vec![&**object, &**value]),
+        K::Range { start, end, .. } => {
+            let mut v = Vec::new();
+            if let Some(s) = start {
+                v.push(&**s);
+            }
+            if let Some(t) = end {
+                v.push(&**t);
+            }
+            ("Range", v)
+        }
+        K::Slice { object, range } => ("Slice", vec![&**object, &**range]),
+        K::Reference { operand, .. } => ("Reference", vec![&**operand]),
+        K::Deref(inner) => ("Deref", vec![&**inner]),
+        K::DerefAssign { target, value } => ("DerefAssign", vec![&**target, &**value]),
+        K::StructLiteral { fields, .. } => (
+            "StructLiteral",
+            fields.iter().map(|(_, v)| &**v).collect::<Vec<_>>(),
+        ),
+        K::Cast { expr, .. } => ("Cast", vec![&**expr]),
+        K::EnumVariant { args, .. } => ("EnumVariant", args.iter().collect()),
+        K::Match { scrutinee, arms } => {
+            let mut v = vec![&**scrutinee];
+            v.extend(arms.iter().map(|a| &*a.body));
+            ("Match", v)
+        }
+        K::ResultAssert { scrutinee, .. } => ("ResultAssert", vec![&**scrutinee]),
+        K::Block { tail, .. } => ("Block", vec![&**tail]),
+    }
+}
+
+fn walk_expr(e: &TypedExpr, out: &mut BTreeSet<String>) {
+    use aelys_sema::TypedExprKind as K;
+    let (kind, children) = expr_children(e);
+    if ref_typed(&e.ty) || children.iter().any(|c| ref_typed(&c.ty)) {
+        out.insert(kind.to_string());
+    }
+    for c in &children {
+        walk_expr(c, out);
+    }
+    match &e.kind {
+        K::LambdaInner {
+            params,
+            return_type,
+            body,
+            captures,
+        } => {
+            if params.iter().any(|p| ref_typed(&p.ty))
+                || ref_typed(return_type)
+                || captures.iter().any(|(_, t)| ref_typed(t))
+            {
+                out.insert("LambdaInner".to_string());
+            }
+            for s in body {
+                walk_stmt(s, out);
+            }
+        }
+        K::Block { stmts, .. } => {
+            for s in stmts {
+                walk_stmt(s, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn walk_stmt(stmt: &TypedStmt, out: &mut BTreeSet<String>) {
+    use aelys_sema::TypedStmtKind as S;
+    let mut carries = false;
+    let mut exprs: Vec<&TypedExpr> = Vec::new();
+    let mut stmts: Vec<&TypedStmt> = Vec::new();
+    let name = match &stmt.kind {
+        S::Expression(e) => {
+            exprs.push(e);
+            "Expression"
+        }
+        S::Let {
+            initializer,
+            var_type,
+            ..
+        } => {
+            carries |= ref_typed(var_type);
+            exprs.push(initializer);
+            "Let"
+        }
+        S::Block(body) => {
+            stmts.extend(body.iter());
+            "Block"
+        }
+        S::If {
+            condition,
+            then_branch,
+            else_branch,
+        } => {
+            exprs.push(condition);
+            stmts.push(then_branch);
+            if let Some(e) = else_branch {
+                stmts.push(e);
+            }
+            "If"
+        }
+        S::While { condition, body } => {
+            exprs.push(condition);
+            stmts.push(body);
+            "While"
+        }
+        S::For {
+            start,
+            end,
+            step,
+            body,
+            ..
+        } => {
+            exprs.push(start);
+            exprs.push(end);
+            if let Some(s) = step.as_ref().as_ref() {
+                exprs.push(s);
+            }
+            stmts.push(body);
+            "For"
+        }
+        S::ForEach {
+            iterable,
+            elem_type,
+            body,
+            ..
+        } => {
+            carries |= ref_typed(elem_type);
+            exprs.push(iterable);
+            stmts.push(body);
+            "ForEach"
+        }
+        S::Return(value) => {
+            if let Some(v) = value {
+                exprs.push(v);
+            }
+            "Return"
+        }
+        S::Break => "Break",
+        S::Continue => "Continue",
+        S::Function(f) => {
+            carries |= f.params.iter().any(|p| ref_typed(&p.ty)) || ref_typed(&f.return_type);
+            stmts.extend(f.body.iter());
+            "Function"
+        }
+        S::Needs(_) => "Needs",
+        S::StructDecl { fields, .. } => {
+            carries |= fields.iter().any(|(_, t)| ref_typed(t));
+            "StructDecl"
+        }
+        S::EnumDecl { variants, .. } => {
+            carries |= variants
+                .iter()
+                .any(|(_, _, types)| types.iter().any(ref_typed));
+            "EnumDecl"
+        }
+    };
+    if carries || exprs.iter().any(|e| ref_typed(&e.ty)) {
+        out.insert(format!("stmt.{name}"));
+    }
+    for e in exprs {
+        walk_expr(e, out);
+    }
+    for s in stmts {
+        walk_stmt(s, out);
+    }
+}
+
+fn reference_typed_positions(src: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Ok(program) = compile_to_typed_ast(src) else {
+        return out;
+    };
+    for stmt in &program.stmts {
+        walk_stmt(stmt, &mut out);
+    }
+    out
+}
+
+// a position whose value cannot be a reference, or that owes a reference-typed witness
+const NO_REFERENCE_TYPED_WITNESS: &[(&str, &str)] = &[
+    (
+        "Binary",
+        "cannot: both operands are numeric or string, measured: `r + 1` is E0301 expected `&i64`",
+    ),
+    (
+        "Unary",
+        "cannot: the operand is numeric or bool, measured: `-r` is E0301 expected `&i64`",
+    ),
+    (
+        "And",
+        "cannot: both sides are bool, measured: `r && b` is E0301 expected `&bool`",
+    ),
+    (
+        "Or",
+        "cannot: both sides are bool, the same measurement as And",
+    ),
+    (
+        "Range",
+        "cannot: a bound is i64, measured: `0..r` is E0301 expected `&i64`",
+    ),
+    (
+        "Cast",
+        "cannot: the source is numeric or bool, measured: `r as i64` is E0301 expected `i64`",
+    ),
+    (
+        "FmtString",
+        "cannot: a reference has no rendering, measured: `\"{r}\"` reaches E0902 cannot convert \
+         Ptr(I64) to string. C41 covers the laundering the parts allowed, through a deref",
+    ),
+    (
+        "stmt.If",
+        "cannot: the condition is bool, measured: `if r` is E0301 expected `&bool`",
+    ),
+    (
+        "stmt.While",
+        "cannot: the condition is bool, the same measurement as stmt.If",
+    ),
+    ("stmt.For", "cannot: the bounds are i64, the same measurement as Range"),
+    (
+        "stmt.Block",
+        "cannot: a block statement carries statements and no expression of its own, so no type \
+         is read at the statement itself",
+    ),
+    ("Grouping", "owed: no row parenthesises a reference"),
+    ("Lambda", "owed: no row gives a lambda a reference-typed parameter"),
+    ("LambdaInner", "owed: the same debt as Lambda"),
+    ("Member", "owed: no row reads a reference-typed field"),
+    ("VecLiteral", "owed: no row builds a vec of references"),
+    ("FieldAssign", "owed: no row stores a reference into a field"),
+    (
+        "ResultAssert",
+        "owed: no row asserts a Result whose payload is a reference",
+    ),
+    (
+        "stmt.Expression",
+        "owed: no row evaluates a reference in statement position",
+    ),
+    ("stmt.Return", "owed: no row returns a reference"),
+];
+
+// the table asserted that a row exists for a variant, never that the row's witness could fail.
+#[test]
+fn every_covered_position_has_a_reference_typed_witness() {
+    let mut witnesses: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for row in GROUP_A.iter().chain(GROUP_B).chain(GROUP_C) {
+        for position in reference_typed_positions(row.src) {
+            witnesses.entry(position).or_default().insert(row.id.into());
+        }
+    }
+    let mut excused: Vec<&str> = Vec::new();
+    for (variant, reason) in NO_REFERENCE_TYPED_WITNESS {
+        assert!(
+            reason.starts_with("cannot: ") || reason.starts_with("owed: "),
+            "{variant} is excused without saying whether the position cannot hold a reference or \
+             merely has no witness yet"
+        );
+        assert!(!excused.contains(variant), "{variant} is excused twice");
+        excused.push(variant);
+    }
+    assert_eq!(
+        NO_REFERENCE_TYPED_WITNESS.len(),
+        20,
+        "the excusal table changed size, which is a deliberate edit here"
+    );
+
+    let mut naked = Vec::new();
+    for (variant, note) in SLOT_COVERAGE {
+        if note.starts_with("excluded: ") {
+            continue;
+        }
+        let held = witnesses.get(*variant);
+        if excused.contains(variant) {
+            assert!(
+                !note
+                    .split(' ')
+                    .any(|id| held.is_some_and(|rows| rows.contains(id))),
+                "{variant} is excused from carrying a reference-typed witness and now cites one, \
+                 so the excusal is stale and the row it names is enforced by nothing"
+            );
+            continue;
+        }
+        let covered = note
+            .split(' ')
+            .any(|id| held.is_some_and(|rows| rows.contains(id)));
+        if !covered {
+            naked.push(format!(
+                "{variant}\tcited rows {note}\tref-typed witnesses: {}",
+                held.map(|r| r.iter().cloned().collect::<Vec<_>>().join(" "))
+                    .unwrap_or_else(|| "none in the corpus".to_string())
+            ));
+        }
+    }
+    assert!(
+        naked.is_empty(),
+        "a covered position has no witness that carries a reference, so every row for it \
+         satisfies the table while being unable to detect anything:\n{}",
+        naked.join("\n")
+    );
+}
+
+const AGGREGATE_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() -> i64 {\n\
+     \x20   let mut a: [i64; 2] = [1, 2]\n\
+     \x20   let p: &mut [i64] = a[..]\n\
+     \x20   let b: [i64; 2] = [a[0]; 2]\n\
+     \x20   p[0] = 9\n\
+     \x20   println(b[0])\n\
+     \x20   return 0\n\
+     }\n";
+
+const FMT_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() -> i64 {\n\
+     \x20   let mut a: [i64; 2] = [1, 2]\n\
+     \x20   let p: &mut [i64] = a[..]\n\
+     \x20   println(\"{a[0]}\")\n\
+     \x20   p[0] = 9\n\
+     \x20   return 0\n\
+     }\n";
+
+const FILL_USES_AN_AFFINE_LOCAL_AGAIN: &str = "struct Resource { n: i64 }\n\
+     fn main() -> i64 {\n\
+     \x20   let r: Resource = Resource{n: 1}\n\
+     \x20   let a: [Resource; 2] = [r; 2]\n\
+     \x20   println(r.n)\n\
+     \x20   return 0\n\
+     }\n";
+
+const FILL_MOVES_AN_AFFINE_LOCAL_TWICE: &str = "struct Resource { n: i64 }\n\
+     fn sink(x: Resource) -> i64 { return x.n }\n\
+     fn main() -> i64 {\n\
+     \x20   let r: Resource = Resource{n: 1}\n\
+     \x20   let a: [Resource; 2] = [r; 2]\n\
+     \x20   println(sink(r))\n\
+     \x20   return 0\n\
+     }\n";
+
+#[test]
+fn the_four_consumers_of_the_operand_list_are_each_re_pinned() {
+    let root = repo_root();
+    let loans = fs::read_to_string(root.join("air/src/bir/loans.rs")).expect("bir loans");
+    let moves = fs::read_to_string(root.join("air/src/bir/moves.rs")).expect("bir moves");
+    for (file, text, name) in [
+        ("loans.rs", &loans, "fn gen_loans"),
+        ("loans.rs", &loans, "fn rvalue_reads"),
+        ("loans.rs", &loans, "fn rvalue_operand_events"),
+        ("moves.rs", &moves, "fn rvalue_uses"),
+    ] {
+        assert!(
+            text.contains(name),
+            "{file}: {name} is the consumer this stage re-pinned and it is gone or renamed"
+        );
+    }
+    assert!(
+        loans.contains("fn projected_is_ref"),
+        "loans.rs: E0714 reads the projection rather than the base local, and the predicate that \
+         does it is gone"
+    );
+
+    let h = Harness::new();
+    // e0714's loop is carried by rows a23 c39 c40 c45, and liveness by rows c41 c42 c43 c44
+    expect_reject(
+        &h,
+        "S2B-conflict-aggregate",
+        AGGREGATE_READS_A_MUTABLY_BORROWED_BASE,
+        "E0713",
+    );
+    expect_reject(
+        &h,
+        "S2B-conflict-fmt",
+        FMT_READS_A_MUTABLY_BORROWED_BASE,
+        "E0713",
+    );
+    expect_reject(&h, "S2B-move-use", FILL_USES_AN_AFFINE_LOCAL_AGAIN, "E0701");
+    expect_reject(
+        &h,
+        "S2B-move-twice",
+        FILL_MOVES_AN_AFFINE_LOCAL_TWICE,
+        "E0702",
+    );
+}
+
 #[test]
 fn the_corpus_census_is_exact() {
     let mut becomes = 0;
@@ -2337,7 +3076,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 16, 30, 4, 1, 0, 109),
+        (31, 27, 0, 0, 19, 39, 4, 1, 0, 121),
         "the class split changed"
     );
 }
@@ -2385,23 +3124,23 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
          for strings is Binary with a String operand, row B23",
     ),
     ("Null", "excluded: a literal cannot carry a managed type"),
-    ("FmtString", "B13"),
-    ("Identifier", "B08 B09"),
+    ("FmtString", "B13 C41"),
+    ("Identifier", "B08 B09 A21"),
     ("Binary", "A10 B23"),
     ("Unary", "A11"),
-    ("And", "A20"),
+    ("And", "A20 C49"),
     ("Or", "A30"),
     ("Call", "A09 B07 B12 C04 C05"),
-    ("Assign", "C17"),
+    ("Assign", "C17 C42"),
     ("Grouping", "A06"),
-    ("If", "A27 B06"),
+    ("If", "A27 B06 C42"),
     ("Lambda", "B14 C08 C09 C25"),
     ("LambdaInner", "B14 C08 C09 C25"),
     ("Member", "A02 A03 A24 A33 A34 B17 B18 B19 B28 C01 C11"),
-    ("ArrayLiteral", "C21"),
-    ("ArraySized", "A23"),
+    ("ArrayLiteral", "C21 C39"),
+    ("ArraySized", "A36 A23"),
     ("VecLiteral", "B09"),
-    ("Index", "A01 A16 A31 A35 B24 C03 C10"),
+    ("Index", "A01 A16 A31 A35 B24 C03 C10 C47"),
     ("IndexAssign", "B01 B02 B21 B25 B26 C28"),
     ("FieldAssign", "A04 A17 B20 B27 C02 C14"),
     ("Range", "A15"),
@@ -2412,19 +3151,19 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
     ),
     ("Deref", "A01 C12"),
     ("DerefAssign", "B03 B04 B29 B32 C15"),
-    ("StructLiteral", "C22"),
+    ("StructLiteral", "C22 C40"),
     ("Cast", "A07"),
-    ("EnumVariant", "B10 B11"),
-    ("Match", "C18"),
+    ("EnumVariant", "B10 B11 C45"),
+    ("Match", "C18 C43"),
     ("ResultAssert", "B22 C26"),
-    ("Block", "A19 A28"),
+    ("Block", "A19 A28 C46"),
     ("stmt.Expression", "A18 B18"),
-    ("stmt.Let", "A05 B09 B19"),
+    ("stmt.Let", "A05 B09 B19 A21"),
     ("stmt.Block", "A19"),
     ("stmt.If", "A12"),
     ("stmt.While", "A13"),
-    ("stmt.For", "A14 A29"),
-    ("stmt.ForEach", "C13"),
+    ("stmt.For", "A14 A29 C48"),
+    ("stmt.ForEach", "C13 C44"),
     ("stmt.Return", "A01 B05 B17 C16"),
     (
         "stmt.Break",
@@ -2434,7 +3173,7 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
         "stmt.Continue",
         "excluded: a unit variant, it carries no expression",
     ),
-    ("stmt.Function", "B15"),
+    ("stmt.Function", "B15 A01"),
     (
         "stmt.Needs",
         "excluded: NeedsStmt is path, kind and span, checked against the definition rather than \
@@ -2914,7 +3653,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
         );
     }
     // the three fences the a6 booking names, and the rows that hold them
-    for (code, row) in [("E0730", "C34"), ("E0412", "C35"), ("E0410", "C36")] {
+    for (code, row) in [("E0730", "C34"), ("E0430", "C35"), ("E0410", "C36")] {
         let held = GROUP_C
             .iter()
             .find(|r| r.id == row)
@@ -2924,11 +3663,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
             "{row} must still be the {code} route into the fail-open category"
         );
     }
-    assert!(
-        aelys_common::diagnostic::registry::lookup("E0410").is_none(),
-        "E0410 gained an --explain entry; that is an improvement, and this row is where the gap          was recorded, so retire it here"
-    );
-    for code in ["E0730", "E0412"] {
+    for code in ["E0730", "E0430", "E0410"] {
         assert!(
             aelys_common::diagnostic::registry::lookup(code).is_some(),
             "{code} fences something this stage books under A6 and must keep its --explain entry"
