@@ -249,10 +249,11 @@ impl<'a> LoweringContext<'a> {
         let len_local = self.alloc_temp(AirType::I64);
         let len_rvalue = match &col_ty {
             AirType::Array(_, n) => Rvalue::Use(Operand::Const(AirConst::IntLiteral(*n as i64))),
-            AirType::Str => Rvalue::FieldAccess {
-                base: Operand::Copy(col_local),
-                field: "len".to_string(),
+            AirType::Str => Rvalue::Call {
+                func: Callee::Named("__aelys_str_char_count".to_string()),
+                args: vec![Operand::Copy(col_local)],
             },
+            AirType::Slice(_) => Rvalue::Len(Operand::Copy(col_local)),
             _ => Rvalue::Call {
                 func: Callee::Named("__aelys_len".to_string()),
                 args: vec![Operand::Copy(col_local)],

@@ -5,6 +5,7 @@ mod program;
 mod stmts;
 
 use crate::*;
+use aelys_common::Fault;
 use aelys_sema::{InferType, TypedProgram};
 use aelys_syntax::BinaryOp;
 
@@ -12,10 +13,15 @@ pub fn lower(program: &TypedProgram) -> AirProgram {
     try_lower(program).unwrap_or_else(|failure| panic!("{}", format_lowering_errors(&failure)))
 }
 
+pub struct LowerError {
+    pub fault: Fault,
+    pub message: String,
+}
+
 // a borrow rejection renders richly (spans/carets/codes); an air-lowering failure keeps its flat
 pub enum LowerFailure {
     Borrow(Vec<crate::bir::BirDiagnostic>),
-    Lowering(Vec<String>),
+    Lowering(Vec<LowerError>),
 }
 
 fn build_and_check_bir(
@@ -107,7 +113,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) block_aliases: Vec<(u32, u32)>,
     pub(super) closure_env_param: Option<LocalId>,
     pub(super) capture_slots: std::collections::HashMap<LocalId, String>,
-    pub(super) lowering_errors: Vec<String>,
+    pub(super) lowering_errors: Vec<LowerError>,
 }
 
 pub(super) struct CarrierLocal {
@@ -164,7 +170,7 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn finish(self) -> Result<AirProgram, Vec<String>> {
+    fn finish(self) -> Result<AirProgram, Vec<LowerError>> {
         if !self.lowering_errors.is_empty() {
             return Err(self.lowering_errors);
         }
@@ -332,8 +338,20 @@ impl<'a> LoweringContext<'a> {
             .map(|l| l.ty.clone())
     }
 
-    pub(super) fn report_error(&mut self, message: String) {
-        self.lowering_errors.push(message);
+    pub(super) fn report(&mut self, fault: Fault, message: String) {
+        self.lowering_errors.push(LowerError { fault, message });
+    }
+
+    pub(super) fn report_ice(&mut self, message: String) {
+        self.report(Fault::Compiler, message);
+    }
+
+    pub(super) fn report_unsupported(&mut self, message: String) {
+        self.report(Fault::Unsupported, message);
+    }
+
+    pub(super) fn report_program(&mut self, message: String) {
+        self.report(Fault::Program, message);
     }
 
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
@@ -410,31 +428,13 @@ impl<'a> LoweringContext<'a> {
                     AirType::Struct(name.clone())
                 }
             }
-            InferType::Enum(name, type_args) => {
-                if type_args.is_empty() {
-                    AirType::Enum(name.clone())
-                } else {
-                    // pre-mangle so the mono pass can disambiguate unit variant assignments
-                    let lowered_args: Vec<AirType> = type_args
-                        .iter()
-                        .map(|a| self.lower_type_from_infer(a))
-                        .collect();
-                    // only when every arg is concrete: an unresolved or generic arg would
-                    let all_concrete = lowered_args
-                        .iter()
-                        .all(|t| !matches!(t, AirType::Opaque | AirType::Param(_)));
-                    if all_concrete {
-                        let suffix = lowered_args
-                            .iter()
-                            .map(|t| crate::mono::substitute::type_to_string(t))
-                            .collect::<Vec<_>>()
-                            .join("$");
-                        AirType::Enum(format!("__mono_{}_{}", name, suffix))
-                    } else {
-                        AirType::Enum(name.clone())
-                    }
-                }
-            }
+            InferType::Enum(name, type_args) => AirType::Enum(EnumRef {
+                name: name.clone(),
+                args: type_args
+                    .iter()
+                    .map(|a| self.lower_type_from_infer(a))
+                    .collect(),
+            }),
             InferType::Var(_id) => {
                 #[cfg(debug_assertions)]
                 eprintln!(
@@ -454,7 +454,7 @@ impl<'a> LoweringContext<'a> {
         let elem_size = self.stack_array_elem_size(elem_ty) as u64;
         let total = n.saturating_mul(elem_size);
         if total > MAX_STACK_BYTES {
-            self.report_error(format!(
+            self.report_program(format!(
                 "stack array too large: [{}; {}] = {} bytes (max {} bytes). \
                  Consider using a smaller size or a heap-allocated collection.",
                 crate::print::fmt_type(elem_ty),
@@ -570,7 +570,7 @@ impl<'a> LoweringContext<'a> {
 fn format_lowering_errors(failure: &LowerFailure) -> String {
     // borrow rejections join their primary phrases (markers preserved) into the same shell as the
     let errors: Vec<String> = match failure {
-        LowerFailure::Lowering(errors) => errors.clone(),
+        LowerFailure::Lowering(errors) => errors.iter().map(|e| e.message.clone()).collect(),
         LowerFailure::Borrow(diags) => diags.iter().map(|d| d.primary.1.clone()).collect(),
     };
     let joined = errors

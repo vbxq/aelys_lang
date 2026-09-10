@@ -82,7 +82,7 @@ impl<'a> LoweringContext<'a> {
         }
         match val {
             Operand::Copy(id) | Operand::Move(id) => self.emit_cow_retain(*id, sp),
-            Operand::Const(_) => self.report_error(
+            Operand::Const(_) => self.report_ice(
                 "[cow] a Vec slot is initialised from a non-local operand; the share cannot be \
                  accounted (this is a compiler bug, not a program error)"
                     .to_string(),
@@ -273,15 +273,16 @@ impl<'a> LoweringContext<'a> {
                     cur_ty = field_ty;
                 }
                 RcPathStep::EnumPayload {
-                    enum_name,
+                    enum_ref,
                     tag,
                     field_index,
                 } => {
-                    let payload_ty = self.air_enum_payload_type(enum_name, *tag, *field_index);
+                    let payload_ty =
+                        self.air_enum_payload_type(&enum_ref.symbol(), *tag, *field_index);
                     cur = self.emit_rvalue_to_temp(
                         payload_ty.clone(),
                         Rvalue::EnumPayload {
-                            enum_name: enum_name.clone(),
+                            enum_ref: enum_ref.clone(),
                             tag: *tag,
                             operand: cur,
                             field_index: *field_index,
@@ -375,7 +376,7 @@ impl<'a> LoweringContext<'a> {
             // skipping is only sound while generic structs never reach codegen; once they
             crate::rc_paths::RcScan::Undecidable(_) => None,
             crate::rc_paths::RcScan::RejectedMultiVariant(why) => {
-                self.report_error(format!("[rc-stage1] {why}"));
+                self.report_unsupported(format!("[rc-stage1] {why}"));
                 None
             }
         }
@@ -430,7 +431,7 @@ impl<'a> LoweringContext<'a> {
                             let n = match &size.kind {
                                 TypedExprKind::Int(v) => *v as u64,
                                 _ => {
-                                    self.report_error(
+                                    self.report_unsupported(
                                         "unsupported non-constant array size: \
                                          ArraySized requires a constant integer size expression"
                                             .to_string(),
@@ -598,14 +599,14 @@ impl<'a> LoweringContext<'a> {
                     let exit = loop_ctx.exit;
                     let body_depth = loop_ctx.body_scope_depth;
                     if self.rc_live_below(body_depth) {
-                        self.report_error(
+                        self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `break`; \
                              non-local jumps out of an Rc's scope are not supported yet"
                                 .to_string(),
                         );
                         self.seal_block(AirTerminator::Unreachable);
                     } else if self.affine_live_below(body_depth) {
-                        self.report_error(
+                        self.report_unsupported(
                             "[move] an affine value live in a loop body is abandoned by `break`; \
                              non-local jumps out of an affine scope are not supported yet"
                                 .to_string(),
@@ -616,7 +617,7 @@ impl<'a> LoweringContext<'a> {
                     }
                 } else {
                     // break outside loop: sema should have rejected this, but
-                    self.report_error("break statement outside of loop".to_string());
+                    self.report_program("break statement outside of loop".to_string());
                     self.seal_block(AirTerminator::Unreachable);
                 }
             }
@@ -625,14 +626,14 @@ impl<'a> LoweringContext<'a> {
                     let header = loop_ctx.header;
                     let body_depth = loop_ctx.body_scope_depth;
                     if self.rc_live_below(body_depth) {
-                        self.report_error(
+                        self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `continue`; \
                              non-local jumps out of an Rc's scope are not supported yet"
                                 .to_string(),
                         );
                         self.seal_block(AirTerminator::Unreachable);
                     } else if self.affine_live_below(body_depth) {
-                        self.report_error(
+                        self.report_unsupported(
                             "[move] an affine value live in a loop body is abandoned by `continue`; \
                              non-local jumps out of an affine scope are not supported yet"
                                 .to_string(),
@@ -642,7 +643,7 @@ impl<'a> LoweringContext<'a> {
                         self.seal_block(AirTerminator::Goto(header));
                     }
                 } else {
-                    self.report_error("continue statement outside of loop".to_string());
+                    self.report_program("continue statement outside of loop".to_string());
                     self.seal_block(AirTerminator::Unreachable);
                 }
             }

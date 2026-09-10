@@ -1,10 +1,43 @@
 use super::LoweringContext;
 use crate::*;
+use aelys_common::Fault;
 use aelys_sema::{InferType, TypedFunction, TypedParam, TypedStmtKind};
 use aelys_syntax::ForeignConv;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ConstFoldFailure {
+    NotAConstant,
+    // the value is fixed at compile time and this compiler does not materialize it yet
+    FoldNotImplemented,
+    Invariant,
+}
+
+impl ConstFoldFailure {
+    pub(super) fn fault(self) -> Fault {
+        match self {
+            ConstFoldFailure::NotAConstant => Fault::Program,
+            ConstFoldFailure::FoldNotImplemented => Fault::Unsupported,
+            ConstFoldFailure::Invariant => Fault::Compiler,
+        }
+    }
+
+    fn rank(self) -> u8 {
+        match self {
+            ConstFoldFailure::FoldNotImplemented => 0,
+            ConstFoldFailure::NotAConstant => 1,
+            ConstFoldFailure::Invariant => 2,
+        }
+    }
+
+    fn worse(self, other: ConstFoldFailure) -> ConstFoldFailure {
+        if other.rank() > self.rank() { other } else { self }
+    }
+}
+
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_program(&mut self) {
+        let mut lowered_structs: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for stmt in &self.program.stmts {
             if let TypedStmtKind::StructDecl {
                 name,
@@ -13,12 +46,14 @@ impl<'a> LoweringContext<'a> {
                 ..
             } = &stmt.kind
             {
-                if type_params.is_empty() {
+                if type_params.is_empty() && lowered_structs.insert(name.clone()) {
                     self.lower_struct_decl(name, type_params, fields, &stmt.span);
                 }
             }
         }
 
+        let mut lowered_enums: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         for stmt in &self.program.stmts {
             if let TypedStmtKind::EnumDecl {
                 name,
@@ -26,6 +61,7 @@ impl<'a> LoweringContext<'a> {
                 variants,
                 ..
             } = &stmt.kind
+                && lowered_enums.insert(name.clone())
             {
                 self.lower_enum_decl(name, type_params, variants, &stmt.span);
             }
@@ -153,7 +189,7 @@ impl<'a> LoweringContext<'a> {
     fn lowered_return_type(&mut self, func: &TypedFunction, noun: &str) -> AirType {
         let mut ret_ty = self.lower_type_from_infer(&func.return_type);
         if ret_ty == AirType::Opaque {
-            self.report_error(format!(
+            self.report_ice(format!(
                 "{} `{}` has unresolved return type (Opaque); \
                  treating as void — this indicates a type inference failure",
                 noun, func.name
@@ -435,10 +471,11 @@ impl<'a> LoweringContext<'a> {
         } = &stmt.kind
         {
             let ty = self.lower_type_from_infer(var_type);
-            let init = self.try_global_const_expr(initializer);
-            if let Some(message) = self.global_initializer_error(name, &ty, init.as_ref()) {
-                self.report_error(message);
+            let folded = self.try_global_const_expr(initializer);
+            if let Some((fault, message)) = Self::global_initializer_error(name, &ty, &folded) {
+                self.report(fault, message);
             }
+            let init = folded.ok();
             self.globals.push(AirGlobal {
                 name: name.clone(),
                 ty,
@@ -452,7 +489,7 @@ impl<'a> LoweringContext<'a> {
     pub(super) fn try_global_const_expr(
         &mut self,
         expr: &aelys_sema::TypedExpr,
-    ) -> Option<AirConst> {
+    ) -> Result<AirConst, ConstFoldFailure> {
         use aelys_sema::TypedExprKind;
         match &expr.kind {
             TypedExprKind::Lambda(inner) => self.try_global_const_expr(inner),
@@ -464,7 +501,7 @@ impl<'a> LoweringContext<'a> {
             } => {
                 let runtime_caps = self.runtime_captures(captures);
                 if !runtime_caps.is_empty() {
-                    return None; // capturing lambdas cannot be global constants
+                    return Err(ConstFoldFailure::NotAConstant);
                 }
                 let lambda_name = format!("__lambda_{}", self.next_function_id);
                 let fake_func = TypedFunction {
@@ -481,7 +518,7 @@ impl<'a> LoweringContext<'a> {
                     captures: Vec::new(),
                 };
                 self.lower_function_as_closure(&fake_func);
-                Some(AirConst::FnRef(lambda_name))
+                Ok(AirConst::FnRef(lambda_name))
             }
             TypedExprKind::ArrayLiteral { elements } => {
                 let elements = elements.clone();
@@ -489,7 +526,7 @@ impl<'a> LoweringContext<'a> {
                 for e in &elements {
                     consts.push(self.try_global_const_expr(e)?);
                 }
-                Some(AirConst::Array(consts))
+                Ok(AirConst::Array(consts))
             }
             TypedExprKind::StructLiteral { name, fields } => {
                 let name = name.clone();
@@ -498,7 +535,7 @@ impl<'a> LoweringContext<'a> {
                 for (fname, fexpr) in &fields {
                     field_consts.push((fname.clone(), self.try_global_const_expr(fexpr)?));
                 }
-                Some(AirConst::Struct {
+                Ok(AirConst::Struct {
                     name,
                     fields: field_consts,
                 })
@@ -508,19 +545,27 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn global_initializer_error(
-        &self,
         name: &str,
         ty: &AirType,
-        init: Option<&AirConst>,
-    ) -> Option<String> {
-        let Some(init) = init else {
-            return Some(format!(
-                "file-scope let '{name}' requires a compile-time constant initializer"
-            ));
+        init: &Result<AirConst, ConstFoldFailure>,
+    ) -> Option<(Fault, String)> {
+        let init = match init {
+            Ok(init) => init,
+            Err(failure) => {
+                return Some((
+                    failure.fault(),
+                    format!(
+                        "file-scope let '{name}' requires a compile-time constant initializer"
+                    ),
+                ));
+            }
         };
         if matches!(ty, AirType::Enum(_)) && Self::enum_payload_needs_runtime_storage(init) {
-            return Some(format!(
-                "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
+            return Some((
+                Fault::Unsupported,
+                format!(
+                    "file-scope let '{name}' uses enum payload values with runtime-backed storage (`str`/`fnptr`), which globals cannot serialize yet"
+                ),
             ));
         }
         None
@@ -559,14 +604,17 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    pub(super) fn try_const_expr(&self, expr: &aelys_sema::TypedExpr) -> Option<AirConst> {
+    pub(super) fn try_const_expr(
+        &self,
+        expr: &aelys_sema::TypedExpr,
+    ) -> Result<AirConst, ConstFoldFailure> {
         use aelys_sema::TypedExprKind;
         match &expr.kind {
             TypedExprKind::Int(v) => {
                 if expr.ty.is_integer() {
-                    Some(AirConst::Int(*v, super::infer_to_int_size(&expr.ty)))
+                    Ok(AirConst::Int(*v, super::infer_to_int_size(&expr.ty)))
                 } else {
-                    Some(AirConst::IntLiteral(*v))
+                    Ok(AirConst::IntLiteral(*v))
                 }
             }
             TypedExprKind::Float(v) => {
@@ -575,18 +623,18 @@ impl<'a> LoweringContext<'a> {
                 } else {
                     AirFloatSize::F64
                 };
-                Some(AirConst::Float(*v, size))
+                Ok(AirConst::Float(*v, size))
             }
-            TypedExprKind::Bool(v) => Some(AirConst::Bool(*v)),
-            TypedExprKind::String(v) => Some(AirConst::Str(v.clone())),
-            TypedExprKind::Null => Some(AirConst::Null),
+            TypedExprKind::Bool(v) => Ok(AirConst::Bool(*v)),
+            TypedExprKind::String(v) => Ok(AirConst::Str(v.clone())),
+            TypedExprKind::Null => Ok(AirConst::Null),
             TypedExprKind::Identifier(name) => {
                 if let Some(existing) = self.resolve_const_global_alias(name) {
-                    Some(existing)
+                    Ok(existing)
                 } else if matches!(expr.ty, InferType::Function { .. }) {
-                    Some(AirConst::FnRef(name.clone()))
+                    Ok(AirConst::FnRef(name.clone()))
                 } else {
-                    None
+                    Err(ConstFoldFailure::NotAConstant)
                 }
             }
             TypedExprKind::EnumVariant {
@@ -605,39 +653,40 @@ impl<'a> LoweringContext<'a> {
                         })
                     }) =>
             {
-                Some(AirConst::Int(*tag as i64, AirIntSize::I32))
+                Ok(AirConst::Int(*tag as i64, AirIntSize::I32))
             }
             TypedExprKind::EnumVariant { tag, args, .. } => {
                 let payload = args
                     .iter()
                     .map(|arg| self.try_const_expr(arg))
-                    .collect::<Option<Vec<_>>>()?;
-                // globals skip enuminit, so carry the monomorphized name here
-                let AirType::Enum(enum_name) = self.lower_type_from_infer(&expr.ty) else {
-                    return None;
+                    .collect::<Result<Vec<_>, _>>()?;
+                let AirType::Enum(enum_ref) = self.lower_type_from_infer(&expr.ty) else {
+                    return Err(ConstFoldFailure::Invariant);
                 };
-                Some(AirConst::Enum {
-                    enum_name,
+                Ok(AirConst::Enum {
+                    enum_ref,
                     tag: *tag,
                     payload,
                 })
             }
             TypedExprKind::ArrayLiteral { elements } => {
-                let consts: Option<Vec<AirConst>> =
+                let consts: Result<Vec<AirConst>, _> =
                     elements.iter().map(|e| self.try_const_expr(e)).collect();
                 consts.map(AirConst::Array)
             }
             TypedExprKind::ArraySized { size, fill_value } => {
-                let n = if let TypedExprKind::Int(n) = &size.kind {
-                    Some(*n as usize)
-                } else {
-                    None
-                }?;
-                let fill = fill_value.as_ref().and_then(|fv| self.try_const_expr(fv))?;
-                Some(AirConst::Array(vec![fill; n]))
+                let TypedExprKind::Int(n) = &size.kind else {
+                    return Err(self.fold_failure(size));
+                };
+                let n = *n as usize;
+                let Some(fv) = fill_value.as_ref() else {
+                    return Err(ConstFoldFailure::FoldNotImplemented);
+                };
+                let fill = self.try_const_expr(fv)?;
+                Ok(AirConst::Array(vec![fill; n]))
             }
             TypedExprKind::StructLiteral { name, fields } => {
-                let field_consts: Option<Vec<(String, AirConst)>> = fields
+                let field_consts: Result<Vec<(String, AirConst)>, _> = fields
                     .iter()
                     .map(|(fname, fexpr)| self.try_const_expr(fexpr).map(|c| (fname.clone(), c)))
                     .collect();
@@ -646,7 +695,65 @@ impl<'a> LoweringContext<'a> {
                     fields,
                 })
             }
-            _ => None,
+            other => Err(self.fold_failure_of(other)),
+        }
+    }
+
+    fn fold_failure(&self, expr: &aelys_sema::TypedExpr) -> ConstFoldFailure {
+        self.try_const_expr(expr)
+            .err()
+            .unwrap_or(ConstFoldFailure::FoldNotImplemented)
+    }
+
+    // no wildcard arm: a new expression form must state whether a constant for it can exist
+    fn fold_failure_of(&self, kind: &aelys_sema::TypedExprKind) -> ConstFoldFailure {
+        use aelys_sema::TypedExprKind as K;
+        use ConstFoldFailure::{FoldNotImplemented, NotAConstant};
+        match kind {
+            K::Int(_)
+            | K::Float(_)
+            | K::Bool(_)
+            | K::String(_)
+            | K::Null
+            | K::Identifier(_)
+            | K::EnumVariant { .. }
+            | K::ArrayLiteral { .. }
+            | K::ArraySized { .. }
+            | K::StructLiteral { .. } => FoldNotImplemented,
+            K::Lambda(_) | K::LambdaInner { .. } => FoldNotImplemented,
+            K::Grouping(inner) => self.fold_failure(inner),
+            K::Cast { expr, .. } => self.fold_failure(expr),
+            K::Unary { operand, .. } => self.fold_failure(operand),
+            K::Binary { left, right, .. }
+            | K::And { left, right }
+            | K::Or { left, right } => self.fold_failure(left).worse(self.fold_failure(right)),
+            K::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => self
+                .fold_failure(condition)
+                .worse(self.fold_failure(then_branch))
+                .worse(self.fold_failure(else_branch)),
+            K::VecLiteral { elements, .. } => elements
+                .iter()
+                .map(|e| self.fold_failure(e))
+                .fold(FoldNotImplemented, ConstFoldFailure::worse),
+            K::FmtString(_)
+            | K::Call { .. }
+            | K::Assign { .. }
+            | K::Member { .. }
+            | K::Index { .. }
+            | K::IndexAssign { .. }
+            | K::FieldAssign { .. }
+            | K::Range { .. }
+            | K::Slice { .. }
+            | K::Reference { .. }
+            | K::Deref(_)
+            | K::DerefAssign { .. }
+            | K::Match { .. }
+            | K::ResultAssert { .. }
+            | K::Block { .. } => NotAConstant,
         }
     }
 }

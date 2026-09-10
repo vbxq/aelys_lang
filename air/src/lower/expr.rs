@@ -42,13 +42,13 @@ impl<'a> LoweringContext<'a> {
                 self.emit_carrier_field_retains(value_op.clone(), field_air_ty, &paths, sp);
             }
             TypedExprKind::Call { .. } => {
-                self.report_error(format!(
+                self.report_unsupported(format!(
                     "[rc-stage3a] {what} is initialized from a call returning an `Rc<T>`-bearing \
                      value; ownership transfer into a carrier field is not supported yet"
                 ));
             }
             _ => {
-                self.report_error(format!(
+                self.report_unsupported(format!(
                     "[rc-stage3a] {what} is initialized from a conditional/compound expression \
                      producing an `Rc<T>`-bearing value; only a direct reference (clone) or a \
                      fresh literal is supported yet"
@@ -235,7 +235,7 @@ impl<'a> LoweringContext<'a> {
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                     other => {
-                        self.report_error(format!(
+                        self.report_ice(format!(
                             "ICE: array literal has non-array type `{}` at AIR lowering",
                             other
                         ));
@@ -265,7 +265,7 @@ impl<'a> LoweringContext<'a> {
                 let n = match &size.kind {
                     TypedExprKind::Int(v) => *v as u64,
                     _ => {
-                        self.report_error(
+                        self.report_unsupported(
                             "unsupported non-constant array size in AIR lowering: \
                              ArraySized requires a constant integer size expression"
                                 .to_string(),
@@ -276,7 +276,7 @@ impl<'a> LoweringContext<'a> {
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                     other => {
-                        self.report_error(format!(
+                        self.report_ice(format!(
                             "ICE: ArraySized has non-array type `{}` at AIR lowering",
                             other
                         ));
@@ -292,7 +292,7 @@ impl<'a> LoweringContext<'a> {
                     let elem_ty_for_zero = match &expr.ty {
                         InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                         other => {
-                            self.report_error(format!(
+                            self.report_ice(format!(
                                 "ICE: ArraySized zero-init has non-array type `{}` at AIR lowering",
                                 other
                             ));
@@ -322,7 +322,7 @@ impl<'a> LoweringContext<'a> {
                 let elem_ty = match &vec_ty {
                     AirType::Vec(inner) => (**inner).clone(),
                     other => {
-                        self.report_error(format!(
+                        self.report_ice(format!(
                             "ICE: vec literal has non-Vec AIR type `{other:?}` at lowering"
                         ));
                         AirType::I64
@@ -382,7 +382,7 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Reference { operand, .. } => match self.place_addr(operand) {
                 Some(addr) => Operand::Copy(addr.ptr),
                 None => {
-                    self.report_error(
+                    self.report_ice(
                         "ICE: `&` of an expression that denotes no storage reached AIR lowering;                          sema must reject it (E0421)"
                             .to_string(),
                     );
@@ -446,7 +446,7 @@ impl<'a> LoweringContext<'a> {
                     let elem_ty = match &vec_ty {
                         AirType::Vec(inner) => (**inner).clone(),
                         other => {
-                            self.report_error(format!(
+                            self.report_ice(format!(
                                 "ICE: Vec::new has non-Vec AIR type `{other:?}` at lowering"
                             ));
                             AirType::I64
@@ -457,6 +457,9 @@ impl<'a> LoweringContext<'a> {
                 if enum_name == "Vec" && variant == "push" {
                     return self.lower_vec_push(args, sp);
                 }
+                if enum_name == "Vec" && variant == "pop" {
+                    return self.lower_vec_pop(&expr.ty, args, sp);
+                }
                 if enum_name == "Vec" && variant == "try_as_unique_mut_slice" {
                     return self.lower_vec_try_as_unique_mut_slice(&expr.ty, args, sp);
                 }
@@ -465,6 +468,18 @@ impl<'a> LoweringContext<'a> {
                 }
                 if enum_name == "Vec" && variant == "as_slice" {
                     return self.lower_vec_as_slice(&expr.ty, args, sp);
+                }
+                if enum_name == "string" && variant == "substring_bytes" {
+                    let lowered: Vec<Operand> =
+                        args.iter().map(|arg| self.lower_expr(arg)).collect();
+                    return self.emit_rvalue_to_temp(
+                        AirType::Str,
+                        Rvalue::Call {
+                            func: Callee::Named("__aelys_str_substring_bytes".to_string()),
+                            args: lowered,
+                        },
+                        sp,
+                    );
                 }
                 let mut payload: Vec<Operand> = Vec::with_capacity(args.len());
                 for arg in args {
@@ -479,10 +494,15 @@ impl<'a> LoweringContext<'a> {
                     );
                     payload.push(op);
                 }
+                let air_ty = self.lower_type_from_infer(&expr.ty);
+                let enum_ref = match &air_ty {
+                    AirType::Enum(r) => r.clone(),
+                    _ => EnumRef::plain(enum_name.clone()),
+                };
                 self.emit_rvalue_to_temp(
-                    self.lower_type_from_infer(&expr.ty),
+                    air_ty,
                     Rvalue::EnumInit {
-                        enum_name: enum_name.clone(),
+                        enum_ref,
                         variant: variant.clone(),
                         tag: *tag,
                         payload,
@@ -645,7 +665,7 @@ impl<'a> LoweringContext<'a> {
                 Operand::Copy(addr.ptr)
             }
             None => {
-                self.report_error(
+                self.report_ice(
                     "ICE: slice of an expression that denotes no storage reached AIR lowering; \
                      sema must reject it (E0421)"
                         .to_string(),
@@ -661,7 +681,7 @@ impl<'a> LoweringContext<'a> {
         };
         if let Some(s) = start {
             if !matches!(&s.kind, TypedExprKind::Int(0)) {
-                self.report_error(
+                self.report_ice(
                     "ICE: slice with a non-zero start bound reached AIR lowering; sema must \
                      reject it (E0425)"
                         .to_string(),
@@ -678,7 +698,7 @@ impl<'a> LoweringContext<'a> {
                     self.emit_rvalue_to_temp(AirType::I64, Rvalue::Len(ptr_op.clone()), sp)
                 }
                 _ => {
-                    self.report_error(
+                    self.report_ice(
                         "ICE: slice of a base with no derivable length reached AIR lowering; \
                          sema must reject it (E0425)"
                             .to_string(),
@@ -828,7 +848,7 @@ impl<'a> LoweringContext<'a> {
         };
 
         let Some(base) = self.projection_base_mode(object, PlaceMode::Store) else {
-            self.report_error(
+            self.report_ice(
                 "ICE: indexed-assign target denotes no storage at AIR lowering; sema must \
                  reject it (E0421)"
                     .to_string(),
@@ -892,7 +912,7 @@ impl<'a> LoweringContext<'a> {
         };
 
         let Some(base) = self.projection_base_mode(object, PlaceMode::Store) else {
-            self.report_error(
+            self.report_ice(
                 "ICE: field-assign target denotes no storage at AIR lowering; sema must \
                  reject it (E0421)"
                     .to_string(),
@@ -1174,7 +1194,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_vec_push(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
         if args.len() != 2 {
-            self.report_error(format!(
+            self.report_ice(format!(
                 "ICE: Vec::push expects 2 arguments, got {}",
                 args.len()
             ));
@@ -1183,7 +1203,7 @@ impl<'a> LoweringContext<'a> {
         let vec_addr = match self.projection_base(&args[0]) {
             Some(addr) => Operand::Copy(addr.ptr),
             None => {
-                self.report_error(
+                self.report_ice(
                     "ICE: Vec::push target denotes no storage at AIR lowering; sema must \
                      reject it (E0421)"
                         .to_string(),
@@ -1213,6 +1233,43 @@ impl<'a> LoweringContext<'a> {
         Operand::Const(AirConst::Null)
     }
 
+    fn lower_vec_pop(
+        &mut self,
+        result_ty: &InferType,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Operand {
+        if args.len() != 1 {
+            self.report_ice(format!(
+                "ICE: Vec::pop expects 1 argument, got {}",
+                args.len()
+            ));
+            return Operand::Const(AirConst::Null);
+        }
+        let vec_addr = match self.projection_base(&args[0]) {
+            Some(addr) => Operand::Copy(addr.ptr),
+            None => {
+                self.report_ice(
+                    "ICE: Vec::pop target denotes no storage at AIR lowering; sema must \
+                     reject it (E0421)"
+                        .to_string(),
+                );
+                return Operand::Const(AirConst::Null);
+            }
+        };
+        let elem_ty = self.lower_type_from_infer(result_ty);
+        let out_slot = self.alloc_temp_mut(elem_ty.clone());
+        let out_addr = self.addr_of_own_temp(out_slot, &elem_ty, sp);
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named("__aelys_vec_pop".to_string()),
+                args: vec![vec_addr, out_addr],
+            },
+            sp,
+        );
+        Operand::Copy(out_slot)
+    }
+
     fn lower_len_member(&mut self, object: &TypedExpr, sp: Option<Span>) -> Operand {
         if let Some(addr) = self.projection_base(object) {
             return self.emit_rvalue_to_temp(
@@ -1234,7 +1291,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_vec_len(&mut self, args: &[TypedExpr], sp: Option<Span>) -> Operand {
         if args.len() != 1 {
-            self.report_error(format!(
+            self.report_ice(format!(
                 "ICE: Vec::len expects 1 argument, got {}",
                 args.len()
             ));
@@ -1250,14 +1307,14 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         if args.len() != 1 {
-            self.report_error(format!(
+            self.report_ice(format!(
                 "ICE: Vec::as_slice expects 1 argument, got {}",
                 args.len()
             ));
             return Operand::Const(AirConst::Null);
         }
         let Some(addr) = self.projection_base(&args[0]) else {
-            self.report_error(
+            self.report_ice(
                 "ICE: Vec::as_slice target denotes no storage at AIR lowering".to_string(),
             );
             return Operand::Const(AirConst::Null);
@@ -1280,7 +1337,7 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Operand {
         if args.len() != 1 {
-            self.report_error(format!(
+            self.report_ice(format!(
                 "ICE: Vec::try_as_unique_mut_slice expects 1 argument, got {}",
                 args.len()
             ));
@@ -1289,7 +1346,7 @@ impl<'a> LoweringContext<'a> {
         let vec_addr = match self.projection_base(&args[0]) {
             Some(addr) => Operand::Copy(addr.ptr),
             None => {
-                self.report_error(
+                self.report_ice(
                     "ICE: Vec::try_as_unique_mut_slice target denotes no storage at AIR lowering"
                         .to_string(),
                 );
@@ -1401,7 +1458,7 @@ impl<'a> LoweringContext<'a> {
                 crate::rc_paths::RcScan::Paths(_)
             );
             if cap_ty.is_rc() || cap_ty.contains_rc() || carrier_capture {
-                self.report_error(format!(
+                self.report_unsupported(format!(
                     "[rc-stage1] closure captures `{cap_name}` of type `{cap_ty}` which is or contains \
                      an `Rc<T>`; capturing an Rc (or a carrier of one) in a closure is not supported"
                 ));
@@ -1437,7 +1494,7 @@ impl<'a> LoweringContext<'a> {
                         Operand::Copy(id)
                     }
                 } else {
-                    self.report_error(format!(
+                    self.report_ice(format!(
                         "ICE: captured variable `{}` not found in scope during closure lowering",
                         cap_name
                     ));
@@ -1484,10 +1541,10 @@ impl<'a> LoweringContext<'a> {
             return Operand::Const(AirConst::Null);
         }
 
-        let enum_name = match &scrutinee.ty {
-            InferType::Enum(name, _) => name.clone(),
+        let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
+            AirType::Enum(r) => r,
             _ => {
-                self.report_error(format!(
+                self.report_ice(format!(
                     "match scrutinee is not an enum type: {:?}",
                     scrutinee.ty
                 ));
@@ -1498,7 +1555,7 @@ impl<'a> LoweringContext<'a> {
         let tag_op = self.emit_rvalue_to_temp(
             AirType::I32,
             Rvalue::EnumTag {
-                enum_name: enum_name.clone(),
+                enum_ref: enum_ref.clone(),
                 operand: scrutinee_op.clone(),
             },
             sp,
@@ -1534,13 +1591,7 @@ impl<'a> LoweringContext<'a> {
         for (block_id, arm) in arm_blocks {
             self.fixup_block_id_noop(block_id);
 
-            if let TypedPattern::Variant {
-                enum_name: arm_enum_name,
-                tag,
-                bindings,
-                ..
-            } = &arm.pattern
-            {
+            if let TypedPattern::Variant { tag, bindings, .. } = &arm.pattern {
                 for (field_index, (name, ty)) in bindings.iter().enumerate() {
                     let field_ty = self.lower_type_from_infer(ty);
                     let field_local = self.alloc_named_local(name, field_ty.clone(), false, sp);
@@ -1548,7 +1599,7 @@ impl<'a> LoweringContext<'a> {
                         AirStmtKind::Assign {
                             place: Place::Local(field_local),
                             rvalue: Rvalue::EnumPayload {
-                                enum_name: arm_enum_name.clone(),
+                                enum_ref: enum_ref.clone(),
                                 tag: *tag,
                                 operand: scrutinee_op.clone(),
                                 field_index: field_index as u32,
@@ -1618,10 +1669,10 @@ impl<'a> LoweringContext<'a> {
         if self.position_is_dead() {
             return Operand::Const(AirConst::Null);
         }
-        let enum_name = match &scrutinee.ty {
-            InferType::Enum(name, _) => name.clone(),
+        let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
+            AirType::Enum(r) => r,
             _ => {
-                self.report_error(format!(
+                self.report_ice(format!(
                     "result assert scrutinee is not an enum type: {:?}",
                     scrutinee.ty
                 ));
@@ -1632,7 +1683,7 @@ impl<'a> LoweringContext<'a> {
         let tag_op = self.emit_rvalue_to_temp(
             AirType::I32,
             Rvalue::EnumTag {
-                enum_name: enum_name.clone(),
+                enum_ref: enum_ref.clone(),
                 operand: scrutinee_op.clone(),
             },
             sp,
@@ -1654,7 +1705,7 @@ impl<'a> LoweringContext<'a> {
                 AirStmtKind::Assign {
                     place: Place::Local(result),
                     rvalue: Rvalue::EnumPayload {
-                        enum_name,
+                        enum_ref,
                         tag: ok_tag,
                         operand: scrutinee_op,
                         field_index: 0,

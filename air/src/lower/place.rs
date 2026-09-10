@@ -98,6 +98,9 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Member { object, member } => {
+                if member == "bytes" && matches!(object.ty, InferType::String) {
+                    return None;
+                }
                 let base = self.projection_base_mode(object, mode)?;
                 let pointee = self.lower_type_from_infer(&e.ty);
                 let ptr = self.emit_addr_of(Place::Field(base.ptr, member.clone()), &pointee, sp);
