@@ -4,7 +4,7 @@ use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::function_symbol_name;
 use crate::types::{aelys_string_type, air_basic_type_to_llvm, closure_fat_ptr_type};
 use aelys_air::{
-    AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, Operand,
+    AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, EnumRef, Operand,
     layout::{enum_has_data, enum_max_payload_size, resolved_layout},
 };
 use inkwell::AddressSpace;
@@ -38,9 +38,7 @@ impl CodegenContext {
         Ok(())
     }
 
-    // flat i32 blob: n_entries, then {count, offset_idx} per type, then the offsets.
     // index 0 is a reserved {count:0} entry, so a stray type_id 0 object reads zero
-    // children instead of walking a real type's pointer map
     pub(crate) fn emit_rc_type_table(&self, program: &AirProgram) -> Result<(), CodegenError> {
         const SYMBOL: &str = "__aelys_rc_type_table";
         // a re-run must not double-define the symbol
@@ -148,10 +146,17 @@ impl CodegenContext {
                 self.fnref_initializer(&global.name, &global.ty, name, program)
             }
             AirConst::Enum {
-                enum_name,
+                enum_ref,
                 tag,
                 payload,
-            } => self.enum_initializer(&global.name, &global.ty, enum_name, *tag, payload, program),
+            } => self.enum_initializer(
+                &global.name,
+                &global.ty,
+                &enum_ref.symbol(),
+                *tag,
+                payload,
+                program,
+            ),
             AirConst::ZeroInit(ty) if *ty == global.ty => {
                 Ok(air_basic_type_to_llvm(ty, self.context)?.const_zero())
             }
@@ -188,8 +193,6 @@ impl CodegenContext {
             )));
         };
         let elem_llvm_ty = air_basic_type_to_llvm(elem_ty, self.context)?;
-        // Build a temporary AirGlobal for each element so we can reuse
-        // the existing scalar initializer paths.
         let elem_consts: Result<Vec<BasicValueEnum<'static>>, _> = elems
             .iter()
             .map(|c| {
@@ -205,7 +208,6 @@ impl CodegenContext {
             .collect();
         let elem_values = elem_consts?;
 
-        // Build the LLVM const array for the element type.
         let const_arr: BasicValueEnum<'static> = match elem_llvm_ty {
             inkwell::types::BasicTypeEnum::IntType(t) => {
                 let vals: Vec<_> = elem_values.iter().map(|v| v.into_int_value()).collect();
@@ -257,7 +259,6 @@ impl CodegenContext {
                 global_name, struct_name
             ))
         })?;
-        // Look up the canonical field order from the AIR program.
         let struct_def = program
             .structs
             .iter()
@@ -268,7 +269,6 @@ impl CodegenContext {
                     global_name, struct_name
                 ))
             })?;
-        // Build field values in canonical order.
         let mut field_values: Vec<BasicValueEnum<'static>> =
             Vec::with_capacity(struct_def.fields.len());
         for struct_field in &struct_def.fields {
@@ -320,7 +320,7 @@ impl CodegenContext {
                 .i64_type()
                 .const_int(value as u64, false)
                 .into(),
-            AirType::Enum(name) => self.enum_int_initializer(name, value, program)?,
+            AirType::Enum(r) => self.enum_int_initializer(&r.symbol(), value, program)?,
             other => {
                 return Err(CodegenError::UnsupportedType(format!(
                     "integer global initializer is not supported for {:?}",
@@ -382,8 +382,6 @@ impl CodegenContext {
             )));
         }
 
-        // Unit variants in data enums still use aggregate storage, so keep the
-        // payload byte array zeroed while materializing the tag as a constant.
         let enum_ty = self
             .context
             .get_struct_type(&enum_struct_name)
@@ -412,16 +410,18 @@ impl CodegenContext {
         payload: &[AirConst],
         program: &AirProgram,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
-        let AirType::Enum(global_enum_name) = ty else {
+        let AirType::Enum(global_enum_ref) = ty else {
             return Err(CodegenError::UnsupportedType(format!(
                 "global '{}' uses enum initializer with non-enum type {:?}",
                 global_name, ty
             )));
         };
-        if global_enum_name != enum_name {
+        if global_enum_ref.symbol() != enum_name {
             return Err(CodegenError::UnsupportedType(format!(
                 "global '{}' enum initializer name '{}' does not match declared type '{}'",
-                global_name, enum_name, global_enum_name
+                global_name,
+                enum_name,
+                global_enum_ref.symbol()
             )));
         }
 
@@ -572,7 +572,6 @@ impl CodegenContext {
             .find(|function| function.name == function_name)
             .map(function_symbol_name)
             .unwrap_or_else(|| function_name.to_string());
-        // Globals are emitted before bodies, so they need the declared LLVM symbol.
         let func = self.module.get_function(&symbol_name).ok_or_else(|| {
             CodegenError::LlvmError(format!(
                 "global '{}' references unknown function '{}'",
@@ -582,8 +581,6 @@ impl CodegenContext {
         let fn_ptr = func.as_global_value().as_pointer_value();
 
         if matches!(conv, aelys_air::CallingConv::Aelys) {
-            // Aelys-convention function values are fat pointers { fn_ptr, env_ptr }.
-            // Named functions have no captures, so env_ptr is null.
             let null_env = self.context.ptr_type(AddressSpace::default()).const_null();
             let fat = closure_fat_ptr_type(self.context)
                 .const_named_struct(&[fn_ptr.into(), null_env.into()]);
@@ -611,8 +608,6 @@ impl CodegenContext {
             let field_layout = resolved_layout(field_ty, &program.struct_sizes);
             byte_offset = align_to(byte_offset, field_layout.align);
 
-            // Constant globals still store enum payloads in the raw byte array layout.
-            // Pack fields with the same AIR-computed offsets as runtime EnumInit.
             let field_bytes = self.const_bytes(
                 &format!("{global_name}_{}_{}", variant.name, index),
                 field_ty,
@@ -671,29 +666,32 @@ impl CodegenContext {
                 .map(|byte| self.context.i8_type().const_int(byte as u64, false))
                 .collect()),
             (AirType::Ptr(_), AirConst::Null) => Ok(vec![self.context.i8_type().const_zero(); 8]),
-            (AirType::Enum(enum_name), AirConst::Int(value, _) | AirConst::IntLiteral(value)) => {
+            (AirType::Enum(r), AirConst::Int(value, _) | AirConst::IntLiteral(value)) => {
+                let enum_name = r.symbol();
                 let tag = u32::try_from(*value).map_err(|_| {
                     CodegenError::UnsupportedType(format!(
                         "enum initializer tag {value} is out of range for {enum_name}"
                     ))
                 })?;
-                self.enum_value_bytes(name, enum_name, tag, &[], program)
+                self.enum_value_bytes(name, &enum_name, tag, &[], program)
             }
             (
-                AirType::Enum(enum_name),
+                AirType::Enum(r),
                 AirConst::Enum {
-                    enum_name: const_enum_name,
+                    enum_ref: const_enum_ref,
                     tag,
                     payload,
                 },
             ) => {
+                let enum_name = r.symbol();
+                let const_enum_name = const_enum_ref.symbol();
                 if enum_name != const_enum_name {
                     return Err(CodegenError::UnsupportedType(format!(
                         "nested enum constant '{}' does not match expected '{}'",
                         const_enum_name, enum_name
                     )));
                 }
-                self.enum_value_bytes(name, enum_name, *tag, payload, program)
+                self.enum_value_bytes(name, &enum_name, *tag, payload, program)
             }
             _ => Err(CodegenError::UnsupportedInstruction(format!(
                 "global '{}' cannot serialize {} as {:?}",
@@ -723,7 +721,10 @@ impl CodegenContext {
             return self.integer_bytes(&AirType::I32, tag as i64);
         }
 
-        let layout = resolved_layout(&AirType::Enum(enum_name.to_string()), &program.struct_sizes);
+        let layout = resolved_layout(
+            &AirType::Enum(EnumRef::plain(enum_name)),
+            &program.struct_sizes,
+        );
         let payload_offset: u32 = 4;
         let variant = enum_def
             .variants

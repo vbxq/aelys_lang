@@ -29,11 +29,9 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) string_globals: HashMap<String, PointerValue<'static>>,
     pub(crate) current_block: Option<BlockId>,
     pub(crate) current_stmt_index: Option<usize>,
-    // cached so we don't recompute it 3 times
     entry_block_id: BlockId,
-    // sret pointer (LLVM param 0) for C-convention functions returning structs
-    // on Windows. Terminators store to this instead of returning directly.
     pub(crate) sret_ptr: Option<PointerValue<'static>>,
+    interp_buffer: Option<PointerValue<'static>>,
 }
 
 impl<'a> FunctionCodegen<'a> {
@@ -61,19 +59,12 @@ impl<'a> FunctionCodegen<'a> {
                 alloca_locals.insert(local.id);
             }
         }
-        // locals assigned in 2+ blocks need alloca, value_map can't express
-        // phi nodes, so multi-block assignments (if-expressions, short-circuit
-        // AND/OR) would silently read stale values from codegen order instead
-        // of control flow. alloca + mem2reg fixes this though
+        // and/or) would silently read stale values from codegen order instead
         let mut first_assign_block: HashMap<LocalId, BlockId> = HashMap::new();
         for block in &air_function.blocks {
             for stmt in &block.stmts {
                 if let AirStmtKind::Assign { place, rvalue } = &stmt.kind {
                     if let Place::Local(local) = place {
-                        // A param already has an SSA value from copy_params (the
-                        // function entry), so any subsequent assignment in a block
-                        // creates a second "definition site" — force alloca so
-                        // dominance requirements are met across basic blocks.
                         if param_ids.contains(local) {
                             alloca_locals.insert(*local);
                         } else {
@@ -95,12 +86,16 @@ impl<'a> FunctionCodegen<'a> {
                     if let Place::Index(local, _) = place {
                         alloca_locals.insert(*local);
                     }
-                    // itself a pointer, so it needs a real slot; a deref root is read as a value
                     if let Rvalue::AddressOf(
                         Place::Local(local) | Place::Field(local, _) | Place::Index(local, _),
                     ) = rvalue
                     {
                         alloca_locals.insert(*local);
+                    }
+                    if let Rvalue::Len(Operand::Copy(local) | Operand::Move(local)) = rvalue {
+                        if !matches!(local_types.get(local), Some(AirType::Ptr(_))) {
+                            alloca_locals.insert(*local);
+                        }
                     }
                     if let Rvalue::Index { base, .. } = rvalue {
                         if let Operand::Copy(local) | Operand::Move(local) = base {
@@ -151,7 +146,35 @@ impl<'a> FunctionCodegen<'a> {
             current_stmt_index: None,
             entry_block_id,
             sret_ptr,
+            interp_buffer: None,
         }
+    }
+
+    /// must match aelys_f64_str_buf in core/src/aelys_core_common.c, the callee writes blind
+    pub(crate) const INTERP_BUFFER_BYTES: u32 = 64;
+
+    /// one slot per frame, never per call site, or a print in a loop would grow the stack
+    pub(crate) fn ensure_interp_buffer(&mut self) -> Result<PointerValue<'static>, CodegenError> {
+        if let Some(ptr) = self.interp_buffer {
+            return Ok(ptr);
+        }
+        let entry = self.entry_block()?;
+        let resume = self.builder.get_insert_block();
+        match entry.get_first_instruction() {
+            Some(first) => self.builder.position_before(&first),
+            None => self.builder.position_at_end(entry),
+        }
+        let buffer_ty = self.context.i8_type().array_type(Self::INTERP_BUFFER_BYTES);
+        let ptr = self
+            .builder
+            .build_alloca(buffer_ty, "interp_buf")
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.align_alloca(ptr, buffer_ty.into())?;
+        if let Some(block) = resume {
+            self.builder.position_at_end(block);
+        }
+        self.interp_buffer = Some(ptr);
+        Ok(ptr)
     }
 
     pub(crate) fn generate(&mut self) -> Result<(), CodegenError> {
@@ -161,7 +184,6 @@ impl<'a> FunctionCodegen<'a> {
         self.generate_blocks()
     }
 
-    /// Returns block IDs in codegen order: entry first, then the rest.
     fn ordered_block_ids(&self) -> Vec<BlockId> {
         let mut ids = Vec::with_capacity(self.air_function.blocks.len());
         ids.push(self.entry_block_id);
@@ -204,7 +226,6 @@ impl<'a> FunctionCodegen<'a> {
 
     fn copy_params(&mut self) -> Result<(), CodegenError> {
         let params = self.air_function.params.clone();
-        // sret pointer occupies LLVM param 0, implicit env occupies the next slot
         let mut offset = if self.sret_ptr.is_some() { 1u32 } else { 0 };
         if function_has_implicit_env(self.air_function) {
             offset += 1; // skip implicit env param
@@ -357,7 +378,6 @@ impl<'a> FunctionCodegen<'a> {
     }
 }
 
-/// Find the entry block (no predecessors). Falls back to first block.
 fn find_entry_block(func: &AirFunction) -> BlockId {
     use aelys_air::AirTerminator;
 

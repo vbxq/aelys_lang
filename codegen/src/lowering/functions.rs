@@ -316,10 +316,10 @@ pub(crate) fn is_abi_unsafe_type(ty: &AirType, program: &AirProgram) -> bool {
             | AirType::Slice(_)
             | AirType::Vec(_)
             | AirType::Array(_, _)
-    ) || matches!(ty, AirType::Enum(name) if program
+    ) || matches!(ty, AirType::Enum(r) if program
         .enums
         .iter()
-        .find(|def| def.name == *name)
+        .find(|def| def.name == r.symbol())
         .is_some_and(enum_has_data))
 }
 
@@ -338,10 +338,10 @@ fn reject_struct_abi_on_c_function(
     is_windows: bool,
 ) -> Result<(), CodegenError> {
     for param in &function.params {
-        if matches!(&param.ty, AirType::Enum(name) if program
+        if matches!(&param.ty, AirType::Enum(r) if program
             .enums
             .iter()
-            .find(|def| def.name == *name)
+            .find(|def| def.name == r.symbol())
             .is_some_and(enum_has_data))
         {
             return Err(CodegenError::UnsupportedType(format!(

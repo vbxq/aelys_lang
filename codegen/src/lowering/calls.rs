@@ -5,7 +5,7 @@ use crate::lowering::globals::{GLOBAL_GET_PREFIX, GLOBAL_SET_PREFIX};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm};
 use crate::{is_reserved_bootstrap_builtin, reserved_bootstrap_builtin_message};
 use aelys_air::symbols::BOOTSTRAP_BUILTIN_SYMBOLS;
-use aelys_air::{AirConst, AirType, Callee, LocalId, Operand, layout::enum_has_data};
+use aelys_air::{AirConst, AirType, Callee, EnumRef, LocalId, Operand, layout::enum_has_data};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, FunctionValue};
 
@@ -111,6 +111,18 @@ impl<'a> FunctionCodegen<'a> {
                 return Ok(Some(self.emit_scalar_to_string(&arg_type, arg_values[0])?));
             }
 
+            if name == "__aelys_to_string_into" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_to_string_into expects exactly one argument".to_string(),
+                    ));
+                }
+                let arg_type = self.operand_type(&args[0])?;
+                return Ok(Some(
+                    self.emit_scalar_to_string_into(&arg_type, arg_values[0])?,
+                ));
+            }
+
             if name == "__aelys_str_concat" {
                 if args.len() != 2 {
                     return Err(CodegenError::UnsupportedInstruction(
@@ -118,6 +130,48 @@ impl<'a> FunctionCodegen<'a> {
                     ));
                 }
                 return Ok(Some(self.emit_str_concat(arg_values[0], arg_values[1])?));
+            }
+
+            if name == "__aelys_str_char_count" {
+                if args.len() != 1 || !arg_values[0].is_struct_value() {
+                    return Err(CodegenError::UnsupportedType(
+                        "__aelys_str_char_count expects exactly one string argument".to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let function = self.ensure_str_char_count_function();
+                let call = self
+                    .builder
+                    .build_call(function, &[s_ptr.into(), s_len.into()], "str_char_count")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(call.try_as_basic_value().basic());
+            }
+
+            if name == "__aelys_str_substring_bytes" {
+                if args.len() != 3 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_substring_bytes expects exactly three arguments".to_string(),
+                    ));
+                }
+                if !arg_values[0].is_struct_value() {
+                    return Err(CodegenError::UnsupportedType(
+                        "__aelys_str_substring_bytes expects a string first argument".to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let function = self.ensure_str_substring_bytes_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[
+                        s_ptr.into(),
+                        s_len.into(),
+                        arg_values[1].into(),
+                        arg_values[2].into(),
+                    ],
+                    "str_substring_bytes",
+                )?));
             }
 
             if name == "__aelys_rc_retain" || name == "__aelys_rc_release" {
@@ -145,6 +199,7 @@ impl<'a> FunctionCodegen<'a> {
             // the runtime needs the element size, which air cannot compute without program
             if name == "__aelys_vec_init"
                 || name == "__aelys_vec_push"
+                || name == "__aelys_vec_pop"
                 || name == "__aelys_vec_try_as_unique_mut_slice"
             {
                 return self.generate_vec_runtime_call(name, args, &arg_values);
@@ -342,8 +397,8 @@ impl<'a> FunctionCodegen<'a> {
                     ));
                 }
             },
-            AirType::Enum(ref enum_name) => {
-                return self.generate_enum_print(enum_name, &args[0], value, newline, expected_ret);
+            AirType::Enum(ref enum_ref) => {
+                return self.generate_enum_print(enum_ref, &args[0], value, newline, expected_ret);
             }
             _ => self.emit_scalar_to_string(&arg_type, value)?,
         };
@@ -429,6 +484,60 @@ impl<'a> FunctionCodegen<'a> {
                 let fn_val = self.ensure_to_string_bool_function();
                 self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
             }
+            other => Err(CodegenError::UnsupportedType(format!(
+                "cannot convert {:?} to string",
+                other
+            ))),
+        }
+    }
+
+    pub(crate) fn emit_scalar_to_string_into(
+        &mut self,
+        arg_type: &AirType,
+        value: BasicValueEnum<'static>,
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        match arg_type {
+            AirType::I64 | AirType::I32 | AirType::I16 | AirType::I8 => {
+                let int_val = value.into_int_value();
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
+                } else {
+                    self.builder
+                        .build_int_s_extend(int_val, self.context.i64_type(), "ext_i64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let buffer = self.ensure_interp_buffer()?;
+                let fn_val = self.ensure_to_string_i64_into_function();
+                self.call_sret_returning_fn(fn_val, &[buffer.into(), i64_val.into()], "to_str")
+            }
+            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 => {
+                let int_val = value.into_int_value();
+                let i64_val = if int_val.get_type() == self.context.i64_type() {
+                    int_val
+                } else {
+                    self.builder
+                        .build_int_z_extend(int_val, self.context.i64_type(), "zext_i64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let buffer = self.ensure_interp_buffer()?;
+                let fn_val = self.ensure_to_string_i64_into_function();
+                self.call_sret_returning_fn(fn_val, &[buffer.into(), i64_val.into()], "to_str")
+            }
+            AirType::F64 | AirType::F32 => {
+                let float_val = value.into_float_value();
+                let f64_val = if float_val.get_type() == self.context.f64_type() {
+                    float_val
+                } else {
+                    self.builder
+                        .build_float_ext(float_val, self.context.f64_type(), "ext_f64")
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?
+                };
+                let buffer = self.ensure_interp_buffer()?;
+                let fn_val = self.ensure_to_string_f64_into_function();
+                self.call_sret_returning_fn(fn_val, &[buffer.into(), f64_val.into()], "to_str")
+            }
+            // the bool form hands back a .rodata literal, there was never an allocation to elide
+            AirType::Bool => self.emit_scalar_to_string(arg_type, value),
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot convert {:?} to string",
                 other
@@ -562,12 +671,13 @@ impl<'a> FunctionCodegen<'a> {
 
     fn generate_enum_print(
         &mut self,
-        enum_name: &str,
+        enum_ref: &EnumRef,
         _arg: &Operand,
         value: BasicValueEnum<'static>,
         newline: bool,
         expected_ret: Option<&AirType>,
     ) -> Result<Option<BasicValueEnum<'static>>, CodegenError> {
+        let enum_name = enum_ref.symbol();
         let enum_def = self
             .program
             .enums
@@ -578,11 +688,7 @@ impl<'a> FunctionCodegen<'a> {
             })?
             .clone();
 
-        let display_name = if let Some(rest) = enum_name.strip_prefix("__mono_") {
-            rest.split('_').next().unwrap_or(rest)
-        } else {
-            enum_name
-        };
+        let display_name = enum_ref.name.as_str();
 
         let is_data = enum_has_data(&enum_def);
 
