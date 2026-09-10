@@ -6,10 +6,12 @@ mod runtime;
 
 pub use core_lib::resolve_aelys_core_lib;
 pub use link::LinkRequirement;
+pub use lower::{executable_path_for, object_path_for};
 pub use runtime::RuntimeVariant;
 
+use crate::SourceOptions;
 use aelys_common::Warning;
-use aelys_common::error::{AelysError, CompileErrorKind};
+use aelys_common::error::{AelysError, CompileErrorKind, Fault};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
@@ -20,9 +22,10 @@ use std::process::Command;
 use std::sync::Arc;
 
 use diagnostics::{
-    backend_diagnostic_error, bir_diagnostics_to_error, duplicate_symbol_errors_to_error,
-    fallback_source_span, foreign_clash_errors_to_error, foreign_signature_errors_to_error,
-    mono_errors_to_error, multiple_diagnostics, program_anchor_span,
+    FaultMessage, all_compiler, backend_diagnostic_error, bir_diagnostics_to_error,
+    duplicate_symbol_errors_to_error, fallback_source_span, faulted_messages,
+    foreign_clash_errors_to_error, foreign_signature_errors_to_error, join_by_fault,
+    mono_errors_to_error, multiple_diagnostics, numbered, program_anchor_span,
     reserved_name_errors_to_error, runtime_symbol_errors_to_error, sema_errors_to_diagnostics,
     vec_surface_errors_to_error,
 };
@@ -67,8 +70,16 @@ pub fn lower_file_to_air(
     path: &Path,
     opt_level: OptimizationLevel,
 ) -> Result<aelys_air::AirProgram, String> {
+    lower_file_to_air_with_sources(path, opt_level, &SourceOptions::default())
+}
+
+pub fn lower_file_to_air_with_sources(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    sources: &SourceOptions,
+) -> Result<aelys_air::AirProgram, String> {
     let artifacts =
-        lower_file_to_air_with_source(path, opt_level).map_err(|err| err.to_string())?;
+        lower_file_to_air_with_source(path, opt_level, sources).map_err(|err| err.to_string())?;
     Ok(artifacts.air)
 }
 
@@ -201,6 +212,51 @@ fn build_imports(
     Ok(imports)
 }
 
+// a prelude name loses to anything the unit binds itself, silently: that is the whole contract
+fn fall_back_to_prelude(
+    imports: &mut aelys_sema::ModuleImports,
+    scope: &aelys_sema::ModuleImports,
+    bound: &HashSet<String>,
+) {
+    for (name, exports) in &scope.namespaces {
+        if !bound.contains(name) {
+            imports
+                .namespaces
+                .entry(name.clone())
+                .or_insert_with(|| exports.clone());
+        }
+    }
+    for (name, item) in &scope.values {
+        if !bound.contains(name) {
+            imports
+                .values
+                .entry(name.clone())
+                .or_insert_with(|| item.clone());
+        }
+    }
+    for (name, ty) in &scope.types {
+        if !bound.contains(name) {
+            imports
+                .types
+                .entry(name.clone())
+                .or_insert_with(|| ty.clone());
+        }
+    }
+}
+
+fn widen_with_exports(scope: &mut aelys_sema::ModuleImports, exports: &aelys_sema::ModuleExports) {
+    for (name, item) in &exports.values {
+        if item.is_pub {
+            scope.values.insert(name.clone(), item.clone());
+        }
+    }
+    for (name, ty) in &exports.types {
+        if ty.is_pub {
+            scope.types.insert(name.clone(), ty.clone());
+        }
+    }
+}
+
 fn import_error(
     unit: &crate::modules::ModuleUnit,
     span: aelys_syntax::Span,
@@ -318,6 +374,8 @@ fn compile_module(
 
     let mut optimizer = Optimizer::new(opt_level);
     let typed_program = optimizer.optimize(checked);
+    let mut warnings = warnings;
+    warnings.extend(optimizer.take_warnings());
 
     let mut air =
         aelys_air::lower::try_lower_with_imports(&typed_program, imported).map_err(|failure| {
@@ -326,24 +384,25 @@ fn compile_module(
                     bir_diagnostics_to_error(diags, src.clone())
                 }
                 aelys_air::lower::LowerFailure::Lowering(errors) => {
-                    let message = if errors.is_empty() {
-                        "AIR lowering failed with an unknown error".to_string()
+                    if errors.is_empty() {
+                        backend_diagnostic_error(
+                            src.clone(),
+                            fallback_source_span(src.as_ref()),
+                            "air-lowering",
+                            "AIR lowering failed with an unknown error",
+                            None,
+                            None,
+                            Fault::Compiler,
+                        )
                     } else {
-                        errors
-                            .iter()
-                            .enumerate()
-                            .map(|(i, e)| format!("{}. {}", i + 1, e))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    };
-                    backend_diagnostic_error(
-                        src.clone(),
-                        fallback_source_span(src.as_ref()),
-                        "air-lowering",
-                        message,
-                        None,
-                        None,
-                    )
+                        join_by_fault(
+                            faulted_messages(errors),
+                            fallback_source_span(src.as_ref()),
+                            src.clone(),
+                            "air-lowering",
+                            numbered,
+                        )
+                    }
                 }
             }
         })?;
@@ -392,6 +451,14 @@ fn compile_module(
     })
 }
 
+fn joined_with_semicolons(messages: &[String]) -> String {
+    messages.join("; ")
+}
+
+fn joined_with_newlines(messages: &[String]) -> String {
+    messages.join("\n")
+}
+
 fn anchor_in(
     air: &aelys_air::AirProgram,
     source: &Source,
@@ -406,8 +473,9 @@ fn anchor_in(
 fn lower_file_to_air_with_source(
     path: &Path,
     opt_level: OptimizationLevel,
+    sources: &SourceOptions,
 ) -> Result<LoweringArtifacts, AelysError> {
-    let graph = crate::modules::discover(path).map_err(|failure| failure.error)?;
+    let graph = crate::modules::discover(path, sources).map_err(|failure| failure.error)?;
 
     let mut exports: Vec<Arc<aelys_sema::ModuleExports>> = Vec::new();
     let mut programs: Vec<aelys_air::AirProgram> = Vec::new();
@@ -424,9 +492,18 @@ fn lower_file_to_air_with_source(
     );
 
     let mut bir_imports = aelys_air::bir::Imports::default();
-    for unit in &graph.units {
-        let imports = build_imports(unit, &exports)?;
+    let mut prelude_scope: Option<aelys_sema::ModuleImports> = None;
+    for (index, unit) in graph.units.iter().enumerate() {
+        let mut imports = build_imports(unit, &exports)?;
+        let prelude_own_scope = (Some(index) == graph.prelude).then(|| imports.clone());
+        if let Some(scope) = &prelude_scope {
+            fall_back_to_prelude(&mut imports, scope, &unit.bound);
+        }
         let compiled = compile_module(unit, imports, opt_level, &programs, &bir_imports)?;
+        if let Some(mut scope) = prelude_own_scope {
+            widen_with_exports(&mut scope, &compiled.exports);
+            prelude_scope = Some(scope);
+        }
         for (name, set) in &compiled.effects {
             bir_imports.effects.insert(name.clone(), *set);
         }
@@ -474,15 +551,22 @@ fn lower_file_to_air_with_source(
     }
     let layout_errors = aelys_air::layout::compute_layouts(&mut air);
     if !layout_errors.is_empty() {
-        let message = layout_errors.join("; ");
-        let owner = sources.owner(&message);
-        return Err(backend_diagnostic_error(
-            owner.clone(),
+        let messages: Vec<String> = layout_errors.iter().map(|e| e.to_string()).collect();
+        let owner = sources.owner(&joined_with_semicolons(&messages));
+        let faulted: Vec<FaultMessage> = layout_errors
+            .iter()
+            .zip(messages)
+            .map(|(error, message)| FaultMessage {
+                fault: error.fault(),
+                message,
+            })
+            .collect();
+        return Err(join_by_fault(
+            faulted,
             anchor_in(&air, owner.as_ref(), &src),
+            owner.clone(),
             "air-layout",
-            message,
-            None,
-            None,
+            joined_with_semicolons,
         ));
     }
 
@@ -496,6 +580,7 @@ fn lower_file_to_air_with_source(
             message,
             None,
             None,
+            Fault::Compiler,
         )
     })?;
     aelys_air::passes::copy_elim::eliminate_copies(&mut air);
@@ -506,20 +591,18 @@ fn lower_file_to_air_with_source(
         aelys_air::passes::rc_elision::eliminate_redundant_rc(&mut air);
     }
 
+    // runs at every -o level: the leaks it closes are counted rows, not an optimisation
+    aelys_air::passes::temp_elision::elide_temporaries(&mut air);
+
     if let Err(validation_errors) = aelys_air::passes::validate::validate_air(&air) {
-        let message = validation_errors
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<_>>()
-            .join("\n");
-        let owner = sources.owner(&message);
-        return Err(backend_diagnostic_error(
-            owner.clone(),
+        let messages: Vec<String> = validation_errors.iter().map(|e| e.to_string()).collect();
+        let owner = sources.owner(&joined_with_newlines(&messages));
+        return Err(join_by_fault(
+            all_compiler(messages),
             anchor_in(&air, owner.as_ref(), &src),
+            owner.clone(),
             "air-validation",
-            message,
-            None,
-            None,
+            joined_with_newlines,
         ));
     }
 
@@ -560,7 +643,7 @@ pub fn compile_file_with_llvm_variant(
     emit_llvm_ir: bool,
     runtime: RuntimeVariant,
 ) -> Result<(), AelysError> {
-    let artifacts = lower_file_to_air_with_source(path, opt_level)?;
+    let artifacts = lower_file_to_air_with_source(path, opt_level, &SourceOptions::default())?;
     compile_air_with_llvm(
         path,
         &artifacts.air,
@@ -593,7 +676,25 @@ pub fn compile_file_with_llvm_linked(
     runtime: RuntimeVariant,
     link: &LinkRequirement,
 ) -> Result<Vec<Warning>, AelysError> {
-    let artifacts = lower_file_to_air_with_source(path, opt_level)?;
+    compile_file_with_llvm_sources(
+        path,
+        opt_level,
+        emit_llvm_ir,
+        runtime,
+        link,
+        &SourceOptions::default(),
+    )
+}
+
+pub fn compile_file_with_llvm_sources(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    emit_llvm_ir: bool,
+    runtime: RuntimeVariant,
+    link: &LinkRequirement,
+    sources: &SourceOptions,
+) -> Result<Vec<Warning>, AelysError> {
+    let artifacts = lower_file_to_air_with_source(path, opt_level, sources)?;
     compile_air_with_llvm_linked(
         path,
         &artifacts.air,

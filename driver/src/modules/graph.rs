@@ -2,12 +2,10 @@ use aelys_syntax::{Source, Stmt};
 use std::sync::Arc;
 
 pub(crate) enum ResolvedImport {
-    // `needs a.b` and `needs a.b as k` bind one name to a whole module
     Namespace {
         local: String,
         target: usize,
     },
-    // `needs x, y from a.b` binds each name to one exported item
     Symbols {
         names: Vec<String>,
         target: usize,
@@ -20,11 +18,13 @@ pub(crate) struct ModuleUnit {
     pub(crate) source: Arc<Source>,
     pub(crate) stmts: Vec<Stmt>,
     pub(crate) imports: Vec<ResolvedImport>,
+    pub(crate) bound: std::collections::HashSet<String>,
 }
 
 pub(crate) struct ModuleGraph {
-    // dependency order: every unit appears after everything it imports, the root last
     pub(crate) units: Vec<ModuleUnit>,
+    // the prelude is visited first, so units at or below it are its own subtree and get no prelude
+    pub(crate) prelude: Option<usize>,
 }
 
 impl ModuleGraph {

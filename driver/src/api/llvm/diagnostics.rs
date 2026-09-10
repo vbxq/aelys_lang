@@ -1,7 +1,8 @@
+use aelys_air::symbols::SymbolCarrier;
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
-use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
+use aelys_common::error::{AelysError, CompileError, CompileErrorKind, Fault};
 use aelys_common::{Diagnostic, Replacement, Severity, Suggestion};
-use aelys_sema::{TypeError, TypeErrorKind};
+use aelys_sema::{ConstraintReason, InferType, TypeError, TypeErrorKind};
 use aelys_syntax::{Source, Span as SyntaxSpan};
 use std::sync::Arc;
 
@@ -17,6 +18,7 @@ pub(super) fn backend_diagnostic_error(
     message: impl Into<String>,
     note: Option<String>,
     help: Option<String>,
+    fault: Fault,
 ) -> AelysError {
     AelysError::Compile(CompileError::new(
         CompileErrorKind::BackendDiagnostic {
@@ -24,10 +26,72 @@ pub(super) fn backend_diagnostic_error(
             message: user_facing(message),
             note,
             help,
+            fault,
         },
         span,
         source,
     ))
+}
+
+pub(super) struct FaultMessage {
+    pub(super) fault: Fault,
+    pub(super) message: String,
+}
+
+pub(super) fn faulted_messages(
+    errors: impl IntoIterator<Item = aelys_air::lower::LowerError>,
+) -> Vec<FaultMessage> {
+    errors
+        .into_iter()
+        .map(|error| FaultMessage {
+            fault: error.fault,
+            message: error.message,
+        })
+        .collect()
+}
+
+pub(super) fn all_compiler(messages: impl IntoIterator<Item = String>) -> Vec<FaultMessage> {
+    messages
+        .into_iter()
+        .map(|message| FaultMessage {
+            fault: Fault::Compiler,
+            message,
+        })
+        .collect()
+}
+
+// one diagnostic per class present, in fault::join_order; no class absorbs another
+pub(super) fn join_by_fault(
+    messages: Vec<FaultMessage>,
+    span: SyntaxSpan,
+    source: Arc<Source>,
+    backend: &str,
+    render: fn(&[String]) -> String,
+) -> AelysError {
+    let mut errors: Vec<AelysError> = Vec::new();
+    for fault in Fault::JOIN_ORDER {
+        let bucket: Vec<String> = messages
+            .iter()
+            .filter(|entry| entry.fault == fault)
+            .map(|entry| entry.message.clone())
+            .collect();
+        if bucket.is_empty() {
+            continue;
+        }
+        errors.push(backend_diagnostic_error(
+            source.clone(),
+            span,
+            backend,
+            render(&bucket),
+            None,
+            None,
+            fault,
+        ));
+    }
+    match errors.len() {
+        1 => errors.pop().expect("length checked"),
+        _ => multiple_diagnostics(errors),
+    }
 }
 
 pub(super) fn multiple_diagnostics(errors: Vec<AelysError>) -> AelysError {
@@ -42,29 +106,52 @@ pub(super) fn multiple_diagnostics(errors: Vec<AelysError>) -> AelysError {
 const VEC_SURFACE_ANNOTATION: &str = "Vec used outside the guaranteed value-semantics surface";
 
 pub(super) fn mono_errors_to_error(
-    errors: Vec<String>,
+    errors: Vec<aelys_air::mono::MonoError>,
     span: SyntaxSpan,
     source: Arc<Source>,
 ) -> AelysError {
-    let marker = aelys_air::passes::vec_surface::MARKER;
-    let (surface, other): (Vec<String>, Vec<String>) =
-        errors.into_iter().partition(|e| e.starts_with(marker));
-
+    let (surface, rest): (Vec<_>, Vec<_>) = errors
+        .into_iter()
+        .partition(|e| e.kind == aelys_air::mono::MonoErrorKind::VecSurface);
+    let (no_definition, other): (Vec<_>, Vec<_>) = rest
+        .into_iter()
+        .partition(|e| e.kind == aelys_air::mono::MonoErrorKind::NoDefinition);
+    let mut other: Vec<FaultMessage> = other
+        .into_iter()
+        .map(|e| FaultMessage {
+            fault: e.fault,
+            message: e.message,
+        })
+        .collect();
+    let no_definition: Vec<Diagnostic> = no_definition
+        .iter()
+        .map(|error| no_definition_diagnostic(&error.message, span, source.clone()))
+        .collect();
+    if surface.is_empty() && other.is_empty() {
+        return AelysError::Multiple(no_definition);
+    }
+    if surface.is_empty() && no_definition.is_empty() {
+        return join_by_fault(other, span, source.clone(), "monomorphization", numbered);
+    }
     if surface.is_empty() {
-        return backend_diagnostic_error(
-            source.clone(),
-            span,
-            "monomorphization",
-            numbered(&other),
-            None,
-            None,
+        let mut diagnostics = no_definition;
+        diagnostics.extend(
+            join_by_fault(
+                std::mem::take(&mut other),
+                span,
+                source.clone(),
+                "monomorphization",
+                numbered,
+            )
+            .to_diagnostics(),
         );
+        return AelysError::Multiple(diagnostics);
     }
 
     let mut diagnostics: Vec<Diagnostic> = surface
         .iter()
-        .map(|message| {
-            Diagnostic::new(Severity::Error, &user_facing(message.as_str()))
+        .map(|error| {
+            Diagnostic::new(Severity::Error, &user_facing(error.message.as_str()))
                 .with_code("E0412")
                 .with_primary_label(
                     source.clone(),
@@ -73,21 +160,28 @@ pub(super) fn mono_errors_to_error(
                 )
         })
         .collect();
+    diagnostics.extend(no_definition);
     if !other.is_empty() {
-        diagnostics.push(
-            Diagnostic::new(
-                Severity::Error,
-                &user_facing(format!("[monomorphization] {}", numbered(&other))),
-            )
-            .with_code("E0901")
-            .with_primary_label(
-                source.clone(),
-                span,
-                Some("backend error".to_string()),
-            ),
+        diagnostics.extend(
+            join_by_fault(other, span, source.clone(), "monomorphization", numbered)
+                .to_diagnostics(),
         );
     }
     AelysError::Multiple(diagnostics)
+}
+
+const NO_DEFINITION_ANNOTATION: &str = "no definition for this type in the lowered program";
+
+fn no_definition_diagnostic(message: &str, span: SyntaxSpan, source: Arc<Source>) -> Diagnostic {
+    let mut diag = Diagnostic::new(Severity::Error, &user_facing(message))
+        .with_code("E0430")
+        .with_primary_label(source, span, Some(NO_DEFINITION_ANNOTATION.to_string()));
+    diag.add_help(
+        "a generic struct is not lowered yet, so a mention of one names no definition; if no \
+         generic struct is involved this is a defect in the compiler"
+            .to_string(),
+    );
+    diag
 }
 
 pub(super) fn vec_surface_errors_to_error(
@@ -102,13 +196,20 @@ pub(super) fn vec_surface_errors_to_error(
                 .span
                 .map(|s| air_span_to_syntax_span(s, source.as_ref()))
                 .unwrap_or_else(|| program_anchor_span(air, source.as_ref()));
-            Diagnostic::new(Severity::Error, &user_facing(err.message.as_str()))
-                .with_code("E0412")
-                .with_primary_label(
-                    source.clone(),
-                    span,
-                    Some(VEC_SURFACE_ANNOTATION.to_string()),
-                )
+            match err.kind {
+                aelys_air::passes::vec_surface::SurfaceErrorKind::NoDefinition => {
+                    no_definition_diagnostic(err.message.as_str(), span, source.clone())
+                }
+                aelys_air::passes::vec_surface::SurfaceErrorKind::VecSurface => {
+                    Diagnostic::new(Severity::Error, &user_facing(err.message.as_str()))
+                        .with_code("E0412")
+                        .with_primary_label(
+                            source.clone(),
+                            span,
+                            Some(VEC_SURFACE_ANNOTATION.to_string()),
+                        )
+                }
+            }
         })
         .collect();
     AelysError::Multiple(diagnostics)
@@ -125,7 +226,10 @@ pub(super) fn duplicate_symbol_errors_to_error(
     let diagnostics: Vec<Diagnostic> = duplicates
         .iter()
         .map(|dup| {
-            let declared = sites.get(&dup.symbol).map(Vec::as_slice).unwrap_or(&[]);
+            let declared = match dup.carrier {
+                SymbolCarrier::Function => sites.get(&dup.symbol).map(Vec::as_slice).unwrap_or(&[]),
+                SymbolCarrier::Enum | SymbolCarrier::Struct => &[],
+            };
             let site = |i: usize| {
                 declared.get(i).map(|site| site.span).or_else(|| {
                     dup.spans
@@ -164,9 +268,33 @@ pub(super) fn duplicate_symbol_errors_to_error(
                 }
                 return diag;
             }
+            // a type instance carries its arity in its symbol, so two of them deriving one name is unreachable
+            let what = match dup.carrier {
+                SymbolCarrier::Enum => Some("enums"),
+                SymbolCarrier::Struct => Some("structs"),
+                SymbolCarrier::Function => None,
+            };
+            if let Some(what) = what {
+                return backend_diagnostic_error(
+                    source.clone(),
+                    first_span,
+                    "symbol",
+                    format!(
+                        "two {what} compile to the same symbol `{}`, which the derivation of a \
+                         type name is supposed to make impossible",
+                        dup.symbol
+                    ),
+                    None,
+                    None,
+                    Fault::Compiler,
+                )
+                .to_diagnostics()
+                .pop()
+                .expect("a compile error renders one diagnostic");
+            }
             let message = format!(
-                "[symbol] two functions compile to the same symbol `{}`, so a call to one would \
-                 reach the other",
+                "[symbol] two functions compile to the same symbol `{}`, so a call to one \
+                 would reach the other",
                 dup.symbol
             );
             let mut diag = Diagnostic::new(Severity::Error, &message)
@@ -176,8 +304,8 @@ pub(super) fn duplicate_symbol_errors_to_error(
                 diag.add_secondary_label(source.clone(), second_span, Some(second_hint));
             }
             let help = if dup.symbol.starts_with("__mono_") {
-                "rename one of them; a generic instance is named from the function name and its \
-                 type arguments joined by `_`, so two different pairs can produce one name"
+                "rename one of them; a generic instance is named from the function name and \
+                 its type arguments joined by `_`, so two different pairs can produce one name"
             } else {
                 "rename one of them; nested functions do not get separate symbols yet"
             };
@@ -285,7 +413,7 @@ pub(super) fn runtime_symbol_errors_to_error(
     AelysError::Multiple(diagnostics)
 }
 
-fn numbered(errors: &[String]) -> String {
+pub(super) fn numbered(errors: &[String]) -> String {
     errors
         .iter()
         .enumerate()
@@ -331,18 +459,7 @@ pub(super) fn bir_diagnostics_to_error(
         })
         .collect();
 
-    if diagnostics.is_empty() {
-        backend_diagnostic_error(
-            source.clone(),
-            fallback_source_span(source.as_ref()),
-            "borrow-check",
-            "borrow check failed",
-            None,
-            None,
-        )
-    } else {
-        AelysError::Multiple(diagnostics)
-    }
+    AelysError::Multiple(diagnostics)
 }
 
 fn first_line_only(source: &Source, span: SyntaxSpan) -> SyntaxSpan {
@@ -395,13 +512,33 @@ pub(super) fn sema_errors_to_diagnostics(
     }
 }
 
+fn promoted_reason(error: &TypeError) -> Option<String> {
+    let TypeErrorKind::Mismatch { expected, .. } = &error.kind else {
+        return None;
+    };
+    if !matches!(expected, InferType::Dynamic) {
+        return None;
+    }
+    let reason = error.reason.to_string();
+    (!reason.trim().is_empty()).then(|| user_facing(reason))
+}
+
+fn string_ordering(error: &TypeError) -> bool {
+    matches!(&error.kind, TypeErrorKind::NotOneOf { ty, .. } if matches!(ty, InferType::String))
+        && matches!(error.reason, ConstraintReason::Comparison)
+}
+
 fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnostic {
+    let promoted = promoted_reason(error);
     let (code, message, annotation) = match &error.kind {
-        TypeErrorKind::Mismatch { expected, found } => (
-            "E0301",
-            format!("expected `{}`, found `{}`", expected, found),
-            format!("expected `{}`, found `{}`", expected, found),
-        ),
+        TypeErrorKind::Mismatch { expected, found } => match &promoted {
+            Some(reason) => ("E0301", reason.clone(), reason.clone()),
+            None => (
+                "E0301",
+                format!("expected `{}`, found `{}`", expected, found),
+                format!("expected `{}`, found `{}`", expected, found),
+            ),
+        },
         TypeErrorKind::RefMutability { found, required } => (
             "E0416",
             format!(
@@ -416,12 +553,20 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "infinite type".to_string(),
         ),
         TypeErrorKind::NotOneOf { ty, options } => {
-            let opts: Vec<_> = options.iter().map(|o| format!("`{}`", o)).collect();
-            (
-                "E0301",
-                format!("type `{}` is not one of [{}]", ty, opts.join(", ")),
-                "type mismatch".to_string(),
-            )
+            if string_ordering(error) {
+                (
+                    "E0301",
+                    "`string` has no ordering operator".to_string(),
+                    "no `<`, `<=`, `>` or `>=` on `string`".to_string(),
+                )
+            } else {
+                let opts: Vec<_> = options.iter().map(|o| format!("`{}`", o)).collect();
+                (
+                    "E0301",
+                    format!("type `{}` is not one of [{}]", ty, opts.join(", ")),
+                    "type mismatch".to_string(),
+                )
+            }
         }
         TypeErrorKind::ArityMismatch { expected, found } => {
             let reason_str = error.reason.to_string();
@@ -496,6 +641,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0414",
             error.to_string(),
             "iterating a `Vec<T>` with `for` is not supported yet".to_string(),
+        ),
+        TypeErrorKind::ForeachNotIterable { .. } => (
+            "E0431",
+            error.to_string(),
+            "this expression cannot be iterated".to_string(),
         ),
         TypeErrorKind::MutIndexRefUnsupported => (
             "E0415",
@@ -616,6 +766,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "no such item in that module".to_string(),
         ),
+        TypeErrorKind::ModuleBoundElsewhere { .. } => (
+            "E0623",
+            error.to_string(),
+            "not bound in this scope".to_string(),
+        ),
         TypeErrorKind::FieldNotPublic { .. } => (
             "E0610",
             error.to_string(),
@@ -670,13 +825,20 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
     }
 
     match &error.kind {
-        TypeErrorKind::Mismatch { .. } => {
+        TypeErrorKind::Mismatch { .. } if promoted.is_none() => {
             let reason_str = error.reason.to_string();
             if !reason_str.is_empty() {
                 diag.add_note(user_facing(reason_str));
             }
         }
         _ => {}
+    }
+
+    if string_ordering(error) {
+        diag.add_help(
+            "order two strings with `str.compare(a, b)`, which is negative, zero or positive"
+                .to_string(),
+        );
     }
 
     if let Some(help) = &error.help {
@@ -705,7 +867,7 @@ pub(super) fn fallback_source_span(source: &Source) -> SyntaxSpan {
 pub(super) fn program_anchor_span(air: &aelys_air::AirProgram, source: &Source) -> SyntaxSpan {
     main_function_air_span(air)
         .or_else(|| air.functions.iter().find_map(|function| function.span))
-        .map(|span| air_span_to_syntax_span(span, source))
+        .map(|span| first_line_only(source, air_span_to_syntax_span(span, source)))
         .unwrap_or_else(|| fallback_source_span(source))
 }
 
@@ -743,24 +905,41 @@ pub(super) fn llvm_backend_error_to_diagnostic(
     air: &aelys_air::AirProgram,
     source: Arc<Source>,
 ) -> AelysError {
-    let (message, note, help, location) = match err {
-        LlvmBackendError::LlvmError(message) => {
-            (format!("llvm error: {message}"), None, None, None)
-        }
-        LlvmBackendError::UnsupportedType(message) => {
-            (format!("unsupported type: {message}"), None, None, None)
-        }
+    let (message, note, help, location, fault) = match err {
+        LlvmBackendError::LlvmError(message) => (
+            format!("llvm error: {message}"),
+            None,
+            None,
+            None,
+            Fault::Compiler,
+        ),
+        LlvmBackendError::Toolchain(message) => (
+            format!("llvm error: {message}"),
+            None,
+            None,
+            None,
+            Fault::Environment,
+        ),
+        LlvmBackendError::UnsupportedType(message) => (
+            format!("unsupported type: {message}"),
+            None,
+            None,
+            None,
+            Fault::Unsupported,
+        ),
         LlvmBackendError::UnsupportedInstruction(message) => (
             format!("unsupported instruction: {message}"),
             None,
             None,
             None,
+            Fault::Unsupported,
         ),
         LlvmBackendError::InvalidNativeEntry(message) => (
             format!("invalid native entry: {message}"),
             None,
             native_entry_help(&message),
             None,
+            Fault::Program,
         ),
         LlvmBackendError::UnsupportedAir {
             kind,
@@ -779,7 +958,13 @@ pub(super) fn llvm_backend_error_to_diagnostic(
             } else {
                 Some(note_parts.join("; "))
             };
-            (format!("unsupported AIR: {kind}"), note, None, location)
+            (
+                format!("unsupported AIR: {kind}"),
+                note,
+                None,
+                location,
+                Fault::Unsupported,
+            )
         }
     };
 
@@ -787,10 +972,15 @@ pub(super) fn llvm_backend_error_to_diagnostic(
         .as_ref()
         .and_then(|loc| air_location_span(air, loc))
         .or_else(|| main_function_air_span(air))
-        .map(|span| air_span_to_syntax_span(span, source.as_ref()))
+        .map(|span| {
+            first_line_only(
+                source.as_ref(),
+                air_span_to_syntax_span(span, source.as_ref()),
+            )
+        })
         .unwrap_or_else(|| fallback_source_span(source.as_ref()));
 
-    backend_diagnostic_error(source, span, "llvm-backend", message, note, help)
+    backend_diagnostic_error(source, span, "llvm-backend", message, note, help, fault)
 }
 
 fn air_location_span(
@@ -891,6 +1081,7 @@ mod tests {
     fn duplicate_symbol_renders_with_no_matching_typed_declaration() {
         let rendered = render(
             DuplicateSymbol {
+                carrier: SymbolCarrier::Function,
                 symbol: "__mono_ghost_i64".to_string(),
                 spans: vec![None, None],
                 has_extern: false,
@@ -916,6 +1107,7 @@ mod tests {
     fn conflicting_external_symbol_leaves_an_unplaced_second_site_undrawn() {
         let rendered = render(
             DuplicateSymbol {
+                carrier: SymbolCarrier::Function,
                 symbol: "solo".to_string(),
                 spans: vec![None, None],
                 has_extern: true,
@@ -941,6 +1133,7 @@ mod tests {
     fn duplicate_symbol_renders_with_one_matching_typed_declaration() {
         let rendered = render(
             DuplicateSymbol {
+                carrier: SymbolCarrier::Function,
                 symbol: "solo".to_string(),
                 spans: vec![None, None],
                 has_extern: false,
@@ -975,6 +1168,7 @@ mod tests {
         assert_eq!(spans.len(), 2, "the fixture must supply two air spans");
         let rendered = duplicate_symbol_errors_to_error(
             vec![DuplicateSymbol {
+                carrier: SymbolCarrier::Function,
                 symbol: "__mono_ghost_i64".to_string(),
                 spans,
                 has_extern: false,
@@ -997,5 +1191,97 @@ mod tests {
             !rendered.contains("inside `"),
             "an air-span label has no parent to name, got:\n{rendered}"
         );
+    }
+
+    fn faulted(fault: Fault, message: &str) -> FaultMessage {
+        FaultMessage {
+            fault,
+            message: message.to_string(),
+        }
+    }
+
+    fn codes(error: &AelysError) -> Vec<String> {
+        error
+            .to_diagnostics()
+            .iter()
+            .map(|diag| diag.code.clone().unwrap_or_else(|| "UNCODED".to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn a_mixed_fault_vector_splits_per_class_in_the_pinned_order() {
+        let source = Source::new("<unit>", "fn main() -> i64 { return 0 }\n");
+        let span = fallback_source_span(source.as_ref());
+        let error = join_by_fault(
+            vec![
+                faulted(Fault::Environment, "the linker refused"),
+                faulted(Fault::Unsupported, "no lowering for this form"),
+                faulted(Fault::Program, "this cannot be represented"),
+                faulted(Fault::Compiler, "an invariant broke"),
+                faulted(Fault::Compiler, "a second invariant broke"),
+            ],
+            span,
+            source,
+            "air-lowering",
+            numbered,
+        );
+
+        let diagnostics = error.to_diagnostics();
+        assert_eq!(
+            codes(&error),
+            vec!["E0901", "E0904", "E0902", "E0903"],
+            "the emitted order is pinned to Compiler, Program, Unsupported, Environment"
+        );
+        assert_eq!(
+            diagnostics.len(),
+            4,
+            "one diagnostic per class present, and no class absorbs another"
+        );
+
+        let compiler = &diagnostics[0].message;
+        assert!(
+            compiler.contains("1. an invariant broke")
+                && compiler.contains("2. a second invariant broke"),
+            "the Compiler class keeps both of its messages, numbered from one: {compiler}"
+        );
+        for foreign in [
+            "this cannot be represented",
+            "no lowering for this form",
+            "the linker refused",
+        ] {
+            assert!(
+                !compiler.contains(foreign),
+                "no message may leak across classes: {compiler} carries {foreign}"
+            );
+        }
+        for (position, expected) in [
+            (1usize, "this cannot be represented"),
+            (2, "no lowering for this form"),
+            (3, "the linker refused"),
+        ] {
+            let rendered = &diagnostics[position].message;
+            assert!(
+                rendered.contains(&format!("1. {expected}")),
+                "each class numbers its own list from one: {rendered}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_single_fault_vector_stays_one_diagnostic() {
+        let source = Source::new("<unit>", "fn main() -> i64 { return 0 }\n");
+        let span = fallback_source_span(source.as_ref());
+        let error = join_by_fault(
+            all_compiler(vec!["one".to_string(), "two".to_string()]),
+            span,
+            source,
+            "air-validation",
+            numbered,
+        );
+        assert!(
+            matches!(error, AelysError::Compile(_)),
+            "a vector with a single class must not become a Multiple"
+        );
+        assert_eq!(codes(&error), vec!["E0901"]);
     }
 }

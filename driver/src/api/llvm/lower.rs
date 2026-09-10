@@ -1,4 +1,4 @@
-use aelys_common::error::AelysError;
+use aelys_common::error::{AelysError, Fault};
 use aelys_opt::OptimizationLevel;
 use aelys_syntax::Source;
 use std::path::{Path, PathBuf};
@@ -75,7 +75,15 @@ pub(super) fn compile_air_with_llvm_linked(
     if has_main_entry {
         let anchor = program_anchor_span(air, source.as_ref());
         let core_lib = resolve_aelys_core_lib(runtime).map_err(|message| {
-            backend_diagnostic_error(source.clone(), anchor, "llvm-linker", message, None, None)
+            backend_diagnostic_error(
+                source.clone(),
+                anchor,
+                "llvm-linker",
+                message,
+                None,
+                None,
+                Fault::Compiler,
+            )
         })?;
         let exe_path = executable_path_for(path);
         link_native_executable(&object_path, &exe_path, &core_lib, runtime, link).map_err(
@@ -87,6 +95,7 @@ pub(super) fn compile_air_with_llvm_linked(
                     message,
                     None,
                     foreign_declaration_help(air, source.as_ref()),
+                    Fault::Compiler,
                 )
             },
         )?;
@@ -140,13 +149,13 @@ fn foreign_declaration_help(air: &aelys_air::AirProgram, source: &Source) -> Opt
     ))
 }
 
-fn object_path_for(path: &Path) -> PathBuf {
+pub fn object_path_for(path: &Path) -> PathBuf {
     let mut object = path.to_path_buf();
     object.set_extension(if cfg!(windows) { "obj" } else { "o" });
     object
 }
 
-fn executable_path_for(path: &Path) -> PathBuf {
+pub fn executable_path_for(path: &Path) -> PathBuf {
     let mut output = path.with_extension("");
     if cfg!(windows) {
         output.set_extension("exe");
