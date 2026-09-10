@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for, linker_unavailable};
+
 // the index is a runtime argument, so the bounds check survives constant folding.
 const SLICE_INDEX_SRC: &str = r#"
 nogc fn get(a: &[i64], i: i64) -> i64 { return a[i] }
@@ -26,20 +29,6 @@ fn slice_index_src(index: i64) -> String {
 
 fn unwrap_src(payload: &str) -> String {
     UNWRAP_SRC.replace("PAYLOAD", payload)
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn exe_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
 }
 
 fn skip(reason: &str) {
@@ -66,6 +55,7 @@ fn emit_ir(src: &str, level: OptimizationLevel) -> String {
 }
 
 fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
+    let _pin = common::pin_legs("run", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -74,7 +64,9 @@ fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                skip("native linker unavailable");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -83,9 +75,10 @@ fn run(src: &str, level: OptimizationLevel) -> Option<Output> {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        skip("executable not produced");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     Some(Command::new(&exe).output().expect("run compiled exe"))
 }
 
@@ -435,7 +428,9 @@ fn asan_run(src: &str) -> Option<Output> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                skip("native linker unavailable (asan)");
+                common::require_linker_skip(
+                    "a skipped asan probe proves nothing about memory cleanliness",
+                );
                 return None;
             }
             panic!("compilation should succeed: {err}");

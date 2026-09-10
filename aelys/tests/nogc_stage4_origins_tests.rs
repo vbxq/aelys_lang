@@ -1,9 +1,11 @@
 use aelys_driver::{compile_file_with_llvm, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 const RESOURCE: &str = "struct Resource { id: i64 }\n";
 
@@ -26,21 +28,8 @@ fn accepts(body: &str) {
         .unwrap_or_else(|err| panic!("the escape checker must accept this program: {err}"));
 }
 
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn exe_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
 fn run_exit(body: &str) -> Option<i32> {
+    let _pin = common::pin_legs("run_exit", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, format!("{RESOURCE}{body}")).expect("write source");
@@ -49,7 +38,9 @@ fn run_exit(body: &str) -> Option<i32> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -57,9 +48,10 @@ fn run_exit(body: &str) -> Option<i32> {
     }
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     Some(output.status.code().expect("exit code"))
 }
@@ -239,7 +231,6 @@ fn main() -> i64 {
 }
 
 // projected ref-store uaf: a reference reaches a container through a projected index store, which
-// the aggregate-literal guard never sees. rejected at build time.
 #[test]
 fn projected_ref_store_uaf_is_rejected() {
     let err = reject(
@@ -315,7 +306,6 @@ fn main() -> i64 {
     );
 }
 
-// labelled over-conservative-but-sound, distinct from the unsafe rejects.
 #[test]
 fn returned_call_result_hits_floor() {
     let err = reject(
@@ -400,8 +390,6 @@ fn main() -> i64 {
 }
 
 // c1 (senior review): a reference to a reference lets a loan escape a scope via a deref-copy that
-// whole-local provenance never sees; forming the nested ref is rejected so the whole route is dead.
-// this uaf compiled and ran to exit 5 before the fix.
 #[test]
 fn nested_ref_deref_copy_uaf_is_rejected() {
     let err = reject(

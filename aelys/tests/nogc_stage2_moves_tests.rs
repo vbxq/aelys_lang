@@ -1,9 +1,11 @@
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
+
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
 const RESOURCE: &str = "struct Resource { id: i64 }\n";
 
@@ -25,19 +27,8 @@ fn accepts(body: &str) {
         .unwrap_or_else(|err| panic!("the move checker must accept this program: {err}"));
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
-
 fn run_stdout(body: &str) -> Option<(i32, String)> {
+    let _pin = common::pin_legs("run_stdout", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, format!("{RESOURCE}{body}")).expect("write source");
@@ -51,7 +42,9 @@ fn run_stdout(body: &str) -> Option<(i32, String)> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -60,10 +53,11 @@ fn run_stdout(body: &str) -> Option<(i32, String)> {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
 
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     let code = output.status.code().expect("exit code");
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();

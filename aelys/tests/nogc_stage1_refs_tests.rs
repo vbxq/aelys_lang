@@ -7,26 +7,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found")
-        || error.contains("failed to run")
-        || error.contains("failed with status Some(-1073741819)")
-}
+mod common;
+use common::{exe_path_for, linker_unavailable};
 
-fn exe_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
-/// compile `src`, link, run, and return the exit code. `none` only when the
 fn compile_and_run(src: &str) -> Option<i32> {
     compile_and_run_opt(src, OptimizationLevel::None)
 }
 
 fn compile_and_run_opt(src: &str, level: OptimizationLevel) -> Option<i32> {
+    let _pin = common::pin_legs("compile_and_run_opt", 1);
     let dir = tempdir().expect("tempdir");
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
@@ -35,7 +24,9 @@ fn compile_and_run_opt(src: &str, level: OptimizationLevel) -> Option<i32> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping exec assertion");
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compilation/link should succeed: {err}");
@@ -44,10 +35,11 @@ fn compile_and_run_opt(src: &str, level: OptimizationLevel) -> Option<i32> {
 
     let exe = exe_path_for(&source_path);
     if !exe.is_file() {
-        eprintln!("executable not produced (linker unavailable); skipping");
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
         return None;
     }
 
+    common::note_leg();
     let output = Command::new(&exe).output().expect("run compiled exe");
     Some(output.status.code().expect("exit code"))
 }
@@ -97,7 +89,6 @@ fn main() -> i64 { let mut x = 41; bump(&mut x); return x }
     assert_eq!(code, 42, "P2: bump(&mut x) must leave x = 42");
 }
 
-// slice an array and index-read it (fat pointer + index).
 #[test]
 fn p3_slice_array_index_read() {
     let Some(code) = compile_and_run(
@@ -156,7 +147,6 @@ fn p6_asan_seam_exit_15() {
 }
 
 // p6 (asan): best-effort probe that the same program is memory-clean (no uaf/oob),
-// since both the &mut write and the slice read point into stack allocas.
 #[test]
 fn p6_asan_clean_probe() {
     let dir = tempdir().expect("tempdir");
@@ -167,7 +157,9 @@ fn p6_asan_clean_probe() {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
-                eprintln!("linker unavailable; skipping ASan probe");
+                common::require_linker_skip(
+                    "a skipped asan probe proves nothing about memory cleanliness",
+                );
                 return;
             }
             panic!("compilation should succeed: {err}");
@@ -227,8 +219,6 @@ fn p6_asan_clean_probe() {
 }
 
 // regression: a &mut borrow of a mutable local in a loop must invalidate local
-// const-prop, else the optimizer folds the stale value (82 vs the true 141) at o2/o3.
-// the borrow target is `let mut x`, since `&mut` of an immutable binding
 const LOOP_BORROW_SRC: &str = r#"
 fn main() -> i64 {
     let mut x = 41
