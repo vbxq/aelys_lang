@@ -279,8 +279,8 @@ let g: Option<i64> = Option::Some(42)
         .expect("global 'g' not found");
     assert!(matches!(
         global.init,
-        Some(AirConst::Enum { ref enum_name, tag: 0, ref payload })
-            if enum_name == "__mono_Option_i64"
+        Some(AirConst::Enum { ref enum_ref, tag: 0, ref payload })
+            if enum_ref.symbol() == "__mono_Option$1$i64"
                 && matches!(payload.as_slice(), [AirConst::Int(42, AirIntSize::I64)])
     ));
 }
@@ -334,12 +334,9 @@ let h: Option<i64> = g
     ));
 }
 
-// regression test: Null -> Ptr(Void)
 
 #[test]
 fn null_literal_lowers_to_ptr_void_not_bare_void() {
-    // InferType::Null was lowered to AirType::Void, causing 0-byte allocations
-    // It should be AirType::Ptr(Box::new(AirType::Void))
     let air = lower_source(
         r#"
 fn make_null() {
@@ -362,7 +359,7 @@ fn make_null() {
 
 #[test]
 fn null_literal_type_is_not_void() {
-    // ensure the local for a null-typed variable is not AirType::Void
+    // ensure the local for a null-typed variable is not airtype::void
     let air = lower_source(
         r#"
 fn test_null() {
@@ -383,13 +380,10 @@ fn test_null() {
     );
 }
 
-// array size validation
-// verify that invalid user code produces a descriptive compile error via the lowering_errors mechanism instead of a raw Rust panic
 
 #[test]
 #[should_panic(expected = "AIR lowering failed")]
 fn non_constant_array_size_in_expr_produces_error() {
-    // [fill; n] where n is a variable should produce a clean compile error
     lower_source(
         r#"
 fn f(n: i64) -> i64 {
@@ -403,7 +397,6 @@ fn f(n: i64) -> i64 {
 #[test]
 #[should_panic(expected = "non-constant array size")]
 fn non_constant_array_size_error_message_is_descriptive() {
-    // verify the error message mentions what went wrong.
     lower_source(
         r#"
 fn g(size: i64) -> i64 {
@@ -417,7 +410,6 @@ fn g(size: i64) -> i64 {
 #[test]
 #[should_panic(expected = "stack array too large")]
 fn oversized_stack_array_in_expr_produces_error() {
-    // a very large [fill; N] should produce a clean compile error
     lower_source(
         r#"
 fn h() -> i64 {
@@ -431,7 +423,6 @@ fn h() -> i64 {
 #[test]
 #[should_panic(expected = "AIR lowering failed")]
 fn oversized_array_error_aggregated_in_finish() {
-    // verify that the error is reported through the aggregated finish() mechanism.
     lower_source(
         r#"
 fn big() -> i64 {

@@ -1541,7 +1541,7 @@ fn use_null() {
 }
 
 #[test]
-fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
+fn a_generic_enum_named_without_its_type_arguments_is_refused() {
     let option_enum = AirEnumDef {
         name: "Option".to_string(),
         type_params: vec![TypeParamId(0)],
@@ -1566,18 +1566,18 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
         gc_mode: GcMode::Managed,
         type_params: vec![],
         params: vec![],
-        ret_ty: AirType::Enum("__mono_Option_i64".to_string()),
+        ret_ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
         locals: vec![
             AirLocal {
                 id: LocalId(0),
-                ty: AirType::Enum("__mono_Option_i64".to_string()),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
                 name: Some("ret".to_string()),
                 is_mut: false,
                 span: None,
             },
             AirLocal {
                 id: LocalId(1),
-                ty: AirType::Enum("__mono_Option_i64".to_string()),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
                 name: Some("value".to_string()),
                 is_mut: false,
                 span: None,
@@ -1589,7 +1589,7 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
                 kind: AirStmtKind::Assign {
                     place: Place::Local(LocalId(1)),
                     rvalue: Rvalue::EnumInit {
-                        enum_name: "Option".to_string(),
+                        enum_ref: EnumRef::new("Option", vec![AirType::I64]),
                         variant: "Some".to_string(),
                         tag: 0,
                         payload: vec![Operand::Const(AirConst::Int(1, AirIntSize::I64))],
@@ -1611,18 +1611,18 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
         gc_mode: GcMode::Managed,
         type_params: vec![],
         params: vec![],
-        ret_ty: AirType::Enum("__mono_Option_str".to_string()),
+        ret_ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
         locals: vec![
             AirLocal {
                 id: LocalId(0),
-                ty: AirType::Enum("__mono_Option_str".to_string()),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
                 name: Some("ret".to_string()),
                 is_mut: false,
                 span: None,
             },
             AirLocal {
                 id: LocalId(1),
-                ty: AirType::Enum("__mono_Option_str".to_string()),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
                 name: Some("value".to_string()),
                 is_mut: false,
                 span: None,
@@ -1634,7 +1634,7 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
                 kind: AirStmtKind::Assign {
                     place: Place::Local(LocalId(1)),
                     rvalue: Rvalue::EnumInit {
-                        enum_name: "Option".to_string(),
+                        enum_ref: EnumRef::new("Option", vec![AirType::Str]),
                         variant: "Some".to_string(),
                         tag: 0,
                         payload: vec![Operand::Const(AirConst::Str("hello".to_string()))],
@@ -1659,7 +1659,7 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
         ret_ty: AirType::Void,
         locals: vec![AirLocal {
             id: LocalId(0),
-            ty: AirType::Enum("Option".to_string()),
+            ty: AirType::Enum(EnumRef::plain("Option")),
             name: Some("ambiguous".to_string()),
             is_mut: false,
             span: None,
@@ -1670,7 +1670,7 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
                 kind: AirStmtKind::Assign {
                     place: Place::Local(LocalId(0)),
                     rvalue: Rvalue::EnumInit {
-                        enum_name: "Option".to_string(),
+                        enum_ref: EnumRef::plain("Option"),
                         variant: "None".to_string(),
                         tag: 1,
                         payload: vec![],
@@ -1699,15 +1699,34 @@ fn validate_rejects_ambiguous_generic_unit_variant_after_mono() {
 
     let errors = match monomorphize(program) {
         Err(e) => e,
-        Ok(_) => {
-            panic!("ambiguous generic unit variant should be rejected during monomorphization")
-        }
+        Ok(_) => panic!(
+            "a generic enum named with no type arguments carries no instantiation, so \
+             monomorphization must refuse it instead of picking one of the two that exist"
+        ),
     };
     assert!(
-        errors.iter().any(|e| e.contains("ambiguous unit variant")),
-        "expected ambiguous unit variant error, got: {:?}",
+        errors
+            .iter()
+            .any(|e| e.message.contains("names it with no type arguments")),
+        "expected the bare generic enum reference to be named, got: {:?}",
         errors
     );
+}
+
+fn aelys_fnptr() -> AirType {
+    AirType::FnPtr {
+        params: vec![],
+        ret: Box::new(AirType::I64),
+        conv: CallingConv::Aelys,
+    }
+}
+
+fn c_fnptr() -> AirType {
+    AirType::FnPtr {
+        params: vec![],
+        ret: Box::new(AirType::I64),
+        conv: CallingConv::C,
+    }
 }
 
 #[test]
@@ -1774,14 +1793,14 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
                     },
                     AirLocal {
                         id: LocalId(2),
-                        ty: AirType::Enum("Holder".to_string()),
+                        ty: AirType::Enum(EnumRef::new("Holder", vec![aelys_fnptr()])),
                         name: Some("aelys_holder".to_string()),
                         is_mut: false,
                         span: None,
                     },
                     AirLocal {
                         id: LocalId(3),
-                        ty: AirType::Enum("Holder".to_string()),
+                        ty: AirType::Enum(EnumRef::new("Holder", vec![c_fnptr()])),
                         name: Some("c_holder".to_string()),
                         is_mut: false,
                         span: None,
@@ -1812,7 +1831,7 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
                             kind: AirStmtKind::Assign {
                                 place: Place::Local(LocalId(2)),
                                 rvalue: Rvalue::EnumInit {
-                                    enum_name: "Holder".to_string(),
+                                    enum_ref: EnumRef::new("Holder", vec![aelys_fnptr()]),
                                     variant: "Value".to_string(),
                                     tag: 0,
                                     payload: vec![Operand::Copy(LocalId(0))],
@@ -1824,7 +1843,7 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
                             kind: AirStmtKind::Assign {
                                 place: Place::Local(LocalId(3)),
                                 rvalue: Rvalue::EnumInit {
-                                    enum_name: "Holder".to_string(),
+                                    enum_ref: EnumRef::new("Holder", vec![c_fnptr()]),
                                     variant: "Value".to_string(),
                                     tag: 0,
                                     payload: vec![Operand::Copy(LocalId(1))],
@@ -1870,7 +1889,7 @@ fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
     let holder_defs: Vec<_> = air
         .enums
         .iter()
-        .filter(|def| def.name.starts_with("__mono_Holder_"))
+        .filter(|def| def.name.starts_with("__mono_Holder$"))
         .collect();
     assert_eq!(
         holder_defs.len(),
@@ -2095,5 +2114,238 @@ fn validate_leaves_an_unreachable_terminator_operand_alone() {
     assert!(
         validate_air(&program).is_ok(),
         "no path from the entry reaches bb9, so the rule has nothing to say about it"
+    );
+}
+
+fn program_with_parts(
+    functions: Vec<AirFunction>,
+    enums: Vec<AirEnumDef>,
+    globals: Vec<AirGlobal>,
+) -> AirProgram {
+    AirProgram {
+        functions,
+        structs: vec![],
+        enums,
+        globals,
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    }
+}
+
+fn param_survivals(program: &AirProgram) -> Vec<String> {
+    match validate_air(program) {
+        Ok(()) => Vec::new(),
+        Err(errors) => errors
+            .iter()
+            .filter(|e| matches!(e.detail, AirValidationDetail::TypeParamSurvived { .. }))
+            .map(|e| e.to_string())
+            .collect(),
+    }
+}
+
+#[test]
+fn a_type_parameter_surviving_in_a_global_is_refused() {
+    let program = program_with_parts(
+        vec![],
+        vec![],
+        vec![AirGlobal {
+            name: "g".to_string(),
+            ty: AirType::Enum(EnumRef::new("Opt", vec![AirType::Param(TypeParamId(0))])),
+            init: None,
+            gc_mode: GcMode::Managed,
+            span: None,
+        }],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("global g") && m.contains("param_0")),
+        "a global whose type still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+#[test]
+fn a_type_parameter_surviving_in_an_enum_payload_is_refused() {
+    let program = program_with_parts(
+        vec![],
+        vec![AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![AirEnumVariant {
+                name: "Some".to_string(),
+                tag: 0,
+                payload: vec![AirType::Param(TypeParamId(3))],
+            }],
+            span: None,
+        }],
+        vec![],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("enum Opt") && m.contains("param_3")),
+        "an enum payload that still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+#[test]
+fn a_type_parameter_surviving_in_an_extern_signature_is_refused() {
+    let program = program_with_parts(
+        vec![AirFunction {
+            id: FunctionId(0),
+            name: "puts_like".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![AirParam {
+                id: LocalId(0),
+                ty: AirType::Ptr(Box::new(AirType::Param(TypeParamId(7)))),
+                name: "s".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::I64,
+            locals: vec![],
+            blocks: vec![],
+            is_extern: true,
+            calling_conv: CallingConv::C,
+            attributes: default_attribs(),
+            span: None,
+        }],
+        vec![],
+        vec![],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("puts_like") && m.contains("param_7")),
+        "an extern signature that still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+// sema refuses every source spelling of this, so only a hand-built air program reaches the arm
+#[test]
+fn one_call_site_binding_a_type_parameter_two_ways_is_a_diagnostic() {
+    let pair = AirEnumDef {
+        name: "Pair".to_string(),
+        type_params: vec![TypeParamId(0), TypeParamId(1)],
+        variants: vec![AirEnumVariant {
+            name: "Both".to_string(),
+            tag: 0,
+            payload: vec![
+                AirType::Param(TypeParamId(0)),
+                AirType::Param(TypeParamId(1)),
+            ],
+        }],
+        span: None,
+    };
+    let same = AirFunction {
+        id: FunctionId(0),
+        name: "same".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![TypeParamId(9)],
+        params: vec![AirParam {
+            id: LocalId(0),
+            ty: AirType::Enum(EnumRef::new(
+                "Pair",
+                vec![
+                    AirType::Param(TypeParamId(9)),
+                    AirType::Param(TypeParamId(9)),
+                ],
+            )),
+            name: "p".to_string(),
+            span: None,
+        }],
+        ret_ty: AirType::I64,
+        locals: vec![],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![],
+            terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                1,
+                AirIntSize::I64,
+            )))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+    let caller_ty = AirType::Enum(EnumRef::new("Pair", vec![AirType::I64, AirType::Bool]));
+    let caller = AirFunction {
+        id: FunctionId(1),
+        name: "main".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::I64,
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: caller_ty.clone(),
+                name: Some("p".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::I64,
+                name: Some("r".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![
+                AirStmt {
+                    kind: AirStmtKind::Assign {
+                        place: Place::Local(LocalId(0)),
+                        rvalue: Rvalue::EnumInit {
+                            enum_ref: EnumRef::new("Pair", vec![AirType::I64, AirType::Bool]),
+                            variant: "Both".to_string(),
+                            tag: 0,
+                            payload: vec![
+                                Operand::Const(AirConst::Int(1, AirIntSize::I64)),
+                                Operand::Const(AirConst::Bool(true)),
+                            ],
+                        },
+                    },
+                    span: None,
+                },
+                AirStmt {
+                    kind: AirStmtKind::Assign {
+                        place: Place::Local(LocalId(1)),
+                        rvalue: Rvalue::Call {
+                            func: Callee::Named("same".to_string()),
+                            args: vec![Operand::Copy(LocalId(0))],
+                        },
+                    },
+                    span: None,
+                },
+            ],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let errors = match monomorphize(program_with_parts(vec![same, caller], vec![pair], vec![])) {
+        Err(errors) => errors,
+        Ok(_) => panic!("one call site binding a type parameter two ways must be refused"),
+    };
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.message.contains("binds type parameter")
+                && e.message.contains("`i64`")
+                && e.message.contains("`bool`")),
+        "the refusal must name the two bindings instead of keeping the first, got: {:?}",
+        errors.iter().map(|e| e.message.clone()).collect::<Vec<_>>()
     );
 }

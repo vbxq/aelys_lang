@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for as executable_path_for, linker_unavailable};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Verdict {
     Reject,
@@ -63,20 +66,6 @@ fn is_reject_name(stem: &str) -> bool {
     stem.ends_with("_reject") || stem.starts_with("never")
 }
 
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("failed to run `lld-link`: program not found")
-        || error.contains("failed to run `link`: program not found")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn executable_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
-
 #[cfg(unix)]
 fn classify_exit(status: ExitStatus) -> Verdict {
     use std::os::unix::process::ExitStatusExt;
@@ -104,7 +93,6 @@ fn linker_available() -> bool {
     }
 }
 
-// the levels the net evaluates at. -o2 alone is what let a -o0-only miscompile of two nested
 const GOLDEN_LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
     ("-O2", OptimizationLevel::Standard),
@@ -135,6 +123,7 @@ fn evaluate_at(fixture: &Path, opt: OptimizationLevel) -> Verdict {
             if !exe.is_file() {
                 return Verdict::CompileOk;
             }
+            common::note_leg();
             let output = Command::new(&exe)
                 .output()
                 .expect("compiled executable should run");
@@ -196,7 +185,7 @@ fn read_golden() -> BTreeMap<String, Verdict> {
 #[test]
 fn e2e_fixtures_match_golden() {
     if !linker_available() {
-        eprintln!("skipping e2e golden net: native linker unavailable in this environment");
+        common::require_linker_skip("a skipped golden net compares no fixture against anything");
         return;
     }
 
@@ -206,6 +195,14 @@ fn e2e_fixtures_match_golden() {
         "no .aelys fixtures found in {:?}",
         fixtures_dir()
     );
+
+    let runs = read_golden()
+        .values()
+        .filter(|v| matches!(v, Verdict::Exit(_) | Verdict::Signal(_)))
+        .count();
+    let _pin = std::env::var_os("AELYS_REGEN_GOLDEN")
+        .is_none()
+        .then(|| common::pin_legs("golden net", runs * GOLDEN_LEVELS.len()));
 
     let mut per_level: Vec<(&str, BTreeMap<String, Verdict>)> = Vec::new();
     for (level, opt) in GOLDEN_LEVELS {

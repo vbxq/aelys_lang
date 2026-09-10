@@ -1,3 +1,4 @@
+use aelys_air::EnumRef;
 use aelys_air::{
     AirEnumDef, AirEnumVariant, AirProgram, AirStructDef, AirStructField, AirType, CallingConv,
     layout::{compute_layouts, layout_of},
@@ -82,7 +83,6 @@ fn primitives() {
         ret: Box::new(AirType::Void),
         conv: CallingConv::Aelys,
     };
-    // Aelys closure values are fat pointers { fn_ptr, env_ptr } = 16 bytes.
     assert_eq!(layout_of(&fnptr).size, 16);
 }
 
@@ -94,8 +94,6 @@ fn array_layout() {
     assert_eq!(l.align, 4);
 }
 
-// struct Padded { a: i8, b: i32 }
-// a@0(1) + 3 padding + b@4(4) = size 8, align 4
 #[test]
 fn padding_i8_i32() {
     let mut prog = program(vec![sdef(
@@ -107,8 +105,6 @@ fn padding_i8_i32() {
     assert_eq!(prog.structs[0].fields[1].offset, Some(4));
 }
 
-// struct Wide { x: i64, y: i8 }
-// x@0(8) + y@8(1) + 7 trailing padding = size 16, align 8
 #[test]
 fn trailing_padding() {
     let mut prog = program(vec![sdef(
@@ -120,8 +116,6 @@ fn trailing_padding() {
     assert_eq!(prog.structs[0].fields[1].offset, Some(8));
 }
 
-// struct Mixed { a: i8, b: i16, c: i32, d: i64 }
-// a@0, pad 1, b@2, c@4, d@8 → size 16, align 8
 #[test]
 fn mixed_alignment() {
     let mut prog = program(vec![sdef(
@@ -141,8 +135,6 @@ fn mixed_alignment() {
     assert_eq!(s.fields[3].offset, Some(8));
 }
 
-// Inner { x: i32, y: i32 } → size 8, align 4
-// Outer { tag: i8, inner: Inner } → tag@0, pad 3, inner@4
 #[test]
 fn nested_struct() {
     let mut prog = program(vec![
@@ -167,7 +159,6 @@ fn nested_struct() {
     assert_eq!(prog.structs[1].fields[1].offset, Some(4));
 }
 
-// Outer declared before Inner → topo sort resolves order
 #[test]
 fn reverse_declaration_order() {
     let mut prog = program(vec![
@@ -191,7 +182,6 @@ fn reverse_declaration_order() {
     assert_eq!(prog.structs[1].fields[1].offset, Some(4));
 }
 
-// Ptr(Self) is valid (linked list)
 #[test]
 fn self_ptr_is_valid() {
     let mut prog = program(vec![sdef(
@@ -215,8 +205,6 @@ fn empty_struct() {
     compute_layouts(&mut prog);
 }
 
-// Vec2 { f32, f32 } = size 8, align 4
-// Mesh { id: i32, vertices: [Vec2; 4] } → id@0, vertices@4(32)
 #[test]
 fn array_of_struct_field() {
     let mut prog = program(vec![
@@ -248,7 +236,7 @@ fn enum_struct_dependency_chain_resolves() {
             sdef(
                 "Wrapper",
                 vec![
-                    field("e", AirType::Enum("Message".into())),
+                    field("e", AirType::Enum(EnumRef::plain("Message"))),
                     field("flag", AirType::I8),
                 ],
             ),
@@ -267,7 +255,6 @@ fn enum_struct_dependency_chain_resolves() {
     assert_eq!(prog.structs[1].fields[1].offset, Some(16));
 }
 
-// Closure env with mixed captures: i64@0, bool@8, str@16
 #[test]
 fn closure_env() {
     let mut prog = program(vec![AirStructDef {
@@ -298,7 +285,7 @@ fn self_reference_reports_error() {
         !errors.is_empty(),
         "expected error for self-referencing struct"
     );
-    assert!(errors[0].contains("infinite size"));
+    assert!(errors[0].to_string().contains("infinite size"));
 }
 
 #[test]
@@ -316,7 +303,7 @@ fn struct_enum_cycle_reports_error() {
     let mut prog = program_with_enums(
         vec![sdef(
             "Node",
-            vec![field("next", AirType::Enum("OptionNode".into()))],
+            vec![field("next", AirType::Enum(EnumRef::plain("OptionNode")))],
         )],
         vec![enum_def(
             "OptionNode",

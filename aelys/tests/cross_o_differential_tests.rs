@@ -3,8 +3,10 @@ use aelys_opt::OptimizationLevel;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Once;
 use tempfile::{TempDir, tempdir};
+
+mod common;
+use common::{exe_path_for, exit_code, linker_unavailable, slug, warm_core_archive};
 
 const LEVELS: [(&str, OptimizationLevel); 4] = [
     ("-O0", OptimizationLevel::None),
@@ -14,24 +16,6 @@ const LEVELS: [(&str, OptimizationLevel); 4] = [
 ];
 
 const CORPUS_PARTIAL_ACCEPT_BASELINE: usize = 15;
-
-static WARM: Once = Once::new();
-
-fn warm_core_archive() {
-    WARM.call_once(|| {
-        let Ok(dir) = tempdir() else { return };
-        let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
-            return;
-        }
-        let _ = compile_file_with_llvm_variant(
-            &path,
-            OptimizationLevel::None,
-            false,
-            RuntimeVariant::Rc,
-        );
-    });
-}
 
 #[derive(Clone, PartialEq, Eq)]
 enum LevelResult {
@@ -66,40 +50,6 @@ struct Harness {
     dir: TempDir,
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
-
-fn exit_code(status: &std::process::ExitStatus) -> i32 {
-    if let Some(code) = status.code() {
-        return code;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    -1
-}
-
-fn slug(id: &str, tag: &str) -> String {
-    let mut s = String::with_capacity(id.len() + tag.len() + 1);
-    for c in id.chars().chain(std::iter::once('_')).chain(tag.chars()) {
-        s.push(if c.is_ascii_alphanumeric() { c } else { '_' });
-    }
-    s
-}
-
 impl Harness {
     fn new() -> Self {
         warm_core_archive();
@@ -109,7 +59,9 @@ impl Harness {
     }
 
     fn run(exe: &Path) -> Option<(i32, String)> {
+        let _pin = common::pin_legs("run", 1);
         let out = Command::new(exe).output().ok()?;
+        common::note_leg();
         Some((
             exit_code(&out.status),
             String::from_utf8_lossy(&out.stdout).into_owned(),
@@ -127,6 +79,9 @@ impl Harness {
             match compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
                 Err(err) => {
                     if linker_unavailable(&err.to_string()) {
+                        common::require_linker_skip(
+                            "a skipped value row carries no runtime evidence at all",
+                        );
                         return Eval::Unavailable;
                     }
                     results.push((name, LevelResult::Rejected));
@@ -188,11 +143,9 @@ fn compare(id: &str, levels: &[(&'static str, LevelResult)]) -> (Vec<String>, bo
     )
 }
 
-// every divergence class this project has seen, plus the two value-semantics shapes the run was built around
 
 const FIXTURES: &[(&str, Expect, &str)] = &[
     (
-        // the inliner duplicated the argument to every parameter occurrence, so an effectful arg ran more than once
         "SI-D01",
         Expect::Invariant,
         r#"
@@ -310,7 +263,6 @@ fn main() -> i64 {
 "#,
     ),
     (
-        // a stdout-shaped divergence: interpolation allocates and formats per iteration, so a pass can reorder it
         "SI-D11",
         Expect::Invariant,
         r#"
@@ -341,7 +293,6 @@ fn main() -> i64 {
 "#,
     ),
     (
-        // defect number one, carried here for its -o1 leg: the invariants suite fixes the absolute bound
         "SI-D13",
         Expect::Invariant,
         r#"
@@ -404,7 +355,7 @@ fn curated_fixtures_produce_the_same_answer_at_every_opt_level() {
     for (id, expect, src) in FIXTURES {
         match h.evaluate(id, src) {
             Eval::Unavailable => {
-                eprintln!("{id}: toolchain unavailable, skipping");
+                common::require_linker_skip("a skipped fixture compares no opt level to any other");
                 return;
             }
             Eval::Nondeterministic => {
@@ -454,6 +405,32 @@ fn curated_fixtures_produce_the_same_answer_at_every_opt_level() {
 }
 
 const PREOPT_FIXTURES: &[(&str, &str, &str)] = &[
+    (
+        "SI-D09",
+        "E0204",
+        r#"
+pub let g: i64 = 1
+pub let g: i64 = 2
+fn main() -> i64 {
+    println(g)
+    return 0
+}
+"#,
+    ),
+    (
+        "SI-D10",
+        "E0204",
+        r#"
+pub let g: i64 = 1
+pub let mut g: i64 = 2
+fn main() -> i64 {
+    println(g)
+    g = 99
+    println(g)
+    return 0
+}
+"#,
+    ),
     (
         "SI-D03",
         "E0702",
@@ -511,6 +488,23 @@ fn pre_opt_verdicts_hold_at_every_opt_level_even_when_dead() {
     );
 }
 
+#[test]
+fn the_duplicate_global_divergence_would_have_been_caught_by_this_class() {
+    let recorded = [
+        ("-O0", LevelResult::Ran { exit: 0, stdout: "2\n".to_string() }),
+        ("-O1", LevelResult::Ran { exit: 0, stdout: "2\n".to_string() }),
+        ("-O2", LevelResult::Ran { exit: 0, stdout: "1\n".to_string() }),
+        ("-O3", LevelResult::Ran { exit: 0, stdout: "1\n".to_string() }),
+    ];
+    let (failures, _) = compare("SI-D09", &recorded);
+    assert!(
+        !failures.is_empty(),
+        "SI-D09 was measured on the pre-repair compiler at -O0 2, -O1 2, -O2 1, -O3 1; the row \
+         asserts E0204 at every level now, so this is the standing proof that the comparison \
+         which catches it is the one running, and that a one-level row could not have seen it"
+    );
+}
+
 // the curated table above holds every known divergence class, so the default path loses nothing we curate
 
 fn workspace_root() -> PathBuf {
@@ -535,7 +529,6 @@ fn collect_aelys(dir: &Path, out: &mut Vec<PathBuf>) {
 }
 
 #[test]
-// miscompiled at -o0 only (llvm repaired them at -o1+), so this sweep would have flagged them
 #[ignore = "STAGE GATE: run scripts/corpus_sweep.sh instead -- in-process this is OOM-killed"]
 fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
     let root = workspace_root();
@@ -572,7 +565,7 @@ fn the_aelys_corpus_produces_the_same_answer_at_every_opt_level() {
         let id = format!("c{i}");
         match h.evaluate(&id, &src) {
             Eval::Unavailable => {
-                eprintln!("corpus sweep: toolchain unavailable, skipping");
+                common::require_linker_skip("a skipped sweep compares no opt level to any other");
                 return;
             }
             Eval::Nondeterministic => nondeterministic.push(name),

@@ -151,7 +151,6 @@ let x = paint(Color::Red)
     );
 }
 
-// ============ Data Variant Tests ============
 
 #[test]
 fn data_variant_parse_and_typecheck() {
@@ -307,11 +306,9 @@ fn use_write() -> Message {
 }
 "#;
     let air = lower_source(src);
-    // Verify the enum def exists in the AIR program
     let enum_def = air.enums.iter().find(|e| e.name == "Message");
     assert!(enum_def.is_some(), "Message enum should exist in AIR");
     let def = enum_def.unwrap();
-    // Verify the data variant has payload types
     let write_variant = def.variants.iter().find(|v| v.name == "Write");
     assert!(write_variant.is_some(), "Write variant should exist");
     assert_eq!(
@@ -376,7 +373,6 @@ let c = Color::Red
     let enum_def = air.enums.iter().find(|e| e.name == "Color");
     assert!(enum_def.is_some(), "Color enum should exist in AIR");
     let def = enum_def.unwrap();
-    // All variants should have empty payload (simple enum)
     for v in &def.variants {
         assert!(
             v.payload.is_empty(),
@@ -442,7 +438,6 @@ let d4 = Data::BoolVal(false)
     );
 }
 
-// ============ Match Expression Tests ============
 
 #[test]
 fn match_simple_enum_exhaustive() {
@@ -690,13 +685,11 @@ fn name(c: Color) -> i64 {
     let air = lower_source(src);
     let air_text = print_program(&air);
 
-    // The AIR should contain a switch terminator
     assert!(
         air_text.contains("switch"),
         "match should lower to switch terminator, got:\n{}",
         air_text
     );
-    // The AIR should contain enum_tag extraction
     assert!(
         air_text.contains("enum_tag"),
         "match should extract enum tag, got:\n{}",
@@ -724,7 +717,6 @@ fn handle(m: Message) -> i64 {
     let air = lower_source(src);
     let air_text = print_program(&air);
 
-    // Should contain switch, enum_tag, and enum_payload
     assert!(
         air_text.contains("switch"),
         "match should lower to switch, got:\n{}",
@@ -757,7 +749,7 @@ fn name(c: Color) -> i64 {
     let air = lower_source(src);
     let air_text = print_program(&air);
 
-    // Should contain switch with default block
+    // should contain switch with default block
     assert!(
         air_text.contains("switch"),
         "match with wildcard should lower to switch, got:\n{}",
@@ -785,7 +777,7 @@ fn check(d: Dir) -> i64 {
     let air = lower_source(src);
     let air_text = print_program(&air);
 
-    // Should contain switch and unreachable (since it is exhaustive without wildcard)
+    // should contain switch and unreachable (since it is exhaustive without wildcard)
     assert!(
         air_text.contains("switch"),
         "exhaustive match should use switch, got:\n{}",
@@ -870,7 +862,6 @@ let r = to_int(Color::Green)
 
 #[test]
 fn match_with_semicolons_between_arms() {
-    // The parser should accept both commas and semicolons between arms
     let src = r#"
 enum Color { Red, Green, Blue }
 
@@ -911,7 +902,6 @@ fn test(c: Color) -> i64 {
 
 #[test]
 fn match_data_variant_uses_binding_in_body() {
-    // Verify that bindings are actually usable in the arm body
     let src = r#"
 enum Wrapper {
     Val(i64),
@@ -931,7 +921,6 @@ fn extract(w: Wrapper) -> i64 {
         "binding used in arm body should type-check: {:?}",
         result.err()
     );
-    // Also verify AIR lowering works
     let air = lower_source(src);
     let air_text = print_program(&air);
     assert!(
@@ -941,7 +930,7 @@ fn extract(w: Wrapper) -> i64 {
     );
 }
 
-// ============ Generic Enum Tests ============
+// ============ generic enum tests ============
 
 #[test]
 fn generic_enum_option_some() {
@@ -1094,8 +1083,7 @@ fn is_some(opt: Option<i64>) -> i64 {
 
 #[test]
 fn generic_enum_none_without_annotation() {
-    // Unit variant of a generic enum without type annotation should produce
-    // a clear "type annotations needed" error, not a confusing AIR-level Opaque error.
+    // unit variant of a generic enum without type annotation should produce
     let src = r#"
 enum Option<T> {
     Some(T),
@@ -1183,7 +1171,7 @@ enum Option<T> {
 let x = Option::Some(42)
 "#;
     let air = lower_source(src);
-    // The generic enum def should exist (with type params)
+    // the generic enum def should exist (with type params)
     let enum_def = air.enums.iter().find(|e| e.name.contains("Option"));
     assert!(
         enum_def.is_some(),
@@ -1209,7 +1197,6 @@ fn unwrap_or(opt: Option<i64>, default: i64) -> i64 {
     let air = lower_source(src);
     let air_text = print_program(&air);
 
-    // Should contain switch and enum_tag
     assert!(
         air_text.contains("switch"),
         "match on generic enum should lower to switch, got:\n{}",
@@ -1229,10 +1216,7 @@ fn unwrap_or(opt: Option<i64>, default: i64) -> i64 {
 
 #[test]
 fn generic_enum_wrong_arg_type() {
-    // Option<T>::Some expects one argument of type T.
-    // With `Some(42)`, T = i64. But we can't enforce that T must be i64
-    // from a separate annotation without one -- this just tests that
-    // type checking works with the generic args.
+    // with `some(42)`, t = i64. but we can't enforce that t must be i64
     let src = r#"
 enum Option<T> {
     Some(T),
@@ -1359,14 +1343,14 @@ fn main() {
     let pair = air
         .enums
         .iter()
-        .find(|e| e.name == "__mono_Pair_i64$str")
+        .find(|e| e.name == "__mono_Pair$2$i64$str")
         .expect("nested Pair mono enum should exist");
     assert_eq!(pair.variants[0].payload.len(), 2);
 
     let boxed = air
         .enums
         .iter()
-        .find(|e| e.name == "__mono_Boxed_enum___mono_Pair_i64$str")
+        .find(|e| e.name == "__mono_Boxed$1$enum___mono_Pair$2$i64$str")
         .expect("Boxed<Pair<...>> mono enum should exist");
     let value_variant = boxed
         .variants
@@ -1375,7 +1359,10 @@ fn main() {
         .expect("Value variant should exist");
     assert_eq!(
         value_variant.payload,
-        vec![AirType::Enum("__mono_Pair_i64$str".to_string())]
+        vec![AirType::Enum(aelys_air::EnumRef::new(
+            "Pair",
+            vec![AirType::I64, AirType::Str]
+        ))]
     );
 }
 
@@ -1397,7 +1384,7 @@ fn apply_default() -> Holder<fn(i64) -> i64> {
     let holder = air
         .enums
         .iter()
-        .find(|e| e.name == "__mono_Holder_fnptr$i64$Ri64")
+        .find(|e| e.name == "__mono_Holder$1$fnptr$i64$Ri64")
         .expect("fnptr-instantiated Holder enum should exist");
     assert_eq!(holder.variants.len(), 2);
     assert!(
@@ -1434,11 +1421,11 @@ fn main() {
     let air_text = print_program(&air);
 
     assert!(
-        air_text.contains("enum_init __mono_Holder_fnptr$i64$Ri64::Value"),
+        air_text.contains("enum_init __mono_Holder$1$fnptr$i64$Ri64::Value"),
         "named function payload should monomorphize to fnptr enum, got:\n{air_text}"
     );
     assert!(
-        !air_text.contains("__mono_Holder_ptr_void"),
+        !air_text.contains("__mono_Holder$1$ptr_void"),
         "named function payload must not degrade to ptr_void mono, got:\n{air_text}"
     );
 }
@@ -1472,7 +1459,6 @@ fn handle(r: Result<i64, string>) -> i64 {
     );
 }
 
-// ============ Multiple Instantiation Tests ============
 
 #[test]
 fn generic_enum_none_with_multiple_monos() {
@@ -1495,8 +1481,6 @@ let c: Option<i64> = Option::None
 
 #[test]
 fn generic_enum_none_with_multiple_monos_air() {
-    // Uses functions instead of top-level lets because top-level lets become
-    // globals (which don't emit EnumInit to AIR).
     let src = r#"
 enum Option<T> {
     Some(T),
@@ -1516,7 +1500,7 @@ fn make_none_int() -> Option<i64> {
     let air = aelys_air::mono::monomorphize(air).unwrap();
     let air_text = print_program(&air);
 
-    // After monomorphization, no generic enum definitions should remain
+    // after monomorphization, no generic enum definitions should remain
     let remaining_generic = air.enums.iter().any(|e| !e.type_params.is_empty());
     assert!(
         !remaining_generic,
@@ -1524,8 +1508,7 @@ fn make_none_int() -> Option<i64> {
         air_text
     );
 
-    // The enum_init for None variant should reference a monomorphized name
-    // (not the raw "Option")
+    // the enum_init for none variant should reference a monomorphized name
     assert!(
         !air_text.contains("enum_init Option::"),
         "unit variant Option::None should be monomorphized, got:\n{}",
@@ -1554,5 +1537,124 @@ let b = test2()
         result.is_ok(),
         "None in different typed functions should work: {:?}",
         result.err()
+    );
+}
+
+fn sweep_pool() -> Vec<AirType> {
+    use aelys_air::{CallingConv, EnumRef};
+    let mut pool = vec![
+        AirType::I8,
+        AirType::I16,
+        AirType::I32,
+        AirType::I64,
+        AirType::U8,
+        AirType::U16,
+        AirType::U32,
+        AirType::U64,
+        AirType::F32,
+        AirType::F64,
+        AirType::Bool,
+        AirType::Str,
+        AirType::Void,
+        AirType::Opaque,
+        // the derivation is injective only because the grammar forces a capitalized struct name
+        AirType::Struct("Ptr".into()),
+        AirType::Struct("Enum".into()),
+        AirType::Struct("R".into()),
+        AirType::Struct("A_B".into()),
+        AirType::Struct("A".into()),
+        AirType::Struct("B".into()),
+    ];
+    let leaves = pool.clone();
+    for leaf in &leaves {
+        pool.push(AirType::Ptr(Box::new(leaf.clone())));
+        pool.push(AirType::Slice(Box::new(leaf.clone())));
+        pool.push(AirType::Vec(Box::new(leaf.clone())));
+        pool.push(AirType::Array(Box::new(leaf.clone()), 2));
+        pool.push(AirType::FnPtr {
+            params: vec![leaf.clone()],
+            ret: Box::new(AirType::I64),
+            conv: CallingConv::Aelys,
+        });
+        pool.push(AirType::FnPtr {
+            params: vec![AirType::I64, leaf.clone()],
+            ret: Box::new(leaf.clone()),
+            conv: CallingConv::C,
+        });
+        for base in ["E", "E_x", "Q", "Q_ptr"] {
+            pool.push(AirType::Enum(EnumRef::new(base, vec![leaf.clone()])));
+            pool.push(AirType::Enum(EnumRef::new(
+                base,
+                vec![leaf.clone(), AirType::I64],
+            )));
+        }
+    }
+    pool
+}
+
+#[test]
+fn the_derived_enum_symbol_is_injective_over_the_type_pool() {
+    use aelys_air::EnumRef;
+    use std::collections::HashMap;
+
+    let bases = [
+        "Q", "Q_ptr", "E", "E_x", "Opt", "Pair", "ptr", "enum", "param", "fnptr",
+    ];
+    let pool = sweep_pool();
+    let mut by_symbol: HashMap<String, String> = HashMap::new();
+    let mut collisions: Vec<String> = Vec::new();
+    let mut derived = 0usize;
+
+    let mut note = |base: &str, args: Vec<AirType>, derived: &mut usize| {
+        let key = format!("{}{:?}", base, args);
+        let symbol = EnumRef::new(base, args).symbol();
+        *derived += 1;
+        if let Some(previous) = by_symbol.insert(symbol.clone(), key.clone())
+            && previous != key
+        {
+            collisions.push(format!(
+                "`{symbol}` is derived by both {previous} and {key}"
+            ));
+        }
+    };
+
+    for base in bases {
+        note(base, Vec::new(), &mut derived);
+        for a in &pool {
+            note(base, vec![a.clone()], &mut derived);
+        }
+        for a in &pool {
+            for b in &pool {
+                note(base, vec![a.clone(), b.clone()], &mut derived);
+            }
+        }
+    }
+
+    assert!(
+        derived > 20_000,
+        "the sweep derived only {derived} names, which is too few to have exercised arity 2"
+    );
+    assert!(
+        collisions.is_empty(),
+        "{} of {derived} derived names collide; the first few:\n{}",
+        collisions.len(),
+        collisions
+            .iter()
+            .take(10)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    eprintln!("injectivity sweep: {derived} derived names, 0 collisions");
+}
+
+#[test]
+fn a_plain_enum_keeps_its_bare_name() {
+    use aelys_air::EnumRef;
+    assert_eq!(EnumRef::plain("Opt").symbol(), "Opt");
+    assert_eq!(EnumRef::plain("Tagged").symbol(), "Tagged");
+    assert_eq!(
+        EnumRef::new("Pair", vec![AirType::I64, AirType::Str]).symbol(),
+        "__mono_Pair$2$i64$str"
     );
 }
