@@ -1,6 +1,6 @@
 
 use super::{ColorChoice, Command, ParsedArgs};
-use aelys_driver::{LinkRequirement, RuntimeVariant};
+use aelys_driver::{LinkRequirement, RuntimeVariant, SourceOptions};
 use aelys_opt::OptimizationLevel;
 use std::path::PathBuf;
 
@@ -31,6 +31,7 @@ struct Parser<'a> {
     color: ColorChoice,
     explain_code: Option<String>,
     link: LinkRequirement,
+    sources: SourceOptions,
 }
 
 impl<'a> Parser<'a> {
@@ -50,6 +51,7 @@ impl<'a> Parser<'a> {
             color: ColorChoice::Auto,
             explain_code: None,
             link: LinkRequirement::default(),
+            sources: SourceOptions::default(),
         }
     }
 
@@ -167,6 +169,20 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
+            if let Some(consumed_next) = self.parse_include_option(token_str)? {
+                self.advance();
+                if consumed_next {
+                    self.advance();
+                }
+                continue;
+            }
+
+            if token_str == "--no-prelude" {
+                self.sources.prelude = None;
+                self.advance();
+                continue;
+            }
+
             if let Some((wflag, consumed)) = self.parse_warning_flag(token_str)? {
                 self.warning_flags.push(wflag);
                 self.advance();
@@ -229,6 +245,7 @@ impl<'a> Parser<'a> {
             warning_flags: self.warning_flags,
             color: self.color,
             link: self.link,
+            sources: self.sources,
         })
     }
 
@@ -240,6 +257,7 @@ impl<'a> Parser<'a> {
             warning_flags: Vec::new(),
             color: self.color,
             link: LinkRequirement::default(),
+            sources: SourceOptions::default(),
         }
     }
 
@@ -251,6 +269,7 @@ impl<'a> Parser<'a> {
             warning_flags: Vec::new(),
             color: self.color,
             link: LinkRequirement::default(),
+            sources: SourceOptions::default(),
         }
     }
 
@@ -340,7 +359,6 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_warning_flag(&self, token: &str) -> Result<Option<(String, bool)>, String> {
-        // -wall, -wno-inline, -werror, etc
         if let Some(rest) = token.strip_prefix("-W") {
             if rest.is_empty() {
                 return Err("-W requires a category (e.g. -Wall, -Werror)".into());
@@ -413,6 +431,31 @@ impl<'a> Parser<'a> {
             return Ok(Some(consumed_next));
         }
         Ok(None)
+    }
+
+    fn parse_include_option(&mut self, token: &str) -> Result<Option<bool>, String> {
+        let (value, consumed_next) = if token == "-I" || token == "--include" {
+            let next = self
+                .peek_next()
+                .ok_or_else(|| format!("{} requires a value", token))?;
+            if next.starts_with('-') {
+                return Err(format!(
+                    "{token} requires a value and `{next}` looks like an option; write `-I{next}` or `--include={next}` to pass it as a value"
+                ));
+            }
+            (next.to_string(), true)
+        } else if let Some(rest) = token.strip_prefix("--include=") {
+            (rest.to_string(), false)
+        } else if let Some(rest) = token.strip_prefix("-I") {
+            (rest.to_string(), false)
+        } else {
+            return Ok(None);
+        };
+        if value.is_empty() || value == "=" {
+            return Err("-I requires a non-empty value".to_string());
+        }
+        self.sources.include.push(PathBuf::from(value));
+        Ok(Some(consumed_next))
     }
 
     fn peek_next(&self) -> Option<&str> {

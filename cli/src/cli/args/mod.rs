@@ -1,7 +1,7 @@
 mod parse;
 mod usage;
 
-use aelys_driver::{LinkRequirement, RuntimeVariant};
+use aelys_driver::{LinkRequirement, RuntimeVariant, SourceOptions};
 use aelys_opt::OptimizationLevel;
 
 pub use parse::parse_args;
@@ -37,4 +37,5 @@ pub struct ParsedArgs {
     pub warning_flags: Vec<String>,
     pub color: ColorChoice,
     pub link: LinkRequirement,
+    pub sources: SourceOptions,
 }

@@ -9,6 +9,7 @@ pub fn run_explain(code: &str) {
         None => {
             eprintln!("error: unknown error code: {}", code);
             eprintln!("Use 'aelys --explain EXXXX' with a valid error code.");
+            std::process::exit(1);
         }
     }
 }

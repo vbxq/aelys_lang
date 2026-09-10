@@ -60,6 +60,7 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
     let color = color_config_from_choice(&parsed.color);
     let runtime = parsed.runtime;
     let link = parsed.link;
+    let sources = parsed.sources;
 
     match parsed.command {
         args::Command::Help => Ok(0),
@@ -85,6 +86,7 @@ fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
             emit_llvm_ir,
             &color,
             &link,
+            &sources,
         ),
     }
 }

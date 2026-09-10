@@ -15,6 +15,8 @@ Flags:
   --emit-llvm-ir             Emit LLVM IR to <source>.ll
   -L, --library-path <dir>   Add a directory to the link search path
   -l, --library <name>       Link against a library, after the aelys runtime
+  -I, --include <dir>        Add a module search root, after the root file's own directory
+  --no-prelude               Do not look for the `std.prelude` module
   --explain <code>           Show detailed explanation for an error code (e.g., E0401)
   --color <auto|always|never>  Control color output (default: auto)
   --no-color                 Disable color output
@@ -29,5 +31,6 @@ Examples:
   aelys compile main.aelys -O2
   aelys compile main.aelys -o output.exe -Wall -Werror
   aelys compile main.aelys --emit-llvm-ir
+  aelys compile main.aelys -I /path/to/lib
   aelys --explain E0401"
 }
