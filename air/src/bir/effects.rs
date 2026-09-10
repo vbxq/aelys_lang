@@ -138,8 +138,10 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
         ("Rc", "new")
             | ("Vec", "new")
             | ("Vec", "push")
+            | ("Vec", "pop")
             | ("Vec", "with_capacity")
             | ("Vec", "reserve")
+            | ("string", "substring_bytes")
     )
 }
 
@@ -403,6 +405,12 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                     }
                 }
                 return;
+            }
+            if enum_name == "string" && variant == "substring_bytes" {
+                set.insert(Effect::Panic);
+            }
+            if enum_name == "Vec" && variant == "pop" {
+                set.insert(Effect::Panic);
             }
             if is_managed_alloc_variant(enum_name, variant) {
                 alloc_managed(set);

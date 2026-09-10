@@ -677,6 +677,32 @@ impl<'a> BodyBuilder<'a> {
         })
     }
 
+    // an operand nothing consumes is still a read, and a read the ir drops is a loan the escape pass never sees
+    fn read_operand(&mut self, expr: &TypedExpr) {
+        let op = self.build_operand(expr);
+        self.observe(op, expr.ty.clone(), expr.span);
+    }
+
+    fn observe(&mut self, op: BirOperand, ty: InferType, span: Span) {
+        if matches!(op, BirOperand::Const) {
+            return;
+        }
+        let _ = self.emit_to_temp(BirRvalue::Use(op), ty, span);
+    }
+
+    fn assign_temp(&mut self, dest: BirLocalId, op: BirOperand, span: Span) {
+        self.push(
+            BirStmtKind::Assign {
+                dest: BirPlace {
+                    local: dest,
+                    proj: Vec::new(),
+                },
+                rvalue: BirRvalue::Use(op),
+            },
+            span,
+        );
+    }
+
     fn place_of(&mut self, expr: &TypedExpr) -> Option<BirPlace> {
         match &expr.kind {
             TypedExprKind::Identifier(name) => self.lookup(name).map(|local| BirPlace {
@@ -689,7 +715,7 @@ impl<'a> BodyBuilder<'a> {
                 Some(base)
             }
             TypedExprKind::Index { object, index } => {
-                let _ = self.build_operand(index);
+                self.read_operand(index);
                 let mut base = self.place_of(object)?;
                 base.proj.push(BirProjection::Index);
                 Some(base)
@@ -711,8 +737,16 @@ impl<'a> BodyBuilder<'a> {
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
-            | TypedExprKind::FmtString(_)
             | TypedExprKind::Null => BirOperand::Const,
+
+            TypedExprKind::FmtString(parts) => {
+                for part in parts {
+                    if let TypedFmtStringPart::Expr(inner) = part {
+                        self.read_operand(inner);
+                    }
+                }
+                BirOperand::Const
+            }
 
             TypedExprKind::Identifier(name) => match self.lookup(name) {
                 Some(local) => {
@@ -728,6 +762,25 @@ impl<'a> BodyBuilder<'a> {
                 }
                 None => BirOperand::Const,
             },
+
+            TypedExprKind::Member { object, member }
+                if member == "bytes" && matches!(object.ty, InferType::String) =>
+            {
+                match self.place_of(object) {
+                    Some(place) => self.emit_to_temp(
+                        BirRvalue::Ref {
+                            place,
+                            mutable: false,
+                        },
+                        expr.ty.clone(),
+                        span,
+                    ),
+                    None => {
+                        let op = self.build_operand(object);
+                        self.emit_to_temp(BirRvalue::Use(op), expr.ty.clone(), span)
+                    }
+                }
+            }
 
             TypedExprKind::Member { .. }
             | TypedExprKind::Index { .. }
@@ -809,6 +862,36 @@ impl<'a> BodyBuilder<'a> {
                         }
                     }
                 }
+                // pop writes its receiver, so a live element borrow must die at the write
+                if enum_name.as_str() == "Vec" && variant.as_str() == "pop" {
+                    if let Some(recv) = args.first() {
+                        match self.build_operand(recv) {
+                            BirOperand::Copy(dest) => {
+                                self.push(
+                                    BirStmtKind::Assign {
+                                        dest: dest.clone(),
+                                        rvalue: BirRvalue::Aggregate(vec![BirOperand::Copy(
+                                            dest.clone(),
+                                        )]),
+                                    },
+                                    span,
+                                );
+                                return self.emit_to_temp(
+                                    BirRvalue::Aggregate(vec![BirOperand::Copy(dest)]),
+                                    expr.ty.clone(),
+                                    span,
+                                );
+                            }
+                            recv_op => {
+                                return self.emit_to_temp(
+                                    BirRvalue::Aggregate(vec![recv_op]),
+                                    expr.ty.clone(),
+                                    span,
+                                );
+                            }
+                        }
+                    }
+                }
                 if enum_name.as_str() == "Vec" && variant.as_str() == "len" {
                     if let Some(recv) = args.first() {
                         return self.build_operand(recv);
@@ -851,11 +934,12 @@ impl<'a> BodyBuilder<'a> {
                 self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
             TypedExprKind::ArraySized { size, fill_value } => {
-                let _ = self.build_operand(size);
+                self.read_operand(size);
+                let mut ops = Vec::new();
                 if let Some(fv) = fill_value {
-                    let _ = self.build_operand(fv);
+                    ops.push(self.build_operand(fv));
                 }
-                self.emit_to_temp(BirRvalue::Aggregate(Vec::new()), expr.ty.clone(), span)
+                self.emit_to_temp(BirRvalue::Aggregate(ops), expr.ty.clone(), span)
             }
 
             TypedExprKind::Reference { mutable, operand } => {
@@ -886,7 +970,7 @@ impl<'a> BodyBuilder<'a> {
 
             // a slice is a borrow of its base: no here, a slice of a slice is a kept form
             TypedExprKind::Slice { object, range } => {
-                let _ = self.build_operand(range);
+                self.read_operand(range);
                 let mutable = matches!(expr.ty, InferType::Slice { mutable: true, .. });
                 match self.place_of(object) {
                     Some(place) => {
@@ -900,10 +984,10 @@ impl<'a> BodyBuilder<'a> {
             }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
-                    let _ = self.build_operand(s);
+                    self.read_operand(s);
                 }
                 if let Some(e) = end {
-                    let _ = self.build_operand(e);
+                    self.read_operand(e);
                 }
                 BirOperand::Const
             }
@@ -933,7 +1017,7 @@ impl<'a> BodyBuilder<'a> {
             } => {
                 self.reject_projected_ref_store(value);
                 let v = self.build_operand(value);
-                let _ = self.build_operand(index);
+                self.read_operand(index);
                 if let Some(mut place) = self.place_of(object) {
                     place.proj.push(BirProjection::Index);
                     self.push(
@@ -1013,7 +1097,7 @@ impl<'a> BodyBuilder<'a> {
             left.span,
         );
         self.start(rhs_id);
-        let _ = self.build_operand(right);
+        self.read_operand(right);
         if self.cur_open {
             self.seal(BirTerminator::Goto(merge_id), expr.span);
         }
@@ -1030,6 +1114,7 @@ impl<'a> BodyBuilder<'a> {
         expr: &TypedExpr,
     ) -> BirOperand {
         let cond = self.build_operand(condition);
+        let out = self.new_temp(expr.ty.clone(), expr.span);
         let then_id = self.new_block_id();
         let merge_id = self.new_block_id();
         let else_id = if else_branch.is_some() {
@@ -1046,20 +1131,24 @@ impl<'a> BodyBuilder<'a> {
         );
 
         self.start(then_id);
-        let _ = self.build_operand(then_branch);
+        let taken = self.build_operand(then_branch);
         if self.cur_open {
+            self.assign_temp(out, taken, then_branch.span);
             self.seal(BirTerminator::Goto(merge_id), then_branch.span);
         }
         if let Some(else_br) = else_branch {
             self.start(else_id);
-            let _ = self.build_operand(else_br);
+            let other = self.build_operand(else_br);
             if self.cur_open {
+                self.assign_temp(out, other, else_br.span);
                 self.seal(BirTerminator::Goto(merge_id), else_br.span);
             }
         }
         self.start(merge_id);
-        let _ = expr;
-        BirOperand::Const
+        BirOperand::Copy(BirPlace {
+            local: out,
+            proj: Vec::new(),
+        })
     }
 
     fn build_match_expr(
@@ -1069,6 +1158,7 @@ impl<'a> BodyBuilder<'a> {
         expr: &TypedExpr,
     ) -> BirOperand {
         let discr = self.build_operand(scrutinee);
+        let out = self.new_temp(expr.ty.clone(), expr.span);
         let merge_id = self.new_block_id();
         let arm_ids: Vec<BirBlockId> = arms.iter().map(|_| self.new_block_id()).collect();
         let mut targets = arm_ids.clone();
@@ -1079,15 +1169,20 @@ impl<'a> BodyBuilder<'a> {
         for (arm, id) in arms.iter().zip(arm_ids.iter()) {
             self.start(*id);
             self.open_scope(arm.body.span);
-            let _ = self.build_operand(&arm.body);
+            let taken = self.build_operand(&arm.body);
+            if self.cur_open {
+                self.assign_temp(out, taken, arm.body.span);
+            }
             self.close_scope();
             if self.cur_open {
                 self.seal(BirTerminator::Goto(merge_id), arm.body.span);
             }
         }
         self.start(merge_id);
-        let _ = expr;
-        BirOperand::Const
+        BirOperand::Copy(BirPlace {
+            local: out,
+            proj: Vec::new(),
+        })
     }
 
     fn build_block_expr(&mut self, stmts: &[TypedStmt], tail: &TypedExpr) -> BirOperand {
@@ -1272,7 +1367,7 @@ impl<'a> BodyBuilder<'a> {
                 value,
             } => self.build_field_assign(object, field, value, span),
             TypedExprKind::IndexAssign { .. } | TypedExprKind::DerefAssign { .. } => {
-                let _ = self.build_operand(expr);
+                self.read_operand(expr);
             }
             TypedExprKind::If {
                 condition,
@@ -1288,7 +1383,7 @@ impl<'a> BodyBuilder<'a> {
                 let _ = self.build_block_expr(stmts, tail);
             }
             _ => {
-                let _ = self.build_operand(expr);
+                self.read_operand(expr);
             }
         }
     }
@@ -1364,10 +1459,10 @@ impl<'a> BodyBuilder<'a> {
         step: Option<&TypedExpr>,
         body: &TypedStmt,
     ) {
-        let _ = self.build_operand(start);
-        let _ = self.build_operand(end);
+        self.read_operand(start);
+        self.read_operand(end);
         if let Some(s) = step {
-            let _ = self.build_operand(s);
+            self.read_operand(s);
         }
         let header_id = self.new_block_id();
         let body_id = self.new_block_id();
@@ -1401,12 +1496,15 @@ impl<'a> BodyBuilder<'a> {
         elem_type: &InferType,
         body: &TypedStmt,
     ) {
-        let _ = self.build_operand(iterable);
+        let iter_op = self.build_operand(iterable);
+        let iter_ty = iterable.ty.clone();
+        let iter_span = iterable.span;
         let header_id = self.new_block_id();
         let body_id = self.new_block_id();
         let exit_id = self.new_block_id();
         self.seal(BirTerminator::Goto(header_id), body.span);
         self.start(header_id);
+        self.observe(iter_op, iter_ty, iter_span);
         self.seal(
             BirTerminator::Branch {
                 discr: BirOperand::Const,

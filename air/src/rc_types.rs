@@ -72,14 +72,15 @@ pub fn compute_offset_for_path(
                 cur = field.ty.clone();
             }
             RcPathStep::EnumPayload {
-                enum_name,
+                enum_ref,
                 tag,
                 field_index,
             } => {
+                let enum_name = enum_ref.symbol();
                 let def = program
                     .enums
                     .iter()
-                    .find(|e| &e.name == enum_name)
+                    .find(|e| e.name == enum_name)
                     .ok_or_else(|| {
                         RcOffsetError(format!("unknown enum `{enum_name}` along Rc path"))
                     })?;

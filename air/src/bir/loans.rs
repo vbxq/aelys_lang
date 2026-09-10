@@ -55,6 +55,25 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
         .unwrap_or(false)
 }
 
+// e0714 asks whether the operand is a reference, and a projection off a reference base need not be one
+fn projected_is_ref(body: &BirBody, place: &BirPlace) -> bool {
+    let Some(local) = body.locals.get(place.local.0 as usize) else {
+        return false;
+    };
+    let mut ty = &local.ty;
+    for step in &place.proj {
+        ty = match (step, ty) {
+            (BirProjection::Deref, InferType::Ref { referent, .. }) => referent,
+            (
+                BirProjection::Index,
+                InferType::Slice { elem, .. } | InferType::Array(elem, _) | InferType::Vec(elem),
+            ) => elem,
+            _ => return is_ref_ty(&local.ty),
+        };
+    }
+    is_ref_ty(ty)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RootClass {
     Managed,
@@ -214,7 +233,7 @@ pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<
                 BirRvalue::Aggregate(ops) => {
                     for op in ops {
                         if let BirOperand::Copy(p) | BirOperand::Move(p) = op {
-                            if local_is_ref(body, p.local) {
+                            if projected_is_ref(body, p) {
                                 let decl = body.locals[p.local.0 as usize].decl_span;
                                 errors.push(
                                     BirDiagnostic::new(

@@ -36,6 +36,46 @@ pub struct Span {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumRef {
+    pub name: String,
+    pub args: Vec<AirType>,
+}
+
+impl EnumRef {
+    pub fn plain(name: impl Into<String>) -> Self {
+        EnumRef {
+            name: name.into(),
+            args: Vec::new(),
+        }
+    }
+
+    pub fn new(name: impl Into<String>, args: Vec<AirType>) -> Self {
+        EnumRef {
+            name: name.into(),
+            args,
+        }
+    }
+
+    // the symbol is produced for codegen and display and is never parsed back for meaning
+    pub fn symbol(&self) -> String {
+        derive_enum_symbol(&self.name, &self.args)
+    }
+}
+
+// three pinned strings and the byte golden read a plain enum under its bare name, so arity 0 must not decorate
+pub fn derive_enum_symbol(name: &str, args: &[AirType]) -> String {
+    if args.is_empty() {
+        return name.to_string();
+    }
+    let rendered = args
+        .iter()
+        .map(crate::mono::substitute::type_to_string)
+        .collect::<Vec<_>>()
+        .join("$");
+    format!("__mono_{}${}${}", name, args.len(), rendered)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AirType {
     I8,
     I16,
@@ -52,7 +92,7 @@ pub enum AirType {
     Str,
     Ptr(Box<AirType>),
     Struct(String),
-    Enum(String),
+    Enum(EnumRef),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
     // extra cap field never perturbs immutable array views
@@ -303,17 +343,17 @@ pub enum Rvalue {
         index: Operand,
     },
     EnumInit {
-        enum_name: String,
+        enum_ref: EnumRef,
         variant: String,
         tag: u32,
         payload: Vec<Operand>, // empty for unit variants
     },
     EnumTag {
-        enum_name: String,
+        enum_ref: EnumRef,
         operand: Operand,
     },
     EnumPayload {
-        enum_name: String,
+        enum_ref: EnumRef,
         tag: u32,
         operand: Operand,
         field_index: u32,
@@ -355,7 +395,7 @@ pub enum AirConst {
     Null,
     FnRef(String),
     Enum {
-        enum_name: String,
+        enum_ref: EnumRef,
         tag: u32,
         payload: Vec<AirConst>,
     },

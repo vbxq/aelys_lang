@@ -1,11 +1,11 @@
-use crate::{AirEnumDef, AirStructDef, AirType};
+use crate::{AirEnumDef, AirStructDef, AirType, EnumRef};
 use std::collections::HashSet;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RcPathStep {
     Field(String),
     EnumPayload {
-        enum_name: String,
+        enum_ref: EnumRef,
         tag: u32,
         field_index: u32,
     },
@@ -95,8 +95,9 @@ fn scan(
             visited.remove(name);
             Ok(())
         }
-        AirType::Enum(name) => {
-            let Some(def) = enums.iter().find(|e| &e.name == name) else {
+        AirType::Enum(r) => {
+            let name = r.symbol();
+            let Some(def) = enums.iter().find(|e| e.name == name) else {
                 return Ok(());
             };
             if def
@@ -120,7 +121,7 @@ fn scan(
                         scan(pty, structs, enums, &mut Vec::new(), &mut probe, visited)?;
                     }
                 }
-                visited.remove(name);
+                visited.remove(&name);
                 if !probe.is_empty() {
                     return Err(ScanReject::MultiVariant(format!(
                         "`{name}` is a multi-variant enum carrying an `Rc<T>` in a variant payload; \
@@ -133,16 +134,16 @@ fn scan(
             for v in &def.variants {
                 for (field_index, pty) in v.payload.iter().enumerate() {
                     prefix.push(RcPathStep::EnumPayload {
-                        enum_name: name.clone(),
+                        enum_ref: r.clone(),
                         tag: v.tag,
                         field_index: field_index as u32,
                     });
-                    let r = scan(pty, structs, enums, prefix, out, visited);
+                    let res = scan(pty, structs, enums, prefix, out, visited);
                     prefix.pop();
-                    r?;
+                    res?;
                 }
             }
-            visited.remove(name);
+            visited.remove(&name);
             Ok(())
         }
         AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {

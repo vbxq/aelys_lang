@@ -1,5 +1,50 @@
 use crate::{AirEnumDef, AirProgram, AirStructDef, AirType};
+use aelys_common::Fault;
 use std::collections::{HashMap, HashSet};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LayoutError {
+    InfiniteSize {
+        struct_name: String,
+        field: String,
+    },
+    RecursiveCycle {
+        names: Vec<String>,
+    },
+    StructCycle {
+        names: Vec<String>,
+    },
+}
+
+impl LayoutError {
+    pub fn fault(&self) -> Fault {
+        match self {
+            LayoutError::InfiniteSize { .. } => Fault::Program,
+            LayoutError::RecursiveCycle { .. } => Fault::Program,
+            LayoutError::StructCycle { .. } => Fault::Program,
+        }
+    }
+}
+
+impl std::fmt::Display for LayoutError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LayoutError::InfiniteSize { struct_name, field } => write!(
+                f,
+                "struct `{}` has infinite size: field `{}` contains `{}` by value",
+                struct_name, field, struct_name
+            ),
+            LayoutError::RecursiveCycle { names } => write!(
+                f,
+                "recursive type cycle involving by-value enums/structs: {}",
+                names.join(" <-> ")
+            ),
+            LayoutError::StructCycle { names } => {
+                write!(f, "recursive struct cycle: {}", names.join(" <-> "))
+            }
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 pub struct TypeLayout {
@@ -14,12 +59,11 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::I32 | AirType::U32 | AirType::F32 => TypeLayout { size: 4, align: 4 },
         AirType::I64 | AirType::U64 | AirType::F64 => TypeLayout { size: 8, align: 8 },
         AirType::Ptr(_) => TypeLayout { size: 8, align: 8 },
-        // Aelys function values are fat pointers { fn_ptr: ptr, env_ptr: ptr } = 16 bytes.
         AirType::FnPtr { .. } => TypeLayout { size: 16, align: 8 },
         AirType::Str => TypeLayout { size: 16, align: 8 },
         AirType::Void => TypeLayout { size: 0, align: 1 },
         AirType::Slice(_) => TypeLayout { size: 16, align: 8 },
-        // Stage 4 Vec: 24-byte fat ptr {ptr, len, cap}, 8-aligned (design §2/§8 H2).
+        // stage 4 vec: 24-byte fat ptr {ptr, len, cap}, 8-aligned (design §2/§8 h2).
         AirType::Vec(_) => TypeLayout { size: 24, align: 8 },
         AirType::Param(_) | AirType::Opaque => TypeLayout { size: 8, align: 8 },
         AirType::Array(inner, n) => {
@@ -29,16 +73,14 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
                 align: el.align,
             }
         }
-        // tag only: a data enum is sized from its registered llvm struct in codegen
         AirType::Enum(_) => TypeLayout { size: 4, align: 4 },
         AirType::Struct(name) => {
-            // no sound fallback exists here, so reaching this context-free path is a bug
             panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
         }
     }
 }
 
-pub fn compute_layouts(program: &mut AirProgram) -> Vec<String> {
+pub fn compute_layouts(program: &mut AirProgram) -> Vec<LayoutError> {
     let name_to_idx: HashMap<String, usize> = program
         .structs
         .iter()
@@ -134,10 +176,7 @@ pub fn compute_layouts(program: &mut AirProgram) -> Vec<String> {
                 .iter()
                 .map(|&idx| format!("enum {}", program.enums[idx].name)),
         );
-        return vec![format!(
-            "recursive type cycle involving by-value enums/structs: {}",
-            names.join(" <-> ")
-        )];
+        return vec![LayoutError::RecursiveCycle { names }];
     }
 
     program.struct_sizes = resolved;
@@ -153,7 +192,8 @@ where
 
 fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
     match ty {
-        AirType::Struct(name) | AirType::Enum(name) => resolved.contains_key(name.as_str()),
+        AirType::Struct(name) => resolved.contains_key(name.as_str()),
+        AirType::Enum(r) => resolved.contains_key(r.symbol().as_str()),
         AirType::Array(inner, _) => type_resolved(inner, resolved),
         AirType::I8
         | AirType::U8
@@ -182,8 +222,8 @@ pub fn resolved_layout(ty: &AirType, sizes: &HashMap<String, TypeLayout>) -> Typ
         AirType::Struct(name) => *sizes.get(name.as_str()).unwrap_or_else(|| {
             panic!("invariant: struct `{name}` referenced before its layout is computed")
         }),
-        AirType::Enum(name) => sizes
-            .get(name.as_str())
+        AirType::Enum(r) => sizes
+            .get(r.symbol().as_str())
             .copied()
             .unwrap_or(TypeLayout { size: 4, align: 4 }),
         AirType::Array(inner, n) => {
@@ -224,15 +264,15 @@ pub fn align_to(offset: u32, align: u32) -> u32 {
     (offset + align - 1) & !(align - 1)
 }
 
-fn detect_self_references(structs: &[AirStructDef]) -> Vec<String> {
+fn detect_self_references(structs: &[AirStructDef]) -> Vec<LayoutError> {
     let mut errors = Vec::new();
     for def in structs {
         for field in &def.fields {
             if references_by_value(&field.ty, &def.name) {
-                errors.push(format!(
-                    "struct `{}` has infinite size: field `{}` contains `{}` by value",
-                    def.name, field.name, def.name
-                ));
+                errors.push(LayoutError::InfiniteSize {
+                    struct_name: def.name.clone(),
+                    field: field.name.clone(),
+                });
             }
         }
     }
@@ -260,7 +300,7 @@ fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
 fn topological_order(
     structs: &[AirStructDef],
     name_to_idx: &HashMap<String, usize>,
-) -> Result<Vec<usize>, String> {
+) -> Result<Vec<usize>, LayoutError> {
     let n = structs.len();
     let mut in_degree = vec![0u32; n];
     let mut dependents: Vec<Vec<usize>> = vec![vec![]; n];
@@ -293,22 +333,20 @@ fn topological_order(
     }
 
     if order.len() != n {
-        let cycle: Vec<&str> = (0..n)
+        let names: Vec<String> = (0..n)
             .filter(|&i| in_degree[i] > 0)
-            .map(|i| structs[i].name.as_str())
+            .map(|i| structs[i].name.clone())
             .collect();
-        return Err(format!("recursive struct cycle: {}", cycle.join(" <-> ")));
+        return Err(LayoutError::StructCycle { names });
     }
 
     Ok(order)
 }
 
-/// Returns true if the enum has any data variants (non-empty payload).
 pub fn enum_has_data(def: &AirEnumDef) -> bool {
     def.variants.iter().any(|v| !v.payload.is_empty())
 }
 
-/// Compute the max alignment needed across all payload fields of a data enum.
 fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>) -> u32 {
     def.variants
         .iter()
@@ -318,12 +356,7 @@ fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>)
         .unwrap_or(1)
 }
 
-/// Compute the max payload size in bytes across all variants of a data enum.
-/// Each variant's payload is laid out with proper alignment padding between fields,
-/// matching the aligned offsets that codegen uses when storing fields.
-///
 /// `struct_sizes` must contain computed sizes for any struct types that appear
-/// in enum variant payloads. Pass `&program.struct_sizes` after `compute_layouts`.
 pub fn enum_max_payload_size(def: &AirEnumDef, struct_sizes: &HashMap<String, TypeLayout>) -> u32 {
     def.variants
         .iter()
