@@ -19,7 +19,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
         AirType::Struct(name) => name.clone(),
-        AirType::Enum(name) => format!("enum {}", name),
+        AirType::Enum(r) => format!("enum {}", r.symbol()),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
         AirType::Slice(inner) => format!("[{}]", fmt_type(inner)),
         AirType::Vec(inner) => format!("Vec<{}>", fmt_type(inner)),
@@ -68,12 +68,12 @@ pub fn fmt_const(c: &AirConst) -> String {
         AirConst::Null => "null".into(),
         AirConst::FnRef(name) => format!("fnref @{}", name),
         AirConst::Enum {
-            enum_name,
+            enum_ref,
             tag,
             payload,
         } => {
             let payload = payload.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
-            format!("enumconst {}#{}({})", enum_name, tag, payload)
+            format!("enumconst {}#{}({})", enum_ref.symbol(), tag, payload)
         }
         AirConst::ZeroInit(ty) => format!("zeroinit {}", fmt_type(ty)),
         AirConst::Undef(ty) => format!("undef {}", fmt_type(ty)),
@@ -178,7 +178,6 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             .find(|g| g.name == *name)
             .map(|g| g.ty.clone())
             .unwrap_or(AirType::Void),
-        // through the pointer is what keeps `--emit-air` readable
         Place::Field(id, name) => {
             let root = match local_type(func, *id) {
                 AirType::Ptr(inner) => inner.as_ref(),
@@ -270,36 +269,40 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
             )
         }
         Rvalue::EnumInit {
-            enum_name,
+            enum_ref,
             variant,
             tag,
             payload,
         } => {
             if payload.is_empty() {
-                format!("enum_init {}::{} (tag={})", enum_name, variant, tag)
+                format!("enum_init {}::{} (tag={})", enum_ref.symbol(), variant, tag)
             } else {
                 let args: Vec<_> = payload.iter().map(|p| fmt_operand(p, func)).collect();
                 format!(
                     "enum_init {}::{} (tag={}, payload=[{}])",
-                    enum_name,
+                    enum_ref.symbol(),
                     variant,
                     tag,
                     args.join(", ")
                 )
             }
         }
-        Rvalue::EnumTag { enum_name, operand } => {
-            format!("enum_tag {} {}", enum_name, fmt_operand(operand, func))
+        Rvalue::EnumTag { enum_ref, operand } => {
+            format!(
+                "enum_tag {} {}",
+                enum_ref.symbol(),
+                fmt_operand(operand, func)
+            )
         }
         Rvalue::EnumPayload {
-            enum_name,
+            enum_ref,
             tag,
             operand,
             field_index,
         } => {
             format!(
                 "enum_payload {} (tag={}, field={}) {}",
-                enum_name,
+                enum_ref.symbol(),
                 tag,
                 field_index,
                 fmt_operand(operand, func)

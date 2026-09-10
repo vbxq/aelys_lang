@@ -2,10 +2,38 @@ use crate::{AirProgram, AirStmtKind, AirType, Span};
 use std::collections::{HashMap, HashSet};
 
 pub const MARKER: &str = "[vec-surface]";
+pub const NO_DEFINITION_MARKER: &str = "[no-definition]";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SurfaceErrorKind {
+    VecSurface,
+    NoDefinition,
+}
 
 pub struct VecSurfaceError {
+    pub kind: SurfaceErrorKind,
     pub message: String,
     pub span: Option<Span>,
+}
+
+enum Reject {
+    NoDefinition(String),
+    Undecidable(String),
+}
+
+impl Reject {
+    fn kind(&self) -> SurfaceErrorKind {
+        match self {
+            Reject::NoDefinition(_) => SurfaceErrorKind::NoDefinition,
+            Reject::Undecidable(_) => SurfaceErrorKind::VecSurface,
+        }
+    }
+
+    fn reason(&self) -> &str {
+        match self {
+            Reject::NoDefinition(reason) | Reject::Undecidable(reason) => reason,
+        }
+    }
 }
 
 pub fn check_vec_surface(program: &AirProgram) -> Result<(), Vec<VecSurfaceError>> {
@@ -96,7 +124,7 @@ pub fn check_vec_surface(program: &AirProgram) -> Result<(), Vec<VecSurfaceError
     }
 }
 
-pub fn type_args_reject(program: &AirProgram, ty: &AirType) -> Option<String> {
+pub fn type_args_reject(program: &AirProgram, ty: &AirType) -> Option<(SurfaceErrorKind, String)> {
     let scan = Scan {
         structs: program
             .structs
@@ -107,9 +135,30 @@ pub fn type_args_reject(program: &AirProgram, ty: &AirType) -> Option<String> {
     };
     let mut visited = HashSet::new();
     match scan.holds_vec(ty, &mut visited) {
-        Ok(true) => Some(format!("`{}` holds a `Vec<T>` by value", type_name(ty))),
+        Ok(true) => Some((
+            SurfaceErrorKind::VecSurface,
+            format!("`{}` holds a `Vec<T>` by value", type_name(ty)),
+        )),
         Ok(false) => None,
-        Err(reason) => Some(reason),
+        Err(reject) => Some((reject.kind(), reject.reason().to_string())),
+    }
+}
+
+fn reject_error(reject: Reject, ty: &AirType, what: &str, span: Option<Span>) -> VecSurfaceError {
+    let message = match &reject {
+        Reject::NoDefinition(reason) => format!(
+            "{NO_DEFINITION_MARKER} {what} has type `{}`, and {reason}",
+            type_name(ty)
+        ),
+        Reject::Undecidable(reason) => format!(
+            "{MARKER} {what} has type `{}`, which the Vec surface check cannot decide: {reason}",
+            type_name(ty)
+        ),
+    };
+    VecSurfaceError {
+        kind: reject.kind(),
+        message,
+        span,
     }
 }
 
@@ -119,11 +168,31 @@ struct Scan<'a> {
 }
 
 impl Scan<'_> {
+    // this runs before the enum mono pass, so an instantiation is still its generic definition plus its arguments
+    fn enum_payloads(&self, r: &crate::EnumRef) -> Result<(String, Vec<AirType>), Reject> {
+        let symbol = r.symbol();
+        let def = self
+            .enums
+            .get(symbol.as_str())
+            .or_else(|| self.enums.get(r.name.as_str()))
+            .ok_or_else(|| {
+                Reject::NoDefinition(format!("enum `{symbol}` has no definition in the program"))
+            })?;
+        let payloads = def
+            .variants
+            .iter()
+            .flat_map(|v| v.payload.iter())
+            .map(|ty| crate::mono::substitute_type_params(ty, &def.type_params, &r.args))
+            .collect();
+        Ok((symbol, payloads))
+    }
+
     fn slot(&self, ty: &AirType, what: &str, span: Option<Span>, out: &mut Vec<VecSurfaceError>) {
         let mut visited = HashSet::new();
         match self.offend_slot(ty, &mut visited) {
             Ok(false) => {}
             Ok(true) => out.push(VecSurfaceError {
+                kind: SurfaceErrorKind::VecSurface,
                 message: format!(
                     "{MARKER} {what} has type `{}`, which holds a `Vec<T>` by value inside \
                      another container; a Vec inside a Vec/array/struct/enum is not supported \
@@ -133,14 +202,7 @@ impl Scan<'_> {
                 ),
                 span,
             }),
-            Err(reason) => out.push(VecSurfaceError {
-                message: format!(
-                    "{MARKER} {what} has type `{}`, which the Vec surface check cannot decide: \
-                     {reason}",
-                    type_name(ty)
-                ),
-                span,
-            }),
+            Err(reject) => out.push(reject_error(reject, ty, what, span)),
         }
     }
 
@@ -149,6 +211,7 @@ impl Scan<'_> {
         match self.holds_vec(ty, &mut visited) {
             Ok(false) => {}
             Ok(true) => out.push(VecSurfaceError {
+                kind: SurfaceErrorKind::VecSurface,
                 message: format!(
                     "{MARKER} {what} has type `{}`, which holds a `Vec<T>` by value; a Vec \
                      inside a Vec/array/struct/enum/Rc is not supported yet (the buffer would \
@@ -158,24 +221,19 @@ impl Scan<'_> {
                 ),
                 span,
             }),
-            Err(reason) => out.push(VecSurfaceError {
-                message: format!(
-                    "{MARKER} {what} has type `{}`, which the Vec surface check cannot decide: \
-                     {reason}",
-                    type_name(ty)
-                ),
-                span,
-            }),
+            Err(reject) => out.push(reject_error(reject, ty, what, span)),
         }
     }
 
-    fn holds_vec(&self, ty: &AirType, visited: &mut HashSet<String>) -> Result<bool, String> {
+    fn holds_vec(&self, ty: &AirType, visited: &mut HashSet<String>) -> Result<bool, Reject> {
         match ty {
             AirType::Vec(_) => Ok(true),
             AirType::Array(inner, _) => self.holds_vec(inner, visited),
             AirType::Struct(name) => {
                 let Some(def) = self.structs.get(name.as_str()) else {
-                    return Err(format!("struct `{name}` has no definition in the program"));
+                    return Err(Reject::NoDefinition(format!(
+                        "struct `{name}` has no definition in the program"
+                    )));
                 };
                 if !visited.insert(name.clone()) {
                     return Ok(false);
@@ -187,24 +245,25 @@ impl Scan<'_> {
                 visited.remove(name);
                 Ok(found)
             }
-            AirType::Enum(name) => {
-                let Some(def) = self.enums.get(name.as_str()) else {
-                    return Err(format!("enum `{name}` has no definition in the program"));
-                };
-                if !visited.insert(name.clone()) {
+            AirType::Enum(r) => {
+                let (symbol, payloads) = self.enum_payloads(r)?;
+                if !visited.insert(symbol.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
-                for variant in &def.variants {
-                    for payload in &variant.payload {
-                        found |= self.holds_vec(payload, visited)?;
-                    }
+                for payload in &payloads {
+                    found |= self.holds_vec(payload, visited)?;
                 }
-                visited.remove(name);
+                visited.remove(&symbol);
                 Ok(found)
             }
-            AirType::Param(id) => Err(format!("type parameter {} survived monomorphization", id.0)),
-            AirType::Opaque => Err("an unresolved `Dynamic` type survived lowering".to_string()),
+            AirType::Param(id) => Err(Reject::Undecidable(format!(
+                "type parameter {} survived monomorphization",
+                id.0
+            ))),
+            AirType::Opaque => Err(Reject::Undecidable(
+                "an unresolved `Dynamic` type survived lowering".to_string(),
+            )),
             // a pointer, a slice and a fn pointer refer to a buffer, they never carry one
             AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
             AirType::I8
@@ -223,12 +282,14 @@ impl Scan<'_> {
         }
     }
 
-    fn offend_slot(&self, ty: &AirType, visited: &mut HashSet<String>) -> Result<bool, String> {
+    fn offend_slot(&self, ty: &AirType, visited: &mut HashSet<String>) -> Result<bool, Reject> {
         match ty {
             AirType::Vec(inner) | AirType::Array(inner, _) => self.holds_vec(inner, visited),
             AirType::Struct(name) => {
                 let Some(def) = self.structs.get(name.as_str()) else {
-                    return Err(format!("struct `{name}` has no definition in the program"));
+                    return Err(Reject::NoDefinition(format!(
+                        "struct `{name}` has no definition in the program"
+                    )));
                 };
                 if !visited.insert(name.clone()) {
                     return Ok(false);
@@ -244,24 +305,25 @@ impl Scan<'_> {
                 visited.remove(name);
                 Ok(found)
             }
-            AirType::Enum(name) => {
-                let Some(def) = self.enums.get(name.as_str()) else {
-                    return Err(format!("enum `{name}` has no definition in the program"));
-                };
-                if !visited.insert(name.clone()) {
+            AirType::Enum(r) => {
+                let (symbol, payloads) = self.enum_payloads(r)?;
+                if !visited.insert(symbol.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
-                for variant in &def.variants {
-                    for payload in &variant.payload {
-                        found |= self.holds_vec(payload, visited)?;
-                    }
+                for payload in &payloads {
+                    found |= self.holds_vec(payload, visited)?;
                 }
-                visited.remove(name);
+                visited.remove(&symbol);
                 Ok(found)
             }
-            AirType::Param(id) => Err(format!("type parameter {} survived monomorphization", id.0)),
-            AirType::Opaque => Err("an unresolved `Dynamic` type survived lowering".to_string()),
+            AirType::Param(id) => Err(Reject::Undecidable(format!(
+                "type parameter {} survived monomorphization",
+                id.0
+            ))),
+            AirType::Opaque => Err(Reject::Undecidable(
+                "an unresolved `Dynamic` type survived lowering".to_string(),
+            )),
             AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
             AirType::I8
             | AirType::I16

@@ -1,8 +1,8 @@
 //! - eo `airtype::opaque` anywhere, because this means an unresolved dynamic type survived past monomorphization
 
 use crate::{
-    AirBlock, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BlockId, Callee,
-    LocalId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BlockId,
+    Callee, EnumRef, LocalId, Operand, Place, Rvalue,
 };
 use std::collections::HashSet;
 use std::fmt;
@@ -41,6 +41,7 @@ pub enum AirValidationDetail {
         enum_name: String,
     },
     UnknownEnumReference { enum_name: String, context: String },
+    TypeParamSurvived { rendered: String, context: String },
     UnknownGlobalReference {
         global_name: String,
         context: String,
@@ -138,6 +139,12 @@ impl fmt::Display for AirValidationError {
                 write!(
                     f,
                     "enum operation references unknown enum `{enum_name}` after monomorphization ({context})"
+                )
+            }
+            AirValidationDetail::TypeParamSurvived { rendered, context } => {
+                write!(
+                    f,
+                    "`{rendered}` still names a type parameter after monomorphization ({context})"
                 )
             }
             AirValidationDetail::UnknownGlobalReference {
@@ -260,9 +267,14 @@ fn collect_unknown_enum_names(
     missing: &mut Vec<String>,
 ) {
     match ty {
-        AirType::Enum(name) => {
-            if !known_enums.contains(name) && !missing.iter().any(|existing| existing == name) {
-                missing.push(name.clone());
+        AirType::Enum(r) => {
+            let symbol = r.symbol();
+            if !known_enums.contains(&symbol) && !missing.iter().any(|existing| *existing == symbol)
+            {
+                missing.push(symbol);
+            }
+            for arg in &r.args {
+                collect_unknown_enum_names(arg, known_enums, missing);
             }
         }
         AirType::Ptr(inner)
@@ -285,6 +297,46 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
     let mut errors = Vec::new();
     let known_enums: HashSet<String> = program.enums.iter().map(|def| def.name.clone()).collect();
     let known_globals: HashSet<String> = program.globals.iter().map(|g| g.name.clone()).collect();
+
+    for global in &program.globals {
+        let owner = format!("global {}", global.name);
+        let mut missing = Vec::new();
+        collect_unknown_enum_names(&global.ty, &known_enums, &mut missing);
+        for enum_name in missing {
+            errors.push(AirValidationError {
+                function_name: owner.clone(),
+                detail: AirValidationDetail::UnknownEnumReference {
+                    enum_name,
+                    context: "global type".to_string(),
+                },
+            });
+        }
+    }
+
+    // a generic definition is a template until mono replaces it, so its own payload is not a use
+    for def in &program.enums {
+        if !def.type_params.is_empty() {
+            continue;
+        }
+        let owner = format!("enum {}", def.name);
+        for variant in &def.variants {
+            for ty in &variant.payload {
+                let mut missing = Vec::new();
+                collect_unknown_enum_names(ty, &known_enums, &mut missing);
+                for enum_name in missing {
+                    errors.push(AirValidationError {
+                        function_name: owner.clone(),
+                        detail: AirValidationDetail::UnknownEnumReference {
+                            enum_name,
+                            context: format!("payload of variant `{}`", variant.name),
+                        },
+                    });
+                }
+            }
+        }
+    }
+
+    check_no_type_params(program, &mut errors);
 
     for def in &program.structs {
         for field in &def.fields {
@@ -702,6 +754,269 @@ fn check_terminator_locals(
     }
 }
 
+// mono renders a surviving type parameter as `param_n`, so a name carrying it is the same defect as the type
+fn note_type_param(
+    rendered: String,
+    owner: &str,
+    context: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    errors.push(AirValidationError {
+        function_name: owner.to_string(),
+        detail: AirValidationDetail::TypeParamSurvived {
+            rendered,
+            context: context.to_string(),
+        },
+    });
+}
+
+fn check_type_for_params(
+    ty: &AirType,
+    owner: &str,
+    context: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    match ty {
+        AirType::Param(id) => note_type_param(format!("param_{}", id.0), owner, context, errors),
+        AirType::Struct(name) => {
+            if name.contains("param_") {
+                note_type_param(name.clone(), owner, context, errors);
+            }
+        }
+        AirType::Enum(r) => {
+            let symbol = r.symbol();
+            if symbol.contains("param_") {
+                note_type_param(symbol, owner, context, errors);
+            }
+            for arg in &r.args {
+                check_type_for_params(arg, owner, context, errors);
+            }
+        }
+        AirType::Ptr(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner)
+        | AirType::Vec(inner) => check_type_for_params(inner, owner, context, errors),
+        AirType::FnPtr { params, ret, .. } => {
+            for param in params {
+                check_type_for_params(param, owner, context, errors);
+            }
+            check_type_for_params(ret, owner, context, errors);
+        }
+        _ => {}
+    }
+}
+
+fn check_const_for_params(
+    value: &AirConst,
+    owner: &str,
+    context: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    match value {
+        AirConst::Enum {
+            enum_ref, payload, ..
+        } => {
+            check_type_for_params(&AirType::Enum(enum_ref.clone()), owner, context, errors);
+            for item in payload {
+                check_const_for_params(item, owner, context, errors);
+            }
+        }
+        AirConst::Struct { name, fields } => {
+            if name.contains("param_") {
+                note_type_param(name.clone(), owner, context, errors);
+            }
+            for (_, item) in fields {
+                check_const_for_params(item, owner, context, errors);
+            }
+        }
+        AirConst::Array(items) => {
+            for item in items {
+                check_const_for_params(item, owner, context, errors);
+            }
+        }
+        AirConst::ZeroInit(ty) | AirConst::Undef(ty) => {
+            check_type_for_params(ty, owner, context, errors)
+        }
+        _ => {}
+    }
+}
+
+fn check_operand_for_params(
+    operand: &Operand,
+    owner: &str,
+    context: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    if let Operand::Const(value) = operand {
+        check_const_for_params(value, owner, context, errors);
+    }
+}
+
+fn check_no_type_params(program: &AirProgram, errors: &mut Vec<AirValidationError>) {
+    for global in &program.globals {
+        let owner = format!("global {}", global.name);
+        check_type_for_params(&global.ty, &owner, "global type", errors);
+        if let Some(init) = &global.init {
+            check_const_for_params(init, &owner, "global initializer", errors);
+        }
+    }
+    for def in &program.structs {
+        if !def.type_params.is_empty() {
+            continue;
+        }
+        let owner = format!("struct {}", def.name);
+        if def.name.contains("param_") {
+            note_type_param(def.name.clone(), &owner, "definition name", errors);
+        }
+        for field in &def.fields {
+            check_type_for_params(
+                &field.ty,
+                &owner,
+                &format!("field `{}`", field.name),
+                errors,
+            );
+        }
+    }
+    for def in &program.enums {
+        if !def.type_params.is_empty() {
+            continue;
+        }
+        let owner = format!("enum {}", def.name);
+        if def.name.contains("param_") {
+            note_type_param(def.name.clone(), &owner, "definition name", errors);
+        }
+        for variant in &def.variants {
+            for ty in &variant.payload {
+                check_type_for_params(
+                    ty,
+                    &owner,
+                    &format!("payload of variant `{}`", variant.name),
+                    errors,
+                );
+            }
+        }
+    }
+    // an extern signature never reaches validate_function, which returns before it is read
+    for function in &program.functions {
+        if !function.type_params.is_empty() {
+            continue;
+        }
+        let owner = &function.name;
+        if function.name.contains("param_") {
+            note_type_param(function.name.clone(), owner, "definition name", errors);
+        }
+        for param in &function.params {
+            check_type_for_params(
+                &param.ty,
+                owner,
+                &format!("parameter `{}`", param.name),
+                errors,
+            );
+        }
+        check_type_for_params(&function.ret_ty, owner, "return type", errors);
+        for local in &function.locals {
+            check_type_for_params(&local.ty, owner, &format!("local %{}", local.id.0), errors);
+        }
+        for block in &function.blocks {
+            for (i, stmt) in block.stmts.iter().enumerate() {
+                let context = format!("bb{}, stmt #{}", block.id.0, i);
+                match &stmt.kind {
+                    AirStmtKind::Assign { rvalue, .. } => {
+                        check_rvalue_for_params(rvalue, owner, &context, errors)
+                    }
+                    AirStmtKind::GcAlloc { ty, .. }
+                    | AirStmtKind::Alloc { ty, .. }
+                    | AirStmtKind::RcAlloc { ty, .. } => {
+                        check_type_for_params(ty, owner, &context, errors)
+                    }
+                    AirStmtKind::CallVoid { args, .. } => {
+                        for arg in args {
+                            check_operand_for_params(arg, owner, &context, errors);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+}
+
+fn check_rvalue_for_params(
+    rvalue: &Rvalue,
+    owner: &str,
+    context: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    match rvalue {
+        Rvalue::Cast { operand, from, to } => {
+            check_operand_for_params(operand, owner, context, errors);
+            check_type_for_params(from, owner, context, errors);
+            check_type_for_params(to, owner, context, errors);
+        }
+        Rvalue::EnumInit {
+            enum_ref, payload, ..
+        } => {
+            check_type_for_params(&AirType::Enum(enum_ref.clone()), owner, context, errors);
+            for op in payload {
+                check_operand_for_params(op, owner, context, errors);
+            }
+        }
+        Rvalue::EnumTag { enum_ref, operand }
+        | Rvalue::EnumPayload {
+            enum_ref, operand, ..
+        } => {
+            check_type_for_params(&AirType::Enum(enum_ref.clone()), owner, context, errors);
+            check_operand_for_params(operand, owner, context, errors);
+        }
+        Rvalue::StructInit { name, fields } => {
+            if name.contains("param_") {
+                note_type_param(name.clone(), owner, context, errors);
+            }
+            for (_, op) in fields {
+                check_operand_for_params(op, owner, context, errors);
+            }
+        }
+        Rvalue::Use(op) | Rvalue::UnaryOp(_, op) | Rvalue::Deref(op) | Rvalue::Len(op) => {
+            check_operand_for_params(op, owner, context, errors)
+        }
+        Rvalue::BinaryOp(_, a, b) | Rvalue::Index { base: a, index: b } => {
+            check_operand_for_params(a, owner, context, errors);
+            check_operand_for_params(b, owner, context, errors);
+        }
+        Rvalue::Call { args, .. } => {
+            for op in args {
+                check_operand_for_params(op, owner, context, errors);
+            }
+        }
+        Rvalue::FieldAccess { base, .. } => check_operand_for_params(base, owner, context, errors),
+        Rvalue::ClosureCreate { env, .. } => check_operand_for_params(env, owner, context, errors),
+        Rvalue::SliceFromParts { ptr, len } => {
+            check_operand_for_params(ptr, owner, context, errors);
+            check_operand_for_params(len, owner, context, errors);
+        }
+        Rvalue::AddressOf(_) => {}
+    }
+}
+
+fn check_enum_ref_known(
+    enum_ref: &EnumRef,
+    known_enums: &HashSet<String>,
+    func_name: &str,
+    ctx: &str,
+    errors: &mut Vec<AirValidationError>,
+) {
+    let symbol = enum_ref.symbol();
+    if !known_enums.contains(&symbol) {
+        errors.push(AirValidationError {
+            function_name: func_name.to_string(),
+            detail: AirValidationDetail::UnknownEnumReference {
+                enum_name: symbol,
+                context: ctx.to_string(),
+            },
+        });
+    }
+}
+
 fn check_rvalue_locals(
     rvalue: &Rvalue,
     declared: &HashSet<LocalId>,
@@ -741,45 +1056,21 @@ fn check_rvalue_locals(
             check_place_locals(place, declared, known_globals, func_name, ctx, errors);
         }
         Rvalue::EnumInit {
-            enum_name, payload, ..
+            enum_ref, payload, ..
         } => {
-            if !known_enums.contains(enum_name) {
-                errors.push(AirValidationError {
-                    function_name: func_name.to_string(),
-                    detail: AirValidationDetail::UnknownEnumReference {
-                        enum_name: enum_name.clone(),
-                        context: ctx.to_string(),
-                    },
-                });
-            }
+            check_enum_ref_known(enum_ref, known_enums, func_name, ctx, errors);
             for operand in payload {
                 check_operand_locals(operand, declared, func_name, ctx, errors);
             }
         }
-        Rvalue::EnumTag { enum_name, operand } => {
-            if !known_enums.contains(enum_name) {
-                errors.push(AirValidationError {
-                    function_name: func_name.to_string(),
-                    detail: AirValidationDetail::UnknownEnumReference {
-                        enum_name: enum_name.clone(),
-                        context: ctx.to_string(),
-                    },
-                });
-            }
+        Rvalue::EnumTag { enum_ref, operand } => {
+            check_enum_ref_known(enum_ref, known_enums, func_name, ctx, errors);
             check_operand_locals(operand, declared, func_name, ctx, errors);
         }
         Rvalue::EnumPayload {
-            enum_name, operand, ..
+            enum_ref, operand, ..
         } => {
-            if !known_enums.contains(enum_name) {
-                errors.push(AirValidationError {
-                    function_name: func_name.to_string(),
-                    detail: AirValidationDetail::UnknownEnumReference {
-                        enum_name: enum_name.clone(),
-                        context: ctx.to_string(),
-                    },
-                });
-            }
+            check_enum_ref_known(enum_ref, known_enums, func_name, ctx, errors);
             check_operand_locals(operand, declared, func_name, ctx, errors);
         }
         Rvalue::ClosureCreate { env, .. } => {

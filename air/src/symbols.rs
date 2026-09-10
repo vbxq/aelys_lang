@@ -31,32 +31,78 @@ pub fn symbol_for_source_name(name: &str) -> String {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SymbolCarrier {
+    Function,
+    Enum,
+    Struct,
+}
+
 pub struct DuplicateSymbol {
+    pub carrier: SymbolCarrier,
     pub symbol: String,
     pub spans: Vec<Option<Span>>,
     pub has_extern: bool,
 }
 
+type SymbolKey = (SymbolCarrier, String);
+
+fn note_symbol(
+    order: &mut Vec<SymbolKey>,
+    by_symbol: &mut HashMap<SymbolKey, (Vec<Option<Span>>, usize)>,
+    key: SymbolKey,
+    span: Option<Span>,
+    defined: bool,
+) {
+    let entry = by_symbol.entry(key.clone()).or_default();
+    if entry.0.is_empty() {
+        order.push(key);
+    }
+    entry.0.push(span);
+    if defined {
+        entry.1 += 1;
+    }
+}
+
 pub fn duplicate_symbols(air: &AirProgram) -> Vec<DuplicateSymbol> {
-    let mut order: Vec<String> = Vec::new();
-    let mut by_symbol: HashMap<String, (Vec<Option<Span>>, usize)> = HashMap::new();
+    let mut order: Vec<SymbolKey> = Vec::new();
+    let mut by_symbol: HashMap<SymbolKey, (Vec<Option<Span>>, usize)> = HashMap::new();
     for function in &air.functions {
         let symbol = function_symbol_name(function);
-        let entry = by_symbol.entry(symbol.clone()).or_default();
-        if entry.0.is_empty() {
-            order.push(symbol);
-        }
-        entry.0.push(function.span);
-        if !function.is_extern {
-            entry.1 += 1;
-        }
+        note_symbol(
+            &mut order,
+            &mut by_symbol,
+            (SymbolCarrier::Function, symbol),
+            function.span,
+            !function.is_extern,
+        );
+    }
+    for def in &air.enums {
+        note_symbol(
+            &mut order,
+            &mut by_symbol,
+            (SymbolCarrier::Enum, def.name.clone()),
+            def.span,
+            true,
+        );
+    }
+    for def in &air.structs {
+        note_symbol(
+            &mut order,
+            &mut by_symbol,
+            (SymbolCarrier::Struct, def.name.clone()),
+            def.span,
+            true,
+        );
     }
     order
         .into_iter()
-        .filter_map(|symbol| {
-            let (spans, defined) = by_symbol.remove(&symbol)?;
+        .filter_map(|key| {
+            let (spans, defined) = by_symbol.remove(&key)?;
+            let (carrier, symbol) = key;
             (spans.len() > 1 && defined > 0).then(|| DuplicateSymbol {
                 has_extern: defined < spans.len(),
+                carrier,
                 symbol,
                 spans,
             })
