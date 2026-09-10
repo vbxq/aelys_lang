@@ -602,7 +602,7 @@ fn the_unresolved_symbol_anchors_on_main() {
 }
 
 #[test]
-fn structural_row_e0901_has_five_anchor_sites_in_the_source() {
+fn structural_row_the_backend_family_has_five_anchor_sites_in_the_source() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("root");
@@ -617,7 +617,7 @@ fn structural_row_e0901_has_five_anchor_sites_in_the_source() {
     ] {
         assert!(
             diagnostics.contains(anchor),
-            "D1b: E0901 anchor site missing: {anchor}"
+            "D1b: backend-family anchor site missing: {anchor}"
         );
     }
     assert!(

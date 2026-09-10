@@ -1,3 +1,4 @@
+use aelys_air::EnumRef;
 // the foreign type surface, the abi barrier's return half, and the splice guard on runtime symbols
 
 use aelys_air::{
@@ -267,7 +268,7 @@ fn an_aggregate_return_on_the_c_convention_is_refused_on_this_target() {
     }
     for (id, name, is_extern, ret_ty) in [
         ("C1", "c1", true, AirType::Str),
-        ("C2", "c2", true, AirType::Enum("Opt".to_string())),
+        ("C2", "c2", true, AirType::Enum(EnumRef::plain("Opt"))),
         ("C3", "c3", true, AirType::Vec(Box::new(AirType::I64))),
         ("C9", "c9", false, AirType::Str),
     ] {
@@ -296,7 +297,7 @@ fn a_scalar_return_and_the_internal_convention_are_untouched() {
 fn the_parameter_half_of_the_barrier_still_answers() {
     for (id, name, ty) in [
         ("C7", "c7", AirType::Str),
-        ("C8", "c8", AirType::Enum("Opt".to_string())),
+        ("C8", "c8", AirType::Enum(EnumRef::plain("Opt"))),
     ] {
         let mut function = declaration(name, true, CallingConv::C, AirType::I64);
         function.params = vec![aelys_air::AirParam {
@@ -336,7 +337,7 @@ fn structural_row_the_indirect_fnptr_program_toggles_by_its_other_declaration() 
         "get_opt",
         true,
         CallingConv::C,
-        AirType::Enum("Opt".to_string()),
+        AirType::Enum(EnumRef::plain("Opt")),
     )]);
     let err = codegen(&program).expect_err("C10");
     assert!(err.contains("get_opt"), "C10: {err}");
@@ -685,17 +686,21 @@ fn the_admitted_runtime_set_is_pinned_and_its_linked_half_is_what_nm_defines() {
 }
 
 #[test]
-fn an_extern_main_over_a_source_main_answers_e0301_and_the_registry_says_so() {
+fn an_extern_main_over_a_source_main_answers_e0204_and_the_registry_says_so() {
     let rendered = lower("unsafe extern fn main(x: i64) -> i64\n\nfn main() -> i64 { return 0 }\n")
         .expect_err("E9");
     assert!(
-        rendered.contains("E0301") && !rendered.contains("E0613"),
+        rendered.contains("E0204") && !rendered.contains("E0613"),
         "E9: the duplicate check answers before the reservation, found:\n{rendered}"
+    );
+    assert!(
+        rendered.contains("once as an external declaration and once as a function"),
+        "E9: the headline must name the two forms that collide, not a type pair, found:\n{rendered}"
     );
     let info = aelys_common::registry::lookup("E0613").expect("E0613 must be registered");
     assert!(
-        info.explanation.contains("E0301"),
-        "E9: E0613 must say which check answers first, got:\n{}",
+        info.explanation.contains("E0204") && !info.explanation.contains("E0301"),
+        "E9: E0613 must say which check answers first, and it is no longer E0301, got:\n{}",
         info.explanation
     );
 }

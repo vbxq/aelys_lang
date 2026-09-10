@@ -427,28 +427,87 @@ fn fixtures() -> Vec<PathBuf> {
     found
 }
 
+fn census(sources: &aelys_driver::SourceOptions) -> (Vec<PathBuf>, Vec<PathBuf>) {
+    let mut ok = Vec::new();
+    let mut rejected = Vec::new();
+    for path in fixtures() {
+        match aelys_driver::lower_file_to_air_with_sources(&path, OptimizationLevel::None, sources)
+        {
+            Ok(_) => ok.push(path),
+            Err(_) => rejected.push(path),
+        }
+    }
+    (ok, rejected)
+}
+
+fn rejected_list(rejected: &[PathBuf]) -> String {
+    rejected
+        .iter()
+        .map(|p| p.display().to_string())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 #[test]
 fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let files = fixtures();
-    assert_eq!(files.len(), 457, "the fixture corpus MUST hold 457 files");
-    let mut ok = Vec::new();
-    let mut rejected = Vec::new();
-    for path in &files {
-        match aelys_driver::lower_file_to_air(path, OptimizationLevel::None) {
-            Ok(_) => ok.push(path.clone()),
-            Err(_) => rejected.push(path.clone()),
-        }
-    }
+    assert_eq!(files.len(), 458, "the fixture corpus MUST hold 458 files");
+
+    let (ok, rejected) = census(&aelys_driver::SourceOptions::default());
     assert_eq!(
         (ok.len(), rejected.len()),
-        (408, 49),
-        "the surface MUST answer 408 accepted and 49 rejected; std/io.aelys is the one added\n\
+        (408, 50),
+        "with no search root the surface MUST answer 408 accepted and 50 rejected; stress57 \
+         moved from rejected to accepted when a generic enum started carrying its type arguments \
+         into AIR, and the five library modules that carry a `needs` are rejected because a \
+         module path resolves under the root file's own directory and nowhere else\n\
          rejected:\n{}",
-        rejected
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
+        rejected_list(&rejected)
+    );
+
+    let absent =
+        aelys_driver::SourceOptions::with_include(vec![repo_root().join("does_not_exist")]);
+    let (ok_absent, rejected_absent) = census(&absent);
+    assert_eq!(
+        (ok_absent.len(), rejected_absent.len()),
+        (408, 50),
+        "a search root that holds nothing MUST move no file, and a prelude that does not \
+         resolve MUST be silent rather than an error\nrejected:\n{}",
+        rejected_list(&rejected_absent)
+    );
+
+    let with_root = aelys_driver::SourceOptions::with_include(vec![repo_root()]);
+    let (ok_root, rejected_root) = census(&with_root);
+    assert_eq!(
+        (ok_root.len(), rejected_root.len()),
+        (413, 45),
+        "with the repository root on the search path the five library modules that carry a \
+         `needs` MUST compile on their own\nrejected:\n{}",
+        rejected_list(&rejected_root)
+    );
+
+    let moved: Vec<String> = rejected
+        .iter()
+        .filter(|path| !rejected_root.contains(path))
+        .map(|path| path.display().to_string())
+        .collect();
+    let mut moved_names: Vec<&str> = moved
+        .iter()
+        .map(|p| p.rsplit(std::path::MAIN_SEPARATOR).next().unwrap_or(p))
+        .collect();
+    moved_names.sort_unstable();
+    assert_eq!(
+        moved_names,
+        [
+            "prelude.aelys",
+            "slice.aelys",
+            "sort.aelys",
+            "str.aelys",
+            "vec.aelys"
+        ],
+        "the files the search path moves MUST be exactly the library modules that import a \
+         sibling\nmoved:\n{}",
+        moved.join("\n")
     );
 }
 

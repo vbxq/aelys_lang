@@ -5,12 +5,12 @@ use std::process::Command;
 
 use aelys_air::bir::build::for_each_fn_decl;
 use aelys_air::symbols::{
-    RUNTIME_DEFINED_SYMBOLS, RUNTIME_IMPORTED_SYMBOLS, RUNTIME_RESERVED_SYMBOLS, duplicate_symbols,
-    reserved_runtime_symbols, reserved_user_names, symbol_for_source_name,
+    RUNTIME_DEFINED_SYMBOLS, RUNTIME_IMPORTED_SYMBOLS, RUNTIME_RESERVED_SYMBOLS, SymbolCarrier,
+    duplicate_symbols, reserved_runtime_symbols, reserved_user_names, symbol_for_source_name,
 };
 use aelys_air::{
-    AirBlock, AirFunction, AirParam, AirProgram, AirTerminator, AirType, BlockId, CallingConv,
-    FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId,
+    AirBlock, AirEnumDef, AirFunction, AirParam, AirProgram, AirStructDef, AirTerminator, AirType,
+    BlockId, CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId,
 };
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm, lower_file_to_air, resolve_aelys_core_lib};
@@ -80,6 +80,25 @@ fn function(id: u32, name: &str, params: &[AirType], is_extern: bool) -> AirFunc
     }
 }
 
+fn enum_def(name: &str) -> AirEnumDef {
+    AirEnumDef {
+        name: name.to_string(),
+        type_params: Vec::new(),
+        variants: Vec::new(),
+        span: None,
+    }
+}
+
+fn struct_def(name: &str) -> AirStructDef {
+    AirStructDef {
+        name: name.to_string(),
+        type_params: Vec::new(),
+        fields: Vec::new(),
+        is_closure_env: false,
+        span: None,
+    }
+}
+
 // the surface cannot mark a function extern yet, so only a hand built air reaches the has_extern arm
 fn program(functions: Vec<AirFunction>) -> AirProgram {
     let mut air = empty_program();
@@ -131,6 +150,60 @@ fn an_extern_over_a_definition_is_a_conflict() {
         found[0].spans.len(),
         2,
         "both sites are carried to the render"
+    );
+}
+
+#[test]
+fn two_enum_definitions_under_one_name_are_a_conflict() {
+    let mut air = empty_program();
+    air.enums.push(enum_def("__mono_Q_ptr_i64"));
+    air.enums.push(enum_def("__mono_Q_ptr_i64"));
+    let found = duplicate_symbols(&air);
+    assert_eq!(
+        found
+            .iter()
+            .map(|dup| dup.symbol.clone())
+            .collect::<Vec<_>>(),
+        vec!["__mono_Q_ptr_i64".to_string()],
+        "an enum name is a codegen symbol like a function name, so two definitions under it are \
+         the same conflict"
+    );
+    assert!(
+        matches!(found[0].carrier, SymbolCarrier::Enum),
+        "the group must name the carrier it came from"
+    );
+}
+
+#[test]
+fn two_struct_definitions_under_one_name_are_a_conflict() {
+    let mut air = empty_program();
+    air.structs.push(struct_def("Point"));
+    air.structs.push(struct_def("Point"));
+    let found = duplicate_symbols(&air);
+    assert_eq!(
+        found
+            .iter()
+            .map(|dup| dup.symbol.clone())
+            .collect::<Vec<_>>(),
+        vec!["Point".to_string()],
+        "a struct name is a codegen symbol like a function name, so two definitions under it are \
+         the same conflict"
+    );
+    assert!(
+        matches!(found[0].carrier, SymbolCarrier::Struct),
+        "the group must name the carrier it came from"
+    );
+}
+
+#[test]
+fn a_function_and_a_type_of_one_name_are_not_a_conflict() {
+    let mut air = program(vec![function(0, "Pair", &[AirType::I64], false)]);
+    air.enums.push(enum_def("Pair"));
+    air.structs.push(struct_def("Pair"));
+    assert!(
+        duplicate_symbols(&air).is_empty(),
+        "a function symbol and a type symbol are emitted into different namespaces, so one name \
+         across carriers is not a collision"
     );
 }
 
@@ -196,7 +269,6 @@ struct Run {
     status: i32,
 }
 
-// exitstatus::code() is none when a signal kills the child, so the row reads `$?` from a shell
 fn compile_and_run(dir: &Path, name: &str, source: &str) -> Run {
     let source_path = dir.join(format!("{name}.aelys"));
     fs::write(&source_path, source).expect("source should be written");
@@ -593,7 +665,6 @@ fn main() -> i64 {
     );
 }
 
-// this crash is accepted: `stdout` is a data object, the declaration lies about it, and the author signed `unsafe` in full
 #[test]
 fn f3_41_a_lying_declaration_of_a_data_object_links_and_crashes() {
     let dir = tempdir().expect("tempdir should be created");
