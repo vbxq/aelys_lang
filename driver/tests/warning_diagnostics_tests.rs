@@ -21,18 +21,23 @@ fn compile_pipeline_returns_structured_warnings() {
     let path = write_temp_source(
         "warning_diag",
         r#"
-struct Point { x: i64 }
-struct Point { y: i64 }
+@inline
+fn probe(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    return probe(n - 1)
+}
 
-fn probe() -> i64 {
-    return 0
+fn main() -> i64 {
+    return probe(3)
 }
 "#,
     );
 
     let warnings = compile_file_with_llvm_with_warnings(
         &path,
-        OptimizationLevel::None,
+        OptimizationLevel::Basic,
         false,
         RuntimeVariant::default(),
     )
@@ -44,8 +49,8 @@ fn probe() -> i64 {
     assert!(
         warnings
             .iter()
-            .any(|warning| matches!(warning.kind, WarningKind::UnknownType { .. })),
-        "expected at least one warning from duplicate struct declarations"
+            .any(|warning| matches!(warning.kind, WarningKind::InlineRecursive)),
+        "expected the inliner's refusal to inline a recursive `@inline` function"
     );
     assert!(
         warnings.iter().all(|warning| warning.source.is_some()),
@@ -53,6 +58,6 @@ fn probe() -> i64 {
     );
 
     let rendered = format_warnings(&warnings);
-    assert!(rendered.contains("warning[W"), "{rendered}");
+    assert!(rendered.contains("warning[W0101]"), "{rendered}");
     assert!(rendered.contains(" --> "), "{rendered}");
 }

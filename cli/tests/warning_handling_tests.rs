@@ -19,11 +19,16 @@ fn werror_turns_warnings_into_failure() {
     let path = write_temp_source(
         "werror",
         r#"
-struct Point { x: i64 }
-struct Point { y: i64 }
+@inline
+fn probe(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    return probe(n - 1)
+}
 
-fn probe() -> i64 {
-    return 0
+fn main() -> i64 {
+    return probe(3)
 }
 "#,
     );
@@ -45,15 +50,20 @@ fn probe() -> i64 {
 }
 
 #[test]
-fn disabling_type_warnings_allows_build() {
+fn disabling_inline_warnings_allows_build() {
     let path = write_temp_source(
         "wdisable",
         r#"
-struct Point { x: i64 }
-struct Point { y: i64 }
+@inline
+fn probe(n: i64) -> i64 {
+    if n <= 0 {
+        return 0
+    }
+    return probe(n - 1)
+}
 
-fn probe() -> i64 {
-    return 0
+fn main() -> i64 {
+    return probe(3)
 }
 "#,
     );
@@ -63,7 +73,7 @@ fn probe() -> i64 {
         "compile".to_string(),
         path.display().to_string(),
         "-Werror".to_string(),
-        "-Wno-type".to_string(),
+        "-Wno-inline".to_string(),
     ];
 
     let result = run_with_args(&args);
@@ -73,6 +83,6 @@ fn probe() -> i64 {
 
     assert!(
         result.is_ok(),
-        "type warnings were disabled, got {result:?}"
+        "inline warnings were disabled, got {result:?}"
     );
 }
