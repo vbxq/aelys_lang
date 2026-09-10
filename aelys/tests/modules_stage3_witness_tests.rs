@@ -47,7 +47,6 @@ fn exit_code(status: &std::process::ExitStatus) -> i32 {
     -1
 }
 
-// rendering lets the echoed source line stand in for the message
 fn message_only(rendered: &str) -> String {
     split_rendering(rendered).0
 }
@@ -268,7 +267,6 @@ fn group_mod_e9_an_unreached_allocator_does_not_taint_its_module() {
     );
 }
 
-// the rendering echoes the source line and would serve it
 #[test]
 fn group_mod_e3_a_reached_allocator_is_named_in_the_chain() {
     reject_row(
@@ -776,7 +774,6 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
 }
 
 
-// `app/util.aelys` and `util.aelys` both publish a `helper`; a summary requalified under the
 const NESTED_COLLIDING: Files = &[
     (
         "root.aelys",
@@ -1018,7 +1015,7 @@ fn group_mod_w3_a_post_merge_diagnostic_names_the_declaring_file() {
                 "pub struct Node { next: Node }\n\npub fn make() -> i64 {\n    return 1\n}\n",
             ),
         ],
-        &["[E0901]", "struct `m.Node` has infinite size"],
+        &["[E0904]", "struct `m.Node` has infinite size"],
         &["m.aelys", "pub struct Node"],
         &["root.aelys", "__q"],
     );
@@ -1042,7 +1039,7 @@ fn group_mod_w4_a_joined_message_anchors_on_its_first_error() {
                 "pub struct Deep { next: Deep }\n\npub fn g() -> i64 {\n    return 2\n}\n",
             ),
         ],
-        &["[E0901]", "struct `a.Node` has infinite size"],
+        &["[E0904]", "struct `a.Node` has infinite size"],
         &["a.aelys", "pub struct Node"],
         &["bb.aelys", "__q"],
     );

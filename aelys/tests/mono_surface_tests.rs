@@ -69,6 +69,12 @@ impl Harness {
         }
     }
 
+    fn write_module(&self, rel: &str, src: &str) {
+        let path = self.dir.path().join(rel);
+        fs::create_dir_all(path.parent().expect("module parent")).expect("module dir");
+        fs::write(&path, src).expect("write module");
+    }
+
     fn value_row(&self, id: &str, src: &str, stdout: &str) {
         for (tag, opt) in LEVELS {
             let path = self.dir.path().join(format!("{}.aelys", slug(id, tag)));
@@ -264,15 +270,84 @@ fn a_mangling_collision_is_e0427_and_not_a_link_error() {
 }
 
 #[test]
-fn an_uninferable_generic_is_a_diagnostic_and_not_a_link_error() {
-    refuse(
-        "uninferable_generic",
+fn a_non_generic_struct_crossing_a_generic_keeps_its_own_name() {
+    Harness::new().value_row(
+        "plain_struct_through_a_generic",
+        "struct P { a: i64 }\n\
+         fn pick<T>(p: P, x: T) -> T { return x }\n\
+         fn mk<T>(x: T) -> P { return P { a: 1 } }\n\
+         fn hold<T>(x: T) -> i64 {\n\
+         \x20   let q: P = P { a: 5 }\n\
+         \x20   return q.a\n\
+         }\n\
+         fn main() -> i64 {\n\
+         \x20   let p: P = P { a: 3 }\n\
+         \x20   println(pick(p, 42))\n\
+         \x20   let r: P = mk(7)\n\
+         \x20   println(r.a)\n\
+         \x20   println(hold(1))\n\
+         \x20   return 0\n\
+         }\n",
+        "42\n1\n5\n",
+    );
+}
+
+#[test]
+fn a_generic_enum_name_that_prefixes_another_never_draws_a_variant_tag() {
+    Harness::new().value_row(
+        "prefixing_generic_enum_names",
+        "enum Q<T> { A(T) }\n\
+         enum Q_ptr<T> { B(T), C(i64) }\n\
+         fn main() -> i64 {\n\
+         \x20   let x: Q_ptr<i64> = Q_ptr::C(99)\n\
+         \x20   let y: Q<i64> = Q::A(4)\n\
+         \x20   println(match x { Q_ptr::B(v) => { v } Q_ptr::C(w) => { w } })\n\
+         \x20   println(match y { Q::A(v) => { v } })\n\
+         \x20   return 0\n\
+         }\n",
+        "99\n4\n",
+    );
+}
+
+#[test]
+fn two_generic_enums_that_do_not_prefix_each_other_both_run() {
+    Harness::new().value_row(
+        "distinct_generic_enums",
+        "enum Alpha<T> { A(T) }\n\
+         enum Beta<T> { B(T), C(i64) }\n\
+         fn main() -> i64 {\n\
+         \x20   let a: Alpha<i64> = Alpha::A(7)\n\
+         \x20   let b: Beta<i64> = Beta::C(35)\n\
+         \x20   match a { Alpha::A(v) => { println(v) } }\n\
+         \x20   match b { Beta::B(v) => { println(v) } Beta::C(w) => { println(w) } }\n\
+         \x20   return 0\n\
+         }\n",
+        "7\n35\n",
+    );
+}
+
+#[test]
+fn a_type_parameter_only_inside_a_generic_enum_is_inferred() {
+    Harness::new().value_row(
+        "type_param_inside_a_generic_enum",
         "enum Opt<T> { Some(T), None }\n\
          fn f<T, U>(o: Opt<T>, y: U) -> i64 { return 11 }\n\
          fn main() -> i64 {\n\
          \x20   let a: Opt<i64> = Opt::Some(7)\n\
-         \x20   let r = f(a, 8)\n\
+         \x20   println(f(a, 8))\n\
          \x20   return 0\n\
+         }\n",
+        "11\n",
+    );
+}
+
+#[test]
+fn a_type_parameter_in_no_argument_position_is_a_diagnostic_and_not_a_link_error() {
+    refuse(
+        "uninferable_generic",
+        "fn g<T>(x: i64) -> i64 { return 3 }\n\
+         fn main() -> i64 {\n\
+         \x20   return g(1)\n\
          }\n",
         &[
             "[monomorphization]",
@@ -282,11 +357,17 @@ fn an_uninferable_generic_is_a_diagnostic_and_not_a_link_error() {
 }
 
 #[test]
-fn a_scalar_read_through_a_reference_is_still_refused_by_e0714() {
-    refuse(
-        "slice_read_into_enum",
+fn a_scalar_read_through_a_reference_is_accepted_and_its_ref_typed_twin_is_not() {
+    lower(
         "enum Opt<T> { Some(T), None }\n\
          nogc fn first(s: &[i64]) -> Opt<i64> { return Opt::Some(s[0]) }\n\
+         fn main() -> i64 { return 0 }\n",
+    )
+    .expect("slice_read_into_enum: an i64 copied out of a slice stores no reference");
+    refuse(
+        "slice_ref_read_into_enum",
+        "enum Opt<T> { Some(T), None }\n\
+         nogc fn first(s: &[&i64]) -> Opt<&i64> { return Opt::Some(s[0]) }\n\
          fn main() -> i64 { return 0 }\n",
         &[
             "E0714",
@@ -356,5 +437,100 @@ fn a_reference_stored_into_a_struct_still_fires_e0714() {
          }\n\
          fn main() -> i64 { return 0 }\n",
         &["E0714", "references stored into aggregate containers"],
+    );
+}
+
+#[test]
+fn a_partly_concrete_generic_enum_parameter_is_inferred() {
+    Harness::new().value_row(
+        "partly_concrete_result",
+        "enum Result<T, E> { Ok(T), Err(E) }\n\
+         fn is_ok_partial<T>(r: Result<T, i64>) -> i64 {\n\
+         \x20   return match r { Result::Ok(v) => { 1 } Result::Err(e) => { 0 } }\n\
+         }\n\
+         fn main() -> i64 {\n\
+         \x20   let r: Result<i64, i64> = Result::Ok(7)\n\
+         \x20   println(is_ok_partial(r))\n\
+         \x20   return 0\n\
+         }\n",
+        "1\n",
+    );
+}
+
+#[test]
+fn two_generic_enums_in_one_signature_are_inferred() {
+    Harness::new().value_row(
+        "option_to_result",
+        "enum Option<T> { Some(T), None }\n\
+         enum Result<T, E> { Ok(T), Err(E) }\n\
+         fn ok_or<T, E>(o: Option<T>, e: E) -> Result<T, E> {\n\
+         \x20   return match o { Option::Some(v) => { Result::Ok(v) } Option::None => { Result::Err(e) } }\n\
+         }\n\
+         fn main() -> i64 {\n\
+         \x20   let o: Option<i64> = Option::Some(5)\n\
+         \x20   let r: Result<i64, i64> = ok_or(o, 9)\n\
+         \x20   println(match r { Result::Ok(v) => { v } Result::Err(e) => { e } })\n\
+         \x20   return 0\n\
+         }\n",
+        "5\n",
+    );
+}
+
+#[test]
+fn a_two_argument_enum_narrowing_to_a_one_argument_enum_is_inferred() {
+    Harness::new().value_row(
+        "result_to_option",
+        "enum Option<T> { Some(T), None }\n\
+         enum Result<T, E> { Ok(T), Err(E) }\n\
+         fn ok<T, E>(r: Result<T, E>) -> Option<T> {\n\
+         \x20   return match r { Result::Ok(v) => { Option::Some(v) } Result::Err(e) => { Option::None } }\n\
+         }\n\
+         fn main() -> i64 {\n\
+         \x20   let r: Result<i64, i64> = Result::Ok(11)\n\
+         \x20   let o: Option<i64> = ok(r)\n\
+         \x20   println(match o { Option::Some(v) => { v } Option::None => { 0 } })\n\
+         \x20   return 0\n\
+         }\n",
+        "11\n",
+    );
+}
+
+#[test]
+fn a_generic_enum_nested_in_another_enums_payload_runs() {
+    Harness::new().value_row(
+        "enum_nested_in_a_payload",
+        "enum Inner<T> { Wrap(T) }\n\
+         enum Big<A, B, K> { W(Inner<K>, B), Z(A) }\n\
+         fn main() -> i64 {\n\
+         \x20   let i: Inner<i64> = Inner::Wrap(21)\n\
+         \x20   let b: Big<bool, i64, i64> = Big::W(i, 2)\n\
+         \x20   println(match b { Big::W(x, y) => { match x { Inner::Wrap(v) => { v * y } } } Big::Z(a) => { 0 } })\n\
+         \x20   return 0\n\
+         }\n",
+        "42\n",
+    );
+}
+
+#[test]
+fn a_generic_enum_crossing_a_module_boundary_runs() {
+    let harness = Harness::new();
+    harness.write_module(
+        "boxmod/lib.aelys",
+        "pub enum Box<T> { Hold(T), Empty }\n\
+         \n\
+         pub fn peek(b: Box<i64>) -> i64 {\n\
+         \x20   return match b { Box::Hold(v) => { v } Box::Empty => { 0 } }\n\
+         }\n",
+    );
+    harness.value_row(
+        "generic_enum_across_a_module",
+        "needs boxmod.lib\n\
+         \n\
+         fn main() -> i64 {\n\
+         \x20   let b: lib.Box<i64> = lib.Box::Hold(23)\n\
+         \x20   println(lib.peek(b))\n\
+         \x20   return 0\n\
+         }\n",
+        "23\n",
     );
 }

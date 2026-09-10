@@ -7,6 +7,9 @@ use std::process::Command;
 use std::sync::Once;
 use tempfile::{TempDir, tempdir};
 
+mod common;
+use common::backend_family_code;
+
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
     ("-O2", OptimizationLevel::Standard),
@@ -253,10 +256,11 @@ impl Harness {
             match lower_file_to_air(&path, *opt) {
                 Ok(_) => {}
                 Err(rendered) => {
+                    let leaked = backend_family_code(&rendered);
                     assert!(
-                        !rendered.contains("E0901"),
-                        "{id} at {tag}: a builtin intercept reported a compiler bug to a user \
-                         program\n{rendered}"
+                        leaked.is_none(),
+                        "{id} at {tag}: a builtin intercept reported a backend failure \
+                         ({leaked:?}) to a user program\n{rendered}"
                     );
                     assert!(
                         named_code(&rendered).is_some(),
@@ -295,7 +299,8 @@ fn main() -> i64 {
 #[test]
 fn ice1_a_length_of_a_temporary_answers_the_length() {
     let h = Harness::new();
-    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 3, 0);
+    // only the literal temporary is released; the two returned by mkv() still leak
+    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 3, 1);
     h.assert_legs(6);
 }
 

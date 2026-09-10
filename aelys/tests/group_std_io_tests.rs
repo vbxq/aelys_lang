@@ -101,7 +101,7 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
 fn strip_stats(stderr: &str) -> String {
     stderr
         .lines()
-        .filter(|l| !l.contains("[rc] allocs="))
+        .filter(|l| !l.contains("[rc] allocs=") && !l.contains("[raw] allocs="))
         .map(|l| format!("{l}\n"))
         .collect()
 }
@@ -513,7 +513,7 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn group_std_io_a_wrapper_colliding_with_its_extern_is_rejected_under_a_meaningless_headline() {
+fn group_std_io_a_wrapper_colliding_with_its_extern_is_rejected_under_a_headline_that_names_it() {
     let h = Harness::new();
     let root = h.stage("STD-IO-10", "reject", IO_EXTERN_COLLIDES_WITH_WRAPPER);
     let rendered = match lower_file_to_air(&root, OptimizationLevel::None) {
@@ -522,12 +522,15 @@ fn group_std_io_a_wrapper_colliding_with_its_extern_is_rejected_under_a_meaningl
     };
     assert_eq!(
         rendered.lines().next(),
-        Some("error[E0301]: expected `dynamic`, found `dynamic`"),
-        "STD-IO-10: PIN, DO NOT REPAIR: the headline must still name no symbol and no \
-         reason\nrendered:\n{rendered}"
+        Some(
+            "error[E0204]: the name `exit` is defined twice, once as an external declaration and \
+             once as a function"
+        ),
+        "STD-IO-10: the headline must name the duplication itself, not a type pair the check never \
+         had\nrendered:\n{rendered}"
     );
     assert!(
-        rendered.contains("= note: duplicate function definition 'exit'"),
-        "STD-IO-10: the note is the only line that says what is wrong\nrendered:\n{rendered}"
+        rendered.contains("`exit` is first defined here, as an external declaration"),
+        "STD-IO-10: both definitions must be drawn\nrendered:\n{rendered}"
     );
 }

@@ -293,6 +293,38 @@ fn group_std_result_defaults_answer_the_payload_or_the_fallback() {
     h.assert_legs(6);
 }
 
+const RESULT_CONSTRUCTORS: &str = r#"
+needs std.result
+
+nogc fn code_of(r: result.Result<i64, i64>) -> i64 {
+    return match r {
+        result.Result::Ok(v) => v,
+        result.Result::Err(e) => 0 - e,
+    }
+}
+
+fn main() -> i64 {
+    let s: result.Option<i64> = result.Option::Some(9)
+    let n: result.Option<i64> = result.Option::None
+    println(result.unwrap_or(result.ok(7), -1))
+    println(result.err_or(result.err(3), -2))
+    println(result.unwrap_or(result.ok_or(s, 5), -1))
+    println(result.err_or(result.ok_or(n, 5), -2))
+    println(result.err_code(result.ok_or(s, 5)))
+    println(result.err_code(result.ok_or(n, 5)))
+    println(code_of(result.ok(4)))
+    println(code_of(result.err(6)))
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_result_constructors_build_a_carrier_and_a_partial_result_is_a_parameter() {
+    let h = Harness::new();
+    h.nogc_row("STD-RESULT-4", RESULT_CONSTRUCTORS, "7\n3\n9\n5\n0\n5\n4\n-6\n");
+    h.assert_legs(6);
+}
+
 const RESULT_QUESTION_MARK: &str = r#"
 needs std.result
 
@@ -504,6 +536,30 @@ fn group_std_slice_option_reads_separate_the_empty_slice_from_the_extreme_elemen
         SLICE_OPTIONS,
         "9\n1\n4\n9\n1\n1\n1\n1\n1\n-9223372036854775808\n1\n9223372036854775807\n",
     );
+    h.assert_legs(6);
+}
+
+const SLICE_FIND: &str = r#"
+needs std.result
+needs std.slice
+
+fn main() -> i64 {
+    let a: [i64;4] = [4, 1, 9, 3]
+    let mut e: [i64;0] = []
+    println(result.some_or(slice.find(a[..], 9), -777))
+    println(result.some_or(slice.find(a[..], 7), -777))
+    if result.is_none(slice.find(a[..], 7)) { println(1) } else { println(0) }
+    if result.is_none(slice.find(e[..], 1)) { println(1) } else { println(0) }
+    println(slice.index_of(a[..], 9))
+    println(slice.index_of(a[..], 7))
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_slice_find_answers_an_option_where_index_of_answers_a_sentinel() {
+    let h = Harness::new();
+    h.nogc_row("STD-SLICE-5", SLICE_FIND, "2\n-777\n1\n1\n2\n-1\n");
     h.assert_legs(6);
 }
 

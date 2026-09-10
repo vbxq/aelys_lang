@@ -403,6 +403,28 @@ fn group_std_vec_the_same_value_bound_to_a_local_is_freed() {
     h.assert_legs(6);
 }
 
+const VEC_FIND: &str = r#"
+needs std.result
+needs std.vec
+
+fn main() -> i64 {
+    let a: [i64;3] = [5, 6, 7]
+    let v = vec.from_slice(a[..])
+    println(result.some_or(vec.find(&v, 6), -777))
+    if result.is_none(vec.find(&v, 8)) { println(1) } else { println(0) }
+    println(vec.index_of(&v, 8))
+    println(vec.sum(&v))
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_vec_find_answers_an_option_where_index_of_answers_a_sentinel() {
+    let h = Harness::new();
+    h.row("STD-VEC-6", VEC_FIND, "1\n1\n-1\n18\n", Some((1, 1)));
+    h.assert_legs(6);
+}
+
 const STR_PREDICATES: &str = r#"
 needs std.result
 needs std.str
@@ -506,12 +528,12 @@ fn group_std_str_builders_answer_and_every_concatenation_is_counted() {
         "STD-STR-3",
         STR_BUILDERS,
         "hello\nworld\nhe\nlo world\n[]\nababab\n[]\n[hi]\n[]\n[hi]\n",
-        Some((37, 0)),
+        Some((21, 0)),
     );
     h.assert_legs(6);
 }
 
-// the four freed allocations are the four vecs; the other 23 are string concatenations, which never free
+// the four freed allocations are the four vecs; the other 22 never free, eight built parts and fourteen concatenations
 const STR_SPLIT_JOIN: &str = r#"
 needs std.str
 needs std.vec
@@ -546,7 +568,7 @@ fn group_std_str_split_and_join_round_trip_and_keep_the_empty_parts() {
         "STD-STR-4",
         STR_SPLIT_JOIN,
         "4\na\n[]\nc\na-b--c\n1\nabc\n1\nabc\n3\nb\nabc\n",
-        Some((27, 4)),
+        Some((26, 4)),
     );
     h.assert_legs(6);
 }
@@ -567,17 +589,100 @@ fn main() -> i64 {{
 }
 
 #[test]
-fn group_std_str_substring_allocates_once_per_character_it_copies() {
+fn group_std_str_substring_allocates_once_per_call_whatever_it_copies() {
     let h = Harness::new();
     for n in [4usize, 8, 16] {
         h.row(
             "STD-STR-5",
             &substring_growth(n),
             &format!("{n}\n"),
-            Some((n as i64, 0)),
+            Some((1, 0)),
         );
     }
     h.assert_legs(18);
+}
+
+const STR_MULTIBYTE_READS: &str = r#"
+needs std.result
+needs std.str
+
+fn main() -> i64 {
+    let s: string = "éléphant"
+    println(s.len)
+    println(str.char_count(s))
+    println(result.some_or(str.char_at(s, 0), "?"))
+    println(result.some_or(str.char_at(s, 7), "?"))
+    if result.is_none(str.char_at(s, 8)) { println(1) } else { println(0) }
+    if str.starts_with(s, "élé") { println(1) } else { println(0) }
+    if str.ends_with(s, "ant") { println(1) } else { println(0) }
+    if str.ends_with("éab", "ab") { println(1) } else { println(0) }
+    println(str.index_of(s, "phant"))
+    println(str.index_of("aé", "é"))
+    if str.contains("aé", "é") { println(1) } else { println(0) }
+    println(str.compare("é", "e"))
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_str_the_reading_surface_answers_on_a_multibyte_string() {
+    let h = Harness::new();
+    h.nogc_row(
+        "STD-STR-6",
+        STR_MULTIBYTE_READS,
+        "10\n8\né\nt\n1\n1\n1\n1\n3\n1\n1\n1\n",
+    );
+    h.assert_legs(6);
+}
+
+const STR_MULTIBYTE_BUILDERS: &str = r#"
+needs std.str
+needs std.vec
+
+fn main() -> i64 {
+    let s: string = "éléphant"
+    println(str.substring(s, 0, 3))
+    println(str.substring(s, 3, 99))
+    println("[" + str.substring(s, 2, 2) + "]")
+    println("[" + str.trim("  élé \t\n") + "]")
+    let parts = str.split("é,à,ü", ",")
+    println(Vec::len(parts))
+    println(parts[1])
+    println(str.join(&parts, "-"))
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_str_the_building_surface_answers_on_a_multibyte_string() {
+    let h = Harness::new();
+    h.row(
+        "STD-STR-7",
+        STR_MULTIBYTE_BUILDERS,
+        "élé\nphant\n[]\n[élé]\n3\nà\né-à-ü\n",
+        Some((17, 1)),
+    );
+    h.assert_legs(6);
+}
+
+// there is no `needs std.result` here: the prelude is the only thing that can put `option` and `result` in scope
+const STR_CARRIER_FROM_THE_PRELUDE: &str = r#"
+needs std.str
+
+fn main() -> i64 {
+    println(match str.char_at("éab", 0) { Option::Some(c) => c, Option::None => "?" })
+    println(match str.char_at("éab", 9) { Option::Some(c) => c, Option::None => "?" })
+    println(match str.parse_int("-42") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
+    println(match str.parse_int("4é") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
+    return 0
+}
+"#;
+
+#[test]
+fn group_std_str_names_the_carrier_without_importing_the_module_that_defines_it() {
+    let h = Harness::new();
+    h.nogc_row("STD-STR-8", STR_CARRIER_FROM_THE_PRELUDE, "é\n?\n-42\n-3\n");
+    h.assert_legs(6);
 }
 
 const STR_LEN_ADDRESS: &str = r#"

@@ -15,9 +15,13 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Once;
 use std::time::{Duration, Instant};
 use tempfile::{TempDir, tempdir};
+
+mod common;
+use common::{
+    backend_family_code, exe_path_for, exit_code, linker_unavailable, slug, warm_core_archive,
+};
 
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
@@ -33,25 +37,6 @@ const REJECT_LEVELS: &[(&str, OptimizationLevel)] = &[
 
 const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc"))];
 
-static WARM: Once = Once::new();
-
-// exactly once and its spurious cannot be attributed to a fixture
-fn warm_core_archive() {
-    WARM.call_once(|| {
-        let Ok(dir) = tempdir() else { return };
-        let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
-            return;
-        }
-        let _ = compile_file_with_llvm_variant(
-            &path,
-            OptimizationLevel::None,
-            false,
-            RuntimeVariant::Rc,
-        );
-    });
-}
-
 struct Outcome {
     exit: i32,
     stdout: String,
@@ -66,48 +51,11 @@ struct Harness {
     linker_skips: Cell<usize>,
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error
-        .lines()
-        .filter(|line| line.contains("[llvm-linker]"))
-        .any(|line| line.contains("program not found") || line.contains("failed to run"))
-}
-
 fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
     let line = stderr.lines().find(|l| l.contains("[rc] allocs="))?;
     let rest = line.trim().strip_prefix("[rc] allocs=")?;
     let (a, m) = rest.split_once(" frees=")?;
     Some((a.trim().parse().ok()?, m.trim().parse().ok()?))
-}
-
-fn exit_code(status: &std::process::ExitStatus) -> i32 {
-    if let Some(code) = status.code() {
-        return code;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    -1
-}
-
-fn slug(id: &str, tag: &str) -> String {
-    let mut s = String::with_capacity(id.len() + tag.len() + 1);
-    for c in id.chars().chain(std::iter::once('_')).chain(tag.chars()) {
-        s.push(if c.is_ascii_alphanumeric() { c } else { '_' });
-    }
-    s
 }
 
 impl Harness {
@@ -133,6 +81,9 @@ impl Harness {
             Ok(()) => self.compiled_legs.set(self.compiled_legs.get() + 1),
             Err(err) => {
                 if linker_unavailable(&err.to_string()) {
+                    common::require_linker_skip(
+                        "a skipped value row carries no runtime evidence at all",
+                    );
                     self.linker_skips.set(self.linker_skips.get() + 1);
                     return None;
                 }
@@ -156,12 +107,14 @@ impl Harness {
     }
 
     fn run_timed(&self, exe: &Path, alloc: Option<&str>, deadline: Option<Duration>) -> Outcome {
+        let _pin = common::pin_legs("run_timed", 1);
         let mut cmd = Command::new(exe);
         cmd.env("AELYS_RC_STATS", "1");
         if let Some(a) = alloc {
             cmd.env("AELYS_ALLOC", a);
         }
         let Some(deadline) = deadline else {
+            common::note_leg();
             let out = cmd.output().expect("run exe");
             let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
             return Outcome {
@@ -174,6 +127,7 @@ impl Harness {
         };
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         let mut child = cmd.spawn().expect("spawn exe");
+        common::note_leg();
         let start = Instant::now();
         loop {
             match child.try_wait().expect("try_wait") {
@@ -243,6 +197,7 @@ enum Oracle {
 }
 
 fn check(h: &Harness, id: &str, src: &str, exit: i32, out: Option<&str>, mem: Memory) {
+    let _pin = common::pin_legs(id, LEVELS.len() * ALLOCATORS.len());
     for (name, opt) in LEVELS {
         let Some(exe) = h.compile(id, name, src, *opt) else {
             eprintln!("{id}: linker unavailable, skipping");
@@ -4153,10 +4108,10 @@ fn group_pa_choke_set_is_tracked() {
             occurrences(&all, "Rvalue::Deref("),
             occurrences(&repo_all, "addr_of_own_temp("),
         ),
-        (0, 3, 6, 4, 4),
+        (0, 3, 6, 4, 5),
         "the choke set moved; the first three are counted over air/src/lower minus place.rs, \
          `Rvalue::Deref(` over all of air/src/lower, and `addr_of_own_temp(` over the repo minus \
-         target as one definition and three callers"
+         target as one definition and four callers"
     );
 }
 
@@ -5210,7 +5165,7 @@ fn main() -> i64 {
     },
     XRow {
         id: "S2-F05",
-        code: "E0901",
+        code: "E0902",
         rejected: r#"
 let gv: Vec<i64> = vec[1, 2, 3]
 fn main() -> i64 {
@@ -6168,8 +6123,8 @@ struct SymRow {
     id: &'static str,
     code: &'static str,
     src: &'static str,
-    // a backend internal error the fence replaces; it must be gone from the rendering
-    absent: Option<&'static str>,
+    // the fence replaces a backend failure, so no member of the backend family may remain
+    no_backend_error: bool,
 }
 
 // base behaviour is recorded per row because none of it survives the fence: these programs are
@@ -6193,7 +6148,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S02",
@@ -6211,7 +6166,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S03",
@@ -6229,7 +6184,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: Some("E0901"),
+        no_backend_error: true,
     },
     SymRow {
         id: "SI-S04",
@@ -6252,7 +6207,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S10",
@@ -6267,7 +6222,7 @@ fn main() -> i64 {
     return __aelys_main()
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S11",
@@ -6282,7 +6237,7 @@ fn __aelys_main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S12",
@@ -6297,7 +6252,7 @@ fn main() -> i64 {
     return __aelys_user_main()
 }
 "#,
-        absent: Some("E0901"),
+        no_backend_error: true,
     },
     SymRow {
         // base prints 2 then 2. this row fails if the pre-monomorphization placement is dropped:
@@ -6322,7 +6277,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S21",
@@ -6346,7 +6301,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S22",
@@ -6360,7 +6315,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         id: "SI-S23",
@@ -6377,7 +6332,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: Some("E0901"),
+        no_backend_error: true,
     },
     SymRow {
         // this is the one collision shape that reaches the fence without pre-empting it
@@ -6398,7 +6353,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
     SymRow {
         // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` mangle
@@ -6417,7 +6372,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: Some("E0901"),
+        no_backend_error: true,
     },
     SymRow {
         id: "L1",
@@ -6429,7 +6384,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        absent: None,
+        no_backend_error: false,
     },
 ];
 
@@ -6528,10 +6483,11 @@ fn group_n_symbol_identity_fails_closed() {
                 row.id,
                 row.code
             );
-            if let Some(absent) = row.absent {
+            if row.no_backend_error {
+                let leaked = backend_family_code(&rendered);
                 assert!(
-                    !rendered.contains(absent),
-                    "{} at {name} MUST no longer reach {absent}, got:\n{rendered}",
+                    leaked.is_none(),
+                    "{} at {name} MUST no longer reach the backend family, got {leaked:?} in:\n{rendered}",
                     row.id
                 );
             }
@@ -7225,6 +7181,9 @@ impl Harness {
         let path = self.write_modules(id, tag, files);
         if let Err(err) = compile_file_with_llvm_variant(&path, opt, false, RuntimeVariant::Rc) {
             if linker_unavailable(&err.to_string()) {
+                common::require_linker_skip(
+                    "a skipped module row carries no runtime evidence at all",
+                );
                 self.linker_skips.set(self.linker_skips.get() + 1);
                 return None;
             }

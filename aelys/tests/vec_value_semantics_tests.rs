@@ -5,23 +5,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
+mod common;
+use common::{exe_path_for, linker_unavailable};
+
 const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O0", OptimizationLevel::None),
     ("-O2", OptimizationLevel::Standard),
     ("-O3", OptimizationLevel::Aggressive),
 ];
-
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("program not found") || error.contains("failed to run")
-}
 
 fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
     let line = stderr.lines().find(|l| l.contains("[rc] allocs="))?;
@@ -40,21 +31,30 @@ fn compile(src: &str, opt: OptimizationLevel) -> Option<PathBuf> {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
+                common::require_linker_skip(
+                    "a skipped value row carries no runtime evidence at all",
+                );
                 return None;
             }
             panic!("compile should succeed:\n{src}\nerror: {err}");
         }
     }
     let exe = exe_path_for(&source_path);
-    if exe.is_file() { Some(exe) } else { None }
+    if !exe.is_file() {
+        common::require_linker_skip("a skipped value row carries no runtime evidence at all");
+        return None;
+    }
+    Some(exe)
 }
 
 fn run(exe: &Path, alloc: Option<&str>) -> (i32, String) {
+    let _pin = common::pin_legs("run", 1);
     let mut cmd = Command::new(exe);
     cmd.env("AELYS_RC_STATS", "1");
     if let Some(a) = alloc {
         cmd.env("AELYS_ALLOC", a);
     }
+    common::note_leg();
     let out = cmd.output().expect("run exe");
     (
         out.status.code().expect("exit code"),
@@ -63,9 +63,9 @@ fn run(exe: &Path, alloc: Option<&str>) -> (i32, String) {
 }
 
 fn assert_exit(label: &str, src: &str, expected: i32) {
+    let _pin = common::pin_legs(label, LEVELS.len() * 2);
     for (name, opt) in LEVELS {
         let Some(exe) = compile(src, *opt) else {
-            eprintln!("{label}: linker unavailable, skipping");
             return;
         };
         for alloc in [None, Some("malloc")] {
@@ -81,9 +81,9 @@ fn assert_exit(label: &str, src: &str, expected: i32) {
 
 // exit oracle plus aelys_rc_stats allocs==frees under both allocators (no leak, no double free).
 fn assert_exit_balanced(label: &str, src: &str, expected: i32) {
+    let _pin = common::pin_legs(label, LEVELS.len() * 2);
     for (name, opt) in LEVELS {
         let Some(exe) = compile(src, *opt) else {
-            eprintln!("{label}: linker unavailable, skipping");
             return;
         };
         for alloc in [None, Some("malloc")] {
@@ -261,7 +261,6 @@ fn main() -> i64 {
 
 #[test]
 fn v30_deref_store_of_a_vec_releases_the_old_buffer() {
-    // *r = u overwrites the pointee slot: retain-new, release-old-through-ptr (n-3, s5)
     assert_exit_balanced(
         "v30",
         r#"
@@ -428,7 +427,6 @@ fn main() -> i64 {
 #[test]
 fn v29_closure_capture_leak_is_per_creation_not_a_wrap() {
     // m-1: a closure created in a loop leaks one env + one buffer per creation. the count must not
-    // wrap; the value stays correct (acc = 100, 100 % 7 = 2) and the leak is named, not "balanced".
     let src = r#"
 fn main() -> i64 {
     let mut i = 0

@@ -1,32 +1,21 @@
 use aelys_driver::compile_file_with_llvm;
 use aelys_opt::OptimizationLevel;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::tempdir;
 
-fn linker_unavailable(error: &str) -> bool {
-    error.contains("failed to run `lld-link`: program not found")
-        || error.contains("failed to run `link`: program not found")
-        || error.contains("failed with status Some(-1073741819)")
-}
-
-fn executable_path_for(source_path: &Path) -> PathBuf {
-    let mut output = source_path.with_extension("");
-    if cfg!(windows) {
-        output.set_extension("exe");
-    }
-    output
-}
+mod common;
+use common::{exe_path_for as executable_path_for, linker_unavailable};
 
 fn compile_run_capture_stdout(source: &str, opt: OptimizationLevel) -> Option<String> {
+    let _pin = common::pin_legs("compile_run_capture_stdout", 1);
     let dir = tempdir().expect("tempdir");
     let path = dir.path().join("interp.aelys");
     fs::write(&path, source).expect("write source");
 
     if let Err(err) = compile_file_with_llvm(&path, opt, false) {
         if linker_unavailable(&err.to_string()) {
-            eprintln!("skipping: native linker unavailable");
+            common::require_linker_skip("a skipped value row carries no runtime evidence at all");
             return None;
         }
         panic!("compilation+link should succeed: {err}");
@@ -38,6 +27,7 @@ fn compile_run_capture_stdout(source: &str, opt: OptimizationLevel) -> Option<St
         "executable must be produced, link must succeed"
     );
 
+    common::note_leg();
     let output = Command::new(&exe)
         .output()
         .expect("compiled program should run");

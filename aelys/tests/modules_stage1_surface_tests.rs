@@ -47,7 +47,6 @@ fn exit_code(status: &std::process::ExitStatus) -> i32 {
     -1
 }
 
-// every expected exit stays under 256, because the shell truncates the rest away
 fn run_row(id: &str, files: Files, exit: i32, stdout: &str) {
     assert!(
         (0..256).contains(&exit),
@@ -77,7 +76,6 @@ fn run_row(id: &str, files: Files, exit: i32, stdout: &str) {
     }
 }
 
-// the rendering echoes the offending source line, so a needle that appears in the program is
 fn message_only(rendered: &str) -> String {
     rendered
         .lines()
@@ -607,6 +605,123 @@ fn group_mod_r3b_an_import_may_not_take_a_name_the_module_defines() {
         ],
         "[E0603]",
         "'seven'",
+    );
+}
+
+const DUP_FN_A: &str = "fn P() -> i64 {\n    return 1\n}\n";
+const DUP_FN_B: &str = "fn P() -> i64 {\n    return 2\n}\n";
+const DUP_FN_SIG: &str = "fn P(a: i64) -> i64 {\n    return a\n}\n";
+const DUP_LET_A: &str = "pub let P: i64 = 1\n";
+const DUP_LET_B: &str = "pub let P: i64 = 2\n";
+const DUP_STRUCT_A: &str = "struct P {\n    x: i64,\n}\n";
+const DUP_STRUCT_B: &str = "struct P {\n    y: i64,\n}\n";
+const DUP_ENUM_A: &str = "enum P {\n    A,\n    B,\n}\n";
+const DUP_ENUM_B: &str = "enum P {\n    C,\n    D,\n}\n";
+const DUP_MAIN: &str = "\nfn main() -> i64 {\n    return 0\n}\n";
+
+const DUPLICATE_FORMS: &[(&str, &str, &str, &str)] = &[
+    ("DUP-1", DUP_FN_A, DUP_FN_B, "twice as a function"),
+    ("DUP-1b", DUP_FN_A, DUP_FN_A, "twice as a function"),
+    ("DUP-1c", DUP_FN_A, DUP_FN_SIG, "twice as a function"),
+    ("DUP-2", DUP_LET_A, DUP_LET_B, "twice as a global"),
+    ("DUP-3", DUP_STRUCT_A, DUP_STRUCT_B, "twice as a struct"),
+    ("DUP-3b", DUP_STRUCT_A, DUP_STRUCT_A, "twice as a struct"),
+    ("DUP-4", DUP_ENUM_A, DUP_ENUM_B, "twice as an enum"),
+    ("DUP-4b", DUP_ENUM_A, DUP_ENUM_A, "twice as an enum"),
+    ("DUP-5", DUP_FN_A, DUP_LET_B, "once as a function and once as a global"),
+    ("DUP-5r", DUP_LET_A, DUP_FN_B, "once as a global and once as a function"),
+    ("DUP-6", DUP_FN_A, DUP_STRUCT_A, "once as a function and once as a struct"),
+    ("DUP-6r", DUP_STRUCT_A, DUP_FN_B, "once as a struct and once as a function"),
+    ("DUP-7", DUP_FN_A, DUP_ENUM_A, "once as a function and once as an enum"),
+    ("DUP-7r", DUP_ENUM_A, DUP_FN_B, "once as an enum and once as a function"),
+    ("DUP-8", DUP_LET_A, DUP_STRUCT_A, "once as a global and once as a struct"),
+    ("DUP-8r", DUP_STRUCT_A, DUP_LET_B, "once as a struct and once as a global"),
+    ("DUP-9", DUP_LET_A, DUP_ENUM_A, "once as a global and once as an enum"),
+    ("DUP-9r", DUP_ENUM_A, DUP_LET_B, "once as an enum and once as a global"),
+    ("DUP-10", DUP_STRUCT_A, DUP_ENUM_A, "once as a struct and once as an enum"),
+    ("DUP-10r", DUP_ENUM_A, DUP_STRUCT_A, "once as an enum and once as a struct"),
+];
+
+#[test]
+fn group_mod_dup_every_pair_of_top_level_binding_forms_is_rejected() {
+    for (id, first, second, phrasing) in DUPLICATE_FORMS {
+        let source = format!("{first}{second}{DUP_MAIN}");
+        for (level, opt) in LEVELS {
+            let dir = tempdir().expect("tempdir");
+            let root = dir.path().join("root.aelys");
+            fs::write(&root, &source).expect("write fixture");
+            let rendered = match lower_file_to_air(&root, *opt) {
+                Ok(_) => panic!(
+                    "{id} at {level}: two top level definitions of `P` MUST be rejected
+{source}"
+                ),
+                Err(rendered) => rendered.to_string(),
+            };
+            assert!(
+                rendered.contains("[E0204]"),
+                "{id} at {level}: the diagnostic MUST carry E0204
+{source}
+rendered:
+{rendered}"
+            );
+            assert!(
+                rendered.contains(phrasing),
+                "{id} at {level}: the headline MUST say {phrasing:?}
+{source}
+rendered:
+{rendered}"
+            );
+            assert!(
+                rendered.contains("is first defined here"),
+                "{id} at {level}: the diagnostic MUST point at the first definition too
+{source}
+rendered:
+{rendered}"
+            );
+        }
+    }
+}
+
+#[test]
+fn group_mod_dup_a_duplicate_definition_draws_a_single_diagnostic_and_no_consequence() {
+    let source = format!("{DUP_FN_A}{DUP_FN_SIG}
+fn main() -> i64 {{
+    return P(7)
+}}
+");
+    let dir = tempdir().expect("tempdir");
+    let root = dir.path().join("root.aelys");
+    fs::write(&root, &source).expect("write fixture");
+    let rendered = match lower_file_to_air(&root, OptimizationLevel::None) {
+        Ok(_) => panic!("DUP-11: MUST be rejected\n{source}"),
+        Err(rendered) => rendered.to_string(),
+    };
+    assert_eq!(
+        rendered.matches("error[").count(),
+        1,
+        "DUP-11: failing at the resolve layer means the second body is never checked against the \
+         first signature, so the arity consequence must not appear\n{source}\nrendered:\n{rendered}"
+    );
+    assert!(
+        !rendered.contains("E0302"),
+        "DUP-11: no arity consequence\n{source}\nrendered:\n{rendered}"
+    );
+}
+
+#[test]
+fn group_mod_dup_a_source_duplicate_answers_before_the_symbol_check() {
+    let source = format!("{DUP_FN_A}{DUP_FN_B}{DUP_MAIN}");
+    let dir = tempdir().expect("tempdir");
+    let root = dir.path().join("root.aelys");
+    fs::write(&root, &source).expect("write fixture");
+    let rendered = match lower_file_to_air(&root, OptimizationLevel::None) {
+        Ok(_) => panic!("DUP-12: MUST be rejected\n{source}"),
+        Err(rendered) => rendered.to_string(),
+    };
+    assert!(
+        rendered.contains("[E0204]") && !rendered.contains("[E0427]"),
+        "DUP-12: E0204 has both source spans and E0427 only has a mangled symbol, so the source \
+         level answer must win\n{source}\nrendered:\n{rendered}"
     );
 }
 
