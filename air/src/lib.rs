@@ -1,9 +1,17 @@
-// AIR, the Aelys Intermediate Representation
 
+pub mod analysis;
+pub mod bir;
 pub mod layout;
 pub mod lower;
+pub mod modules;
 pub mod mono;
+pub mod passes;
 pub mod print;
+pub mod rc_paths;
+pub mod rc_types;
+pub mod symbols;
+
+pub use bir::{Checked, check};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
@@ -28,6 +36,46 @@ pub struct Span {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnumRef {
+    pub name: String,
+    pub args: Vec<AirType>,
+}
+
+impl EnumRef {
+    pub fn plain(name: impl Into<String>) -> Self {
+        EnumRef {
+            name: name.into(),
+            args: Vec::new(),
+        }
+    }
+
+    pub fn new(name: impl Into<String>, args: Vec<AirType>) -> Self {
+        EnumRef {
+            name: name.into(),
+            args,
+        }
+    }
+
+    // the symbol is produced for codegen and display and is never parsed back for meaning
+    pub fn symbol(&self) -> String {
+        derive_enum_symbol(&self.name, &self.args)
+    }
+}
+
+// three pinned strings and the byte golden read a plain enum under its bare name, so arity 0 must not decorate
+pub fn derive_enum_symbol(name: &str, args: &[AirType]) -> String {
+    if args.is_empty() {
+        return name.to_string();
+    }
+    let rendered = args
+        .iter()
+        .map(crate::mono::substitute::type_to_string)
+        .collect::<Vec<_>>()
+        .join("$");
+    format!("__mono_{}${}${}", name, args.len(), rendered)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AirType {
     I8,
     I16,
@@ -40,18 +88,40 @@ pub enum AirType {
     F32,
     F64,
     Bool,
+    /// byte string slice abi: (ptr, len), never nul-terminated.
     Str,
     Ptr(Box<AirType>),
     Struct(String),
+    Enum(EnumRef),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
+    // extra cap field never perturbs immutable array views
+    Vec(Box<AirType>),
     FnPtr {
         params: Vec<AirType>,
         ret: Box<AirType>,
         conv: CallingConv,
     },
     Param(TypeParamId),
+    // mono must eliminate this, validation rejects any opaque that survives
+    Opaque,
     Void,
+}
+
+impl AirType {
+    pub fn int_size(&self) -> Option<AirIntSize> {
+        match self {
+            AirType::I8 => Some(AirIntSize::I8),
+            AirType::I16 => Some(AirIntSize::I16),
+            AirType::I32 => Some(AirIntSize::I32),
+            AirType::I64 => Some(AirIntSize::I64),
+            AirType::U8 => Some(AirIntSize::U8),
+            AirType::U16 => Some(AirIntSize::U16),
+            AirType::U32 => Some(AirIntSize::U32),
+            AirType::U64 => Some(AirIntSize::U64),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,12 +159,30 @@ pub struct AirStructField {
 }
 
 #[derive(Clone)]
+pub struct AirEnumVariant {
+    pub name: String,
+    pub tag: u32,
+    pub payload: Vec<AirType>, // empty = unit variant, non-empty = data variant
+}
+
+#[derive(Clone)]
+pub struct AirEnumDef {
+    pub name: String,
+    pub type_params: Vec<TypeParamId>,
+    pub variants: Vec<AirEnumVariant>,
+    pub span: Option<Span>,
+}
+
+#[derive(Clone)]
 pub struct AirProgram {
     pub functions: Vec<AirFunction>,
     pub structs: Vec<AirStructDef>,
+    pub enums: Vec<AirEnumDef>,
     pub globals: Vec<AirGlobal>,
     pub source_files: Vec<String>,
     pub mono_instances: Vec<MonoInstance>,
+    pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
+    pub rc_type_table: rc_types::RcTypeTable,
 }
 
 #[derive(Clone)]
@@ -205,6 +293,10 @@ pub enum AirStmtKind {
         local: LocalId,
         ty: AirType,
     },
+    RcAlloc {
+        local: LocalId,
+        ty: AirType,
+    },
     Free(LocalId),
     CallVoid {
         func: Callee,
@@ -239,14 +331,43 @@ pub enum Rvalue {
         base: Operand,
         field: String,
     },
-    AddressOf(LocalId),
+    AddressOf(Place),
     Deref(Operand),
     Cast {
         operand: Operand,
         from: AirType,
         to: AirType,
     },
-    Discriminant(Operand),
+    Index {
+        base: Operand,
+        index: Operand,
+    },
+    EnumInit {
+        enum_ref: EnumRef,
+        variant: String,
+        tag: u32,
+        payload: Vec<Operand>, // empty for unit variants
+    },
+    EnumTag {
+        enum_ref: EnumRef,
+        operand: Operand,
+    },
+    EnumPayload {
+        enum_ref: EnumRef,
+        tag: u32,
+        operand: Operand,
+        field_index: u32,
+    },
+    ClosureCreate {
+        fn_name: String,
+        env: Operand,
+    },
+    SliceFromParts {
+        ptr: Operand,
+        len: Operand,
+    },
+    /// the operand is a `ptr(array|slice|vec)` local, never the collection value itself
+    Len(Operand),
 }
 
 #[derive(Clone)]
@@ -272,13 +393,25 @@ pub enum AirConst {
     Bool(bool),
     Str(String),
     Null,
+    FnRef(String),
+    Enum {
+        enum_ref: EnumRef,
+        tag: u32,
+        payload: Vec<AirConst>,
+    },
     ZeroInit(AirType),
     Undef(AirType),
+    Array(Vec<AirConst>),
+    Struct {
+        name: String,
+        fields: Vec<(String, AirConst)>,
+    },
 }
 
 #[derive(Clone)]
 pub enum Place {
     Local(LocalId),
+    Global(String),
     Field(LocalId, String),
     Deref(LocalId),
     Index(LocalId, Operand),

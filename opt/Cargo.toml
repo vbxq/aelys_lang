@@ -7,6 +7,8 @@ edition = "2024"
 aelys-common = { path = "../common" }
 aelys-syntax = { path = "../syntax" }
 aelys-sema = { path = "../sema" }
+aelys-air = { path = "../air" }
 
 [lib]
-doctest = false
+# enabled for the phase-token structural guard on Optimizer::optimize
+doctest = true

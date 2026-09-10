@@ -1,11 +1,25 @@
 use crate::Span;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefKind {
+    Shared,
+    Mut,
+}
+
 #[derive(Debug, Clone)]
 pub struct TypeAnnotation {
     pub name: String,
     pub type_param: Option<Box<TypeAnnotation>>,
+    /// Multiple type parameters for generic types like `Result<i64, string>`.
+    /// When present, takes precedence over `type_param`.
+    pub type_params: Vec<TypeAnnotation>,
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
+    pub array_size: Option<u64>,
+    /// the outer `&` / `&mut`, none for value types
+    pub reference: Option<RefKind>,
+    pub is_slice: bool,
+    pub nogc: bool,
     pub span: Span,
 }
 
@@ -14,8 +28,13 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: None,
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
+            array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
@@ -24,18 +43,83 @@ impl TypeAnnotation {
         Self {
             name,
             type_param: Some(Box::new(type_param)),
+            type_params: Vec::new(),
             fn_params: None,
             fn_ret: None,
+            array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
 
-    pub fn function_type(params: Vec<TypeAnnotation>, ret: TypeAnnotation, span: Span) -> Self {
+    pub fn slice_referent(element: TypeAnnotation, span: Span) -> Self {
+        Self {
+            name: "[slice]".to_string(),
+            type_param: Some(Box::new(element)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            reference: None,
+            is_slice: true,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn with_params(name: String, type_params: Vec<TypeAnnotation>, span: Span) -> Self {
+        let single = if type_params.len() == 1 {
+            Some(Box::new(type_params[0].clone()))
+        } else {
+            None
+        };
+        Self {
+            name,
+            type_param: single,
+            type_params,
+            fn_params: None,
+            fn_ret: None,
+            array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc: false,
+            span,
+        }
+    }
+
+    pub fn function_type(
+        params: Vec<TypeAnnotation>,
+        ret: TypeAnnotation,
+        nogc: bool,
+        span: Span,
+    ) -> Self {
         Self {
             name: "fn".to_string(),
             type_param: None,
+            type_params: Vec::new(),
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
+            array_size: None,
+            reference: None,
+            is_slice: false,
+            nogc,
+            span,
+        }
+    }
+
+    pub fn array_sized(inner: TypeAnnotation, size: u64, span: Span) -> Self {
+        Self {
+            name: "array".to_string(),
+            type_param: Some(Box::new(inner)),
+            type_params: Vec::new(),
+            fn_params: None,
+            fn_ret: None,
+            array_size: Some(size),
+            reference: None,
+            is_slice: false,
+            nogc: false,
             span,
         }
     }
@@ -160,12 +244,11 @@ pub enum ExprKind {
 
     // Arrays and Vecs
     ArrayLiteral {
-        element_type: Option<TypeAnnotation>, // Array<Int>[...] or Array[...]
         elements: Vec<Expr>,
     },
     ArraySized {
-        element_type: Option<TypeAnnotation>, // Array<int>(10) or Array(10) or [; 10]
         size: Box<Expr>,
+        fill_value: Option<Box<Expr>>, // [val; N] syntax
     },
     VecLiteral {
         element_type: Option<TypeAnnotation>,
@@ -180,6 +263,11 @@ pub enum ExprKind {
         index: Box<Expr>,
         value: Box<Expr>,
     },
+    FieldAssign {
+        object: Box<Expr>,
+        field: String,
+        value: Box<Expr>,
+    },
     Range {
         start: Option<Box<Expr>>,
         end: Option<Box<Expr>>,
@@ -190,15 +278,80 @@ pub enum ExprKind {
         range: Box<Expr>,
     },
 
+    Reference {
+        mutable: bool,
+        operand: Box<Expr>,
+    },
+    Deref(Box<Expr>),
+    DerefAssign {
+        target: Box<Expr>,
+        value: Box<Expr>,
+    },
+
     StructLiteral {
         name: String,
         fields: Vec<StructFieldInit>,
+    },
+
+    EnumVariant {
+        enum_name: String,
+        variant: String,
+        args: Vec<Expr>, // empty for unit variants
     },
 
     Cast {
         expr: Box<Expr>,
         target: TypeAnnotation,
     },
+
+    Match {
+        scrutinee: Box<Expr>,
+        arms: Vec<MatchArm>,
+    },
+
+    /// Block expression: `{ stmts...; tail_expr }`
+    Block {
+        stmts: Vec<crate::ast::Stmt>,
+        tail: Box<Expr>,
+    },
+
+    // postfix ?; desugared away in sema, has no typed-ast counterpart
+    Try(Box<Expr>),
+
+    // postfix catch; desugared to a match in sema, has no typed-ast counterpart
+    Catch {
+        scrutinee: Box<Expr>,
+        handler: CatchHandler,
+    },
+
+    // unsafe { ... } block; erased in sema like try, gates unwrap_unchecked via unsafe_depth
+    Unsafe(Box<Expr>),
+}
+
+#[derive(Debug, Clone)]
+pub enum CatchHandler {
+    Binding { name: String, body: Box<Expr> },
+    Arms(Vec<MatchArm>),
+}
+
+#[derive(Debug, Clone)]
+pub struct MatchArm {
+    pub pattern: Pattern,
+    pub body: Box<Expr>,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum Pattern {
+    /// `EnumName::Variant` or `EnumName::Variant(x, y)`
+    Variant {
+        enum_name: String,
+        variant: String,
+        bindings: Vec<String>,
+        span: Span,
+    },
+    /// `_` wildcard
+    Wildcard(Span),
 }
 
 #[derive(Debug, Clone)]

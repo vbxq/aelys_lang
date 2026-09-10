@@ -49,8 +49,13 @@ impl DeadCodeEliminator {
                     self.eliminate_in_expr(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.eliminate_in_expr(size);
+                if let Some(fv) = fill_value {
+                    self.eliminate_in_expr(fv);
+                }
             }
             TypedExprKind::Index { object, index } => {
                 self.eliminate_in_expr(object);
@@ -65,6 +70,10 @@ impl DeadCodeEliminator {
                 self.eliminate_in_expr(index);
                 self.eliminate_in_expr(value);
             }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.eliminate_in_expr(object);
+                self.eliminate_in_expr(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.eliminate_in_expr(s);
@@ -76,6 +85,12 @@ impl DeadCodeEliminator {
             TypedExprKind::Slice { object, range } => {
                 self.eliminate_in_expr(object);
                 self.eliminate_in_expr(range);
+            }
+            TypedExprKind::Reference { operand, .. } => self.eliminate_in_expr(operand),
+            TypedExprKind::Deref(operand) => self.eliminate_in_expr(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.eliminate_in_expr(target);
+                self.eliminate_in_expr(value);
             }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
@@ -91,6 +106,24 @@ impl DeadCodeEliminator {
             }
             TypedExprKind::Cast { expr, .. } => {
                 self.eliminate_in_expr(expr);
+            }
+            TypedExprKind::Block { stmts, tail } => {
+                self.eliminate_in_block(stmts);
+                self.eliminate_in_expr(tail);
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.eliminate_in_expr(scrutinee);
+                for arm in arms {
+                    self.eliminate_in_expr(&mut arm.body);
+                }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.eliminate_in_expr(scrutinee);
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.eliminate_in_expr(arg);
+                }
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)

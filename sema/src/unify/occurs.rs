@@ -3,10 +3,14 @@ use crate::types::{InferType, TypeVarId};
 pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
     match ty {
         InferType::Var(id) => *id == var,
-        InferType::Function { params, ret } => {
+        InferType::Function { params, ret, .. } => {
             params.iter().any(|p| occurs_check(var, p)) || occurs_check(var, ret)
         }
-        InferType::Array(inner) | InferType::Vec(inner) => occurs_check(var, inner),
+        InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+            occurs_check(var, inner)
+        }
+        InferType::Ref { referent, .. } => occurs_check(var, referent),
+        InferType::Slice { elem, .. } => occurs_check(var, elem),
         InferType::Tuple(elems) => elems.iter().any(|e| occurs_check(var, e)),
         InferType::I8
         | InferType::I16
@@ -21,8 +25,10 @@ pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
         | InferType::Bool
         | InferType::String
         | InferType::Null
+        | InferType::Never
         | InferType::Range
         | InferType::Struct(_)
         | InferType::Dynamic => false,
+        InferType::Enum(_, type_args) => type_args.iter().any(|a| occurs_check(var, a)),
     }
 }

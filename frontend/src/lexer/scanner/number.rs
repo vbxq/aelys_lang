@@ -1,9 +1,8 @@
-// Octal literal support contributed by Keggek (ported to rust)
-// https://codeberg.org/gek
+// octal literal support contributed by keggek (ported to rust)
 
 use super::{Lexer, Result};
 use aelys_common::error::{AelysError, CompileErrorKind};
-use aelys_syntax::TokenKind;
+use aelys_syntax::{Span, Token, TokenKind};
 
 impl Lexer {
     pub(super) fn number(&mut self) -> Result<()> {
@@ -61,6 +60,19 @@ impl Lexer {
         } else {
             match text.parse::<i64>() {
                 Ok(n) => self.add_token(TokenKind::Int(n)),
+                Err(_) if text == LEAST_I64_MAGNITUDE && self.negates_what_follows() => {
+                    let minus = self.tokens.pop().expect("negates_what_follows saw it");
+                    self.tokens.push(Token::new(
+                        TokenKind::Int(i64::MIN),
+                        Span::new(
+                            minus.span.start,
+                            self.current,
+                            minus.span.line,
+                            minus.span.column,
+                        ),
+                    ));
+                    self.pending_semicolon = true;
+                }
                 Err(_) => {
                     return Err(AelysError::Compile(
                         self.error(CompileErrorKind::InvalidNumber(text)),
@@ -70,6 +82,15 @@ impl Lexer {
         }
 
         Ok(())
+    }
+
+    // the magnitude of the least i64 has no positive value, so it is a literal only under a minus
+    fn negates_what_follows(&self) -> bool {
+        let mut back = self.tokens.iter().rev();
+        if !matches!(back.next().map(|t| &t.kind), Some(TokenKind::Minus)) {
+            return false;
+        }
+        !back.next().is_some_and(|t| ends_an_expression(&t.kind))
     }
 
     fn hex_number(&mut self) -> Result<()> {
@@ -140,4 +161,26 @@ impl Lexer {
 
         Ok(())
     }
+}
+
+const LEAST_I64_MAGNITUDE: &str = "9223372036854775808";
+
+fn ends_an_expression(kind: &TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Identifier(_)
+            | TokenKind::Int(_)
+            | TokenKind::Float(_)
+            | TokenKind::String(_)
+            | TokenKind::FmtString(_)
+            | TokenKind::True
+            | TokenKind::False
+            | TokenKind::Null
+            | TokenKind::RParen
+            | TokenKind::RBracket
+            | TokenKind::RBrace
+            | TokenKind::PlusPlus
+            | TokenKind::MinusMinus
+            | TokenKind::Question
+    )
 }

@@ -1,9 +1,5 @@
-// module loading and dependency resolution
+mod graph;
+mod resolve;
 
-pub mod loader;
-mod needs;
-
-pub use loader::{
-    ExportInfo, LoadResult, LoadedNativeInfo, ModuleImports, ModuleInfo, ModuleLoader,
-};
-pub use needs::{load_modules_for_program, load_modules_with_loader};
+pub(crate) use graph::{ModuleUnit, ResolvedImport};
+pub(crate) use resolve::discover;

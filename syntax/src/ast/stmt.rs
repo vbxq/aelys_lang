@@ -17,6 +17,8 @@ impl Stmt {
 pub enum StmtKind {
     Expression(Expr),
 
+    Discard(Expr),
+
     Let {
         name: String,
         mutable: bool,
@@ -37,7 +39,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
-    // for i in start..end { } or start..=end (inclusive)
     For {
         iterator: String,
         start: Expr,
@@ -47,7 +48,6 @@ pub enum StmtKind {
         body: Box<Stmt>,
     },
 
-    // for item in collection { }
     ForEach {
         iterator: String,
         iterable: Expr,
@@ -66,21 +66,40 @@ pub enum StmtKind {
         fields: Vec<StructFieldDecl>,
         is_pub: bool,
     },
+
+    EnumDecl {
+        name: String,
+        type_params: Vec<String>,
+        variants: Vec<EnumVariantDecl>,
+        is_pub: bool,
+    },
 }
 
 #[derive(Debug, Clone)]
 pub struct StructFieldDecl {
     pub name: String,
     pub type_annotation: TypeAnnotation,
+    pub is_pub: bool,
     pub span: Span,
 }
 
-// module import - `needs utils.helpers` or `needs cos, sin from std.math`
+#[derive(Debug, Clone)]
+pub struct EnumVariantDecl {
+    pub name: String,
+    pub fields: Vec<TypeAnnotation>, // empty = unit variant, non-empty = tuple variant
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct NeedsStmt {
-    pub path: Vec<String>, // ["utils", "helpers"]
-    pub kind: ImportKind,
+    pub target: NeedsTarget,
     pub span: Span,
+}
+
+#[derive(Debug, Clone)]
+pub enum NeedsTarget {
+    Module { path: Vec<String>, kind: ImportKind },
+    Foreign { header: String },
 }
 
 #[derive(Debug, Clone)]
@@ -90,15 +109,31 @@ pub enum ImportKind {
     Wildcard,                         // needs foo.bar.*
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForeignConv {
+    C,
+}
+
+#[derive(Debug, Clone)]
+pub struct ForeignDecl {
+    pub symbol: String,
+    pub calling_conv: ForeignConv,
+    pub is_unsafe: bool,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
     pub type_params: Vec<String>,
+    pub nogc_bounds: Vec<bool>,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Vec<Stmt>,
     pub decorators: Vec<Decorator>,
     pub is_pub: bool,
+    pub is_nogc: bool,
+    pub foreign: Option<ForeignDecl>,
     pub span: Span,
 }
 

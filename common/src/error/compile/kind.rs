@@ -1,14 +1,19 @@
+use crate::error::fault::Fault;
+use aelys_syntax::Span;
+
 #[derive(Debug)]
 pub enum CompileErrorKind {
-    // Lexer errors
     UnterminatedString,
     InvalidCharacter(char),
     InvalidNumber(String),
     InvalidEscape(char),
     UnterminatedFmtExpr,
     UnmatchedCloseBrace,
+    SourceUnreadable {
+        path: String,
+        io: String,
+    },
 
-    // Parser errors
     UnexpectedToken {
         expected: String,
         found: String,
@@ -23,30 +28,59 @@ pub enum CompileErrorKind {
         max: usize,
     },
 
-    // Compiler errors
     UndefinedVariable(String),
     VariableAlreadyDefined(String),
+    DuplicateDefinition {
+        name: String,
+        form: &'static str,
+        previous_form: &'static str,
+        previous: Span,
+    },
+    UndefinedFunction(String),
+
+    TypeMismatch {
+        expected: String,
+        found: String,
+        reason: String,
+    },
+    ArityMismatch {
+        expected: usize,
+        found: usize,
+        func_name: String,
+    },
+    NotCallable {
+        ty: String,
+    },
+    MemberAccess {
+        message: String,
+    },
+    InfiniteType {
+        message: String,
+    },
+    UnknownType {
+        name: String,
+    },
+    InvalidCast {
+        from: String,
+        to: String,
+    },
+    RecursionLimitExceeded,
+
+    // mutability errors
     AssignToImmutable(String),
-    TooManyConstants,
-    TooManyRegisters,
-    TooManyArguments,
-    TooManyUpvalues,
+    AssignToLoopVariable(String),
+
     BreakOutsideLoop,
     ContinueOutsideLoop,
     ReturnOutsideFunction,
-    AssignToLoopVariable(String),
 
-    // 48-bit signed range for NaN-boxed ints
-    IntegerOverflow {
-        value: String,
-        min: i64,
-        max: i64,
-    },
-
-    // Module errors
     ModuleNotFound {
         module_path: String,
         searched_paths: Vec<String>,
+    },
+    AmbiguousModule {
+        module_path: String,
+        roots: Vec<String>,
     },
     CircularDependency {
         chain: Vec<String>,
@@ -55,36 +89,57 @@ pub enum CompileErrorKind {
         symbol: String,
         module: String,
     },
-    StdlibNotAvailable {
-        module: String,
+    ReservedModuleSegment {
+        module_path: String,
+        segment: String,
+    },
+    ForeignHeaderImport {
+        header: String,
+    },
+    NeedsOutsidePrologue,
+    WildcardImport {
+        module_path: String,
     },
     SymbolNotFound {
         symbol: String,
         module: String,
     },
-    InvalidNativeModule {
-        module: String,
-        reason: String,
-    },
-    NativeCapabilityDenied {
-        module: String,
-        capability: String,
-        required: Vec<String>,
-    },
-    NativeChecksumMismatch {
-        module: String,
-        expected: String,
-        actual: String,
-    },
-    NativeVersionMismatch {
-        module: String,
-        required: String,
-        found: Option<String>,
-    },
     SymbolConflict {
         symbol: String,
         modules: Vec<String>,
     },
+    ConflictingExternalSymbol {
+        symbol: String,
+    },
+    ConflictingForeignDeclarations {
+        symbol: String,
+        reason: String,
+    },
+    ReservedRuntimeSymbol {
+        symbol: String,
+    },
+    MalformedForeignDecl {
+        reason: String,
+    },
+    ForeignSignatureType {
+        function: String,
+        what: String,
+        spelling: String,
+        reason: String,
+    },
 
     TypeInferenceError(String),
+
+    LinkedLibraryClaimsRuntimeSymbol {
+        symbol: String,
+        libraries: Vec<String>,
+    },
+
+    BackendDiagnostic {
+        backend: String,
+        message: String,
+        note: Option<String>,
+        help: Option<String>,
+        fault: Fault,
+    },
 }

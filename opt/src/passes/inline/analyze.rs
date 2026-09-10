@@ -1,4 +1,6 @@
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind};
+use aelys_sema::{
+    InferType, TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind,
+};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
@@ -7,9 +9,13 @@ pub struct FunctionInfo {
     pub call_count: usize,
     pub calls: HashSet<String>,
     pub has_captures: bool,
+    pub has_type_params: bool,
     pub is_recursive: bool,
     pub has_inline: bool,
     pub has_inline_always: bool,
+    // a Vec param must cross a real call: inlining erases the entry retain, so the body
+    // would push straight into the caller's buffer at refcount 1 and corrupt it
+    pub has_vec_param: bool,
 }
 
 pub struct ProgramAnalysis {
@@ -73,6 +79,11 @@ impl ProgramAnalysis {
             }
         }
 
+        // a correctness block, checked before @inline_always: no decorator may override it
+        if info.has_vec_param {
+            return InlineDecision::Blocked(BlockReason::VecParam);
+        }
+
         // @inline_always forces it (except for truly impossible cases already checked)
         if info.has_inline_always {
             return InlineDecision::Inline;
@@ -80,6 +91,10 @@ impl ProgramAnalysis {
 
         if info.has_captures {
             return InlineDecision::Blocked(BlockReason::HasCaptures);
+        }
+
+        if info.has_type_params {
+            return InlineDecision::Blocked(BlockReason::HasTypeParams);
         }
 
         // @inline decorator
@@ -121,6 +136,8 @@ pub enum BlockReason {
     Recursive,
     MutualRecursion(Vec<String>),
     HasCaptures,
+    HasTypeParams,
+    VecParam,
 }
 
 fn analyze_function(func: &TypedFunction) -> FunctionInfo {
@@ -131,15 +148,29 @@ fn analyze_function(func: &TypedFunction) -> FunctionInfo {
 
     let has_inline = func.decorators.iter().any(|d| d.name == "inline");
     let has_inline_always = func.decorators.iter().any(|d| d.name == "inline_always");
+    // read from the sema type, never an erased one
+    let has_vec_param = func.params.iter().any(|p| param_type_holds_vec(&p.ty));
 
     FunctionInfo {
         body_size: func.body.iter().map(count_stmt_size).sum(),
         call_count: 0,
         calls,
         has_captures: !func.captures.is_empty(),
+        has_type_params: !func.type_params.is_empty(),
         is_recursive: false,
         has_inline,
         has_inline_always,
+        has_vec_param,
+    }
+}
+
+// a nominal holding a Vec is already rejected at sema, so only value types matter here
+fn param_type_holds_vec(ty: &InferType) -> bool {
+    match ty {
+        InferType::Vec(_) => true,
+        InferType::Array(inner, _) => param_type_holds_vec(inner),
+        InferType::Tuple(elems) => elems.iter().any(param_type_holds_vec),
+        _ => false,
     }
 }
 
@@ -240,7 +271,14 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
                 collect_calls_in_expr(e, calls);
             }
         }
-        TypedExprKind::ArraySized { size, .. } => collect_calls_in_expr(size, calls),
+        TypedExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
+            collect_calls_in_expr(size, calls);
+            if let Some(fv) = fill_value {
+                collect_calls_in_expr(fv, calls);
+            }
+        }
         TypedExprKind::Index { object, index } => {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(index, calls);
@@ -252,6 +290,10 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
         } => {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(index, calls);
+            collect_calls_in_expr(value, calls);
+        }
+        TypedExprKind::FieldAssign { object, value, .. } => {
+            collect_calls_in_expr(object, calls);
             collect_calls_in_expr(value, calls);
         }
         TypedExprKind::Range { start, end, .. } => {
@@ -266,6 +308,30 @@ fn collect_calls_in_expr(expr: &TypedExpr, calls: &mut HashSet<String>) {
             collect_calls_in_expr(object, calls);
             collect_calls_in_expr(range, calls);
         }
+        TypedExprKind::Match { scrutinee, arms } => {
+            collect_calls_in_expr(scrutinee, calls);
+            for arm in arms {
+                collect_calls_in_expr(&arm.body, calls);
+            }
+        }
+        TypedExprKind::Block { stmts, tail } => {
+            for s in stmts {
+                collect_calls_in_stmt(s, calls);
+            }
+            collect_calls_in_expr(tail, calls);
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, val) in fields {
+                collect_calls_in_expr(val, calls);
+            }
+        }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                collect_calls_in_expr(arg, calls);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => collect_calls_in_expr(expr, calls),
+        TypedExprKind::ResultAssert { scrutinee, .. } => collect_calls_in_expr(scrutinee, calls),
         _ => {}
     }
 }
@@ -367,7 +433,14 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
                 count_calls_in_expr(e, counts);
             }
         }
-        TypedExprKind::ArraySized { size, .. } => count_calls_in_expr(size, counts),
+        TypedExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
+            count_calls_in_expr(size, counts);
+            if let Some(fv) = fill_value {
+                count_calls_in_expr(fv, counts);
+            }
+        }
         TypedExprKind::Index { object, index } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(index, counts);
@@ -379,6 +452,10 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
         } => {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(index, counts);
+            count_calls_in_expr(value, counts);
+        }
+        TypedExprKind::FieldAssign { object, value, .. } => {
+            count_calls_in_expr(object, counts);
             count_calls_in_expr(value, counts);
         }
         TypedExprKind::Range { start, end, .. } => {
@@ -393,6 +470,30 @@ fn count_calls_in_expr(expr: &TypedExpr, counts: &mut HashMap<String, usize>) {
             count_calls_in_expr(object, counts);
             count_calls_in_expr(range, counts);
         }
+        TypedExprKind::Match { scrutinee, arms } => {
+            count_calls_in_expr(scrutinee, counts);
+            for arm in arms {
+                count_calls_in_expr(&arm.body, counts);
+            }
+        }
+        TypedExprKind::Block { stmts, tail } => {
+            for s in stmts {
+                count_calls_in_stmt(s, counts);
+            }
+            count_calls_in_expr(tail, counts);
+        }
+        TypedExprKind::StructLiteral { fields, .. } => {
+            for (_, val) in fields {
+                count_calls_in_expr(val, counts);
+            }
+        }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                count_calls_in_expr(arg, counts);
+            }
+        }
+        TypedExprKind::Cast { expr, .. } => count_calls_in_expr(expr, counts),
+        TypedExprKind::ResultAssert { scrutinee, .. } => count_calls_in_expr(scrutinee, counts),
         _ => {}
     }
 }

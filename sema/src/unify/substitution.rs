@@ -1,5 +1,5 @@
 use crate::types::{InferType, TypeVarId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Default)]
 pub struct Substitution {
@@ -31,17 +31,29 @@ impl Substitution {
         match ty {
             InferType::Var(id) => {
                 if let Some(bound) = self.bindings.get(id) {
-                    self.apply(bound)
+                    let mut visited = HashSet::new();
+                    visited.insert(*id);
+                    self.chase_var(bound, &mut visited)
                 } else {
                     ty.clone()
                 }
             }
-            InferType::Function { params, ret } => InferType::Function {
+            InferType::Function { params, ret, nogc } => InferType::Function {
                 params: params.iter().map(|p| self.apply(p)).collect(),
                 ret: Box::new(self.apply(ret)),
+                nogc: *nogc,
             },
-            InferType::Array(inner) => InferType::Array(Box::new(self.apply(inner))),
+            InferType::Array(inner, len) => InferType::Array(Box::new(self.apply(inner)), *len),
             InferType::Vec(inner) => InferType::Vec(Box::new(self.apply(inner))),
+            InferType::Rc(inner) => InferType::Rc(Box::new(self.apply(inner))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.apply(referent)),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.apply(elem)),
+                mutable: *mutable,
+            },
             InferType::Tuple(elems) => {
                 InferType::Tuple(elems.iter().map(|e| self.apply(e)).collect())
             }
@@ -58,26 +70,45 @@ impl Substitution {
             | InferType::Bool
             | InferType::String
             | InferType::Null
+            | InferType::Never
             | InferType::Range
             | InferType::Struct(_)
             | InferType::Dynamic => ty.clone(),
+            InferType::Enum(name, type_args) => {
+                if type_args.is_empty() {
+                    ty.clone()
+                } else {
+                    InferType::Enum(
+                        name.clone(),
+                        type_args.iter().map(|a| self.apply(a)).collect(),
+                    )
+                }
+            }
         }
     }
 
-    pub fn compose(&self, other: &Substitution) -> Substitution {
-        let mut result = Substitution::new();
-
-        for (var, ty) in &self.bindings {
-            result.bindings.insert(*var, other.apply(ty));
-        }
-
-        for (var, ty) in &other.bindings {
-            if !result.bindings.contains_key(var) {
-                result.bindings.insert(*var, ty.clone());
+    /// Chase a Var binding chain with cycle detection.
+    ///
+    /// Cycles are impossible through the normal unify pipeline, but this
+    /// safety net catches them gracefully if a future change breaks that
+    /// invariant.  Returns `Dynamic` on cycle instead of panicking.
+    fn chase_var(&self, ty: &InferType, visited: &mut HashSet<TypeVarId>) -> InferType {
+        match ty {
+            InferType::Var(id) => {
+                if let Some(bound) = self.bindings.get(id) {
+                    if !visited.insert(*id) {
+                        // Cycle detected — break it by returning Dynamic.
+                        return InferType::Dynamic;
+                    }
+                    self.chase_var(bound, visited)
+                } else {
+                    ty.clone()
+                }
             }
+            // Once we reach a non-Var type, switch back to normal apply
+            // which starts fresh visited sets for any nested Vars.
+            other => self.apply(other),
         }
-
-        result
     }
 
     pub fn bindings(&self) -> &HashMap<TypeVarId, InferType> {
@@ -90,5 +121,81 @@ impl Substitution {
 
     pub fn is_empty(&self) -> bool {
         self.bindings.is_empty()
+    }
+
+    /// Save a copy of the current bindings so we can roll back on failure.
+    pub fn snapshot(&self) -> HashMap<TypeVarId, InferType> {
+        self.bindings.clone()
+    }
+
+    /// Roll back the bindings to a previously saved state.
+    pub fn restore(&mut self, saved: HashMap<TypeVarId, InferType>) {
+        self.bindings = saved;
+    }
+}
+
+// TODO: move that to dedicated aelys/tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::InferType;
+    use crate::types::TypeVarId;
+
+    fn vid(n: u32) -> TypeVarId {
+        TypeVarId(n)
+    }
+
+    #[test]
+    fn apply_resolves_var_chain() {
+        let mut subst = Substitution::new();
+        // Var(0) -> Var(1) -> I64
+        subst.bind(vid(0), InferType::Var(vid(1)));
+        subst.bind(vid(1), InferType::I64);
+        assert_eq!(subst.apply(&InferType::Var(vid(0))), InferType::I64);
+    }
+
+    #[test]
+    fn apply_detects_two_var_cycle() {
+        // debug_assert fires in debug builds; in release the cycle is broken
+        // by returning Dynamic. Either way the call must terminate and not loop.
+        let mut subst = Substitution::new();
+        subst.bindings.insert(vid(0), InferType::Var(vid(1)));
+        subst.bindings.insert(vid(1), InferType::Var(vid(0)));
+        let result = subst.apply(&InferType::Var(vid(0)));
+        // In release: Dynamic. In debug: unreachable (panics before here).
+        assert_eq!(result, InferType::Dynamic);
+    }
+
+    #[test]
+    fn apply_detects_three_var_cycle() {
+        let mut subst = Substitution::new();
+        subst.bindings.insert(vid(0), InferType::Var(vid(1)));
+        subst.bindings.insert(vid(1), InferType::Var(vid(2)));
+        subst.bindings.insert(vid(2), InferType::Var(vid(0)));
+        let result = subst.apply(&InferType::Var(vid(0)));
+        assert_eq!(result, InferType::Dynamic);
+    }
+
+    #[test]
+    fn apply_no_false_positive_on_diamond() {
+        let mut subst = Substitution::new();
+        // Var(0) -> I64, Var(1) -> I64 (same target, not a cycle)
+        subst.bind(vid(0), InferType::I64);
+        subst.bind(vid(1), InferType::I64);
+        // function with two params both referencing the same resolved type
+        let fn_ty = InferType::Function {
+            params: vec![InferType::Var(vid(0)), InferType::Var(vid(1))],
+            ret: Box::new(InferType::Var(vid(0))),
+            nogc: false,
+        };
+        let result = subst.apply(&fn_ty);
+        assert_eq!(
+            result,
+            InferType::Function {
+                params: vec![InferType::I64, InferType::I64],
+                ret: Box::new(InferType::I64),
+                nogc: false,
+            }
+        );
     }
 }

@@ -1,15 +1,15 @@
 use super::TypeInference;
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedFunction, TypedParam};
 use crate::types::InferType;
 use aelys_syntax::Function;
 
 impl TypeInference {
-    /// Infer function type
     pub(super) fn infer_function(&mut self, func: &Function) -> TypedFunction {
         let fn_signature = self.env.lookup_function(&func.name).cloned();
 
         let (sig_params, sig_ret) = match fn_signature.as_deref() {
-            Some(InferType::Function { params, ret }) => {
+            Some(InferType::Function { params, ret, .. }) => {
                 (Some(params.clone()), Some((**ret).clone()))
             }
             _ => (None, None),
@@ -17,11 +17,7 @@ impl TypeInference {
 
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
-
-        for type_param in &func.type_params {
-            let fresh_var = self.type_gen.fresh();
-            self.env.define_local(type_param.clone(), fresh_var);
-        }
+        let saved_literal_inits = self.literal_init_vars.clone();
 
         let mut typed_params = Vec::with_capacity(func.params.len());
         for (i, p) in func.params.iter().enumerate() {
@@ -31,9 +27,13 @@ impl TypeInference {
                 .or_else(|| {
                     p.type_annotation
                         .as_ref()
-                        .map(|ann| self.type_from_annotation(ann))
+                        .map(|ann| self.type_from_param_annotation(ann))
                 })
                 .unwrap_or_else(|| self.type_gen.fresh());
+
+            if p.mutable && matches!(ty, InferType::Function { nogc: true, .. }) {
+                self.errors.push(TypeError::nogc_mut_param(&p.name, p.span));
+            }
 
             typed_params.push(TypedParam {
                 name: p.name.clone(),
@@ -42,6 +42,15 @@ impl TypeInference {
                 span: p.span,
             });
         }
+
+        let saved_nogc_fn_params = std::mem::replace(
+            &mut self.nogc_fn_params,
+            typed_params
+                .iter()
+                .filter(|p| matches!(p.ty, InferType::Function { nogc: true, .. }))
+                .map(|p| p.name.clone())
+                .collect(),
+        );
 
         let return_type = sig_ret
             .or_else(|| {
@@ -56,15 +65,30 @@ impl TypeInference {
 
         for param in &typed_params {
             func_env.define_local(param.name.clone(), param.ty.clone());
+            if param.mutable {
+                func_env.mark_mutable(param.name.clone());
+            }
         }
 
         let saved_env = std::mem::replace(&mut self.env, func_env);
+        let saved_unsafe = std::mem::replace(&mut self.unsafe_depth, 0);
 
         self.collect_signatures(&func.body, &func.name);
 
         self.push_return_type(return_type.clone());
 
-        let typed_body = if func.body.is_empty() {
+        let typed_body = if func.body.is_empty() && func.foreign.is_none() {
+            // empty body implicitly returns null, constrain against the declared return type so fn f()->i64 {} is rejected
+            self.constraints.push(Constraint::equal(
+                InferType::Null,
+                return_type.clone(),
+                func.span,
+                ConstraintReason::Return {
+                    func_name: func.name.clone(),
+                },
+            ));
+            vec![]
+        } else if func.body.is_empty() {
             vec![]
         } else {
             let mut stmts: Vec<_> = func.body[..func.body.len() - 1]
@@ -83,7 +107,10 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.unsafe_depth = saved_unsafe;
         self.type_params_in_scope = saved_type_params;
+        self.literal_init_vars = saved_literal_inits;
+        self.nogc_fn_params = saved_nogc_fn_params;
 
         TypedFunction {
             name: func.name.clone(),
@@ -93,6 +120,8 @@ impl TypeInference {
             body: typed_body,
             decorators: func.decorators.clone(),
             is_pub: func.is_pub,
+            declared_nogc: func.is_nogc,
+            foreign: func.foreign.clone(),
             span: func.span,
             captures,
         }

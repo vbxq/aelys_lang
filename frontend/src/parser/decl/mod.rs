@@ -4,6 +4,7 @@ use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{Stmt, TokenKind};
 
 mod decorators;
+mod enum_decl;
 mod function;
 mod let_decl;
 mod needs;
@@ -13,7 +14,7 @@ mod types;
 impl Parser {
     pub fn declaration(&mut self) -> Result<Stmt> {
         if self.check(&TokenKind::Needs) {
-            return self.needs_declaration();
+            return Err(self.error(CompileErrorKind::NeedsOutsidePrologue));
         }
 
         let decorators = self.decorators()?;
@@ -29,13 +30,42 @@ impl Parser {
             return self.struct_declaration(is_pub);
         }
 
+        if self.check(&TokenKind::Enum) {
+            if !decorators.is_empty() {
+                return Err(self.error(CompileErrorKind::UnexpectedToken {
+                    expected: "function after decorator".to_string(),
+                    found: self.peek().kind.to_string(),
+                }));
+            }
+            return self.enum_declaration(is_pub);
+        }
+
+        if self.check(&TokenKind::Unsafe) && self.peek_at(1).kind == TokenKind::Extern {
+            return self.foreign_declaration(decorators, is_pub);
+        }
+
+        if self.check(&TokenKind::Extern) {
+            return Err(self.error(CompileErrorKind::MalformedForeignDecl {
+                reason: "an external declaration must be `unsafe`".to_string(),
+            }));
+        }
+
+        let is_nogc = self.match_token(&TokenKind::Nogc);
+
         if self.check(&TokenKind::Fn) {
-            return self.function_declaration(decorators, is_pub);
+            return self.function_declaration(decorators, is_pub, is_nogc);
         }
 
         if !decorators.is_empty() {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
                 expected: "function after decorator".to_string(),
+                found: self.peek().kind.to_string(),
+            }));
+        }
+
+        if is_nogc {
+            return Err(self.error(CompileErrorKind::UnexpectedToken {
+                expected: "fn after `nogc`".to_string(),
                 found: self.peek().kind.to_string(),
             }));
         }
@@ -46,7 +76,7 @@ impl Parser {
 
         if is_pub {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: "fn, let, or struct after pub".to_string(),
+                expected: "fn, let, struct, or enum after pub".to_string(),
                 found: self.peek().kind.to_string(),
             }));
         }

@@ -1,7 +1,7 @@
 // removes unused let bindings (unless they have side effects)
 
 use super::super::OptimizationStats;
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use std::collections::HashSet;
 
 pub fn eliminate_unused_in_block(
@@ -24,7 +24,10 @@ pub fn eliminate_unused_in_block(
             if *is_pub {
                 return true;
             } // keep pub exports
-            if !used_vars.contains(name) && !has_side_effects(initializer) {
+            if !used_vars.contains(name)
+                && !has_side_effects(initializer)
+                && !has_observable_drop(&initializer.ty)
+            {
                 stats.dead_code_eliminated += 1;
                 return false;
             }
@@ -75,6 +78,11 @@ fn eliminate_unused_in_function(
     eliminate_unused_in_block(&mut func.body, &local_used, stats);
 }
 
+// reports. leaf types are enough here because a transitive carrier is already rejected upstream.
+fn has_observable_drop(ty: &InferType) -> bool {
+    aelys_air::bir::category::is_affine(ty) || matches!(ty, InferType::Vec(_) | InferType::Rc(_))
+}
+
 fn has_side_effects(expr: &TypedExpr) -> bool {
     match &expr.kind {
         TypedExprKind::Call { .. } | TypedExprKind::Assign { .. } => true,
@@ -99,18 +107,22 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         TypedExprKind::Member { object, .. } => has_side_effects(object),
         TypedExprKind::ArrayLiteral { elements, .. }
         | TypedExprKind::VecLiteral { elements, .. } => elements.iter().any(has_side_effects),
-        TypedExprKind::ArraySized { size, .. } => has_side_effects(size),
+        TypedExprKind::ArraySized {
+            size, fill_value, ..
+        } => has_side_effects(size) || fill_value.as_ref().is_some_and(|fv| has_side_effects(fv)),
         TypedExprKind::Index { object, index } => {
             has_side_effects(object) || has_side_effects(index)
         }
         TypedExprKind::IndexAssign { .. } => true, // assignment has side effects
+        TypedExprKind::FieldAssign { .. } => true, // assignment has side effects
         TypedExprKind::Range { start, end, .. } => {
             start.as_ref().is_some_and(|s| has_side_effects(s))
                 || end.as_ref().is_some_and(|e| has_side_effects(e))
         }
-        TypedExprKind::Slice { object, range } => {
-            has_side_effects(object) || has_side_effects(range)
-        }
+        TypedExprKind::Slice { .. } => true,
+        TypedExprKind::Reference { operand, .. } => has_side_effects(operand),
+        TypedExprKind::Deref(operand) => has_side_effects(operand),
+        TypedExprKind::DerefAssign { .. } => true, // write through a reference has side effects
         TypedExprKind::FmtString(parts) => parts.iter().any(|p| {
             if let aelys_sema::TypedFmtStringPart::Expr(e) = p {
                 has_side_effects(e)
@@ -122,6 +134,20 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
             fields.iter().any(|(_, v)| has_side_effects(v))
         }
         TypedExprKind::Cast { expr, .. } => has_side_effects(expr),
+        TypedExprKind::Block { stmts, tail } => {
+            stmts.iter().any(|s| {
+                if let aelys_sema::TypedStmtKind::Expression(e) = &s.kind {
+                    has_side_effects(e)
+                } else {
+                    true // let/return/etc. have side effects
+                }
+            }) || has_side_effects(tail)
+        }
+        TypedExprKind::Match { scrutinee, arms } => {
+            has_side_effects(scrutinee) || arms.iter().any(|arm| has_side_effects(&arm.body))
+        }
+        TypedExprKind::ResultAssert { .. } => true,
+        TypedExprKind::EnumVariant { args, .. } => args.iter().any(|a| has_side_effects(a)),
         TypedExprKind::Identifier(_)
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

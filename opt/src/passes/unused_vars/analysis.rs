@@ -74,7 +74,8 @@ fn collect_uses_in_stmt(stmt: &TypedStmt, used: &mut HashSet<String>) {
         | TypedStmtKind::Break
         | TypedStmtKind::Continue
         | TypedStmtKind::Needs(_)
-        | TypedStmtKind::StructDecl { .. } => {}
+        | TypedStmtKind::StructDecl { .. }
+        | TypedStmtKind::EnumDecl { .. } => {}
     }
 }
 
@@ -137,8 +138,13 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
                 collect_uses_in_expr(elem, used);
             }
         }
-        TypedExprKind::ArraySized { size, .. } => {
+        TypedExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
             collect_uses_in_expr(size, used);
+            if let Some(fv) = fill_value {
+                collect_uses_in_expr(fv, used);
+            }
         }
         TypedExprKind::Index { object, index } => {
             collect_uses_in_expr(object, used);
@@ -153,6 +159,10 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
             collect_uses_in_expr(index, used);
             collect_uses_in_expr(value, used);
         }
+        TypedExprKind::FieldAssign { object, value, .. } => {
+            collect_uses_in_expr(object, used);
+            collect_uses_in_expr(value, used);
+        }
         TypedExprKind::Range { start, end, .. } => {
             if let Some(s) = start {
                 collect_uses_in_expr(s, used);
@@ -164,6 +174,12 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         TypedExprKind::Slice { object, range } => {
             collect_uses_in_expr(object, used);
             collect_uses_in_expr(range, used);
+        }
+        TypedExprKind::Reference { operand, .. } => collect_uses_in_expr(operand, used),
+        TypedExprKind::Deref(operand) => collect_uses_in_expr(operand, used),
+        TypedExprKind::DerefAssign { target, value } => {
+            collect_uses_in_expr(target, used);
+            collect_uses_in_expr(value, used);
         }
         TypedExprKind::FmtString(parts) => {
             for part in parts {
@@ -179,6 +195,26 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         }
         TypedExprKind::Cast { expr, .. } => {
             collect_uses_in_expr(expr, used);
+        }
+        TypedExprKind::Block { stmts, tail } => {
+            for stmt in stmts {
+                collect_uses_in_stmt(stmt, used);
+            }
+            collect_uses_in_expr(tail, used);
+        }
+        TypedExprKind::Match { scrutinee, arms } => {
+            collect_uses_in_expr(scrutinee, used);
+            for arm in arms {
+                collect_uses_in_expr(&arm.body, used);
+            }
+        }
+        TypedExprKind::ResultAssert { scrutinee, .. } => {
+            collect_uses_in_expr(scrutinee, used);
+        }
+        TypedExprKind::EnumVariant { args, .. } => {
+            for arg in args {
+                collect_uses_in_expr(arg, used);
+            }
         }
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)

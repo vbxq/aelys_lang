@@ -5,6 +5,3 @@ edition = "2024"
 
 [dependencies]
 aelys-syntax = { path = "../syntax" }
-
-[lib]
-doctest = false

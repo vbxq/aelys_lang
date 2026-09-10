@@ -3,7 +3,8 @@ use crate::lexer::Lexer;
 use aelys_common::Result;
 use aelys_common::error::{CompileError, CompileErrorKind};
 use aelys_syntax::{
-    Expr, ExprKind, FmtPart, FmtStringPart, Source, Stmt, StmtKind, StructFieldInit, TokenKind,
+    Expr, ExprKind, FmtPart, FmtStringPart, MatchArm, Pattern, Source, Stmt, StmtKind,
+    StructFieldInit, TokenKind,
 };
 use std::sync::Arc;
 
@@ -16,6 +17,9 @@ impl Parser {
             loop {
                 params.push(self.parse_parameter()?);
                 if !self.match_token(&TokenKind::Comma) {
+                    break;
+                }
+                if self.check(&TokenKind::RParen) {
                     break;
                 }
             }
@@ -55,8 +59,14 @@ impl Parser {
         let then_branch = self.block_expression()?;
 
         self.consume(&TokenKind::Else, "else")?;
-        self.consume(&TokenKind::LBrace, "{")?;
-        let else_branch = self.block_expression()?;
+        let else_branch = if self.check(&TokenKind::If) {
+            let if_span = self.peek().span;
+            self.advance(); // consume `if`
+            self.if_expression(if_span)?
+        } else {
+            self.consume(&TokenKind::LBrace, "{")?;
+            self.block_expression()?
+        };
 
         let end_span = self.previous().span;
 
@@ -70,18 +80,172 @@ impl Parser {
         ))
     }
 
-    // block expr: last expr is the value (like Rust)
+    pub(super) fn match_expression(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
+        let scrutinee = self.expression()?;
+        self.consume(&TokenKind::LBrace, "{")?;
+        let arms = self.match_arms()?;
+        let end_span = self.previous().span;
+
+        Ok(Expr::new(
+            ExprKind::Match {
+                scrutinee: Box::new(scrutinee),
+                arms,
+            },
+            start_span.merge(end_span),
+        ))
+    }
+
+    pub(super) fn match_arms(&mut self) -> Result<Vec<MatchArm>> {
+        let mut arms = Vec::new();
+        while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            if self.match_token(&TokenKind::Semicolon) {
+                continue;
+            }
+            let arm_start = self.peek().span;
+            let pattern = self.parse_pattern()?;
+            self.consume(&TokenKind::FatArrow, "=>")?;
+            let body = if self.check(&TokenKind::Return) {
+                self.match_arm_return()?
+            } else {
+                self.expression()?
+            };
+            let arm_end = self.previous().span;
+            arms.push(MatchArm {
+                pattern,
+                body: Box::new(body),
+                span: arm_start.merge(arm_end),
+            });
+            if !self.match_token(&TokenKind::Comma) {
+                self.match_token(&TokenKind::Semicolon);
+            }
+        }
+        self.consume(&TokenKind::RBrace, "}")?;
+        Ok(arms)
+    }
+
+    fn match_arm_return(&mut self) -> Result<Expr> {
+        let ret_span = self.peek().span;
+        self.advance(); // consume `return`
+
+        let value = if self.check(&TokenKind::Comma)
+            || self.check(&TokenKind::Semicolon)
+            || self.check(&TokenKind::RBrace)
+        {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        let end_span = self.previous().span;
+        let stmt = Stmt::new(StmtKind::Return(value), ret_span.merge(end_span));
+        Ok(Expr::new(
+            ExprKind::Block {
+                stmts: vec![stmt],
+                tail: Box::new(Expr::new(ExprKind::Null, end_span)),
+            },
+            ret_span.merge(end_span),
+        ))
+    }
+
+    fn parse_pattern(&mut self) -> Result<Pattern> {
+        let span = self.peek().span;
+
+        if let TokenKind::Identifier(name) = &self.peek().kind {
+            if name == "_" {
+                self.advance();
+                return Ok(Pattern::Wildcard(span));
+            }
+        }
+
+        let mut enum_name = self.consume_identifier("enum name or _")?;
+        while self.check(&TokenKind::Dot)
+            && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+        {
+            self.advance();
+            let segment = self.consume_identifier("enum path segment")?;
+            enum_name.push('.');
+            enum_name.push_str(&segment);
+        }
+        self.consume(&TokenKind::ColonColon, "::")?;
+        let variant = self.consume_identifier("variant name")?;
+        let variant_end_span = self.previous().span;
+
+        let mut bindings = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    let binding = self.consume_identifier("binding name")?;
+                    bindings.push(binding);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.consume(&TokenKind::RParen, ")")?;
+        }
+
+        let end_span = self.previous().span;
+
+        Ok(Pattern::Variant {
+            enum_name,
+            variant,
+            bindings,
+            span: span.merge(end_span.merge(variant_end_span)),
+        })
+    }
+
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
+        let block_start = self.previous().span;
         let mut stmts = Vec::new();
 
         while !self.check(&TokenKind::RBrace) && !self.is_at_end() {
+            if self.check(&TokenKind::If) {
+                let saved = self.current;
+                match self.expression() {
+                    Ok(expr) => {
+                        if self.check(&TokenKind::RBrace) {
+                            self.consume(&TokenKind::RBrace, "}")?;
+                            let end_span = self.previous().span;
+                            if stmts.is_empty() {
+                                return Ok(expr);
+                            }
+                            return Ok(Expr::new(
+                                ExprKind::Block {
+                                    stmts,
+                                    tail: Box::new(expr),
+                                },
+                                block_start.merge(end_span),
+                            ));
+                        }
+                        self.consume_semicolon()?;
+                        let span = expr.span;
+                        stmts.push(Stmt::new(StmtKind::Expression(expr), span));
+                    }
+                    Err(_) => {
+                        self.current = saved;
+                        stmts.push(self.declaration()?);
+                    }
+                }
+                continue;
+            }
+
             if self.is_expression_start() {
                 let expr = self.expression()?;
 
                 if self.check(&TokenKind::RBrace) {
                     self.consume(&TokenKind::RBrace, "}")?;
+                    let end_span = self.previous().span;
 
-                    return Ok(expr);
+                    if stmts.is_empty() {
+                        return Ok(expr);
+                    }
+                    return Ok(Expr::new(
+                        ExprKind::Block {
+                            stmts,
+                            tail: Box::new(expr),
+                        },
+                        block_start.merge(end_span),
+                    ));
                 }
 
                 self.consume_semicolon()?;
@@ -96,8 +260,34 @@ impl Parser {
         }
 
         self.consume(&TokenKind::RBrace, "}")?;
+        let end_span = self.previous().span;
 
-        Ok(Expr::new(ExprKind::Null, self.previous().span))
+        let tail = if let Some(last) = stmts.last() {
+            if matches!(&last.kind, StmtKind::Expression(_)) {
+                let last = stmts.pop().unwrap();
+                if let StmtKind::Expression(expr) = last.kind {
+                    expr
+                } else {
+                    unreachable!()
+                }
+            } else {
+                Expr::new(ExprKind::Null, end_span)
+            }
+        } else {
+            Expr::new(ExprKind::Null, end_span)
+        };
+
+        if stmts.is_empty() {
+            Ok(tail)
+        } else {
+            Ok(Expr::new(
+                ExprKind::Block {
+                    stmts,
+                    tail: Box::new(tail),
+                },
+                block_start.merge(end_span),
+            ))
+        }
     }
 
     pub(super) fn is_expression_start(&self) -> bool {
@@ -113,9 +303,12 @@ impl Parser {
                 | TokenKind::Identifier(_)
                 | TokenKind::LParen
                 | TokenKind::LBracket
+                | TokenKind::LBrace
                 | TokenKind::Minus
                 | TokenKind::Not
                 | TokenKind::If
+                | TokenKind::Match
+                | TokenKind::Unsafe
                 | TokenKind::Fn
         )
     }
@@ -136,17 +329,13 @@ impl Parser {
             TokenKind::False => ExprKind::Bool(false),
             TokenKind::Null => ExprKind::Null,
             TokenKind::Identifier(ref name)
-                if name.eq_ignore_ascii_case("array") || name.eq_ignore_ascii_case("vec") =>
+                if name.eq_ignore_ascii_case("vec")
+                    && (self.check(&TokenKind::LBracket) || self.check(&TokenKind::Lt)) =>
             {
                 let name = name.clone();
-                return self.typed_collection_literal(name, span);
+                return self.vec_literal(name, span);
             }
-            TokenKind::Identifier(ref name)
-                if name.chars().next().is_some_and(|c| c.is_uppercase())
-                    && self.check(&TokenKind::LBrace)
-                    && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
-                    && matches!(self.peek_at(2).kind, TokenKind::Colon) =>
-            {
+            TokenKind::Identifier(ref name) if self.starts_a_struct_literal(name) => {
                 let name = name.clone();
                 return self.struct_literal(name, span);
             }
@@ -170,8 +359,26 @@ impl Parser {
                 return self.if_expression(span);
             }
 
+            TokenKind::Match => {
+                return self.match_expression(span);
+            }
+
+            TokenKind::Unsafe => {
+                self.consume(&TokenKind::LBrace, "{")?;
+                let block = self.block_expression()?;
+                let end_span = self.previous().span;
+                return Ok(Expr::new(
+                    ExprKind::Unsafe(Box::new(block)),
+                    span.merge(end_span),
+                ));
+            }
+
             TokenKind::Fn => {
                 return self.lambda_expression(span);
+            }
+
+            TokenKind::LBrace => {
+                return self.block_expression();
             }
 
             _ => {
@@ -187,24 +394,77 @@ impl Parser {
         Ok(Expr::new(kind, span))
     }
 
-    /// Parse array literal: [1, 2, 3] or sized array: [; 10]
     fn array_literal(&mut self, start_span: aelys_syntax::Span) -> Result<Expr> {
-        // Check for sized array syntax: [; size]
         if self.match_token(&TokenKind::Semicolon) {
             let size = self.expression()?;
             self.consume(&TokenKind::RBracket, "]")?;
             let end_span = self.previous().span;
             return Ok(Expr::new(
                 ExprKind::ArraySized {
-                    element_type: None,
                     size: Box::new(size),
+                    fill_value: None,
                 },
                 start_span.merge(end_span),
             ));
         }
 
-        let mut elements = Vec::new();
+        if self.check(&TokenKind::RBracket) {
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArrayLiteral {
+                    elements: Vec::new(),
+                },
+                start_span.merge(end_span),
+            ));
+        }
+        let first = self.expression()?;
+        if self.match_token(&TokenKind::Semicolon) {
+            let size = self.expression()?;
+            self.consume(&TokenKind::RBracket, "]")?;
+            let end_span = self.previous().span;
+            return Ok(Expr::new(
+                ExprKind::ArraySized {
+                    size: Box::new(size),
+                    fill_value: Some(Box::new(first)),
+                },
+                start_span.merge(end_span),
+            ));
+        }
 
+        let mut elements = vec![first];
+        while self.match_token(&TokenKind::Comma) {
+            if self.check(&TokenKind::RBracket) {
+                break;
+            }
+            elements.push(self.expression()?);
+        }
+
+        self.consume(&TokenKind::RBracket, "]")?;
+        let end_span = self.previous().span;
+
+        Ok(Expr::new(
+            ExprKind::ArrayLiteral { elements },
+            start_span.merge(end_span),
+        ))
+    }
+
+    fn vec_literal(
+        &mut self,
+        _collection_name: String,
+        start_span: aelys_syntax::Span,
+    ) -> Result<Expr> {
+        let element_type = if self.match_token(&TokenKind::Lt) {
+            let type_ann = self.parse_type_annotation()?;
+            self.consume(&TokenKind::Gt, ">")?;
+            Some(type_ann)
+        } else {
+            None
+        };
+
+        self.consume(&TokenKind::LBracket, "[")?;
+
+        let mut elements = Vec::new();
         if !self.check(&TokenKind::RBracket) {
             loop {
                 elements.push(self.expression()?);
@@ -221,93 +481,39 @@ impl Parser {
         let end_span = self.previous().span;
 
         Ok(Expr::new(
-            ExprKind::ArrayLiteral {
-                element_type: None,
+            ExprKind::VecLiteral {
+                element_type,
                 elements,
             },
             start_span.merge(end_span),
         ))
     }
 
-    /// Parse typed collection literal: Array<Int>[1, 2, 3] or Vec<Float>[1.0, 2.0]
-    /// Also handles sized arrays: Array(10) or Array<int>(10)
-    fn typed_collection_literal(
-        &mut self,
-        collection_name: String,
-        start_span: aelys_syntax::Span,
-    ) -> Result<Expr> {
-        let element_type = if self.match_token(&TokenKind::Lt) {
-            let type_ann = self.parse_type_annotation()?;
-            self.consume(&TokenKind::Gt, ">")?;
-            Some(type_ann)
-        } else {
-            None
-        };
-
-        // Check for sized array constructor: Array(10) or Array<int>(10)
-        // Only valid for Array, not Vec (Vec will fail at "[" consumption)
-        if collection_name.eq_ignore_ascii_case("array") && self.match_token(&TokenKind::LParen) {
-            let size = self.expression()?;
-            self.consume(&TokenKind::RParen, ")")?;
-            let end_span = self.previous().span;
-
-            return Ok(Expr::new(
-                ExprKind::ArraySized {
-                    element_type,
-                    size: Box::new(size),
-                },
-                start_span.merge(end_span),
-            ));
-        }
-
-        self.consume(&TokenKind::LBracket, "[")?;
-
-        // Check for sized array syntax: Array[; 10] or Array<int>[; 10]
-        if self.match_token(&TokenKind::Semicolon) {
-            let size = self.expression()?;
-            self.consume(&TokenKind::RBracket, "]")?;
-            let end_span = self.previous().span;
-            return Ok(Expr::new(
-                ExprKind::ArraySized {
-                    element_type,
-                    size: Box::new(size),
-                },
-                start_span.merge(end_span),
-            ));
-        }
-
-        let mut elements = Vec::new();
-        if !self.check(&TokenKind::RBracket) {
-            loop {
-                elements.push(self.expression()?);
-                if !self.match_token(&TokenKind::Comma) {
-                    break;
-                }
-                if self.check(&TokenKind::RBracket) {
-                    break;
-                }
-            }
-        }
-
-        self.consume(&TokenKind::RBracket, "]")?;
-        let end_span = self.previous().span;
-
-        let kind = if collection_name.eq_ignore_ascii_case("vec") {
-            ExprKind::VecLiteral {
-                element_type,
-                elements,
-            }
-        } else {
-            ExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            }
-        };
-
-        Ok(Expr::new(kind, start_span.merge(end_span)))
+    pub(super) fn starts_a_struct_literal(&self, name: &str) -> bool {
+        self.struct_literal_head(name)
+            && (matches!(self.peek_at(1).kind, TokenKind::RBrace)
+                || self.struct_literal_first_field())
     }
 
-    fn struct_literal(&mut self, name: String, start_span: aelys_syntax::Span) -> Result<Expr> {
+    // `m.p { }` would swallow the empty block of `if s.x { }`, which parsed before modules
+    pub(super) fn starts_a_qualified_struct_literal(&self, name: &str) -> bool {
+        self.struct_literal_head(name) && self.struct_literal_first_field()
+    }
+
+    fn struct_literal_head(&self, name: &str) -> bool {
+        name.chars().next().is_some_and(|c| c.is_uppercase()) && self.check(&TokenKind::LBrace)
+    }
+
+    fn struct_literal_first_field(&self) -> bool {
+        matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
+            && matches!(self.peek_at(2).kind, TokenKind::Colon)
+    }
+
+    pub(super) fn struct_literal(
+        &mut self,
+        name: String,
+        start_span: aelys_syntax::Span,
+    ) -> Result<Expr> {
         self.consume(&TokenKind::LBrace, "{")?;
 
         let mut fields = Vec::new();
@@ -325,10 +531,13 @@ impl Parser {
             });
 
             if !self.match_token(&TokenKind::Comma) {
+                while self.match_token(&TokenKind::Semicolon) {}
                 break;
             }
+            while self.match_token(&TokenKind::Semicolon) {}
         }
 
+        while self.match_token(&TokenKind::Semicolon) {}
         self.consume(&TokenKind::RBrace, "}")?;
         let end_span = self.previous().span;
 
@@ -386,9 +595,6 @@ impl Parser {
     }
 }
 
-// recursively remap all spans in an expression tree to a single span.
-// used to fix format string interpolation spans so errors point to the
-// string literal rather than a synthetic `<fmt-expr>` source
 fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
     expr.span = span;
     match &mut expr.kind {
@@ -437,8 +643,13 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
                 remap_expr_spans(el, span);
             }
         }
-        ExprKind::ArraySized { size, .. } => {
+        ExprKind::ArraySized {
+            size, fill_value, ..
+        } => {
             remap_expr_spans(size, span);
+            if let Some(fv) = fill_value {
+                remap_expr_spans(fv, span);
+            }
         }
         ExprKind::Index { object, index } => {
             remap_expr_spans(object, span);
@@ -451,6 +662,14 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
         } => {
             remap_expr_spans(object, span);
             remap_expr_spans(index, span);
+            remap_expr_spans(value, span);
+        }
+        ExprKind::FieldAssign {
+            object,
+            field: _,
+            value,
+        } => {
+            remap_expr_spans(object, span);
             remap_expr_spans(value, span);
         }
         ExprKind::Range { start, end, .. } => {
@@ -480,7 +699,13 @@ fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
         ExprKind::Cast { expr, .. } => {
             remap_expr_spans(expr, span);
         }
-        // Leaf nodes: Int, Float, String, Bool, Null, Identifier
+        ExprKind::Match { scrutinee, arms } => {
+            remap_expr_spans(scrutinee, span);
+            for arm in arms {
+                arm.span = span;
+                remap_expr_spans(&mut arm.body, span);
+            }
+        }
         _ => {}
     }
 }

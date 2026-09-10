@@ -33,6 +33,13 @@ impl Lexer {
             "in" => TokenKind::In,
             "step" => TokenKind::Step,
             "struct" => TokenKind::Struct,
+            "enum" => TokenKind::Enum,
+            "match" => TokenKind::Match,
+            "discard" => TokenKind::Discard,
+            "catch" => TokenKind::Catch,
+            "unsafe" => TokenKind::Unsafe,
+            "nogc" => TokenKind::Nogc,
+            "extern" => TokenKind::Extern,
             _ => TokenKind::Identifier(text),
         };
 

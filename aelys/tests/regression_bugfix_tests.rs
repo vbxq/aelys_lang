@@ -26,7 +26,8 @@ fn lower_optimized(code: &str) -> AirProgram {
         .expect("parse failed");
     let typed = TypeInference::infer_program(stmts, src).expect("sema failed");
     let mut opt = aelys_opt::Optimizer::new(aelys_opt::OptimizationLevel::Standard);
-    let optimized = opt.optimize(typed);
+    let checked = aelys_air::bir::check(typed).unwrap_or_else(|_| panic!("fixture is well-formed"));
+    let optimized = opt.optimize(checked);
     lower(&optimized)
 }
 
@@ -91,8 +92,8 @@ fn block_ids_coherent_in_while_loop() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i32 {
-    let total: i32 = 0
-    let i: i32 = 0
+    let mut total: i32 = 0
+    let mut i: i32 = 0
     while i < n {
         total = total + i
         i = i + 1
@@ -143,9 +144,9 @@ fn block_ids_coherent_in_nested_control_flow() {
     let air = lower_source(
         r#"
 fn classify(n: i32) -> i32 {
-    let result: i32 = 0
+    let mut result: i32 = 0
     if n > 0 {
-        let i: i32 = 0
+        let mut i: i32 = 0
         while i < n {
             if i > 5 {
                 result = result + 2
@@ -260,8 +261,8 @@ fn const_prop_does_not_substitute_in_while_condition() {
     let air = lower_optimized(
         r#"
 fn sum(n: i32) -> i32 {
-    let total: i32 = 0
-    let i: i32 = 0
+    let mut total: i32 = 0
+    let mut i: i32 = 0
     while i < n {
         total = total + i
         i = i + 1
@@ -364,7 +365,7 @@ fn apply(f: fn(i32) -> i32, x: i32) -> i32 {
 // bug fix: Cast from generic type parameter
 
 #[test]
-fn generic_cast_does_not_error_at_sema() {
+fn generic_cast_from_unconstrained_type_param_is_rejected() {
     let src = Source::new(
         "<test>",
         r#"
@@ -379,35 +380,35 @@ fn to_float<T>(x: T) -> f64 {
         .expect("parse failed");
     let result = TypeInference::infer_program(stmts, src);
     assert!(
-        result.is_ok(),
-        "casting generic T to f64 should not produce a sema error, got: {:?}",
+        result.is_err(),
+        "casting unconstrained generic T to f64 should be rejected, got: {:?}",
         result.err()
     );
 }
 
 #[test]
-fn generic_cast_monomorphizes_correctly() {
+fn generic_identity_still_monomorphizes() {
     let air = lower_source(
         r#"
-fn to_float<T>(x: T) -> f64 {
-    return x as f64
+fn id<T>(x: T) -> T {
+    return x
 }
-fn caller() -> f64 {
+fn caller() -> i32 {
     let v: i32 = 42
-    return to_float(v)
+    return id(v)
 }
 "#,
     );
     let mut program = air;
     compute_layouts(&mut program);
-    let program = monomorphize(program);
+    let program = monomorphize(program).unwrap();
     let mono_fn = program
         .functions
         .iter()
-        .find(|f| f.name.contains("__mono_to_float"));
+        .find(|f| f.name.contains("__mono_id"));
     assert!(
         mono_fn.is_some(),
-        "to_float should be monomorphized, found: {:?}",
+        "id should be monomorphized, found: {:?}",
         program
             .functions
             .iter()
@@ -456,8 +457,8 @@ fn sum_loop_block_ids_valid() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i64 {
-    let acc: i64 = 0
-    let i: i32 = 0
+    let mut acc: i64 = 0
+    let mut i: i32 = 0
     while i < n {
         acc = acc + i as i64
         i = i + 1
@@ -476,4 +477,32 @@ fn sum(n: i32) -> i64 {
             ids
         );
     }
+}
+
+#[test]
+fn inliner_does_not_duplicate_effectful_argument() {
+    let air = lower_optimized(
+        r#"
+fn side() -> i64 {
+    let x: i64 = 2
+    return x
+}
+fn twice(v: i64) -> i64 {
+    return v + v
+}
+fn main() -> i64 {
+    return twice(side())
+}
+"#,
+    );
+    let printed = print_program(&air);
+    let side_calls = printed
+        .lines()
+        .filter(|line| line.contains("call side("))
+        .count();
+    assert_eq!(
+        side_calls, 1,
+        "effectful argument side() must be evaluated exactly once after optimization, got {}:\n{}",
+        side_calls, printed
+    );
 }

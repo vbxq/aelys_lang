@@ -1,6 +1,7 @@
 use aelys_air::layout::compute_layouts;
 use aelys_air::lower::{lower, lower_with_gc_mode};
 use aelys_air::mono::monomorphize;
+use aelys_air::passes::validate::{AirValidationDetail, validate_air};
 use aelys_air::*;
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
@@ -25,7 +26,7 @@ fn lower_with_globals(code: &str, globals: &[&str]) -> AirProgram {
         .parse()
         .expect("parse failed");
     let known: HashSet<String> = globals.iter().map(|s| s.to_string()).collect();
-    let typed = TypeInference::infer_program_with_imports(stmts, src, HashSet::new(), known)
+    let typed = TypeInference::infer_program_with_imports(stmts, src, Default::default(), known)
         .expect("sema failed");
     lower(&typed)
 }
@@ -35,6 +36,15 @@ fn func<'a>(air: &'a AirProgram, name: &str) -> &'a AirFunction {
         .iter()
         .find(|f| f.name == name)
         .unwrap_or_else(|| panic!("function `{}` not found in AIR", name))
+}
+
+fn default_attribs() -> FunctionAttribs {
+    FunctionAttribs {
+        inline: InlineHint::Default,
+        no_gc: false,
+        no_unwind: false,
+        cold: false,
+    }
 }
 
 #[test]
@@ -167,12 +177,12 @@ fn outer() {
     );
     assert!(
         !field_names.contains(&"print"),
-        "closure env should NOT capture global `print`, got: {:?}",
+        "closure env should not capture global `print`, got: {:?}",
         field_names
     );
     assert!(
         !field_names.contains(&"println"),
-        "closure env should NOT capture global `println`, got: {:?}",
+        "closure env should not capture global `println`, got: {:?}",
         field_names
     );
 }
@@ -324,7 +334,7 @@ fn caller() -> i32 {
 
     let mut program = air;
     compute_layouts(&mut program);
-    let program = monomorphize(program);
+    let program = monomorphize(program).unwrap();
 
     let mono_fn = program
         .functions
@@ -367,6 +377,59 @@ fn caller() -> i32 {
     assert!(
         !program.functions.iter().any(|f| f.name == "identity"),
         "original generic `identity` should be removed after monomorphization"
+    );
+
+    // verify that monomorphization patched the caller's local type
+    let call_result_local = caller.blocks.iter().find_map(|b| {
+        b.stmts.iter().find_map(|s| match &s.kind {
+            AirStmtKind::Assign {
+                place: Place::Local(id),
+                rvalue:
+                    Rvalue::Call {
+                        func: Callee::Named(n),
+                        ..
+                    },
+            } if n.contains("__mono_identity_i32") => Some(*id),
+            _ => None,
+        })
+    });
+    if let Some(local_id) = call_result_local {
+        let local_ty = caller
+            .locals
+            .iter()
+            .find(|l| l.id == local_id)
+            .map(|l| &l.ty);
+        assert_eq!(
+            local_ty,
+            Some(&AirType::I32),
+            "caller's temp for identity<i32> result should have type I32 after mono, not I64"
+        );
+    }
+}
+
+#[test]
+fn generic_struct_decl_only_does_not_introduce_unresolved_air_params() {
+    let mut air = lower_source(
+        r#"
+struct Box<T> { value: T }
+fn main() {
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "generic struct declaration without instantiation should not produce unresolved AIR params, errors: {:?}",
+        result.err()
+    );
+    assert!(
+        !air.structs.iter().any(|s| s.name == "Box"),
+        "uninstantiated generic struct declarations should not be lowered to AIR structs"
     );
 }
 
@@ -416,5 +479,1873 @@ fn some_func() {
         f.gc_mode,
         GcMode::Manual,
         "file-level Manual gc mode should propagate to functions"
+    );
+}
+
+#[test]
+fn copy_elim_removes_param_to_local_copies() {
+    let mut air = lower_source(
+        r#"
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
+    let a64: i64 = x
+    let a32: i32 = y
+    let a16: i16 = z
+    let a8: i8 = w
+    let ab: bool = b
+    let af32: f32 = f
+    let af64: f64 = d
+    let sp: string = p
+    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+
+    let f = func(&air, "align_probe");
+    let params: HashSet<LocalId> = f.params.iter().map(|p| p.id).collect();
+
+    let has_param_copy = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign {
+                    place: Place::Local(dst),
+                    rvalue: Rvalue::Use(Operand::Copy(src) | Operand::Move(src)),
+                }
+                if params.contains(src) && !params.contains(dst)
+            )
+        })
+    });
+    assert!(
+        !has_param_copy,
+        "copy elimination should remove param-to-local copies"
+    );
+}
+
+#[test]
+fn copy_elim_keeps_reassigned_param_copy() {
+    let mut air = lower_source(
+        r#"
+fn keep_copy(x: i64) -> i64 {
+    let mut y: i64 = x
+    y = y + 1
+    return y
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    aelys_air::passes::copy_elim::eliminate_copies(&mut air);
+
+    let f = func(&air, "keep_copy");
+    let params: HashSet<LocalId> = f.params.iter().map(|p| p.id).collect();
+
+    let has_param_copy = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(&s.kind,
+                AirStmtKind::Assign {
+                    place: Place::Local(dst),
+                    rvalue: Rvalue::Use(Operand::Copy(src) | Operand::Move(src)),
+                }
+                if params.contains(src) && !params.contains(dst)
+            )
+        })
+    });
+    assert!(
+        has_param_copy,
+        "copy should remain when destination local is reassigned"
+    );
+}
+
+#[test]
+fn stdlib_call_println_uses_str_operand() {
+    let air = lower_with_globals(
+        r#"
+fn main() {
+    println("Hello")
+}
+"#,
+        &["print", "println"],
+    );
+
+    let f = func(&air, "main");
+    let arg = f
+        .blocks
+        .iter()
+        .flat_map(|b| b.stmts.iter())
+        .find_map(|s| match &s.kind {
+            AirStmtKind::CallVoid {
+                func: Callee::Named(n),
+                args,
+            }
+            | AirStmtKind::Assign {
+                rvalue:
+                    Rvalue::Call {
+                        func: Callee::Named(n),
+                        args,
+                    },
+                ..
+            } if n == "println" => args.first(),
+            _ => None,
+        })
+        .expect("expected a println call");
+
+    match arg {
+        Operand::Const(AirConst::Str(_)) => {}
+        Operand::Copy(id) | Operand::Move(id) => {
+            let ty = f
+                .params
+                .iter()
+                .find(|p| p.id == *id)
+                .map(|p| &p.ty)
+                .or_else(|| f.locals.iter().find(|l| l.id == *id).map(|l| &l.ty))
+                .expect("println argument local should exist");
+            assert_eq!(ty, &AirType::Str, "println argument must be `str`");
+        }
+        _ => panic!("unexpected println arg operand kind"),
+    }
+}
+
+#[test]
+fn dead_locals_removes_align_probe_copy_targets() {
+    let mut air = lower_source(
+        r#"
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
+    let a64: i64 = x
+    let a32: i32 = y
+    let a16: i16 = z
+    let a8: i8 = w
+    let ab: bool = b
+    let af32: f32 = f
+    let af64: f64 = d
+    let sp: string = p
+    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let f = func(&air, "align_probe");
+    let local_ids: HashSet<u32> = f.locals.iter().map(|l| l.id.0).collect();
+    for id in 8..=14 {
+        assert!(
+            !local_ids.contains(&id),
+            "local %{} should be removed by dead_locals",
+            id
+        );
+    }
+}
+
+#[test]
+fn multi_instantiation_generic_dispatches_correctly() {
+    let air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i64 {
+    let a: i32 = identity(42 as i32)
+    let b: i64 = identity(100)
+    return (a as i64) + b
+}
+"#,
+    );
+
+    let mut program = air;
+    compute_layouts(&mut program);
+    let program = monomorphize(program).unwrap();
+
+    let mono_i32 = program
+        .functions
+        .iter()
+        .find(|f| f.name.contains("__mono_identity_i32"));
+    let mono_i64 = program
+        .functions
+        .iter()
+        .find(|f| f.name.contains("__mono_identity_i64"));
+    assert!(
+        mono_i32.is_some(),
+        "expected __mono_identity_i32, found: {:?}",
+        program
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        mono_i64.is_some(),
+        "expected __mono_identity_i64, found: {:?}",
+        program
+            .functions
+            .iter()
+            .map(|f| &f.name)
+            .collect::<Vec<_>>()
+    );
+
+    let mono_i32 = mono_i32.unwrap();
+    assert_eq!(mono_i32.params[0].ty, AirType::I32);
+    assert_eq!(mono_i32.ret_ty, AirType::I32);
+    let mono_i64 = mono_i64.unwrap();
+    assert_eq!(mono_i64.params[0].ty, AirType::I64);
+    assert_eq!(mono_i64.ret_ty, AirType::I64);
+
+    // verify call sites too are rewritten to the correct mangled names
+    let caller = func(&program, "caller");
+    let call_targets: Vec<String> = caller
+        .blocks
+        .iter()
+        .flat_map(|b| {
+            b.stmts
+                .iter()
+                .filter_map(|s| match &s.kind {
+                    AirStmtKind::Assign {
+                        rvalue:
+                            Rvalue::Call {
+                                func: Callee::Named(n),
+                                ..
+                            },
+                        ..
+                    } => Some(n.clone()),
+                    _ => None,
+                })
+                .chain(match &b.terminator {
+                    AirTerminator::Invoke {
+                        func: Callee::Named(n),
+                        ..
+                    } => Some(n.clone()),
+                    _ => None,
+                })
+        })
+        .collect();
+
+    assert!(
+        call_targets
+            .iter()
+            .any(|n| n.contains("__mono_identity_i32")),
+        "caller should call __mono_identity_i32, found calls: {:?}",
+        call_targets
+    );
+    assert!(
+        call_targets
+            .iter()
+            .any(|n| n.contains("__mono_identity_i64")),
+        "caller should call __mono_identity_i64, found calls: {:?}",
+        call_targets
+    );
+}
+
+
+fn make_valid_program() -> AirProgram {
+    AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "test_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: Some("_ret".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                    0,
+                    AirIntSize::I64,
+                )))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    }
+}
+
+#[test]
+fn validate_rejects_void_local_non_return() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Void,
+        name: Some("bad_local".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Void local"
+    );
+    let errors = result.unwrap_err();
+    assert_eq!(
+        errors.len(),
+        1,
+        "expected exactly 1 error, got {}",
+        errors.len()
+    );
+    assert!(
+        matches!(
+            &errors[0].detail,
+            AirValidationDetail::VoidLocal { local_id: 1, .. }
+        ),
+        "expected VoidLocal error for local %1, got: {:?}",
+        errors[0].detail
+    );
+    assert_eq!(errors[0].function_name, "test_fn");
+}
+
+#[test]
+fn validate_accepts_void_return_local_on_void_function() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "void_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::Void,
+                name: Some("_ret".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(None),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_ok(),
+        "void return local on void function should be valid"
+    );
+}
+
+#[test]
+fn validate_rejects_void_param() {
+    let mut program = make_valid_program();
+    program.functions[0].params.push(AirParam {
+        id: LocalId(10),
+        ty: AirType::Void,
+        name: "bad_param".to_string(),
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Void param"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::VoidLocal { local_id: 10, .. }
+        )),
+        "expected VoidLocal error for param %10, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn function_param_call_lowers_to_indirect_call() {
+    let air = lower_source(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+"#,
+    );
+    let f = func(&air, "apply");
+    let has_indirect = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        func: Callee::FnPtr(_),
+                        ..
+                    },
+                    ..
+                }
+            )
+        })
+    });
+    assert!(
+        has_indirect,
+        "expected call through function parameter to lower as Callee::FnPtr"
+    );
+}
+
+#[test]
+fn struct_fnptr_field_call_lowers_to_indirect_call() {
+    let air = lower_source(
+        r#"
+struct Holder {
+    f: fn(i64) -> i64,
+}
+
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+
+fn main() -> i64 {
+    let h = Holder { f: inc }
+    return h.f(41)
+}
+"#,
+    );
+    let f = func(&air, "main");
+    let has_bad_named_call = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        func: Callee::Named(name),
+                        ..
+                    },
+                    ..
+                } if name == "h.f"
+            )
+        })
+    });
+    let has_indirect = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::Call {
+                        func: Callee::FnPtr(_),
+                        ..
+                    },
+                    ..
+                }
+            )
+        })
+    });
+    assert!(
+        !has_bad_named_call,
+        "struct fnptr field call must not lower as direct named call"
+    );
+    assert!(
+        has_indirect,
+        "expected struct fnptr field call to lower as Callee::FnPtr"
+    );
+}
+
+#[test]
+fn function_identifier_as_value_lowers_to_fnref() {
+    let air = lower_source(
+        r#"
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    return f(x)
+}
+fn inc(x: i64) -> i64 {
+    return x + 1
+}
+fn main() -> i64 {
+    return apply(inc, 5)
+}
+"#,
+    );
+    let f = func(&air, "main");
+    let has_closure_create = f.blocks.iter().any(|b| {
+        b.stmts.iter().any(|s| {
+            matches!(
+                &s.kind,
+                AirStmtKind::Assign {
+                    rvalue: Rvalue::ClosureCreate { fn_name, .. },
+                    ..
+                } if fn_name == "inc"
+            )
+        })
+    });
+    assert!(
+        has_closure_create,
+        "expected function identifier value to materialize from ClosureCreate(\"inc\")"
+    );
+}
+
+#[test]
+fn validate_rejects_undeclared_block_reference() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "bad_block_ref".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Goto(BlockId(99)),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for undeclared block"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UndeclaredBlock { block_id: 99, .. }
+        )),
+        "expected UndeclaredBlock error for bb99, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_undeclared_local_reference() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "bad_local_ref".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: None,
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(42)))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for undeclared local"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::UndeclaredLocal { local_id: 42, .. }
+        )),
+        "expected UndeclaredLocal error for %42, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_accepts_valid_lowered_program() {
+    let air = lower_source(
+        r#"
+fn add(a: i64, b: i64) -> i64 {
+    return a + b
+}
+"#,
+    );
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "valid lowered program should pass validation, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_accepts_valid_program_after_full_pipeline() {
+    // full pipeline: lower -> layouts -> mono -> copy_elim -> dead_locals -> validate
+    let mut air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i32 {
+    let v: i32 = 42
+    return identity(v)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "fully-pipelined program should pass validation, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_collects_multiple_errors() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "multi_bad".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::I64,
+            locals: vec![
+                AirLocal {
+                    id: LocalId(0),
+                    ty: AirType::I64,
+                    name: None,
+                    is_mut: false,
+                    span: None,
+                },
+                AirLocal {
+                    id: LocalId(1),
+                    ty: AirType::Void,
+                    name: Some("void1".to_string()),
+                    is_mut: false,
+                    span: None,
+                },
+                AirLocal {
+                    id: LocalId(2),
+                    ty: AirType::Void,
+                    name: Some("void2".to_string()),
+                    is_mut: false,
+                    span: None,
+                },
+            ],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                    0,
+                    AirIntSize::I64,
+                )))),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(result.is_err());
+    let errors = result.unwrap_err();
+    assert_eq!(
+        errors.len(),
+        2,
+        "expected 2 VoidLocal errors (for %1 and %2), got {}",
+        errors.len()
+    );
+}
+
+#[test]
+fn validate_skips_extern_functions() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "extern_fn".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![AirParam {
+                id: LocalId(0),
+                ty: AirType::I64,
+                name: "x".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::Void,
+            locals: vec![],
+            blocks: vec![], // empty body is OK for extern
+            is_extern: true,
+            calling_conv: CallingConv::C,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_ok(),
+        "extern functions should be skipped, errors: {:?}",
+        result.err()
+    );
+}
+
+
+#[test]
+fn validate_rejects_opaque_local() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Opaque,
+        name: Some("unresolved_dynamic".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque local"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 1, .. }
+        )),
+        "expected OpaqueType error for local %1, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_param() {
+    let mut program = make_valid_program();
+    program.functions[0].params.push(AirParam {
+        id: LocalId(10),
+        ty: AirType::Opaque,
+        name: "opaque_param".to_string(),
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque param"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 10, .. }
+        )),
+        "expected OpaqueType error for param %10, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_nested_in_array() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(2),
+        ty: AirType::Array(Box::new(AirType::Opaque), 5),
+        name: Some("opaque_array".to_string()),
+        is_mut: false,
+        span: None,
+    });
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque nested in Array"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType { local_id: 2, .. }
+        )),
+        "expected OpaqueType error for local %2, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_rejects_opaque_struct_field() {
+    let program = AirProgram {
+        functions: vec![],
+        structs: vec![AirStructDef {
+            name: "BadStruct".to_string(),
+            type_params: vec![],
+            fields: vec![AirStructField {
+                name: "unresolved".to_string(),
+                ty: AirType::Opaque,
+                offset: Some(0),
+            }],
+            is_closure_env: false,
+            span: None,
+        }],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "expected validation to fail for Opaque struct field"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueStructField {
+                struct_name,
+                field_name,
+            } if struct_name == "BadStruct" && field_name == "unresolved"
+        )),
+        "expected OpaqueStructField error, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_opaque_does_not_appear_after_monomorphization() {
+    // but monomorphization should replace it with the concrete type
+
+    let mut air = lower_source(
+        r#"
+fn identity<T>(x: T) -> T {
+    return x
+}
+fn caller() -> i64 {
+    return identity(42)
+}
+"#,
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "monomorphized generic call should not have Opaque types, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn validate_print_builtin_does_not_produce_opaque_local() {
+    let mut air = lower_with_globals(
+        r#"
+fn main() {
+    println("hello world")
+}
+"#,
+        &["print", "println"],
+    );
+    compute_layouts(&mut air);
+    let mut air = monomorphize(air).unwrap();
+    passes::copy_elim::eliminate_copies(&mut air);
+    passes::dead_locals::eliminate_dead_locals(&mut air);
+
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "println call should not produce Opaque locals, errors: {:?}",
+        result.err()
+    );
+
+    let f = func(&air, "main");
+    for local in &f.locals {
+        assert_ne!(
+            local.ty,
+            AirType::Opaque,
+            "local %{} should not have Opaque type after pipeline",
+            local.id.0
+        );
+    }
+}
+
+
+/// the lowering now produces opaque instead of void. if such a local ever reaches the validation pass, it should be rejected with an opaquetype error
+#[test]
+fn validate_rejects_opaque_from_tuple_or_range() {
+    let program = AirProgram {
+        functions: vec![AirFunction {
+            id: FunctionId(0),
+            name: "tuple_leak".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![],
+            ret_ty: AirType::Void,
+            locals: vec![AirLocal {
+                id: LocalId(0),
+                ty: AirType::Opaque,
+                name: Some("leaked_tuple".to_string()),
+                is_mut: false,
+                span: None,
+            }],
+            blocks: vec![AirBlock {
+                id: BlockId(0),
+                stmts: vec![],
+                terminator: AirTerminator::Return(None),
+            }],
+            is_extern: false,
+            calling_conv: CallingConv::Aelys,
+            attributes: FunctionAttribs {
+                inline: InlineHint::Default,
+                no_gc: false,
+                no_unwind: false,
+                cold: false,
+            },
+            span: None,
+        }],
+        structs: vec![],
+        enums: vec![],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let result = validate_air(&program);
+    assert!(
+        result.is_err(),
+        "Opaque local (from Tuple/Range) should be rejected by validation"
+    );
+    let errors = result.unwrap_err();
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.detail,
+            AirValidationDetail::OpaqueType {
+                local_id: 0,
+                local_name: Some(name),
+            } if name == "leaked_tuple"
+        )),
+        "expected OpaqueType error for leaked_tuple, got: {:?}",
+        errors
+    );
+}
+
+#[test]
+fn validate_accepts_null_typed_local() {
+    let air = lower_source(
+        r#"
+fn use_null() {
+    let x = null
+}
+"#,
+    );
+    let result = validate_air(&air);
+    assert!(
+        result.is_ok(),
+        "null-typed local (Ptr(Void)) should pass validation, errors: {:?}",
+        result.err()
+    );
+}
+
+#[test]
+fn a_generic_enum_named_without_its_type_arguments_is_refused() {
+    let option_enum = AirEnumDef {
+        name: "Option".to_string(),
+        type_params: vec![TypeParamId(0)],
+        variants: vec![
+            AirEnumVariant {
+                name: "Some".to_string(),
+                tag: 0,
+                payload: vec![AirType::Param(TypeParamId(0))],
+            },
+            AirEnumVariant {
+                name: "None".to_string(),
+                tag: 1,
+                payload: vec![],
+            },
+        ],
+        span: None,
+    };
+
+    let seed_i64 = AirFunction {
+        id: FunctionId(0),
+        name: "seed_i64".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
+                name: Some("ret".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::I64])),
+                name: Some("value".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_ref: EnumRef::new("Option", vec![AirType::I64]),
+                        variant: "Some".to_string(),
+                        tag: 0,
+                        payload: vec![Operand::Const(AirConst::Int(1, AirIntSize::I64))],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let seed_str = AirFunction {
+        id: FunctionId(1),
+        name: "seed_str".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
+                name: Some("ret".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::Enum(EnumRef::new("Option", vec![AirType::Str])),
+                name: Some("value".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_ref: EnumRef::new("Option", vec![AirType::Str]),
+                        variant: "Some".to_string(),
+                        tag: 0,
+                        payload: vec![Operand::Const(AirConst::Str("hello".to_string()))],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let ambiguous_none = AirFunction {
+        id: FunctionId(2),
+        name: "ambiguous_none".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::Void,
+        locals: vec![AirLocal {
+            id: LocalId(0),
+            ty: AirType::Enum(EnumRef::plain("Option")),
+            name: Some("ambiguous".to_string()),
+            is_mut: false,
+            span: None,
+        }],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(0)),
+                    rvalue: Rvalue::EnumInit {
+                        enum_ref: EnumRef::plain("Option"),
+                        variant: "None".to_string(),
+                        tag: 1,
+                        payload: vec![],
+                    },
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Return(None),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let program = AirProgram {
+        functions: vec![seed_i64, seed_str, ambiguous_none],
+        structs: vec![],
+        enums: vec![option_enum],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let errors = match monomorphize(program) {
+        Err(e) => e,
+        Ok(_) => panic!(
+            "a generic enum named with no type arguments carries no instantiation, so \
+             monomorphization must refuse it instead of picking one of the two that exist"
+        ),
+    };
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.message.contains("names it with no type arguments")),
+        "expected the bare generic enum reference to be named, got: {:?}",
+        errors
+    );
+}
+
+fn aelys_fnptr() -> AirType {
+    AirType::FnPtr {
+        params: vec![],
+        ret: Box::new(AirType::I64),
+        conv: CallingConv::Aelys,
+    }
+}
+
+fn c_fnptr() -> AirType {
+    AirType::FnPtr {
+        params: vec![],
+        ret: Box::new(AirType::I64),
+        conv: CallingConv::C,
+    }
+}
+
+#[test]
+fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
+    let program = AirProgram {
+        functions: vec![
+            AirFunction {
+                id: FunctionId(0),
+                name: "fast_fn".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(1),
+                name: "c_fn".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::I64,
+                locals: vec![],
+                blocks: vec![],
+                is_extern: true,
+                calling_conv: CallingConv::C,
+                attributes: default_attribs(),
+                span: None,
+            },
+            AirFunction {
+                id: FunctionId(2),
+                name: "seed".to_string(),
+                gc_mode: GcMode::Managed,
+                type_params: vec![],
+                params: vec![],
+                ret_ty: AirType::Void,
+                locals: vec![
+                    AirLocal {
+                        id: LocalId(0),
+                        ty: AirType::FnPtr {
+                            params: vec![],
+                            ret: Box::new(AirType::I64),
+                            conv: CallingConv::Aelys,
+                        },
+                        name: Some("fast".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(1),
+                        ty: AirType::FnPtr {
+                            params: vec![],
+                            ret: Box::new(AirType::I64),
+                            conv: CallingConv::C,
+                        },
+                        name: Some("c".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(2),
+                        ty: AirType::Enum(EnumRef::new("Holder", vec![aelys_fnptr()])),
+                        name: Some("aelys_holder".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                    AirLocal {
+                        id: LocalId(3),
+                        ty: AirType::Enum(EnumRef::new("Holder", vec![c_fnptr()])),
+                        name: Some("c_holder".to_string()),
+                        is_mut: false,
+                        span: None,
+                    },
+                ],
+                blocks: vec![AirBlock {
+                    id: BlockId(0),
+                    stmts: vec![
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(0)),
+                                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(
+                                    "fast_fn".to_string(),
+                                ))),
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(1)),
+                                rvalue: Rvalue::Use(Operand::Const(AirConst::FnRef(
+                                    "c_fn".to_string(),
+                                ))),
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(2)),
+                                rvalue: Rvalue::EnumInit {
+                                    enum_ref: EnumRef::new("Holder", vec![aelys_fnptr()]),
+                                    variant: "Value".to_string(),
+                                    tag: 0,
+                                    payload: vec![Operand::Copy(LocalId(0))],
+                                },
+                            },
+                            span: None,
+                        },
+                        AirStmt {
+                            kind: AirStmtKind::Assign {
+                                place: Place::Local(LocalId(3)),
+                                rvalue: Rvalue::EnumInit {
+                                    enum_ref: EnumRef::new("Holder", vec![c_fnptr()]),
+                                    variant: "Value".to_string(),
+                                    tag: 0,
+                                    payload: vec![Operand::Copy(LocalId(1))],
+                                },
+                            },
+                            span: None,
+                        },
+                    ],
+                    terminator: AirTerminator::Return(None),
+                }],
+                is_extern: false,
+                calling_conv: CallingConv::Aelys,
+                attributes: default_attribs(),
+                span: None,
+            },
+        ],
+        structs: vec![],
+        enums: vec![AirEnumDef {
+            name: "Holder".to_string(),
+            type_params: vec![TypeParamId(0)],
+            variants: vec![
+                AirEnumVariant {
+                    name: "Value".to_string(),
+                    tag: 0,
+                    payload: vec![AirType::Param(TypeParamId(0))],
+                },
+                AirEnumVariant {
+                    name: "Empty".to_string(),
+                    tag: 1,
+                    payload: vec![],
+                },
+            ],
+            span: None,
+        }],
+        globals: vec![],
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    };
+
+    let air = monomorphize(program).unwrap();
+    let holder_defs: Vec<_> = air
+        .enums
+        .iter()
+        .filter(|def| def.name.starts_with("__mono_Holder$"))
+        .collect();
+    assert_eq!(
+        holder_defs.len(),
+        2,
+        "distinct fnptr calling conventions must produce distinct Holder monos"
+    );
+    assert!(
+        holder_defs.iter().any(|def| matches!(
+            &def.variants[0].payload[..],
+            [AirType::FnPtr {
+                conv: CallingConv::Aelys,
+                ..
+            }]
+        )),
+        "missing Aelys fnptr instantiation: {:?}",
+        holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
+    );
+    assert!(
+        holder_defs.iter().any(|def| matches!(
+            &def.variants[0].payload[..],
+            [AirType::FnPtr {
+                conv: CallingConv::C,
+                ..
+            }]
+        )),
+        "missing C fnptr instantiation: {:?}",
+        holder_defs.iter().map(|def| &def.name).collect::<Vec<_>>()
+    );
+}
+
+// a use into a field and an addr into a ptr both escape this rule
+#[test]
+fn validate_rejects_address_of_into_a_non_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::I64,
+        name: Some("slot".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::AddressOf(Place::Local(LocalId(0))),
+        },
+        span: None,
+    });
+
+    let errors = validate_air(&program).expect_err("an addr into an i64 local must be rejected");
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e.detail, AirValidationDetail::PtrnessMismatch { .. })),
+        "expected a ptrness mismatch, got: {errors:?}"
+    );
+}
+
+#[test]
+fn validate_accepts_address_of_into_a_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Ptr(Box::new(AirType::I64)),
+        name: Some("slot".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::AddressOf(Place::Local(LocalId(0))),
+        },
+        span: None,
+    });
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "an addr into a ptr local must be accepted"
+    );
+}
+
+#[test]
+fn validate_rejects_len_into_a_pointer_place() {
+    let mut program = make_valid_program();
+    program.functions[0].locals.push(AirLocal {
+        id: LocalId(1),
+        ty: AirType::Ptr(Box::new(AirType::I64)),
+        name: Some("n".to_string()),
+        is_mut: false,
+        span: None,
+    });
+    program.functions[0].blocks[0].stmts.push(AirStmt {
+        kind: AirStmtKind::Assign {
+            place: Place::Local(LocalId(1)),
+            rvalue: Rvalue::Len(Operand::Copy(LocalId(0))),
+        },
+        span: None,
+    });
+
+    let errors = validate_air(&program).expect_err("a len into a ptr local must be rejected");
+    assert!(
+        errors
+            .iter()
+            .any(|e| matches!(e.detail, AirValidationDetail::PtrnessMismatch { .. })),
+        "expected a ptrness mismatch, got: {errors:?}"
+    );
+}
+
+fn bool_local(id: u32) -> AirLocal {
+    AirLocal {
+        id: LocalId(id),
+        ty: AirType::Bool,
+        name: Some(format!("c{id}")),
+        is_mut: false,
+        span: None,
+    }
+}
+
+fn ret_zero() -> AirTerminator {
+    AirTerminator::Return(Some(Operand::Const(AirConst::Int(0, AirIntSize::I64))))
+}
+
+#[test]
+fn validate_rejects_a_branch_on_a_local_no_statement_writes() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks = vec![
+        AirBlock {
+            id: BlockId(0),
+            stmts: vec![],
+            terminator: AirTerminator::Branch {
+                cond: Operand::Copy(LocalId(1)),
+                then_block: BlockId(1),
+                else_block: BlockId(2),
+            },
+        },
+        AirBlock {
+            id: BlockId(1),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+        AirBlock {
+            id: BlockId(2),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+    ];
+
+    let errors = validate_air(&program).expect_err("a branch on an unwritten local is malformed");
+    assert_eq!(errors.len(), 1, "expected exactly 1 error, got {errors:?}");
+    assert!(
+        matches!(
+            &errors[0].detail,
+            AirValidationDetail::UnwrittenTerminatorOperand { local_id: 1, .. }
+        ),
+        "expected UnwrittenTerminatorOperand for local %1, got: {:?}",
+        errors[0].detail
+    );
+}
+
+#[test]
+fn validate_accepts_a_branch_on_a_local_a_statement_writes() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks = vec![
+        AirBlock {
+            id: BlockId(0),
+            stmts: vec![AirStmt {
+                kind: AirStmtKind::Assign {
+                    place: Place::Local(LocalId(1)),
+                    rvalue: Rvalue::Use(Operand::Const(AirConst::Bool(true))),
+                },
+                span: None,
+            }],
+            terminator: AirTerminator::Branch {
+                cond: Operand::Copy(LocalId(1)),
+                then_block: BlockId(1),
+                else_block: BlockId(2),
+            },
+        },
+        AirBlock {
+            id: BlockId(1),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+        AirBlock {
+            id: BlockId(2),
+            stmts: vec![],
+            terminator: ret_zero(),
+        },
+    ];
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "the assignment is the whole difference with the rejected twin"
+    );
+}
+
+#[test]
+fn validate_leaves_an_unreachable_terminator_operand_alone() {
+    let mut program = make_valid_program();
+    let f = &mut program.functions[0];
+    f.locals.push(bool_local(1));
+    f.blocks.push(AirBlock {
+        id: BlockId(9),
+        stmts: vec![],
+        terminator: AirTerminator::Branch {
+            cond: Operand::Copy(LocalId(1)),
+            then_block: BlockId(10),
+            else_block: BlockId(10),
+        },
+    });
+    f.blocks.push(AirBlock {
+        id: BlockId(10),
+        stmts: vec![],
+        terminator: ret_zero(),
+    });
+
+    assert!(
+        validate_air(&program).is_ok(),
+        "no path from the entry reaches bb9, so the rule has nothing to say about it"
+    );
+}
+
+fn program_with_parts(
+    functions: Vec<AirFunction>,
+    enums: Vec<AirEnumDef>,
+    globals: Vec<AirGlobal>,
+) -> AirProgram {
+    AirProgram {
+        functions,
+        structs: vec![],
+        enums,
+        globals,
+        source_files: vec![],
+        mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+    }
+}
+
+fn param_survivals(program: &AirProgram) -> Vec<String> {
+    match validate_air(program) {
+        Ok(()) => Vec::new(),
+        Err(errors) => errors
+            .iter()
+            .filter(|e| matches!(e.detail, AirValidationDetail::TypeParamSurvived { .. }))
+            .map(|e| e.to_string())
+            .collect(),
+    }
+}
+
+#[test]
+fn a_type_parameter_surviving_in_a_global_is_refused() {
+    let program = program_with_parts(
+        vec![],
+        vec![],
+        vec![AirGlobal {
+            name: "g".to_string(),
+            ty: AirType::Enum(EnumRef::new("Opt", vec![AirType::Param(TypeParamId(0))])),
+            init: None,
+            gc_mode: GcMode::Managed,
+            span: None,
+        }],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("global g") && m.contains("param_0")),
+        "a global whose type still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+#[test]
+fn a_type_parameter_surviving_in_an_enum_payload_is_refused() {
+    let program = program_with_parts(
+        vec![],
+        vec![AirEnumDef {
+            name: "Opt".to_string(),
+            type_params: vec![],
+            variants: vec![AirEnumVariant {
+                name: "Some".to_string(),
+                tag: 0,
+                payload: vec![AirType::Param(TypeParamId(3))],
+            }],
+            span: None,
+        }],
+        vec![],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("enum Opt") && m.contains("param_3")),
+        "an enum payload that still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+#[test]
+fn a_type_parameter_surviving_in_an_extern_signature_is_refused() {
+    let program = program_with_parts(
+        vec![AirFunction {
+            id: FunctionId(0),
+            name: "puts_like".to_string(),
+            gc_mode: GcMode::Managed,
+            type_params: vec![],
+            params: vec![AirParam {
+                id: LocalId(0),
+                ty: AirType::Ptr(Box::new(AirType::Param(TypeParamId(7)))),
+                name: "s".to_string(),
+                span: None,
+            }],
+            ret_ty: AirType::I64,
+            locals: vec![],
+            blocks: vec![],
+            is_extern: true,
+            calling_conv: CallingConv::C,
+            attributes: default_attribs(),
+            span: None,
+        }],
+        vec![],
+        vec![],
+    );
+    let found = param_survivals(&program);
+    assert!(
+        found
+            .iter()
+            .any(|m| m.contains("puts_like") && m.contains("param_7")),
+        "an extern signature that still names a type parameter must be refused, got: {found:?}"
+    );
+}
+
+// sema refuses every source spelling of this, so only a hand-built air program reaches the arm
+#[test]
+fn one_call_site_binding_a_type_parameter_two_ways_is_a_diagnostic() {
+    let pair = AirEnumDef {
+        name: "Pair".to_string(),
+        type_params: vec![TypeParamId(0), TypeParamId(1)],
+        variants: vec![AirEnumVariant {
+            name: "Both".to_string(),
+            tag: 0,
+            payload: vec![
+                AirType::Param(TypeParamId(0)),
+                AirType::Param(TypeParamId(1)),
+            ],
+        }],
+        span: None,
+    };
+    let same = AirFunction {
+        id: FunctionId(0),
+        name: "same".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![TypeParamId(9)],
+        params: vec![AirParam {
+            id: LocalId(0),
+            ty: AirType::Enum(EnumRef::new(
+                "Pair",
+                vec![
+                    AirType::Param(TypeParamId(9)),
+                    AirType::Param(TypeParamId(9)),
+                ],
+            )),
+            name: "p".to_string(),
+            span: None,
+        }],
+        ret_ty: AirType::I64,
+        locals: vec![],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![],
+            terminator: AirTerminator::Return(Some(Operand::Const(AirConst::Int(
+                1,
+                AirIntSize::I64,
+            )))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+    let caller_ty = AirType::Enum(EnumRef::new("Pair", vec![AirType::I64, AirType::Bool]));
+    let caller = AirFunction {
+        id: FunctionId(1),
+        name: "main".to_string(),
+        gc_mode: GcMode::Managed,
+        type_params: vec![],
+        params: vec![],
+        ret_ty: AirType::I64,
+        locals: vec![
+            AirLocal {
+                id: LocalId(0),
+                ty: caller_ty.clone(),
+                name: Some("p".to_string()),
+                is_mut: false,
+                span: None,
+            },
+            AirLocal {
+                id: LocalId(1),
+                ty: AirType::I64,
+                name: Some("r".to_string()),
+                is_mut: false,
+                span: None,
+            },
+        ],
+        blocks: vec![AirBlock {
+            id: BlockId(0),
+            stmts: vec![
+                AirStmt {
+                    kind: AirStmtKind::Assign {
+                        place: Place::Local(LocalId(0)),
+                        rvalue: Rvalue::EnumInit {
+                            enum_ref: EnumRef::new("Pair", vec![AirType::I64, AirType::Bool]),
+                            variant: "Both".to_string(),
+                            tag: 0,
+                            payload: vec![
+                                Operand::Const(AirConst::Int(1, AirIntSize::I64)),
+                                Operand::Const(AirConst::Bool(true)),
+                            ],
+                        },
+                    },
+                    span: None,
+                },
+                AirStmt {
+                    kind: AirStmtKind::Assign {
+                        place: Place::Local(LocalId(1)),
+                        rvalue: Rvalue::Call {
+                            func: Callee::Named("same".to_string()),
+                            args: vec![Operand::Copy(LocalId(0))],
+                        },
+                    },
+                    span: None,
+                },
+            ],
+            terminator: AirTerminator::Return(Some(Operand::Copy(LocalId(1)))),
+        }],
+        is_extern: false,
+        calling_conv: CallingConv::Aelys,
+        attributes: default_attribs(),
+        span: None,
+    };
+
+    let errors = match monomorphize(program_with_parts(vec![same, caller], vec![pair], vec![])) {
+        Err(errors) => errors,
+        Ok(_) => panic!("one call site binding a type parameter two ways must be refused"),
+    };
+    assert!(
+        errors
+            .iter()
+            .any(|e| e.message.contains("binds type parameter")
+                && e.message.contains("`i64`")
+                && e.message.contains("`bool`")),
+        "the refusal must name the two bindings instead of keeping the first, got: {:?}",
+        errors.iter().map(|e| e.message.clone()).collect::<Vec<_>>()
     );
 }

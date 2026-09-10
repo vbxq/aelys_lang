@@ -22,6 +22,10 @@ impl InlineExpander {
             return None;
         }
 
+        if args.iter().any(|a| !self.arg_is_pure(a)) {
+            return None;
+        }
+
         let param_map: HashMap<String, TypedExpr> = func
             .params
             .iter()
@@ -30,6 +34,30 @@ impl InlineExpander {
             .collect();
 
         self.try_simple_inline(&func.body, &param_map, call_span)
+    }
+
+    fn arg_is_pure(&self, e: &TypedExpr) -> bool {
+        match &e.kind {
+            TypedExprKind::Int(_)
+            | TypedExprKind::Float(_)
+            | TypedExprKind::Bool(_)
+            | TypedExprKind::String(_)
+            | TypedExprKind::Null
+            | TypedExprKind::Identifier(_) => true,
+            TypedExprKind::Binary { left, right, .. }
+            | TypedExprKind::And { left, right }
+            | TypedExprKind::Or { left, right } => {
+                self.arg_is_pure(left) && self.arg_is_pure(right)
+            }
+            TypedExprKind::Unary { operand, .. } => self.arg_is_pure(operand),
+            TypedExprKind::Grouping(inner) => self.arg_is_pure(inner),
+            TypedExprKind::Cast { expr, .. } => self.arg_is_pure(expr),
+            TypedExprKind::Member { object, .. } => self.arg_is_pure(object),
+            TypedExprKind::Index { object, index } => {
+                self.arg_is_pure(object) && self.arg_is_pure(index)
+            }
+            _ => false,
+        }
     }
 
     fn try_simple_inline(
@@ -73,6 +101,9 @@ impl InlineExpander {
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => true,
+            TypedExprKind::EnumVariant { args, .. } => args
+                .iter()
+                .all(|a| self.expr_has_only_params_and_literals(a, params)),
 
             TypedExprKind::Identifier(name) => params.contains_key(name),
 
@@ -169,11 +200,7 @@ impl InlineExpander {
                 member: member.clone(),
             },
 
-            TypedExprKind::ArrayLiteral {
-                element_type,
-                elements,
-            } => TypedExprKind::ArrayLiteral {
-                element_type: element_type.clone(),
+            TypedExprKind::ArrayLiteral { elements } => TypedExprKind::ArrayLiteral {
                 elements: elements
                     .iter()
                     .map(|e| self.substitute_expr(e, params, span))
@@ -191,9 +218,11 @@ impl InlineExpander {
                     .collect(),
             },
 
-            TypedExprKind::ArraySized { element_type, size } => TypedExprKind::ArraySized {
-                element_type: element_type.clone(),
+            TypedExprKind::ArraySized { size, fill_value } => TypedExprKind::ArraySized {
                 size: Box::new(self.substitute_expr(size, params, span)),
+                fill_value: fill_value
+                    .as_ref()
+                    .map(|fv| Box::new(self.substitute_expr(fv, params, span))),
             },
 
             TypedExprKind::Index { object, index } => TypedExprKind::Index {
@@ -208,6 +237,16 @@ impl InlineExpander {
             } => TypedExprKind::IndexAssign {
                 object: Box::new(self.substitute_expr(object, params, span)),
                 index: Box::new(self.substitute_expr(index, params, span)),
+                value: Box::new(self.substitute_expr(value, params, span)),
+            },
+
+            TypedExprKind::FieldAssign {
+                object,
+                field,
+                value,
+            } => TypedExprKind::FieldAssign {
+                object: Box::new(self.substitute_expr(object, params, span)),
+                field: field.clone(),
                 value: Box::new(self.substitute_expr(value, params, span)),
             },
 
@@ -228,6 +267,18 @@ impl InlineExpander {
             TypedExprKind::Slice { object, range } => TypedExprKind::Slice {
                 object: Box::new(self.substitute_expr(object, params, span)),
                 range: Box::new(self.substitute_expr(range, params, span)),
+            },
+
+            TypedExprKind::Reference { mutable, operand } => TypedExprKind::Reference {
+                mutable: *mutable,
+                operand: Box::new(self.substitute_expr(operand, params, span)),
+            },
+            TypedExprKind::Deref(operand) => {
+                TypedExprKind::Deref(Box::new(self.substitute_expr(operand, params, span)))
+            }
+            TypedExprKind::DerefAssign { target, value } => TypedExprKind::DerefAssign {
+                target: Box::new(self.substitute_expr(target, params, span)),
+                value: Box::new(self.substitute_expr(value, params, span)),
             },
 
             // lambdas need special care to avoid capturing the wrong variables
@@ -293,6 +344,48 @@ impl InlineExpander {
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
             TypedExprKind::Null => TypedExprKind::Null,
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                tag,
+                args,
+            } => TypedExprKind::EnumVariant {
+                enum_name: enum_name.clone(),
+                variant: variant.clone(),
+                tag: *tag,
+                args: args
+                    .iter()
+                    .map(|a| self.substitute_expr(a, params, span))
+                    .collect(),
+            },
+            TypedExprKind::Block { stmts, tail } => TypedExprKind::Block {
+                stmts: stmts
+                    .iter()
+                    .map(|s| self.substitute_stmt(s, params, span))
+                    .collect(),
+                tail: Box::new(self.substitute_expr(tail, params, span)),
+            },
+            TypedExprKind::Match { scrutinee, arms } => TypedExprKind::Match {
+                scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
+                arms: arms
+                    .iter()
+                    .map(|arm| aelys_sema::TypedMatchArm {
+                        pattern: arm.pattern.clone(),
+                        body: Box::new(self.substitute_expr(&arm.body, params, span)),
+                    })
+                    .collect(),
+            },
+            TypedExprKind::ResultAssert {
+                scrutinee,
+                ok_tag,
+                payload_ty,
+                on_err,
+            } => TypedExprKind::ResultAssert {
+                scrutinee: Box::new(self.substitute_expr(scrutinee, params, span)),
+                ok_tag: *ok_tag,
+                payload_ty: payload_ty.clone(),
+                on_err: on_err.clone(),
+            },
         };
 
         TypedExpr::new(kind, expr.ty.clone(), span)

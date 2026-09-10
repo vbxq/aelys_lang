@@ -1,37 +1,36 @@
 pub fn usage() -> &'static str {
     "Usage:
-  aelys [flags] <file> [args...]
-  aelys run [flags] <file> [args...]
-  aelys compile <file>
-  aelys asm <file>
-  aelys repl [flags]
+  aelys compile [flags] <file>
+  aelys explain <error-code>
+  aelys help
   aelys version
 
-Flags (any position):
+Flags:
   -h, --help                 Show help
   -v, --version              Show version
   -O<level> or -O <level>    Optimization level: 0,1,2,3, none, basic, standard, aggressive
-  -o, --output <path>        Output path (compile/asm)
-  --stdout                   Print asm to stdout (asm)
-  --emit-air                 Print AIR instead of compiling (compile)
-  -ae.<k>=<v>                VM option (e.g., -ae.max-heap=64M)
-  --ae-<k>=<v>               VM option (e.g., --ae-max-heap=64M)
-  --allow-caps=<list>        Allow native capabilities (comma-separated)
-  --deny-caps=<list>         Deny native capabilities (comma-separated)
-  --dev                      Enable dev features (hot reload)
+  --runtime <leak|rc|rc+cycles>  Runtime: rc (real refcount, default), leak (never frees), rc+cycles (rc + cycle collector)
+  -o, --output <path>        Output path
+  --emit-air                 Print AIR instead of compiling
+  --emit-llvm-ir             Emit LLVM IR to <source>.ll
+  -L, --library-path <dir>   Add a directory to the link search path
+  -l, --library <name>       Link against a library, after the aelys runtime
+  -I, --include <dir>        Add a module search root, after the root file's own directory
+  --no-prelude               Do not look for the `std.prelude` module
+  --explain <code>           Show detailed explanation for an error code (e.g., E0401)
+  --color <auto|always|never>  Control color output (default: auto)
+  --no-color                 Disable color output
 
 Warning flags:
   -Wall                      Enable all warnings
   -Werror                    Treat warnings as errors
-  -W<category>               Enable specific category (inline, unused, deprecated, shadow)
+  -W<category>               Enable specific category (inline, unused, deprecated, shadow, type)
   -Wno-<category>            Disable specific category
 
 Examples:
-  aelys main.aelys -O2 --ae-trusted=true
-  aelys main.aelys -O2 '-ae.trusted=true'  (quote in PowerShell)
-  aelys run -O3 main.aelys arg1 arg2
-  aelys repl -ae.max-heap=1G
-  aelys asm main.aelys --stdout
-  aelys compile main.aelys -o main.avbc -Wall -Werror
-  aelys run program.avbc"
+  aelys compile main.aelys -O2
+  aelys compile main.aelys -o output.exe -Wall -Werror
+  aelys compile main.aelys --emit-llvm-ir
+  aelys compile main.aelys -I /path/to/lib
+  aelys --explain E0401"
 }

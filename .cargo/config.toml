@@ -1,0 +1,2 @@
+[env]
+LLVM_SYS_181_PREFIX = "/usr/lib/llvm18"

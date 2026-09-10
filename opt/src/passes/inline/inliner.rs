@@ -1,3 +1,5 @@
+// TODO: consider deleting this or refactor it
+
 use super::analyze::{BlockReason, InlineDecision, ProgramAnalysis};
 use super::expand::InlineExpander;
 use crate::passes::{OptimizationLevel, OptimizationPass, OptimizationStats};
@@ -147,7 +149,14 @@ impl FunctionInliner {
                     self.inline_in_expr(e, analysis);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => self.inline_in_expr(size, analysis),
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
+                self.inline_in_expr(size, analysis);
+                if let Some(fv) = fill_value {
+                    self.inline_in_expr(fv, analysis);
+                }
+            }
             TypedExprKind::Index { object, index } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
@@ -159,6 +168,10 @@ impl FunctionInliner {
             } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
+                self.inline_in_expr(value, analysis);
+            }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.inline_in_expr(object, analysis);
                 self.inline_in_expr(value, analysis);
             }
             TypedExprKind::Range { start, end, .. } => {
@@ -177,6 +190,32 @@ impl FunctionInliner {
                 for s in body.iter_mut() {
                     self.inline_in_stmt(s, analysis);
                 }
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.inline_in_expr(scrutinee, analysis);
+                for arm in arms.iter_mut() {
+                    self.inline_in_expr(&mut arm.body, analysis);
+                }
+            }
+            TypedExprKind::Block { stmts, tail } => {
+                for s in stmts.iter_mut() {
+                    self.inline_in_stmt(s, analysis);
+                }
+                self.inline_in_expr(tail, analysis);
+            }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, val) in fields.iter_mut() {
+                    self.inline_in_expr(val, analysis);
+                }
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args.iter_mut() {
+                    self.inline_in_expr(arg, analysis);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.inline_in_expr(scrutinee, analysis)
             }
             _ => {}
         }
@@ -217,6 +256,9 @@ impl FunctionInliner {
             BlockReason::Recursive => WarningKind::InlineRecursive,
             BlockReason::MutualRecursion(cycle) => WarningKind::InlineMutualRecursion { cycle },
             BlockReason::HasCaptures => WarningKind::InlineHasCaptures,
+            BlockReason::HasTypeParams => WarningKind::InlineHasCaptures, // reuse warning kind for now
+            // reusing the captures warning kind, there is no dedicated variant yet
+            BlockReason::VecParam => WarningKind::InlineHasCaptures,
         };
 
         let has_always = func.decorators.iter().any(|d| d.name == "inline_always");

@@ -19,13 +19,16 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
         AirType::Struct(name) => name.clone(),
+        AirType::Enum(r) => format!("enum {}", r.symbol()),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
         AirType::Slice(inner) => format!("[{}]", fmt_type(inner)),
+        AirType::Vec(inner) => format!("Vec<{}>", fmt_type(inner)),
         AirType::FnPtr { params, ret, .. } => {
             let ps: Vec<_> = params.iter().map(fmt_type).collect();
             format!("fn({}) -> {}", ps.join(", "), fmt_type(ret))
         }
         AirType::Param(id) => format!("T{}", id.0),
+        AirType::Opaque => "opaque".into(),
     }
 }
 
@@ -63,8 +66,29 @@ pub fn fmt_const(c: &AirConst) -> String {
         AirConst::Bool(b) => b.to_string(),
         AirConst::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
         AirConst::Null => "null".into(),
+        AirConst::FnRef(name) => format!("fnref @{}", name),
+        AirConst::Enum {
+            enum_ref,
+            tag,
+            payload,
+        } => {
+            let payload = payload.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
+            format!("enumconst {}#{}({})", enum_ref.symbol(), tag, payload)
+        }
         AirConst::ZeroInit(ty) => format!("zeroinit {}", fmt_type(ty)),
         AirConst::Undef(ty) => format!("undef {}", fmt_type(ty)),
+        AirConst::Array(elems) => {
+            let elems = elems.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
+            format!("[{}]", elems)
+        }
+        AirConst::Struct { name, fields } => {
+            let fields = fields
+                .iter()
+                .map(|(f, c)| format!("{}: {}", f, fmt_const(c)))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!("{} {{ {} }}", name, fields)
+        }
     }
 }
 
@@ -74,7 +98,7 @@ fn local_type(func: &AirFunction, id: LocalId) -> &AirType {
         .find(|p| p.id == id)
         .map(|p| &p.ty)
         .or_else(|| func.locals.iter().find(|l| l.id == id).map(|l| &l.ty))
-        .unwrap_or_else(|| panic!("unknown local %{}", id.0))
+        .unwrap_or_else(|| panic!("invariant: unknown local %{} in AIR pretty-printer", id.0))
 }
 
 fn fmt_operand(op: &Operand, func: &AirFunction) -> String {
@@ -148,8 +172,18 @@ fn fmt_args(args: &[Operand], func: &AirFunction) -> String {
 fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirType {
     match place {
         Place::Local(id) => local_type(func, *id).clone(),
+        Place::Global(name) => program
+            .globals
+            .iter()
+            .find(|g| g.name == *name)
+            .map(|g| g.ty.clone())
+            .unwrap_or(AirType::Void),
         Place::Field(id, name) => {
-            if let AirType::Struct(sname) = local_type(func, *id) {
+            let root = match local_type(func, *id) {
+                AirType::Ptr(inner) => inner.as_ref(),
+                other => other,
+            };
+            if let AirType::Struct(sname) = root {
                 program
                     .structs
                     .iter()
@@ -165,10 +199,18 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             AirType::Ptr(inner) => (**inner).clone(),
             _ => AirType::Void,
         },
-        Place::Index(id, _) => match local_type(func, *id) {
-            AirType::Array(inner, _) | AirType::Slice(inner) => (**inner).clone(),
-            _ => AirType::Void,
-        },
+        Place::Index(id, _) => {
+            let root = match local_type(func, *id) {
+                AirType::Ptr(inner) => inner.as_ref(),
+                other => other,
+            };
+            match root {
+                AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
+                    (**inner).clone()
+                }
+                _ => AirType::Void,
+            }
+        }
     }
 }
 
@@ -176,6 +218,7 @@ fn fmt_place(place: &Place, func: &AirFunction, program: &AirProgram) -> String 
     let ty = place_type(place, func, program);
     match place {
         Place::Local(id) => format!("%{}: {}", id.0, fmt_type(&ty)),
+        Place::Global(name) => format!("@{}: {}", name, fmt_type(&ty)),
         Place::Field(id, name) => format!("%{}.{}: {}", id.0, name, fmt_type(&ty)),
         Place::Deref(id) => format!("*%{}: {}", id.0, fmt_type(&ty)),
         Place::Index(id, idx) => {
@@ -209,14 +252,72 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
         Rvalue::FieldAccess { base, field } => {
             format!("field {} . {}", fmt_operand(base, func), field)
         }
-        Rvalue::AddressOf(id) => {
+        Rvalue::AddressOf(Place::Local(id)) => {
             format!("addr %{}: {}", id.0, fmt_type(local_type(func, *id)))
         }
+        Rvalue::AddressOf(place) => format!("addr {}", fmt_place(place, func, program)),
         Rvalue::Deref(op) => format!("deref {}", fmt_operand(op, func)),
+        Rvalue::Len(op) => format!("len {}", fmt_operand(op, func)),
         Rvalue::Cast { operand, to, .. } => {
             format!("cast {} -> {}", fmt_operand(operand, func), fmt_type(to))
         }
-        Rvalue::Discriminant(op) => format!("discriminant {}", fmt_operand(op, func)),
+        Rvalue::Index { base, index } => {
+            format!(
+                "index {}[{}]",
+                fmt_operand(base, func),
+                fmt_operand(index, func)
+            )
+        }
+        Rvalue::EnumInit {
+            enum_ref,
+            variant,
+            tag,
+            payload,
+        } => {
+            if payload.is_empty() {
+                format!("enum_init {}::{} (tag={})", enum_ref.symbol(), variant, tag)
+            } else {
+                let args: Vec<_> = payload.iter().map(|p| fmt_operand(p, func)).collect();
+                format!(
+                    "enum_init {}::{} (tag={}, payload=[{}])",
+                    enum_ref.symbol(),
+                    variant,
+                    tag,
+                    args.join(", ")
+                )
+            }
+        }
+        Rvalue::EnumTag { enum_ref, operand } => {
+            format!(
+                "enum_tag {} {}",
+                enum_ref.symbol(),
+                fmt_operand(operand, func)
+            )
+        }
+        Rvalue::EnumPayload {
+            enum_ref,
+            tag,
+            operand,
+            field_index,
+        } => {
+            format!(
+                "enum_payload {} (tag={}, field={}) {}",
+                enum_ref.symbol(),
+                tag,
+                field_index,
+                fmt_operand(operand, func)
+            )
+        }
+        Rvalue::ClosureCreate { fn_name, env } => {
+            format!("closure_create @{} env={}", fn_name, fmt_operand(env, func))
+        }
+        Rvalue::SliceFromParts { ptr, len } => {
+            format!(
+                "slice_from_parts ptr={} len={}",
+                fmt_operand(ptr, func),
+                fmt_operand(len, func)
+            )
+        }
     }
 }
 
@@ -249,6 +350,7 @@ fn fmt_stmt(stmt: &AirStmtKind, func: &AirFunction, program: &AirProgram) -> Str
         AirStmtKind::ArenaCreate(id) => format!("arena_create {}", id.0),
         AirStmtKind::ArenaDestroy(id) => format!("arena_destroy {}", id.0),
         AirStmtKind::Alloc { local, ty } => format!("alloc %{}: {}", local.0, fmt_type(ty)),
+        AirStmtKind::RcAlloc { local, ty } => format!("rc_alloc %{}: {}", local.0, fmt_type(ty)),
         AirStmtKind::Free(id) => format!("free %{}", id.0),
         AirStmtKind::CallVoid { func: callee, args } => format!(
             "call void {}({})",
@@ -340,7 +442,11 @@ fn struct_size_align(def: &AirStructDef, program: &AirProgram) -> (u32, u32) {
         for f in &def.fields {
             let (fs, fa) = type_layout_for_print(&f.ty, program);
             max_align = max_align.max(fa);
-            end = end.max(f.offset.unwrap() + fs);
+            end = end.max(
+                f.offset
+                    .expect("invariant: field offset is Some in this branch")
+                    + fs,
+            );
         }
         ((end + max_align - 1) & !(max_align - 1), max_align)
     } else {
@@ -473,7 +579,7 @@ pub fn print_block(block: &AirBlock, program: &AirProgram) -> String {
         .functions
         .iter()
         .find(|f| f.blocks.iter().any(|b| std::ptr::eq(b, block)))
-        .expect("block not found in any function in the program");
+        .expect("invariant: block not found in any function in the program");
     let mut out = String::new();
     write_block(&mut out, block, func, program);
     out

@@ -4,8 +4,6 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
+aelys-common = { path = "../common" }
 aelys-sema = { path = "../sema" }
 aelys-syntax = { path = "../syntax" }
-
-[lib]
-doctest = false

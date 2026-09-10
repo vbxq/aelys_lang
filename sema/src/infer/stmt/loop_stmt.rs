@@ -20,8 +20,20 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
+        self.env.push_scope();
+        let saved_then_literals = self.literal_init_vars.clone();
         let typed_then = self.infer_stmt(then_branch);
-        let typed_else = else_branch.map(|e| Box::new(self.infer_stmt(e)));
+        self.env.pop_scope();
+        self.literal_init_vars = saved_then_literals;
+
+        let typed_else = else_branch.map(|e| {
+            self.env.push_scope();
+            let saved_else_literals = self.literal_init_vars.clone();
+            let typed = self.infer_stmt(e);
+            self.env.pop_scope();
+            self.literal_init_vars = saved_else_literals;
+            Box::new(typed)
+        });
 
         TypedStmtKind::If {
             condition: typed_cond,
@@ -84,9 +96,11 @@ impl TypeInference {
         }
 
         self.env.push_scope();
+        let saved_for_literals = self.literal_init_vars.clone();
         self.env.define_local(iterator.to_string(), InferType::I64);
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_for_literals;
 
         TypedStmtKind::For {
             iterator: iterator.to_string(),
@@ -110,16 +124,21 @@ impl TypeInference {
         let elem_type = match &typed_iterable.ty {
             InferType::String => InferType::String,
             InferType::Vec(inner) => (**inner).clone(),
-            InferType::Array(inner) => (**inner).clone(),
+            InferType::Array(inner, _) => (**inner).clone(),
+            InferType::Slice { elem, .. } => (**elem).clone(),
             InferType::Dynamic => InferType::Dynamic,
-            _ => InferType::Dynamic,
+            // when the iterable is an unresolved type variable, return a fresh var for the element type instead of dynamic
+            InferType::Var(_) => self.type_gen.fresh(),
+            _other => InferType::Dynamic,
         };
 
         self.env.push_scope();
+        let saved_foreach_literals = self.literal_init_vars.clone();
         self.env
             .define_local(iterator.to_string(), elem_type.clone());
         let typed_body = self.infer_stmt(body);
         self.env.pop_scope();
+        self.literal_init_vars = saved_foreach_literals;
 
         TypedStmtKind::ForEach {
             iterator: iterator.to_string(),

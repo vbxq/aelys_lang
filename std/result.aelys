@@ -1,0 +1,71 @@
+pub enum Result<T, E> { Ok(T), Err(E) }
+
+pub enum Option<T> { Some(T), None }
+
+pub fn is_ok<T, E>(r: Result<T, E>) -> bool {
+    return match r {
+        Result::Ok(_) => true,
+        Result::Err(_) => false,
+    }
+}
+
+pub fn is_err<T, E>(r: Result<T, E>) -> bool {
+    return match r {
+        Result::Ok(_) => false,
+        Result::Err(_) => true,
+    }
+}
+
+pub fn is_some<T>(o: Option<T>) -> bool {
+    return match o {
+        Option::Some(_) => true,
+        Option::None => false,
+    }
+}
+
+pub fn is_none<T>(o: Option<T>) -> bool {
+    return match o {
+        Option::Some(_) => false,
+        Option::None => true,
+    }
+}
+
+pub fn unwrap_or<T, E>(r: Result<T, E>, d: T) -> T {
+    return match r {
+        Result::Ok(v) => v,
+        Result::Err(_) => d,
+    }
+}
+
+pub fn err_or<T, E>(r: Result<T, E>, d: E) -> E {
+    return match r {
+        Result::Ok(_) => d,
+        Result::Err(e) => e,
+    }
+}
+
+pub fn some_or<T>(o: Option<T>, d: T) -> T {
+    return match o {
+        Option::Some(v) => v,
+        Option::None => d,
+    }
+}
+
+// a type parameter that appears only inside the returned enum is not inferred, so this surface fixes the error at i64
+pub fn ok<T>(v: T) -> Result<T, i64> { return Result::Ok(v) }
+
+pub fn err(e: i64) -> Result<i64, i64> { return Result::Err(e) }
+
+pub fn ok_or<T>(o: Option<T>, e: i64) -> Result<T, i64> {
+    return match o {
+        Option::Some(v) => Result::Ok(v),
+        Option::None => Result::Err(e),
+    }
+}
+
+pub fn err_code<T>(r: Result<T, i64>) -> i64 {
+    return match r {
+        Result::Ok(_) => 0,
+        Result::Err(e) => e,
+    }
+}

@@ -6,6 +6,3 @@ edition = "2024"
 [dependencies]
 aelys-common = { path = "../common" }
 aelys-syntax = { path = "../syntax" }
-
-[lib]
-doctest = false

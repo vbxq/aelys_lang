@@ -74,8 +74,13 @@ impl ConstantFolder {
                     self.optimize_expr(elem);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.optimize_expr(size);
+                if let Some(fv) = fill_value {
+                    self.optimize_expr(fv);
+                }
             }
             TypedExprKind::Index { object, index } => {
                 self.optimize_expr(object);
@@ -90,6 +95,10 @@ impl ConstantFolder {
                 self.optimize_expr(index);
                 self.optimize_expr(value);
             }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.optimize_expr(object);
+                self.optimize_expr(value);
+            }
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.optimize_expr(s);
@@ -101,6 +110,12 @@ impl ConstantFolder {
             TypedExprKind::Slice { object, range } => {
                 self.optimize_expr(object);
                 self.optimize_expr(range);
+            }
+            TypedExprKind::Reference { operand, .. } => self.optimize_expr(operand),
+            TypedExprKind::Deref(operand) => self.optimize_expr(operand),
+            TypedExprKind::DerefAssign { target, value } => {
+                self.optimize_expr(target);
+                self.optimize_expr(value);
             }
             TypedExprKind::FmtString(parts) => {
                 for part in parts {
@@ -117,12 +132,32 @@ impl ConstantFolder {
             TypedExprKind::Cast { expr, .. } => {
                 self.optimize_expr(expr);
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for stmt in stmts {
+                    self.optimize_stmt(stmt);
+                }
+                self.optimize_expr(tail);
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.optimize_expr(scrutinee);
+                for arm in arms {
+                    self.optimize_expr(&mut arm.body);
+                }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.optimize_expr(scrutinee);
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
             | TypedExprKind::Identifier(_) => {}
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.optimize_expr(arg);
+                }
+            }
         }
 
         if let Some(folded) = self.try_fold(expr) {

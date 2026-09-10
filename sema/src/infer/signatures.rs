@@ -1,57 +1,22 @@
 use super::TypeInference;
+use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::types::InferType;
 use aelys_syntax::{Function, Stmt, StmtKind};
+use std::collections::HashSet;
 use std::rc::Rc;
 
 impl TypeInference {
-    /// Collect function signatures before inference (pre-pass)
     pub(super) fn collect_signatures(&mut self, stmts: &[Stmt], prefix: &str) {
         for stmt in stmts {
             match &stmt.kind {
                 StmtKind::Function(func) => {
                     self.collect_function_signature(func, prefix);
                 }
-                StmtKind::Block(inner_stmts) => {
-                    self.collect_signatures(inner_stmts, prefix);
-                }
-                StmtKind::If {
-                    then_branch,
-                    else_branch,
-                    ..
-                } => {
-                    self.collect_signatures_from_stmt(then_branch, prefix);
-                    if let Some(else_branch) = else_branch {
-                        self.collect_signatures_from_stmt(else_branch, prefix);
-                    }
-                }
-                StmtKind::While { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
-                StmtKind::For { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
-                StmtKind::ForEach { body, .. } => {
-                    self.collect_signatures_from_stmt(body, prefix);
-                }
                 _ => {}
             }
         }
     }
 
-    /// Collect signatures from a single statement
-    fn collect_signatures_from_stmt(&mut self, stmt: &Stmt, prefix: &str) {
-        match &stmt.kind {
-            StmtKind::Function(func) => {
-                self.collect_function_signature(func, prefix);
-            }
-            StmtKind::Block(stmts) => {
-                self.collect_signatures(stmts, prefix);
-            }
-            _ => {}
-        }
-    }
-
-    /// Collect a single function's signature
     fn collect_function_signature(&mut self, func: &Function, prefix: &str) {
         let full_name = if prefix.is_empty() {
             func.name.clone()
@@ -59,13 +24,52 @@ impl TypeInference {
             format!("{}::{}", prefix, func.name)
         };
 
+        if self.env.has_function(&full_name) {
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: InferType::Dynamic,
+                    found: InferType::Dynamic,
+                },
+                span: func.span,
+                reason: ConstraintReason::Other(format!(
+                    "duplicate function definition '{}'",
+                    func.name
+                )),
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+        }
+
+        {
+            let mut seen_params = HashSet::new();
+            for p in &func.params {
+                if !seen_params.insert(&p.name) {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: InferType::Dynamic,
+                            found: InferType::Dynamic,
+                        },
+                        span: p.span,
+                        reason: ConstraintReason::Other(format!(
+                            "duplicate parameter '{}' in function '{}'",
+                            p.name, func.name
+                        )),
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
+                    });
+                }
+            }
+        }
+
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
 
         let mut param_types = Vec::with_capacity(func.params.len());
         for p in &func.params {
             let ty = match &p.type_annotation {
-                Some(ann) => self.type_from_annotation(ann),
+                Some(ann) => self.type_from_param_annotation(ann),
                 None => self.type_gen.fresh(),
             };
             param_types.push(ty);
@@ -73,6 +77,8 @@ impl TypeInference {
 
         let ret_type = match &func.return_type {
             Some(ann) => self.type_from_annotation(ann),
+            // an external declaration has no body, so nothing downstream would ever resolve a variable here
+            None if func.foreign.is_some() => InferType::Null,
             None => self.type_gen.fresh(),
         };
 
@@ -81,8 +87,24 @@ impl TypeInference {
         let fn_type = Rc::new(InferType::Function {
             params: param_types,
             ret: Box::new(ret_type),
+            nogc: func.is_nogc,
         });
 
-        self.env.define_function(full_name, fn_type);
+        self.env.define_function(full_name.clone(), fn_type.clone());
+        self.record_nogc_generic_sig(&full_name, func);
+        self.record_foreign_sig(&full_name, func);
+
+        if !prefix.is_empty() {
+            if self.env.has_function(&func.name) {
+                self.errors.push(TypeError::nested_fn_shadows_outer(
+                    func.name.clone(),
+                    func.span,
+                ));
+            } else {
+                self.env.define_function(func.name.clone(), fn_type);
+                self.record_nogc_generic_sig(&func.name, func);
+                self.record_foreign_sig(&func.name, func);
+            }
+        }
     }
 }

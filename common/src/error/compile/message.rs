@@ -23,99 +23,162 @@ impl CompileErrorKind {
             Self::CommentNestingTooDeep { max } => {
                 format!("block comment nesting too deep (max {} levels)", max)
             }
-            Self::UndefinedVariable(name) => format!("undefined variable '{}'", name),
+            Self::UndefinedVariable(name) => format!("undefined variable `{}`", name),
             Self::VariableAlreadyDefined(name) => {
-                format!("variable '{}' already defined in this scope", name)
+                format!("variable `{}` already defined in this scope", name)
             }
+            Self::DuplicateDefinition {
+                name,
+                form,
+                previous_form,
+                ..
+            } => {
+                if form == previous_form {
+                    format!("the name `{}` is defined twice as {}", name, form)
+                } else {
+                    format!(
+                        "the name `{}` is defined twice, once as {} and once as {}",
+                        name, previous_form, form
+                    )
+                }
+            }
+            Self::UndefinedFunction(name) => format!("undefined function `{}`", name),
+            Self::TypeMismatch {
+                expected,
+                found,
+                reason,
+            } => {
+                if reason.is_empty() {
+                    format!("expected `{}`, found `{}`", expected, found)
+                } else {
+                    format!("expected `{}`, found `{}` ({})", expected, found, reason)
+                }
+            }
+            Self::ArityMismatch {
+                expected,
+                found,
+                func_name,
+            } => format!(
+                "function `{}` takes {} argument{} but {} {} supplied",
+                func_name,
+                expected,
+                if *expected == 1 { "" } else { "s" },
+                found,
+                if *found == 1 { "was" } else { "were" },
+            ),
+            Self::NotCallable { ty } => format!("type `{}` is not callable", ty),
+            Self::MemberAccess { message } => message.clone(),
+            Self::InfiniteType { message } => format!("infinite type: {}", message),
+            Self::UnknownType { name } => format!("unknown type `{}`", name),
+            Self::InvalidCast { from, to } => {
+                format!("cannot cast `{}` to `{}`", from, to)
+            }
+            Self::RecursionLimitExceeded => "type inference recursion limit exceeded".to_string(),
             Self::AssignToImmutable(name) => {
-                format!("cannot assign to immutable variable '{}'", name)
+                format!("cannot assign to immutable variable `{}`", name)
             }
-            Self::TooManyConstants => "too many constants in function".to_string(),
-            Self::TooManyRegisters => "too many local variables in function".to_string(),
-            Self::TooManyArguments => "too many arguments in function call".to_string(),
-            Self::TooManyUpvalues => "too many captured variables (max 255)".to_string(),
+            Self::AssignToLoopVariable(name) => {
+                format!("cannot assign to loop variable `{}`", name)
+            }
             Self::BreakOutsideLoop => "'break' outside of loop".to_string(),
             Self::ContinueOutsideLoop => "'continue' outside of loop".to_string(),
             Self::ReturnOutsideFunction => "'return' outside of function".to_string(),
-            Self::AssignToLoopVariable(name) => {
-                format!("cannot assign to loop variable '{}'", name)
+            Self::ModuleNotFound { module_path, .. } => {
+                format!("module not found: '{}'", module_path,)
             }
-            Self::IntegerOverflow { value, min, max } => format!(
-                "integer literal '{}' exceeds 48-bit signed range ({} to {})",
-                value, min, max
-            ),
-            Self::ModuleNotFound {
+            Self::AmbiguousModule { module_path, roots } => format!(
+                "module '{}' resolves in {} search roots",
                 module_path,
-                searched_paths,
-            } => {
-                format!(
-                    "module not found: '{}'\n   = note: searched in: {}",
-                    module_path,
-                    searched_paths.join(", ")
-                )
-            }
+                roots.len()
+            ),
             Self::CircularDependency { chain } => {
                 format!("circular dependency detected: {}", chain.join(" -> "))
             }
-            Self::SymbolNotPublic { symbol, module } => format!(
-                "'{}' is not public in module '{}'\n   = help: add 'pub' before the declaration in {}.aelys",
-                symbol, module, module
+            Self::SymbolNotPublic { symbol, module } => {
+                format!("'{}' is not public in module '{}'", symbol, module)
+            }
+            Self::ReservedModuleSegment {
+                module_path,
+                segment,
+            } => format!(
+                "module path '{}' uses the reserved segment '{}'",
+                module_path, segment
             ),
-            Self::StdlibNotAvailable { module } => format!(
-                "standard library module '{}' is not yet implemented\n   = note: standard library will be available in a future version",
-                module
-            ),
+            Self::ForeignHeaderImport { header } => {
+                format!(
+                    "importing the C header \"{}\" is not implemented yet",
+                    header
+                )
+            }
+            Self::NeedsOutsidePrologue => {
+                "a `needs` declaration may only appear before any other top-level declaration"
+                    .to_string()
+            }
+            Self::WildcardImport { module_path } => {
+                format!(
+                    "wildcard import of '{}' is not implemented yet",
+                    module_path
+                )
+            }
             Self::SymbolNotFound { symbol, module } => {
                 format!("symbol '{}' not found in module '{}'", symbol, module)
             }
-            Self::InvalidNativeModule { module, reason } => {
-                format!("invalid native module '{}': {}", module, reason)
-            }
-            Self::NativeCapabilityDenied {
-                module,
-                capability,
-                required,
-            } => {
-                let caps_str = required.join(", ");
-                format!(
-                    "native module '{}' requires capability '{}' which is not allowed\n   \
-                     = required capabilities: [{}]\n   \
-                     = hint: use --allow-caps={} or -ae.trusted=true to allow",
-                    module, capability, caps_str, capability
-                )
-            }
-            Self::NativeChecksumMismatch {
-                module,
-                expected,
-                actual,
-            } => format!(
-                "native module '{}' checksum mismatch\n   \
-                 = expected: {}\n   \
-                 = actual:   {}\n   \
-                 = hint: the module file may have been modified or corrupted",
-                module, expected, actual
+            Self::ConflictingExternalSymbol { symbol } => format!(
+                "the external symbol '{}' is also defined in this program, so a call meant for \
+                 the foreign function would reach the Aelys body",
+                symbol
             ),
-            Self::NativeVersionMismatch {
-                module,
-                required,
-                found,
-            } => {
-                let found_str = found.as_deref().unwrap_or("(none)");
-                format!(
-                    "native module '{}' version constraint not satisfied\n   \
-                     = required: {}\n   \
-                     = found:    {}",
-                    module, required, found_str
-                )
+            Self::ConflictingForeignDeclarations { symbol, reason } => format!(
+                "the external symbol '{}' is declared more than once and the declarations do not \
+                 agree: {}",
+                symbol, reason
+            ),
+            Self::ReservedRuntimeSymbol { symbol } => format!(
+                "'{}' is a symbol the Aelys runtime links, so the linker would resolve the \
+                 runtime's own calls to this function",
+                symbol
+            ),
+            Self::MalformedForeignDecl { reason } => {
+                format!("malformed external declaration: {}", reason)
             }
-            Self::TypeInferenceError(msg) => format!("type error: {}", msg),
+            Self::ForeignSignatureType {
+                function,
+                what,
+                spelling,
+                reason,
+            } => format!(
+                "the external declaration '{}' names the type '{}' for {}, which is outside the \
+                 external type surface: {}",
+                function, spelling, what, reason
+            ),
             Self::SymbolConflict { symbol, modules } => {
                 format!(
-                    "symbol '{}' is exported by multiple modules: {}\n   = hint: use 'as' alias to disambiguate",
+                    "the import name '{}' is introduced more than once, by: {}",
                     symbol,
                     modules.join(", ")
                 )
             }
+            Self::TypeInferenceError(msg) => {
+                let headline = msg
+                    .lines()
+                    .find(|line| !line.trim().is_empty())
+                    .unwrap_or("type inference failed")
+                    .trim();
+                format!("type error: {}", headline)
+            }
+            Self::LinkedLibraryClaimsRuntimeSymbol { symbol, libraries } => format!(
+                "the linked executable defines '{}', a symbol the Aelys runtime links, and the \
+                 aelys-core archive does not define it; it comes from one of the requested \
+                 libraries: {}",
+                symbol,
+                libraries.join(", ")
+            ),
+            Self::SourceUnreadable { path, io } => {
+                format!("could not read {}: {}", path, io)
+            }
+            Self::BackendDiagnostic {
+                backend, message, ..
+            } => format!("[{}] {}", backend, message),
         }
     }
 }

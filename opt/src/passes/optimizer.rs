@@ -3,6 +3,7 @@ use super::{
     LocalConstantPropagator, OptimizationLevel, OptimizationPass, OptimizationStats,
     UnusedVarEliminator,
 };
+use aelys_air::bir::Checked;
 use aelys_common::Warning;
 use aelys_sema::TypedProgram;
 
@@ -66,7 +67,13 @@ impl Optimizer {
         self.level
     }
 
-    pub fn optimize(&mut self, mut program: TypedProgram) -> TypedProgram {
+    /// optimizer without first running the borrow/move check is a compile error, not a convention.
+    /// a raw `typedprogram` is rejected at compile time, the standing proof the ordering is structural:
+    /// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
+    /// the positive control pins the intended shape so the negative test cannot pass vacuously:
+    /// let mut opt = aelys_opt::optimizer::new(aelys_opt::optimizationlevel::none);
+    pub fn optimize(&mut self, checked: Checked) -> TypedProgram {
+        let mut program = checked.into_inner();
         self.collected_warnings.clear();
 
         if let Some(inliner) = &mut self.inliner {

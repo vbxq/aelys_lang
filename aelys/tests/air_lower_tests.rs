@@ -183,3 +183,252 @@ fn float_literal_defaults_to_f64() {
         Some(AirConst::Float(_, AirFloatSize::F64))
     ));
 }
+
+#[test]
+fn top_level_global_read_uses_global_get_instead_of_closure_env() {
+    let air = lower_source(
+        r#"
+let g = 7
+
+fn main() -> i64 {
+    return g
+}
+"#,
+    );
+
+    let main = func(&air, "main");
+    assert!(
+        main.params.is_empty(),
+        "main should not get a hidden env param"
+    );
+    assert!(
+        !air.structs.iter().any(|s| s.name == "__closure_env_main"),
+        "top-level globals must not synthesize a closure env"
+    );
+    assert!(
+        has_named_call(main, "__aelys_global_get_g"),
+        "global reads should lower to the synthetic global getter call"
+    );
+}
+
+#[test]
+fn top_level_simple_enum_global_lowers_to_const_tag() {
+    let air = lower_source(
+        r#"
+enum Color {
+    Red,
+    Green,
+}
+
+let c: Color = Color::Green
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "c")
+        .expect("global 'c' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
+}
+
+#[test]
+fn top_level_data_enum_unit_global_lowers_to_const_tag() {
+    let air = lower_source(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "g")
+        .expect("global 'g' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
+}
+
+#[test]
+fn top_level_data_enum_payload_global_lowers_to_const_enum() {
+    let air = lower_source(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::Some(42)
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "g")
+        .expect("global 'g' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Enum { ref enum_ref, tag: 0, ref payload })
+            if enum_ref.symbol() == "__mono_Option$1$i64"
+                && matches!(payload.as_slice(), [AirConst::Int(42, AirIntSize::I64)])
+    ));
+}
+
+#[test]
+fn top_level_fnptr_global_alias_lowers_to_target_fnref() {
+    let air = lower_source(
+        r#"
+let g: fn() -> i64 = main
+let h: fn() -> i64 = g
+
+fn main() -> i64 {
+    return h()
+}
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "h")
+        .expect("global 'h' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::FnRef(ref name)) if name == "main"
+    ));
+}
+
+#[test]
+fn top_level_data_enum_global_alias_clones_const_initializer() {
+    let air = lower_source(
+        r#"
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+let g: Option<i64> = Option::None
+let h: Option<i64> = g
+"#,
+    );
+
+    let global = air
+        .globals
+        .iter()
+        .find(|g| g.name == "h")
+        .expect("global 'h' not found");
+    assert!(matches!(
+        global.init,
+        Some(AirConst::Int(1, AirIntSize::I32))
+    ));
+}
+
+
+#[test]
+fn null_literal_lowers_to_ptr_void_not_bare_void() {
+    let air = lower_source(
+        r#"
+fn make_null() {
+    let x = null
+}
+"#,
+    );
+    let f = func(&air, "make_null");
+    let null_local = f
+        .locals
+        .iter()
+        .find(|l| l.name.as_deref() == Some("x"))
+        .expect("local 'x' not found");
+    assert_eq!(
+        null_local.ty,
+        AirType::Ptr(Box::new(AirType::Void)),
+        "null literal should produce Ptr(Void), not bare Void"
+    );
+}
+
+#[test]
+fn null_literal_type_is_not_void() {
+    // ensure the local for a null-typed variable is not airtype::void
+    let air = lower_source(
+        r#"
+fn test_null() {
+    let y = null
+}
+"#,
+    );
+    let f = func(&air, "test_null");
+    let local = f
+        .locals
+        .iter()
+        .find(|l| l.name.as_deref() == Some("y"))
+        .expect("local 'y' not found");
+    assert_ne!(
+        local.ty,
+        AirType::Void,
+        "null-typed local must not be bare Void (would cause 0-byte alloca)"
+    );
+}
+
+
+#[test]
+#[should_panic(expected = "AIR lowering failed")]
+fn non_constant_array_size_in_expr_produces_error() {
+    lower_source(
+        r#"
+fn f(n: i64) -> i64 {
+    let arr = [0; n]
+    return 0
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "non-constant array size")]
+fn non_constant_array_size_error_message_is_descriptive() {
+    lower_source(
+        r#"
+fn g(size: i64) -> i64 {
+    let arr = [42; size]
+    return 0
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "stack array too large")]
+fn oversized_stack_array_in_expr_produces_error() {
+    lower_source(
+        r#"
+fn h() -> i64 {
+    let x = [0; 200000]
+    return x[0]
+}
+"#,
+    );
+}
+
+#[test]
+#[should_panic(expected = "AIR lowering failed")]
+fn oversized_array_error_aggregated_in_finish() {
+    lower_source(
+        r#"
+fn big() -> i64 {
+    let huge = [1; 300000]
+    return huge[0]
+}
+"#,
+    );
+}

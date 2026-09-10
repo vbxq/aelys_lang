@@ -1,17 +1,17 @@
 use std::fmt;
 
 pub mod compile;
-pub mod runtime;
-pub mod stack;
+pub mod fault;
+
+use crate::diagnostic::Diagnostic;
 
 pub use compile::{CompileError, CompileErrorKind};
-pub use runtime::{RuntimeError, RuntimeErrorKind};
-pub use stack::StackFrame;
+pub use fault::Fault;
 
 #[derive(Debug)]
 pub enum AelysError {
     Compile(CompileError),
-    Runtime(RuntimeError),
+    Multiple(Vec<Diagnostic>),
 }
 
 impl From<CompileError> for AelysError {
@@ -20,19 +20,38 @@ impl From<CompileError> for AelysError {
     }
 }
 
-impl From<RuntimeError> for AelysError {
-    fn from(e: RuntimeError) -> Self {
-        AelysError::Runtime(e)
-    }
-}
-
 impl fmt::Display for AelysError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AelysError::Compile(e) => write!(f, "{}", e),
-            AelysError::Runtime(e) => write!(f, "{}", e),
+            AelysError::Multiple(diagnostics) => {
+                for diag in diagnostics {
+                    write!(f, "{}", diag)?;
+                }
+                Ok(())
+            }
+            _ => write!(f, "{}", self.to_diagnostic()),
         }
     }
 }
 
 impl std::error::Error for AelysError {}
+
+impl AelysError {
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        match self {
+            AelysError::Compile(e) => e.to_diagnostic(),
+            AelysError::Multiple(diagnostics) => {
+                diagnostics.first().cloned().unwrap_or_else(|| {
+                    Diagnostic::new(crate::diagnostic::Severity::Error, "unknown error")
+                })
+            }
+        }
+    }
+
+    pub fn to_diagnostics(&self) -> Vec<Diagnostic> {
+        match self {
+            AelysError::Multiple(diagnostics) => diagnostics.clone(),
+            _ => vec![self.to_diagnostic()],
+        }
+    }
+}

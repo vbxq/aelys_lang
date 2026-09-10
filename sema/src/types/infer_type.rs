@@ -17,17 +17,32 @@ pub enum InferType {
     String,
     Null,
 
+    /// never is a subtype of every type `unify(never, t)` always succeeds
+    Never,
+
     Function {
         params: Vec<InferType>,
         ret: Box<InferType>,
+        nogc: bool,
     },
 
-    Array(Box<InferType>),
+    Array(Box<InferType>, Option<u64>),
     Vec(Box<InferType>),
+    Rc(Box<InferType>),
+    // stage 1 borrows, erased to a raw ptr / fat {ptr,len} in air
+    Ref {
+        referent: Box<InferType>,
+        mutable: bool,
+    },
+    Slice {
+        elem: Box<InferType>,
+        mutable: bool,
+    },
     Tuple(Vec<InferType>),
     Range,
 
     Struct(std::string::String),
+    Enum(std::string::String, Vec<InferType>),
 
     Var(TypeVarId),
 
@@ -60,11 +75,16 @@ impl InferType {
     pub fn has_vars(&self) -> bool {
         match self {
             InferType::Var(_) => true,
-            InferType::Function { params, ret } => {
+            InferType::Function { params, ret, .. } => {
                 params.iter().any(|p| p.has_vars()) || ret.has_vars()
             }
-            InferType::Array(inner) | InferType::Vec(inner) => inner.has_vars(),
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+                inner.has_vars()
+            }
+            InferType::Ref { referent, .. } => referent.has_vars(),
+            InferType::Slice { elem, .. } => elem.has_vars(),
             InferType::Tuple(elems) => elems.iter().any(|e| e.has_vars()),
+            InferType::Enum(_, args) => args.iter().any(|a| a.has_vars()),
             _ => false,
         }
     }
@@ -74,26 +94,68 @@ impl InferType {
     }
 
     pub fn is_concrete(&self) -> bool {
-        matches!(
-            self,
+        match self {
             InferType::I8
-                | InferType::I16
-                | InferType::I32
-                | InferType::I64
-                | InferType::U8
-                | InferType::U16
-                | InferType::U32
-                | InferType::U64
-                | InferType::F32
-                | InferType::F64
-                | InferType::Bool
-                | InferType::String
-                | InferType::Null
-                | InferType::Struct(_)
-        )
+            | InferType::I16
+            | InferType::I32
+            | InferType::I64
+            | InferType::U8
+            | InferType::U16
+            | InferType::U32
+            | InferType::U64
+            | InferType::F32
+            | InferType::F64
+            | InferType::Bool
+            | InferType::String
+            | InferType::Null
+            | InferType::Struct(_) => true,
+            InferType::Enum(_, args) => args.iter().all(|a| a.is_concrete()),
+            InferType::Ref { referent, .. } => referent.is_concrete(),
+            InferType::Slice { elem, .. } => elem.is_concrete(),
+            _ => false,
+        }
+    }
+
+    pub fn is_rc(&self) -> bool {
+        matches!(self, InferType::Rc(_))
+    }
+
+    pub fn contains_rc(&self) -> bool {
+        match self {
+            InferType::Rc(_) => true,
+            InferType::Array(inner, _) | InferType::Vec(inner) => inner.contains_rc(),
+            InferType::Ref { referent, .. } => referent.contains_rc(),
+            InferType::Slice { elem, .. } => elem.contains_rc(),
+            InferType::Tuple(elems) => elems.iter().any(|e| e.contains_rc()),
+            InferType::Enum(_, args) => args.iter().any(|a| a.contains_rc()),
+            InferType::Function { params, ret, .. } => {
+                params.iter().any(|p| p.contains_rc()) || ret.contains_rc()
+            }
+            _ => false,
+        }
     }
 
     pub fn from_annotation(ann: &aelys_syntax::TypeAnnotation) -> Self {
+        if let Some(kind) = ann.reference {
+            let mutable = matches!(kind, aelys_syntax::RefKind::Mut);
+            if ann.is_slice {
+                let elem = ann
+                    .type_param
+                    .as_ref()
+                    .map(|p| Self::from_annotation(p))
+                    .unwrap_or(InferType::Dynamic);
+                return InferType::Slice {
+                    elem: Box::new(elem),
+                    mutable,
+                };
+            }
+            let mut base = ann.clone();
+            base.reference = None;
+            return InferType::Ref {
+                referent: Box::new(Self::from_annotation(&base)),
+                mutable,
+            };
+        }
         if ann.is_function_type() {
             let params = ann
                 .fn_params
@@ -108,7 +170,19 @@ impl InferType {
             return InferType::Function {
                 params,
                 ret: Box::new(ret),
+                nogc: ann.nogc,
             };
+        }
+        if ann.name == "Rc" {
+            let inner = ann
+                .type_param
+                .as_ref()
+                .map(|p| Self::from_annotation(p))
+                .unwrap_or(InferType::Dynamic);
+            return InferType::Rc(Box::new(inner));
+        }
+        if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
+            return InferType::Struct(ann.name.clone());
         }
         let name_lower = ann.name.to_lowercase();
         match name_lower.as_str() {
@@ -123,15 +197,15 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
-            "string" => InferType::String,
+            "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
-            "array" => {
+            "array" if ann.array_size.is_some() => {
                 let inner = ann
                     .type_param
                     .as_ref()
                     .map(|p| Self::from_annotation(p))
                     .unwrap_or(InferType::Dynamic);
-                InferType::Array(Box::new(inner))
+                InferType::Array(Box::new(inner), ann.array_size)
             }
             "vec" => {
                 let inner = ann
@@ -141,13 +215,7 @@ impl InferType {
                     .unwrap_or(InferType::Dynamic);
                 InferType::Vec(Box::new(inner))
             }
-            _ => {
-                if ann.name.chars().next().is_some_and(|c| c.is_uppercase()) {
-                    InferType::Struct(ann.name.clone())
-                } else {
-                    InferType::Dynamic
-                }
-            }
+            _ => InferType::Dynamic,
         }
     }
 
@@ -164,7 +232,7 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
-            "string" => InferType::String,
+            "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
             _ => {
                 if name.chars().next().is_some_and(|c| c.is_uppercase()) {
@@ -197,6 +265,14 @@ impl InferType {
         }
     }
 
+    pub fn float_fits(value: f64, ty: &InferType) -> bool {
+        match ty {
+            InferType::F32 => value.is_finite() && value.abs() <= f32::MAX as f64,
+            InferType::F64 => true,
+            _ => false,
+        }
+    }
+
     pub fn all_integer_types() -> Vec<InferType> {
         vec![
             InferType::I8,
@@ -219,6 +295,61 @@ impl InferType {
         types.extend(Self::all_float_types());
         types
     }
+
+    fn numeric_rank(&self) -> Option<(i16, bool)> {
+        match self {
+            InferType::I8 => Some((8, true)),
+            InferType::I16 => Some((16, true)),
+            InferType::I32 => Some((32, true)),
+            InferType::I64 => Some((64, true)),
+            InferType::U8 => Some((8, false)),
+            InferType::U16 => Some((16, false)),
+            InferType::U32 => Some((32, false)),
+            InferType::U64 => Some((64, false)),
+            InferType::F32 => Some((-32, true)),
+            InferType::F64 => Some((-64, true)),
+            _ => None,
+        }
+    }
+
+    pub fn can_implicit_widen_to(&self, target: &InferType) -> bool {
+        if self == target {
+            return false;
+        }
+
+        let (src_rank, src_signed) = match self.numeric_rank() {
+            Some(r) => r,
+            None => return false,
+        };
+
+        let (tgt_rank, tgt_signed) = match target.numeric_rank() {
+            Some(r) => r,
+            None => return false,
+        };
+
+        if src_rank < 0 {
+            return false;
+        }
+
+        if tgt_rank < 0 {
+            let tgt_bits = -tgt_rank; // 32 or 64
+            return if tgt_bits == 32 {
+                src_rank <= 16
+            } else {
+                src_rank <= 32
+            };
+        }
+
+        if src_signed && tgt_signed {
+            tgt_rank > src_rank
+        } else if !src_signed && !tgt_signed {
+            tgt_rank > src_rank
+        } else if !src_signed && tgt_signed {
+            tgt_rank > src_rank
+        } else {
+            false
+        }
+    }
 }
 
 impl fmt::Display for InferType {
@@ -237,7 +368,8 @@ impl fmt::Display for InferType {
             InferType::Bool => write!(f, "bool"),
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
-            InferType::Function { params, ret } => {
+            InferType::Never => write!(f, "!"),
+            InferType::Function { params, ret, .. } => {
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {
                     if i > 0 {
@@ -247,8 +379,16 @@ impl fmt::Display for InferType {
                 }
                 write!(f, ") -> {}", ret)
             }
-            InferType::Array(inner) => write!(f, "[{}]", inner),
+            InferType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
+            InferType::Array(inner, None) => write!(f, "[{}]", inner),
             InferType::Vec(inner) => write!(f, "vec[{}]", inner),
+            InferType::Rc(inner) => write!(f, "Rc<{}>", inner),
+            InferType::Ref { referent, mutable } => {
+                write!(f, "&{}{}", if *mutable { "mut " } else { "" }, referent)
+            }
+            InferType::Slice { elem, mutable } => {
+                write!(f, "&{}[{}]", if *mutable { "mut " } else { "" }, elem)
+            }
             InferType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {
@@ -260,7 +400,23 @@ impl fmt::Display for InferType {
                 write!(f, ")")
             }
             InferType::Range => write!(f, "range"),
-            InferType::Struct(name) => write!(f, "{}", name),
+            InferType::Struct(name) => {
+                write!(f, "{}", crate::modules::strip_type_head(name))
+            }
+            InferType::Enum(name, type_args) => {
+                write!(f, "{}", crate::modules::strip_type_head(name))?;
+                if !type_args.is_empty() {
+                    write!(f, "<")?;
+                    for (i, arg) in type_args.iter().enumerate() {
+                        if i > 0 {
+                            write!(f, ", ")?;
+                        }
+                        write!(f, "{}", arg)?;
+                    }
+                    write!(f, ">")?;
+                }
+                Ok(())
+            }
             InferType::Var(id) => write!(f, "{}", id),
             InferType::Dynamic => write!(f, "dynamic"),
         }
