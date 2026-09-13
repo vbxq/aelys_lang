@@ -9,10 +9,10 @@ target triple = "x86_64-pc-linux-gnu"
 
 @__aelys_global_g = internal global i64 3
 @__aelys_rc_type_table = constant [3 x i32] [i32 1, i32 0, i32 3]
-@str_6_0 = private constant [25 x i8] c"null pointer dereference\00"
-@str_5_0 = private constant [5 x i8] c"base\00"
-@str_5_1 = private constant [2 x i8] c"\0A\00"
-@str_5_2 = private constant [25 x i8] c"null pointer dereference\00"
+@str_6_0 = private constant { i32, i8, i8, i8, i8, i32, i32, [25 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [25 x i8] c"null pointer dereference\00" }, align 16
+@str_5_0 = private constant { i32, i8, i8, i8, i8, i32, i32, [5 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [5 x i8] c"base\00" }, align 16
+@str_5_1 = private constant { i32, i8, i8, i8, i8, i32, i32, [2 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [2 x i8] c"\0A\00" }, align 16
+@str_5_2 = private constant { i32, i8, i8, i8, i8, i32, i32, [25 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [25 x i8] c"null pointer dereference\00" }, align 16
 
 define fastcc i64 @helper(ptr %0, i64 %1) {
 bb0:
@@ -80,7 +80,7 @@ bb0:
   br i1 %deref_null_cmp, label %deref_null, label %deref_ok
 
 deref_null:                                       ; preds = %bb0
-  call void @__aelys_panic(ptr @str_6_0, i64 24)
+  call void @__aelys_panic(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [25 x i8] }, ptr @str_6_0, i32 0, i32 7, i32 0), i64 24)
   unreachable
 
 deref_ok:                                         ; preds = %bb0
@@ -91,7 +91,7 @@ deref_ok:                                         ; preds = %bb0
   br i1 %deref_null_cmp1, label %deref_null2, label %deref_ok3
 
 deref_null2:                                      ; preds = %deref_ok
-  call void @__aelys_panic(ptr @str_6_0, i64 24)
+  call void @__aelys_panic(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [25 x i8] }, ptr @str_6_0, i32 0, i32 7, i32 0), i64 24)
   unreachable
 
 deref_ok3:                                        ; preds = %deref_ok
@@ -109,8 +109,8 @@ bb0:
   %l3 = alloca ptr, align 8
   %l5 = alloca { ptr, ptr }, align 8
   %l8 = alloca %Holder, align 8
-  call void @__aelys_write(ptr @str_5_0, i64 4)
-  call void @__aelys_write(ptr @str_5_1, i64 1)
+  call void @__aelys_write(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [5 x i8] }, ptr @str_5_0, i32 0, i32 7, i32 0), i64 4)
+  call void @__aelys_write(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [2 x i8] }, ptr @str_5_1, i32 0, i32 7, i32 0), i64 1)
   store i64 10, ptr %l0, align 8
   store { ptr, ptr } { ptr @seven, ptr null }, ptr %l2, align 8
   %alloc_raw = call ptr @__aelys_alloc(i64 8)
@@ -121,7 +121,7 @@ bb0:
   br i1 %deref_null_cmp, label %deref_null, label %deref_ok
 
 deref_null:                                       ; preds = %bb0
-  call void @__aelys_panic(ptr @str_5_2, i64 24)
+  call void @__aelys_panic(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [25 x i8] }, ptr @str_5_2, i32 0, i32 7, i32 0), i64 24)
   unreachable
 
 deref_ok:                                         ; preds = %bb0
@@ -156,12 +156,12 @@ deref_ok:                                         ; preds = %bb0
   %closure_env7 = extractvalue { ptr, ptr } %ld5, 1
   %call_closure8 = call fastcc i64 %closure_fn6(ptr %closure_env7, i64 2)
   %iadd9 = add i64 %iadd5, %call_closure8
-  %call_direct10 = call fastcc i64 @__mono_ident_i64(ptr null, i64 6)
+  %call_direct10 = call fastcc i64 @"__mono_ident$1$i64"(ptr null, i64 6)
   %iadd11 = add i64 %iadd9, %call_direct10
   ret i64 %iadd11
 }
 
-define fastcc i64 @__mono_ident_i64(ptr %0, i64 %1) {
+define fastcc i64 @"__mono_ident$1$i64"(ptr %0, i64 %1) {
 bb0:
   ret i64 %1
 }

@@ -760,29 +760,54 @@ fn unit_like() -> void {
 }
 
 #[test]
-fn llvm_string_index_compiles_and_calls_runtime() {
+fn llvm_string_iteration_compiles_and_calls_runtime() {
     let ir = compile_to_verified_ir(
+        r#"
+fn first(s: string) -> i64 {
+    for c in s {
+        return c as i64
+    }
+    return -1
+}
+"#,
+    );
+    assert!(
+        ir.contains("@__aelys_str_decode_at"),
+        "string iteration should call __aelys_str_decode_at:\n{ir}"
+    );
+    assert!(
+        !ir.contains("@__aelys_str_char_at_scalar"),
+        "the loop must not reach the accessor that re-walks from byte 0:\n{ir}"
+    );
+    let decl = ir
+        .lines()
+        .find(|l| l.contains("declare") && l.contains("@__aelys_str_decode_at"))
+        .expect("__aelys_str_decode_at must be declared");
+    assert!(
+        decl.starts_with("declare i64 @__aelys_str_decode_at(ptr, i64, i64)"),
+        "decode_at must hand back a packed i64 from (ptr, i64, i64):\n{decl}"
+    );
+}
+
+#[test]
+fn llvm_string_index_is_refused_before_the_backend() {
+    let dir = tempdir().expect("tempdir should be created");
+    let source_path = dir.path().join("module.aelys");
+    fs::write(
+        &source_path,
         r#"
 fn char_at(s: string, i: i64) -> string {
     return s[i]
 }
 "#,
-    );
+    )
+    .expect("source should be written");
+    let err = compile_file_with_llvm(&source_path, OptimizationLevel::None, true)
+        .expect_err("indexing a string must be refused");
+    let rendered = format!("{err:?}");
     assert!(
-        ir.contains("@__aelys_str_char_at"),
-        "string index should call __aelys_str_char_at:\n{ir}"
-    );
-    let char_at_decl = ir
-        .lines()
-        .find(|l| l.contains("declare") && l.contains("@__aelys_str_char_at"))
-        .expect("__aelys_str_char_at must be declared");
-    assert!(
-        char_at_decl.contains("__aelys_string"),
-        "char_at must involve %__aelys_string type:\n{char_at_decl}"
-    );
-    assert!(
-        char_at_decl.contains("ptr") && char_at_decl.contains("i64"),
-        "char_at must accept (ptr, i64, i64) args:\n{char_at_decl}"
+        rendered.contains("cannot be indexed by integer"),
+        "the refusal must name the removed construct:\n{rendered}"
     );
 }
 
@@ -918,18 +943,28 @@ fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
 }
 
 #[test]
-fn llvm_string_literal_index_compiles() {
+fn llvm_string_literal_iteration_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn first_char() -> string {
-    let s = "hello"
-    return s[0]
+    for c in "hello" {
+        return string::from_char(c)
+    }
+    return ""
 }
 "#,
     );
     assert!(
-        ir.contains("@__aelys_str_char_at"),
-        "string literal index should call __aelys_str_char_at:\n{ir}"
+        ir.contains("@__aelys_str_decode_at"),
+        "string literal iteration should call __aelys_str_decode_at:\n{ir}"
+    );
+    assert!(
+        !ir.contains("@__aelys_str_char_at_scalar"),
+        "the loop must not reach the accessor that re-walks from byte 0:\n{ir}"
+    );
+    assert!(
+        ir.contains("@__aelys_str_from_char"),
+        "the exit from char world should call __aelys_str_from_char:\n{ir}"
     );
 }
 

@@ -7,6 +7,14 @@ use aelys_codegen::CodegenContext;
 use std::fs;
 use tempfile::tempdir;
 
+fn compile_air_error(program: &AirProgram) -> String {
+    let mut codegen = CodegenContext::new("index_tests");
+    match codegen.compile(program) {
+        Ok(()) => panic!("codegen must refuse this program"),
+        Err(e) => e.to_string(),
+    }
+}
+
 fn compile_air_to_verified_ir(program: &AirProgram) -> String {
     let dir = tempdir().expect("tempdir should be created");
     let ll_path = dir.path().join("module.ll");
@@ -44,13 +52,9 @@ fn default_attribs() -> FunctionAttribs {
     }
 }
 
-/// Array read: Rvalue::Index on Array(I64, 4), verify GEP + bounds check + load
+/// array read: rvalue::index on array(i64, 4), verify gep + bounds check + load
 #[test]
 fn array_index_read_generates_gep_and_bounds_check() {
-    // fn probe(idx: i64) -> i64 {
-    //   let arr: [i64; 4] = zeroinit
-    //   return arr[idx]
-    // }
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -121,7 +125,6 @@ fn array_index_read_generates_gep_and_bounds_check() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // should have GEP into the array
     assert!(
         ir.contains("getelementptr inbounds"),
         "array index should generate GEP:\n{ir}"
@@ -131,12 +134,10 @@ fn array_index_read_generates_gep_and_bounds_check() {
         ir.contains("icmp uge"),
         "array index should generate unsigned bounds check:\n{ir}"
     );
-    // should call __aelys_panic for OOB
     assert!(
         ir.contains("@__aelys_panic"),
         "array index should call __aelys_panic on OOB:\n{ir}"
     );
-    // should have idx_oob and idx_ok labels
     assert!(ir.contains("idx_oob:"), "should have idx_oob block:\n{ir}");
     assert!(ir.contains("idx_ok:"), "should have idx_ok block:\n{ir}");
     // should have unreachable after panic
@@ -144,19 +145,14 @@ fn array_index_read_generates_gep_and_bounds_check() {
         ir.contains("unreachable"),
         "should have unreachable after panic:\n{ir}"
     );
-    // should load the element
     assert!(
         ir.contains("load i64"),
         "array index should load element:\n{ir}"
     );
 }
 
-/// String index: Rvalue::Index on Str delegates to __aelys_str_char_at (UTF-8 char indexing)
 #[test]
-fn string_index_read_calls_runtime_char_at() {
-    // fn probe(s: str, idx: i64) -> str {
-    //   return s[idx]
-    // }
+fn string_index_below_sema_is_refused_by_codegen() {
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -213,42 +209,21 @@ fn string_index_read_calls_runtime_char_at() {
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     };
 
-    let ir = compile_air_to_verified_ir(&program);
+    let err = compile_air_error(&program);
 
-    // should call the UTF-8 runtime function, not inline byte-level GEP
     assert!(
-        ir.contains("@__aelys_str_char_at"),
-        "string index should call __aelys_str_char_at:\n{ir}"
-    );
-    // The runtime function must be declared with the right argument types.
-    // Return convention varies by platform: by-value on Linux, sret on Windows.
-    let char_at_decl = ir
-        .lines()
-        .find(|l| l.contains("declare") && l.contains("@__aelys_str_char_at"))
-        .expect("__aelys_str_char_at must be declared");
-    assert!(
-        char_at_decl.contains("__aelys_string"),
-        "char_at must involve %__aelys_string type:\n{char_at_decl}"
+        err.contains("index of a string reached codegen"),
+        "the refusal must name the construct:\n{err}"
     );
     assert!(
-        char_at_decl.contains("ptr") && char_at_decl.contains("i64"),
-        "char_at must accept (ptr, i64, i64) args:\n{char_at_decl}"
-    );
-    // should not do byte-level GEP into string data
-    assert!(
-        !ir.contains("str_idx_ptr"),
-        "string index must not use byte-level GEP:\n{ir}"
+        err.contains("sema must reject it (E0304)"),
+        "the refusal must name the rule that owns it:\n{err}"
     );
 }
 
-/// Array write: Place::Index on Array(I64, 4), verify GEP + store + bounds check
+/// array write: place::index on array(i64, 4), verify gep + store + bounds check
 #[test]
 fn array_index_write_generates_gep_and_store() {
-    // fn probe(idx: i64, val: i64) -> void {
-    //   let arr: [i64; 4] = zeroinit
-    //   arr[idx] = val
-    //   return void
-    // }
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -315,12 +290,10 @@ fn array_index_write_generates_gep_and_store() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // should have GEP
     assert!(
         ir.contains("getelementptr inbounds"),
         "array write should generate GEP:\n{ir}"
     );
-    // should store the value
     assert!(
         ir.contains("store i64"),
         "array write should generate store:\n{ir}"
@@ -336,10 +309,9 @@ fn array_index_write_generates_gep_and_store() {
     );
 }
 
-/// Bounds check structure: verify idx_oob has unreachable after __aelys_panic
+/// bounds check structure: verify idx_oob has unreachable after __aelys_panic
 #[test]
 fn bounds_check_structure_has_unreachable_after_panic() {
-    // Reuse same simple program as array read test
     let program = AirProgram {
         functions: vec![AirFunction {
             id: FunctionId(0),
@@ -410,14 +382,13 @@ fn bounds_check_structure_has_unreachable_after_panic() {
 
     let ir = compile_air_to_verified_ir(&program);
 
-    // Find the idx_oob block and verify it ends with unreachable
+    // find the idx_oob block and verify it ends with unreachable
     let oob_block_start = ir
         .find("idx_oob:")
         .expect("should have idx_oob block in IR");
     let after_oob = &ir[oob_block_start..];
-    // The block should contain the panic call and then unreachable
+    // the block should contain the panic call and then unreachable
     let next_label = after_oob.find("\n\n").or_else(|| {
-        // In some IR formats, blocks are separated by labels
         after_oob[9..].find(':').map(|pos| pos + 9)
     });
     let oob_block_text = match next_label {
