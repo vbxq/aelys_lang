@@ -1,8 +1,10 @@
+pub mod ablation;
 pub mod constraint;
 pub mod env;
 pub mod infer;
 pub mod modules;
 pub mod place_spine;
+pub mod rc_init;
 pub mod typed_ast;
 pub mod types;
 pub mod unify;
@@ -13,7 +15,10 @@ pub use infer::{TypeInference, entry::InferenceResult};
 pub use modules::{
     ItemKind, Lookup, ModuleExports, ModuleImports, ModuleType, ModuleTypeDef, ModuleValue,
 };
-pub use place_spine::{denotes_a_place, deref_is_shared, spine_is_shared, target_ptr_is_shared};
+pub use place_spine::{
+    bytes_receiver_is_backed, denotes_a_place, deref_is_shared, spine_is_shared,
+    target_ptr_is_shared,
+};
 pub use typed_ast::{
     ResultAssertOnErr, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedMatchArm,
     TypedParam, TypedPattern, TypedProgram, TypedStmt, TypedStmtKind,

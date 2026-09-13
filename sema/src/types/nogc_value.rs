@@ -3,7 +3,6 @@ use std::collections::HashSet;
 
 impl TypeTable {
     /// stricter than "not managed": an owned `string` and a general `fn` are also rejected. the walk
-    /// is fail-closed, so any type it cannot resolve is not a nogc value.
     pub fn is_nogc_value(&self, ty: &InferType) -> bool {
         let mut visited = HashSet::new();
         self.scan_nogc_value(ty, &[], &mut visited)
@@ -27,6 +26,7 @@ impl TypeTable {
             | InferType::F32
             | InferType::F64
             | InferType::Bool
+            | InferType::Char
             | InferType::Null
             | InferType::Never => true,
             InferType::String => false,

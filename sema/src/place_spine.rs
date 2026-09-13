@@ -21,6 +21,18 @@ fn is_rc_get(e: &TypedExpr) -> bool {
     )
 }
 
+fn rc_get_receiver(e: &TypedExpr) -> Option<&TypedExpr> {
+    match &e.kind {
+        TypedExprKind::EnumVariant {
+            enum_name,
+            variant,
+            args,
+            ..
+        } if enum_name == "Rc" && variant == "get" => args.first(),
+        _ => None,
+    }
+}
+
 pub fn spine_root_name(e: &TypedExpr) -> Option<&str> {
     match &e.kind {
         TypedExprKind::Identifier(name) => Some(name),
@@ -49,20 +61,27 @@ pub fn computed_len_receiver(e: &TypedExpr) -> Option<&InferType> {
     }
 }
 
+// an rc temporary owns the cell it hands out, so the object's type cannot answer for its storage
 pub fn denotes_a_place(e: &TypedExpr) -> bool {
     match &e.kind {
         TypedExprKind::Grouping(inner) => denotes_a_place(inner),
         TypedExprKind::Identifier(_) => true,
         TypedExprKind::Deref(_) => true,
-        _ if is_rc_get(e) => true,
+        _ if is_rc_get(e) => rc_get_receiver(e).is_some_and(denotes_a_place),
         TypedExprKind::Member { object, member } => {
-            !is_computed_len(&object.ty, member)
-                && (projects_through_pointer(&object.ty) || denotes_a_place(object))
+            !is_computed_len(&object.ty, member) && denotes_a_place(object)
         }
-        TypedExprKind::Index { object, .. } => {
-            projects_through_pointer(&object.ty) || denotes_a_place(object)
-        }
+        TypedExprKind::Index { object, .. } => denotes_a_place(object),
         _ => false,
+    }
+}
+
+// a string literal is .rodata: its bytes outlive every view of them, which no place rule can see
+pub fn bytes_receiver_is_backed(e: &TypedExpr) -> bool {
+    match &e.kind {
+        TypedExprKind::Grouping(inner) => bytes_receiver_is_backed(inner),
+        TypedExprKind::String(_) => true,
+        _ => denotes_a_place(e),
     }
 }
 

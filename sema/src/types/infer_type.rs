@@ -14,6 +14,8 @@ pub enum InferType {
     F32,
     F64,
     Bool,
+    // a validated unicode scalar value, 4 bytes wide and never an integer
+    Char,
     String,
     Null,
 
@@ -106,6 +108,7 @@ impl InferType {
             | InferType::F32
             | InferType::F64
             | InferType::Bool
+            | InferType::Char
             | InferType::String
             | InferType::Null
             | InferType::Struct(_) => true,
@@ -197,6 +200,7 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
+            "char" => InferType::Char,
             "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
             "array" if ann.array_size.is_some() => {
@@ -232,6 +236,7 @@ impl InferType {
             "float" | "f64" | "float64" => InferType::F64,
             "f32" | "float32" => InferType::F32,
             "bool" => InferType::Bool,
+            "char" => InferType::Char,
             "string" | "str" => InferType::String,
             "null" | "void" => InferType::Null,
             _ => {
@@ -294,6 +299,29 @@ impl InferType {
         let mut types = Self::all_integer_types();
         types.extend(Self::all_float_types());
         types
+    }
+
+    /// the one list `<` accepts, so the `ord` bound cannot drift away from the operator
+    pub fn ord_types() -> Vec<InferType> {
+        let mut types = Self::all_numeric_types();
+        types.push(InferType::Char);
+        types
+    }
+
+    // `string` answers `==` and refuses `<`, which points at `str.compare` instead
+    pub fn eq_types() -> Vec<InferType> {
+        let mut types = Self::ord_types();
+        types.push(InferType::Bool);
+        types.push(InferType::String);
+        types
+    }
+
+    pub fn satisfies_ord(&self) -> bool {
+        Self::ord_types().contains(self)
+    }
+
+    pub fn satisfies_eq(&self) -> bool {
+        Self::eq_types().contains(self)
     }
 
     fn numeric_rank(&self) -> Option<(i16, bool)> {
@@ -366,6 +394,7 @@ impl fmt::Display for InferType {
             InferType::F32 => write!(f, "f32"),
             InferType::F64 => write!(f, "f64"),
             InferType::Bool => write!(f, "bool"),
+            InferType::Char => write!(f, "char"),
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
             InferType::Never => write!(f, "!"),

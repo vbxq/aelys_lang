@@ -1,8 +1,6 @@
 use super::InferType;
 use std::fmt;
 
-// resolved type, after inference all veriable are resolved
-// this is what the compiler uses for opcode selection
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolvedType {
     I8,
@@ -16,6 +14,7 @@ pub enum ResolvedType {
     F32,
     F64,
     Bool,
+    Char,
     String,
     Null,
 
@@ -106,9 +105,10 @@ impl ResolvedType {
             InferType::F32 => ResolvedType::F32,
             InferType::F64 => ResolvedType::F64,
             InferType::Bool => ResolvedType::Bool,
+            InferType::Char => ResolvedType::Char,
             InferType::String => ResolvedType::String,
             InferType::Null => ResolvedType::Null,
-            // Never represents unreachable code; map to Null (void) for codegen.
+            // never represents unreachable code; map to null (void) for codegen.
             InferType::Never => ResolvedType::Null,
             InferType::Function { params, ret, .. } => ResolvedType::Function {
                 params: params.iter().map(ResolvedType::from_infer_type).collect(),
@@ -156,6 +156,7 @@ impl fmt::Display for ResolvedType {
             ResolvedType::F32 => write!(f, "f32"),
             ResolvedType::F64 => write!(f, "f64"),
             ResolvedType::Bool => write!(f, "bool"),
+            ResolvedType::Char => write!(f, "char"),
             ResolvedType::String => write!(f, "string"),
             ResolvedType::Null => write!(f, "null"),
             ResolvedType::Function { params, ret } => {

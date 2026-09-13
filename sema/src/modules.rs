@@ -1,4 +1,5 @@
 use crate::types::{EnumDef, InferType, StructDef};
+use aelys_syntax::TypeBounds;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -14,6 +15,9 @@ pub struct ModuleValue {
     pub ty: InferType,
     pub qualified: String,
     pub is_pub: bool,
+    pub type_params: Vec<String>,
+    // the importer has to re-check the bounds, the exporting module never sees this call site
+    pub bounds: Vec<TypeBounds>,
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +242,16 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                     path,
                     &owned,
                 );
+                let bounds = func
+                    .type_params
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| {
+                        let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                        set.nogc |= func.declared_nogc;
+                        set
+                    })
+                    .collect();
                 exports.values.insert(
                     func.name.clone(),
                     ModuleValue {
@@ -245,6 +259,8 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         ty,
                         qualified: qualify_value(path, &func.name),
                         is_pub: func.is_pub,
+                        type_params: func.type_params.clone(),
+                        bounds,
                     },
                 );
             }
@@ -261,6 +277,8 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         ty: qualify_infer_type(var_type, path, &owned),
                         qualified: qualify_value(path, name),
                         is_pub: *is_pub,
+                        type_params: Vec::new(),
+                        bounds: Vec::new(),
                     },
                 );
             }
