@@ -2,7 +2,7 @@
 use aelys_common::{ColorConfig, WarningConfig, format_warnings, render_summary};
 use aelys_driver::{
     LinkRequirement, RuntimeVariant, SourceOptions, compile_file_with_llvm_sources,
-    executable_path_for, lower_file_to_air_with_sources, object_path_for,
+    executable_path_for, ir_path_for, lower_file_to_air_with_sources, object_path_for,
 };
 use aelys_opt::OptimizationLevel;
 use std::path::{Path, PathBuf};
@@ -23,9 +23,7 @@ pub fn run_with_options(
         return emit_air_program(path, opt_level, sources);
     }
 
-    if output.is_some() {
-        return Err("--output is not supported yet".to_string());
-    }
+    let requested = output.as_deref().map(Path::new);
 
     match compile_file_with_llvm_sources(
         Path::new(path),
@@ -34,6 +32,7 @@ pub fn run_with_options(
         runtime,
         link,
         sources,
+        requested,
     ) {
         Ok(warnings) => {
             let filtered: Vec<_> = warnings
@@ -51,14 +50,16 @@ pub fn run_with_options(
                 ));
             }
 
+            let source = Path::new(path);
+            let chosen = |default: PathBuf| requested.map(Path::to_path_buf).unwrap_or(default);
             if emit_llvm_ir {
-                let mut ir_path = PathBuf::from(path);
-                ir_path.set_extension("ll");
-                eprintln!("Wrote {}", ir_path.display());
-            } else if !executable_path_for(Path::new(path)).is_file() {
+                eprintln!("Wrote {}", chosen(ir_path_for(source)).display());
+            } else if let Some(target) = requested {
+                eprintln!("Wrote {}", target.display());
+            } else if !executable_path_for(source).is_file() {
                 eprintln!(
                     "Wrote {} (no `main`, so nothing was linked)",
-                    object_path_for(Path::new(path)).display()
+                    object_path_for(source).display()
                 );
             }
 
