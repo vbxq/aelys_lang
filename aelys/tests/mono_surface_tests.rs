@@ -123,6 +123,14 @@ fn lower(src: &str) -> Result<(), String> {
         .map_err(|err| err.to_string())
 }
 
+fn air_function_names(src: &str) -> Vec<String> {
+    let dir = tempdir().expect("tempdir");
+    let path = dir.path().join("module.aelys");
+    fs::write(&path, src).expect("write source");
+    let air = lower_file_to_air(&path, OptimizationLevel::None).expect("lower");
+    air.functions.iter().map(|f| f.name.clone()).collect()
+}
+
 fn refuse(id: &str, src: &str, needles: &[&str]) {
     match lower(src) {
         Ok(()) => panic!("{id}: expected a refusal, but the program compiled"),
@@ -250,22 +258,48 @@ fn a_void_generic_with_a_concrete_signature_runs() {
     );
 }
 
+const MANGLING_COLLISION: &str = "struct A_B { v: i64 }\n\
+     struct B { v: i64 }\n\
+     fn g<T>(x: T) -> i64 { return 1 }\n\
+     fn g_A<T>(x: T) -> i64 { return 2 }\n\
+     fn main() -> i64 {\n\
+     \x20   let p: A_B = A_B { v: 1 }\n\
+     \x20   let q: B = B { v: 2 }\n\
+     \x20   println(g(p))\n\
+     \x20   println(g_A(q))\n\
+     \x20   return 0\n\
+     }\n";
+
 #[test]
-fn a_mangling_collision_is_e0427_and_not_a_link_error() {
+fn two_generic_instances_that_once_collided_reach_their_own_bodies() {
+    Harness::new().value_row("mangling_collision", MANGLING_COLLISION, "1\n2\n");
+}
+
+#[test]
+fn a_generic_instance_symbol_carries_its_arity() {
+    let names = air_function_names(MANGLING_COLLISION);
+    for wanted in ["__mono_g$1$A_B", "__mono_g_A$1$B"] {
+        assert!(
+            names.iter().any(|n| n == wanted),
+            "the arity is what separates `g<A_B>` from `g_A<B>`; {wanted:?} is missing from {names:?}"
+        );
+    }
+}
+
+#[test]
+fn two_nested_functions_of_one_name_are_still_e0427() {
     refuse(
-        "mangling_collision",
-        "struct A_B { v: i64 }\n\
-         struct B { v: i64 }\n\
-         fn g<T>(x: T) -> i64 { return 1 }\n\
-         fn g_A<T>(x: T) -> i64 { return 2 }\n\
-         fn main() -> i64 {\n\
-         \x20   let p: A_B = A_B { v: 1 }\n\
-         \x20   let q: B = B { v: 2 }\n\
-         \x20   let a = g(p)\n\
-         \x20   let b = g_A(q)\n\
-         \x20   return a + b\n\
-         }\n",
-        &["E0427", "__mono_g_A_B"],
+        "nested_duplicate_symbol",
+        "fn outer() -> i64 {\n\
+         \x20   fn dup() -> i64 { return 1 }\n\
+         \x20   return dup()\n\
+         }\n\
+         fn other() -> i64 {\n\
+         \x20   fn dup() -> i64 { return 2 }\n\
+         \x20   return dup()\n\
+         }\n\
+         fn main() -> i64 { return outer() + other() }\n",
+        &["E0427", "`dup`"],
     );
 }
 
@@ -533,4 +567,26 @@ fn a_generic_enum_crossing_a_module_boundary_runs() {
          }\n",
         "23\n",
     );
+}
+
+// type_to_string is the mono key, so a char sharing u32's rendering would give one body two types
+#[test]
+fn a_char_type_argument_does_not_share_a_symbol_with_u32() {
+    let names = air_function_names(
+        "enum Opt<T> { None, Some(T) }\n\
+         fn hold<T>(x: T) -> Opt<T> { return Opt::Some(x) }\n\
+         fn main() -> i64 {\n\
+         \x20   let a = hold('a')\n\
+         \x20   let b = hold(97 as u32)\n\
+         \x20   return 0\n\
+         }\n",
+    );
+    let char_syms: Vec<&String> = names.iter().filter(|n| n.ends_with("$char")).collect();
+    let u32_syms: Vec<&String> = names.iter().filter(|n| n.ends_with("$u32")).collect();
+    assert_eq!(
+        (char_syms.len(), u32_syms.len()),
+        (1, 1),
+        "one instantiation each, and they must not collide\nnames: {names:?}"
+    );
+    assert_ne!(char_syms[0], u32_syms[0], "names: {names:?}");
 }

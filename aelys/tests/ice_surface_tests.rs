@@ -300,7 +300,7 @@ fn main() -> i64 {
 fn ice1_a_length_of_a_temporary_answers_the_length() {
     let h = Harness::new();
     // only the literal temporary is released; the two returned by mkv() still leak
-    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 3, 1);
+    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 6, 1);
     h.assert_legs(6);
 }
 
@@ -422,10 +422,10 @@ fn main() -> i64 {
 #[test]
 fn ice5_the_shapes_that_were_already_fine_are_untouched() {
     let h = Harness::new();
-    h.value_row("ICE-5a", I5_LEN_ON_A_PLACE, "3\n4\n", 1, 1);
-    h.value_row("ICE-5b", I5_AS_SLICE_ON_A_PLACE, "3\n3\n", 1, 1);
-    h.value_row("ICE-5c", I5_AS_SLICE_THROUGH_A_DEREF, "10\n", 1, 1);
-    h.value_row("ICE-5d", I5_RC_GET_ONE_LAYER, "101\n", 1, 1);
+    h.value_row("ICE-5a", I5_LEN_ON_A_PLACE, "3\n4\n", 3, 1);
+    h.value_row("ICE-5b", I5_AS_SLICE_ON_A_PLACE, "3\n3\n", 3, 1);
+    h.value_row("ICE-5c", I5_AS_SLICE_THROUGH_A_DEREF, "10\n", 2, 1);
+    h.value_row("ICE-5d", I5_RC_GET_ONE_LAYER, "101\n", 2, 1);
     h.assert_legs(24);
 }
 
@@ -457,7 +457,7 @@ fn ice6_every_builtin_intercept_still_answers_on_a_place_receiver() {
         "ICE-6",
         I6_EVERY_INTERCEPT_ON_A_PLACE,
         "7\n2\n3\n2\n40\n",
-        4,
+        9,
         4,
     );
     h.assert_legs(6);

@@ -71,6 +71,7 @@ fn run_row(id: &str, files: Files, sources: &SourceOptions, exit: i32, stdout: &
             RuntimeVariant::Rc,
             &LinkRequirement::default(),
             sources,
+            None,
         ) {
             panic!("{id} at {level}: MUST compile and link\nerror:\n{err}");
         }
@@ -331,6 +332,7 @@ fn s33_a_program_that_defines_its_own_option_keeps_it_with_no_diagnostic() {
         RuntimeVariant::Rc,
         &LinkRequirement::default(),
         &sources,
+        None,
     )
     .expect("S3.3-3: the shadowing program MUST compile");
     assert!(

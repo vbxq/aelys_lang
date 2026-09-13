@@ -1,3 +1,5 @@
+// a title stating nothing allocates still pins a non-zero count, since printing moved from the raw counter
+
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
@@ -251,7 +253,7 @@ fn main() -> i64 {
 #[test]
 fn len1_a_view_of_an_array_answers_its_length() {
     let h = Harness::new();
-    h.value_row("LEN-1", L1_ARRAY_VIEW, "3\n", 0, 0);
+    h.value_row("LEN-1", L1_ARRAY_VIEW, "3\n", 1, 0);
     h.assert_legs(6);
 }
 
@@ -269,7 +271,7 @@ fn main() -> i64 {
 #[test]
 fn len2_a_view_of_a_vec_answers_what_vec_len_answers() {
     let h = Harness::new();
-    h.value_row("LEN-2", L2_VEC_VIEW, "4\n0\n", 1, 1);
+    h.value_row("LEN-2", L2_VEC_VIEW, "4\n0\n", 3, 1);
     h.assert_legs(6);
 }
 
@@ -289,7 +291,7 @@ fn main() -> i64 {
 #[test]
 fn len3_mutability_does_not_gate_reading_a_length() {
     let h = Harness::new();
-    h.value_row("LEN-3", L3_MUT_VIEW, "5\n5\n", 0, 0);
+    h.value_row("LEN-3", L3_MUT_VIEW, "5\n5\n", 2, 0);
     h.assert_legs(6);
 }
 
@@ -308,7 +310,7 @@ fn main() -> i64 {
 #[test]
 fn len4_a_length_read_inside_nogc_allocates_nothing() {
     let h = Harness::new();
-    h.value_row("LEN-4", L4_NOGC, "7\n", 0, 0);
+    h.value_row("LEN-4", L4_NOGC, "7\n", 1, 0);
     h.assert_legs(6);
 }
 
@@ -339,7 +341,7 @@ pub nogc fn count(s: &[i64]) -> i64 {
 #[test]
 fn len5_a_length_survives_a_module_boundary() {
     let h = Harness::new();
-    h.module_row("LEN-5", L5_MODULE, "5\n", 0, 0);
+    h.module_row("LEN-5", L5_MODULE, "5\n", 1, 0);
     h.assert_legs(6);
 }
 
@@ -357,7 +359,7 @@ fn main() -> i64 {
 #[test]
 fn len6_a_reslice_reports_the_same_length() {
     let h = Harness::new();
-    h.value_row("LEN-6", L6_RESLICE, "4\n0\n", 0, 0);
+    h.value_row("LEN-6", L6_RESLICE, "4\n0\n", 2, 0);
     h.assert_legs(6);
 }
 
@@ -427,7 +429,7 @@ fn main() -> i64 {
 #[test]
 fn len8_an_empty_view_answers_zero() {
     let h = Harness::new();
-    h.value_row("LEN-8", L8_EMPTY, "0\n", 0, 0);
+    h.value_row("LEN-8", L8_EMPTY, "0\n", 1, 0);
     h.assert_legs(6);
 }
 
@@ -447,7 +449,7 @@ fn main() -> i64 {
 #[test]
 fn len9_a_length_does_not_need_a_binding_first() {
     let h = Harness::new();
-    h.value_row("LEN-9", L9_NO_BINDING, "3\n5\n3\n", 1, 1);
+    h.value_row("LEN-9", L9_NO_BINDING, "3\n5\n3\n", 4, 1);
     h.assert_legs(6);
 }
 
@@ -465,7 +467,7 @@ fn main() -> i64 {
 #[test]
 fn len10_a_sub_range_reports_its_own_length_not_its_bases() {
     let h = Harness::new();
-    h.value_row("LEN-10", L10_SUB_RANGE, "2\n2\n-3\n", 0, 0);
+    h.value_row("LEN-10", L10_SUB_RANGE, "2\n2\n-3\n", 3, 0);
     h.assert_legs(6);
 }
 
@@ -485,7 +487,7 @@ fn main() -> i64 {
 #[test]
 fn len11_a_vec_answers_the_same_length_both_ways() {
     let h = Harness::new();
-    h.value_row("LEN-11", L11_VEC_BOTH_WAYS, "6\n6\n0\n7\n0\n", 1, 1);
+    h.value_row("LEN-11", L11_VEC_BOTH_WAYS, "6\n6\n0\n7\n0\n", 6, 1);
     h.assert_legs(6);
 }
 
@@ -503,7 +505,7 @@ fn main() -> i64 {
 #[test]
 fn len12_a_sized_array_answers_its_length_here_and_as_a_parameter() {
     let h = Harness::new();
-    h.value_row("LEN-12", L12_SIZED_ARRAY, "4\n4\n0\n", 0, 0);
+    h.value_row("LEN-12", L12_SIZED_ARRAY, "4\n4\n0\n", 3, 0);
     h.assert_legs(6);
 }
 
@@ -524,7 +526,7 @@ fn main() -> i64 {
 #[test]
 fn len13_an_array_length_inside_nogc_allocates_nothing() {
     let h = Harness::new();
-    h.value_row("LEN-13", L13_NOGC_ARRAY, "6\n2\n", 0, 0);
+    h.value_row("LEN-13", L13_NOGC_ARRAY, "6\n2\n", 2, 0);
     h.assert_legs(6);
 }
 
@@ -577,7 +579,7 @@ fn main() -> i64 {
 #[test]
 fn len15_a_vec_view_read_inside_nogc_adds_no_allocation() {
     let h = Harness::new();
-    h.value_row("LEN-15", L15_NOGC_VEC_VIEW, "8\n", 1, 1);
+    h.value_row("LEN-15", L15_NOGC_VEC_VIEW, "8\n", 2, 1);
     h.assert_legs(6);
 }
 
@@ -595,7 +597,7 @@ fn main() -> i64 {
 #[test]
 fn len16_a_string_answers_its_length_from_any_receiver() {
     let h = Harness::new();
-    h.value_row("LEN-16", L16_STRING, "5\n2\n4\n", 0, 0);
+    h.value_row("LEN-16", L16_STRING, "5\n2\n4\n", 3, 0);
     h.assert_legs(6);
 }
 

@@ -1,3 +1,5 @@
+// a title stating nothing allocates still pins a non-zero count, since printing moved from the raw counter
+
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
@@ -291,7 +293,7 @@ fn group_std_io_writes_a_line_to_stdout_and_to_stderr_without_allocating() {
             stderr: "bad\n",
             code: 0,
             env: &[],
-            stats: Some((0, 0)),
+            stats: Some((4, 0)),
         },
     );
     h.assert_legs(6);
@@ -320,7 +322,13 @@ fn group_std_io_write_all_reports_every_byte_of_a_long_buffer() {
     h.row(
         "STD-IO-2",
         IO_LONG,
-        &Want::out("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n40\n"),
+        &Want {
+            stdout: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n40\n",
+            stderr: "",
+            code: 0,
+            env: &[],
+            stats: Some((1, 0)),
+        },
     );
     h.assert_legs(6);
 }
@@ -354,7 +362,7 @@ fn group_std_io_env_len_answers_for_a_set_a_missing_and_an_unterminated_name() {
             stderr: "",
             code: 0,
             env: &[("GROUP_STD_IO", "abcdefg")],
-            stats: Some((0, 0)),
+            stats: Some((6, 0)),
         },
     );
     h.assert_legs(6);
@@ -376,7 +384,17 @@ fn main() -> i64 {
 #[test]
 fn group_std_io_unix_time_is_a_plausible_epoch_second_and_never_goes_backwards() {
     let h = Harness::new();
-    h.row("STD-IO-4", IO_TIME, &Want::out("1\n1\n1\n"));
+    h.row(
+        "STD-IO-4",
+        IO_TIME,
+        &Want {
+            stdout: "1\n1\n1\n",
+            stderr: "",
+            code: 0,
+            env: &[],
+            stats: Some((3, 0)),
+        },
+    );
     h.assert_legs(6);
 }
 
@@ -463,7 +481,7 @@ fn group_std_io_externs_link_beside_the_runtime_symbols_they_share() {
             stderr: "",
             code: 0,
             env: &[],
-            stats: Some((3, 0)),
+            stats: Some((5, 2)),
         },
     );
     h.assert_legs(6);

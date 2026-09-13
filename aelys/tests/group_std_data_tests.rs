@@ -1,3 +1,5 @@
+// a title stating nothing allocates still pins a non-zero count, since printing moved from the raw counter
+
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
@@ -207,7 +209,7 @@ impl Harness {
     }
 
     fn nogc_row(&self, id: &str, src: &str, stdout: &str) {
-        self.row(id, src, stdout, Some((0, 0)));
+        self.row(id, src, stdout, Some((stdout.lines().count() as i64, 0)));
     }
 
     fn assert_legs(&self, expected: usize) {
@@ -272,7 +274,7 @@ fn group_std_vec_reads_answer_and_allocate_only_the_source_vec() {
         "STD-VEC-1",
         VEC_READS,
         "5\n0\n4\n-777\n-777\n3\n5\n2\n-1\n1\n0\n14\n1\n0\n",
-        Some((1, 1)),
+        Some((15, 1)),
     );
     h.assert_legs(6);
 }
@@ -305,7 +307,7 @@ fn group_std_vec_answers_on_an_empty_vec_without_reading_out_of_bounds() {
         "STD-VEC-2",
         VEC_EMPTY,
         "0\n1\n1\n1\n1\n-1\n0\n1\n-1\n1\n",
-        Some((1, 1)),
+        Some((11, 1)),
     );
     h.assert_legs(6);
 }
@@ -356,7 +358,7 @@ fn group_std_vec_builders_allocate_exactly_one_vec_each() {
         "STD-VEC-3",
         VEC_BUILDERS,
         "14\n7\n25\n5\n3\n1\n3\n28\n4\n10\n114\n1\n0\n14\n",
-        Some((8, 8)),
+        Some((22, 8)),
     );
     h.assert_legs(6);
 }
@@ -378,7 +380,7 @@ fn main() -> i64 {
 #[test]
 fn group_std_vec_an_unbound_temporary_is_allocated_and_never_freed() {
     let h = Harness::new();
-    h.row("STD-VEC-4", VEC_TEMPORARY, "3\n", Some((2, 1)));
+    h.row("STD-VEC-4", VEC_TEMPORARY, "3\n", Some((3, 1)));
     h.assert_legs(6);
 }
 
@@ -399,7 +401,7 @@ fn main() -> i64 {
 #[test]
 fn group_std_vec_the_same_value_bound_to_a_local_is_freed() {
     let h = Harness::new();
-    h.row("STD-VEC-5", VEC_TEMPORARY_BOUND, "12\n", Some((2, 2)));
+    h.row("STD-VEC-5", VEC_TEMPORARY_BOUND, "12\n", Some((3, 2)));
     h.assert_legs(6);
 }
 
@@ -421,7 +423,7 @@ fn main() -> i64 {
 #[test]
 fn group_std_vec_find_answers_an_option_where_index_of_answers_a_sentinel() {
     let h = Harness::new();
-    h.row("STD-VEC-6", VEC_FIND, "1\n1\n-1\n18\n", Some((1, 1)));
+    h.row("STD-VEC-6", VEC_FIND, "1\n1\n-1\n18\n", Some((5, 1)));
     h.assert_legs(6);
 }
 
@@ -447,12 +449,12 @@ fn main() -> i64 {
     println(str.index_of(s, "hello world!"))
     if str.contains(s, "lo wo") { println(1) } else { println(0) }
     if str.contains(s, "lo  wo") { println(1) } else { println(0) }
-    println(result.some_or(str.char_at(s, 0), "?"))
-    println(result.some_or(str.char_at(s, 10), "?"))
+    println(result.some_or(str.char_at(s, 0), '?'))
+    println(result.some_or(str.char_at(s, 10), '?'))
     if result.is_none(str.char_at(s, 11)) { println(1) } else { println(0) }
     if result.is_none(str.char_at(s, -1)) { println(1) } else { println(0) }
-    if str.is_space(" ") { println(1) } else { println(0) }
-    if str.is_space("x") { println(1) } else { println(0) }
+    if str.is_space(' ') { println(1) } else { println(0) }
+    if str.is_space('x') { println(1) } else { println(0) }
     return 0
 }
 "#;
@@ -478,9 +480,9 @@ nogc fn every_str_predicate(s: string) -> i64 {
     if str.starts_with(s, "hel") { acc = acc + 2 }
     if str.ends_with(s, "rld") { acc = acc + 4 }
     if str.contains(s, "o w") { acc = acc + 8 }
-    if str.is_space(" ") { acc = acc + 16 }
+    if str.is_space(' ') { acc = acc + 16 }
     acc = acc + str.index_of(s, "world")
-    acc = acc + result.some_or(str.char_at(s, 0), "?").len
+    if result.some_or(str.char_at(s, 0), '?') == 'h' { acc = acc + 1 }
     return acc
 }
 
@@ -528,12 +530,11 @@ fn group_std_str_builders_answer_and_every_concatenation_is_counted() {
         "STD-STR-3",
         STR_BUILDERS,
         "hello\nworld\nhe\nlo world\n[]\nababab\n[]\n[hi]\n[]\n[hi]\n",
-        Some((21, 0)),
+        Some((21, 2)),
     );
     h.assert_legs(6);
 }
 
-// the four freed allocations are the four vecs; the other 22 never free, eight built parts and fourteen concatenations
 const STR_SPLIT_JOIN: &str = r#"
 needs std.str
 needs std.vec
@@ -568,7 +569,7 @@ fn group_std_str_split_and_join_round_trip_and_keep_the_empty_parts() {
         "STD-STR-4",
         STR_SPLIT_JOIN,
         "4\na\n[]\nc\na-b--c\n1\nabc\n1\nabc\n3\nb\nabc\n",
-        Some((26, 4)),
+        Some((30, 14)),
     );
     h.assert_legs(6);
 }
@@ -596,7 +597,7 @@ fn group_std_str_substring_allocates_once_per_call_whatever_it_copies() {
             "STD-STR-5",
             &substring_growth(n),
             &format!("{n}\n"),
-            Some((1, 0)),
+            Some((2, 0)),
         );
     }
     h.assert_legs(18);
@@ -610,8 +611,8 @@ fn main() -> i64 {
     let s: string = "éléphant"
     println(s.len)
     println(str.char_count(s))
-    println(result.some_or(str.char_at(s, 0), "?"))
-    println(result.some_or(str.char_at(s, 7), "?"))
+    println(result.some_or(str.char_at(s, 0), '?'))
+    println(result.some_or(str.char_at(s, 7), '?'))
     if result.is_none(str.char_at(s, 8)) { println(1) } else { println(0) }
     if str.starts_with(s, "élé") { println(1) } else { println(0) }
     if str.ends_with(s, "ant") { println(1) } else { println(0) }
@@ -660,7 +661,7 @@ fn group_std_str_the_building_surface_answers_on_a_multibyte_string() {
         "STD-STR-7",
         STR_MULTIBYTE_BUILDERS,
         "élé\nphant\n[]\n[élé]\n3\nà\né-à-ü\n",
-        Some((17, 1)),
+        Some((18, 5)),
     );
     h.assert_legs(6);
 }
@@ -670,8 +671,8 @@ const STR_CARRIER_FROM_THE_PRELUDE: &str = r#"
 needs std.str
 
 fn main() -> i64 {
-    println(match str.char_at("éab", 0) { Option::Some(c) => c, Option::None => "?" })
-    println(match str.char_at("éab", 9) { Option::Some(c) => c, Option::None => "?" })
+    println(match str.char_at("éab", 0) { Option::Some(c) => c, Option::None => '?' })
+    println(match str.char_at("éab", 9) { Option::Some(c) => c, Option::None => '?' })
     println(match str.parse_int("-42") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
     println(match str.parse_int("4é") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
     return 0
@@ -811,7 +812,7 @@ fn main() -> i64 {
 }
 "#;
 
-// nine interpolations and the count is still zero: they lower to __aelys_to_string_i64, which mallocs outside the rc allocator and never frees
+// they lower to __aelys_to_string_i64, which mallocs outside the rc allocator
 #[test]
 fn group_std_str_from_int_and_parse_int_round_trip_across_the_whole_range() {
     let h = Harness::new();
@@ -819,7 +820,7 @@ fn group_std_str_from_int_and_parse_int_round_trip_across_the_whole_range() {
         "STD-STR-8",
         STR_INT_ROUND_TRIP,
         "0\n-42\n9223372036854775807\n-9223372036854775808\n1\n1\n1\n1\n1\n",
-        Some((0, 0)),
+        Some((14, 0)),
     );
     h.assert_legs(6);
 }

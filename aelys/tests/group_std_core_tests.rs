@@ -1,3 +1,5 @@
+// a title stating nothing allocates still pins a non-zero count, since printing moved from the raw counter
+
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
@@ -192,7 +194,9 @@ impl Harness {
                     });
                     assert_eq!(
                         got, want,
-                        "{id} at {tag}/{alloc_name}: MUST be allocs={} frees={}",
+                        "{id} at {tag}/{alloc_name}: MUST be allocs={} frees={}; the count is \
+                         derived from the pinned stdout, one managed string per printed line, so \
+                         a higher one means the nogc surface allocated on its own",
                         want.0, want.1
                     );
                 }
@@ -205,7 +209,7 @@ impl Harness {
     }
 
     fn nogc_row(&self, id: &str, src: &str, stdout: &str) {
-        self.row(id, src, stdout, Some((0, 0)));
+        self.row(id, src, stdout, Some((stdout.lines().count() as i64, 0)));
     }
 
     fn assert_legs(&self, expected: usize) {

@@ -109,6 +109,7 @@ impl Harness {
             RuntimeVariant::Rc,
             &LinkRequirement::default(),
             &sources_with(extra),
+            None,
         ) {
             Ok(_) => {
                 let exe = exe_path_for(root);
@@ -388,9 +389,9 @@ fn group_surface_a_duplicated_global_is_refused_at_both_optimization_levels() {
 }
 
 #[test]
-fn group_surface_an_interpolation_that_goes_nowhere_allocates_no_raw_bytes() {
+fn group_surface_an_interpolation_that_goes_nowhere_allocates_nothing() {
     let h = Harness::new();
-    let _pin = pin_legs("interpolation raw counter", LEVELS.len() * 2);
+    let _pin = pin_legs("interpolation counters", LEVELS.len() * 2);
     h.counted_row(
         "interp_alone",
         "fn main() -> i64 {\n\
@@ -410,8 +411,8 @@ fn group_surface_an_interpolation_that_goes_nowhere_allocates_no_raw_bytes() {
          \x20   return 0\n\
          }\n",
         "é7\n",
-        None,
-        Some((1, 0)),
+        Some((2, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -426,7 +427,7 @@ fn group_surface_a_vec_temporary_read_for_its_length_is_freed() {
          \x20   return 0\n\
          }\n",
         "2\n",
-        Some((1, 1)),
+        Some((2, 1)),
         None,
     );
 }
@@ -495,6 +496,45 @@ fn group_surface_an_interpolation_of_a_dead_local_is_refused() {
          }\n",
         "E0722",
         "`inner` does not live long enough",
+    );
+}
+
+#[test]
+fn group_surface_a_match_arm_binder_of_a_dead_local_is_refused() {
+    let h = Harness::new();
+    h.refuses(
+        "dead_match_binder",
+        "enum B { F(i64), G }\n\
+         \n\
+         fn main() -> i64 {\n\
+         \x20   let anchor: i64 = 42\n\
+         \x20   let mut r: &i64 = &anchor\n\
+         \x20   {\n\
+         \x20       let o: B = B::F(7)\n\
+         \x20       match o { B::F(t) => r = &t, B::G => r = &anchor }\n\
+         \x20   }\n\
+         \x20   println(\"{*r}\")\n\
+         \x20   return 0\n\
+         }\n",
+        "E0722",
+        "`t` does not live long enough",
+    );
+}
+
+#[test]
+fn group_surface_a_missing_external_symbol_is_not_a_compiler_bug() {
+    let h = Harness::new();
+    h.refuses(
+        "missing_extern",
+        "unsafe extern fn group_surface_no_such_symbol() -> i64\n\
+         \n\
+         fn main() -> i64 {\n\
+         \x20   if false { unsafe { println(group_surface_no_such_symbol()) } }\n\
+         \x20   println(1)\n\
+         \x20   return 0\n\
+         }\n",
+        "E0903",
+        "add `-L <dir> -l <name>`",
     );
 }
 
@@ -726,7 +766,7 @@ fn group_surface_a_vec_gives_back_and_a_missing_method_names_what_exists() {
          \x20   return 0\n\
          }\n",
         "3\n2\n",
-        Some((1, 1)),
+        Some((3, 1)),
         None,
     );
     h.refuses(
@@ -883,7 +923,7 @@ fn group_surface_a_string_for_each_yields_characters_not_bytes() {
          \n\
          fn joined(s: string) -> string {{\n\
          \x20   let mut acc: string = \"|\"\n\
-         \x20   for c in s {{ acc = acc + c + \"|\" }}\n\
+         \x20   for c in s {{ acc = acc + string::from_char(c) + \"|\" }}\n\
          \x20   return acc\n\
          }}\n\
          \n\
