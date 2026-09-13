@@ -320,11 +320,14 @@ fn parse_leading_int(text: &str) -> Option<i64> {
 #[test]
 fn golden_vs_should_be_annotations() {
     let golden = read_golden();
-    if golden.is_empty() {
-        eprintln!("golden not generated yet; skipping annotation cross-check");
-        return;
-    }
+    assert!(
+        !golden.is_empty(),
+        "golden {:?} is missing or empty; generate it with AELYS_REGEN_GOLDEN=1. An absent \
+         golden used to turn this row into a pass that compared nothing",
+        golden_path()
+    );
 
+    let mut checked = 0usize;
     let mut mismatches: Vec<String> = Vec::new();
     for (name, verdict) in &golden {
         let Verdict::Exit(code) = verdict else {
@@ -335,6 +338,7 @@ fn golden_vs_should_be_annotations() {
             Err(_) => continue,
         };
         if let Some(annotation) = extract_should_be(&src) {
+            checked += 1;
             let expected = annotation.rem_euclid(256) as i32;
             if *code != expected {
                 mismatches.push(format!(
@@ -344,17 +348,19 @@ fn golden_vs_should_be_annotations() {
         }
     }
 
-    if mismatches.is_empty() {
-        eprintln!(
-            "annotation cross-check: all '// should be N' annotations agree with the golden (mod 256)"
-        );
-    } else {
-        eprintln!(
-            "[soft] {} fixture(s) where the golden exit code disagrees with the '// should be N' annotation:",
-            mismatches.len()
-        );
-        for line in &mismatches {
-            eprintln!("  {line}");
-        }
-    }
+    assert!(
+        checked > 0,
+        "no fixture carried a `// should be N` annotation next to a `return`, so this row \
+         compared nothing at all"
+    );
+    assert!(
+        mismatches.is_empty(),
+        "{} fixture(s) where the golden exit code disagrees with the `// should be N` \
+         annotation:\n{}",
+        mismatches.len(),
+        mismatches.join("\n")
+    );
+    eprintln!(
+        "annotation cross-check: {checked} annotated fixture(s) agree with the golden (mod 256)"
+    );
 }

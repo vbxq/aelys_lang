@@ -1868,7 +1868,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "101\n7919\n", 2, 2),
+        Oracle::ExitOutStats(0, "101\n7919\n", 4, 2),
     ),
     (
         // still be freed exactly once. this is what catches emit_vec_detach's pointer form
@@ -2183,7 +2183,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "9\n1\n", 3, 1),
+        Oracle::ExitOutStats(0, "9\n1\n", 5, 1),
     ),
     (
         "SI-PA34",
@@ -2210,7 +2210,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         "SI-PA36",
@@ -2225,7 +2225,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "66\n", 1, 1),
+        Oracle::ExitOutStats(0, "66\n", 2, 1),
     ),
     (
         "SI-PA37",
@@ -2240,7 +2240,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "38\n", 2, 2),
+        Oracle::ExitOutStats(0, "38\n", 3, 2),
     ),
     (
         "SI-PA38",
@@ -2489,7 +2489,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "7\n7\n", 3, 1),
+        Oracle::ExitOutStats(0, "7\n7\n", 5, 1),
     ),
     (
         "SI-PAA04",
@@ -2553,7 +2553,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "101\n", 1, 1),
+        Oracle::ExitOutStats(0, "101\n", 2, 1),
     ),
     (
         "SI-PA56",
@@ -4108,10 +4108,11 @@ fn group_pa_choke_set_is_tracked() {
             occurrences(&all, "Rvalue::Deref("),
             occurrences(&repo_all, "addr_of_own_temp("),
         ),
-        (0, 3, 6, 4, 5),
+        (3, 4, 7, 5, 6),
         "the choke set moved; the first three are counted over air/src/lower minus place.rs, \
          `Rvalue::Deref(` over all of air/src/lower, and `addr_of_own_temp(` over the repo minus \
-         target as one definition and four callers"
+         target as one definition and five callers. str_escape.rs reads these forms to decide \
+         whether a string slot is still the only owner, and creates none of them"
     );
 }
 
@@ -4292,7 +4293,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         "S2-A02",
@@ -4304,7 +4305,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         "S2-A03",
@@ -4316,7 +4317,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         "S2-A04",
@@ -4355,7 +4356,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         // seven elements, so the length and the element cannot coincide
@@ -4368,7 +4369,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         "S2-A08",
@@ -4380,7 +4381,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "7\n", 1, 1),
+        Oracle::ExitOutStats(0, "7\n", 2, 1),
     ),
     (
         "S2-A09",
@@ -4392,7 +4393,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "7\n", 1, 1),
+        Oracle::ExitOutStats(0, "7\n", 2, 1),
     ),
     (
         "S2-A10",
@@ -4405,7 +4406,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n", 2, 1),
     ),
     (
         // the read shape 's interprocedural half must not cost
@@ -4455,7 +4456,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "1\n", 1, 1),
+        Oracle::ExitOutStats(0, "1\n", 2, 1),
     ),
     (
         "S2-M07",
@@ -4469,7 +4470,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "1\n99\n", 1, 1),
+        Oracle::ExitOutStats(0, "1\n99\n", 3, 1),
     ),
     (
         // the base is born and buried inside the lambda, so nothing it borrows can outlive it
@@ -4502,7 +4503,7 @@ fn main() -> i64 {
     return z
 }
 "#,
-        Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
+        Oracle::ExitOutStats(0, "11\n99\n", 4, 2),
     ),
     // the seven rows fenced, now correct programs. the aliased ones carry a divergence as
     (
@@ -4530,7 +4531,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "99\n1\n", 2, 2),
+        Oracle::ExitOutStats(0, "99\n1\n", 4, 2),
     ),
     (
         "S2-M02",
@@ -4575,7 +4576,7 @@ fn main() -> i64 {
     return z
 }
 "#,
-        Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
+        Oracle::ExitOutStats(0, "11\n99\n", 4, 2),
     ),
     (
         "S2-M12",
@@ -4593,7 +4594,7 @@ fn main() -> i64 {
     return z
 }
 "#,
-        Oracle::ExitOutStats(0, "11\n", 2, 2),
+        Oracle::ExitOutStats(0, "11\n", 3, 2),
     ),
     (
         // a re-slice inside the callee, so the write's dest is two borrows from the referent
@@ -4613,7 +4614,7 @@ fn main() -> i64 {
     return z
 }
 "#,
-        Oracle::ExitOutStats(0, "11\n", 2, 2),
+        Oracle::ExitOutStats(0, "11\n", 3, 2),
     ),
     (
         "S2-M16",
@@ -4631,7 +4632,7 @@ fn main() -> i64 {
     return z
 }
 "#,
-        Oracle::ExitOutStats(0, "99\n", 0, 0),
+        Oracle::ExitOutStats(0, "99\n", 1, 0),
     ),
     (
         "S2-X02",
@@ -4646,7 +4647,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "99\n11\n", 2, 2),
+        Oracle::ExitOutStats(0, "99\n11\n", 4, 2),
     ),
     (
         "S2-X04",
@@ -4659,7 +4660,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "44\n", 1, 1),
+        Oracle::ExitOutStats(0, "44\n", 2, 1),
     ),
     (
         "S2-X03",
@@ -4673,7 +4674,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n44\n", 1, 1),
+        Oracle::ExitOutStats(0, "22\n44\n", 3, 1),
     ),
     (
         // by-value capture holds this: the env's share detaches on push, and frees=1 is the leak
@@ -4693,7 +4694,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 3, 1),
+        Oracle::ExitOutStats(0, "22\n", 4, 1),
     ),
     (
         "S2-T01",
@@ -5284,7 +5285,8 @@ fn main() -> i64 {
     }
 }
 
-#[cfg(feature = "asan-invariants")]
+// the module is built unconditionally so an import refactor cannot silently unbuild the asan tier
+#[cfg_attr(not(feature = "asan-invariants"), allow(dead_code))]
 mod asan {
     use super::*;
 
@@ -5444,12 +5446,14 @@ fn main() -> i64 {
         }
     }
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn asan_tier_value_rows_are_clean() {
         let h = Harness::new();
         let Some(_archive) = build_asan_archive(h.dir.path()) else {
-            return;
+            panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
+        let mut instrumented_and_run = 0usize;
 
         for (id, src, expected) in ASAN_ROWS {
             let path = h.write(id, "asan", src);
@@ -5461,13 +5465,11 @@ fn main() -> i64 {
             )
             .is_err()
             {
-                eprintln!("{id}: toolchain unavailable, skipping");
-                return;
+                panic!("{id}: the ASan tier must compile its row");
             }
             let object = path.with_extension(if cfg!(windows) { "obj" } else { "o" });
             if !object.is_file() {
-                eprintln!("{id}: object not produced, skipping");
-                return;
+                panic!("{id}: the ASan tier must produce an object");
             }
             let exe = h.dir.path().join(format!("{}_asan_exe", slug(id, "")));
             let link = Command::new("clang")
@@ -5479,8 +5481,7 @@ fn main() -> i64 {
                 .arg(&exe)
                 .output();
             let Ok(link) = link else {
-                eprintln!("{id}: clang unavailable, skipping");
-                return;
+                panic!("{id}: the ASan tier must link");
             };
             assert!(
                 link.status.success(),
@@ -5493,6 +5494,7 @@ fn main() -> i64 {
                 .output()
                 .expect("run the instrumented exe");
             let stderr = String::from_utf8_lossy(&run.stderr);
+            instrumented_and_run += 1;
             assert_eq!(
                 run.status.code(),
                 Some(*expected),
@@ -5503,9 +5505,16 @@ fn main() -> i64 {
                 "{id}: ASan reports a memory error\nstderr:\n{stderr}"
             );
         }
+
+        assert_eq!(
+            instrumented_and_run,
+            ASAN_ROWS.len(),
+            "a sweep that instrumented fewer rows than it pins reported a confident zero"
+        );
     }
 
     // the nested vec shape was a reproducible use-after-free returning 77; it now fails closed, so
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn asan_tier_nested_vec_still_fails_closed() {
         let h = Harness::new();
@@ -6089,7 +6098,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "1\n", 1, 1),
+        Oracle::ExitOutStats(0, "1\n", 2, 1),
     ),
     (
         "SI-N72",
@@ -6108,7 +6117,7 @@ fn host() -> i64 {
 }
 fn main() -> i64 { return host() }
 "#,
-        Oracle::ExitOutStats(0, "1\n", 1, 1),
+        Oracle::ExitOutStats(0, "1\n", 2, 1),
     ),
 ];
 
@@ -6356,25 +6365,6 @@ fn main() -> i64 {
         no_backend_error: false,
     },
     SymRow {
-        // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` mangle
-        id: "SI-S24",
-        code: "E0427",
-        src: r#"
-struct B { v: i64 }
-struct A_B { v: i64 }
-fn f<T>(x: T) -> i64 { return 1 }
-fn f_A<T>(x: T) -> i64 { return 2 }
-fn main() -> i64 {
-    let b = B { v: 0 }
-    let ab = A_B { v: 0 }
-    println(f(ab))
-    println(f_A(b))
-    return 0
-}
-"#,
-        no_backend_error: true,
-    },
-    SymRow {
         id: "L1",
         code: "E0428",
         src: r#"
@@ -6388,7 +6378,22 @@ fn main() -> i64 {
     },
 ];
 
+const SI_S24_ONCE_COLLIDED: &str = r#"
+struct B { v: i64 }
+struct A_B { v: i64 }
+fn f<T>(x: T) -> i64 { return 1 }
+fn f_A<T>(x: T) -> i64 { return 2 }
+fn main() -> i64 {
+    let b = B { v: 0 }
+    let ab = A_B { v: 0 }
+    println(f(ab))
+    println(f_A(b))
+    return 0
+}
+"#;
+
 const GROUP_N_SYM_CONTROLS: &[(&str, &str, Oracle)] = &[
+    ("SI-S24ctl", SI_S24_ONCE_COLLIDED, Oracle::ExitOut(0, "1\n2\n")),
     (
         "SI-S00",
         r#"
@@ -6550,33 +6555,21 @@ fn s07_e0427_sees_through_a_lambda_body_and_names_the_parent() {
 }
 
 #[test]
-fn s06_e0427_names_the_mangled_symbol_and_both_air_spans() {
-    let h = Harness::new();
-    let src = GROUP_N_SYM
-        .iter()
-        .find(|row| row.id == "SI-S24")
-        .expect("SI-S24 must exist")
-        .src;
+fn s06_two_generic_instances_that_once_collided_reach_distinct_symbols() {
     for (name, opt) in REJECT_LEVELS {
-        let rendered = h.reject("SI-S06", name, src, *opt);
-        assert!(
-            rendered.contains("same symbol `__mono_f_A_B`"),
-            "SI-S06 at {name} MUST name the mangled symbol, got:\n{rendered}"
-        );
-        assert_eq!(
-            (marker_lines(&rendered, '^'), marker_lines(&rendered, '-')),
-            (1, 1),
-            "SI-S06 at {name} MUST draw one label per definition, got:\n{rendered}"
-        );
-        assert!(
-            !rendered.contains("inside `"),
-            "SI-S06 at {name} has no typed declaration for the symbol, so no parent can be \
-             named, got:\n{rendered}"
-        );
-        assert!(
-            rendered.contains("type arguments joined by"),
-            "SI-S06 at {name} MUST explain the mangling, not nesting, got:\n{rendered}"
-        );
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("si_s06.aelys");
+        std::fs::write(&path, SI_S24_ONCE_COLLIDED).expect("write fixture");
+        let air = aelys_driver::lower_file_to_air(&path, *opt)
+            .unwrap_or_else(|err| panic!("SI-S06 at {name} must lower, got:\n{err}"));
+        let names: Vec<&str> = air.functions.iter().map(|f| f.name.as_str()).collect();
+        for wanted in ["__mono_f$1$A_B", "__mono_f_A$1$B"] {
+            assert!(
+                names.contains(&wanted),
+                "SI-S06 at {name}: the arity is what separates `f<A_B>` from `f_A<B>`; {wanted:?} \
+                 is missing from {names:?}"
+            );
+        }
     }
 }
 
@@ -6801,7 +6794,7 @@ fn stage3_unique_mut_slice_writes_only_a_unique_buffer() {
         &h,
         "S3-UMS-unique",
         STAGE3_UNIQUE_MUT_SLICE,
-        Oracle::ExitOutStats(0, "101\n", 1, 1),
+        Oracle::ExitOutStats(0, "101\n", 2, 1),
     );
     h.assert_measured("S3-UMS-unique");
 }
@@ -6825,7 +6818,7 @@ fn stage3_unique_mut_slice_is_effect_free_inside_nogc() {
         &h,
         "S3-UMS-nogc",
         STAGE3_NOGC_MUT_SLICE,
-        Oracle::ExitOutStats(0, "101\n", 1, 1),
+        Oracle::ExitOutStats(0, "101\n", 2, 1),
     );
     h.assert_measured("S3-UMS-nogc");
 }
@@ -6847,7 +6840,7 @@ fn stage3_unique_mut_slice_splices_non_i64_element_sizes() {
         &h,
         "S3-UMS-i32",
         STAGE3_I32_MUT_SLICE,
-        Oracle::ExitOutStats(0, "101\n", 1, 1),
+        Oracle::ExitOutStats(0, "101\n", 2, 1),
     );
     h.assert_measured("S3-UMS-i32");
 }
@@ -7110,25 +7103,25 @@ fn stage6_managed_nogc_boundary_is_on_the_default_invariant_path() {
         &h,
         "SI-NG-read",
         STAGE6_DEFAULT_R1,
-        Oracle::ExitOutStats(0, "3\n7919\n", 1, 1),
+        Oracle::ExitOutStats(0, "3\n7919\n", 3, 1),
     );
     run_row(
         &h,
         "SI-NG-compute-normals",
         STAGE6_DEFAULT_R2,
-        Oracle::ExitOutStats(0, "101\n7919\n", 2, 2),
+        Oracle::ExitOutStats(0, "101\n7919\n", 4, 2),
     );
     run_row(
         &h,
         "SI-NG-shared-index",
         STAGE6_DEFAULT_R3,
-        Oracle::ExitOutStats(0, "7919\n", 1, 1),
+        Oracle::ExitOutStats(0, "7919\n", 2, 1),
     );
     run_row(
         &h,
         "SI-NG-kept-callback",
         STAGE6_DEFAULT_KEEP_CALLBACK,
-        Oracle::ExitOutStats(0, "2\n", 0, 0),
+        Oracle::ExitOutStats(0, "2\n", 1, 0),
     );
     run_rejects(&h, STAGE6_DEFAULT_REJECTS);
     h.assert_measured("SI-NG-boundary");
@@ -7723,7 +7716,7 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
                 "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n",
             ),
         ],
-        ModOracle::Stats(9, "9\n", 0, 0),
+        ModOracle::Stats(9, "9\n", 1, 0),
     ),
     (
         "SI-MOD-E0602-kept",
