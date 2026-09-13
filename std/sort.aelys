@@ -1,9 +1,9 @@
 needs std.str
 
-pub nogc fn insertion_sort(s: &mut [i64]) {
+pub nogc fn insertion_sort<T: ord>(s: &mut [T]) {
     let mut i: i64 = 1
     while i < s.len {
-        let x: i64 = s[i]
+        let x: T = s[i]
         let mut j: i64 = i - 1
         while j >= 0 and s[j] > x {
             s[j + 1] = s[j]
@@ -14,7 +14,7 @@ pub nogc fn insertion_sort(s: &mut [i64]) {
     }
 }
 
-pub nogc fn binary_search(s: &[i64], x: i64) -> i64 {
+pub nogc fn binary_search<T: ord>(s: &[T], x: T) -> i64 {
     let mut lo: i64 = 0
     let mut hi: i64 = s.len - 1
     while lo <= hi {
@@ -25,6 +25,7 @@ pub nogc fn binary_search(s: &[i64], x: i64) -> i64 {
     return -1
 }
 
+// `ord` does not hold of `string`, so ordering strings stays its own entry point
 pub nogc fn strings(s: &mut [string]) {
     let mut i: i64 = 1
     while i < s.len {

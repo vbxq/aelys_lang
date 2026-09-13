@@ -2,7 +2,7 @@ needs Option, Result from std.result
 
 pub nogc fn is_empty(s: string) -> bool { return s.len == 0 }
 
-// s[i] counts characters and s.len counts bytes, so these two speak the byte offsets s.bytes takes
+// i is a byte offset here, the same index s.bytes takes and the same unit s.len counts
 pub nogc fn is_char_boundary(s: string, i: i64) -> bool {
     if i < 0 { return false }
     if i > s.len { return false }
@@ -44,10 +44,14 @@ nogc fn byte_offset(s: string, k: i64) -> i64 {
     return s.len
 }
 
-pub nogc fn char_at(s: string, i: i64) -> Option<string> {
+pub nogc fn char_at(s: string, i: i64) -> Option<char> {
     if i < 0 { return Option::None }
-    if i >= char_count(s) { return Option::None }
-    return Option::Some(s[i])
+    let mut k: i64 = 0
+    for c in s {
+        if k == i { return Option::Some(c) }
+        k = k + 1
+    }
+    return Option::None
 }
 
 pub fn substring(s: string, start: i64, end: i64) -> string {
@@ -131,8 +135,8 @@ pub fn repeat(s: string, n: i64) -> string {
     return out
 }
 
-pub nogc fn is_space(c: string) -> bool {
-    return c == " " or c == "\t" or c == "\n" or c == "\r"
+pub nogc fn is_space(c: char) -> bool {
+    return c == ' ' or c == '\t' or c == '\n' or c == '\r'
 }
 
 nogc fn space_byte(b: u8) -> bool {

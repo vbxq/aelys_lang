@@ -1,57 +1,58 @@
 needs Option from std.result
 
+// there is no bound for arithmetic, so the element stays i64 until one exists
 pub nogc fn sum(s: &[i64]) -> i64 {
     let mut acc: i64 = 0
     for x in s { acc = acc + x }
     return acc
 }
 
-pub nogc fn first(s: &[i64]) -> Option<i64> {
+pub nogc fn first<T>(s: &[T]) -> Option<T> {
     if s.len == 0 { return Option::None }
     return Option::Some(s[0])
 }
 
-pub nogc fn last(s: &[i64]) -> Option<i64> {
+pub nogc fn last<T>(s: &[T]) -> Option<T> {
     if s.len == 0 { return Option::None }
     return Option::Some(s[s.len - 1])
 }
 
-pub nogc fn max(s: &[i64]) -> Option<i64> {
+pub nogc fn max<T: ord>(s: &[T]) -> Option<T> {
     if s.len == 0 { return Option::None }
-    let mut m: i64 = s[0]
+    let mut m: T = s[0]
     for x in s {
         if x > m { m = x }
     }
     return Option::Some(m)
 }
 
-pub nogc fn min(s: &[i64]) -> Option<i64> {
+pub nogc fn min<T: ord>(s: &[T]) -> Option<T> {
     if s.len == 0 { return Option::None }
-    let mut m: i64 = s[0]
+    let mut m: T = s[0]
     for x in s {
         if x < m { m = x }
     }
     return Option::Some(m)
 }
 
-pub nogc fn index_of(s: &[i64], x: i64) -> i64 {
+pub nogc fn index_of<T: eq>(s: &[T], x: T) -> i64 {
     for i in 0..s.len {
         if s[i] == x { return i }
     }
     return -1
 }
 
-pub nogc fn find(s: &[i64], x: i64) -> Option<i64> {
+pub nogc fn find<T: eq>(s: &[T], x: T) -> Option<i64> {
     let i: i64 = index_of(s, x)
     if i < 0 { return Option::None }
     return Option::Some(i)
 }
 
-pub nogc fn contains(s: &[i64], x: i64) -> bool {
+pub nogc fn contains<T: eq>(s: &[T], x: T) -> bool {
     return index_of(s, x) >= 0
 }
 
-pub nogc fn eq(a: &[i64], b: &[i64]) -> bool {
+pub nogc fn eq<T: eq>(a: &[T], b: &[T]) -> bool {
     if a.len != b.len { return false }
     for i in 0..a.len {
         if a[i] != b[i] { return false }
@@ -59,24 +60,24 @@ pub nogc fn eq(a: &[i64], b: &[i64]) -> bool {
     return true
 }
 
-pub nogc fn is_sorted(s: &[i64]) -> bool {
+pub nogc fn is_sorted<T: ord>(s: &[T]) -> bool {
     for i in 1..s.len {
         if s[i] < s[i - 1] { return false }
     }
     return true
 }
 
-pub nogc fn fill(s: &mut [i64], x: i64) {
+pub nogc fn fill<T>(s: &mut [T], x: T) {
     for i in 0..s.len { s[i] = x }
 }
 
-pub nogc fn swap(s: &mut [i64], i: i64, j: i64) {
-    let t: i64 = s[i]
+pub nogc fn swap<T>(s: &mut [T], i: i64, j: i64) {
+    let t: T = s[i]
     s[i] = s[j]
     s[j] = t
 }
 
-pub nogc fn reverse(s: &mut [i64]) {
+pub nogc fn reverse<T>(s: &mut [T]) {
     let mut i: i64 = 0
     let mut j: i64 = s.len - 1
     while i < j {
