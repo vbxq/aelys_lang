@@ -644,7 +644,6 @@ selftest() {
     local d="$WORK/st"
     mkdir -p "$d"
     local wrap="$d/planting-cli"
-    # the wrapper keys on the leg directory because compile_leg always names the source prog.aelys
     cat > "$wrap" <<EOF
 #!/usr/bin/env bash
 "$cli" "\$@"

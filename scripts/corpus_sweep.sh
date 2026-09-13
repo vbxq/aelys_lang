@@ -3,7 +3,6 @@ set -u
 ROOT="${AELYS_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 MODE="$1"; shift
 
-# # clone. cow is generated from scripts/cow_probes.py, so it exists on any checkout.
 COW=$(mktemp -d)
 FIX="$COW" python3 "$ROOT/scripts/cow_probes.py" || { echo "corpus_sweep.sh: cow probes failed" >&2; exit 5; }
 COW_N=$(ls "$COW"/*.aelys 2>/dev/null | wc -l)
@@ -31,11 +30,17 @@ abspath() {
   ( cd "$(dirname "$p")" && printf '%s/%s\n' "$(pwd)" "$(basename "$p")" )
 }
 
-run_one() { # <cli> <src> <level> <workdir> -> "exit|stdout" or "COMPILEFAIL"
+run_one() { # <cli> <src> <level> <workdir> -> "exit|stdout" or "COMPILEFAIL|<code>"
   local cli="$1" src="$2" lvl="$3" wd="$4"
   local b; b=$(basename "$src" .aelys)
   cp "$src" "$wd/$b.aelys"
-  ( cd "$wd" && "$cli" compile "$b.aelys" "$lvl" >/dev/null 2>&1 ) || { echo "COMPILEFAIL"; return; }
+  # the previous level's binary would be run as this level's answer
+  command rm -f -- "$wd/$b"
+  local err code
+  err=$(cd "$wd" && "$cli" compile "$b.aelys" "$lvl" --no-color 2>&1 >/dev/null) || {
+    code=$(printf '%s' "$err" | command grep -oE 'error\[E[0-9]{4}\]' | head -1)
+    echo "COMPILEFAIL|${code:-nocode}"; return
+  }
   local out rc
   out=$(cd "$wd" && timeout 25 "./$b" 2>/dev/null); rc=$?
   echo "$rc|$(echo "$out" | head -c 200000 | tr '\n' '~')"
@@ -48,8 +53,8 @@ if [ "$MODE" = diff ]; then
     n=$((n+1))
     a=$(run_one "$OLD" "$f" -O0 "$WA")
     b=$(run_one "$NEW" "$f" -O0 "$WB")
-    [ "$a" = COMPILEFAIL ] && cf=$((cf+1))
-    [ "$b" = COMPILEFAIL ] && cf=$((cf+1))
+    case "$a" in COMPILEFAIL*) cf=$((cf+1)) ;; esac
+    case "$b" in COMPILEFAIL*) cf=$((cf+1)) ;; esac
     if [ "$a" != "$b" ]; then
       b2=$(cd "$WB" && timeout 25 "./$(basename $f .aelys)" 2>/dev/null; echo "rc=$?")
       b3=$(cd "$WB" && timeout 25 "./$(basename $f .aelys)" 2>/dev/null; echo "rc=$?")
@@ -69,7 +74,9 @@ elif [ "$MODE" = xo ]; then
     n=$((n+1)); sigs=(); levels=()
     for O in -O0 -O1 -O2 -O3; do
       r=$(run_one "$CLI" "$f" "$O" "$W")
-      if [ "$r" != "COMPILEFAIL" ]; then sigs+=("$r"); levels+=("$O"); else cf=$((cf+1)); fi
+      # a refusal is a verdict, so it is compared and not dropped: dropping it is what hid the class
+      sigs+=("$r"); levels+=("$O")
+      case "$r" in COMPILEFAIL*) cf=$((cf+1)) ;; esac
     done
     if [ ${#sigs[@]} -gt 1 ]; then
       first="${sigs[0]}"

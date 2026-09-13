@@ -21,6 +21,7 @@ aelys-common	aelys_common	lib
 aelys-core	aelys_core	doc
 aelys-core	aelys_core	lib
 aelys	cross_o_differential_tests	test
+aelys	cross_o_value_net_tests	test
 aelys-driver	aelys_driver	doc
 aelys-driver	aelys_driver	lib
 aelys-driver	emit_llvm_ir_mode_tests	test
@@ -55,6 +56,8 @@ aelys	governance_tests	test
 aelys	group_std_core_tests	test
 aelys	group_std_data_tests	test
 aelys	group_std_io_tests	test
+aelys	group_surface_tests	test
+aelys	group_v01_tests	test
 aelys	ice_surface_tests	test
 aelys	implicit_widening_tests	test
 aelys	len_surface_tests	test
@@ -107,6 +110,12 @@ aelys	run3_stage3_cow_tests	test
 aelys	run3_stage4_ref_mutability_tests	test
 aelys	run3_stage4_slice_views_tests	test
 aelys	run3_stage6_boundary_tests	test
+aelys	s0b_fold_and_cast_tests	test
+aelys	s11_bytes_no_place_tests	test
+aelys	s12_char_surface_tests	test
+aelys	s13_stage1_fixes_tests	test
+aelys	s4c_sweep_fixes_tests	test
+aelys	s4d_arm_scope_tests	test
 aelys	sema_adversarial_tests	test
 aelys-sema	aelys_sema	doc
 aelys-sema	aelys_sema	lib
@@ -129,11 +138,14 @@ aelys	sema_type_var_tests	test
 aelys	stage3b_rejection_tests	test
 aelys	stage3c_tests	test
 aelys	stage3d_tests	test
+aelys	str_bytes_surface_tests	test
 aelys	string_interpolation_tests	test
 aelys-syntax	aelys_syntax	doc
 aelys-syntax	aelys_syntax	lib
 aelys	surface_stage3_tests	test
 aelys	syntax_span_test	test
+aelys	temp_elision_tests	test
+aelys	v01_stage2_generics_tests	test
+aelys	v01b_stage1_string_header_tests	test
 aelys	vec_surface_tests	test
 aelys	vec_value_semantics_tests	test
-aelys	workspace_crates_compile	test

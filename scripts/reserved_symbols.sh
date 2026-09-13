@@ -14,8 +14,9 @@ GREP=/usr/bin/grep
 
 # # an extern names a foreign symbol and does not define it, so its `fn __` is neutralised before the scan
 STRIP_EXTERN='s/(^|[^A-Za-z0-9_])extern[[:space:]]+fn[[:space:]]+__/\1extern DECL __/g'
-DEF_RE='(^|[^A-Za-z0-9_])(nogc[[:space:]]+)?fn[[:space:]]+__[A-Za-z0-9_]*\('
-EXTERN_RE='(^|[^A-Za-z0-9_])extern[[:space:]]+fn[[:space:]]+__[A-Za-z0-9_]*\('
+# an aelys identifier is unicode alphanumeric and a reserved name can carry generic arguments, so an ascii class stops short of both
+DEF_RE='(^|[^A-Za-z0-9_])(nogc[[:space:]]+)?fn[[:space:]]+__[^([:space:]]*\('
+EXTERN_RE='(^|[^A-Za-z0-9_])extern[[:space:]]+fn[[:space:]]+__[^([:space:]]*\('
 # # the diagnostic a fixture must assert for its reserved-name definition to be a proof of rejection
 REJECTION_CODE=E0428
 
@@ -62,7 +63,40 @@ emit_probe() {
         cat "$EMIT_DIR/compile.log" >&2
         exit 3
     fi
-    "$GREP" -oE '^define[^@]*@[A-Za-z0-9_.$]+' "$EMIT_DIR/probe.ll" | sed 's/.*@//' | sort -u
+    defined_symbols "$EMIT_DIR/probe.ll" | sort -u
+}
+
+# llvm quotes and hex escapes names outside its plain charset, so `$` and non ascii identifiers hide from a charset regex
+defined_symbols() {
+    awk '
+        function unhex(pair,   hi, lo) {
+            hi = index("0123456789abcdef", tolower(substr(pair, 1, 1))) - 1
+            lo = index("0123456789abcdef", tolower(substr(pair, 2, 1))) - 1
+            if (hi < 0 || lo < 0) return -1
+            return hi * 16 + lo
+        }
+        /^define/ {
+            at = index($0, "@")
+            if (at == 0) next
+            rest = substr($0, at + 1)
+            if (substr(rest, 1, 1) != "\"") {
+                if (match(rest, /^[-A-Za-z0-9_.$]+/)) print substr(rest, 1, RLENGTH)
+                next
+            }
+            rest = substr(rest, 2)
+            end = index(rest, "\"")
+            if (end == 0) next
+            raw = substr(rest, 1, end - 1)
+            name = ""
+            while ((esc = index(raw, "\\")) > 0) {
+                byte = unhex(substr(raw, esc + 1, 2))
+                if (byte < 0) break
+                name = name substr(raw, 1, esc - 1) sprintf("%c", byte)
+                raw = substr(raw, esc + 3)
+            }
+            print name raw
+        }
+    ' "$1"
 }
 
 case "${1:-all}" in
@@ -95,8 +129,9 @@ RESERVED_SYMS=0
 UNCLASSIFIED_SYMS=
 LAMBDA_SYMS=0
 HAVE_MONO=0
-for sym in $EMITTED; do
-    if printf '%s\n' "$DECLARED" | grep -qx "$sym"; then
+while IFS= read -r sym; do
+    [ -n "$sym" ] || continue
+    if printf '%s\n' "$DECLARED" | grep -qxF -- "$sym"; then
         USER_SYMS=$((USER_SYMS + 1))
         continue
     fi
@@ -108,10 +143,10 @@ for sym in $EMITTED; do
                 __mono_*) HAVE_MONO=1 ;;
             esac
             ;;
-        *) UNCLASSIFIED_SYMS="$UNCLASSIFIED_SYMS $sym" ;;
+        *) UNCLASSIFIED_SYMS="$UNCLASSIFIED_SYMS$sym"$'\n' ;;
     esac
-done
-UNCLASSIFIED=$(printf '%s\n' $UNCLASSIFIED_SYMS | grep -c . )
+done <<< "$EMITTED"
+UNCLASSIFIED=$(printf '%s' "$UNCLASSIFIED_SYMS" | grep -c .)
 
 TRACKED=$(git ls-files '*.aelys' | wc -l)
 DECLS=$(find . -path ./target -prune -o -name '*.aelys' -print0 \
@@ -156,7 +191,8 @@ echo "  of those smuggling a definition in         : $RUST_DECLS   (over-rejecti
 
 rc=0
 [ "$UNCLASSIFIED" -eq 0 ] || {
-    echo "FAIL: the compiler emits a function symbol outside the reserved namespace:$UNCLASSIFIED_SYMS" >&2
+    echo "FAIL: the compiler emits a function symbol outside the reserved namespace:" >&2
+    printf '%s' "$UNCLASSIFIED_SYMS" >&2
     rc=1
 }
 [ "$USER_SYMS" -gt 0 ] || { echo "FAIL: the probe module emitted no user symbol" >&2; rc=1; }

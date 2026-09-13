@@ -108,7 +108,6 @@ N_DOC=$(awk -F'\t' '$3=="doc"' "$TARGETS" | wc -l)
 N_UNIT=$((N_TARGETS - N_TEST - N_DOC))
 echo "verify_suites: enumerated $N_TARGETS targets ($N_TEST integration, $N_UNIT unit, $N_DOC doc)"
 
-# an empty target list would exit zero having run nothing, so it dies here instead of reporting green
 if [ "$N_TARGETS" -eq 0 ]; then
     echo "verify_suites: the enumeration produced 0 targets, nothing would run and nothing would fail" >&2
     exit 2
@@ -116,7 +115,6 @@ fi
 
 pin_problems=""
 
-# a pin that holds no row gates nothing, so present-but-empty is treated exactly like absent
 load_pin() {
     label="$1"; path="$2"; out="$3"; want="$4"
     if [ ! -f "$path" ]; then
@@ -178,6 +176,30 @@ fi
 feature_new=$(comm -23 "$FEATURES_MEASURED" "$FEATURES_PINNED")
 feature_gone=$(comm -13 "$FEATURES_MEASURED" "$FEATURES_PINNED")
 
+DECLARED_MODS="$RESULTS_DIR/declared_mods.txt"
+COMPILED_MODS="$RESULTS_DIR/compiled_mods.txt"
+
+# a `mod x;` nested in an inline module is indented, and a top level one is what cargo resolves against tests/
+suite_mod_decls() {
+    sed 's://.*::' "$1" \
+        | awk '/^(pub[ \t]+)?mod[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*;[ \t]*$/ { sub(/;.*$/, ""); print $NF }'
+}
+
+# governance g2 derives the same set: tests/<dir>/mod.rs and everything it declares is compiled, not dead
+walk_mods() {
+    local f="$1" base="$2" name flat nested
+    command grep -Fxq "$f" "$COMPILED_MODS" && return 0
+    echo "$f" >>"$COMPILED_MODS"
+    for name in $(sed 's://.*::' "$f" \
+        | awk '/^[ \t]*(pub[ \t]+)?mod[ \t]+[A-Za-z_][A-Za-z0-9_]*[ \t]*;[ \t]*$/ { sub(/;.*$/, ""); print $NF }'); do
+        flat="$base/$name.rs"
+        [ -f "$flat" ] && walk_mods "$flat" "$base/$name"
+        nested="$base/$name/mod.rs"
+        [ -f "$nested" ] && walk_mods "$nested" "$base/$name"
+    done
+    return 0
+}
+
 # a suite file with no enumerated target is a suite that exists in the tree and is never run
 awk -F'\t' '$3=="test" {print $4}' "$TARGETS" | sort -u >"$RESULTS_DIR/test_src_paths.txt"
 : >"$UNCOVERED"
@@ -192,11 +214,20 @@ while IFS= read -r manifest; do
         fi
     done < <( { find "$tdir" -maxdepth 1 -type f -name '*.rs'
                 find "$tdir" -mindepth 2 -maxdepth 2 -type f -name 'main.rs'; } | sort )
+    : >"$DECLARED_MODS"
+    while IFS= read -r f; do
+        suite_mod_decls "$f" >>"$DECLARED_MODS"
+    done < <(find "$tdir" -maxdepth 1 -type f -name '*.rs' | sort)
+    sort -u -o "$DECLARED_MODS" "$DECLARED_MODS"
     while IFS= read -r d; do
         [ -f "$d/main.rs" ] && continue
-        if [ -n "$(find "$d" -type f -name '*.rs' -print -quit)" ]; then
-            echo "$d" >>"$UNCOMPILED"
+        : >"$COMPILED_MODS"
+        if [ -f "$d/mod.rs" ] && command grep -Fxq "$(basename "$d")" "$DECLARED_MODS"; then
+            walk_mods "$d/mod.rs" "$d"
         fi
+        while IFS= read -r f; do
+            command grep -Fxq "$f" "$COMPILED_MODS" || echo "$f" >>"$UNCOMPILED"
+        done < <(find "$d" -type f -name '*.rs' | sort)
     done < <(find "$tdir" -mindepth 1 -maxdepth 1 -type d | sort)
 done <"$MEMBERS"
 N_UNCOVERED=$(wc -l <"$UNCOVERED")
@@ -205,12 +236,11 @@ echo "verify_suites: uncovered test sources: $N_UNCOVERED"
 if [ "$N_UNCOVERED" -gt 0 ]; then
     while IFS= read -r f; do echo "UNCOVERED	$f"; done <"$UNCOVERED"
 fi
-echo "verify_suites: test dirs cargo never compiles: $N_UNCOMPILED"
+echo "verify_suites: test sources cargo never compiles: $N_UNCOMPILED"
 if [ "$N_UNCOMPILED" -gt 0 ]; then
-    while IFS= read -r d; do echo "UNCOMPILED	$d (holds *.rs but no main.rs)"; done <"$UNCOMPILED"
+    while IFS= read -r f; do echo "UNCOMPILED	$f (no main.rs above it and no suite declares it)"; done <"$UNCOMPILED"
 fi
 
-# two cargo jobs and two test threads are a hard cap on this machine, above that it runs out of ram
 echo "verify_suites: building all targets"
 if ! cargo build --workspace --all-targets -j2 >"$RESULTS_DIR/build.log" 2>&1; then
     echo "verify_suites: workspace build failed, aborting before any suite runs" >&2
@@ -260,7 +290,6 @@ list_target() {
     ' "$log" >>"$NAME_MEASURED"
 }
 
-# the refresh is the only pass that still pays for a listing run, a pin taken from run logs would inherit whatever the runs happened to register
 if [ "$UPDATE_NAME_PIN" -eq 1 ]; then
     echo "verify_suites: listing registered test names for the pin refresh"
     name_t0=$(date +%s)
@@ -377,7 +406,6 @@ run_target() {
     if [ "$nres" -eq 0 ]; then
         printf '%s\t%s\t%s\t%s\n' "$pkg" "$tgt" "$kindlabel" "$status" >>"$NAME_UNMEASURED"
     else
-        # a listing spells a should_panic test with its bare name while the run log appends ` - should panic`
         awk -v p="$pkg" -v t="$tgt" -v k="$kindlabel" -v ign="$IGN_MEASURED" '
             /^test / {
                 rest = substr($0, 6)
@@ -419,7 +447,6 @@ SWEEPS_PINNED="$RESULTS_DIR/sweeps_pinned.tsv"
 SWEEPS_PIN_ROWS="$RESULTS_DIR/sweeps_pin_rows.tsv"
 SWEEP_RUNS="$RESULTS_DIR/sweep_runs.tsv"
 
-# a standing check that lives in scripts/ and that no list invokes is exactly the class this harness exists to close
 find "$ROOT/scripts" -maxdepth 1 -type f -printf '%f\n' | sort -u >"$SWEEPS_MEASURED"
 
 sweep_bad=""
@@ -526,7 +553,6 @@ while IFS=$'\t' read -r up ut uk ust; do
     name_unchecked_report="${name_unchecked_report}NAMES UNCHECKED      $up $ut $uk ($ust, the binary printed no result line, $held pinned name(s) held back rather than reported as vanished)"$'\n'
 done <"$NAME_UNMEASURED"
 
-# some targets are structurally empty forever, so the gate compares the EMPTY set against a pin instead of counting
 MEASURED_EMPTY="$RESULTS_DIR/empty_measured.tsv"
 PINNED_EMPTY="$RESULTS_DIR/empty_pinned.tsv"
 EMPTY_PIN_ROWS="$RESULTS_DIR/empty_pin_rows.tsv"
@@ -548,7 +574,7 @@ if [ -f "$CENSUS" ]; then
     census_conditional=$(awk -F'\t' 'NF >= 4 && $1 !~ /^#/ && $3 != "always"' "$CENSUS" | wc -l)
 fi
 
-# an unconditional census row is ignored in every pass its target runs in, so a feature run must ignore the base pass set of its package and nothing else
+# a feature run ignores the base pass set of its package and nothing else
 feature_ignore_bad=""
 if [ "$census_conditional" -gt 0 ]; then
     awk -F'\t' 'NF >= 4 && $1 !~ /^#/ && $3 != "always" { printf "%s %s [%s]\n", $1, $2, $3 }' "$CENSUS" \
@@ -627,7 +653,7 @@ echo "---- non PASS targets ----"
 if [ -n "$nonpass" ]; then printf '%s' "$nonpass"; else echo "(none)"; fi
 echo "---- uncovered test sources ----"
 if [ "$N_UNCOVERED" -gt 0 ]; then cat "$UNCOVERED"; else echo "(none)"; fi
-echo "---- test dirs cargo never compiles ----"
+echo "---- test sources cargo never compiles ----"
 if [ "$N_UNCOMPILED" -gt 0 ]; then cat "$UNCOMPILED"; else echo "(none)"; fi
 echo "---- pin availability ----"
 if [ -n "$pin_problems" ]; then printf '%s' "$pin_problems"; else echo "(none, every pin is present and holds rows)"; fi
