@@ -2,9 +2,38 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedFunction, TypedParam};
 use crate::types::InferType;
-use aelys_syntax::Function;
+use aelys_syntax::{Function, TypeBounds};
+use std::collections::HashMap;
 
 impl TypeInference {
+    pub(crate) fn bounds_of(func: &Function) -> HashMap<String, TypeBounds> {
+        func.type_params
+            .iter()
+            .enumerate()
+            .map(|(i, name)| {
+                let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                set.nogc |= func.is_nogc;
+                (name.clone(), set)
+            })
+            .collect()
+    }
+
+    pub(crate) fn bounds_on_type_param(&self, ty: &InferType) -> Option<(String, TypeBounds)> {
+        let InferType::Struct(name) = ty else {
+            return None;
+        };
+        if !self.type_params_in_scope.iter().any(|p| p == name) {
+            return None;
+        }
+        Some((
+            name.clone(),
+            self.type_param_bounds
+                .get(name)
+                .copied()
+                .unwrap_or_default(),
+        ))
+    }
+
     pub(super) fn infer_function(&mut self, func: &Function) -> TypedFunction {
         let fn_signature = self.env.lookup_function(&func.name).cloned();
 
@@ -17,6 +46,7 @@ impl TypeInference {
 
         let saved_type_params =
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
+        let saved_bounds = std::mem::replace(&mut self.type_param_bounds, Self::bounds_of(func));
         let saved_literal_inits = self.literal_init_vars.clone();
 
         let mut typed_params = Vec::with_capacity(func.params.len());
@@ -109,12 +139,14 @@ impl TypeInference {
         self.env = saved_env;
         self.unsafe_depth = saved_unsafe;
         self.type_params_in_scope = saved_type_params;
+        self.type_param_bounds = saved_bounds;
         self.literal_init_vars = saved_literal_inits;
         self.nogc_fn_params = saved_nogc_fn_params;
 
         TypedFunction {
             name: func.name.clone(),
             type_params: func.type_params.clone(),
+            bounds: func.bounds.clone(),
             params: typed_params,
             return_type,
             body: typed_body,

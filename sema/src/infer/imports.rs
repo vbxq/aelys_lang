@@ -81,9 +81,11 @@ impl TypeInference {
 
     fn define_imported_value(&mut self, item: &ModuleValue) {
         match item.kind {
-            ItemKind::Function => self
-                .env
-                .define_function_owned(item.qualified.clone(), item.ty.clone()),
+            ItemKind::Function => {
+                self.env
+                    .define_function_owned(item.qualified.clone(), item.ty.clone());
+                self.record_imported_bound_sig(item);
+            }
             ItemKind::Global => {
                 self.env
                     .define_local(item.qualified.clone(), item.ty.clone());

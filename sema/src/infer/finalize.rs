@@ -133,6 +133,7 @@ impl TypeInference {
             TypedExprKind::Int(n) => TypedExprKind::Int(n),
             TypedExprKind::Float(f) => TypedExprKind::Float(f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(b),
+            TypedExprKind::Char(cp) => TypedExprKind::Char(cp),
             TypedExprKind::String(s) => TypedExprKind::String(s),
             TypedExprKind::Null => TypedExprKind::Null,
 
@@ -350,6 +351,7 @@ impl TypeInference {
                                 variant,
                                 tag,
                                 bindings,
+                                span,
                             } => crate::typed_ast::TypedPattern::Variant {
                                 enum_name,
                                 variant,
@@ -358,6 +360,7 @@ impl TypeInference {
                                     .into_iter()
                                     .map(|(n, ty)| (n, Self::finalize_type(ty)))
                                     .collect(),
+                                span,
                             },
                             crate::typed_ast::TypedPattern::Wildcard => {
                                 crate::typed_ast::TypedPattern::Wildcard

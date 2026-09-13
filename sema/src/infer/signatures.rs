@@ -91,7 +91,7 @@ impl TypeInference {
         });
 
         self.env.define_function(full_name.clone(), fn_type.clone());
-        self.record_nogc_generic_sig(&full_name, func);
+        self.record_bound_generic_sig(&full_name, func);
         self.record_foreign_sig(&full_name, func);
 
         if !prefix.is_empty() {
@@ -102,7 +102,7 @@ impl TypeInference {
                 ));
             } else {
                 self.env.define_function(func.name.clone(), fn_type);
-                self.record_nogc_generic_sig(&func.name, func);
+                self.record_bound_generic_sig(&func.name, func);
                 self.record_foreign_sig(&func.name, func);
             }
         }

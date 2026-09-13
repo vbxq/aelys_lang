@@ -27,12 +27,14 @@ impl Default for TypeInference {
             warnings: Vec::new(),
             type_table: TypeTable::new(),
             type_params_in_scope: Vec::new(),
+            type_param_bounds: HashMap::new(),
+            instantiated_param_names: HashMap::new(),
             literal_init_vars: HashMap::new(),
             try_counter: 0,
             unsafe_depth: 0,
             catch_match_pending: false,
             nogc_fn_params: HashSet::new(),
-            nogc_generic_sigs: HashMap::new(),
+            bound_generic_sigs: HashMap::new(),
             foreign_sigs: HashSet::new(),
             foreign_shadowed_spans: HashSet::new(),
             module_globals: HashSet::new(),
@@ -380,11 +382,18 @@ impl TypeInference {
         let is_type_param = |ty: &InferType| -> bool {
             matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
         };
+        let defers = |kind: &TypeErrorKind| {
+            matches!(
+                kind,
+                TypeErrorKind::NestedFnShadowsOuter { .. }
+                    | TypeErrorKind::ConstIndexOutOfBounds { .. }
+            )
+        };
         let all_errors: Vec<_> = inf
             .errors
             .iter()
             .filter_map(|err| {
-                if matches!(&err.kind, TypeErrorKind::NestedFnShadowsOuter { .. }) {
+                if defers(&err.kind) {
                     return Some(err.clone());
                 }
                 let fatal = match &err.kind {
@@ -400,10 +409,7 @@ impl TypeInference {
             })
             .collect();
 
-        if all_errors
-            .iter()
-            .any(|err| !matches!(&err.kind, TypeErrorKind::NestedFnShadowsOuter { .. }))
-        {
+        if all_errors.iter().any(|err| !defers(&err.kind)) {
             return Err(all_errors);
         }
         let deferred_errors = all_errors;

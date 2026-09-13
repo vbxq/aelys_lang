@@ -283,6 +283,7 @@ impl TypeInference {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => {}
         }

@@ -1,8 +1,8 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::place_spine::{
-    computed_len_receiver, denotes_a_place, is_computed_len, shared_slice_view, spine_is_shared,
-    spine_root_name, target_ptr_is_shared,
+    bytes_receiver_is_backed, computed_len_receiver, denotes_a_place, is_computed_len,
+    shared_slice_view, spine_is_shared, spine_root_name, target_ptr_is_shared,
 };
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use crate::types::InferType;
@@ -59,6 +59,21 @@ impl TypeInference {
                 }
                 _ => {}
             }
+        }
+    }
+
+    // it sits in sema and not in lowering so the optimizer cannot rewrite the spelling first
+    fn check_rc_carrier_surface(&mut self, value: &TypedExpr, what: &str) {
+        if !self.type_table.contains_rc_nominal(&value.ty) {
+            return;
+        }
+        if let crate::rc_init::RcInit::Unaccountable(blocker) =
+            crate::rc_init::rc_init_provenance(value)
+        {
+            self.errors.push(TypeError::rc_carrier_out_of_surface(
+                crate::rc_init::rc_init_refusal(blocker, what),
+                value.span,
+            ));
         }
     }
 
@@ -218,6 +233,23 @@ impl TypeInference {
         let mut generic_scope = parent_scope.clone();
         generic_scope.extend(func.type_params.iter().cloned());
 
+        let saved_params = std::mem::replace(
+            &mut self.type_params_in_scope,
+            generic_scope.iter().cloned().collect(),
+        );
+        let saved_bounds = std::mem::replace(
+            &mut self.type_param_bounds,
+            func.type_params
+                .iter()
+                .enumerate()
+                .map(|(i, name)| {
+                    let mut set = func.bounds.get(i).copied().unwrap_or_default();
+                    set.nogc |= func.declared_nogc;
+                    (name.clone(), set)
+                })
+                .collect(),
+        );
+
         for param in &func.params {
             self.validate_type(&param.ty, param.span, &generic_scope, declared_type_params);
         }
@@ -244,6 +276,8 @@ impl TypeInference {
             &generic_scope,
             declared_type_params,
         );
+        self.type_params_in_scope = saved_params;
+        self.type_param_bounds = saved_bounds;
     }
 
     fn validate_expr(
@@ -269,7 +303,7 @@ impl TypeInference {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
-                self.check_nogc_bound_call(callee, args);
+                self.check_bound_call(callee, args);
                 match &callee.ty {
                     InferType::Function { params, .. } => {
                         if params.len() != args.len() {
@@ -388,6 +422,12 @@ impl TypeInference {
                                 ),
                                 expr.span,
                             ));
+                        } else if member == "bytes"
+                            && !crate::ablation::bytes_no_place_unchecked()
+                            && !bytes_receiver_is_backed(object)
+                        {
+                            self.errors
+                                .push(TypeError::no_place("the receiver of `.bytes`", object.span));
                         }
                     }
                     InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..) => {
@@ -478,13 +518,14 @@ impl TypeInference {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(index, generic_scope, declared_type_params);
 
-                if !Self::is_indexable_type(&object.ty)
-                    && !self.is_active_generic_placeholder_type(
-                        &object.ty,
-                        generic_scope,
-                        declared_type_params,
-                    )
-                {
+                if self.is_active_generic_placeholder_type(
+                    &object.ty,
+                    generic_scope,
+                    declared_type_params,
+                ) {
+                    self.errors
+                        .push(TypeError::generic_index(&object.ty, expr.span));
+                } else if !Self::is_indexable_type(&object.ty) {
                     self.errors.push(TypeError::member_access(
                         format!("index operation on non-indexable type {}", object.ty),
                         expr.span,
@@ -623,9 +664,10 @@ impl TypeInference {
                     }
                 }
             }
-            TypedExprKind::StructLiteral { fields, .. } => {
-                for (_, value) in fields {
+            TypedExprKind::StructLiteral { name, fields } => {
+                for (field, value) in fields {
                     self.validate_expr(value, generic_scope, declared_type_params);
+                    self.check_rc_carrier_surface(value, &format!("field `{name}.{field}`"));
                 }
             }
             TypedExprKind::Cast {
@@ -652,6 +694,12 @@ impl TypeInference {
             } => {
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
+                    if !crate::rc_init::RUNTIME_CARRIER_EXEMPT.contains(&enum_name.as_str()) {
+                        self.check_rc_carrier_surface(
+                            arg,
+                            &format!("payload of `{enum_name}::{variant}`"),
+                        );
+                    }
                 }
                 if enum_name == "Vec" && variant == "push" && !args.is_empty() {
                     self.check_write_target(&args[0], "a `Vec::push`", expr.span);
@@ -721,6 +769,7 @@ impl TypeInference {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => {}
         }
@@ -890,6 +939,12 @@ impl TypeInference {
     }
 
     fn is_cast_allowed_resolved(&self, src: &InferType, target: &InferType) -> bool {
+        if *src == InferType::Char {
+            return target.is_integer();
+        }
+        if *target == InferType::Char {
+            return false;
+        }
         (src.is_numeric() || *src == InferType::Bool || *src == InferType::Dynamic)
             && (target.is_numeric() || *target == InferType::Bool)
     }
