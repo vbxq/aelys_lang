@@ -77,6 +77,9 @@ pub enum TypeErrorKind {
     RcOutOfSurface {
         detail: String,
     },
+    RcCarrierOutOfSurface {
+        detail: String,
+    },
     VecOutOfSurface {
         detail: String,
     },
@@ -88,6 +91,10 @@ pub enum TypeErrorKind {
         detail: String,
     },
     MutIndexRefUnsupported,
+    ConstIndexOutOfBounds {
+        index: i64,
+        len: u64,
+    },
     MutRefImmutableBinding {
         name: String,
     },
@@ -143,6 +150,14 @@ pub enum TypeErrorKind {
         detail: String,
     },
     NogcGenericAsValue {
+        detail: String,
+    },
+    /// raised at the operator, where the declaration never named the bound
+    BoundMissing {
+        detail: String,
+    },
+    /// raised at the call, where the type argument does not satisfy the bound
+    BoundNotSatisfied {
         detail: String,
     },
     ForeignAsValue {
@@ -250,6 +265,9 @@ impl fmt::Display for TypeError {
             TypeErrorKind::RcOutOfSurface { detail } => {
                 write!(f, "[rc-stage1] {}", detail)
             }
+            TypeErrorKind::RcCarrierOutOfSurface { detail } => {
+                write!(f, "{}", detail)
+            }
             TypeErrorKind::VecOutOfSurface { detail } => {
                 write!(f, "[vec-surface] {}", detail)
             }
@@ -327,6 +345,15 @@ impl fmt::Display for TypeError {
                  it into a local binding and reference that",
                 if *mutable { "&mut" } else { "&" }
             ),
+            TypeErrorKind::ConstIndexOutOfBounds { index, len } if *len == 0 => write!(
+                f,
+                "[const-index] index {index} is outside `[_; 0]`, which has no elements"
+            ),
+            TypeErrorKind::ConstIndexOutOfBounds { index, len } => write!(
+                f,
+                "[const-index] index {index} is outside `[_; {len}]`, whose elements are 0 to {}",
+                len - 1
+            ),
             TypeErrorKind::MutIndexRefUnsupported => write!(
                 f,
                 "[mut-index-ref] a mutable reference through an element or field projection is \
@@ -371,6 +398,8 @@ impl fmt::Display for TypeError {
             TypeErrorKind::NogcBoundUnresolved { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcBoundGenericStruct { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcGenericAsValue { detail } => write!(f, "[nogc] {detail}"),
+            TypeErrorKind::BoundMissing { detail } => write!(f, "[bound] {detail}"),
+            TypeErrorKind::BoundNotSatisfied { detail } => write!(f, "[bound] {detail}"),
             TypeErrorKind::ForeignAsValue { detail } => write!(f, "{detail}"),
             TypeErrorKind::ForeignCallOutsideUnsafe { detail } => write!(f, "{detail}"),
             TypeErrorKind::ModuleItemNotPublic { module, item } => {
@@ -464,6 +493,19 @@ impl TypeError {
     pub fn rc_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::RcOutOfSurface {
+                detail: detail.into(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn rc_carrier_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::RcCarrierOutOfSurface {
                 detail: detail.into(),
             },
             span,
@@ -579,6 +621,17 @@ impl TypeError {
     pub fn vec_foreach_unsupported(span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::VecForeachUnsupported,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn const_index_out_of_bounds(index: i64, len: u64, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::ConstIndexOutOfBounds { index, len },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
@@ -796,6 +849,83 @@ impl TypeError {
         }
     }
 
+    pub fn bound_missing(
+        type_param: &str,
+        op: &str,
+        bound: &str,
+        declared: &str,
+        span: Span,
+    ) -> Self {
+        let carries = if declared.is_empty() {
+            format!("`{type_param}` carries no bound")
+        } else {
+            format!("`{type_param}` carries `{declared}`")
+        };
+        TypeError {
+            kind: TypeErrorKind::BoundMissing {
+                detail: format!(
+                    "`{op}` needs the `{bound}` bound on type parameter \
+                     `{type_param}`, and {carries}"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "declare it as `<{type_param}: {bound}>`, or add it with `+` to the \
+                 bounds already there"
+            )),
+            suggestion: None,
+        }
+    }
+
+    pub fn bound_not_satisfied(
+        fn_name: &str,
+        type_param: &str,
+        bound: &str,
+        found: &InferType,
+        span: Span,
+    ) -> Self {
+        let carries = match bound {
+            "ord" => {
+                "the integers, the floats and `char` are `ord`; `string` is not, use `str.compare`"
+            }
+            _ => "the integers, the floats, `bool`, `char` and `string` are `eq`",
+        };
+        TypeError {
+            kind: TypeErrorKind::BoundNotSatisfied {
+                detail: format!(
+                    "type parameter `{type_param}` of `{fn_name}` is bound `{bound}`, but \
+                     this call instantiates it with `{found}`, which is not `{bound}`"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(carries.to_string()),
+            suggestion: None,
+        }
+    }
+
+    pub fn bound_unresolved(fn_name: &str, type_param: &str, bound: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::BoundNotSatisfied {
+                detail: format!(
+                    "type parameter `{type_param}` of `{fn_name}` is bound `{bound}`, but \
+                     this call does not pin it to a concrete type, so the bound cannot be \
+                     proven"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: Some(format!(
+                "pass an argument whose type fixes `{type_param}` to a concrete `{bound}` type"
+            )),
+            suggestion: None,
+        }
+    }
+
     // a nogc-bound generic referenced as a value escapes every checked call site
     pub fn nogc_generic_as_value(fn_name: &str, span: Span) -> Self {
         TypeError {
@@ -931,6 +1061,52 @@ impl TypeError {
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),
             help: None,
+            suggestion: None,
+        }
+    }
+
+    // the help must not name `s.bytes[i]`: that view outlives its base unless the base is a place
+    pub fn string_index_removed(assignment: bool, span: Span) -> Self {
+        let message = if assignment {
+            "a `string` cannot be written through `s[i]`; a string is a sequence of unicode \
+             scalar values, not a buffer of characters at fixed offsets"
+                .to_string()
+        } else {
+            "a `string` cannot be indexed by integer; `.len` counts bytes while `s[i]` counted \
+             characters, and the two could not both be right"
+                .to_string()
+        };
+        TypeError {
+            kind: TypeErrorKind::MemberAccess { message },
+            span,
+            reason: ConstraintReason::Other("string index".to_string()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "read the characters with `for c in s`, which yields a `char`, or ask for one \
+                 with `str.char_at(s, i)`"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn generic_index(ty: &InferType, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MemberAccess {
+                message: format!(
+                    "a value of the generic type parameter `{ty}` cannot be indexed; the element \
+                     type is not known until `{ty}` is bound, and a type parameter carries no \
+                     bound that would supply one"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other("generic index".to_string()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "take a container instead of a bare type parameter: `Vec<T>`, `[T; N]` and \
+                 `&[T]` all index to a `T`"
+                    .to_string(),
+            ),
             suggestion: None,
         }
     }

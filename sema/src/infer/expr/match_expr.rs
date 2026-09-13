@@ -270,6 +270,7 @@ impl TypeInference {
                             variant: variant.clone(),
                             tag: variant_def.tag,
                             bindings: typed_bindings,
+                            span: *pat_span,
                         },
                         body: Box::new(typed_body),
                     });
@@ -459,7 +460,7 @@ impl TypeInference {
                         enum_name,
                         variant,
                         bindings,
-                        ..
+                        span,
                     } => TypedPattern::Variant {
                         enum_name: enum_name.clone(),
                         variant: variant.clone(),
@@ -468,6 +469,7 @@ impl TypeInference {
                             .iter()
                             .map(|name| (name.clone(), InferType::Dynamic))
                             .collect(),
+                        span: *span,
                     },
                     Pattern::Wildcard(_) => TypedPattern::Wildcard,
                 };

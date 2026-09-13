@@ -34,6 +34,7 @@ impl TypeInference {
             ExprKind::Float(f) => (TypedExprKind::Float(*f), InferType::F64),
             ExprKind::Bool(b) => (TypedExprKind::Bool(*b), InferType::Bool),
             ExprKind::String(s) => (TypedExprKind::String(s.clone()), InferType::String),
+            ExprKind::Char(cp) => (TypedExprKind::Char(*cp), InferType::Char),
             ExprKind::FmtString(parts) => {
                 let typed_parts = parts
                     .iter()
@@ -302,7 +303,6 @@ impl TypeInference {
             ExprKind::Catch { scrutinee, handler } => {
                 self.infer_catch_expr(scrutinee, handler, expr.span)
             }
-            // unsafe is erased like try; tuple flow keeps depth -= 1 from being skipped by an early return
             ExprKind::Unsafe(inner) => {
                 self.unsafe_depth += 1;
                 let t = self.infer_expr(inner);
@@ -537,17 +537,24 @@ impl TypeInference {
                     }
                 }
                 if all_narrowed && !had_error {
-                    expr.ty = target_ty.clone();
+                    // the annotation gives the element type, never the count: stamping its
+                    let count = elements.len() as u64;
+                    expr.ty = InferType::Array(elem_ty.clone(), Some(count));
                 }
 
                 return !had_error;
             }
         }
 
-        if let InferType::Array(elem_ty, _) = target_ty {
-            if let TypedExprKind::ArraySized { fill_value, .. } = &mut expr.kind {
+        if let InferType::Array(elem_ty, target_len) = target_ty {
+            if let TypedExprKind::ArraySized { size, fill_value } = &mut expr.kind {
+                // not override one it does: that is how a repeat overruns its storage
+                let size_agrees = match (Self::closed_const_int(&**size), target_len) {
+                    (Some(n), Some(len)) => n >= 0 && n as u64 == *len,
+                    _ => true,
+                };
                 if let Some(fv) = fill_value {
-                    if self.try_narrow_literal(fv, elem_ty) && fv.ty == **elem_ty {
+                    if self.try_narrow_literal(fv, elem_ty) && fv.ty == **elem_ty && size_agrees {
                         expr.ty = target_ty.clone();
                         return true;
                     }

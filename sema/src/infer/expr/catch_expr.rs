@@ -37,14 +37,14 @@ impl TypeInference {
         let obj_span = typed_scrutinee.span;
         let v_name = self.next_catch_binding('v');
         let ok_arm = MatchArm {
-            pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], span),
+            pattern: variant_pattern(&enum_name, "Ok", vec![v_name.clone()], obj_span),
             body: Box::new(ident_expr(&v_name, span)),
             span,
         };
 
         let err_arm = match handler {
             CatchHandler::Binding { name, body } => MatchArm {
-                pattern: variant_pattern(&enum_name, "Err", vec![name.clone()], span),
+                pattern: variant_pattern(&enum_name, "Err", vec![name.clone()], obj_span),
                 body: body.clone(),
                 span,
             },
@@ -59,7 +59,7 @@ impl TypeInference {
                     span,
                 );
                 MatchArm {
-                    pattern: variant_pattern(&enum_name, "Err", vec![e_name], span),
+                    pattern: variant_pattern(&enum_name, "Err", vec![e_name], obj_span),
                     body: Box::new(inner),
                     span,
                 }

@@ -1,3 +1,4 @@
+mod bounds;
 mod captures;
 mod constraints;
 pub mod entry;
@@ -7,7 +8,6 @@ mod finalize;
 mod functions;
 mod imports;
 mod lambda;
-mod nogc_bound;
 mod returns;
 mod signatures;
 mod stmt;
@@ -30,7 +30,7 @@ const MAX_INFERENCE_DEPTH: usize = 200;
 const KNOWN_TYPE_NAMES: &[&str] = &[
     "int", "i8", "i16", "i32", "i64", "int8", "int16", "int32", "int64", "u8", "u16", "u32", "u64",
     "uint8", "uint16", "uint32", "uint64", "float", "f32", "f64", "float32", "float64", "bool",
-    "string", "str", "null", "void", "array", "vec",
+    "char", "string", "str", "null", "void", "array", "vec",
 ];
 
 pub struct TypeInference {
@@ -43,12 +43,14 @@ pub struct TypeInference {
     warnings: Vec<Warning>,
     pub(crate) type_table: TypeTable,
     type_params_in_scope: Vec<String>,
+    type_param_bounds: HashMap<String, aelys_syntax::TypeBounds>,
+    instantiated_param_names: HashMap<crate::types::TypeVarId, String>,
     literal_init_vars: HashMap<String, LiteralInit>,
     try_counter: usize,
     unsafe_depth: usize,
     catch_match_pending: bool,
     nogc_fn_params: HashSet<String>,
-    nogc_generic_sigs: HashMap<String, Vec<nogc_bound::NogcGenericSig>>,
+    bound_generic_sigs: HashMap<String, Vec<bounds::BoundGenericSig>>,
     foreign_sigs: HashSet<String>,
     foreign_shadowed_spans: HashSet<(usize, usize)>,
     pub(crate) module_globals: HashSet<String>,

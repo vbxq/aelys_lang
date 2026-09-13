@@ -2,9 +2,57 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::{InferType, ResolvedType};
-use aelys_syntax::{Expr, ExprKind, Span, TypeAnnotation};
+use aelys_syntax::{BinaryOp, Expr, ExprKind, Span, TypeAnnotation, UnaryOp};
 
 impl TypeInference {
+    pub(crate) fn closed_const_int(expr: &TypedExpr) -> Option<i64> {
+        match &expr.kind {
+            TypedExprKind::Int(v) => Some(*v),
+            TypedExprKind::Grouping(inner) => Self::closed_const_int(inner),
+            TypedExprKind::Cast {
+                expr: inner,
+                target,
+            } => {
+                let v = Self::closed_const_int(inner)?;
+                (target.is_integer() && InferType::int_fits(v, target)).then_some(v)
+            }
+            TypedExprKind::Unary {
+                op: UnaryOp::Neg,
+                operand,
+            } => Self::closed_const_int(operand)?.checked_neg(),
+            TypedExprKind::Binary { op, left, right } => {
+                let (l, r) = (
+                    Self::closed_const_int(left)?,
+                    Self::closed_const_int(right)?,
+                );
+                let v = match op {
+                    BinaryOp::Add => l.checked_add(r),
+                    BinaryOp::Sub => l.checked_sub(r),
+                    BinaryOp::Mul => l.checked_mul(r),
+                    BinaryOp::Div => l.checked_div(r),
+                    BinaryOp::Mod => l.checked_rem(r),
+                    _ => None,
+                }?;
+                (!expr.ty.is_integer() || InferType::int_fits(v, &expr.ty)).then_some(v)
+            }
+            _ => None,
+        }
+    }
+
+    // decided here and not on the air, so the optimizer cannot fold a local into the answer
+    fn reject_const_index_out_of_bounds(&mut self, object: &TypedExpr, index: &TypedExpr) {
+        let InferType::Array(_, Some(len)) = &object.ty else {
+            return;
+        };
+        let Some(at) = Self::closed_const_int(index) else {
+            return;
+        };
+        if at < 0 || at as u128 >= *len as u128 {
+            self.errors
+                .push(TypeError::const_index_out_of_bounds(at, *len, index.span));
+        }
+    }
+
     fn reject_rc_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
         for elem in elements {
             if elem.ty.is_rc()
@@ -90,10 +138,9 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
-        let array_len = match &typed_size.kind {
-            TypedExprKind::Int(n) if *n >= 0 => Some(*n as u64),
-            _ => None,
-        };
+        let array_len = Self::closed_const_int(&typed_size)
+            .filter(|n| *n >= 0)
+            .map(|n| n as u64);
 
         let typed_fill = fill_value.map(|fv| Box::new(self.infer_expr(fv)));
 
@@ -203,11 +250,17 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
+        self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
+
         let elem_ty = match &typed_object.ty {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
-            InferType::String => InferType::String,
+            InferType::String => {
+                self.errors
+                    .push(TypeError::string_index_removed(false, object.span));
+                InferType::Dynamic
+            }
             InferType::Dynamic => InferType::Dynamic,
             InferType::Var(_) => self.type_gen.fresh(),
             _other => InferType::Dynamic,
@@ -265,6 +318,8 @@ impl TypeInference {
             ConstraintReason::ArrayIndex,
         ));
 
+        self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
+
         // r1-r3 already refuse the construction forms; this is the fail-closed backstop
         if matches!(typed_object.ty, InferType::Array(_, _) | InferType::Vec(_))
             && self.type_table.contains_vec_by_value(&typed_value.ty)
@@ -312,8 +367,11 @@ impl TypeInference {
                     ConstraintReason::ArrayElement,
                 ));
             }
-            InferType::String | InferType::Dynamic | InferType::Var(_) | _ => {
+            InferType::String => {
+                self.errors
+                    .push(TypeError::string_index_removed(true, object.span));
             }
+            InferType::Dynamic | InferType::Var(_) | _ => {}
         }
 
         (

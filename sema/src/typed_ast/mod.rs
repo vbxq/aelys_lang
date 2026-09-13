@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use aelys_syntax::Source;
 use aelys_syntax::Span;
-use aelys_syntax::{BinaryOp, Decorator, ForeignDecl, NeedsStmt, UnaryOp};
+use aelys_syntax::{BinaryOp, Decorator, ForeignDecl, NeedsStmt, TypeBounds, UnaryOp};
 
 use crate::types::InferType;
 use crate::types::TypeTable;
@@ -90,6 +90,7 @@ pub enum TypedStmtKind {
 pub struct TypedFunction {
     pub name: String,
     pub type_params: Vec<String>,
+    pub bounds: Vec<TypeBounds>,
     pub params: Vec<TypedParam>,
     pub return_type: InferType,
     pub body: Vec<TypedStmt>,
@@ -128,6 +129,7 @@ pub enum TypedExprKind {
     Int(i64),
     Float(f64),
     Bool(bool),
+    Char(u32),
     String(String),
     FmtString(Vec<TypedFmtStringPart>),
     Null,
@@ -293,6 +295,7 @@ pub enum TypedPattern {
         variant: String,
         tag: u32,
         bindings: Vec<(String, InferType)>,
+        span: Span,
     },
     Wildcard,
 }

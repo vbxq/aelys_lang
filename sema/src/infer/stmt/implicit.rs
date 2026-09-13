@@ -122,8 +122,8 @@ impl TypeInference {
                 let typed_stmt = self.infer_stmt(stmt);
                 if !stmt_guarantees_return(stmt) {
                     self.constraints.push(Constraint::equal(
-                        return_type.clone(),
                         InferType::Null,
+                        return_type.clone(),
                         stmt.span,
                         ConstraintReason::Return {
                             func_name: self
