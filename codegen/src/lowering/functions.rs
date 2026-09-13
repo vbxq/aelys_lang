@@ -383,6 +383,7 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::F32 => "f32",
         AirType::F64 => "f64",
         AirType::Bool => "bool",
+        AirType::Char => "char",
         AirType::Str => "string",
         AirType::Ptr(_) => "ptr",
         AirType::Struct(_) => "struct",

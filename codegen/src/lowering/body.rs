@@ -1,4 +1,8 @@
 use crate::lowering::functions::{function_has_implicit_env, needs_sret};
+use crate::lowering::stmts::RC_HEADER_SIZE;
+use crate::lowering::strings::{
+    IMMORTAL_REFCOUNT, RC_FLAG_NO_TRACE, rc_headered_bytes_type, rc_headered_data_indices,
+};
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{
@@ -164,12 +168,44 @@ impl<'a> FunctionCodegen<'a> {
             Some(first) => self.builder.position_before(&first),
             None => self.builder.position_at_end(entry),
         }
-        let buffer_ty = self.context.i8_type().array_type(Self::INTERP_BUFFER_BYTES);
-        let ptr = self
+        let buffer_ty = rc_headered_bytes_type(self.context, Self::INTERP_BUFFER_BYTES);
+        let base = self
             .builder
             .build_alloca(buffer_ty, "interp_buf")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        self.align_alloca(ptr, buffer_ty.into())?;
+        if let Some(inst) = base.as_instruction() {
+            inst.set_alignment(RC_HEADER_SIZE as u32)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+        // a release reaching a frame slot must find a pinned count, or it frees a stack address
+        let i32_ty = self.context.i32_type();
+        let i8_ty = self.context.i8_type();
+        for (field, value) in [
+            (0u32, i32_ty.const_int(IMMORTAL_REFCOUNT, false).into()),
+            (1u32, i8_ty.const_int(RC_FLAG_NO_TRACE, false).into()),
+            (2u32, i8_ty.const_zero().into()),
+            (3u32, i8_ty.const_zero().into()),
+            (4u32, i8_ty.const_zero().into()),
+            (5u32, i32_ty.const_zero().into()),
+            (6u32, i32_ty.const_zero().into()),
+        ] {
+            let slot = self
+                .builder
+                .build_struct_gep(buffer_ty, base, field, "interp_hdr")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            self.builder
+                .build_store::<BasicValueEnum<'static>>(slot, value)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+        let ptr = unsafe {
+            self.builder.build_in_bounds_gep(
+                buffer_ty,
+                base,
+                &rc_headered_data_indices(self.context),
+                "interp_data",
+            )
+        }
+        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         if let Some(block) = resume {
             self.builder.position_at_end(block);
         }

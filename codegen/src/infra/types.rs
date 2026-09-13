@@ -7,7 +7,7 @@ use inkwell::types::{
 
 const AELYS_STRING_STRUCT_NAME: &str = "__aelys_string";
 
-// a dataless enum registers no body, so this marker separates it from a name codegen never heard of, and `$` keeps it out of the `__aelys_enum_` space
+// this marker separates a dataless enum from a name codegen never heard of
 pub const ENUM_TAG_MARKER_PREFIX: &str = "__aelys_enumtag$";
 
 pub fn enum_struct_name(name: &str) -> String {
@@ -25,7 +25,7 @@ pub fn air_type_to_llvm<'ctx>(
     match ty {
         AirType::I8 | AirType::U8 => Ok(context.i8_type().into()),
         AirType::I16 | AirType::U16 => Ok(context.i16_type().into()),
-        AirType::I32 | AirType::U32 => Ok(context.i32_type().into()),
+        AirType::I32 | AirType::U32 | AirType::Char => Ok(context.i32_type().into()),
         AirType::I64 | AirType::U64 => Ok(context.i64_type().into()),
         AirType::F32 => Ok(context.f32_type().into()),
         AirType::F64 => Ok(context.f64_type().into()),

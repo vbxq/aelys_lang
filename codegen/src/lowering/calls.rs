@@ -14,6 +14,8 @@ const RUNTIME_SYMBOL_PREFIX: &str = "__aelys_";
 pub(crate) const AD_HOC_RUNTIME_SYMBOLS: &[&str] = &[
     "__aelys_vec_retain",
     "__aelys_vec_release",
+    "__aelys_str_retain",
+    "__aelys_str_release",
     "__aelys_len",
     // the range constructor, whose arity follows the written bounds
     "__aelys_range",
@@ -146,6 +148,94 @@ impl<'a> FunctionCodegen<'a> {
                     .build_call(function, &[s_ptr.into(), s_len.into()], "str_char_count")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 return Ok(call.try_as_basic_value().basic());
+            }
+
+            if name == "__aelys_str_char_at_scalar" {
+                if args.len() != 2 || !arg_values[0].is_struct_value() {
+                    return Err(CodegenError::UnsupportedType(
+                        "__aelys_str_char_at_scalar expects a string and a character index"
+                            .to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let function = self.ensure_str_char_at_scalar_function();
+                let call = self
+                    .builder
+                    .build_call(
+                        function,
+                        &[s_ptr.into(), s_len.into(), arg_values[1].into()],
+                        "str_char_at_scalar",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(call.try_as_basic_value().basic());
+            }
+
+            if name == "__aelys_str_decode_at" {
+                if args.len() != 2 || !arg_values[0].is_struct_value() {
+                    return Err(CodegenError::UnsupportedType(
+                        "__aelys_str_decode_at expects a string and a byte offset".to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let function = self.ensure_str_decode_at_function();
+                let call = self
+                    .builder
+                    .build_call(
+                        function,
+                        &[s_ptr.into(), s_len.into(), arg_values[1].into()],
+                        "str_decode_at",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(call.try_as_basic_value().basic());
+            }
+
+            if name == "__aelys_char_from_i64" || name == "__aelys_char_is_scalar" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(format!(
+                        "{name} expects exactly one argument"
+                    )));
+                }
+                let function = if name == "__aelys_char_from_i64" {
+                    self.ensure_char_from_i64_function()
+                } else {
+                    self.ensure_char_is_scalar_function()
+                };
+                let call = self
+                    .builder
+                    .build_call(function, &[arg_values[0].into()], "char_intrinsic")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                let raw = call
+                    .try_as_basic_value()
+                    .basic()
+                    .ok_or_else(|| CodegenError::LlvmError(format!("{name} returned nothing")))?;
+                if name == "__aelys_char_is_scalar" {
+                    let truncated = self
+                        .builder
+                        .build_int_truncate(
+                            raw.into_int_value(),
+                            self.context.bool_type(),
+                            "char_is_scalar_bit",
+                        )
+                        .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                    return Ok(Some(truncated.into()));
+                }
+                return Ok(Some(raw));
+            }
+
+            if name == "__aelys_str_from_char" {
+                if args.len() != 1 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_from_char expects exactly one argument".to_string(),
+                    ));
+                }
+                let function = self.ensure_str_from_char_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[arg_values[0].into()],
+                    "str_from_char",
+                )?));
             }
 
             if name == "__aelys_str_substring_bytes" {
@@ -484,6 +574,10 @@ impl<'a> FunctionCodegen<'a> {
                 let fn_val = self.ensure_to_string_bool_function();
                 self.call_sret_returning_fn(fn_val, &[i64_val.into()], "to_str")
             }
+            AirType::Char => {
+                let fn_val = self.ensure_to_string_char_function();
+                self.call_sret_returning_fn(fn_val, &[value.into()], "to_str")
+            }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot convert {:?} to string",
                 other
@@ -538,6 +632,11 @@ impl<'a> FunctionCodegen<'a> {
             }
             // the bool form hands back a .rodata literal, there was never an allocation to elide
             AirType::Bool => self.emit_scalar_to_string(arg_type, value),
+            AirType::Char => {
+                let buffer = self.ensure_interp_buffer()?;
+                let fn_val = self.ensure_to_string_char_into_function();
+                self.call_sret_returning_fn(fn_val, &[buffer.into(), value.into()], "to_str")
+            }
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot convert {:?} to string",
                 other

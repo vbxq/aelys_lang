@@ -2,6 +2,10 @@ use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::function_symbol_name;
+use crate::lowering::stmts::RC_HEADER_SIZE;
+use crate::lowering::strings::{
+    rc_headered_bytes_type, rc_headered_bytes_value, rc_headered_data_indices,
+};
 use crate::types::{aelys_string_type, air_basic_type_to_llvm, closure_fat_ptr_type};
 use aelys_air::{
     AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, EnumRef, Operand,
@@ -117,6 +121,19 @@ impl CodegenContext {
             AirConst::IntLiteral(value) => self.int_initializer(&global.ty, *value, program),
             AirConst::Int(value, _) => self.int_initializer(&global.ty, *value, program),
             AirConst::Float(value, _) => self.float_initializer(&global.ty, *value),
+            AirConst::Char(cp) => {
+                if !matches!(global.ty, AirType::Char) {
+                    return Err(CodegenError::UnsupportedType(format!(
+                        "global '{}' has char initializer but non-char type {:?}",
+                        global.name, global.ty
+                    )));
+                }
+                Ok(self
+                    .context
+                    .i32_type()
+                    .const_int(u64::from(*cp), false)
+                    .into())
+            }
             AirConst::Bool(value) => {
                 if !matches!(global.ty, AirType::Bool) {
                     return Err(CodegenError::UnsupportedType(format!(
@@ -519,29 +536,23 @@ impl CodegenContext {
         let array_len = u32::try_from(bytes.len() + 1).map_err(|_| {
             CodegenError::UnsupportedType(format!("string global '{}' is too large", name))
         })?;
-        let array_ty = self.context.i8_type().array_type(array_len);
+        let headered_ty = rc_headered_bytes_type(self.context, array_len);
         let storage_name = format!("{}{}_bytes", GLOBAL_STORAGE_PREFIX, name);
         let backing = if let Some(existing) = self.module.get_global(&storage_name) {
             existing
         } else {
-            let global_value = self.module.add_global(array_ty, None, &storage_name);
+            let global_value = self.module.add_global(headered_ty, None, &storage_name);
             global_value.set_linkage(Linkage::Private);
             global_value.set_constant(true);
-            let mut nul_terminated = bytes.to_vec();
-            nul_terminated.push(0);
-            let byte_values: Vec<_> = nul_terminated
-                .iter()
-                .map(|byte| self.context.i8_type().const_int(*byte as u64, false))
-                .collect();
-            global_value.set_initializer(&self.context.i8_type().const_array(&byte_values));
+            global_value.set_alignment(RC_HEADER_SIZE as u32);
+            global_value.set_initializer(&rc_headered_bytes_value(self.context, bytes));
             global_value
         };
 
-        let zero = self.context.i64_type().const_zero();
         let ptr = unsafe {
             backing
                 .as_pointer_value()
-                .const_in_bounds_gep(array_ty, &[zero, zero])
+                .const_in_bounds_gep(headered_ty, &rc_headered_data_indices(self.context))
         };
         let len = self.context.i64_type().const_int(bytes.len() as u64, false);
         Ok(aelys_string_type(self.context)
@@ -648,6 +659,7 @@ impl CodegenContext {
             (AirType::Bool, AirConst::Bool(value)) => Ok(vec![
                 self.context.i8_type().const_int(u64::from(*value), false),
             ]),
+            (AirType::Char, AirConst::Char(cp)) => self.integer_bytes(ty, i64::from(*cp)),
             (
                 AirType::I16
                 | AirType::I32
@@ -767,7 +779,7 @@ impl CodegenContext {
             AirType::I16 => (value as i16).to_le_bytes().to_vec(),
             AirType::U16 => (value as u16).to_le_bytes().to_vec(),
             AirType::I32 => (value as i32).to_le_bytes().to_vec(),
-            AirType::U32 => (value as u32).to_le_bytes().to_vec(),
+            AirType::U32 | AirType::Char => (value as u32).to_le_bytes().to_vec(),
             AirType::I64 => value.to_le_bytes().to_vec(),
             AirType::U64 => (value as u64).to_le_bytes().to_vec(),
             other => {
