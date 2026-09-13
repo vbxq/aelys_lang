@@ -658,15 +658,7 @@ impl MonoContext {
     }
 
     pub(super) fn mangle_name(&self, name: &str, type_args: &[AirType]) -> String {
-        if type_args.is_empty() {
-            return name.to_string();
-        }
-        let type_str = type_args
-            .iter()
-            .map(substitute::type_to_string)
-            .collect::<Vec<_>>()
-            .join("$");
-        format!("__mono_{}_{}", name, type_str)
+        crate::derive_mono_symbol(name, type_args)
     }
 
     fn uninstantiated_call_sites(&self, program: &AirProgram) -> Vec<MonoError> {

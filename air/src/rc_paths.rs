@@ -170,6 +170,7 @@ fn scan(
         | AirType::F32
         | AirType::F64
         | AirType::Bool
+        | AirType::Char
         | AirType::Str
         | AirType::FnPtr { .. }
         | AirType::Opaque

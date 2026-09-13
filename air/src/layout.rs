@@ -56,7 +56,7 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
     match ty {
         AirType::I8 | AirType::U8 | AirType::Bool => TypeLayout { size: 1, align: 1 },
         AirType::I16 | AirType::U16 => TypeLayout { size: 2, align: 2 },
-        AirType::I32 | AirType::U32 | AirType::F32 => TypeLayout { size: 4, align: 4 },
+        AirType::I32 | AirType::U32 | AirType::F32 | AirType::Char => TypeLayout { size: 4, align: 4 },
         AirType::I64 | AirType::U64 | AirType::F64 => TypeLayout { size: 8, align: 8 },
         AirType::Ptr(_) => TypeLayout { size: 8, align: 8 },
         AirType::FnPtr { .. } => TypeLayout { size: 16, align: 8 },
@@ -203,6 +203,7 @@ fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
         | AirType::I32
         | AirType::U32
         | AirType::F32
+        | AirType::Char
         | AirType::I64
         | AirType::U64
         | AirType::F64

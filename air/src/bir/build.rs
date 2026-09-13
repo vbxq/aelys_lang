@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use aelys_sema::{
     InferType, TypeTable, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction,
-    TypedMatchArm, TypedProgram, TypedStmt, TypedStmtKind,
+    TypedMatchArm, TypedPattern, TypedProgram, TypedStmt, TypedStmtKind,
 };
 use aelys_syntax::Span;
 
@@ -159,6 +159,7 @@ where
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
+        | TypedExprKind::Char(_)
         | TypedExprKind::String(_)
         | TypedExprKind::Null
         | TypedExprKind::Identifier(_) => {}
@@ -736,6 +737,7 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => BirOperand::Const,
 
@@ -766,6 +768,16 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Member { object, member }
                 if member == "bytes" && matches!(object.ty, InferType::String) =>
             {
+                if !aelys_sema::bytes_receiver_is_backed(object) {
+                    self.build_errors.push(BirDiagnostic::new(
+                        "E0901",
+                        "[ice]",
+                        span,
+                        "ICE: `.bytes` of a receiver that denotes no storage reached BIR \
+                         building; sema must reject it (E0421)"
+                            .to_string(),
+                    ));
+                }
                 match self.place_of(object) {
                     Some(place) => self.emit_to_temp(
                         BirRvalue::Ref {
@@ -1169,6 +1181,7 @@ impl<'a> BodyBuilder<'a> {
         for (arm, id) in arms.iter().zip(arm_ids.iter()) {
             self.start(*id);
             self.open_scope(arm.body.span);
+            self.bind_arm_pattern(&arm.pattern, arm.body.span);
             let taken = self.build_operand(&arm.body);
             if self.cur_open {
                 self.assign_temp(out, taken, arm.body.span);
@@ -1183,6 +1196,16 @@ impl<'a> BodyBuilder<'a> {
             local: out,
             proj: Vec::new(),
         })
+    }
+
+    fn bind_arm_pattern(&mut self, pattern: &TypedPattern, body_span: Span) {
+        let TypedPattern::Variant { bindings, span, .. } = pattern else {
+            return;
+        };
+        for (name, ty) in bindings {
+            let local = self.new_named(name, ty.clone(), *span, false);
+            self.push(BirStmtKind::StorageLive(local), body_span);
+        }
     }
 
     fn build_block_expr(&mut self, stmts: &[TypedStmt], tail: &TypedExpr) -> BirOperand {

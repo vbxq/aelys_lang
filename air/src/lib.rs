@@ -13,6 +13,8 @@ pub mod symbols;
 
 pub use bir::{Checked, check};
 
+pub mod ablation;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct LocalId(pub u32);
 
@@ -64,6 +66,11 @@ impl EnumRef {
 
 // three pinned strings and the byte golden read a plain enum under its bare name, so arity 0 must not decorate
 pub fn derive_enum_symbol(name: &str, args: &[AirType]) -> String {
+    derive_mono_symbol(name, args)
+}
+
+// without the arity between the delimiters `f<a_b>` and `f_a<b>` land on one symbol
+pub fn derive_mono_symbol(name: &str, args: &[AirType]) -> String {
     if args.is_empty() {
         return name.to_string();
     }
@@ -88,6 +95,8 @@ pub enum AirType {
     F32,
     F64,
     Bool,
+    // its own variant, not u32: type_to_string is the mono key and sharing one would collide
+    Char,
     /// byte string slice abi: (ptr, len), never nul-terminated.
     Str,
     Ptr(Box<AirType>),
@@ -119,6 +128,7 @@ impl AirType {
             AirType::U16 => Some(AirIntSize::U16),
             AirType::U32 => Some(AirIntSize::U32),
             AirType::U64 => Some(AirIntSize::U64),
+            AirType::Char => Some(AirIntSize::U32),
             _ => None,
         }
     }
@@ -391,6 +401,7 @@ pub enum AirConst {
     Int(i64, AirIntSize),
     Float(f64, AirFloatSize),
     Bool(bool),
+    Char(u32),
     Str(String),
     Null,
     FnRef(String),

@@ -15,6 +15,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::F32 => "f32".into(),
         AirType::F64 => "f64".into(),
         AirType::Bool => "bool".into(),
+        AirType::Char => "char".into(),
         AirType::Str => "str".into(),
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
@@ -64,6 +65,10 @@ pub fn fmt_const(c: &AirConst) -> String {
             format!("{}{}", s, fmt_float_size(size))
         }
         AirConst::Bool(b) => b.to_string(),
+        AirConst::Char(cp) => match char::from_u32(*cp) {
+            Some(c) => format!("'{}'", c),
+            None => format!("char#{cp}"),
+        },
         AirConst::Str(s) => format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\"")),
         AirConst::Null => "null".into(),
         AirConst::FnRef(name) => format!("fnref @{}", name),

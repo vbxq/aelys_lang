@@ -15,12 +15,72 @@ pub const RESERVED_PREFIX: &str = "__";
 // a program may call these without declaring them, so sema pins their types and codegen must let them through
 pub const BOOTSTRAP_BUILTIN_SYMBOLS: &[&str] = &["print", "println", "__aelys_collect"];
 
+pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
+    "__aelys_str_concat",
+    "__aelys_str_from_char",
+    "__aelys_str_substring_bytes",
+    "__aelys_to_string",
+];
+
 pub fn function_symbol_name(function: &AirFunction) -> String {
     if !function.is_extern && function.name == "main" {
         USER_MAIN_SYMBOL.to_string()
     } else {
         function.name.clone()
     }
+}
+
+// the undefined symbols a link must still resolve; read before any pass can delete the call
+pub fn referenced_extern_symbols(air: &AirProgram) -> Vec<String> {
+    use crate::{AirStmtKind, AirTerminator, Callee, Rvalue};
+
+    let externs: std::collections::HashSet<&str> = air
+        .functions
+        .iter()
+        .filter(|function| function.is_extern)
+        .map(|function| function.name.as_str())
+        .collect();
+    let by_id: HashMap<u32, &str> = air
+        .functions
+        .iter()
+        .filter(|function| function.is_extern)
+        .map(|function| (function.id.0, function.name.as_str()))
+        .collect();
+
+    let mut out: Vec<String> = Vec::new();
+    let take = |callee: &Callee, out: &mut Vec<String>| {
+        let name = match callee {
+            Callee::Extern(name, _) => Some(name.clone()),
+            Callee::Named(name) => externs.contains(name.as_str()).then(|| name.clone()),
+            Callee::Direct(id) => by_id.get(&id.0).map(|name| (*name).to_string()),
+            Callee::FnPtr(_) => None,
+        };
+        if let Some(name) = name
+            && !out.contains(&name)
+        {
+            out.push(name);
+        }
+    };
+
+    for function in &air.functions {
+        for block in &function.blocks {
+            for stmt in &block.stmts {
+                match &stmt.kind {
+                    AirStmtKind::CallVoid { func, .. } => take(func, &mut out),
+                    AirStmtKind::Assign {
+                        rvalue: Rvalue::Call { func, .. },
+                        ..
+                    } => take(func, &mut out),
+                    _ => {}
+                }
+            }
+            if let AirTerminator::Invoke { func, .. } = &block.terminator {
+                take(func, &mut out);
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 pub fn symbol_for_source_name(name: &str) -> String {
@@ -188,6 +248,9 @@ pub fn foreign_type_rejection(
         }
         InferType::Null => Some("`void` names c's absence of a value, so it is only a return type"),
         InferType::String => Some("an aelys string is a managed value, not a c `char *`"),
+        InferType::Char => {
+            Some("a `char` is a validated unicode scalar value, and c's `char` is a byte")
+        }
         InferType::Rc(_) => {
             Some("an `Rc<T>` lowers to a bare pointer, which would hand c a reference counted cell")
         }
@@ -242,6 +305,7 @@ pub const RUNTIME_DEFINED_SYMBOLS: &[&str] = &[
     "aelys_immix_alloc",
     "aelys_immix_block_count",
     "aelys_immix_free",
+    "aelys_immix_is_dead",
     "aelys_immix_realloc",
     "main",
 ];
@@ -300,7 +364,7 @@ pub fn reserved_runtime_symbols(
         .iter()
         .filter_map(|function| {
             let symbol = function_symbol_name(function);
-            // the runtime's own link cannot be diverted by a declaration, and what sits on the other side of the symbol is the binding author's affair
+            // the runtime link cannot be diverted by a declaration
             let claimed = if function.is_extern {
                 RUNTIME_DEFINED_SYMBOLS.contains(&symbol.as_str())
                     || reserved_against_declarations.contains(&symbol.as_str())

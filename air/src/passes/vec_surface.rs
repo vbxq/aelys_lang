@@ -277,6 +277,7 @@ impl Scan<'_> {
             | AirType::F32
             | AirType::F64
             | AirType::Bool
+            | AirType::Char
             | AirType::Str
             | AirType::Void => Ok(false),
         }
@@ -336,6 +337,7 @@ impl Scan<'_> {
             | AirType::F32
             | AirType::F64
             | AirType::Bool
+            | AirType::Char
             | AirType::Str
             | AirType::Void => Ok(false),
         }

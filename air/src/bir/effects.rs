@@ -142,6 +142,7 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
             | ("Vec", "with_capacity")
             | ("Vec", "reserve")
             | ("string", "substring_bytes")
+            | ("string", "from_char")
     )
 }
 
@@ -228,6 +229,7 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
+        | TypedExprKind::Char(_)
         | TypedExprKind::String(_)
         | TypedExprKind::Null
         | TypedExprKind::Identifier(_) => {}
@@ -407,6 +409,9 @@ fn walk_expr(expr: &TypedExpr, tt: &TypeTable, set: &mut EffectSet, w: &mut Witn
                 return;
             }
             if enum_name == "string" && variant == "substring_bytes" {
+                set.insert(Effect::Panic);
+            }
+            if enum_name == "char" && variant == "from_i64" {
                 set.insert(Effect::Panic);
             }
             if enum_name == "Vec" && variant == "pop" {
@@ -720,6 +725,7 @@ mod tests {
             | InferType::F32
             | InferType::F64
             | InferType::Bool
+            | InferType::Char
             | InferType::String
             | InferType::Null
             | InferType::Never
