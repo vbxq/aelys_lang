@@ -132,6 +132,23 @@ impl CompileError {
             CompileErrorKind::SymbolConflict { .. } => {
                 diag.add_help("use 'as' to bind one of them to another name".to_string());
             }
+            CompileErrorKind::OptimizationVerdictSplit {
+                refused_at,
+                accepted_at,
+                ..
+            } => {
+                diag.add_note(
+                    "a verdict belongs to the language and not to the optimization level, so the \
+                     two levels cannot both be right about this program"
+                        .to_string(),
+                );
+                diag.add_help(format!(
+                    "read the refusal above first: if it names something to change, changing it \
+                     settles both levels; compile at `{}` for its full form, and if the program \
+                     is well formed report it with `{}` and `{}` named",
+                    refused_at, refused_at, accepted_at
+                ));
+            }
             CompileErrorKind::DuplicateDefinition {
                 name,
                 previous_form,

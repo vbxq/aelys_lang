@@ -9,6 +9,10 @@ pub enum CompileErrorKind {
     InvalidEscape(char),
     UnterminatedFmtExpr,
     UnmatchedCloseBrace,
+    UnterminatedCharLiteral,
+    CharLiteralNotOneScalar {
+        scalars: usize,
+    },
     SourceUnreadable {
         path: String,
         io: String,
@@ -23,6 +27,9 @@ pub enum CompileErrorKind {
     InvalidAssignmentTarget,
     RecursionDepthExceeded {
         max: usize,
+    },
+    UnknownTypeBound {
+        name: String,
     },
     CommentNestingTooDeep {
         max: usize,
@@ -133,6 +140,12 @@ pub enum CompileErrorKind {
     LinkedLibraryClaimsRuntimeSymbol {
         symbol: String,
         libraries: Vec<String>,
+    },
+
+    OptimizationVerdictSplit {
+        refused_at: String,
+        accepted_at: String,
+        refusal: String,
     },
 
     BackendDiagnostic {

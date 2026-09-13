@@ -11,12 +11,15 @@ impl CompileErrorKind {
             Self::UnterminatedFmtExpr => 6,
             Self::UnmatchedCloseBrace => 7,
             Self::SourceUnreadable { .. } => 8,
+            Self::UnterminatedCharLiteral => 9,
+            Self::CharLiteralNotOneScalar { .. } => 10,
 
             Self::UnexpectedToken { .. } => 101,
             Self::ExpectedExpression => 102,
             Self::ExpectedIdentifier => 103,
             Self::InvalidAssignmentTarget => 104,
             Self::RecursionDepthExceeded { .. } => 105,
+            Self::UnknownTypeBound { .. } => 106,
 
             Self::UndefinedVariable(_) => 201,
             Self::VariableAlreadyDefined(_) => 202,
@@ -56,6 +59,8 @@ impl CompileErrorKind {
             Self::MalformedForeignDecl { .. } => 614,
             Self::ForeignSignatureType { .. } => 615,
             Self::LinkedLibraryClaimsRuntimeSymbol { .. } => 618,
+
+            Self::OptimizationVerdictSplit { .. } => 432,
 
             Self::TypeInferenceError(_) => 301,
 

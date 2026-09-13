@@ -11,9 +11,19 @@ impl CompileErrorKind {
                 "unterminated expression in format string (missing '}')".to_string()
             }
             Self::UnmatchedCloseBrace => "unmatched '}' in string (use '}}' to escape)".to_string(),
+            Self::UnterminatedCharLiteral => {
+                "unterminated character literal (missing closing `'`)".to_string()
+            }
+            Self::CharLiteralNotOneScalar { scalars } => format!(
+                "a character literal holds exactly one unicode scalar value, this one holds \
+                 {scalars}; write it with `\"` if you meant a string"
+            ),
             Self::UnexpectedToken { expected, found } => {
                 format!("expected {}, found {}", expected, found)
             }
+            Self::UnknownTypeBound { name } => format!(
+                "`{name}` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`"
+            ),
             Self::ExpectedExpression => "expected expression".to_string(),
             Self::ExpectedIdentifier => "expected identifier".to_string(),
             Self::InvalidAssignmentTarget => "invalid assignment target".to_string(),
@@ -176,6 +186,15 @@ impl CompileErrorKind {
             Self::SourceUnreadable { path, io } => {
                 format!("could not read {}: {}", path, io)
             }
+            Self::OptimizationVerdictSplit {
+                refused_at,
+                accepted_at,
+                refusal,
+            } => format!(
+                "{}\nthat refusal is raised at {} and not at {}, so the compiler reached two \
+                 verdicts on this program",
+                refusal, refused_at, accepted_at
+            ),
             Self::BackendDiagnostic {
                 backend, message, ..
             } => format!("[{}] {}", backend, message),

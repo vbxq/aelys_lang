@@ -73,6 +73,31 @@ To write a literal `}`, double it: `}}`.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0009",
+        title: "unterminated character literal",
+        explanation: "\
+A `'` opens a character literal but no closing `'` follows on the same line.
+
+    let c = 'a'      // ok
+    let c = 'a       // E0009",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0010",
+        title: "character literal is not one scalar value",
+        explanation: "\
+A character literal holds exactly one unicode scalar value. Zero is empty
+and two or more is a string:
+
+    let c = 'e'      // ok
+    let c = ''       // E0010, nothing between the quotes
+    let c = 'ab'     // E0010, use \"ab\" instead
+
+A user perceived character can be several scalar values, and those are a
+string, not a `char`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0008",
         title: "the input file could not be read",
         explanation: "\
@@ -129,6 +154,29 @@ struct field (`p.x`), or an indexed element (`arr[i]`).
 Expressions are nested beyond the compiler's recursion limit. This is a
 stack-overflow guard. The expression needs to be simplified or broken
 into intermediate variables.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0106",
+        title: "not a bound",
+        explanation: "\
+A type parameter was given a bound the compiler does not have. There are
+three, they are built in, and they are derived structurally from the type
+an instantiation supplies:
+
+    nogc    a value the managed heap never owns
+    eq      a type `==` answers on: the integers, the floats, `bool`,
+            `char`, `string`
+    ord     a type `<` answers on: the integers, the floats, `char`.
+            `string` is not one: it points at `str.compare` instead.
+            `ord` implies `eq`.
+
+Combine them with `+`:
+
+    fn sort<T: nogc + ord>(s: &mut [T]) { ... }
+
+`eq` and `ord` are read as ordinary names here, not keywords, so a
+function or variable may still be called `eq` or `ord` anywhere else.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -318,10 +366,10 @@ and can't be overwritten inside the body.
         explanation: "\
 `Rc<T>` is reference counted, and every retain has to be matched by a
 release the compiler can point at. Forms where that accounting cannot be
-proven are refused rather than silently miscompiled, and the message
-carries `[rc-stage1]`.
+proven are refused rather than silently miscompiled. A binding carries
+`[rc-stage1]`; a struct field or an enum payload carries `[rc-stage3a]`.
 
-Three shapes are refused today.
+Four shapes are refused today.
 
 An `Rc` binding declared `mut`, because an Rc is single-assignment for
 now and the overwrite would drop a retain:
@@ -341,6 +389,17 @@ or a generic payload erased at the AIR boundary.
 
     let xs = [r, r]             // E0410
     Rc::get(Rc::get(rr))        // E0410, a nested Rc payload
+
+A struct field or an enum payload initialized from a value whose count the
+compiler cannot account for. It has to be a fresh literal, a read of an
+existing binding or field, or a conditional whose branches are both one or
+both the other. A call is refused because nothing in a signature says
+whether the callee hands over its count or only lends it, and guessing
+either way is a leak or a use-after-free:
+
+    let w = W{ r: mkrc() }              // E0410, a call
+    let w = W{ r: if c { a } else { b } }   // ok, both branches read
+    let w = W{ r: Rc::new(1) }              // ok, a fresh literal
 
 Keep the `Rc` in a direct local and read through it where you need it.",
         severity: Severity::Error,
@@ -575,18 +634,24 @@ an `Rc`-field read, or a call. Bind an indirect value to a name first:
         title: "this expression denotes no storage",
         explanation: "\
 `&`, `&mut`, `Vec::push`'s target, the receiver of a `Vec` view
-(`Vec::as_slice`, `Vec::try_as_unique_mut_slice`) and the left-hand
-side of an assignment all need an ADDRESS. A call result, an aggregate
-literal or an arithmetic expression is a value, not a place: it lives
-in a temporary the compiler is free to discard, so a write through it
-would land nowhere and a view into it would outlive what it views.
+(`Vec::as_slice`, `Vec::try_as_unique_mut_slice`), the receiver of
+`.bytes` and the left-hand side of an assignment all need an ADDRESS.
+A call result, an aggregate literal or an arithmetic expression is a
+value, not a place: it lives in a temporary the compiler is free to
+discard, so a write through it would land nowhere and a view into it
+would outlive what it views.
 
     let r = &make_cell()          // E0421
     make_cell().f = 101           // E0421
     Vec::push(make_vec(), 1)      // E0421
     Vec::as_slice(make_vec())     // E0421
+    make_string().bytes           // E0421
 
 A length is a value, not a view, so `Vec::len(make_vec())` is fine.
+
+A string literal is the one receiver `.bytes` accepts without a
+binding: its bytes live in static storage for the whole run, so
+`\"hi\".bytes` outlives every view of it.
 
 Bind the value to a name first, then use the binding:
 
@@ -693,27 +758,25 @@ emitted body, and every call to either reaches whichever one was emitted.
         return dup()
     }
 
-A generic instance is named from the function name and the type arguments
-it was instantiated with, joined by `_`, so two functions that share no
-name at all can still land on one symbol:
+`main` counts here too, because it is emitted as `__aelys_main`.
+
+A generic instance can no longer be reached from source. Functions, enums
+and structs alike name an instance from its arity as well as from its type
+arguments, which makes the derivation injective, so these are all legal and
+land on four distinct symbols:
 
     struct B { v: i64 }
     struct A_B { v: i64 }
-    fn f<T>(x: T) -> i64 { return 1 }     // at T = A_B
-    fn f_A<T>(x: T) -> i64 { return 2 }   // at T = B
-// , both are `__mono_f_a_b`
+    fn f<T>(x: T) -> i64 { return 1 }     // at T = A_B, `__mono_f$1$A_B`
+    fn f_A<T>(x: T) -> i64 { return 2 }   // at T = B,   `__mono_f_A$1$B`
 
-`main` counts here too, because it is emitted as `__aelys_main`.
+`enum Q<T>` and `enum Q_ptr<T>` in one file reach `__mono_Q$1$i64` and
+`__mono_Q_ptr$1$i64` the same way. Two generic instances landing on one
+symbol is an internal invariant break and is reported as a compiler bug,
+not here.
 
-Enums and structs carry the same check, but it can no longer be reached
-from source: a generic type instance is named from its arity as well as
-its arguments, which makes the derivation injective, so `enum Q<T>` and
-`enum Q_ptr<T>` in one file are both legal and reach `__mono_Q$1$i64` and
-`__mono_Q_ptr$1$i64`. Two type definitions landing on one symbol is an
-internal invariant break and is reported as a compiler bug, not here.
-
-Nested functions do not get scope-qualified symbols yet, and generic
-instances are not disambiguated, so the fix is to rename one of them.",
+Nested functions do not get scope-qualified symbols yet, so the fix is to
+rename one of them.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1014,6 +1077,29 @@ the bound could not be proven there.",
 A generic function with a `nogc` bound was referenced outside a direct
 call. Taking it as a value would let it be instantiated somewhere the
 bound is never checked, so only direct calls are allowed.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0732",
+        title: "bound not satisfied",
+        explanation: "\
+A type parameter was used in a way its bounds do not allow, or a call
+instantiated a bounded type parameter with a type that does not satisfy
+the bound.
+
+`==` and `!=` on a type parameter need `eq`. `<`, `<=`, `>` and `>=`
+need `ord`, which implies `eq`. Neither is assumed: without the bound the
+function body would have no operation to compile.
+
+    fn eq<T: eq>(a: T, b: T) -> bool { return a == b }
+    fn lt<T: ord>(a: T, b: T) -> bool { return a < b }
+
+The bounds are derived structurally by the compiler, never declared by a
+user. `eq` holds of the integers, the floats, `bool`, `char` and
+`string`; `ord` holds of the integers, the floats and `char`. `string` is
+deliberately not `ord`: ordering strings goes through `str.compare`. A
+type parameter, a struct, an enum, a `Vec`, a slice and a reference
+satisfy neither.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1424,6 +1510,58 @@ different view of the base.
 
 The rule is the same on all four types, so `.len` behaves identically
 whichever one it is written on.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0432",
+        title: "the compiler reached two verdicts on one program",
+        explanation: "\
+The same source was accepted at one optimization level and refused at
+another. A program is accepted or refused by the language, so the two
+levels cannot both be right about it.
+
+The refusal the strict level raised is printed first, in full, and it is
+the part to read first: it is an ordinary diagnostic and most of the time
+it names something in the program to change. Changing that settles both
+levels at once. Compile at the level named as refusing to see the same
+refusal with its spans.
+
+Only when that refusal describes nothing you can act on is the split
+itself the finding. Then report the program with both levels named.
+
+Switching to the accepting level is never the answer: the binary it
+produces is not covered by the refusal the other level raised.
+
+The comparison that raises this runs from type inference to the end of
+AIR validation. The LLVM pass pipeline, the object writer and the linker
+run once, below it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0433",
+        title: "this index is outside the array",
+        explanation: "\
+An array declared `[T; N]` has elements 0 to N-1. When the index is a
+closed constant expression and the array's length is known, the read or
+the write is decided here rather than at run time.
+
+    fn f() -> i64 {
+        let a: [i64; 4] = [1, 2, 3, 4]
+        return a[7]            // E0433
+    }
+
+    fn g() -> i64 {
+        let a: [i64; 4] = [1, 2, 3, 4]
+        let i: i64 = 2 + 5
+        return a[i]            // E0433, `2 + 5` is closed
+    }
+
+An index the front end cannot close, such as one read from a parameter or
+computed in a loop, is not refused here and keeps its run-time bounds
+check.
+
+A `Vec<T>` and a slice have no length in their type, so this never
+applies to them.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
