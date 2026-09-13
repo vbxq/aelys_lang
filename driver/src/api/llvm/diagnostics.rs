@@ -33,6 +33,36 @@ pub(super) fn backend_diagnostic_error(
     ))
 }
 
+pub(super) fn optimization_verdict_split(
+    source: Arc<Source>,
+    refused_at: String,
+    refusal: &AelysError,
+    accepted_at: String,
+) -> AelysError {
+    // the whole refusal travels: it is the only actionable half of a split
+    let refusal = refusal
+        .to_diagnostics()
+        .iter()
+        .map(|diagnostic| {
+            let code = diagnostic
+                .code
+                .clone()
+                .unwrap_or_else(|| "no code".to_string());
+            format!("[{}] {}", code, user_facing(diagnostic.message.trim()))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    AelysError::Compile(CompileError::new(
+        CompileErrorKind::OptimizationVerdictSplit {
+            refused_at,
+            accepted_at,
+            refusal,
+        },
+        fallback_source_span(source.as_ref()),
+        source,
+    ))
+}
+
 pub(super) struct FaultMessage {
     pub(super) fault: Fault,
     pub(super) message: String,
@@ -304,8 +334,8 @@ pub(super) fn duplicate_symbol_errors_to_error(
                 diag.add_secondary_label(source.clone(), second_span, Some(second_hint));
             }
             let help = if dup.symbol.starts_with("__mono_") {
-                "rename one of them; a generic instance is named from the function name and \
-                 its type arguments joined by `_`, so two different pairs can produce one name"
+                "a generic instance is named from its arity as well as its type arguments, so two \
+                 of them reaching one symbol is a compiler bug, not a name you can rename"
             } else {
                 "rename one of them; nested functions do not get separate symbols yet"
             };
@@ -632,6 +662,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             format!("[rc-stage1] {}", detail),
             "Rc used outside the Stage 1 supported surface".to_string(),
         ),
+        TypeErrorKind::RcCarrierOutOfSurface { detail } => (
+            "E0410",
+            detail.clone(),
+            "Rc used outside the Stage 1 supported surface".to_string(),
+        ),
         TypeErrorKind::VecOutOfSurface { detail } => (
             "E0412",
             format!("[vec-surface] {}", detail),
@@ -646,6 +681,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0431",
             error.to_string(),
             "this expression cannot be iterated".to_string(),
+        ),
+        TypeErrorKind::ConstIndexOutOfBounds { .. } => (
+            "E0433",
+            error.to_string(),
+            "this index is outside the array".to_string(),
         ),
         TypeErrorKind::MutIndexRefUnsupported => (
             "E0415",
@@ -743,6 +783,16 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "a generic struct cannot satisfy the `nogc` bound".to_string(),
         ),
+        TypeErrorKind::BoundMissing { .. } => (
+            "E0732",
+            error.to_string(),
+            "this operator needs a bound".to_string(),
+        ),
+        TypeErrorKind::BoundNotSatisfied { .. } => (
+            "E0732",
+            error.to_string(),
+            "bound not satisfied here".to_string(),
+        ),
         TypeErrorKind::NogcGenericAsValue { .. } => (
             "E0731",
             error.to_string(),
@@ -785,7 +835,7 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
 
     let clamp = matches!(
         code,
-        "E0418" | "E0611" | "E0728" | "E0729" | "E0730" | "E0731"
+        "E0418" | "E0611" | "E0728" | "E0729" | "E0730" | "E0731" | "E0732"
     );
     let cut = |span| {
         if clamp {
@@ -1098,7 +1148,7 @@ mod tests {
             "both labels fall to the program anchor, so exactly one is drawn, got:\n{rendered}"
         );
         assert!(
-            rendered.contains("type arguments joined by"),
+            rendered.contains("named from its arity"),
             "a mangled symbol must not be explained as a nested function, got:\n{rendered}"
         );
     }

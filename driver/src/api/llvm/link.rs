@@ -20,15 +20,16 @@ pub(super) fn link_native_executable(
     core_lib: &Path,
     runtime: RuntimeVariant,
     link: &LinkRequirement,
+    require: &[String],
 ) -> Result<(), String> {
     #[cfg(windows)]
     {
         let _ = runtime;
-        link_windows(object_path, exe_path, core_lib, link)
+        link_windows(object_path, exe_path, core_lib, link, require)
     }
     #[cfg(not(windows))]
     {
-        link_unix(object_path, exe_path, core_lib, runtime, link)
+        link_unix(object_path, exe_path, core_lib, runtime, link, require)
     }
 }
 
@@ -38,6 +39,7 @@ fn link_windows(
     exe_path: &Path,
     core_lib: &Path,
     link: &LinkRequirement,
+    require: &[String],
 ) -> Result<(), String> {
     let obj = object_path.to_string_lossy().to_string();
     let exe = exe_path.to_string_lossy().to_string();
@@ -58,6 +60,9 @@ fn link_windows(
     for name in &link.libraries {
         link_args.push(format!("{}.lib", name));
     }
+    for symbol in require {
+        link_args.push(format!("/INCLUDE:{}", symbol));
+    }
 
     let mut errors = Vec::new();
     for linker in windows_linkers() {
@@ -77,6 +82,7 @@ fn link_unix(
     core_lib: &Path,
     runtime: RuntimeVariant,
     link: &LinkRequirement,
+    require: &[String],
 ) -> Result<(), String> {
     let obj = object_path.to_string_lossy().to_string();
     let exe = exe_path.to_string_lossy().to_string();
@@ -96,6 +102,10 @@ fn link_unix(
     }
     for name in &link.libraries {
         args.push(format!("-l{}", name));
+    }
+    // the symbol set is the unoptimised air's, so a pass that deletes the only call cannot delete the link
+    for symbol in require {
+        args.push(format!("-Wl,--require-defined={}", symbol));
     }
     super::run_process_c_locale("cc", &args)
 }

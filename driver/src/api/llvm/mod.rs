@@ -6,7 +6,7 @@ mod runtime;
 
 pub use core_lib::resolve_aelys_core_lib;
 pub use link::LinkRequirement;
-pub use lower::{executable_path_for, object_path_for};
+pub use lower::{executable_path_for, ir_path_for, object_path_for};
 pub use runtime::RuntimeVariant;
 
 use crate::SourceOptions;
@@ -25,19 +25,23 @@ use diagnostics::{
     FaultMessage, all_compiler, backend_diagnostic_error, bir_diagnostics_to_error,
     duplicate_symbol_errors_to_error, fallback_source_span, faulted_messages,
     foreign_clash_errors_to_error, foreign_signature_errors_to_error, join_by_fault,
-    mono_errors_to_error, multiple_diagnostics, numbered, program_anchor_span,
-    reserved_name_errors_to_error, runtime_symbol_errors_to_error, sema_errors_to_diagnostics,
-    vec_surface_errors_to_error,
+    mono_errors_to_error, multiple_diagnostics, numbered, optimization_verdict_split,
+    program_anchor_span, reserved_name_errors_to_error, runtime_symbol_errors_to_error,
+    sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::{compile_air_with_llvm, compile_air_with_llvm_linked};
 
 // todo: find a better way, clean this up once we have a proper bootstrap
 use aelys_air::symbols::BOOTSTRAP_BUILTIN_SYMBOLS as BOOTSTRAP_BUILTINS;
 
+const UNOPTIMIZED_LEVEL: &str = "-O0";
+
 struct LoweringArtifacts {
     air: aelys_air::AirProgram,
     source: Arc<Source>,
     warnings: Vec<Warning>,
+    // read off the unoptimised air: what the link must resolve is not the optimizer's to decide
+    required_externs: Vec<String>,
 }
 
 pub fn compile_to_typed_ast(source_code: &str) -> Result<aelys_sema::TypedProgram, AelysError> {
@@ -129,9 +133,10 @@ fn qualify_chain(path: &str, steps: Vec<aelys_air::bir::Step>) -> Vec<aelys_air:
         .collect()
 }
 
-struct CompiledModule {
-    air: aelys_air::AirProgram,
-    typed: aelys_sema::TypedProgram,
+struct ModuleFront {
+    dotted: String,
+    source: Arc<Source>,
+    globals: HashSet<String>,
     exports: Arc<aelys_sema::ModuleExports>,
     effects: std::collections::HashMap<String, aelys_air::bir::EffectSet>,
     chains: std::collections::HashMap<String, Vec<aelys_air::bir::Step>>,
@@ -287,20 +292,26 @@ fn imported_global_symbols(imports: &aelys_sema::ModuleImports) -> HashSet<Strin
     names
 }
 
-fn compile_module(
+fn sourced(warnings: Vec<Warning>, src: &Arc<Source>) -> Vec<Warning> {
+    warnings
+        .into_iter()
+        .map(|warning| {
+            if warning.source.is_none() {
+                warning.with_source(src.clone())
+            } else {
+                warning
+            }
+        })
+        .collect()
+}
+
+fn front_stage(
     unit: &crate::modules::ModuleUnit,
     imports: aelys_sema::ModuleImports,
-    opt_level: OptimizationLevel,
-    compiled: &[aelys_air::AirProgram],
     bir_imports: &aelys_air::bir::Imports,
-) -> Result<CompiledModule, AelysError> {
+) -> Result<(ModuleFront, aelys_air::bir::Checked), AelysError> {
     let src = unit.source.clone();
-    let imported = aelys_air::lower::Imported {
-        globals: imported_global_symbols(&imports),
-        structs: compiled.iter().flat_map(|p| p.structs.clone()).collect(),
-        enums: compiled.iter().flat_map(|p| p.enums.clone()).collect(),
-        bir: bir_imports.clone(),
-    };
+    let globals = imported_global_symbols(&imports);
 
     let known_globals: HashSet<String> = BOOTSTRAP_BUILTINS.iter().map(|s| s.to_string()).collect();
     let inference = aelys_sema::TypeInference::infer_program_full(
@@ -372,14 +383,43 @@ fn compile_module(
         checked.program(),
     ));
 
-    let mut optimizer = Optimizer::new(opt_level);
-    let typed_program = optimizer.optimize(checked);
-    let mut warnings = warnings;
-    warnings.extend(optimizer.take_warnings());
+    Ok((
+        ModuleFront {
+            dotted: unit.dotted.clone(),
+            source: src.clone(),
+            globals,
+            exports,
+            effects,
+            chains,
+            externs,
+            warnings: sourced(warnings, &src),
+        },
+        checked,
+    ))
+}
 
-    let mut air =
-        aelys_air::lower::try_lower_with_imports(&typed_program, imported).map_err(|failure| {
-            match failure {
+// every check a -o level can change the input of is in here, so above -o0 this runs twice
+fn air_stage(
+    fronts: &[ModuleFront],
+    typed: &[&aelys_sema::TypedProgram],
+    root: &Arc<Source>,
+    sources: &ModuleSources,
+    opt_level: OptimizationLevel,
+) -> Result<aelys_air::AirProgram, AelysError> {
+    let mut programs: Vec<aelys_air::AirProgram> = Vec::with_capacity(fronts.len());
+    let mut bir_imports = aelys_air::bir::Imports::default();
+
+    for (front, typed_program) in fronts.iter().zip(typed.iter().copied()) {
+        let src = front.source.clone();
+        let imported = aelys_air::lower::Imported {
+            globals: front.globals.clone(),
+            structs: programs.iter().flat_map(|p| p.structs.clone()).collect(),
+            enums: programs.iter().flat_map(|p| p.enums.clone()).collect(),
+            bir: bir_imports.clone(),
+        };
+
+        let mut air = aelys_air::lower::try_lower_with_imports(typed_program, imported).map_err(
+            |failure| match failure {
                 aelys_air::lower::LowerFailure::Borrow(diags) => {
                     bir_diagnostics_to_error(diags, src.clone())
                 }
@@ -404,122 +444,46 @@ fn compile_module(
                         )
                     }
                 }
-            }
-        })?;
+            },
+        )?;
 
-    // mono is function-destroying as well as function-creating: two block-nested `fn g<t>` in
-    let duplicates = aelys_air::symbols::duplicate_symbols(&air);
-    if !duplicates.is_empty() {
-        return Err(duplicate_symbol_errors_to_error(
-            duplicates,
-            &typed_program,
-            &air,
-            src.clone(),
-        ));
-    }
-
-    aelys_air::modules::qualify(&mut air, &unit.dotted);
-
-    let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
-    if !runtime_claims.is_empty() {
-        return Err(runtime_symbol_errors_to_error(
-            runtime_claims,
-            &air,
-            src.clone(),
-        ));
-    }
-
-    let warnings = warnings
-        .into_iter()
-        .map(|warning| {
-            if warning.source.is_none() {
-                warning.with_source(src.clone())
-            } else {
-                warning
-            }
-        })
-        .collect();
-
-    Ok(CompiledModule {
-        air,
-        typed: typed_program,
-        exports,
-        effects,
-        chains,
-        externs,
-        warnings,
-    })
-}
-
-fn joined_with_semicolons(messages: &[String]) -> String {
-    messages.join("; ")
-}
-
-fn joined_with_newlines(messages: &[String]) -> String {
-    messages.join("\n")
-}
-
-fn anchor_in(
-    air: &aelys_air::AirProgram,
-    source: &Source,
-    root: &Arc<Source>,
-) -> aelys_syntax::Span {
-    if std::ptr::eq(source, root.as_ref()) {
-        return program_anchor_span(air, source);
-    }
-    fallback_source_span(source)
-}
-
-fn lower_file_to_air_with_source(
-    path: &Path,
-    opt_level: OptimizationLevel,
-    sources: &SourceOptions,
-) -> Result<LoweringArtifacts, AelysError> {
-    let graph = crate::modules::discover(path, sources).map_err(|failure| failure.error)?;
-
-    let mut exports: Vec<Arc<aelys_sema::ModuleExports>> = Vec::new();
-    let mut programs: Vec<aelys_air::AirProgram> = Vec::new();
-    let mut warnings: Vec<Warning> = Vec::new();
-    let mut root_typed: Option<aelys_sema::TypedProgram> = None;
-    let src = graph.root().source.clone();
-    let sources = ModuleSources::new(
-        &graph
-            .units
-            .iter()
-            .map(|unit| (unit.dotted.clone(), unit.source.clone()))
-            .collect::<Vec<_>>(),
-        src.clone(),
-    );
-
-    let mut bir_imports = aelys_air::bir::Imports::default();
-    let mut prelude_scope: Option<aelys_sema::ModuleImports> = None;
-    for (index, unit) in graph.units.iter().enumerate() {
-        let mut imports = build_imports(unit, &exports)?;
-        let prelude_own_scope = (Some(index) == graph.prelude).then(|| imports.clone());
-        if let Some(scope) = &prelude_scope {
-            fall_back_to_prelude(&mut imports, scope, &unit.bound);
+        // mono is function-destroying as well as function-creating: two block-nested `fn g<t>` in
+        let duplicates = aelys_air::symbols::duplicate_symbols(&air);
+        if !duplicates.is_empty() {
+            return Err(duplicate_symbol_errors_to_error(
+                duplicates,
+                typed_program,
+                &air,
+                src.clone(),
+            ));
         }
-        let compiled = compile_module(unit, imports, opt_level, &programs, &bir_imports)?;
-        if let Some(mut scope) = prelude_own_scope {
-            widen_with_exports(&mut scope, &compiled.exports);
-            prelude_scope = Some(scope);
+
+        aelys_air::modules::qualify(&mut air, &front.dotted);
+
+        let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
+        if !runtime_claims.is_empty() {
+            return Err(runtime_symbol_errors_to_error(
+                runtime_claims,
+                &air,
+                src.clone(),
+            ));
         }
-        for (name, set) in &compiled.effects {
+
+        for (name, set) in &front.effects {
             bir_imports.effects.insert(name.clone(), *set);
         }
-        for (name, steps) in &compiled.chains {
+        for (name, steps) in &front.chains {
             bir_imports.chains.insert(name.clone(), steps.clone());
         }
-        for (name, sig) in &compiled.externs {
+        for (name, sig) in &front.externs {
             bir_imports.externs.insert(name.clone(), sig.clone());
         }
-        exports.push(compiled.exports);
-        programs.push(compiled.air);
-        warnings.extend(compiled.warnings);
-        root_typed = Some(compiled.typed);
+
+        programs.push(air);
     }
 
-    let typed_program = root_typed.expect("a graph always holds its root");
+    let typed_program = typed.last().copied().expect("a graph always holds its root");
+    let src = root.clone();
 
     let air = aelys_air::modules::merge(programs);
 
@@ -527,7 +491,7 @@ fn lower_file_to_air_with_source(
     if !duplicates.is_empty() {
         return Err(duplicate_symbol_errors_to_error(
             duplicates,
-            &typed_program,
+            typed_program,
             &air,
             src.clone(),
         ));
@@ -541,7 +505,7 @@ fn lower_file_to_air_with_source(
     if !duplicates.is_empty() {
         return Err(duplicate_symbol_errors_to_error(
             duplicates,
-            &typed_program,
+            typed_program,
             &air,
             src.clone(),
         ));
@@ -606,10 +570,134 @@ fn lower_file_to_air_with_source(
         ));
     }
 
+    Ok(air)
+}
+
+fn joined_with_semicolons(messages: &[String]) -> String {
+    messages.join("; ")
+}
+
+fn joined_with_newlines(messages: &[String]) -> String {
+    messages.join("\n")
+}
+
+fn anchor_in(
+    air: &aelys_air::AirProgram,
+    source: &Source,
+    root: &Arc<Source>,
+) -> aelys_syntax::Span {
+    if std::ptr::eq(source, root.as_ref()) {
+        return program_anchor_span(air, source);
+    }
+    fallback_source_span(source)
+}
+
+fn lower_file_to_air_with_source(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    sources: &SourceOptions,
+) -> Result<LoweringArtifacts, AelysError> {
+    let graph = crate::modules::discover(path, sources).map_err(|failure| failure.error)?;
+
+    let src = graph.root().source.clone();
+    let module_sources = ModuleSources::new(
+        &graph
+            .units
+            .iter()
+            .map(|unit| (unit.dotted.clone(), unit.source.clone()))
+            .collect::<Vec<_>>(),
+        src.clone(),
+    );
+
+    let mut exports: Vec<Arc<aelys_sema::ModuleExports>> = Vec::new();
+    let mut fronts: Vec<ModuleFront> = Vec::new();
+    let mut checked: Vec<aelys_air::bir::Checked> = Vec::new();
+    let mut bir_imports = aelys_air::bir::Imports::default();
+    let mut prelude_scope: Option<aelys_sema::ModuleImports> = None;
+    for (index, unit) in graph.units.iter().enumerate() {
+        let mut imports = build_imports(unit, &exports)?;
+        let prelude_own_scope = (Some(index) == graph.prelude).then(|| imports.clone());
+        if let Some(scope) = &prelude_scope {
+            fall_back_to_prelude(&mut imports, scope, &unit.bound);
+        }
+        let (front, unit_checked) = front_stage(unit, imports, &bir_imports)?;
+        if let Some(mut scope) = prelude_own_scope {
+            widen_with_exports(&mut scope, &front.exports);
+            prelude_scope = Some(scope);
+        }
+        for (name, set) in &front.effects {
+            bir_imports.effects.insert(name.clone(), *set);
+        }
+        for (name, steps) in &front.chains {
+            bir_imports.chains.insert(name.clone(), steps.clone());
+        }
+        for (name, sig) in &front.externs {
+            bir_imports.externs.insert(name.clone(), sig.clone());
+        }
+        exports.push(front.exports.clone());
+        fronts.push(front);
+        checked.push(unit_checked);
+    }
+
+    let reference = (opt_level != OptimizationLevel::None).then(|| {
+        let unoptimized: Vec<&aelys_sema::TypedProgram> =
+            checked.iter().map(|unit| unit.program()).collect();
+        air_stage(
+            &fronts,
+            &unoptimized,
+            &src,
+            &module_sources,
+            OptimizationLevel::None,
+        )
+    });
+
+    let mut warnings: Vec<Warning> = Vec::new();
+    let mut optimized: Vec<aelys_sema::TypedProgram> = Vec::with_capacity(checked.len());
+    for (front, unit_checked) in fronts.iter_mut().zip(checked) {
+        let mut optimizer = Optimizer::new(opt_level);
+        let program = optimizer.optimize(unit_checked);
+        warnings.append(&mut front.warnings);
+        warnings.extend(sourced(optimizer.take_warnings(), &front.source));
+        optimized.push(program);
+    }
+
+    let optimized_refs: Vec<&aelys_sema::TypedProgram> = optimized.iter().collect();
+    let actual = air_stage(&fronts, &optimized_refs, &src, &module_sources, opt_level);
+
+    let level = format!("-O{}", opt_level.numeric());
+    let mut required_externs: Option<Vec<String>> = None;
+    let air = match (reference, actual) {
+        (None, actual) => actual?,
+        (Some(Ok(unoptimized)), Ok(air)) => {
+            required_externs = Some(aelys_air::symbols::referenced_extern_symbols(&unoptimized));
+            air
+        }
+        (Some(Err(unoptimized)), Err(_)) => return Err(unoptimized),
+        (Some(Err(unoptimized)), Ok(_)) => {
+            return Err(optimization_verdict_split(
+                src.clone(),
+                UNOPTIMIZED_LEVEL.to_string(),
+                &unoptimized,
+                level,
+            ));
+        }
+        (Some(Ok(_)), Err(optimized_error)) => {
+            return Err(optimization_verdict_split(
+                src.clone(),
+                level,
+                &optimized_error,
+                UNOPTIMIZED_LEVEL.to_string(),
+            ));
+        }
+    };
+
+    let required_externs = required_externs
+        .unwrap_or_else(|| aelys_air::symbols::referenced_extern_symbols(&air));
     Ok(LoweringArtifacts {
         air,
         source: src,
         warnings,
+        required_externs,
     })
 }
 
@@ -626,7 +714,8 @@ pub fn compile_air_program_to_executable(
         .unwrap_or("<air>")
         .to_string();
     let src = Source::new(&name, "");
-    compile_air_with_llvm(path, air, opt_level, false, runtime, src)
+    let require = aelys_air::symbols::referenced_extern_symbols(air);
+    compile_air_with_llvm(path, air, opt_level, false, runtime, src, &require)
 }
 
 pub fn compile_file_with_llvm(
@@ -651,6 +740,7 @@ pub fn compile_file_with_llvm_variant(
         emit_llvm_ir,
         runtime,
         artifacts.source,
+        &artifacts.required_externs,
     )
 }
 
@@ -683,6 +773,7 @@ pub fn compile_file_with_llvm_linked(
         runtime,
         link,
         &SourceOptions::default(),
+        None,
     )
 }
 
@@ -693,6 +784,7 @@ pub fn compile_file_with_llvm_sources(
     runtime: RuntimeVariant,
     link: &LinkRequirement,
     sources: &SourceOptions,
+    output: Option<&Path>,
 ) -> Result<Vec<Warning>, AelysError> {
     let artifacts = lower_file_to_air_with_source(path, opt_level, sources)?;
     compile_air_with_llvm_linked(
@@ -701,8 +793,10 @@ pub fn compile_file_with_llvm_sources(
         opt_level,
         emit_llvm_ir,
         runtime,
-        artifacts.source,
+        artifacts.source.clone(),
         link,
+        output,
+        &artifacts.required_externs,
     )?;
     Ok(artifacts.warnings)
 }

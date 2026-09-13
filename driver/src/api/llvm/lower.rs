@@ -18,6 +18,7 @@ pub(super) fn compile_air_with_llvm(
     emit_llvm_ir: bool,
     runtime: RuntimeVariant,
     source: Arc<Source>,
+    require: &[String],
 ) -> Result<(), AelysError> {
     compile_air_with_llvm_linked(
         path,
@@ -27,6 +28,8 @@ pub(super) fn compile_air_with_llvm(
         runtime,
         source,
         &LinkRequirement::default(),
+        None,
+        require,
     )
 }
 
@@ -38,6 +41,8 @@ pub(super) fn compile_air_with_llvm_linked(
     runtime: RuntimeVariant,
     source: Arc<Source>,
     link: &LinkRequirement,
+    output: Option<&Path>,
+    require: &[String],
 ) -> Result<(), AelysError> {
     let module_name = path
         .file_stem()
@@ -52,9 +57,13 @@ pub(super) fn compile_air_with_llvm_linked(
         .optimize(opt_level.llvm_pass_pipeline(), opt_level.numeric())
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
+    let has_main_entry = air
+        .functions
+        .iter()
+        .any(|function| !function.is_extern && function.name == "main");
+
     if emit_llvm_ir {
-        let mut ir_path = PathBuf::from(path);
-        ir_path.set_extension("ll");
+        let ir_path = requested(output, || ir_path_for(path));
         let ir_path_str = ir_path.to_string_lossy().to_string();
         codegen
             .emit_ir(&ir_path_str)
@@ -62,16 +71,16 @@ pub(super) fn compile_air_with_llvm_linked(
         return Ok(());
     }
 
-    let object_path = object_path_for(path);
+    let object_path = if has_main_entry {
+        object_path_for(path)
+    } else {
+        requested(output, || object_path_for(path))
+    };
     let object_path_str = object_path.to_string_lossy().to_string();
     codegen
         .emit_object(&object_path_str, opt_level.numeric())
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
-    let has_main_entry = air
-        .functions
-        .iter()
-        .any(|function| !function.is_extern && function.name == "main");
     if has_main_entry {
         let anchor = program_anchor_span(air, source.as_ref());
         let core_lib = resolve_aelys_core_lib(runtime).map_err(|message| {
@@ -82,11 +91,11 @@ pub(super) fn compile_air_with_llvm_linked(
                 message,
                 None,
                 None,
-                Fault::Compiler,
+                Fault::Environment,
             )
         })?;
-        let exe_path = executable_path_for(path);
-        link_native_executable(&object_path, &exe_path, &core_lib, runtime, link).map_err(
+        let exe_path = requested(output, || executable_path_for(path));
+        link_native_executable(&object_path, &exe_path, &core_lib, runtime, link, require).map_err(
             |message| {
                 backend_diagnostic_error(
                     source.clone(),
@@ -95,7 +104,8 @@ pub(super) fn compile_air_with_llvm_linked(
                     message,
                     None,
                     foreign_declaration_help(air, source.as_ref()),
-                    Fault::Compiler,
+                    // linker stderr cannot separate a missing library from a broken object
+                    Fault::Environment,
                 )
             },
         )?;
@@ -147,6 +157,16 @@ fn foreign_declaration_help(air: &aelys_air::AirProgram, source: &Source) -> Opt
          that defines it. this program declares {}",
         sites.join(", ")
     ))
+}
+
+fn requested(output: Option<&Path>, default: impl FnOnce() -> PathBuf) -> PathBuf {
+    output.map(Path::to_path_buf).unwrap_or_else(default)
+}
+
+pub fn ir_path_for(path: &Path) -> PathBuf {
+    let mut ir_path = PathBuf::from(path);
+    ir_path.set_extension("ll");
+    ir_path
 }
 
 pub fn object_path_for(path: &Path) -> PathBuf {
