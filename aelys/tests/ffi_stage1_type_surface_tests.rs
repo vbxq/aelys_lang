@@ -127,7 +127,6 @@ fn the_eleven_scalars_pass_in_both_positions_and_a_borrow_only_as_a_parameter() 
     rejected_e0615("F2-10", "unsafe extern fn probe(x: &i64) -> &i64");
 }
 
-// an `rc<t>` and a `&t` both lower to `*t`, so only a verdict taken on the typed ast can tell them apart
 #[test]
 fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
     rejected_e0615("F2-3", "unsafe extern fn probe(x: Rc<i64>)");
@@ -349,7 +348,7 @@ fn the_return_position_admits_what_the_parameter_position_refuses() {
 }
 
 #[test]
-fn the_infer_type_enumeration_still_counts_twenty_six_variants() {
+fn the_infer_type_enumeration_still_counts_twenty_seven_variants() {
     let text = fs::read_to_string(repo_root().join("sema/src/types/infer_type.rs"))
         .expect("read the type enumeration");
     let body = text
@@ -375,7 +374,7 @@ fn the_infer_type_enumeration_still_counts_twenty_six_variants() {
         })
         .count();
     assert_eq!(
-        variants, 26,
+        variants, 27,
         "the surface is a verdict per variant, so a new variant is a new decision"
     );
 }

@@ -181,8 +181,8 @@ fn the_same_program_without_the_library_is_rejected_and_leaves_no_executable() {
     )
     .expect_err("L3: without `-l` the link cannot resolve the symbol");
     assert!(
-        err.contains("E0901"),
-        "L3: the verdict is a backend error: {err}"
+        err.contains("E0903") && !err.contains("compiler bug"),
+        "L3: a link the toolchain refused is not a compiler bug: {err}"
     );
     assert!(
         err.contains("undefined reference"),
@@ -203,7 +203,8 @@ fn a_library_without_a_search_path_is_rejected() {
     };
     let err = compile(dir.path(), "l4", TRIPLE_AE, &link, OptimizationLevel::None)
         .expect_err("L4: a bare `-l` finds only the system path");
-    assert!(err.contains("E0901"), "L4: {err}");
+    assert!(err.contains("E0903"), "L4: {err}");
+    assert!(!err.contains("compiler bug"), "L4: {err}");
     assert!(!exe_path(dir.path(), "l4").exists(), "L4: no executable");
 }
 
@@ -216,7 +217,8 @@ fn a_search_path_that_does_not_exist_is_a_rejection_not_a_panic() {
     };
     let err = compile(dir.path(), "l5", TRIPLE_AE, &link, OptimizationLevel::None)
         .expect_err("L5: the library is not on that path");
-    assert!(err.contains("E0901"), "L5: {err}");
+    assert!(err.contains("E0903"), "L5: {err}");
+    assert!(!err.contains("compiler bug"), "L5: {err}");
     assert!(!exe_path(dir.path(), "l5").exists(), "L5: no executable");
 }
 
@@ -226,7 +228,8 @@ fn a_library_that_does_not_exist_is_rejected() {
     let link = link_to(dir.path(), &["aelys_stage4_no_such_library"]);
     let err = compile(dir.path(), "l6", TRIPLE_AE, &link, OptimizationLevel::None)
         .expect_err("L6: the linker cannot find it");
-    assert!(err.contains("E0901"), "L6: {err}");
+    assert!(err.contains("E0903"), "L6: {err}");
+    assert!(!err.contains("compiler bug"), "L6: {err}");
     assert!(!exe_path(dir.path(), "l6").exists(), "L6: no executable");
 }
 
@@ -677,7 +680,8 @@ fn a_link_failure_with_no_external_declaration_carries_no_ffi_help() {
         OptimizationLevel::None,
     )
     .expect_err("D5: the library is missing, so the link fails");
-    assert!(err.contains("E0901"), "D5: {err}");
+    assert!(err.contains("E0903"), "D5: {err}");
+    assert!(!err.contains("compiler bug"), "D5: {err}");
     assert!(
         !err.contains("an external function is resolved at link time"),
         "D5: the help must not become universal noise: {err}"

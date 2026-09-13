@@ -366,6 +366,7 @@ fn foreign_declaration(name: &str, params: &[InferType], nogc: bool) -> TypedStm
         kind: TypedStmtKind::Function(TypedFunction {
             name: name.to_string(),
             type_params: Vec::new(),
+            bounds: Vec::new(),
             params: params
                 .iter()
                 .enumerate()

@@ -489,8 +489,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
 
     assert_eq!(
         measured_defined.len(),
-        5,
-        "the runtime defines five symbols of its own, got: {measured_defined:?}"
+        6,
+        "the runtime defines six symbols of its own, got: {measured_defined:?}"
     );
     assert_eq!(
         measured_defined,
@@ -501,8 +501,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
 
     assert_eq!(
         measured_undefined.len(),
-        19,
-        "nm reports nineteen undefined symbols, got: {measured_undefined:?}"
+        20,
+        "nm reports twenty undefined symbols, got: {measured_undefined:?}"
     );
     let imported_only: BTreeSet<String> = measured_undefined
         .difference(&measured_defined)
@@ -511,7 +511,7 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
     assert_eq!(
         imported_only.len(),
         16,
-        "sixteen of the nineteen are imported and never defined, got: {imported_only:?}"
+        "sixteen of the twenty are imported and never defined, got: {imported_only:?}"
     );
     assert_eq!(
         imported_only,
@@ -527,8 +527,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
     );
     assert_eq!(
         RUNTIME_RESERVED_SYMBOLS.len(),
-        21,
-        "the union counts twenty one entries"
+        22,
+        "the union counts twenty two entries"
     );
 }
 
@@ -546,7 +546,7 @@ fn f3_36_a_declaration_is_measured_against_the_defined_half_and_a_body_against_t
     assert_eq!(
         claimed,
         pinned(RUNTIME_DEFINED_SYMBOLS),
-        "a declaration claims no symbol, so only the five the runtime defines itself are closed \
+        "a declaration claims no symbol, so only the six the runtime defines itself are closed \
          to it"
     );
 
@@ -784,6 +784,7 @@ fn declaration(name: &str) -> TypedStmt {
         kind: TypedStmtKind::Function(TypedFunction {
             name: name.to_string(),
             type_params: Vec::new(),
+            bounds: Vec::new(),
             params: Vec::new(),
             return_type: InferType::I64,
             body: Vec::new(),

@@ -132,9 +132,7 @@ fn the_malloc_free_dereference_program_is_now_rejected() {
 }
 
 #[test]
-#[ignore = "the origin model of the reference design (charter section 4) is outside this run; \
-            measured here, a `&buf[0]` on a local kept by the callee answers 123 at -O0 and 124 at -O1..3"]
-fn a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level() {
+fn a_callee_that_keeps_a_pointer_to_a_caller_local_is_accepted_at_every_level() {
     let dir = tempdir().expect("tempdir");
     let root = dir.path();
     fs::create_dir_all(root.join("lib")).expect("lib dir");
@@ -142,7 +140,8 @@ fn a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level() {
         root.join("stash.c"),
         "static const unsigned char *kept;\n\
          void aelys_stash(const unsigned char *p) { kept = p; }\n\
-         long aelys_peek(void) { return kept[0] + kept[1]; }\n",
+         long aelys_peek(void) { return kept[0] + kept[1]; }\n\
+         long aelys_held(void) { return kept != 0; }\n",
     )
     .expect("write c");
     for (program, args) in [
@@ -163,16 +162,24 @@ fn a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level() {
     };
     let source = "unsafe extern fn aelys_stash(p: &u8)\n\
                   unsafe extern fn aelys_peek() -> i64\n\
-                  fn stash() { let mut buf: [u8; 4] = [100, 24, 0, 0]\n\
-                  \u{20}            unsafe { aelys_stash(&buf[0]) } }\n\
-                  fn main() -> i64 { stash()\n\
-                  \u{20}                 unsafe { return aelys_peek() } }\n";
+                  unsafe extern fn aelys_held() -> i64\n\
+                  fn stash() -> i64 { let mut buf: [u8; 4] = [100, 24, 0, 0]\n\
+                  \u{20}                   unsafe { aelys_stash(&buf[0]) }\n\
+                  \u{20}                   unsafe { return aelys_peek() } }\n\
+                  fn main() -> i64 { let seen = stash()\n\
+                  \u{20}                 unsafe { return seen + aelys_held() } }\n";
     let path = root.join("t19.aelys");
     fs::write(&path, source).expect("write");
     let mut answers = Vec::new();
     for (name, opt) in LEVELS {
         aelys_driver::compile_file_with_llvm_linked(&path, opt, false, RuntimeVariant::Rc, &link)
-            .expect("compiles");
+            .unwrap_or_else(|err| {
+                panic!(
+                    "T19 {name}: the program is refused. If the refusal is an origin model this \
+                     witness has served its purpose: delete it and write the refusal down as the \
+                     new contract; any other refusal is a separate regression. {err}"
+                )
+            });
         let code = Command::new(root.join("t19"))
             .status()
             .expect("run")
@@ -180,9 +187,10 @@ fn a_borrowed_local_kept_by_the_callee_answers_differently_at_each_level() {
             .unwrap_or(-1);
         answers.push((name, code));
     }
-    assert_eq!(
-        answers[0].1, answers[1].1,
-        "a type contract may never depend on the optimization level, and here it does: {answers:?}"
+    assert!(
+        answers.iter().all(|(_, code)| *code == 125),
+        "T19: a callee keeping a `&buf[0]` of a caller local still answers 124 through that \
+         pointer and still holds it after the frame dies, at every level: {answers:?}"
     );
 }
 
@@ -644,6 +652,8 @@ fn the_admitted_runtime_set_is_pinned_and_its_linked_half_is_what_nm_defines() {
         "__aelys_collect",
         "__aelys_len",
         "__aelys_range",
+        "__aelys_str_release",
+        "__aelys_str_retain",
         "__aelys_vec_release",
         "__aelys_vec_retain",
     ]
