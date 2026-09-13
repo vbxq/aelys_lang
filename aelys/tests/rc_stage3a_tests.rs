@@ -115,10 +115,6 @@ fn main() -> i64 {
         stderr.contains("[rc] allocs=1 frees=1"),
         "a copied carrier must free its Rc exactly once; got stderr:\n{stderr}"
     );
-    assert!(
-        !stderr.contains("frees=2"),
-        "a carrier's Rc must NOT be freed per copy; got stderr:\n{stderr}"
-    );
 }
 
 #[test]

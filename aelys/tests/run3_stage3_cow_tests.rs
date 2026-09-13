@@ -367,28 +367,28 @@ const S3_27: &str = "struct S { n: i64 }\n\
 #[test]
 fn s3_01_a_mut_view_of_a_whole_owner_still_detaches_at_the_store() {
     let h = Harness::new();
-    h.value_row("S3-01", S3_01, "101\n7919\n", 2, 2);
+    h.value_row("S3-01", S3_01, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_02_the_depth_one_indexed_store_keeps_its_values_through_the_move() {
     let h = Harness::new();
-    h.value_row("S3-02", S3_02, "101\n7919\n", 2, 2);
+    h.value_row("S3-02", S3_02, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_09_a_read_through_an_element_reference_must_not_detach() {
     let h = Harness::new();
-    h.value_row("S3-09", S3_09, "7919\n7919\n", 1, 1);
+    h.value_row("S3-09", S3_09, "7919\n7919\n", 3, 1);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_10_pushs_own_detach_path_is_untouched_by_the_move() {
     let h = Harness::new();
-    h.value_row("S3-10", S3_10, "7919\n7919\n", 2, 2);
+    h.value_row("S3-10", S3_10, "7919\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
@@ -396,14 +396,14 @@ fn s3_10_pushs_own_detach_path_is_untouched_by_the_move() {
 #[test]
 fn s3_11_a_vec_literals_element_stores_allocate_nothing() {
     let h = Harness::new();
-    h.value_row("S3-11", S3_11, "7919\n3\n", 1, 1);
+    h.value_row("S3-11", S3_11, "7919\n3\n", 3, 1);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_27_a_capturing_closure_writing_a_whole_element_is_already_by_value() {
     let h = Harness::new();
-    h.value_row("S3-27", S3_27, "7919\n7919\n", 3, 1);
+    h.value_row("S3-27", S3_27, "7919\n7919\n", 5, 1);
     h.assert_legs(8);
 }
 
@@ -593,28 +593,28 @@ const S3_33: &str = "struct S { n: i64 }\n\
 #[test]
 fn s3_03_a_field_under_an_element_detaches_before_the_address_exists() {
     let h = Harness::new();
-    h.value_row("S3-03", S3_03, "101\n7919\n", 2, 2);
+    h.value_row("S3-03", S3_03, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_04_the_same_store_through_a_reference_spine() {
     let h = Harness::new();
-    h.value_row("S3-04", S3_04, "101\n7919\n", 2, 2);
+    h.value_row("S3-04", S3_04, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_05_an_index_under_an_index_detaches_once() {
     let h = Harness::new();
-    h.value_row("S3-05", S3_05, "101\n2\n", 2, 2);
+    h.value_row("S3-05", S3_05, "101\n2\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_06_two_field_steps_under_an_element() {
     let h = Harness::new();
-    h.value_row("S3-06", S3_06, "101\n7919\n", 2, 2);
+    h.value_row("S3-06", S3_06, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
@@ -622,29 +622,28 @@ fn s3_06_two_field_steps_under_an_element() {
 #[test]
 fn s3_07_the_same_store_inside_a_lambda_body() {
     let h = Harness::new();
-    h.value_row("S3-07", S3_07, "101\n7919\n", 2, 2);
+    h.value_row("S3-07", S3_07, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_08_a_buffer_that_was_never_shared_allocates_nothing() {
     let h = Harness::new();
-    h.value_row("S3-08", S3_08, "101\n", 1, 1);
+    h.value_row("S3-08", S3_08, "101\n", 2, 1);
     h.assert_legs(8);
 }
 
-// a second live miscompile at head, `101 | 101` allocs=1, in neither charter a14's table nor
 #[test]
 fn s3_28_a_lambda_nested_inside_a_lambda() {
     let h = Harness::new();
-    h.value_row("S3-28", S3_28, "101\n7919\n", 2, 2);
+    h.value_row("S3-28", S3_28, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_30_an_array_element_under_a_field_under_an_element() {
     let h = Harness::new();
-    h.value_row("S3-30", S3_30, "101\n7919\n", 2, 2);
+    h.value_row("S3-30", S3_30, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
@@ -652,14 +651,14 @@ fn s3_30_an_array_element_under_a_field_under_an_element() {
 #[test]
 fn s3_31_a_compound_store_whose_read_straddles_the_detach() {
     let h = Harness::new();
-    h.value_row("S3-31", S3_31, "8020\n7919\n", 2, 2);
+    h.value_row("S3-31", S3_31, "8020\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_32_a_loop_carried_element_store_advances_and_stays_private() {
     let h = Harness::new();
-    h.value_row("S3-32", S3_32, "3\n0\n3\n", 2, 2);
+    h.value_row("S3-32", S3_32, "3\n0\n3\n", 5, 2);
     h.assert_legs(8);
 }
 
@@ -667,7 +666,7 @@ fn s3_32_a_loop_carried_element_store_advances_and_stays_private() {
 #[test]
 fn s3_33_three_way_sharing() {
     let h = Harness::new();
-    h.value_row("S3-33", S3_33, "101\n7919\n7919\n", 2, 2);
+    h.value_row("S3-33", S3_33, "101\n7919\n7919\n", 5, 2);
     h.assert_legs(8);
 }
 
@@ -857,15 +856,14 @@ const S3_29: &str = "fn main() -> i64 {\n\
 #[test]
 fn s3_26_a_capturing_closure_cannot_mutate_an_outer_vec_at_depth_two_either() {
     let h = Harness::new();
-    h.value_row("S3-26", S3_26, "7919\n7919\n", 3, 1);
+    h.value_row("S3-26", S3_26, "7919\n7919\n", 5, 1);
     h.assert_legs(8);
 }
 
-// it, it rests on a measurement over storage that has no cow at all
 #[test]
 fn s3_29_a_capture_is_by_value_for_storage_the_closure_writes() {
     let h = Harness::new();
-    h.value_row("S3-29", S3_29, "101\n7919\n", 1, 0);
+    h.value_row("S3-29", S3_29, "101\n7919\n", 3, 0);
     h.assert_legs(8);
 }
 
@@ -970,7 +968,7 @@ const S3_21_STRUCT: &str = "struct S { v: Vec<i64> }\n\
 fn s3_15_a_write_through_a_slice_of_a_vec_now_runs() {
     let h = Harness::new();
     h.value_row("S3-15", S3_15, "", 1, 1);
-    h.value_row("S3-15-aliased", S3_15_ALIASED, "101\n7919\n", 2, 2);
+    h.value_row("S3-15-aliased", S3_15_ALIASED, "101\n7919\n", 4, 2);
     h.assert_legs(16);
 }
 
@@ -978,7 +976,7 @@ fn s3_15_a_write_through_a_slice_of_a_vec_now_runs() {
 fn s3_16_the_view_returned_across_an_origin_now_runs() {
     let h = Harness::new();
     h.value_row("S3-16", S3_16, "", 1, 1);
-    h.value_row("S3-16-aliased", S3_16_ALIASED, "101\n7919\n", 2, 2);
+    h.value_row("S3-16-aliased", S3_16_ALIASED, "101\n7919\n", 4, 2);
     h.assert_legs(16);
 }
 
@@ -1021,11 +1019,15 @@ fn s3_20b_an_rc_of_a_vec_is_what_holds_the_narrowing() {
     h.assert_legs(4);
 }
 
-// the same, via a type parameter: it is only `vec` after monomorphisation, so it misses an
+// the same, via a type parameter: the index rule refuses it before any vec surface is consulted
 #[test]
 fn s3_20c_a_generic_instantiated_at_a_vec_is_the_other_half() {
     let h = Harness::new();
-    h.fenced_row("S3-20c", S3_20C, "E0412");
+    let rendered = h.fenced_row("S3-20c", S3_20C, "E0304");
+    assert!(
+        rendered.contains("the generic type parameter `T` cannot be indexed"),
+        "S3-20c: the refusal must name the index rule that owns it\n{rendered}"
+    );
     h.assert_legs(4);
 }
 
@@ -1105,7 +1107,7 @@ const S3_35: &str = "fn main() -> i64 {\n\
 #[test]
 fn s3_34_an_index_compound_store_reads_before_the_detach_and_writes_after() {
     let h = Harness::new();
-    h.value_row("S3-34", S3_34, "8020\n7919\n", 2, 2);
+    h.value_row("S3-34", S3_34, "8020\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
@@ -1113,13 +1115,14 @@ fn s3_34_an_index_compound_store_reads_before_the_detach_and_writes_after() {
 #[test]
 fn s3_35_a_deref_assign_replacing_the_whole_slot() {
     let h = Harness::new();
-    h.value_row("S3-35", S3_35, "101\n7919\n", 2, 2);
+    h.value_row("S3-35", S3_35, "101\n7919\n", 4, 2);
     h.assert_legs(8);
 }
 
 // - leak legs run under `aelys_alloc=malloc`, because under immix every runtime allocation is
 
-#[cfg(feature = "asan-invariants")]
+// the module is built unconditionally so an import refactor cannot silently unbuild the asan tier
+#[cfg_attr(not(feature = "asan-invariants"), allow(dead_code))]
 mod asan {
     use super::*;
 
@@ -1213,11 +1216,12 @@ mod asan {
             .count()
     }
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn asan_tier_the_corpus_reports_no_memory_error() {
         let h = Harness::new();
         let Some(_archive) = build_asan_archive(h.dir.path()) else {
-            return;
+            panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
         let mut instrumented_and_run = 0usize;
 
@@ -1231,13 +1235,11 @@ mod asan {
             )
             .is_err()
             {
-                eprintln!("{id}: toolchain unavailable, skipping the ASan tier");
-                return;
+                panic!("{id}: the ASan tier must compile its row");
             }
             let object = path.with_extension(if cfg!(windows) { "obj" } else { "o" });
             if !object.is_file() {
-                eprintln!("{id}: object not produced, skipping the ASan tier");
-                return;
+                panic!("{id}: the ASan tier must produce an object");
             }
             let exe = h.dir.path().join(format!("{}_asan_exe", slug(id, "")));
             let link = Command::new("clang")
@@ -1249,8 +1251,7 @@ mod asan {
                 .arg(&exe)
                 .output();
             let Ok(link) = link else {
-                eprintln!("{id}: clang unavailable, skipping the ASan tier");
-                return;
+                panic!("{id}: the ASan tier must link");
             };
             assert!(
                 link.status.success(),

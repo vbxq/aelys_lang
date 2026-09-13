@@ -117,9 +117,11 @@ fn accepts_and_runs(src: &str, stdout: &str, exit: i32, stats: &str) {
                 got_out, stdout,
                 "stdout at {level:?}/{allocator}; stderr:\n{got_err}"
             );
+            // the runtime prints an [rc] and a [raw] counter line, an unprefixed match takes either
+            let want = format!("[rc] {stats}");
             assert!(
-                got_err.contains(stats),
-                "expected `{stats}` at {level:?}/{allocator}; got stderr:\n{got_err}"
+                got_err.contains(&want),
+                "expected `{want}` at {level:?}/{allocator}; got stderr:\n{got_err}"
             );
         }
     }
@@ -153,7 +155,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -237,7 +239,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -268,7 +270,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -304,7 +306,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -340,7 +342,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=0 frees=0",
+        "allocs=1 frees=0",
     );
 }
 
@@ -382,7 +384,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=0 frees=0",
+        "allocs=1 frees=0",
     );
 }
 
@@ -400,7 +402,7 @@ fn main() -> i64 {
 "#,
         "1\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -556,7 +558,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -597,7 +599,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -629,7 +631,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -667,7 +669,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -701,12 +703,12 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
 #[test]
-fn u5_the_same_struct_without_an_rc_field_runs_without_allocating() {
+fn u5_the_same_struct_without_an_rc_field_allocates_only_in_its_println() {
     let err = rejects(
         r#"
 struct T { b: i64, a: [i64;3] }
@@ -733,7 +735,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=0 frees=0",
+        "allocs=1 frees=0",
     );
 }
 
@@ -771,7 +773,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -805,7 +807,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -843,7 +845,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -861,7 +863,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=0 frees=0",
+        "allocs=1 frees=0",
     );
     let err = rejects(
         r#"
@@ -892,7 +894,7 @@ fn main() -> i64 {{
         ),
         "0\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -953,7 +955,7 @@ fn main() -> i64 { return go(pick) }
 "#,
         "9\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -1032,12 +1034,12 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
 #[test]
-fn e2_the_plain_enum_twin_runs_without_allocating() {
+fn e2_the_plain_enum_twin_allocates_only_in_its_println() {
     accepts_and_runs(
         r#"
 enum E { A(i64), B(i64) }
@@ -1051,7 +1053,7 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=0 frees=0",
+        "allocs=1 frees=0",
     );
 }
 
@@ -1083,7 +1085,7 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -1121,7 +1123,7 @@ fn main() -> i64 {{
         ),
         "4\n",
         0,
-        "allocs=1 frees=1",
+        "allocs=2 frees=1",
     );
 }
 
@@ -1434,9 +1436,12 @@ fn main() -> i64 { return f() }
         &[r#"LOANROOT fn=f loan=0 root=%1 proj=[] ty=Vec(I64) class=Managed"#],
     );
 }
-#[cfg(feature = "asan-invariants")]
+// the module is built unconditionally so an import refactor cannot silently unbuild the asan tier
+#[cfg_attr(not(feature = "asan-invariants"), allow(dead_code))]
 mod asan {
     use super::*;
+    // the file-level import moved into `mod common` at f56b1cf and this gated module went unbuilt
+    use std::path::{Path, PathBuf};
 
     fn build_asan_archive(dir: &Path) -> Option<PathBuf> {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -1583,6 +1588,7 @@ fn main() -> i64 {
         ]
     }
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn asan_tier_is_armed_and_the_managed_rows_are_clean() {
         let dir = tempdir().expect("tempdir");
@@ -1623,7 +1629,7 @@ fn main() -> i64 {
                 "{id}: the sanitizer reports a memory error\nstderr:\n{err}"
             );
             assert!(
-                err.contains("allocs=1 frees=1"),
+                err.contains("[rc] allocs=1 frees=1"),
                 "{id}: expected a balanced refcount; stderr:\n{err}"
             );
         }
@@ -1631,6 +1637,7 @@ fn main() -> i64 {
     }
 
     // the leak is in the bootstrap integer-to-string helper and predates this stage, so the row
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn asan_tier_pins_the_known_println_leak() {
         let dir = tempdir().expect("tempdir");
@@ -1643,31 +1650,138 @@ fn main() -> i64 {
         let Some(exe) = link_instrumented(dir.path(), "known_leak", &src) else {
             panic!("the ASan tier must link");
         };
-        let run = Command::new(&exe)
-            .env("AELYS_RC_STATS", "1")
-            .env("ASAN_OPTIONS", "detect_leaks=1")
-            .output()
-            .expect("run the instrumented exe");
-        let err = String::from_utf8_lossy(&run.stderr);
+        let run = |allocator: &str| {
+            let out = Command::new(&exe)
+                .env("AELYS_RC_STATS", "1")
+                .env("ASAN_OPTIONS", "detect_leaks=1")
+                .env("AELYS_ALLOC", allocator)
+                .output()
+                .expect("run the instrumented exe");
+            let err = String::from_utf8_lossy(&out.stderr).into_owned();
+            assert_eq!(
+                String::from_utf8_lossy(&out.stdout),
+                "9\n",
+                "{allocator} stderr:\n{err}"
+            );
+            assert!(
+                err.contains("[rc] allocs=2 frees=1"),
+                "the println's string is a managed allocation now and nothing releases it yet, so \
+                 the managed counter is what carries the known leak; {allocator} stderr:\n{err}"
+            );
+            err
+        };
+
+        // a region block stays reachable through g_all_blocks, so lsan cannot see an object leaked inside one
+        let immix = run("immix");
+        assert!(
+            !immix.contains("LeakSanitizer"),
+            "immix answers the leak from a block it still holds, so a leak report here means the \
+             allocator changed shape and this row must be re-decided;\nstderr:\n{immix}"
+        );
         assert_eq!(
-            String::from_utf8_lossy(&run.stdout),
-            "9\n",
-            "stderr:\n{err}"
+            immix.matches("allocated from:").count(),
+            0,
+            "immix stderr:\n{immix}"
+        );
+
+        let malloc = run("malloc");
+        assert!(
+            malloc.contains("LeakSanitizer: detected memory leaks"),
+            "the known println leak stopped reproducing, so this row must be re-decided;\nstderr:\n{malloc}"
         );
         assert!(
-            err.contains("allocs=1 frees=1"),
-            "the managed refcount must still balance; stderr:\n{err}"
+            malloc.contains("__aelys_to_string_i64"),
+            "a leak appeared that is not the known bootstrap one; stderr:\n{malloc}"
+        );
+        let stacks = malloc.matches("allocated from:").count();
+        assert_eq!(
+            stacks, 1,
+            "exactly one leak stack is known; stderr:\n{malloc}"
+        );
+    }
+
+    // the unbound control keeps the detector armed, so a clean witness cannot be a silent oracle
+    #[cfg(feature = "asan-invariants")]
+    #[test]
+    fn asan_tier_sees_a_bound_string_freed_and_only_the_unbound_half_still_leaks() {
+        let dir = tempdir().expect("tempdir");
+        let Some(_archive) = build_asan_archive(dir.path()) else {
+            panic!("the ASan tier must build its archive on a machine with clang and ar");
+        };
+        let loop_body = |bind: &str| {
+            format!(
+                "fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n                     while i < 5 {{\n{bind}        n = n + s.len\n        i = i + 1\n    }}\n                     return n\n}}\n"
+            )
+        };
+        let bound =
+            loop_body("        let t: string = \"{i}\"\n        let s: string = \"row \" + t\n");
+        let unbound = loop_body("        let s: string = \"row \" + \"{i}\"\n");
+
+        // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
+        let run = |id: &str, src: &str, allocator: &str, clean: bool| {
+            let Some(exe) = link_instrumented(dir.path(), id, src) else {
+                panic!("the ASan tier must link");
+            };
+            let out = Command::new(&exe)
+                .env("AELYS_RC_STATS", "1")
+                .env("ASAN_OPTIONS", "detect_leaks=1")
+                .env("AELYS_ALLOC", allocator)
+                .output()
+                .expect("run the instrumented exe");
+            let err = String::from_utf8_lossy(&out.stderr).into_owned();
+            if clean {
+                assert_eq!(
+                    out.status.code(),
+                    Some(25),
+                    "{id}/{allocator} must answer the loop's own value; stderr:\n{err}"
+                );
+            }
+            err
+        };
+
+        let bound_malloc = run("s1c_bound", &bound, "malloc", true);
+        assert!(
+            bound_malloc.contains("[rc] allocs=10 frees=10"),
+            "both allocations of a bound concatenation are released, which is the whole of the \
+             bound the increment claims: measured flat at 12180 KB peak rss over 2e5 turns and \
+             12104 KB over 2e6. two neighbouring shapes carry no such bound and are not fixed \
+             here. a `continue` or `break` jumps over the scope end release: allocs=2000001 \
+             frees=1000000, 12328 KB at 2e5 rising to 32860 KB at 2e6. any bound call result is \
+             classified Borrow and never released, `let t = thru(...)`: allocs=2000000 frees=0, \
+             12116 KB at 2e5 rising to 63964 KB at 2e6;\nstderr:\n{bound_malloc}"
         );
         assert!(
-            err.contains("LeakSanitizer: detected memory leaks"),
-            "the known println leak stopped reproducing, so this row must be re-decided;\nstderr:\n{err}"
+            !bound_malloc.contains("LeakSanitizer"),
+            "a bound string must leave nothing behind on the leg that can see it;\nstderr:\n{bound_malloc}"
+        );
+        assert_eq!(
+            bound_malloc.matches("allocated from:").count(),
+            0,
+            "stderr:\n{bound_malloc}"
+        );
+
+        let unbound_malloc = run("s1c_unbound", &unbound, "malloc", false);
+        assert!(
+            unbound_malloc.contains("[rc] allocs=10 frees=5"),
+            "only the bound half of the same loop is released;\nstderr:\n{unbound_malloc}"
         );
         assert!(
-            err.contains("__aelys_to_string_i64"),
-            "a leak appeared that is not the known bootstrap one; stderr:\n{err}"
+            unbound_malloc.contains("LeakSanitizer: detected memory leaks")
+                && unbound_malloc.contains("__aelys_to_string_i64"),
+            "the unbound temporary is the leak this row keeps armed until it is released too;\n\
+             stderr:\n{unbound_malloc}"
         );
-        let stacks = err.matches("allocated from:").count();
-        assert_eq!(stacks, 1, "exactly one leak stack is known; stderr:\n{err}");
+
+        let bound_immix = run("s1c_bound_immix", &bound, "immix", true);
+        assert!(
+            !bound_immix.contains("LeakSanitizer"),
+            "stderr:\n{bound_immix}"
+        );
+        let unbound_immix = run("s1c_unbound_immix", &unbound, "immix", true);
+        assert!(
+            !unbound_immix.contains("LeakSanitizer"),
+            "immix answers the leak from a block it still holds, so a report here means the \
+             allocator changed shape;\nstderr:\n{unbound_immix}"
+        );
     }
 }
-

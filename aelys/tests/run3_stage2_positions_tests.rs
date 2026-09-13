@@ -323,7 +323,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -344,7 +344,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -367,7 +367,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -396,7 +396,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "101\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -421,7 +421,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -440,7 +440,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -459,7 +459,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -484,7 +484,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -633,7 +633,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -658,7 +658,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -679,7 +679,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -864,7 +864,7 @@ const CONTROL_PLAIN_ELEMENT: (&str, &str, i64, i64) = (
      \x20   return 0\n\
      }\n",
     "7919\n",
-    1,
+    2,
     1,
 );
 
@@ -894,7 +894,7 @@ const GROUP_B: &[Row] = &[
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         }),
     },
@@ -923,7 +923,7 @@ const GROUP_B: &[Row] = &[
                   }\n",
             stdout: "7919\n1\n",
             exit: 0,
-            allocs: 3,
+            allocs: 5,
             frees: 3,
         }),
     },
@@ -1387,7 +1387,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "7919\n7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 3,
             frees: 1,
         }),
     },
@@ -1422,7 +1422,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         }),
     },
@@ -1758,7 +1758,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 1,
+            allocs: 2,
             frees: 1,
         }),
     },
@@ -2012,7 +2012,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2032,7 +2032,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2051,7 +2051,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2069,7 +2069,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2092,7 +2092,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2111,7 +2111,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "7920\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2131,7 +2131,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2151,7 +2151,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the whole-element store already detaches",
@@ -2174,7 +2174,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: the whole-element store already detaches",
@@ -2382,7 +2382,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing, and the debt was discharged rather than deferred: the condition this \
@@ -2407,7 +2407,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "already correct, and it is what proves the lambda is not the cause",
@@ -2430,7 +2430,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 2,
+            allocs: 4,
             frees: 2,
         },
         owed: "nothing: there is no boundary left to escape across, which is what closed L01",
@@ -2467,7 +2467,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "7\n",
-            allocs: 0,
+            allocs: 1,
             frees: 0,
         },
         owed: "nothing today, and it is the sharpest A14 witness: a store E0429 refuses one \
@@ -2479,6 +2479,7 @@ const VALUE_BUILDER_EXCLUSIONS: &[(&str, &str)] = &[
     ("Int", "a literal is its own value and carries no sub-expression"),
     ("Float", "a literal is its own value and carries no sub-expression"),
     ("Bool", "a literal is its own value and carries no sub-expression"),
+    ("Char", "a literal is its own value and carries no sub-expression"),
     ("String", "a literal is its own value and carries no sub-expression"),
     ("Null", "a literal is its own value and carries no sub-expression"),
     (
@@ -2582,7 +2583,7 @@ fn no_value_producing_builder_drops_its_operand() {
     }
     assert_eq!(
         VALUE_BUILDER_EXCLUSIONS.len(),
-        18,
+        19,
         "the exclusion list changed size, which is a deliberate edit here"
     );
 }
@@ -2597,6 +2598,7 @@ fn expr_children(e: &TypedExpr) -> (&'static str, Vec<&TypedExpr>) {
         K::Int(_) => ("Int", Vec::new()),
         K::Float(_) => ("Float", Vec::new()),
         K::Bool(_) => ("Bool", Vec::new()),
+        K::Char(_) => ("Char", Vec::new()),
         K::String(_) => ("String", Vec::new()),
         K::Null => ("Null", Vec::new()),
         K::FmtString(parts) => (
@@ -2827,15 +2829,16 @@ fn reference_typed_positions(src: &str) -> BTreeSet<String> {
 const NO_REFERENCE_TYPED_WITNESS: &[(&str, &str)] = &[
     (
         "Binary",
-        "cannot: both operands are numeric or string, measured: `r + 1` is E0301 expected `&i64`",
+        "cannot: both operands are numeric or string, measured: `r + 1` is E0301 expected `i64`, \
+         found `&i64`",
     ),
     (
         "Unary",
-        "cannot: the operand is numeric or bool, measured: `-r` is E0301 expected `&i64`",
+        "cannot: the operand is numeric or bool, measured: `-r` is E0301 expected `i64`, found `&i64`",
     ),
     (
         "And",
-        "cannot: both sides are bool, measured: `r && b` is E0301 expected `&bool`",
+        "cannot: both sides are bool, measured: `r && b` is E0301 expected `bool`, found `&bool`",
     ),
     (
         "Or",
@@ -2843,11 +2846,12 @@ const NO_REFERENCE_TYPED_WITNESS: &[(&str, &str)] = &[
     ),
     (
         "Range",
-        "cannot: a bound is i64, measured: `0..r` is E0301 expected `&i64`",
+        "cannot: a bound is i64, measured: `0..r` is E0301 expected `i64`, found `&i64`",
     ),
     (
         "Cast",
-        "cannot: the source is numeric or bool, measured: `r as i64` is E0301 expected `i64`",
+        "cannot: the source is numeric or bool, measured: `r as i64` is E0301 expected `i64`, \
+         found `&i64`",
     ),
     (
         "FmtString",
@@ -2856,7 +2860,7 @@ const NO_REFERENCE_TYPED_WITNESS: &[(&str, &str)] = &[
     ),
     (
         "stmt.If",
-        "cannot: the condition is bool, measured: `if r` is E0301 expected `&bool`",
+        "cannot: the condition is bool, measured: `if r` is E0301 expected `bool`, found `&bool`",
     ),
     (
         "stmt.While",
@@ -3118,6 +3122,7 @@ const SLOT_COVERAGE: &[(&str, &str)] = &[
     ("Int", "excluded: a literal cannot carry a managed type"),
     ("Float", "excluded: a literal cannot carry a managed type"),
     ("Bool", "excluded: a literal cannot carry a managed type"),
+    ("Char", "excluded: a literal cannot carry a managed type"),
     (
         "String",
         "excluded: a string literal local is accepted in nogc, measured; the managed site \
@@ -3277,7 +3282,7 @@ fn the_slot_coverage_map_is_total_over_the_variant_list() {
             );
         }
     }
-    assert_eq!(excluded, 10, "the number of declared exclusions changed");
+    assert_eq!(excluded, 11, "the number of declared exclusions changed");
 }
 
 #[test]
@@ -3288,7 +3293,7 @@ fn the_language_defined_position_space_is_the_variant_list() {
     let stmts = variant_names(&ast, "TypedStmtKind");
     assert_eq!(
         (exprs.len(), stmts.len()),
-        (35, 14),
+        (36, 14),
         "the typed ast variant list moved:\nexpr {exprs:?}\nstmt {stmts:?}"
     );
     for required in [

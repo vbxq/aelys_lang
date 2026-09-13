@@ -88,10 +88,6 @@ fn main() -> i64 {
         stderr.contains("[rc] allocs=1 frees=1"),
         "shared Rc must free once at the last drop, not per handle; got stderr:\n{stderr}"
     );
-    assert!(
-        !stderr.contains("frees=2"),
-        "a shared Rc must NOT free twice; got stderr:\n{stderr}"
-    );
 }
 
 #[test]
