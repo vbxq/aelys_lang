@@ -18,10 +18,17 @@ impl TypeInference {
         mapping: &mut HashMap<String, InferType>,
     ) -> InferType {
         match ty {
-            InferType::Struct(name) if !self.type_table.has_struct(name) => mapping
-                .entry(name.clone())
-                .or_insert_with(|| self.type_gen.fresh())
-                .clone(),
+            InferType::Struct(name) if !self.type_table.has_struct(name) => {
+                if let Some(bound) = mapping.get(name) {
+                    return bound.clone();
+                }
+                let fresh = self.type_gen.fresh();
+                if let InferType::Var(id) = fresh {
+                    self.instantiated_param_names.insert(id, name.clone());
+                }
+                mapping.insert(name.clone(), fresh.clone());
+                fresh
+            }
             InferType::Function { params, ret, nogc } => {
                 let new_params = params
                     .iter()
@@ -40,6 +47,15 @@ impl TypeInference {
             InferType::Vec(inner) => {
                 InferType::Vec(Box::new(self.instantiate_inner(inner, mapping)))
             }
+            InferType::Rc(inner) => InferType::Rc(Box::new(self.instantiate_inner(inner, mapping))),
+            InferType::Ref { referent, mutable } => InferType::Ref {
+                referent: Box::new(self.instantiate_inner(referent, mapping)),
+                mutable: *mutable,
+            },
+            InferType::Slice { elem, mutable } => InferType::Slice {
+                elem: Box::new(self.instantiate_inner(elem, mapping)),
+                mutable: *mutable,
+            },
             InferType::Tuple(elems) => InferType::Tuple(
                 elems
                     .iter()

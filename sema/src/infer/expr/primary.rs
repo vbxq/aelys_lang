@@ -148,6 +148,12 @@ impl TypeInference {
         if enum_name == "string" && variant == "substring_bytes" {
             return self.infer_substring_bytes(args, span);
         }
+        if enum_name == "string" && variant == "from_char" {
+            return self.infer_string_from_char(args, span);
+        }
+        if enum_name == "char" && (variant == "from_i64" || variant == "is_scalar") {
+            return self.infer_char_intrinsic(variant, args, span);
+        }
 
         if let Some(known) = intrinsic_methods(enum_name) {
             self.errors.push(TypeError {
@@ -680,6 +686,77 @@ impl TypeInference {
         )
     }
 
+    fn infer_string_from_char(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "string::from_char expects exactly 1 argument, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::Char,
+                args[0].span,
+                ConstraintReason::Other(
+                    "string::from_char takes the character it encodes".to_string(),
+                ),
+            ));
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "string".to_string(),
+                variant: "from_char".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::String,
+        )
+    }
+
+    fn infer_char_intrinsic(
+        &mut self,
+        variant: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "char::{} expects exactly 1 argument, got {}",
+                    variant,
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            self.constraints.push(Constraint::equal(
+                typed_args[0].ty.clone(),
+                InferType::I64,
+                args[0].span,
+                ConstraintReason::Other(format!("char::{variant} takes a code point")),
+            ));
+        }
+        let ret = if variant == "from_i64" {
+            InferType::Char
+        } else {
+            InferType::Bool
+        };
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "char".to_string(),
+                variant: variant.to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            ret,
+        )
+    }
+
     fn infer_vec_read(
         &mut self,
         variant: &str,
@@ -854,7 +931,8 @@ fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
             "try_as_unique_mut_slice",
         ]),
         "Rc" => Some(&["new", "get", "null"]),
-        "string" => Some(&["substring_bytes"]),
+        "string" => Some(&["substring_bytes", "from_char"]),
+        "char" => Some(&["from_i64", "is_scalar"]),
         _ => None,
     }
 }
