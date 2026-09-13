@@ -5,6 +5,8 @@
 
 #include "aelys_rc.h" /* AELYS_RC_HEADER_SIZE */
 
+extern void __aelys_panic(const char *ptr, long long len);
+
 static inline uint32_t *aelys_rc_header(void *ptr) {
     return (uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
 }
@@ -29,6 +31,13 @@ void __aelys_rc_release(void *ptr) {
     /* a pinned (saturated) count stays put; the leak variant never frees, even at zero */
     if (header[0] == UINT32_MAX) {
         return;
+    }
+    /* a release past zero scribbles on freed memory, so a double free must stop here, not later */
+    if (header[0] == AELYS_RC_DEAD) {
+        __aelys_panic(AELYS_RC_FREED_MSG, (long long)(sizeof(AELYS_RC_FREED_MSG) - 1));
+    }
+    if (header[0] == 0) {
+        __aelys_panic(AELYS_RC_UNDERFLOW_MSG, (long long)(sizeof(AELYS_RC_UNDERFLOW_MSG) - 1));
     }
     header[0] -= 1;
 }
