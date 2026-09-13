@@ -11,6 +11,10 @@ void *aelys_immix_alloc(long long size);
 void aelys_immix_free(void *base);
 void *aelys_immix_realloc(void *base, long long size);
 
+/* answers for the most recently freed block, all the rc guard can ask without reading it */
+/* one address deep and lost on reuse: a stale release onto a slot already handed back out lands on a live object and nothing fires */
+int aelys_immix_is_dead(const void *base);
+
 /* counts 32 KiB region blocks only, oversized blocks are excluded */
 long long aelys_immix_block_count(void);
 

@@ -5,9 +5,11 @@
 #include <stdint.h>
 #include <stdlib.h> /* malloc/realloc/free */
 
+#include "aelys_alloc_immix.h" /* aelys_immix_is_dead */
 #include "aelys_rc.h" /* AELYS_RC_HEADER_SIZE */
 
 extern void __aelys_free(void *ptr);
+extern void __aelys_panic(const char *ptr, long long len);
 extern long long __aelys_free_count;
 extern void (*__aelys_collect_hook)(void);
 
@@ -109,11 +111,22 @@ void __aelys_rc_release(void *ptr) {
     if (ptr == NULL) {
         return;
     }
+    /* the tombstone answers without reading a header the allocator has already reused */
+    if (aelys_immix_is_dead((char *)ptr - AELYS_RC_HEADER_SIZE)) {
+        __aelys_panic(AELYS_RC_FREED_MSG, (long long)(sizeof(AELYS_RC_FREED_MSG) - 1));
+    }
     uint32_t *rc = aelys_rc_refcount(ptr);
     /* a pinned (saturated) count never decrements, so it can never reach zero and the collector
        sees gc_refcount stay above zero, keeping it live: a permanent leak, never a double free */
     if (rc[0] == UINT32_MAX) {
         return;
+    }
+    /* a release past zero scribbles on freed memory, so a double free must stop here, not later */
+    if (rc[0] == AELYS_RC_DEAD) {
+        __aelys_panic(AELYS_RC_FREED_MSG, (long long)(sizeof(AELYS_RC_FREED_MSG) - 1));
+    }
+    if (rc[0] == 0) {
+        __aelys_panic(AELYS_RC_UNDERFLOW_MSG, (long long)(sizeof(AELYS_RC_UNDERFLOW_MSG) - 1));
     }
     rc[0] -= 1;
     if (rc[0] == 0) {
@@ -122,6 +135,7 @@ void __aelys_rc_release(void *ptr) {
             candidate_remove(ptr);
         }
         __aelys_free_count++;
+        rc[0] = AELYS_RC_DEAD;
         __aelys_free((char *)ptr - AELYS_RC_HEADER_SIZE);
         return;
     }
@@ -236,6 +250,7 @@ void __aelys_cycle_collect(void) {
         }
         void *c = g_candidates[i].ptr;
         __aelys_free_count++;
+        *aelys_rc_refcount(c) = AELYS_RC_DEAD;
         __aelys_free((char *)c - AELYS_RC_HEADER_SIZE);
         g_candidates[i].ptr = NULL;
     }

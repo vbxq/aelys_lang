@@ -37,8 +37,11 @@ typedef struct AelysBlock {
     struct AelysBlock *next;
 } AelysBlock;
 
+/* next sits at base+8: a link at base+0 would write over the sentinel the rc guard reads */
 typedef struct FreeSlot {
-    struct FreeSlot *next; /* intrusive: stored in the first 8o of the free slot */
+    uint32_t guard_word;
+    uint32_t pad;
+    struct FreeSlot *next; /* intrusive: stored in the second 8o of the free slot */
 } FreeSlot;
 
 static AelysBlock *g_cur_block = NULL;
@@ -46,6 +49,9 @@ static AelysBlock *g_all_blocks = NULL;            /* keeps region blocks reacha
 static FreeSlot *g_freelist[AELYS_N_CLASSES];
 static long long g_block_count = 0;
 static int g_mode = -1;                            /* -1 uninit, 0 = malloc, 1 = immix */
+/* under AELYS_ALLOC=malloc this is the only record of a free that a release may still read */
+/* an integer, never a pointer: a pointer whose target went back to free is indeterminate and gcc folds the comparison from -O1 up */
+static uintptr_t g_last_freed = 0;
 
 static void immix_init_mode(void) {
     const char *e = getenv("AELYS_ALLOC");
@@ -106,10 +112,10 @@ static AelysBlock *block_record(char *raw) {
 
 /* chaining writes `next` inside the poisoned slot, so open and reclose just that word */
 static void freelist_push(uint32_t cls, FreeSlot *s) {
-    asan_unpoison(s, sizeof(FreeSlot));
+    asan_unpoison(&s->next, sizeof(s->next));
     s->next = g_freelist[cls];
     g_freelist[cls] = s;
-    asan_poison(s, sizeof(FreeSlot));
+    asan_poison(&s->next, sizeof(s->next));
 }
 
 static FreeSlot *freelist_pop(uint32_t cls) {
@@ -117,13 +123,13 @@ static FreeSlot *freelist_pop(uint32_t cls) {
     if (!s) {
         return NULL;
     }
-    asan_unpoison(s, sizeof(FreeSlot));
+    asan_unpoison(&s->next, sizeof(s->next));
     g_freelist[cls] = s->next;
     /* the caller reopens the whole slot */
     return s;
 }
 
-void *aelys_immix_alloc(long long size) {
+static void *immix_alloc_slot(long long size) {
     if (!immix_enabled()) {
         return malloc((size_t)(size > 0 ? size : 0));
     }
@@ -175,14 +181,32 @@ void *aelys_immix_alloc(long long size) {
     return base;
 }
 
-void aelys_immix_free(void *base) {
-    if (!immix_enabled()) {
-        free(base);
-        return;
+/* handing the tombstoned address back out must retire it, or an honest release aborts */
+static void *retire_tombstone(void *p) {
+    if (p && (uintptr_t)p == g_last_freed) {
+        g_last_freed = 0;
     }
+    return p;
+}
+
+void *aelys_immix_alloc(long long size) {
+    return retire_tombstone(immix_alloc_slot(size));
+}
+
+int aelys_immix_is_dead(const void *base) {
+    return base != NULL && (uintptr_t)base == g_last_freed;
+}
+
+void aelys_immix_free(void *base) {
     if (!base) {
         return;
     }
+    if (!immix_enabled()) {
+        g_last_freed = (uintptr_t)base;
+        free(base);
+        return;
+    }
+    g_last_freed = (uintptr_t)base;
     char *prefix = (char *)base - AELYS_PREFIX_SIZE;
 
     /* asan cannot see a double-free through a region allocator, the magic can */
@@ -208,7 +232,13 @@ void aelys_immix_free(void *base) {
 
 void *aelys_immix_realloc(void *base, long long size) {
     if (!immix_enabled()) {
-        return realloc(base, (size_t)(size > 0 ? size : 0));
+        uintptr_t old = (uintptr_t)base;
+        void *nbase = retire_tombstone(realloc(base, (size_t)(size > 0 ? size : 0)));
+        /* a move leaves the old address freed, and only a non-null return proves the move happened */
+        if (base && nbase && (uintptr_t)nbase != old) {
+            g_last_freed = old;
+        }
+        return nbase;
     }
     if (!base) {
         return aelys_immix_alloc(size);
