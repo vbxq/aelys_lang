@@ -1,4 +1,3 @@
-// removes unused let bindings (unless they have side effects)
 
 use super::super::OptimizationStats;
 use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
@@ -152,6 +151,7 @@ fn has_side_effects(expr: &TypedExpr) -> bool {
         | TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
+        | TypedExprKind::Char(_)
         | TypedExprKind::String(_)
         | TypedExprKind::Null => false,
     }

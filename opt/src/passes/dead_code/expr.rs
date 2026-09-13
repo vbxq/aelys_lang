@@ -9,7 +9,6 @@ impl DeadCodeEliminator {
                 then_branch,
                 else_branch,
             } => {
-                // ternary with constant condition -> just the result
                 if let Some(cond_value) = Self::is_const_bool(condition) {
                     let taken = if cond_value { then_branch } else { else_branch };
                     self.eliminate_in_expr(taken);
@@ -128,6 +127,7 @@ impl DeadCodeEliminator {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
             | TypedExprKind::Identifier(_) => {}

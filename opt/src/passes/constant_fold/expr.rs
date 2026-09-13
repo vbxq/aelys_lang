@@ -6,7 +6,6 @@ mod logic;
 mod unary;
 
 impl ConstantFolder {
-    // peel off nested groupings to get at the actual value
     pub(super) fn unwrap_grouping(expr: &TypedExpr) -> &TypedExpr {
         match &expr.kind {
             TypedExprKind::Grouping(inner) => Self::unwrap_grouping(inner),
@@ -27,6 +26,7 @@ impl ConstantFolder {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => None,
             _ => None,
@@ -150,6 +150,7 @@ impl ConstantFolder {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
             | TypedExprKind::Identifier(_) => {}

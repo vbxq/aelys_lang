@@ -149,6 +149,7 @@ impl GlobalConstantPropagator {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => {}
         }
@@ -231,9 +232,6 @@ impl GlobalConstantPropagator {
         }
     }
 
-    /// Process a statement list, removing any global constant whose name is
-    /// shadowed by a local `let` so that subsequent statements in the same
-    /// scope see the local binding rather than the global one.
     fn substitute_in_scoped_stmts(&mut self, stmts: &mut Vec<TypedStmt>) {
         let mut shadowed: Vec<(String, aelys_sema::TypedExpr)> = Vec::new();
         for stmt in stmts.iter_mut() {

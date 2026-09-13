@@ -17,7 +17,6 @@ impl InlineExpander {
         args: &[TypedExpr],
         call_span: Span,
     ) -> Option<TypedExpr> {
-        // don't inline if arity doesn't match
         if func.params.len() != args.len() {
             return None;
         }
@@ -41,6 +40,7 @@ impl InlineExpander {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null
             | TypedExprKind::Identifier(_) => true,
@@ -66,7 +66,6 @@ impl InlineExpander {
         params: &HashMap<String, TypedExpr>,
         span: Span,
     ) -> Option<TypedExpr> {
-        // only inline truly trivial bodies: single return or expression with no let bindings
         if body.len() != 1 {
             return None;
         }
@@ -99,6 +98,7 @@ impl InlineExpander {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => true,
             TypedExprKind::EnumVariant { args, .. } => args
@@ -128,7 +128,6 @@ impl InlineExpander {
                     && self.expr_has_only_params_and_literals(then_branch, params)
                     && self.expr_has_only_params_and_literals(else_branch, params)
             }
-            // anything else (calls, arrays, etc.) - don't inline
             _ => false,
         }
     }
@@ -281,7 +280,6 @@ impl InlineExpander {
                 value: Box::new(self.substitute_expr(value, params, span)),
             },
 
-            // lambdas need special care to avoid capturing the wrong variables
             TypedExprKind::Lambda(inner) => {
                 TypedExprKind::Lambda(Box::new(self.substitute_expr(inner, params, span)))
             }
@@ -292,7 +290,6 @@ impl InlineExpander {
                 body,
                 captures,
             } => {
-                // don't substitute params that shadow the outer ones
                 let mut filtered = params.clone();
                 for p in lparams {
                     filtered.remove(&p.name);
@@ -342,6 +339,7 @@ impl InlineExpander {
             TypedExprKind::Int(n) => TypedExprKind::Int(*n),
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
+            TypedExprKind::Char(cp) => TypedExprKind::Char(*cp),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
             TypedExprKind::Null => TypedExprKind::Null,
             TypedExprKind::EnumVariant {

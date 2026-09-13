@@ -1,4 +1,3 @@
-// collects all variable reads in the program
 
 use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use std::collections::HashSet;
@@ -219,6 +218,7 @@ fn collect_uses_in_expr(expr: &TypedExpr, used: &mut HashSet<String>) {
         TypedExprKind::Int(_)
         | TypedExprKind::Float(_)
         | TypedExprKind::Bool(_)
+        | TypedExprKind::Char(_)
         | TypedExprKind::String(_)
         | TypedExprKind::Null => {}
     }
