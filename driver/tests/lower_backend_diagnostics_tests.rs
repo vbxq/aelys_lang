@@ -1,4 +1,4 @@
-// TODO: those tests *are* going to break because I'll change the error handling system at some point.
+// todo: those tests *are* going to break because i'll change the error handling system at some point.
 
 use aelys_driver::lower_file_to_air;
 use aelys_opt::OptimizationLevel;
@@ -40,19 +40,37 @@ fn assert_lowering_error(source: &str, expected_fragment: &str) {
 fn non_constant_array_size_is_reported_without_panic() {
     let src = r#"
 fn test(n: i64) -> i64 {
-    let arr: [i64; 10] = [0; n];
+    let arr = [0; n];
     arr[0]
 }
 "#;
     assert_lowering_error(
         src,
-        "unsupported non-constant array size: ArraySized requires a constant integer size expression",
+        "unsupported non-constant array size: an array size must be a compile-time constant",
+    );
+}
+
+#[test]
+fn an_annotated_length_supplies_the_count_a_non_constant_size_cannot() {
+    let src = r#"
+fn test(n: i64) -> i64 {
+    let arr: [i64; 10] = [0; n];
+    arr[0]
+}
+"#;
+    let path = write_temp_source("lower_diag", src);
+    let result = lower_file_to_air(&path, OptimizationLevel::None);
+    let _ = fs::remove_file(&path);
+    assert!(
+        result.is_ok(),
+        "the `[i64; 10]` annotation gives the array its length, so this lowers: {:?}",
+        result.err()
     );
 }
 
 #[test]
 fn returning_array_compiles_successfully() {
-    // Arrays can be returned by value — this should not produce a lowering error.
+    // arrays can be returned by value this should not produce a lowering error.
     let src = r#"
 fn f() -> [i64; 3] {
     let arr = [1, 2, 3];
