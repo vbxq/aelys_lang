@@ -41,18 +41,15 @@ impl Lexer {
                         self.advance();
                         current_literal.push('{');
                     } else {
-                        // start of format expression or placeholder
                         has_format = true;
                         if !current_literal.is_empty() {
                             parts.push(FmtPart::Literal(std::mem::take(&mut current_literal)));
                         }
 
                         if self.peek() == '}' {
-                            // {} -> placeholder
                             self.advance();
                             parts.push(FmtPart::Placeholder);
                         } else {
-                            // {expr} -> expression
                             let expr = self.scan_format_expr()?;
                             parts.push(FmtPart::Expr(expr));
                         }
@@ -134,6 +131,26 @@ impl Lexer {
                     if self.is_at_end() {
                         return Err(AelysError::Compile(
                             self.error(CompileErrorKind::UnterminatedFmtExpr),
+                        ));
+                    }
+                    expr.push(self.advance());
+                }
+                // a char literal can hold a brace or a quote, and the depth count must not see it
+                '\'' => {
+                    expr.push(self.advance());
+                    while !self.is_at_end() && self.peek() != '\'' && self.peek() != '\n' {
+                        if self.peek() == '\\' {
+                            expr.push(self.advance());
+                            if !self.is_at_end() {
+                                expr.push(self.advance());
+                            }
+                        } else {
+                            expr.push(self.advance());
+                        }
+                    }
+                    if self.is_at_end() || self.peek() == '\n' {
+                        return Err(AelysError::Compile(
+                            self.error(CompileErrorKind::UnterminatedCharLiteral),
                         ));
                     }
                     expr.push(self.advance());

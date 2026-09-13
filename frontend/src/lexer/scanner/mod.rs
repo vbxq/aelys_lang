@@ -1,10 +1,9 @@
-// lexer: chars -> tokens
-// TODO: consider switching to logos for speed
 
 use aelys_common::error::AelysError;
 use aelys_syntax::{Source, Token, TokenKind};
 use std::sync::Arc;
 
+mod character;
 mod comment;
 mod cursor;
 mod identifier;
@@ -27,9 +26,6 @@ pub struct Lexer {
     start_column: u32,
     pending_semicolon: bool,
     nesting_depth: u32,
-    /// Stack of saved nesting depths. When entering `{`, the current paren/bracket
-    /// nesting depth is saved and reset to 0 so that auto-semicolons work inside
-    /// brace-delimited blocks even when those blocks appear inside `()` or `[]`.
     brace_saved_depths: Vec<u32>,
 }
 

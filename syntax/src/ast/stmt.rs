@@ -122,11 +122,58 @@ pub struct ForeignDecl {
     pub span: Span,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TypeBounds {
+    pub nogc: bool,
+    pub eq: bool,
+    pub ord: bool,
+}
+
+impl TypeBounds {
+    pub const NAMES: [&'static str; 3] = ["nogc", "eq", "ord"];
+
+    pub fn set(&mut self, name: &str) -> bool {
+        match name {
+            "nogc" => self.nogc = true,
+            "eq" => self.eq = true,
+            "ord" => self.ord = true,
+            _ => return false,
+        }
+        true
+    }
+
+    pub fn is_empty(&self) -> bool {
+        !self.nogc && !self.eq && !self.ord
+    }
+
+    pub fn needs_eq(&self) -> bool {
+        self.eq || self.ord
+    }
+
+    pub fn needs_ord(&self) -> bool {
+        self.ord
+    }
+
+    pub fn spelling(&self) -> String {
+        let mut parts: Vec<&str> = Vec::new();
+        if self.nogc {
+            parts.push("nogc");
+        }
+        if self.eq {
+            parts.push("eq");
+        }
+        if self.ord {
+            parts.push("ord");
+        }
+        parts.join(" + ")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Function {
     pub name: String,
     pub type_params: Vec<String>,
-    pub nogc_bounds: Vec<bool>,
+    pub bounds: Vec<TypeBounds>,
     pub params: Vec<Parameter>,
     pub return_type: Option<TypeAnnotation>,
     pub body: Vec<Stmt>,

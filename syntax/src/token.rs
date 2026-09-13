@@ -24,6 +24,7 @@ pub enum TokenKind {
     Int(i64),
     Float(f64),
     String(String),
+    Char(u32),
     FmtString(Vec<FmtPart>),
     True,
     False,
@@ -115,6 +116,7 @@ impl TokenKind {
             Self::Int(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -129,6 +131,7 @@ impl TokenKind {
                 | Self::Int(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -153,6 +156,10 @@ impl std::fmt::Display for TokenKind {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "\"{}\"", s),
+            Self::Char(cp) => match char::from_u32(*cp) {
+                Some(c) => write!(f, "'{}'", c),
+                None => write!(f, "'\\u{{{:x}}}'", cp),
+            },
             Self::FmtString(_) => write!(f, "<format string>"),
             Self::True => write!(f, "true"),
             Self::False => write!(f, "false"),

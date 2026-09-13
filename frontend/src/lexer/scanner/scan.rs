@@ -172,6 +172,8 @@ impl Lexer {
 
             '"' => self.string()?,
 
+            '\'' => self.character()?,
+
             c if c.is_ascii_digit() => self.number()?,
 
             c if c.is_alphabetic() || c == '_' => self.identifier(),

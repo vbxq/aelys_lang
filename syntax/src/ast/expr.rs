@@ -10,13 +10,11 @@ pub enum RefKind {
 pub struct TypeAnnotation {
     pub name: String,
     pub type_param: Option<Box<TypeAnnotation>>,
-    /// Multiple type parameters for generic types like `Result<i64, string>`.
-    /// When present, takes precedence over `type_param`.
+    /// multiple type parameters for generic types like `result<i64, string>`.
     pub type_params: Vec<TypeAnnotation>,
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
     pub array_size: Option<u64>,
-    /// the outer `&` / `&mut`, none for value types
     pub reference: Option<RefKind>,
     pub is_slice: bool,
     pub nogc: bool,
@@ -174,7 +172,6 @@ impl Expr {
     }
 }
 
-/// Part of a format string in the AST (after parsing expressions)
 #[derive(Debug, Clone)]
 pub enum FmtStringPart {
     Literal(String),
@@ -188,6 +185,7 @@ pub enum ExprKind {
     Int(i64),
     Float(f64),
     String(String),
+    Char(u32),
     Bool(bool),
     Null,
     FmtString(Vec<FmtStringPart>),
@@ -204,7 +202,6 @@ pub enum ExprKind {
         operand: Box<Expr>,
     },
 
-    // short-circuit (separate from Binary because different codegen)
     And {
         left: Box<Expr>,
         right: Box<Expr>,
@@ -224,7 +221,6 @@ pub enum ExprKind {
     },
     Grouping(Box<Expr>), // for precedence
 
-    // ternary: cond ? then : else
     If {
         condition: Box<Expr>,
         then_branch: Box<Expr>,
@@ -242,7 +238,6 @@ pub enum ExprKind {
         member: String,
     }, // module.symbol
 
-    // Arrays and Vecs
     ArrayLiteral {
         elements: Vec<Expr>,
     },
@@ -309,7 +304,6 @@ pub enum ExprKind {
         arms: Vec<MatchArm>,
     },
 
-    /// Block expression: `{ stmts...; tail_expr }`
     Block {
         stmts: Vec<crate::ast::Stmt>,
         tail: Box<Expr>,
@@ -324,7 +318,6 @@ pub enum ExprKind {
         handler: CatchHandler,
     },
 
-    // unsafe { ... } block; erased in sema like try, gates unwrap_unchecked via unsafe_depth
     Unsafe(Box<Expr>),
 }
 
@@ -343,14 +336,12 @@ pub struct MatchArm {
 
 #[derive(Debug, Clone)]
 pub enum Pattern {
-    /// `EnumName::Variant` or `EnumName::Variant(x, y)`
     Variant {
         enum_name: String,
         variant: String,
         bindings: Vec<String>,
         span: Span,
     },
-    /// `_` wildcard
     Wildcard(Span),
 }
 

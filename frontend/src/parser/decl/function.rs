@@ -1,9 +1,29 @@
 use super::Parser;
 use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
-use aelys_syntax::{Decorator, ForeignConv, ForeignDecl, Function, Stmt, StmtKind, TokenKind};
+use aelys_syntax::{
+    Decorator, ForeignConv, ForeignDecl, Function, Stmt, StmtKind, TokenKind, TypeBounds,
+};
 
 impl Parser {
+    fn parse_type_bound(&mut self, set: &mut TypeBounds) -> Result<()> {
+        if self.match_token(&TokenKind::Nogc) {
+            set.nogc = true;
+            return Ok(());
+        }
+        let TokenKind::Identifier(name) = self.peek().kind.clone() else {
+            return Err(self.error(CompileErrorKind::UnexpectedToken {
+                expected: "a bound name".to_string(),
+                found: self.peek().kind.to_string(),
+            }));
+        };
+        if !set.set(&name) {
+            return Err(self.error(CompileErrorKind::UnknownTypeBound { name }));
+        }
+        self.advance();
+        Ok(())
+    }
+
     pub(super) fn function_declaration(
         &mut self,
         decorators: Vec<Decorator>,
@@ -15,17 +35,21 @@ impl Parser {
 
         let name = self.consume_identifier("function name")?;
 
-        let (type_params, nogc_bounds) = if self.match_token(&TokenKind::Lt) {
+        let (type_params, bounds) = if self.match_token(&TokenKind::Lt) {
             let mut params = Vec::new();
             let mut bounds = Vec::new();
             loop {
                 params.push(self.consume_identifier("type parameter")?);
-                bounds.push(if self.match_token(&TokenKind::Colon) {
-                    self.consume(&TokenKind::Nogc, "`nogc`")?;
-                    true
-                } else {
-                    false
-                });
+                let mut set = TypeBounds::default();
+                if self.match_token(&TokenKind::Colon) {
+                    loop {
+                        self.parse_type_bound(&mut set)?;
+                        if !self.match_token(&TokenKind::Plus) {
+                            break;
+                        }
+                    }
+                }
+                bounds.push(set);
                 if !self.match_token(&TokenKind::Comma) {
                     break;
                 }
@@ -67,7 +91,7 @@ impl Parser {
         let function = Function {
             name: name.clone(),
             type_params,
-            nogc_bounds,
+            bounds,
             params,
             return_type,
             body,
@@ -145,7 +169,7 @@ impl Parser {
         let function = Function {
             name: name.clone(),
             type_params: Vec::new(),
-            nogc_bounds: Vec::new(),
+            bounds: Vec::new(),
             params,
             return_type,
             body: Vec::new(),

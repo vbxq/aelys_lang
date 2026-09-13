@@ -296,6 +296,7 @@ impl Parser {
             TokenKind::Int(_)
                 | TokenKind::Float(_)
                 | TokenKind::String(_)
+                | TokenKind::Char(_)
                 | TokenKind::FmtString(_)
                 | TokenKind::True
                 | TokenKind::False
@@ -322,6 +323,7 @@ impl Parser {
             TokenKind::Int(n) => ExprKind::Int(n),
             TokenKind::Float(n) => ExprKind::Float(n),
             TokenKind::String(s) => ExprKind::String(s),
+            TokenKind::Char(cp) => ExprKind::Char(cp),
             TokenKind::FmtString(parts) => {
                 return self.parse_fmt_string(parts, span);
             }
@@ -495,7 +497,6 @@ impl Parser {
                 || self.struct_literal_first_field())
     }
 
-    // `m.p { }` would swallow the empty block of `if s.x { }`, which parsed before modules
     pub(super) fn starts_a_qualified_struct_literal(&self, name: &str) -> bool {
         self.struct_literal_head(name) && self.struct_literal_first_field()
     }
