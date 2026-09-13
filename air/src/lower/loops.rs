@@ -246,6 +246,19 @@ impl<'a> LoweringContext<'a> {
             None,
         );
 
+        // a string carries a byte cursor beside the index so the traversal decodes each character once
+        let byte_local = matches!(col_ty, AirType::Str).then(|| {
+            let cursor = self.alloc_temp_mut(AirType::I64);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(cursor),
+                    rvalue: Rvalue::Use(Operand::Const(AirConst::IntLiteral(0))),
+                },
+                None,
+            );
+            cursor
+        });
+
         let len_local = self.alloc_temp(AirType::I64);
         let len_rvalue = match &col_ty {
             AirType::Array(_, n) => Rvalue::Use(Operand::Const(AirConst::IntLiteral(*n as i64))),
@@ -275,7 +288,7 @@ impl<'a> LoweringContext<'a> {
         let scope_depth = self.locals_by_name.len();
 
         let elem_air_ty = self.lower_type_from_infer(elem_type);
-        let elem_local = self.alloc_named_local(iterator, elem_air_ty, false, sp);
+        let elem_local = self.alloc_named_local(iterator, elem_air_ty.clone(), false, sp);
 
         let header_id = self.alloc_block_id();
         let body_id = self.alloc_block_id();
@@ -304,13 +317,47 @@ impl<'a> LoweringContext<'a> {
         });
 
         self.fixup_block_id_noop(body_id);
+        let mut width_local = None;
+        let elem_rvalue = if let Some(cursor) = byte_local {
+            let packed = self.alloc_temp(AirType::I64);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(packed),
+                    rvalue: Rvalue::Call {
+                        func: Callee::Named("__aelys_str_decode_at".to_string()),
+                        args: vec![Operand::Copy(col_local), Operand::Copy(cursor)],
+                    },
+                },
+                None,
+            );
+            let width = self.alloc_temp(AirType::I64);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(width),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::Shr,
+                        Operand::Copy(packed),
+                        Operand::Const(AirConst::IntLiteral(32)),
+                    ),
+                },
+                None,
+            );
+            width_local = Some(width);
+            Rvalue::Cast {
+                operand: Operand::Copy(packed),
+                from: AirType::I64,
+                to: elem_air_ty,
+            }
+        } else {
+            Rvalue::Index {
+                base: Operand::Copy(col_local),
+                index: Operand::Copy(idx_local),
+            }
+        };
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(elem_local),
-                rvalue: Rvalue::Index {
-                    base: Operand::Copy(col_local),
-                    index: Operand::Copy(idx_local),
-                },
+                rvalue: elem_rvalue,
             },
             None,
         );
@@ -327,6 +374,19 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.pop();
 
         self.fixup_block_id_noop(incr_id);
+        if let (Some(cursor), Some(width)) = (byte_local, width_local) {
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(cursor),
+                    rvalue: Rvalue::BinaryOp(
+                        BinOp::Add,
+                        Operand::Copy(cursor),
+                        Operand::Copy(width),
+                    ),
+                },
+                None,
+            );
+        }
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Local(idx_local),

@@ -3,6 +3,7 @@ mod loops;
 mod place;
 mod program;
 mod stmts;
+mod str_escape;
 
 use crate::*;
 use aelys_common::Fault;
@@ -104,6 +105,7 @@ pub(crate) struct LoweringContext<'a> {
     // never fed from lower_params: releasing a borrowed carrier param callee-side would
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
+    pub(super) str_locals: Vec<(LocalId, usize)>,
     pub(super) affine_locals: Vec<AffineLocal>,
     pub(super) affine_drops:
         std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
@@ -114,6 +116,12 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) closure_env_param: Option<LocalId>,
     pub(super) capture_slots: std::collections::HashMap<LocalId, String>,
     pub(super) lowering_errors: Vec<LowerError>,
+}
+
+pub(super) enum StrInit {
+    Own,
+    Share,
+    Borrow,
 }
 
 pub(super) struct CarrierLocal {
@@ -158,6 +166,7 @@ impl<'a> LoweringContext<'a> {
             rc_locals: Vec::new(),
             carrier_locals: Vec::new(),
             cow_locals: Vec::new(),
+            str_locals: Vec::new(),
             affine_locals: Vec::new(),
             affine_drops: std::collections::HashMap::new(),
             loop_stack: Vec::new(),
@@ -170,9 +179,13 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn finish(self) -> Result<AirProgram, Vec<LowerError>> {
+    fn finish(mut self) -> Result<AirProgram, Vec<LowerError>> {
         if !self.lowering_errors.is_empty() {
             return Err(self.lowering_errors);
+        }
+        // finish runs before mono, copy_elim, dead_locals and rc_elision, so their work is unseen
+        for function in &mut self.functions {
+            str_escape::guard_escaping_str_locals(function);
         }
         Ok(AirProgram {
             functions: self.functions,
@@ -379,6 +392,7 @@ impl<'a> LoweringContext<'a> {
             InferType::F32 => AirType::F32,
             InferType::F64 => AirType::F64,
             InferType::Bool => AirType::Bool,
+            InferType::Char => AirType::Char,
             InferType::String => AirType::Str,
             InferType::Null => AirType::Ptr(Box::new(AirType::Void)),
             InferType::Function { params, ret, .. } => AirType::FnPtr {
@@ -596,6 +610,7 @@ pub(crate) fn infer_to_int_size(ty: &InferType) -> AirIntSize {
         InferType::U16 => AirIntSize::U16,
         InferType::U32 => AirIntSize::U32,
         InferType::U64 => AirIntSize::U64,
+        InferType::Char => AirIntSize::U32,
         _ => AirIntSize::I64,
     }
 }

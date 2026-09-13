@@ -146,6 +146,7 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+        let saved_str_locals = std::mem::take(&mut self.str_locals);
         // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
@@ -178,6 +179,7 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.str_locals = saved_str_locals;
         self.capture_slots = saved_capture_slots;
         self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
@@ -356,6 +358,7 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+        let saved_str_locals = std::mem::take(&mut self.str_locals);
         // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
@@ -379,6 +382,7 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.str_locals = saved_str_locals;
         self.capture_slots = saved_capture_slots;
         self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
@@ -507,6 +511,7 @@ impl<'a> LoweringContext<'a> {
                 let fake_func = TypedFunction {
                     name: lambda_name.clone(),
                     type_params: Vec::new(),
+                    bounds: Vec::new(),
                     params: params.clone(),
                     return_type: return_type.clone(),
                     body: body.clone(),
@@ -626,6 +631,7 @@ impl<'a> LoweringContext<'a> {
                 Ok(AirConst::Float(*v, size))
             }
             TypedExprKind::Bool(v) => Ok(AirConst::Bool(*v)),
+            TypedExprKind::Char(cp) => Ok(AirConst::Char(*cp)),
             TypedExprKind::String(v) => Ok(AirConst::Str(v.clone())),
             TypedExprKind::Null => Ok(AirConst::Null),
             TypedExprKind::Identifier(name) => {
@@ -674,9 +680,10 @@ impl<'a> LoweringContext<'a> {
                     elements.iter().map(|e| self.try_const_expr(e)).collect();
                 consts.map(AirConst::Array)
             }
-            TypedExprKind::ArraySized { size, fill_value } => {
-                let TypedExprKind::Int(n) = &size.kind else {
-                    return Err(self.fold_failure(size));
+            TypedExprKind::ArraySized { fill_value, .. } => {
+                // same count rule as the statement path: the type decides, not the expression
+                let InferType::Array(_, Some(n)) = &expr.ty else {
+                    return Err(ConstFoldFailure::FoldNotImplemented);
                 };
                 let n = *n as usize;
                 let Some(fv) = fill_value.as_ref() else {
@@ -695,7 +702,94 @@ impl<'a> LoweringContext<'a> {
                     fields,
                 })
             }
+            TypedExprKind::Grouping(inner) => self.try_const_expr(inner),
+            TypedExprKind::And { left, right } => {
+                match self.try_const_expr(left)? {
+                    AirConst::Bool(false) => Ok(AirConst::Bool(false)),
+                    AirConst::Bool(true) => match self.try_const_expr(right)? {
+                        right @ AirConst::Bool(_) => Ok(right),
+                        _ => Err(self.fold_failure_of(&expr.kind)),
+                    },
+                    _ => Err(self.fold_failure_of(&expr.kind)),
+                }
+            }
+            TypedExprKind::Or { left, right } => {
+                match self.try_const_expr(left)? {
+                    AirConst::Bool(true) => Ok(AirConst::Bool(true)),
+                    AirConst::Bool(false) => match self.try_const_expr(right)? {
+                        right @ AirConst::Bool(_) => Ok(right),
+                        _ => Err(self.fold_failure_of(&expr.kind)),
+                    },
+                    _ => Err(self.fold_failure_of(&expr.kind)),
+                }
+            }
+            TypedExprKind::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => match self.try_const_expr(condition)? {
+                AirConst::Bool(true) => self.try_const_expr(then_branch),
+                AirConst::Bool(false) => self.try_const_expr(else_branch),
+                _ => Err(self.fold_failure_of(&expr.kind)),
+            },
+            TypedExprKind::Cast {
+                expr: inner,
+                target,
+            } if target.is_integer() => {
+                let v = const_int_of(&self.try_const_expr(inner)?)
+                    .ok_or(ConstFoldFailure::FoldNotImplemented)?;
+                Self::const_int_in(expr, v)
+            }
+            TypedExprKind::Unary { op, operand } => {
+                let inner = self.try_const_expr(operand)?;
+                match (op, &inner) {
+                    (aelys_syntax::UnaryOp::Neg, _) => {
+                        let v = const_int_of(&inner).ok_or(ConstFoldFailure::FoldNotImplemented)?;
+                        let v = v.checked_neg().ok_or(ConstFoldFailure::NotAConstant)?;
+                        Self::const_int_in(expr, v)
+                    }
+                    (aelys_syntax::UnaryOp::Not, AirConst::Bool(b)) => Ok(AirConst::Bool(!*b)),
+                    _ => Err(self.fold_failure_of(&expr.kind)),
+                }
+            }
+            TypedExprKind::Binary { op, left, right } => {
+                let (l, r) = (self.try_const_expr(left)?, self.try_const_expr(right)?);
+                let (Some(l), Some(r)) = (const_int_of(&l), const_int_of(&r)) else {
+                    return Err(self.fold_failure_of(&expr.kind));
+                };
+                use aelys_syntax::BinaryOp as B;
+                match op {
+                    B::Eq => return Ok(AirConst::Bool(l == r)),
+                    B::Ne => return Ok(AirConst::Bool(l != r)),
+                    B::Lt => return Ok(AirConst::Bool(l < r)),
+                    B::Le => return Ok(AirConst::Bool(l <= r)),
+                    B::Gt => return Ok(AirConst::Bool(l > r)),
+                    B::Ge => return Ok(AirConst::Bool(l >= r)),
+                    _ => {}
+                }
+                let v = match op {
+                    B::Add => l.checked_add(r),
+                    B::Sub => l.checked_sub(r),
+                    B::Mul => l.checked_mul(r),
+                    B::Div => l.checked_div(r),
+                    B::Mod => l.checked_rem(r),
+                    _ => None,
+                }
+                .ok_or(ConstFoldFailure::NotAConstant)?;
+                Self::const_int_in(expr, v)
+            }
             other => Err(self.fold_failure_of(other)),
+        }
+    }
+
+    fn const_int_in(expr: &aelys_sema::TypedExpr, v: i64) -> Result<AirConst, ConstFoldFailure> {
+        if expr.ty.is_integer() {
+            if !InferType::int_fits(v, &expr.ty) {
+                return Err(ConstFoldFailure::NotAConstant);
+            }
+            Ok(AirConst::Int(v, super::infer_to_int_size(&expr.ty)))
+        } else {
+            Ok(AirConst::IntLiteral(v))
         }
     }
 
@@ -713,6 +807,7 @@ impl<'a> LoweringContext<'a> {
             K::Int(_)
             | K::Float(_)
             | K::Bool(_)
+            | K::Char(_)
             | K::String(_)
             | K::Null
             | K::Identifier(_)
@@ -755,5 +850,13 @@ impl<'a> LoweringContext<'a> {
             | K::ResultAssert { .. }
             | K::Block { .. } => NotAConstant,
         }
+    }
+}
+
+fn const_int_of(c: &AirConst) -> Option<i64> {
+    match c {
+        AirConst::Int(v, _) => Some(*v),
+        AirConst::IntLiteral(v) => Some(*v),
+        _ => None,
     }
 }

@@ -29,30 +29,13 @@ impl<'a> LoweringContext<'a> {
             crate::rc_paths::RcScan::Undecidable(_) => return,
             crate::rc_paths::RcScan::RejectedMultiVariant(_) => return,
         };
-        let mut prov = value_expr;
-        while let TypedExprKind::Grouping(inner) = &prov.kind {
-            prov = inner;
-        }
-        match &prov.kind {
-            TypedExprKind::EnumVariant {
-                enum_name, variant, ..
-            } if enum_name == "Rc" && variant == "new" => {}
-            TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
-            TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
+        match aelys_sema::rc_init::rc_init_provenance(value_expr) {
+            aelys_sema::rc_init::RcInit::Fresh => {}
+            aelys_sema::rc_init::RcInit::Borrowed => {
                 self.emit_carrier_field_retains(value_op.clone(), field_air_ty, &paths, sp);
             }
-            TypedExprKind::Call { .. } => {
-                self.report_unsupported(format!(
-                    "[rc-stage3a] {what} is initialized from a call returning an `Rc<T>`-bearing \
-                     value; ownership transfer into a carrier field is not supported yet"
-                ));
-            }
-            _ => {
-                self.report_unsupported(format!(
-                    "[rc-stage3a] {what} is initialized from a conditional/compound expression \
-                     producing an `Rc<T>`-bearing value; only a direct reference (clone) or a \
-                     fresh literal is supported yet"
-                ));
+            aelys_sema::rc_init::RcInit::Unaccountable(blocker) => {
+                self.report_unsupported(aelys_sema::rc_init::rc_init_refusal(blocker, what));
             }
         }
     }
@@ -84,6 +67,7 @@ impl<'a> LoweringContext<'a> {
                 Operand::Const(AirConst::Float(*v, size))
             }
             TypedExprKind::Bool(v) => Operand::Const(AirConst::Bool(*v)),
+            TypedExprKind::Char(cp) => Operand::Const(AirConst::Char(*cp)),
             TypedExprKind::String(v) => Operand::Const(AirConst::Str(v.clone())),
             TypedExprKind::Null => Operand::Const(AirConst::Null),
 
@@ -262,44 +246,41 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::ArraySized {
                 size, fill_value, ..
             } => {
-                let n = match &size.kind {
-                    TypedExprKind::Int(v) => *v as u64,
-                    _ => {
-                        self.report_unsupported(
-                            "unsupported non-constant array size in AIR lowering: \
-                             ArraySized requires a constant integer size expression"
-                                .to_string(),
-                        );
-                        0
+                // the count comes from the type, never from the size expression: the optimizer
+                let (elem_ty, n) = match &expr.ty {
+                    InferType::Array(inner, len) => {
+                        let elem_ty = self.lower_type_from_infer(inner);
+                        let len = if crate::ablation::array_length_from_size_expr() {
+                            match &size.kind {
+                                aelys_sema::TypedExprKind::Int(v) => Some(*v as u64),
+                                _ => None,
+                            }
+                        } else {
+                            *len
+                        };
+                        match len {
+                            Some(n) => (elem_ty, n),
+                            None => {
+                                self.report_unsupported(non_constant_array_size_message(size));
+                                (elem_ty, 0)
+                            }
+                        }
                     }
-                };
-                let elem_ty = match &expr.ty {
-                    InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                     other => {
                         self.report_ice(format!(
                             "ICE: ArraySized has non-array type `{}` at AIR lowering",
                             other
                         ));
-                        AirType::I64
+                        (AirType::I64, 0)
                     }
                 };
                 self.check_stack_array_size(&elem_ty, n);
-                let arr_ty = AirType::Array(Box::new(elem_ty), n);
+                let arr_ty = AirType::Array(Box::new(elem_ty.clone()), n);
                 let arr_local = self.alloc_temp_mut(arr_ty);
                 let fill_op = if let Some(fv) = fill_value {
                     self.lower_expr(fv)
                 } else {
-                    let elem_ty_for_zero = match &expr.ty {
-                        InferType::Array(inner, _) => self.lower_type_from_infer(inner),
-                        other => {
-                            self.report_ice(format!(
-                                "ICE: ArraySized zero-init has non-array type `{}` at AIR lowering",
-                                other
-                            ));
-                            AirType::I64
-                        }
-                    };
-                    Operand::Const(AirConst::ZeroInit(elem_ty_for_zero))
+                    Operand::Const(AirConst::ZeroInit(elem_ty))
                 };
                 for i in 0..n {
                     self.emit(
@@ -469,6 +450,35 @@ impl<'a> LoweringContext<'a> {
                 if enum_name == "Vec" && variant == "as_slice" {
                     return self.lower_vec_as_slice(&expr.ty, args, sp);
                 }
+                if enum_name == "string" && variant == "from_char" {
+                    let lowered: Vec<Operand> =
+                        args.iter().map(|arg| self.lower_expr(arg)).collect();
+                    return self.emit_rvalue_to_temp(
+                        AirType::Str,
+                        Rvalue::Call {
+                            func: Callee::Named("__aelys_str_from_char".to_string()),
+                            args: lowered,
+                        },
+                        sp,
+                    );
+                }
+                if enum_name == "char" && (variant == "from_i64" || variant == "is_scalar") {
+                    let lowered: Vec<Operand> =
+                        args.iter().map(|arg| self.lower_expr(arg)).collect();
+                    let (symbol, ty) = if variant == "from_i64" {
+                        ("__aelys_char_from_i64", AirType::Char)
+                    } else {
+                        ("__aelys_char_is_scalar", AirType::Bool)
+                    };
+                    return self.emit_rvalue_to_temp(
+                        ty,
+                        Rvalue::Call {
+                            func: Callee::Named(symbol.to_string()),
+                            args: lowered,
+                        },
+                        sp,
+                    );
+                }
                 if enum_name == "string" && variant == "substring_bytes" {
                     let lowered: Vec<Operand> =
                         args.iter().map(|arg| self.lower_expr(arg)).collect();
@@ -600,6 +610,7 @@ impl<'a> LoweringContext<'a> {
 
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
         let val = self.lower_expr(value);
+        let str_val = self.str_init_kind(&val);
         if let Some(id) = self.lookup_local(name) {
             if let Some(key) = Self::air_drop_key(sp) {
                 let old_drops = self.collect_affine_drops(key, |_| true);
@@ -618,6 +629,16 @@ impl<'a> LoweringContext<'a> {
                     self.emit_cow_release(id, sp);
                 }
             }
+            // `s = s` must emit neither half: the release would free the buffer the retain then re-takes
+            let str_self_assign = matches!(val, Operand::Copy(v) | Operand::Move(v) if v == id);
+            let mut str_share_taken = false;
+            if !is_capture && !str_self_assign && self.str_local_is_owned(id) {
+                str_share_taken = matches!(str_val, crate::lower::StrInit::Share);
+                self.emit_str_release(id, sp);
+                if matches!(str_val, crate::lower::StrInit::Borrow) {
+                    self.forget_str_local(id);
+                }
+            }
             let place = if is_capture {
                 Place::Deref(id)
             } else {
@@ -632,6 +653,9 @@ impl<'a> LoweringContext<'a> {
             );
             if is_capture {
                 return val;
+            }
+            if str_share_taken {
+                self.emit_str_retain(id, sp);
             }
             Operand::Copy(id)
         } else {
@@ -1433,6 +1457,7 @@ impl<'a> LoweringContext<'a> {
         let fake_func = TypedFunction {
             name: lambda_name.clone(),
             type_params: Vec::new(),
+            bounds: Vec::new(),
             params: params.to_vec(),
             return_type: return_type.clone(),
             body: body.to_vec(),
@@ -1591,6 +1616,8 @@ impl<'a> LoweringContext<'a> {
         for (block_id, arm) in arm_blocks {
             self.fixup_block_id_noop(block_id);
 
+            let arm_scope_depth = self.locals_by_name.len();
+
             if let TypedPattern::Variant { tag, bindings, .. } = &arm.pattern {
                 for (field_index, (name, ty)) in bindings.iter().enumerate() {
                     let field_ty = self.lower_type_from_infer(ty);
@@ -1622,6 +1649,7 @@ impl<'a> LoweringContext<'a> {
             } else {
                 self.lower_expr_discard(&arm.body);
             }
+            self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
 
@@ -1779,4 +1807,13 @@ impl<'a> LoweringContext<'a> {
         }
         acc
     }
+}
+
+pub(super) fn non_constant_array_size_message(size: &TypedExpr) -> String {
+    format!(
+        "unsupported non-constant array size: an array size must be a compile-time constant, \
+         and the size expression at line {}, column {} is not; annotate the binding `[T; N]` \
+         if the length is known",
+        size.span.line, size.span.column
+    )
 }

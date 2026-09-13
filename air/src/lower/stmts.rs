@@ -1,4 +1,4 @@
-use super::LoweringContext;
+use super::{LoweringContext, StrInit};
 use crate::*;
 use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
 
@@ -56,6 +56,73 @@ impl<'a> LoweringContext<'a> {
         self.emit_cow_buffer_call("__aelys_vec_release", local, sp);
     }
 
+    fn emit_str_slot_call(&mut self, fn_name: &str, local: LocalId, sp: Option<Span>) {
+        let addr = self.addr_of_own_temp(local, &AirType::Str, sp);
+        self.emit(
+            AirStmtKind::CallVoid {
+                func: Callee::Named(fn_name.to_string()),
+                args: vec![addr],
+            },
+            sp,
+        );
+    }
+
+    pub(super) fn emit_str_retain(&mut self, local: LocalId, sp: Option<Span>) {
+        self.emit_str_slot_call("__aelys_str_retain", local, sp);
+    }
+
+    pub(super) fn emit_str_release(&mut self, local: LocalId, sp: Option<Span>) {
+        self.emit_str_slot_call("__aelys_str_release", local, sp);
+    }
+
+    pub(super) fn str_init_kind(&self, val: &Operand) -> StrInit {
+        if matches!(val, Operand::Const(_)) || self.str_operand_is_fresh(val) {
+            return StrInit::Own;
+        }
+        if let Operand::Copy(id) | Operand::Move(id) = val
+            && self.str_locals.iter().any(|(local, _)| local == id)
+        {
+            return StrInit::Share;
+        }
+        // a library producer (trim, substring, repeat, join, from_int) hands back fresh bytes, so this leaks
+        StrInit::Borrow
+    }
+
+    pub(super) fn str_local_is_owned(&self, id: LocalId) -> bool {
+        self.str_locals.iter().any(|(local, _)| *local == id)
+    }
+
+    pub(super) fn forget_str_local(&mut self, id: LocalId) {
+        self.str_locals.retain(|(local, _)| *local != id);
+    }
+
+    pub(super) fn str_operand_is_fresh(&self, val: &Operand) -> bool {
+        let (Operand::Copy(id) | Operand::Move(id)) = val else {
+            return false;
+        };
+        let Some(last) = self.current_stmts.last() else {
+            return false;
+        };
+        let AirStmtKind::Assign {
+            place: Place::Local(def),
+            rvalue,
+        } = &last.kind
+        else {
+            return false;
+        };
+        if def != id || self.local_air_type(*id) != Some(AirType::Str) {
+            return false;
+        }
+        match rvalue {
+            Rvalue::Call {
+                func: Callee::Named(name),
+                ..
+            } => crate::symbols::STRING_PRODUCER_SYMBOLS.contains(&name.as_str()),
+            Rvalue::BinaryOp(BinOp::Add, _, _) => true,
+            _ => false,
+        }
+    }
+
     pub(super) fn emit_cow_release_through_ptr(&mut self, ptr: Operand, sp: Option<Span>) {
         self.emit(
             AirStmtKind::CallVoid {
@@ -107,7 +174,8 @@ impl<'a> LoweringContext<'a> {
         let has_rc = self.rc_locals.iter().any(|(_, d)| *d > scope_depth);
         let has_carrier = self.carrier_locals.iter().any(|c| c.depth > scope_depth);
         let has_cow = self.cow_locals.iter().any(|(_, d)| *d > scope_depth);
-        if !has_rc && !has_carrier && !has_cow {
+        let has_str = self.str_locals.iter().any(|(_, d)| *d > scope_depth);
+        if !has_rc && !has_carrier && !has_cow && !has_str {
             return;
         }
         let terminated = self.last_block_is_terminated();
@@ -129,6 +197,12 @@ impl<'a> LoweringContext<'a> {
             .filter(|(_, d)| *d > scope_depth)
             .map(|(id, _)| *id)
             .collect();
+        let strs_to_release: Vec<LocalId> = self
+            .str_locals
+            .iter()
+            .filter(|(_, d)| *d > scope_depth)
+            .map(|(id, _)| *id)
+            .collect();
         if !terminated {
             for id in &to_release {
                 self.emit_rc_release(*id, None);
@@ -139,10 +213,14 @@ impl<'a> LoweringContext<'a> {
             for id in &cows_to_release {
                 self.emit_cow_release(*id, None);
             }
+            for id in &strs_to_release {
+                self.emit_str_release(*id, None);
+            }
         }
         self.rc_locals.retain(|(_, d)| *d <= scope_depth);
         self.carrier_locals.retain(|c| c.depth <= scope_depth);
         self.cow_locals.retain(|(_, d)| *d <= scope_depth);
+        self.str_locals.retain(|(_, d)| *d <= scope_depth);
     }
 
     pub(super) fn emit_scope_affine_drops(
@@ -218,6 +296,15 @@ impl<'a> LoweringContext<'a> {
             .collect();
         for id in cows_to_release {
             self.emit_cow_release(id, None);
+        }
+        let strs_to_release: Vec<LocalId> = self
+            .str_locals
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| Some(*id) != escaped)
+            .collect();
+        for id in strs_to_release {
+            self.emit_str_release(id, None);
         }
     }
 
@@ -405,7 +492,11 @@ impl<'a> LoweringContext<'a> {
                 ..
             } => {
                 let ty = self.lower_type_from_infer(var_type);
-                if matches!(ty, AirType::Array(_, _)) {
+                let declared_len = match &ty {
+                    AirType::Array(_, n) => Some(*n),
+                    _ => None,
+                };
+                if let Some(declared_len) = declared_len {
                     match &initializer.kind {
                         TypedExprKind::ArrayLiteral { elements, .. } => {
                             let elem_ops: Vec<Operand> =
@@ -425,20 +516,9 @@ impl<'a> LoweringContext<'a> {
                             }
                             return;
                         }
-                        TypedExprKind::ArraySized {
-                            size, fill_value, ..
-                        } => {
-                            let n = match &size.kind {
-                                TypedExprKind::Int(v) => *v as u64,
-                                _ => {
-                                    self.report_unsupported(
-                                        "unsupported non-constant array size: \
-                                         ArraySized requires a constant integer size expression"
-                                            .to_string(),
-                                    );
-                                    0
-                                }
-                            };
+                        TypedExprKind::ArraySized { fill_value, .. } => {
+                            // expression lets the optimizer's folding decide the verdict
+                            let n = declared_len;
                             let elem_air_ty = match var_type {
                                 InferType::Array(inner, _) => self.lower_type_from_infer(inner),
                                 _ => AirType::I64,
@@ -472,6 +552,8 @@ impl<'a> LoweringContext<'a> {
                     }
                 }
                 let operand = self.lower_expr(initializer);
+                let str_init =
+                    matches!(var_type, InferType::String).then(|| self.str_init_kind(&operand));
 
                 let is_rc_binding = matches!(var_type, InferType::Rc(_));
                 let is_clone = is_rc_binding
@@ -530,6 +612,17 @@ impl<'a> LoweringContext<'a> {
                     );
                     let depth = self.locals_by_name.len();
                     self.cow_locals.push((local, depth));
+                }
+
+                match str_init {
+                    Some(StrInit::Borrow) | None => {}
+                    Some(kind) => {
+                        if matches!(kind, StrInit::Share) {
+                            self.emit_str_retain(local, sp);
+                        }
+                        let depth = self.locals_by_name.len();
+                        self.str_locals.push((local, depth));
+                    }
                 }
 
                 if self.affine_category(var_type).is_affine() {

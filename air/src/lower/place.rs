@@ -99,6 +99,13 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::Member { object, member } => {
                 if member == "bytes" && matches!(object.ty, InferType::String) {
+                    if !aelys_sema::bytes_receiver_is_backed(object) {
+                        self.report_ice(
+                            "ICE: `.bytes` of a receiver that denotes no storage reached AIR \
+                             lowering; sema must reject it (E0421)"
+                                .to_string(),
+                        );
+                    }
                     return None;
                 }
                 let base = self.projection_base_mode(object, mode)?;
