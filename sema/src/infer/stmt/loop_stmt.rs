@@ -122,7 +122,7 @@ impl TypeInference {
         let typed_iterable = self.infer_expr(iterable);
 
         let elem_type = match &typed_iterable.ty {
-            InferType::String => InferType::String,
+            InferType::String => InferType::Char,
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
