@@ -65,7 +65,7 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let is_unsigned = matches!(
             operand_ty,
-            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64
+            AirType::U8 | AirType::U16 | AirType::U32 | AirType::U64 | AirType::Char
         );
 
         let value = match op {
@@ -173,7 +173,6 @@ impl<'a> FunctionCodegen<'a> {
             BinOp::Or | BinOp::BitOr => self.builder.build_or(left, right, "ior").map(Into::into),
             BinOp::BitXor => self.builder.build_xor(left, right, "ixor").map(Into::into),
             BinOp::Shl => {
-                // Mask shift amount to prevent LLVM UB (like Rust: amount % bitwidth)
                 let bitwidth = left.get_type().get_bit_width();
                 let mask = left.get_type().const_int((bitwidth - 1) as u64, false);
                 let masked = self
@@ -337,7 +336,7 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         match op {
             BinOp::Eq | BinOp::Ne => {
-                // exctract ptr/len from both string structs (flat ABI)
+                // exctract ptr/len from both string structs (flat abi)
                 let (a_ptr, a_len) = self.string_parts_from_value(left)?;
                 let (b_ptr, b_len) = self.string_parts_from_value(right)?;
 

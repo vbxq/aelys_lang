@@ -1,13 +1,80 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
+use crate::lowering::stmts::RC_HEADER_SIZE;
 use crate::types::aelys_string_type;
 use inkwell::attributes::{Attribute, AttributeLoc};
+use inkwell::context::Context;
 use inkwell::module::Linkage;
-use inkwell::types::{AnyType, BasicTypeEnum};
+use inkwell::types::{AnyType, BasicTypeEnum, StructType};
 use inkwell::values::{
     BasicMetadataValueEnum, BasicValueEnum, CallSiteValue, FunctionValue, IntValue, PointerValue,
     StructValue,
 };
+
+/// a saturated refcount never decrements, which is what lets a release land on rodata
+pub(crate) const IMMORTAL_REFCOUNT: u64 = u32::MAX as u64;
+/// string bytes carry no child pointer, so the cycle collector must never trace them
+pub(crate) const RC_FLAG_NO_TRACE: u64 = 0x02;
+/// index of the byte array inside the headered constant, not a byte offset
+const RC_HEADERED_DATA_FIELD: u32 = 7;
+
+/// flags is its own byte: folded into a wider word it would only be right on little-endian
+pub(crate) fn rc_headered_bytes_type(
+    context: &'static Context,
+    array_len: u32,
+) -> StructType<'static> {
+    let i8_ty = context.i8_type();
+    let i32_ty = context.i32_type();
+    context.struct_type(
+        &[
+            i32_ty.into(),
+            i8_ty.into(),
+            i8_ty.into(),
+            i8_ty.into(),
+            i8_ty.into(),
+            i32_ty.into(),
+            i32_ty.into(),
+            i8_ty.array_type(array_len).into(),
+        ],
+        false,
+    )
+}
+
+pub(crate) fn rc_headered_bytes_value(
+    context: &'static Context,
+    bytes: &[u8],
+) -> StructValue<'static> {
+    let i8_ty = context.i8_type();
+    let i32_ty = context.i32_type();
+    let mut data: Vec<_> = bytes
+        .iter()
+        .map(|byte| i8_ty.const_int(u64::from(*byte), false))
+        .collect();
+    data.push(i8_ty.const_zero());
+    context.const_struct(
+        &[
+            i32_ty.const_int(IMMORTAL_REFCOUNT, false).into(),
+            i8_ty.const_int(RC_FLAG_NO_TRACE, false).into(),
+            i8_ty.const_zero().into(),
+            i8_ty.const_zero().into(),
+            i8_ty.const_zero().into(),
+            i32_ty.const_zero().into(),
+            i32_ty.const_zero().into(),
+            i8_ty.const_array(&data).into(),
+        ],
+        false,
+    )
+}
+
+/// walks struct field then array element, so the result points at the first byte and not at the array
+pub(crate) fn rc_headered_data_indices(context: &'static Context) -> [IntValue<'static>; 3] {
+    let i32_ty = context.i32_type();
+    [
+        i32_ty.const_zero(),
+        i32_ty.const_int(u64::from(RC_HEADERED_DATA_FIELD), false),
+        i32_ty.const_zero(),
+    ]
+}
 
 impl<'a> FunctionCodegen<'a> {
     pub(crate) fn add_sret_callsite_attr(
@@ -15,8 +82,7 @@ impl<'a> FunctionCodegen<'a> {
         call: CallSiteValue<'static>,
         ret_ty: BasicTypeEnum<'static>,
     ) {
-        // Indirect calls do not inherit parameter attributes from a declaration,
-        // so stamp sret on the callsite itself whenever we materialize the hidden slot.
+        // indirect calls do not inherit parameter attributes from a declaration,
         let sret_attr = self.context.create_type_attribute(
             Attribute::get_named_enum_kind_id("sret"),
             ret_ty.as_any_type_enum(),
@@ -28,7 +94,6 @@ impl<'a> FunctionCodegen<'a> {
         &mut self,
         text: &str,
     ) -> Result<(PointerValue<'static>, u64), CodegenError> {
-        let i8_ty = self.context.i8_type();
         let text_len = u64::try_from(text.len()).map_err(|_| {
             CodegenError::UnsupportedInstruction("string literal too large".to_string())
         })?;
@@ -39,35 +104,31 @@ impl<'a> FunctionCodegen<'a> {
                 CodegenError::UnsupportedInstruction("string literal too large".to_string())
             })?;
 
+        let headered_ty = rc_headered_bytes_type(self.context, array_len);
+
         let global_ptr = if let Some(existing) = self.string_globals.get(text).copied() {
             existing
         } else {
             let name = format!("str_{}_{}", self.air_function.id.0, self.string_id);
             self.string_id = self.string_id.saturating_add(1);
 
-            let mut bytes = Vec::with_capacity(text.len() + 1);
-            for byte in text.as_bytes() {
-                bytes.push(i8_ty.const_int(u64::from(*byte), false));
-            }
-            bytes.push(i8_ty.const_zero());
-
-            let global = self
-                .module
-                .add_global(i8_ty.array_type(array_len), None, &name);
+            let global = self.module.add_global(headered_ty, None, &name);
             global.set_linkage(Linkage::Private);
             global.set_constant(true);
-            global.set_initializer(&i8_ty.const_array(&bytes));
+            global.set_alignment(RC_HEADER_SIZE as u32);
+            global.set_initializer(&rc_headered_bytes_value(self.context, text.as_bytes()));
             let ptr = global.as_pointer_value();
             self.string_globals.insert(text.to_string(), ptr);
             ptr
         };
 
-        let array_ty = i8_ty.array_type(array_len);
-
-        let zero = self.context.i64_type().const_zero();
         let ptr = unsafe {
-            self.builder
-                .build_in_bounds_gep(array_ty, global_ptr, &[zero, zero], "str_ptr")
+            self.builder.build_in_bounds_gep(
+                headered_ty,
+                global_ptr,
+                &rc_headered_data_indices(self.context),
+                "str_ptr",
+            )
         }
         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
@@ -115,9 +176,6 @@ impl<'a> FunctionCodegen<'a> {
         Ok((ptr, len))
     }
 
-    /// Call a function that uses sret convention (struct return via pointer).
-    /// On Windows, alloca a result slot, pass as first arg, call, load result.
-    /// On other targets, call normally and extract the return value.
     pub(crate) fn call_with_sret(
         &mut self,
         fn_val: FunctionValue<'static>,
@@ -154,7 +212,6 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
-    /// Call a runtime function that returns %__aelys_string via sret.
     pub(crate) fn call_sret_returning_fn(
         &mut self,
         fn_val: FunctionValue<'static>,

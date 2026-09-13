@@ -219,10 +219,76 @@ impl<'a> FunctionCodegen<'a> {
         function
     }
 
-    pub(crate) fn ensure_str_char_at_function(&self) -> FunctionValue<'static> {
+    pub(crate) fn ensure_str_char_at_scalar_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_char_at_scalar") {
+            return function;
+        }
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         let i64_ty = self.context.i64_type().into();
-        self.declare_string_returning_fn("__aelys_str_char_at", &[ptr_ty, i64_ty, i64_ty])
+        let fn_ty = self
+            .context
+            .i32_type()
+            .fn_type(&[ptr_ty, i64_ty, i64_ty], false);
+        self.module
+            .add_function("__aelys_str_char_at_scalar", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_str_decode_at_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_str_decode_at") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .i64_type()
+            .fn_type(&[ptr_ty, i64_ty, i64_ty], false);
+        self.module.add_function("__aelys_str_decode_at", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_char_from_i64_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_char_from_i64") {
+            return function;
+        }
+        let fn_ty = self
+            .context
+            .i32_type()
+            .fn_type(&[self.context.i64_type().into()], false);
+        self.module.add_function("__aelys_char_from_i64", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_char_is_scalar_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_char_is_scalar") {
+            return function;
+        }
+        let fn_ty = self
+            .context
+            .i64_type()
+            .fn_type(&[self.context.i64_type().into()], false);
+        self.module
+            .add_function("__aelys_char_is_scalar", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_str_from_char_function(&self) -> FunctionValue<'static> {
+        self.declare_string_returning_fn(
+            "__aelys_str_from_char",
+            &[self.context.i32_type().into()],
+        )
+    }
+
+    pub(crate) fn ensure_to_string_char_function(&self) -> FunctionValue<'static> {
+        self.declare_string_returning_fn(
+            "__aelys_to_string_char",
+            &[self.context.i32_type().into()],
+        )
+    }
+
+    pub(crate) fn ensure_to_string_char_into_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        self.declare_string_returning_fn(
+            "__aelys_to_string_char_into",
+            &[ptr_ty, self.context.i32_type().into()],
+        )
     }
 
     pub(crate) fn ensure_str_char_count_function(&self) -> FunctionValue<'static> {

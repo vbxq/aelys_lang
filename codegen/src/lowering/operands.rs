@@ -44,6 +44,11 @@ impl<'a> FunctionCodegen<'a> {
                 .bool_type()
                 .const_int(u64::from(*v), false)
                 .into()),
+            AirConst::Char(cp) => Ok(self
+                .context
+                .i32_type()
+                .const_int(u64::from(*cp), false)
+                .into()),
             AirConst::Str(s) => self.global_string_value(s),
             AirConst::Null => Ok(self
                 .context
@@ -93,6 +98,7 @@ impl<'a> FunctionCodegen<'a> {
             Operand::Const(AirConst::Float(_, AirFloatSize::F32)) => Ok(AirType::F32),
             Operand::Const(AirConst::Float(_, AirFloatSize::F64)) => Ok(AirType::F64),
             Operand::Const(AirConst::Bool(_)) => Ok(AirType::Bool),
+            Operand::Const(AirConst::Char(_)) => Ok(AirType::Char),
             Operand::Const(AirConst::Str(_)) => Ok(AirType::Str),
             Operand::Const(AirConst::Null) => Ok(AirType::Ptr(Box::new(AirType::Void))),
             Operand::Const(AirConst::FnRef(_)) => Ok(AirType::Ptr(Box::new(AirType::Void))),
@@ -141,6 +147,7 @@ pub(crate) fn constant_kind_name(c: &AirConst) -> &'static str {
         AirConst::Int(_, _) => "Int",
         AirConst::Float(_, _) => "Float",
         AirConst::Bool(_) => "Bool",
+        AirConst::Char(_) => "Char",
         AirConst::Str(_) => "Str",
         AirConst::Null => "Null",
         AirConst::FnRef(_) => "FnRef",

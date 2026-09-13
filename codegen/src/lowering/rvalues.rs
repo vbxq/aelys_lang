@@ -146,17 +146,9 @@ impl<'a> FunctionCodegen<'a> {
                 .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
                 self.load_value(elem_ty, elem_ptr, "idx_load")
             }
-            AirType::Str => {
-                // utf-8 char indexing, runtime handles multi-byte scanning
-                let str_val = self.generate_operand(base)?.into_struct_value();
-                let (str_ptr, str_len) = self.string_parts_from_value(str_val)?;
-                let char_at_fn = self.ensure_str_char_at_function();
-                self.call_sret_returning_fn(
-                    char_at_fn,
-                    &[str_ptr.into(), str_len.into(), idx_val.into()],
-                    "str_char_at",
-                )
-            }
+            AirType::Str => Err(CodegenError::UnsupportedType(
+                "index of a string reached codegen; sema must reject it (E0304)".to_string(),
+            )),
             other => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",
                 other
