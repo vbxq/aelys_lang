@@ -132,7 +132,7 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn raw_counter_reads_zero_without_interpolation() {
+fn both_counters_read_zero_without_interpolation() {
     for_every_shape(HELLO, |run, at| {
         assert_eq!(run.code, 0, "{at}: exits 0; stderr:\n{}", run.stderr);
         assert_eq!(run.stdout, "hello\n", "{at}");
@@ -167,6 +167,12 @@ fn three_interpolations_stay_flat_instead_of_linear() {
         assert_eq!(run.code, 0, "{at}: exits 0; stderr:\n{}", run.stderr);
         assert_eq!(run.stdout, "7\n7\n7\n", "{at}");
         assert_eq!(
+            managed(&run.stderr),
+            Some((0, 0)),
+            "{at}: three prints must not allocate three buffers; stderr:\n{}",
+            run.stderr
+        );
+        assert_eq!(
             raw(&run.stderr),
             Some((0, 0)),
             "{at}: three prints must not raw three buffers; stderr:\n{}",
@@ -184,16 +190,23 @@ fn an_escaping_interpolation_still_allocates_and_still_prints() {
             "{at}: a global outlives its statement and must still read back"
         );
         assert_eq!(
-            raw(&run.stderr),
+            managed(&run.stderr),
             Some((1, 0)),
             "{at}: the peephole must decline a value that flows into a global; stderr:\n{}",
+            run.stderr
+        );
+        assert_eq!(
+            raw(&run.stderr),
+            Some((0, 0)),
+            "{at}: the declined value takes to_string_i64, which allocates through the managed \
+             allocator now and no longer reaches the raw counter; stderr:\n{}",
             run.stderr
         );
     });
 }
 
 #[test]
-fn the_raw_counter_discriminates_between_two_programs() {
+fn the_managed_counter_discriminates_between_two_programs() {
     for (opt, opt_name) in LEVELS {
         let (Some(quiet), Some(loud)) = (
             run_at(HELLO, opt, "immix"),
@@ -201,12 +214,18 @@ fn the_raw_counter_discriminates_between_two_programs() {
         ) else {
             continue;
         };
-        assert_eq!(raw(&quiet.stderr), Some((0, 0)), "{opt_name}");
-        assert_eq!(raw(&loud.stderr), Some((1, 0)), "{opt_name}");
+        assert_eq!(managed(&quiet.stderr), Some((0, 0)), "{opt_name}");
+        assert_eq!(managed(&loud.stderr), Some((1, 0)), "{opt_name}");
         assert_ne!(
+            managed(&quiet.stderr),
+            managed(&loud.stderr),
+            "{opt_name}: an instrument that reads the same number for both measures nothing"
+        );
+        assert_eq!(
             raw(&quiet.stderr),
             raw(&loud.stderr),
-            "{opt_name}: an instrument that reads the same number for both measures nothing"
+            "{opt_name}: no string producer mallocs a bare buffer any more, so the raw counter \
+             is the one that now reads the same number for both and measures nothing here"
         );
     }
 }
@@ -254,9 +273,16 @@ fn main() -> i64 {
         assert_eq!(run.code, 0, "{at}: exits 0; stderr:\n{}", run.stderr);
         assert_eq!(run.stdout, "0\n1\n2\n3\n4\n", "{at}");
         assert_eq!(
-            raw(&run.stderr),
+            managed(&run.stderr),
             Some((0, 0)),
             "{at}: the buffer is per frame, so the trip count cannot show up; stderr:\n{}",
+            run.stderr
+        );
+        assert_eq!(
+            raw(&run.stderr),
+            Some((0, 0)),
+            "{at}: no string producer mallocs a bare buffer any more, so the raw counter cannot \
+             see a trip count either; stderr:\n{}",
             run.stderr
         );
     });
@@ -323,9 +349,16 @@ fn main() -> i64 {
         assert_eq!(run.code, 0, "{at}: exits 0; stderr:\n{}", run.stderr);
         assert_eq!(run.stdout, "1.5\n", "{at}");
         assert_eq!(
-            raw(&run.stderr),
+            managed(&run.stderr),
             Some((0, 0)),
             "{at}: the f64 helper writes into the frame too; stderr:\n{}",
+            run.stderr
+        );
+        assert_eq!(
+            raw(&run.stderr),
+            Some((0, 0)),
+            "{at}: no string producer mallocs a bare buffer any more, so the raw counter cannot \
+             see the f64 helper either; stderr:\n{}",
             run.stderr
         );
     });

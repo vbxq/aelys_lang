@@ -301,9 +301,9 @@ const S6_H3: &str = "nogc fn dbl(x: i64) -> i64 { return x + x }\n\
 #[test]
 fn the_headline_a_nogc_fn_writes_a_managed_vec_through_a_mutable_view() {
     let h = Harness::new();
-    h.value_row("S6-H1", S6_H1, "101\n0\n7919\n", 3, 3);
-    h.value_row("S6-H2", S6_H2, "7919\n0\n", 3, 3);
-    h.value_row("S6-H3", S6_H3, "100\n0\n", 3, 3);
+    h.value_row("S6-H1", S6_H1, "101\n0\n7919\n", 6, 3);
+    h.value_row("S6-H2", S6_H2, "7919\n0\n", 5, 3);
+    h.value_row("S6-H3", S6_H3, "100\n0\n", 5, 3);
     h.assert_legs(24);
 }
 
@@ -329,7 +329,7 @@ fn the_region_adds_no_allocation_of_its_own() {
     );
     assert_eq!(
         with_region,
-        ("7919\n0\n".to_string(), 3, 3),
+        ("7919\n0\n".to_string(), 5, 3),
         "the differential is only worth its zero if both sides are pinned absolutely"
     );
     h.assert_legs(16);
@@ -373,8 +373,8 @@ const S6_M2: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
 #[test]
 fn the_callers_vec_is_still_a_vec_after_the_nogc_call() {
     let h = Harness::new();
-    h.value_row("S6-M1", S6_M1, "7919\n101\n7919\n5\n", 2, 2);
-    h.value_row("S6-M2", S6_M2, "7919\n101\n0\n7919\n", 3, 3);
+    h.value_row("S6-M1", S6_M1, "7919\n101\n7919\n5\n", 6, 2);
+    h.value_row("S6-M2", S6_M2, "7919\n101\n0\n7919\n", 7, 3);
     h.assert_legs(16);
 }
 
@@ -570,20 +570,20 @@ const S6_R6_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 { return Vec::len(*v
 #[test]
 fn the_vec_read_boundary_is_in_the_stage6_net() {
     let h = Harness::new();
-    h.value_row("S6-R1", S6_R1, "3\n7919\n", 1, 1);
-    h.value_row("S6-R2", S6_R2, "101\n7919\n", 2, 2);
-    h.value_row("S6-R3", S6_R3, "7919\n", 1, 1);
+    h.value_row("S6-R1", S6_R1, "3\n7919\n", 3, 1);
+    h.value_row("S6-R2", S6_R2, "101\n7919\n", 4, 2);
+    h.value_row("S6-R3", S6_R3, "7919\n", 2, 1);
     h.fenced_row("S6-R4", S6_R4, "E0727");
     h.fenced_row("S6-R5", S6_R5, "E0727");
     h.fenced_row("S6-R6", S6_R6, "E0727");
-    h.value_row("S6-R4-KEEP", S6_R4_KEEP, "3\n", 1, 1);
-    h.value_row("S6-R5-KEEP", S6_R5_KEEP, "2\n", 0, 0);
-    h.value_row("S6-R6-KEEP", S6_R6_KEEP, "3\n", 1, 1);
+    h.value_row("S6-R4-KEEP", S6_R4_KEEP, "3\n", 2, 1);
+    h.value_row("S6-R5-KEEP", S6_R5_KEEP, "2\n", 1, 0);
+    h.value_row("S6-R6-KEEP", S6_R6_KEEP, "3\n", 2, 1);
     h.assert_legs(60);
 }
 
 // `__aelys_alloc` is served out of the immix arena by default and lsan cannot see it individually.
-#[cfg(feature = "asan-invariants")]
+#[cfg_attr(not(feature = "asan-invariants"), allow(dead_code))]
 mod asan {
     use super::*;
 
@@ -687,7 +687,7 @@ mod asan {
         }
     }
 
-    // bootstrap leak is one stack per `println`, so the expected leak total is exactly that
+    // one leak stack per `println` whose string outlives the call, which is no longer every one
     fn memory_rows() -> Vec<(&'static str, &'static str, &'static str, usize)> {
         vec![
             ("S6-H1", S6_H1, "101\n0\n7919\n", 3),
@@ -696,12 +696,13 @@ mod asan {
             ("S6-E2", S6_H2_NOREGION, "7919\n0\n", 2),
             ("S6-M1", S6_M1, "7919\n101\n7919\n5\n", 4),
             ("S6-M2", S6_M2, "7919\n101\n0\n7919\n", 4),
-            ("S6-R1", S6_R1, "3\n7919\n", 2),
+            ("S6-R1", S6_R1, "3\n7919\n", 1),
             ("S6-R2", S6_R2, "101\n7919\n", 2),
             ("S6-R3", S6_R3, "7919\n", 1),
         ]
     }
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn the_sanitizer_is_actually_linked_in() {
         let dir = tempdir().expect("tempdir");
@@ -721,6 +722,7 @@ mod asan {
         );
     }
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn every_memory_touching_row_is_clean_under_asan_and_malloc() {
         let dir = tempdir().expect("tempdir");
@@ -748,9 +750,12 @@ mod asan {
                  `println` helper\nstderr:\n{}",
                 l.stderr
             );
-            assert!(
-                !l.stderr.contains("in __aelys_alloc"),
-                "{id}: a buffer allocated through the Aelys allocator leaked\nstderr:\n{}",
+            assert_eq!(
+                l.stderr.matches("__aelys_to_string_i64").count(),
+                printlns,
+                "{id}: the `println` helper allocates through __aelys_alloc now, so `in \
+                 __aelys_alloc` no longer separates it from a leaked managed buffer; every leak \
+                 stack must name the helper itself\nstderr:\n{}",
                 l.stderr
             );
         }
@@ -770,6 +775,7 @@ mod asan {
                            \x20   return 0\n\
                            }\n";
 
+    #[cfg(feature = "asan-invariants")]
     #[test]
     fn the_leak_oracle_is_armed_and_only_the_malloc_leg_can_see_a_buffer() {
         let dir = tempdir().expect("tempdir");
@@ -781,8 +787,15 @@ mod asan {
         let immix = run_asan_with(&exe, false, true);
         assert_eq!(
             immix.stacks(),
-            2,
-            "under immix only the two `println` leaks are visible\nstderr:\n{}",
+            0,
+            "the two `println` strings are managed allocations now, so immix serves them from a \
+             block it keeps reachable and LSan sees nothing at all here\nstderr:\n{}",
+            immix.stderr
+        );
+        assert!(
+            immix.stderr.contains("[rc] allocs=5 frees=1"),
+            "immix has no leak stack left to count, so the managed counter is the only witness \
+             that four of the five allocations are still held\nstderr:\n{}",
             immix.stderr
         );
         assert!(
@@ -792,10 +805,35 @@ mod asan {
         );
 
         let malloc = run_asan_with(&exe, true, true);
+        // three was never honest: the same binary under lsan use_stacks=0 reports these four stacks
         assert_eq!(
             malloc.stacks(),
-            3,
-            "under malloc the leaked buffer is a third stack\nstderr:\n{}",
+            4,
+            "under malloc the planted buffer and the copy the closure detaches are the third and \
+             fourth stacks\nstderr:\n{}",
+            malloc.stderr
+        );
+        assert!(
+            malloc
+                .stderr
+                .contains("122 byte(s) leaked in 4 allocation(s)"),
+            "the quantity is the oracle, not the stack count: a total that holds while the stacks \
+             move is one leak reported from a new site, a total that grows is a leak that is \
+             genuinely new\nstderr:\n{}",
+            malloc.stderr
+        );
+        assert_eq!(
+            malloc.stderr.matches("__aelys_to_string_i64").count(),
+            2,
+            "two of the four stacks are the `println` helper, so the other two are the planted \
+             vec and the copy it is detached into, and nothing else\nstderr:\n{}",
+            malloc.stderr
+        );
+        assert_eq!(
+            malloc.stderr.matches("__aelys_vec_detach").count(),
+            1,
+            "the fourth stack is the copy the capturing closure detaches, and naming it is what \
+             stops it being swapped for some other leak later\nstderr:\n{}",
             malloc.stderr
         );
         assert!(
@@ -805,7 +843,7 @@ mod asan {
             malloc.stderr
         );
         assert!(
-            malloc.stderr.contains("allocs=3 frees=1"),
+            malloc.stderr.contains("[rc] allocs=5 frees=1"),
             "stderr:\n{}",
             malloc.stderr
         );

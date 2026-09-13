@@ -339,10 +339,10 @@ fn caller() -> i32 {
     let mono_fn = program
         .functions
         .iter()
-        .find(|f| f.name.contains("__mono_identity_i32"));
+        .find(|f| f.name.contains("__mono_identity$1$i32"));
     assert!(
         mono_fn.is_some(),
-        "expected `__mono_identity_i32` function, found: {:?}",
+        "expected `__mono_identity$1$i32` function, found: {:?}",
         program
             .functions
             .iter()
@@ -362,16 +362,16 @@ fn caller() -> i32 {
         b.stmts.iter().any(|s| {
             matches!(&s.kind,
                 AirStmtKind::Assign { rvalue: Rvalue::Call { func: Callee::Named(n), .. }, .. }
-                if n.contains("__mono_identity_i32")
+                if n.contains("__mono_identity$1$i32")
             )
         }) || matches!(&b.terminator,
             AirTerminator::Invoke { func: Callee::Named(n), .. }
-            if n.contains("__mono_identity_i32")
+            if n.contains("__mono_identity$1$i32")
         )
     });
     assert!(
         has_rewritten_call,
-        "caller's call site should be rewritten to __mono_identity_i32"
+        "caller's call site should be rewritten to __mono_identity$1$i32"
     );
 
     assert!(
@@ -389,7 +389,7 @@ fn caller() -> i32 {
                         func: Callee::Named(n),
                         ..
                     },
-            } if n.contains("__mono_identity_i32") => Some(*id),
+            } if n.contains("__mono_identity$1$i32") => Some(*id),
             _ => None,
         })
     });
@@ -662,14 +662,14 @@ fn caller() -> i64 {
     let mono_i32 = program
         .functions
         .iter()
-        .find(|f| f.name.contains("__mono_identity_i32"));
+        .find(|f| f.name.contains("__mono_identity$1$i32"));
     let mono_i64 = program
         .functions
         .iter()
-        .find(|f| f.name.contains("__mono_identity_i64"));
+        .find(|f| f.name.contains("__mono_identity$1$i64"));
     assert!(
         mono_i32.is_some(),
-        "expected __mono_identity_i32, found: {:?}",
+        "expected __mono_identity$1$i32, found: {:?}",
         program
             .functions
             .iter()
@@ -678,7 +678,7 @@ fn caller() -> i64 {
     );
     assert!(
         mono_i64.is_some(),
-        "expected __mono_identity_i64, found: {:?}",
+        "expected __mono_identity$1$i64, found: {:?}",
         program
             .functions
             .iter()
@@ -725,15 +725,15 @@ fn caller() -> i64 {
     assert!(
         call_targets
             .iter()
-            .any(|n| n.contains("__mono_identity_i32")),
-        "caller should call __mono_identity_i32, found calls: {:?}",
+            .any(|n| n.contains("__mono_identity$1$i32")),
+        "caller should call __mono_identity$1$i32, found calls: {:?}",
         call_targets
     );
     assert!(
         call_targets
             .iter()
-            .any(|n| n.contains("__mono_identity_i64")),
-        "caller should call __mono_identity_i64, found calls: {:?}",
+            .any(|n| n.contains("__mono_identity$1$i64")),
+        "caller should call __mono_identity$1$i64, found calls: {:?}",
         call_targets
     );
 }
@@ -1462,7 +1462,7 @@ fn main() {
 }
 
 
-/// the lowering now produces opaque instead of void. if such a local ever reaches the validation pass, it should be rejected with an opaquetype error
+/// such a local must be rejected with an opaquetype error
 #[test]
 fn validate_rejects_opaque_from_tuple_or_range() {
     let program = AirProgram {
