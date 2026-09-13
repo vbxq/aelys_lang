@@ -68,6 +68,7 @@ impl Substitution {
             | InferType::F32
             | InferType::F64
             | InferType::Bool
+            | InferType::Char
             | InferType::String
             | InferType::Null
             | InferType::Never
@@ -87,17 +88,12 @@ impl Substitution {
         }
     }
 
-    /// Chase a Var binding chain with cycle detection.
-    ///
-    /// Cycles are impossible through the normal unify pipeline, but this
-    /// safety net catches them gracefully if a future change breaks that
-    /// invariant.  Returns `Dynamic` on cycle instead of panicking.
+    /// cycles are impossible through the normal unify pipeline, but this
     fn chase_var(&self, ty: &InferType, visited: &mut HashSet<TypeVarId>) -> InferType {
         match ty {
             InferType::Var(id) => {
                 if let Some(bound) = self.bindings.get(id) {
                     if !visited.insert(*id) {
-                        // Cycle detected — break it by returning Dynamic.
                         return InferType::Dynamic;
                     }
                     self.chase_var(bound, visited)
@@ -105,8 +101,6 @@ impl Substitution {
                     ty.clone()
                 }
             }
-            // Once we reach a non-Var type, switch back to normal apply
-            // which starts fresh visited sets for any nested Vars.
             other => self.apply(other),
         }
     }
@@ -123,18 +117,15 @@ impl Substitution {
         self.bindings.is_empty()
     }
 
-    /// Save a copy of the current bindings so we can roll back on failure.
     pub fn snapshot(&self) -> HashMap<TypeVarId, InferType> {
         self.bindings.clone()
     }
 
-    /// Roll back the bindings to a previously saved state.
     pub fn restore(&mut self, saved: HashMap<TypeVarId, InferType>) {
         self.bindings = saved;
     }
 }
 
-// TODO: move that to dedicated aelys/tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,7 +139,6 @@ mod tests {
     #[test]
     fn apply_resolves_var_chain() {
         let mut subst = Substitution::new();
-        // Var(0) -> Var(1) -> I64
         subst.bind(vid(0), InferType::Var(vid(1)));
         subst.bind(vid(1), InferType::I64);
         assert_eq!(subst.apply(&InferType::Var(vid(0))), InferType::I64);
@@ -157,12 +147,11 @@ mod tests {
     #[test]
     fn apply_detects_two_var_cycle() {
         // debug_assert fires in debug builds; in release the cycle is broken
-        // by returning Dynamic. Either way the call must terminate and not loop.
         let mut subst = Substitution::new();
         subst.bindings.insert(vid(0), InferType::Var(vid(1)));
         subst.bindings.insert(vid(1), InferType::Var(vid(0)));
         let result = subst.apply(&InferType::Var(vid(0)));
-        // In release: Dynamic. In debug: unreachable (panics before here).
+        // in release: dynamic. in debug: unreachable (panics before here).
         assert_eq!(result, InferType::Dynamic);
     }
 
@@ -179,10 +168,9 @@ mod tests {
     #[test]
     fn apply_no_false_positive_on_diamond() {
         let mut subst = Substitution::new();
-        // Var(0) -> I64, Var(1) -> I64 (same target, not a cycle)
+        // var(0) -> i64, var(1) -> i64 (same target, not a cycle)
         subst.bind(vid(0), InferType::I64);
         subst.bind(vid(1), InferType::I64);
-        // function with two params both referencing the same resolved type
         let fn_ty = InferType::Function {
             params: vec![InferType::Var(vid(0)), InferType::Var(vid(1))],
             ret: Box::new(InferType::Var(vid(0))),

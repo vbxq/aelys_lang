@@ -3,7 +3,6 @@ use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam}
 use crate::unify::Substitution;
 
 impl TypeInference {
-    /// Apply substitution to an expression
     pub(super) fn apply_substitution_expr(
         &self,
         expr: &TypedExpr,
@@ -13,6 +12,7 @@ impl TypeInference {
             TypedExprKind::Int(n) => TypedExprKind::Int(*n),
             TypedExprKind::Float(f) => TypedExprKind::Float(*f),
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
+            TypedExprKind::Char(cp) => TypedExprKind::Char(*cp),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
             TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
                 parts
@@ -224,6 +224,7 @@ impl TypeInference {
                                 variant,
                                 tag,
                                 bindings,
+                                span,
                             } => crate::typed_ast::TypedPattern::Variant {
                                 enum_name: enum_name.clone(),
                                 variant: variant.clone(),
@@ -232,6 +233,7 @@ impl TypeInference {
                                     .iter()
                                     .map(|(n, ty)| (n.clone(), subst.apply(ty)))
                                     .collect(),
+                                span: *span,
                             },
                             crate::typed_ast::TypedPattern::Wildcard => {
                                 crate::typed_ast::TypedPattern::Wildcard

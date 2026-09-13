@@ -67,12 +67,13 @@ pub fn unify_dir(
         | (InferType::F32, InferType::F32)
         | (InferType::F64, InferType::F64)
         | (InferType::Bool, InferType::Bool)
+        | (InferType::Char, InferType::Char)
         | (InferType::String, InferType::String)
         | (InferType::Null, InferType::Null) => Ok(()),
 
         (InferType::Struct(a), InferType::Struct(b)) if a == b => Ok(()),
         (InferType::Enum(a, args_a), InferType::Enum(b, args_b)) if a == b => {
-            // if one side has type args and the other doesn't (e.g., enum("option", []) from a variant constructor vs enum("option", [i64]) from an annotation), we accept the match, the type args are informational for monomorphization, not for semantic equality.
+            // differing type args (variant vs annotation) still match: they inform monomorphization, not semantic equality
             if !args_a.is_empty() && !args_b.is_empty() && args_a.len() == args_b.len() {
                 for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {
                     unify_type_arg(a_arg, b_arg, subst)?;

@@ -12,7 +12,8 @@ pub(super) fn occurs_check(var: TypeVarId, ty: &InferType) -> bool {
         InferType::Ref { referent, .. } => occurs_check(var, referent),
         InferType::Slice { elem, .. } => occurs_check(var, elem),
         InferType::Tuple(elems) => elems.iter().any(|e| occurs_check(var, e)),
-        InferType::I8
+        InferType::Char
+        | InferType::I8
         | InferType::I16
         | InferType::I32
         | InferType::I64
