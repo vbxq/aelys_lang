@@ -38,6 +38,10 @@ pub enum ConstraintReason {
     UnknownType { name: String },
     /// Integer literal does not fit in target type (fatal error)
     IntLiteralOverflow { value: i64, target: InferType },
+    /// Float literal does not fit in target type (fatal error)
+    FloatLiteralOverflow { value: f64, target: InferType },
+    /// the `?` operand error type must equal the enclosing function's error type
+    QuestionErrorType,
     /// Generic constraint
     Other(String),
 }
@@ -76,6 +80,15 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::UnknownType { name } => write!(f, "unknown type '{}'", name),
             ConstraintReason::IntLiteralOverflow { value, target } => {
                 write!(f, "integer literal {} does not fit in {:?}", value, target)
+            }
+            ConstraintReason::FloatLiteralOverflow { value, target } => {
+                write!(f, "float literal {} does not fit in {:?}", value, target)
+            }
+            ConstraintReason::QuestionErrorType => {
+                write!(
+                    f,
+                    "[?-stage1] `?` error type must match the function's error type; cross two error types explicitly with `.map_error`"
+                )
             }
             ConstraintReason::Other(s) => write!(f, "{}", s),
         }

@@ -1,10 +1,10 @@
 use super::TypeInference;
+use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedParam};
 use crate::types::InferType;
 use aelys_syntax::{Parameter, Span, Stmt, TypeAnnotation};
 
 impl TypeInference {
-    /// Infer lambda (anonymous function)
     pub(super) fn infer_lambda(
         &mut self,
         params: &[Parameter],
@@ -13,6 +13,7 @@ impl TypeInference {
         span: Span,
     ) -> TypedExpr {
         let closure_env = self.env.for_closure();
+        let saved_literal_inits = self.literal_init_vars.clone();
 
         let mut typed_params = Vec::with_capacity(params.len());
         for p in params {
@@ -34,14 +35,26 @@ impl TypeInference {
         };
 
         let saved_env = std::mem::replace(&mut self.env, closure_env);
+        let saved_unsafe = std::mem::replace(&mut self.unsafe_depth, 0);
 
         for param in &typed_params {
             self.env.define_local(param.name.clone(), param.ty.clone());
+            if param.mutable {
+                self.env.mark_mutable(param.name.clone());
+            }
         }
 
         self.push_return_type(return_type.clone());
 
         let typed_stmts = if body.is_empty() {
+            self.constraints.push(Constraint::equal(
+                InferType::Null,
+                return_type.clone(),
+                span,
+                ConstraintReason::Return {
+                    func_name: "<lambda>".to_string(),
+                },
+            ));
             vec![]
         } else {
             let mut stmts = Vec::new();
@@ -60,11 +73,14 @@ impl TypeInference {
 
         self.pop_return_type();
         self.env = saved_env;
+        self.unsafe_depth = saved_unsafe;
+        self.literal_init_vars = saved_literal_inits;
 
         let param_types: Vec<InferType> = typed_params.iter().map(|p| p.ty.clone()).collect();
         let fn_type = InferType::Function {
             params: param_types,
             ret: Box::new(return_type.clone()),
+            nogc: false,
         };
 
         TypedExpr {

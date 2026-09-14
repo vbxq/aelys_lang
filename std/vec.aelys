@@ -1,0 +1,105 @@
+needs Option from std.result
+needs std.slice
+needs std.sort
+
+pub fn len(v: &Vec<i64>) -> i64 { return Vec::len(*v) }
+
+pub fn is_empty(v: &Vec<i64>) -> bool { return Vec::len(*v) == 0 }
+
+pub fn get(v: &Vec<i64>, i: i64) -> Option<i64> {
+    if i < 0 { return Option::None }
+    if i >= Vec::len(*v) { return Option::None }
+    return Option::Some((*v)[i])
+}
+
+pub fn first(v: &Vec<i64>) -> Option<i64> { return get(v, 0) }
+
+pub fn last(v: &Vec<i64>) -> Option<i64> { return get(v, Vec::len(*v) - 1) }
+
+// the intrinsic aborts on an empty vec, so the length decides before it is called
+pub fn pop(v: &mut Vec<i64>) -> Option<i64> {
+    if Vec::len(*v) == 0 { return Option::None }
+    return Option::Some(Vec::pop(*v))
+}
+
+pub fn index_of(v: &Vec<i64>, x: i64) -> i64 {
+    for i in 0..Vec::len(*v) {
+        if (*v)[i] == x { return i }
+    }
+    return -1
+}
+
+pub fn find(v: &Vec<i64>, x: i64) -> Option<i64> {
+    let i: i64 = index_of(v, x)
+    if i < 0 { return Option::None }
+    return Option::Some(i)
+}
+
+pub fn contains(v: &Vec<i64>, x: i64) -> bool { return index_of(v, x) >= 0 }
+
+pub fn sum(v: &Vec<i64>) -> i64 { return slice.sum(Vec::as_slice(*v)) }
+
+pub fn eq(a: &Vec<i64>, b: &Vec<i64>) -> bool { return slice.eq(Vec::as_slice(*a), Vec::as_slice(*b)) }
+
+pub fn is_sorted(v: &Vec<i64>) -> bool { return slice.is_sorted(Vec::as_slice(*v)) }
+
+pub fn binary_search(v: &Vec<i64>, x: i64) -> i64 { return sort.binary_search(Vec::as_slice(*v), x) }
+
+pub fn from_slice(s: &[i64]) -> Vec<i64> {
+    let mut out = Vec::new()
+    for x in s { Vec::push(out, x) }
+    return out
+}
+
+pub fn copy(v: &Vec<i64>) -> Vec<i64> {
+    let mut out = Vec::new()
+    for x in Vec::as_slice(*v) { Vec::push(out, x) }
+    return out
+}
+
+pub fn concat(a: &Vec<i64>, b: &Vec<i64>) -> Vec<i64> {
+    let mut out = Vec::new()
+    for x in Vec::as_slice(*a) { Vec::push(out, x) }
+    for y in Vec::as_slice(*b) { Vec::push(out, y) }
+    return out
+}
+
+pub fn reversed(v: &Vec<i64>) -> Vec<i64> {
+    let mut out = Vec::new()
+    let mut i: i64 = Vec::len(*v) - 1
+    while i >= 0 {
+        Vec::push(out, (*v)[i])
+        i = i - 1
+    }
+    return out
+}
+
+pub fn sorted(v: &Vec<i64>) -> Vec<i64> {
+    let out = copy(v)
+    let m = Vec::try_as_unique_mut_slice(out)
+    sort.insertion_sort(m)
+    return out
+}
+
+pub fn map(v: &Vec<i64>, f: fn(i64) -> i64) -> Vec<i64> {
+    let mut out = Vec::new()
+    for x in Vec::as_slice(*v) {
+        let y: i64 = f(x)
+        Vec::push(out, y)
+    }
+    return out
+}
+
+pub fn filter(v: &Vec<i64>, f: fn(i64) -> bool) -> Vec<i64> {
+    let mut out = Vec::new()
+    for x in Vec::as_slice(*v) {
+        if f(x) { Vec::push(out, x) }
+    }
+    return out
+}
+
+pub fn fold(v: &Vec<i64>, init: i64, f: fn(i64, i64) -> i64) -> i64 {
+    let mut acc: i64 = init
+    for x in Vec::as_slice(*v) { acc = f(acc, x) }
+    return acc
+}

@@ -1,7 +1,7 @@
-// composition root: frontend -> sema -> opt -> backend -> runtime
 
 pub mod api;
-pub mod modules;
-pub mod pipeline;
+mod modules;
+mod sources;
 
 pub use api::*;
+pub use sources::{DEFAULT_PRELUDE, SourceOptions};

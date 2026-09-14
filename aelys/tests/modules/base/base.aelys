@@ -1,0 +1,37 @@
+struct Holder { v: i64 }
+
+enum Tagged { None, Some(i64) }
+
+let g: i64 = 3
+
+fn ident<T>(v: T) -> T {
+    return v
+}
+
+fn helper(n: i64) -> i64 {
+    return n + 1
+}
+
+fn wrap(n: i64) -> Holder {
+    return Holder { v: n }
+}
+
+fn unwrap(t: Tagged) -> i64 {
+    return match t {
+        Tagged::Some(n) => n
+        Tagged::None => 0
+    }
+}
+
+fn seven() -> i64 {
+    return 7
+}
+
+fn main() -> i64 {
+    println("base")
+    let anchor: i64 = 10
+    let f = seven
+    let bump = fn(n: i64) -> i64 { return n + anchor + g }
+    let h = wrap(helper(1))
+    return h.v + unwrap(Tagged::Some(4)) + f() + bump(2) + ident(6)
+}

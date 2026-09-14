@@ -1,11 +1,8 @@
 pub mod args;
-pub mod vm_config;
 
 pub mod commands {
-    pub mod asm;
     pub mod compile;
-    pub mod repl;
-    pub mod run;
+    pub mod explain;
 }
 
 use aelys_common::WarningConfig;
@@ -31,7 +28,7 @@ pub fn run() -> i32 {
     }
 
     dispatch(parsed).unwrap_or_else(|err| {
-        eprintln!("Error: {}", err);
+        eprintln!("{}", err);
         1
     })
 }
@@ -50,47 +47,46 @@ fn parse_warning_config(flags: &[String]) -> Result<WarningConfig, String> {
     Ok(config)
 }
 
+fn color_config_from_choice(choice: &args::ColorChoice) -> aelys_common::ColorConfig {
+    match choice {
+        args::ColorChoice::Auto => aelys_common::ColorConfig::auto(),
+        args::ColorChoice::Always => aelys_common::ColorConfig::always(),
+        args::ColorChoice::Never => aelys_common::ColorConfig::never(),
+    }
+}
+
 fn dispatch(parsed: args::ParsedArgs) -> Result<i32, String> {
     let warn_config = parse_warning_config(&parsed.warning_flags)?;
+    let color = color_config_from_choice(&parsed.color);
+    let runtime = parsed.runtime;
+    let link = parsed.link;
+    let sources = parsed.sources;
 
     match parsed.command {
         args::Command::Help => Ok(0),
         args::Command::Version => Ok(0),
 
-        args::Command::Run { path, program_args } => commands::run::run_with_options(
-            &path,
-            program_args,
-            parsed.vm_args,
-            parsed.opt_level,
-            warn_config,
-        ),
+        args::Command::Explain { code } => {
+            commands::explain::run_explain(&code);
+            Ok(0)
+        }
 
         args::Command::Compile {
             path,
             output,
             emit_air,
-        } => {
-            if !parsed.vm_args.is_empty() {
-                return Err("vm flags are only supported for run or repl".to_string());
-            }
-            if emit_air {
-                commands::compile::emit_air(&path, parsed.opt_level)
-            } else {
-                commands::compile::run_with_options(&path, output, parsed.opt_level, warn_config)
-            }
-        }
-
-        args::Command::Asm {
-            path,
+            emit_llvm_ir,
+        } => commands::compile::run_with_options(
+            &path,
             output,
-            stdout,
-        } => {
-            commands::asm::run_with_options(&path, output, stdout, parsed.opt_level, parsed.vm_args)
-        }
-
-        args::Command::Repl => {
-            let repl_opt = aelys_opt::OptimizationLevel::Basic;
-            commands::repl::run_with_options(repl_opt, parsed.vm_args)
-        }
+            parsed.opt_level,
+            runtime,
+            warn_config,
+            emit_air,
+            emit_llvm_ir,
+            &color,
+            &link,
+            &sources,
+        ),
     }
 }

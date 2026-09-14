@@ -1,0 +1,129 @@
+air/src/bir/effects.rs	walk_expr	1	InferType	_	{  }	correct-as-is	carrier-walk
+air/src/bir/loans.rs	projected_is_ref	1	InferType	_	return is_ref_ty(&local.ty)	correct-as-is	aggregate-only
+air/src/layout.rs	field_struct_deps	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/layout.rs	references_by_value	1	AirType	_	false	correct-as-is	carrier-walk
+air/src/layout.rs	resolved_layout	1	AirType	other	layout_of(other)	correct-as-is	delegates-to-a-decided-arm
+air/src/lower/expr.rs	lower_expr	1	InferType	other	{ self.report_ice(format!( , other )); AirType }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr	2	InferType	other	{ self.report_ice(format!( , other )); (AirTyp }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr	3	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr	4	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr	5	AirType	_	EnumRef::plain(enum_name.clone())	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_field_assign	1	AirType	_	None	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_field_assign	2	AirType	_	None	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_match_expr	1	AirType	_	{ self.report_ice(format!( , scrutinee.ty ));  }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_rc_new	1	InferType	_	args.first().map(|a| &a.ty).unwrap_or(&InferType	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_rc_null	1	InferType	_	&InferType::Null	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_result_assert	1	AirType	_	{ self.report_ice(format!( , scrutinee.ty ));  }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_slice_expr	1	InferType	_	{ self.report_ice( .to_string(), ); Operand::C }	correct-as-is	aggregate-only
+air/src/lower/loops.rs	lower_foreach	1	AirType	_	Rvalue::Call { func: Callee::Named( .to_string()	correct-as-is	aggregate-only
+air/src/lower/stmts.rs	lower_stmt	1	AirType	_	None	correct-as-is	aggregate-only
+air/src/lower/stmts.rs	lower_stmt	2	InferType	_	AirType::I64	correct-as-is	aggregate-only
+air/src/lower/stmts.rs	lower_stmt	3	InferType	_	AirType::I64	correct-as-is	aggregate-only
+air/src/modules.rs	qualify_type	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/mono/mod.rs	substitute_type_params	1	AirType	other	other.clone()	correct-as-is	carrier-walk
+air/src/mono/mod.rs	ty	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/mono/mod.rs	unify_param	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/mono/substitute.rs	substitute_type	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/passes/validate.rs	check_type_for_params	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/passes/validate.rs	collect_unknown_enum_names	1	AirType	_	{  }	correct-as-is	carrier-walk
+air/src/passes/validate.rs	contains_opaque	1	AirType	_	false	correct-as-is	carrier-walk
+air/src/print.rs	place_type	1	AirType	other	other	correct-as-is	aggregate-only
+air/src/print.rs	place_type	2	AirType	_	AirType::Void	correct-as-is	aggregate-only
+air/src/print.rs	place_type	3	AirType	other	other	correct-as-is	aggregate-only
+air/src/print.rs	place_type	4	AirType	_	AirType::Void	correct-as-is	aggregate-only
+air/src/print.rs	type_layout_for_print	1	AirType	_	{ let l = layout::layout_of(ty); (l.size, l.al }	correct-as-is	delegates-to-a-decided-arm
+air/src/rc_paths.rs	field_is_erased_generic	1	AirType	_	false	correct-as-is	carrier-walk
+codegen/src/infra/types.rs	air_type_to_llvm	1	AirType	_	air_basic_type_to_llvm(ret	correct-as-is	delegates-to-a-decided-arm
+codegen/src/lowering/calls.rs	fn_ptr_signature_for_local	1	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/calls.rs	fn_ptr_signature_for_local	2	AirType	other	{ if use_sret { self.context.void_type().fn_ty }	correct-as-is	aggregate-only
+codegen/src/lowering/calls.rs	generate_bootstrap_print_call	1	AirType	_	self.emit_scalar_to_string(&arg_type	correct-as-is	delegates-to-a-decided-arm
+codegen/src/lowering/calls.rs	generate_vec_detach_call	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/calls.rs	generate_vec_detach_call	2	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/calls.rs	generate_vec_runtime_call	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/calls.rs	generate_vec_runtime_call	2	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/casts.rs	float_info	1	AirType	_	None	correct-as-is	refuses-adaptation
+codegen/src/lowering/casts.rs	float_type_for_air	1	AirType	_	Err(CodegenError::UnsupportedType(format!(	correct-as-is	refuses-adaptation
+codegen/src/lowering/functions.rs	c_integer_extension	1	AirType	_	None	correct-as-is	refuses-adaptation
+codegen/src/lowering/globals.rs	float_initializer	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/globals.rs	fnref_initializer	1	AirType	_	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/globals.rs	global_initializer	1	AirType	_	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/globals.rs	int_initializer	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/rvalues.rs	generate_index	1	AirType	_	unreachable!()	correct-as-is	aggregate-only
+codegen/src/lowering/rvalues.rs	generate_index	2	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/rvalues.rs	generate_rvalue	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/rvalues.rs	generate_slice_from_parts	1	AirType	other	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	elem_base	1	AirType	other	(self.lookup_local_ptr(root)?	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	elem_base	2	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_ptr	1	AirType	_	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_ptr	2	AirType	_	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_type	1	AirType	_	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_type	2	AirType	_	{ return Err(CodegenError::UnsupportedType(for }	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_type	3	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_type	4	AirType	other	other	correct-as-is	aggregate-only
+codegen/src/lowering/stmts.rs	place_type	5	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/structs.rs	generate_field_access	1	AirType	_	{  }	correct-as-is	aggregate-only
+codegen/src/lowering/structs.rs	struct_pointer_from_operand	1	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+codegen/src/lowering/structs.rs	struct_pointer_from_operand	2	AirType	other	Err(CodegenError::UnsupportedType(format!(	correct-as-is	aggregate-only
+opt/src/passes/constant_fold/mod.rs	truncate_to_type	1	InferType	_	value	correct-as-is	refuses-adaptation
+opt/src/passes/inline/analyze.rs	param_type_holds_vec	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/constraint/error.rs	fmt	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/env/free_vars.rs	collect_vars	1	InferType	_	{  }	correct-as-is	carrier-walk
+sema/src/infer/bounds.rs	bind_type_params	1	InferType	_	{  }	correct-as-is	carrier-walk
+sema/src/infer/bounds.rs	type_mentions	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/constraints.rs	recover_param_name	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/infer/constraints.rs	solve_constraints	1	InferType	concrete	{ let mut matched = false; for opt in &options }	correct-as-is	aggregate-only
+sema/src/infer/entry.rs	infer_program_full	1	InferType	_	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/expr/array.rs	infer_index_assign_expr	1	InferType	InferType::Dynamic | InferType::Var(_) | _	{  }	correct-as-is	aggregate-only
+sema/src/infer/expr/array.rs	infer_index_expr	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/expr/array.rs	infer_slice_expr	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	infer_map_error	1	InferType	_	unreachable!( )	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	infer_map_error	2	InferType	other	{ self.errors.push(TypeError::error_handling(  }	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	infer_result_builtin	1	InferType	_	unreachable!( )	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	infer_result_builtin	2	InferType	_	unreachable!( )	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	instantiate_inner	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/infer/expr/catch_expr.rs	infer_catch_expr	1	InferType	other	{ self.errors.push(TypeError::error_handling(  }	correct-as-is	aggregate-only
+sema/src/infer/expr/match_expr.rs	infer_match_typed	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	infer_field_assign_expr	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	infer_field_assign_expr	2	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	member_result_type	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/expr/member.rs	member_result_type	2	InferType	_	InferType::Dynamic	correct-as-is	aggregate-only
+sema/src/infer/expr/mod.rs	infer_expr	1	InferType	other	{ self.errors.push(TypeError::member_access( f }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	infer_rc_get	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	infer_vec_pop	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	infer_vec_push	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	infer_vec_read	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	infer_vec_try_as_unique_mut_slice	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
+sema/src/infer/expr/primary.rs	instantiate_enum_type_param	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/infer/expr/try_expr.rs	classify_carrier	1	InferType	_	Err( )	correct-as-is	aggregate-only
+sema/src/infer/expr/try_expr.rs	infer_try_expr	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/try_expr.rs	infer_try_expr	2	InferType	_	{ self.errors.push(TypeError::error_handling(  }	correct-as-is	aggregate-only
+sema/src/infer/finalize.rs	finalize_expr	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/finalize.rs	finalize_type	1	InferType	other	other	correct-as-is	carrier-walk
+sema/src/infer/functions.rs	infer_function	1	InferType	_	(None	correct-as-is	aggregate-only
+sema/src/infer/stmt/let_stmt.rs	aggregate_embeds_rc_nominal	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/stmt/let_stmt.rs	check_vec_let_surface	1	InferType	_	false	correct-as-is	aggregate-only
+sema/src/infer/substitute/expr.rs	apply_substitution_expr	1	InferType	_	None	correct-as-is	carrier-walk
+sema/src/infer/validate.rs	contains_active_generic_placeholder_type	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/validate.rs	find_leaked_type_param	1	InferType	_	None	correct-as-is	carrier-walk
+sema/src/infer/validate.rs	is_active_generic_placeholder_type	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/infer/validate.rs	validate_expr	1	InferType	other	{ self.errors.push(TypeError::not_callable( ot }	correct-as-is	aggregate-only
+sema/src/infer/validate.rs	validate_expr	2	InferType	other	{ self.errors.push(TypeError::member_access( f }	correct-as-is	aggregate-only
+sema/src/infer/visibility.rs	collect	1	InferType	_	{  }	correct-as-is	carrier-walk
+sema/src/infer/visibility.rs	collect	2	InferType	_	{  }	correct-as-is	carrier-walk
+sema/src/modules.rs	qualify_infer_type	1	InferType	other	other.clone()	correct-as-is	carrier-walk
+sema/src/modules.rs	reach	1	InferType	_	None	correct-as-is	carrier-walk
+sema/src/modules.rs	reach	2	InferType	_	{  }	correct-as-is	carrier-walk
+sema/src/place_spine.rs	place_is_writable	1	InferType	_	{  }	correct-as-is	aggregate-only
+sema/src/types/infer_type.rs	as_var_id	1	InferType	_	None	correct-as-is	carrier-walk
+sema/src/types/infer_type.rs	contains_rc	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/types/infer_type.rs	float_fits	1	InferType	_	false	correct-as-is	refuses-adaptation
+sema/src/types/infer_type.rs	has_vars	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/types/infer_type.rs	int_fits	1	InferType	_	false	correct-as-is	refuses-adaptation
+sema/src/types/infer_type.rs	numeric_rank	1	InferType	_	None	correct-as-is	refuses-adaptation
+sema/src/types/resolved_type.rs	is_float_ish	1	ResolvedType	_	false	correct-as-is	refuses-adaptation
+sema/src/types/resolved_type.rs	is_integer_ish	1	ResolvedType	_	false	correct-as-is	refuses-adaptation
+sema/src/types/resolved_type.rs	unwrap_uncertain	1	ResolvedType	other	other	correct-as-is	carrier-walk
+sema/src/types/type_table.rs	scan_rc_nominal	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/types/type_table.rs	scan_vec_by_value	1	InferType	_	false	correct-as-is	carrier-walk
+sema/src/unify/algorithm.rs	unify_type_arg	1	InferType	_	unify(t1	correct-as-is	delegates-to-a-decided-arm
+sema/src/unify/substitution.rs	chase_var	1	InferType	other	self.apply(other)	correct-as-is	carrier-walk
