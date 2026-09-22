@@ -7,7 +7,6 @@ use tempfile::tempdir;
 mod common;
 use common::{Cli, Leg};
 
-// a floor under each inventory stops an extractor that stopped extracting from reporting a clean world
 const POPULATION_FLOOR: usize = 1800;
 // 891 compiled before the include root reached the legs, so a floor of 900 is what reds if std and the prelude stop resolving again
 const COMPILES_EVERYWHERE_FLOOR: usize = 900;
@@ -48,7 +47,7 @@ const LINK_FAULT_RATCHET: &[(&str, usize)] = &[
     ("aelys/tests/group_surface_tests.rs", 1),
     ("aelys/tests/s4c_sweep_fixes_tests.rs", 1),
     ("aelys/tests/semantic_invariants_tests.rs", 2),
-    ("aelys/tests/v01b_stage1_string_header_tests.rs", 3),
+    ("aelys/tests/v01b_stage1_string_header_tests.rs", 4),
 ];
 
 const WORKERS: usize = 4;

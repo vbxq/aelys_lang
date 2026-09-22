@@ -238,22 +238,35 @@ fn validate_expr_has_no_catch_all_arm() {
     );
 }
 
-#[test]
-fn lower_callee_names_two_forms() {
-    let text = fs::read_to_string(repo_root().join("air/src/lower/expr.rs")).expect("read expr.rs");
+fn fn_body<'a>(text: &'a str, head: &str) -> &'a str {
     let start = text
-        .find("fn lower_callee")
-        .expect("lower_callee must exist");
+        .find(head)
+        .unwrap_or_else(|| panic!("`{head}` must exist"));
     let body = &text[start..];
     let end = body
         .find("\n    fn ")
         .or_else(|| body.find("\n    pub fn "))
-        .expect("lower_callee must end");
+        .unwrap_or_else(|| panic!("`{head}` must end"));
+    &body[..end]
+}
+
+#[test]
+fn lower_callee_names_two_forms() {
+    let text = fs::read_to_string(repo_root().join("air/src/lower/expr.rs")).expect("read expr.rs");
     assert_eq!(
-        body[..end].matches("Callee::Named(").count(),
+        fn_body(&text, "fn named_callee(")
+            .matches("Callee::Named(")
+            .count(),
         2,
         "a third source form rendered as a named callee would need its own exemption in \
          `validate_expr`"
+    );
+    assert_eq!(
+        fn_body(&text, "fn lower_callee(")
+            .matches("Callee::Named(")
+            .count(),
+        0,
+        "every named callee must come from `named_callee`, or the census above counts nothing"
     );
 }
 

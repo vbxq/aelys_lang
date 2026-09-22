@@ -348,7 +348,6 @@ pub fn refusal_is_a_link_fault(leg: &Leg) -> bool {
 const CLI_COMPILE_BUDGET: Duration = Duration::from_secs(60);
 const CLI_RUN_BUDGET: Duration = Duration::from_secs(5);
 
-// a binary older than the crates it is built from measures a compiler no longer in the tree
 const COMPILER_CRATES: [&str; 9] = [
     "common", "syntax", "frontend", "sema", "opt", "air", "codegen", "driver", "cli",
 ];
@@ -533,4 +532,12 @@ fn newest_source_after(dir: &Path, cutoff: std::time::SystemTime, out: &mut Vec<
             out.push(path.display().to_string());
         }
     }
+}
+
+// an asan core sees a string header only when the runtime itself makes the count
+pub fn with_outline_str_counts<T>(compile: impl FnOnce() -> T) -> T {
+    aelys_codegen::set_outline_str_counts(Some(true));
+    let out = compile();
+    aelys_codegen::set_outline_str_counts(None);
+    out
 }

@@ -931,7 +931,7 @@ fn group_mod_m5_the_affine_drop_of_such_a_type_still_runs() {
         )],
         77,
         "77",
-        (2, 1),
+        (1, 1),
     );
 }
 

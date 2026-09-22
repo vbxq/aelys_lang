@@ -1286,12 +1286,12 @@ fn s03a_array_length_and_inline_analysis_answer_the_same_at_every_level() {
                         "  {id}: expected exit={exit} stdout={stdout:?}, got {got:?} stdout={out:?}"
                     ));
                 }
-                let want_rc = format!("[rc] allocs={} frees=0", stdout.lines().count());
+                let want_rc = "[rc] allocs=0 frees=0";
                 if *rc != want_rc {
                     failures.push(format!(
-                        "  {id}: a stack array retains and frees nothing, so the only managed \
-                         allocation is one string per printed line and none of them comes back; \
-                         expected {want_rc}, got {rc}"
+                        "  {id}: a stack array retains and frees nothing and a printed line takes \
+                         the frame buffer, so nothing is allocated at all; expected {want_rc}, \
+                         got {rc}"
                     ));
                 }
             }
@@ -1800,7 +1800,7 @@ enum S03cExpect {
     Runs(i32, &'static str, &'static str),
     // the -o0 rendering, byte for byte, at all four levels: a re-faulted twin would not match
     Unchanged(&'static str, &'static [&'static str]),
-    // the two sides part company from some level up: the code per level, then what e0432 must say
+    // the two sides part company from some level up: the code per level, then what E0432 must say
     Split([&'static str; 4], &'static [&'static str]),
 }
 
@@ -1815,7 +1815,7 @@ fn main() -> i64 {
 const S03C_ROWS: &[(&str, S03cExpect, &str)] = &[
     (
         "S0.3c-A1 both sides accept a program the optimizer rewrites",
-        S03cExpect::Runs(14, "8\n9\n", "[rc] allocs=2 frees=0"),
+        S03cExpect::Runs(14, "8\n9\n", "[rc] allocs=0 frees=0"),
         r#"
 fn double(x: i64) -> i64 { return x + x }
 fn side() -> i64 {

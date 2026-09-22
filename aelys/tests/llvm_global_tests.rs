@@ -342,11 +342,7 @@ fn read_option() -> i64 {
         ),
         "{ir}"
     );
-    assert!(
-        ir.contains("[8 x i8] c\"*\\00\\00\\00\\00\\00\\00\\00\"")
-            || ir.contains("[8 x i8] [i8 42, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0, i8 0]"),
-        "{ir}"
-    );
+    assert!(ir.contains("[1 x i64] [i64 42]"), "{ir}");
 }
 
 #[test]

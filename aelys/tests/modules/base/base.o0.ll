@@ -4,7 +4,7 @@ target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:
 target triple = "x86_64-pc-linux-gnu"
 
 %Holder = type { i64 }
-%__aelys_enum_Tagged = type { i32, [8 x i8] }
+%__aelys_enum_Tagged = type { i32, [1 x i64] }
 %__closure_env___lambda_6 = type { i64 }
 
 @__aelys_global_g = internal global i64 3
@@ -31,10 +31,11 @@ bb0:
 
 define fastcc i64 @unwrap(ptr %0, %__aelys_enum_Tagged %1) {
 bb4:
+  %match_payload_tmp = alloca %__aelys_enum_Tagged, align 8
+  %match_enum_tmp = alloca %__aelys_enum_Tagged, align 8
   %l1 = alloca i64, align 8
   %l3 = alloca i64, align 8
-  %match_enum_tmp = alloca %__aelys_enum_Tagged, align 4
-  store %__aelys_enum_Tagged %1, ptr %match_enum_tmp, align 4
+  store %__aelys_enum_Tagged %1, ptr %match_enum_tmp, align 8
   %match_tag_ptr = getelementptr inbounds %__aelys_enum_Tagged, ptr %match_enum_tmp, i32 0, i32 0
   %match_tag = load i32, ptr %match_tag_ptr, align 4
   switch i32 %match_tag, label %bb3 [
@@ -43,11 +44,10 @@ bb4:
   ]
 
 bb1:                                              ; preds = %bb4
-  %match_payload_tmp = alloca %__aelys_enum_Tagged, align 4
-  store %__aelys_enum_Tagged %1, ptr %match_payload_tmp, align 4
+  store %__aelys_enum_Tagged %1, ptr %match_payload_tmp, align 8
   %match_payload_base = getelementptr inbounds %__aelys_enum_Tagged, ptr %match_payload_tmp, i32 0, i32 1
   %match_field_0_ptr = getelementptr inbounds i8, ptr %match_payload_base, i32 0
-  %match_field_0 = load i64, ptr %match_field_0_ptr, align 4
+  %match_field_0 = load i64, ptr %match_field_0_ptr, align 8
   store i64 %match_field_0, ptr %l3, align 8
   %ld3 = load i64, ptr %l3, align 8
   store i64 %ld3, ptr %l1, align 8
@@ -104,6 +104,7 @@ deref_ok3:                                        ; preds = %deref_ok
 
 define fastcc i64 @__aelys_main(ptr %0) {
 bb0:
+  %enum_tmp = alloca %__aelys_enum_Tagged, align 8
   %l0 = alloca i64, align 8
   %l2 = alloca { ptr, ptr }, align 8
   %l3 = alloca ptr, align 8
@@ -135,15 +136,14 @@ deref_ok:                                         ; preds = %bb0
   store %Holder %call_direct2, ptr %l8, align 8
   %field_ptr = getelementptr inbounds %Holder, ptr %l8, i32 0, i32 0
   %field_load = load i64, ptr %field_ptr, align 8
-  %enum_tmp = alloca %__aelys_enum_Tagged, align 4
   %enum_tag_ptr = getelementptr inbounds %__aelys_enum_Tagged, ptr %enum_tmp, i32 0, i32 0
   store i32 1, ptr %enum_tag_ptr, align 4
   %enum_payload_ptr = getelementptr inbounds %__aelys_enum_Tagged, ptr %enum_tmp, i32 0, i32 1
-  store [8 x i8] zeroinitializer, ptr %enum_payload_ptr, align 1
+  store [1 x i64] zeroinitializer, ptr %enum_payload_ptr, align 8
   %enum_payload_base = getelementptr inbounds %__aelys_enum_Tagged, ptr %enum_tmp, i32 0, i32 1
   %enum_field_0_ptr = getelementptr inbounds i8, ptr %enum_payload_base, i32 0
-  store i64 4, ptr %enum_field_0_ptr, align 4
-  %enum_value = load %__aelys_enum_Tagged, ptr %enum_tmp, align 4
+  store i64 4, ptr %enum_field_0_ptr, align 8
+  %enum_value = load %__aelys_enum_Tagged, ptr %enum_tmp, align 8
   %call_direct3 = call fastcc i64 @unwrap(ptr null, %__aelys_enum_Tagged %enum_value)
   %iadd = add i64 %field_load, %call_direct3
   %ld2 = load { ptr, ptr }, ptr %l2, align 8

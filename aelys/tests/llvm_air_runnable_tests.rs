@@ -1,9 +1,9 @@
 // it is the only oracle in the tree that can exercise an air shape the surface language cannot yet
 
 use aelys_air::{
-    AirBlock, AirConst, AirFunction, AirLocal, AirParam, AirProgram, AirStmt, AirStmtKind,
-    AirTerminator, AirType, BlockId, CallingConv, FunctionAttribs, FunctionId, GcMode, InlineHint,
-    LocalId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram, AirStmt,
+    AirStmtKind, AirTerminator, AirType, BlockId, Callee, CallingConv, FunctionAttribs, FunctionId,
+    GcMode, InlineHint, LocalId, Operand, Place, Rvalue,
 };
 use aelys_driver::{RuntimeVariant, compile_air_program_to_executable};
 use aelys_opt::OptimizationLevel;
@@ -350,4 +350,74 @@ fn an_enum_with_no_definition_is_refused_by_codegen_instead_of_becoming_an_i32()
         err.contains("Ghost") && err.contains("has no definition"),
         "the refusal must name the enum that has no definition, got:\n{err}"
     );
+}
+
+fn print_line(arg: Operand) -> AirStmt {
+    AirStmt {
+        kind: AirStmtKind::CallVoid {
+            func: Callee::Named("println".to_string()),
+            args: vec![arg],
+        },
+        span: None,
+    }
+}
+
+#[test]
+fn a_scalar_print_inside_an_interpolation_window_keeps_that_interpolation_off_the_frame_buffer() {
+    let mut program = program_with(
+        vec![local(0, AirType::Str, None, false)],
+        vec![
+            assign(
+                Place::Local(LocalId(0)),
+                Rvalue::Call {
+                    func: Callee::Named("__aelys_to_string".to_string()),
+                    args: vec![Operand::Const(AirConst::Int(11, AirIntSize::I64))],
+                },
+            ),
+            print_line(Operand::Const(AirConst::Int(22, AirIntSize::I64))),
+            print_line(Operand::Copy(LocalId(0))),
+        ],
+        Operand::Const(AirConst::Int(0, AirIntSize::I64)),
+    );
+    aelys_air::passes::temp_elision::elide_temporaries(&mut program);
+    let AirStmtKind::Assign {
+        rvalue:
+            Rvalue::Call {
+                func: Callee::Named(converter),
+                ..
+            },
+        ..
+    } = &program.functions[0].blocks[0].stmts[0].kind
+    else {
+        panic!("the conversion must still be the first statement after the elision pass");
+    };
+    assert_eq!(
+        converter, "__aelys_to_string",
+        "a print of a scalar writes the frame buffer too, so an interpolation whose print comes \
+         after it must keep its own heap string"
+    );
+
+    let _pin = common::pin_legs("the frame buffer window row", LEVELS.len());
+    let dir = tempdir().expect("tempdir");
+    for (level, opt) in LEVELS {
+        let path = dir
+            .path()
+            .join(format!("frame_window{}.aelys", level.replace('-', "_")));
+        if let Err(err) =
+            compile_air_program_to_executable(&path, &program, *opt, RuntimeVariant::Rc)
+        {
+            if linker_unavailable(&err.to_string()) {
+                common::require_linker_skip("a skipped value row carries no runtime evidence");
+                return;
+            }
+            panic!("the frame buffer window row at {level} must compile:\n{err}");
+        }
+        common::note_leg();
+        let out = Command::new(exe_path_for(&path)).output().expect("run exe");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout),
+            "22\n11\n",
+            "at {level} the scalar print must not overwrite the interpolated value it precedes"
+        );
+    }
 }
