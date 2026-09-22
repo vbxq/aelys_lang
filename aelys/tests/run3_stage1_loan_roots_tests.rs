@@ -155,7 +155,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -239,7 +239,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -270,7 +270,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -306,7 +306,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -342,7 +342,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=0",
+        "allocs=0 frees=0",
     );
 }
 
@@ -384,7 +384,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=0",
+        "allocs=0 frees=0",
     );
 }
 
@@ -402,7 +402,7 @@ fn main() -> i64 {
 "#,
         "1\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -558,7 +558,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -599,7 +599,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -631,7 +631,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -669,7 +669,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -703,12 +703,12 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
 #[test]
-fn u5_the_same_struct_without_an_rc_field_allocates_only_in_its_println() {
+fn u5_the_same_struct_without_an_rc_field_allocates_nothing() {
     let err = rejects(
         r#"
 struct T { b: i64, a: [i64;3] }
@@ -735,7 +735,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=0",
+        "allocs=0 frees=0",
     );
 }
 
@@ -773,7 +773,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -807,7 +807,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -845,7 +845,7 @@ fn main() -> i64 {{
         ),
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -863,7 +863,7 @@ fn main() -> i64 {
 "#,
         "9\n",
         0,
-        "allocs=1 frees=0",
+        "allocs=0 frees=0",
     );
     let err = rejects(
         r#"
@@ -894,7 +894,7 @@ fn main() -> i64 {{
         ),
         "0\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -955,7 +955,7 @@ fn main() -> i64 { return go(pick) }
 "#,
         "9\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -1034,12 +1034,12 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
 #[test]
-fn e2_the_plain_enum_twin_allocates_only_in_its_println() {
+fn e2_the_plain_enum_twin_allocates_nothing() {
     accepts_and_runs(
         r#"
 enum E { A(i64), B(i64) }
@@ -1053,7 +1053,7 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=1 frees=0",
+        "allocs=0 frees=0",
     );
 }
 
@@ -1085,7 +1085,7 @@ fn main() -> i64 {
 "#,
         "0\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -1123,7 +1123,7 @@ fn main() -> i64 {{
         ),
         "4\n",
         0,
-        "allocs=2 frees=1",
+        "allocs=1 frees=1",
     );
 }
 
@@ -1501,7 +1501,9 @@ mod asan {
         let path = dir.join(format!("{id}.aelys"));
         fs::write(&path, src).expect("write source");
         let guard = lock();
-        let built = compile_file_with_llvm(&path, OptimizationLevel::None, false);
+        let built = crate::common::with_outline_str_counts(|| {
+            compile_file_with_llvm(&path, OptimizationLevel::None, false)
+        });
         drop(guard);
         if built.is_err() {
             eprintln!("{id}: toolchain unavailable, skipping");
@@ -1639,7 +1641,7 @@ fn main() -> i64 {
     // the leak is in the bootstrap integer-to-string helper and predates this stage, so the row
     #[cfg(feature = "asan-invariants")]
     #[test]
-    fn asan_tier_pins_the_known_println_leak() {
+    fn asan_tier_sees_the_scalar_println_leave_nothing_behind() {
         let dir = tempdir().expect("tempdir");
         let Some(_archive) = build_asan_archive(dir.path()) else {
             panic!("the ASan tier must build its archive on a machine with clang and ar");
@@ -1647,75 +1649,75 @@ fn main() -> i64 {
         let src = format!(
             "{STRUCT_S}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    let s = x.a[..]\n    s[0] = 9\n    println(s[0])\n    return 0\n}}\n"
         );
-        let Some(exe) = link_instrumented(dir.path(), "known_leak", &src) else {
-            panic!("the ASan tier must link");
-        };
-        let run = |allocator: &str| {
+        // the capture a closure never gives back is the planted leak now that a global gives its own back
+        let control = "fn main() -> i64 {\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n    while i < 5 {\n        let s: string = \"row \" + \"{i}\"\n        let f = fn () -> i64 { return s.len }\n        n = n + f()\n        i = i + 1\n    }\n    return n\n}\n";
+        let run = |id: &str, src: &str, allocator: &str| {
+            let Some(exe) = link_instrumented(dir.path(), id, src) else {
+                panic!("the ASan tier must link");
+            };
             let out = Command::new(&exe)
                 .env("AELYS_RC_STATS", "1")
                 .env("ASAN_OPTIONS", "detect_leaks=1")
                 .env("AELYS_ALLOC", allocator)
                 .output()
                 .expect("run the instrumented exe");
-            let err = String::from_utf8_lossy(&out.stderr).into_owned();
-            assert_eq!(
-                String::from_utf8_lossy(&out.stdout),
-                "9\n",
-                "{allocator} stderr:\n{err}"
-            );
-            assert!(
-                err.contains("[rc] allocs=2 frees=1"),
-                "the println's string is a managed allocation now and nothing releases it yet, so \
-                 the managed counter is what carries the known leak; {allocator} stderr:\n{err}"
-            );
-            err
+            (
+                String::from_utf8_lossy(&out.stdout).into_owned(),
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+            )
         };
 
-        // a region block stays reachable through g_all_blocks, so lsan cannot see an object leaked inside one
-        let immix = run("immix");
-        assert!(
-            !immix.contains("LeakSanitizer"),
-            "immix answers the leak from a block it still holds, so a leak report here means the \
-             allocator changed shape and this row must be re-decided;\nstderr:\n{immix}"
-        );
-        assert_eq!(
-            immix.matches("allocated from:").count(),
-            0,
-            "immix stderr:\n{immix}"
-        );
+        for allocator in ["immix", "malloc"] {
+            let (stdout, err) = run("scalar_println", &src, allocator);
+            assert_eq!(stdout, "9\n", "{allocator} stderr:\n{err}");
+            assert!(
+                err.contains("[rc] allocs=1 frees=1"),
+                "the scalar println takes the frame buffer, so the only managed allocation is the \
+                 Rc and it is released; {allocator} stderr:\n{err}"
+            );
+            assert!(
+                !err.contains("LeakSanitizer"),
+                "the println used to leak its integer string here, and nothing may leak now; \
+                 {allocator} stderr:\n{err}"
+            );
+        }
 
-        let malloc = run("malloc");
+        // a region block stays reachable through g_all_blocks, so lsan cannot see an object leaked inside one
+        let (_, planted) = run("captured_string", control, "malloc");
         assert!(
-            malloc.contains("LeakSanitizer: detected memory leaks"),
-            "the known println leak stopped reproducing, so this row must be re-decided;\nstderr:\n{malloc}"
+            planted.contains("[rc] allocs=15 frees=5"),
+            "a closure keeps no share of what it captures, so the counter must still see the ten \
+             strings its environments hold;\nstderr:\n{planted}"
         );
         assert!(
-            malloc.contains("__aelys_to_string_i64"),
-            "a leak appeared that is not the known bootstrap one; stderr:\n{malloc}"
-        );
-        let stacks = malloc.matches("allocated from:").count();
-        assert_eq!(
-            stacks, 1,
-            "exactly one leak stack is known; stderr:\n{malloc}"
+            planted.contains("LeakSanitizer: detected memory leaks")
+                && planted.contains("185 byte(s) leaked in 10 allocation(s)"),
+            "the strings the closures capture are the planted leak that keeps this detector \
+             armed, so a clean row above cannot be a silent oracle;\nstderr:\n{planted}"
         );
     }
 
     // the unbound control keeps the detector armed, so a clean witness cannot be a silent oracle
     #[cfg(feature = "asan-invariants")]
     #[test]
-    fn asan_tier_sees_a_bound_string_freed_and_only_the_unbound_half_still_leaks() {
+    fn asan_tier_sees_both_halves_of_the_blocker_freed() {
         let dir = tempdir().expect("tempdir");
         let Some(_archive) = build_asan_archive(dir.path()) else {
             panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
-        let loop_body = |bind: &str| {
+        let loop_body = |holder: &str, bind: &str, push: &str| {
             format!(
-                "fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n                     while i < 5 {{\n{bind}        n = n + s.len\n        i = i + 1\n    }}\n                     return n\n}}\n"
+                "fn main() -> i64 {{\n{holder}    let mut i: i64 = 0\n    let mut n: i64 = 0\n                     while i < 5 {{\n{bind}        n = n + s.len\n{push}        i = i + 1\n    }}\n                     return n\n}}\n"
             )
         };
-        let bound =
-            loop_body("        let t: string = \"{i}\"\n        let s: string = \"row \" + t\n");
-        let unbound = loop_body("        let s: string = \"row \" + \"{i}\"\n");
+        let bound = loop_body(
+            "",
+            "        let t: string = \"{i}\"\n        let s: string = \"row \" + t\n",
+            "",
+        );
+        let unbound = loop_body("", "        let s: string = \"row \" + \"{i}\"\n", "");
+        // the capture a closure never gives back is the planted leak now that a global gives its own back
+        let held = "fn main() -> i64 {\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n    while i < 5 {\n        let s: string = \"row \" + \"{i}\"\n        let f = fn () -> i64 { return s.len }\n        n = n + f()\n        i = i + 1\n    }\n    return n\n}\n".to_string();
 
         // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
         let run = |id: &str, src: &str, allocator: &str, clean: bool| {
@@ -1739,49 +1741,27 @@ fn main() -> i64 {
             err
         };
 
-        let bound_malloc = run("s1c_bound", &bound, "malloc", true);
-        assert!(
-            bound_malloc.contains("[rc] allocs=10 frees=10"),
-            "both allocations of a bound concatenation are released, which is the whole of the \
-             bound the increment claims: measured flat at 12180 KB peak rss over 2e5 turns and \
-             12104 KB over 2e6. two neighbouring shapes carry no such bound and are not fixed \
-             here. a `continue` or `break` jumps over the scope end release: allocs=2000001 \
-             frees=1000000, 12328 KB at 2e5 rising to 32860 KB at 2e6. any bound call result is \
-             classified Borrow and never released, `let t = thru(...)`: allocs=2000000 frees=0, \
-             12116 KB at 2e5 rising to 63964 KB at 2e6;\nstderr:\n{bound_malloc}"
-        );
-        assert!(
-            !bound_malloc.contains("LeakSanitizer"),
-            "a bound string must leave nothing behind on the leg that can see it;\nstderr:\n{bound_malloc}"
-        );
-        assert_eq!(
-            bound_malloc.matches("allocated from:").count(),
-            0,
-            "stderr:\n{bound_malloc}"
-        );
+        for (id, src) in [("s1d_bound", &bound), ("s1d_unbound", &unbound)] {
+            for allocator in ["malloc", "immix"] {
+                let err = run(id, src, allocator, true);
+                assert!(
+                    err.contains("[rc] allocs=10 frees=10"),
+                    "{id}/{allocator}: the converted integer and the concatenation are both \
+                     released, bound or not;\nstderr:\n{err}"
+                );
+                assert!(
+                    !err.contains("LeakSanitizer"),
+                    "{id}/{allocator}: nothing may be left behind;\nstderr:\n{err}"
+                );
+                assert_eq!(err.matches("allocated from:").count(), 0, "stderr:\n{err}");
+            }
+        }
 
-        let unbound_malloc = run("s1c_unbound", &unbound, "malloc", false);
+        let held_malloc = run("s1d_captured", &held, "malloc", false);
         assert!(
-            unbound_malloc.contains("[rc] allocs=10 frees=5"),
-            "only the bound half of the same loop is released;\nstderr:\n{unbound_malloc}"
-        );
-        assert!(
-            unbound_malloc.contains("LeakSanitizer: detected memory leaks")
-                && unbound_malloc.contains("__aelys_to_string_i64"),
-            "the unbound temporary is the leak this row keeps armed until it is released too;\n\
-             stderr:\n{unbound_malloc}"
-        );
-
-        let bound_immix = run("s1c_bound_immix", &bound, "immix", true);
-        assert!(
-            !bound_immix.contains("LeakSanitizer"),
-            "stderr:\n{bound_immix}"
-        );
-        let unbound_immix = run("s1c_unbound_immix", &unbound, "immix", true);
-        assert!(
-            !unbound_immix.contains("LeakSanitizer"),
-            "immix answers the leak from a block it still holds, so a report here means the \
-             allocator changed shape;\nstderr:\n{unbound_immix}"
+            held_malloc.contains("LeakSanitizer: detected memory leaks"),
+            "a closure keeps no share of the string it captures, and it is the leak that keeps \
+             this row armed;\nstderr:\n{held_malloc}"
         );
     }
 }

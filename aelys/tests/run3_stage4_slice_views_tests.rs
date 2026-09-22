@@ -1,4 +1,4 @@
-// ! detach and `e0426` fenced the whole family.
+// ! detach and `E0426` fenced the whole family.
 
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant, lower_file_to_air};
 use aelys_opt::OptimizationLevel;
@@ -400,70 +400,70 @@ const S4_H12: &str = "fn view(r: &mut Vec<i64>) -> &mut [i64] { return (*r)[0..3
 #[test]
 fn s4_h1_the_headline_lands_with_both_slices_from_managed_vecs() {
     let h = Harness::new();
-    h.value_row("S4-H1", S4_H1, "101\n7919\n", 4, 2);
+    h.value_row("S4-H1", S4_H1, "101\n7919\n", 2, 2);
     // the spelling that is safe to quote: three owners, so the detach is load-bearing here
-    h.value_row("S4-H1x", S4_H1X, "101\n0\n7919\n", 6, 3);
+    h.value_row("S4-H1x", S4_H1X, "101\n0\n7919\n", 3, 3);
     h.assert_legs(16);
 }
 
 #[test]
 fn s4_h1_carries_no_allocation_the_no_region_twin_does_not() {
     let h = Harness::new();
-    h.value_row("S4-H1", S4_H1, "101\n7919\n", 4, 2);
-    h.value_row("S4-H1n", S4_H1N, "101\n7919\n", 4, 2);
+    h.value_row("S4-H1", S4_H1, "101\n7919\n", 2, 2);
+    h.value_row("S4-H1n", S4_H1N, "101\n7919\n", 2, 2);
     h.assert_legs(16);
 }
 
 #[test]
 fn s4_h2_h3_the_array_bases_still_cost_what_they_did() {
     let h = Harness::new();
-    h.value_row("S4-H2", S4_H2, "101\n7919\n", 3, 1);
-    h.value_row("S4-H3", S4_H3, "101\n7919\n", 2, 0);
+    h.value_row("S4-H2", S4_H2, "101\n7919\n", 1, 1);
+    h.value_row("S4-H3", S4_H3, "101\n7919\n", 0, 0);
     h.assert_legs(16);
 }
 
 #[test]
 fn s4_h4_h5_the_aliased_bases_keep_their_value_semantics() {
     let h = Harness::new();
-    h.value_row("S4-H4", S4_H4, "101\n7919\n", 4, 2);
-    h.value_row("S4-H5", S4_H5, "99\n1\n", 4, 2);
-    h.value_row("S4-H6", S4_H6, "99\n", 2, 1);
+    h.value_row("S4-H4", S4_H4, "101\n7919\n", 2, 2);
+    h.value_row("S4-H5", S4_H5, "99\n1\n", 2, 2);
+    h.value_row("S4-H6", S4_H6, "99\n", 1, 1);
     h.assert_legs(24);
 }
 
 #[test]
 fn s4_h7_a_mutable_view_reaches_a_lambda_parameter() {
     let h = Harness::new();
-    h.value_row("S4-H7", S4_H7, "101\n7919\n", 4, 2);
+    h.value_row("S4-H7", S4_H7, "101\n7919\n", 2, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s4_h8_forwarding_a_read_only_view_to_a_reader_runs() {
     let h = Harness::new();
-    h.value_row("S4-H8", S4_H8, "7919\n", 2, 1);
+    h.value_row("S4-H8", S4_H8, "7919\n", 1, 1);
     h.assert_legs(8);
 }
 
 #[test]
 fn s4_h9_h12_the_managed_side_forms_and_returns_mutable_views() {
     let h = Harness::new();
-    h.value_row("S4-H9", S4_H9, "101\n7919\n", 4, 2);
-    h.value_row("S4-H12", S4_H12, "101\n7919\n", 4, 2);
+    h.value_row("S4-H9", S4_H9, "101\n7919\n", 2, 2);
+    h.value_row("S4-H12", S4_H12, "101\n7919\n", 2, 2);
     h.assert_legs(16);
 }
 
 #[test]
 fn s4_h10_five_views_over_one_aliased_buffer_cost_one_copy() {
     let h = Harness::new();
-    h.value_row("S4-H10", S4_H10, "105\n100\n", 4, 2);
+    h.value_row("S4-H10", S4_H10, "105\n100\n", 2, 2);
     h.assert_legs(8);
 }
 
 #[test]
 fn s4_h11_a_read_only_view_of_a_mut_bound_aliased_vec_copies_nothing() {
     let h = Harness::new();
-    h.value_row("S4-H11", S4_H11, "7919\n7919\n", 3, 1);
+    h.value_row("S4-H11", S4_H11, "7919\n7919\n", 1, 1);
     h.assert_legs(8);
 }
 
@@ -483,8 +483,8 @@ fn the_booking_rule_is_honoured() {
     );
     // the headline discriminates neither, by construction: one owner each and never aliased
     let h = Harness::new();
-    h.value_row("S4-H1", S4_H1, "101\n7919\n", 4, 2);
-    h.value_row("S4-H1x", S4_H1X, "101\n0\n7919\n", 6, 3);
+    h.value_row("S4-H1", S4_H1, "101\n7919\n", 2, 2);
+    h.value_row("S4-H1x", S4_H1X, "101\n0\n7919\n", 3, 3);
     h.assert_legs(16);
     assert!(
         !d1.contains(&"S4-H1") && !d2.contains(&"S4-H1"),
@@ -578,12 +578,12 @@ fn every_position_a_view_can_be_narrowed_in_demotes() {
         ("S4-R7-nested-if", R2_NESTED),
         ("S4-R8-mixed-composites", R2_MIXED),
     ] {
-        h.value_row(id, src, "7919\n7919\n", 3, 1);
+        h.value_row(id, src, "7919\n7919\n", 1, 1);
     }
     h.assert_legs(8 * 8);
 }
 
-// read-only view through a composite over a global becomes e0424 and over an aliased `vec`
+// read-only view through a composite over a global becomes E0424 and over an aliased `vec`
 const R2_GLOBAL_READ: &str = "let mut g: [i64; 3] = [7919, 2, 3]\n\
                               fn main() -> i64 {\n\
                               \x20   let c: bool = true\n\
@@ -604,8 +604,8 @@ const R2_ALIASED_READ: &str = "fn main() -> i64 {\n\
 #[test]
 fn a_missed_demotion_shows_up_as_a_verdict_and_not_as_a_count() {
     let h = Harness::new();
-    h.value_row("S4-R9-global-read", R2_GLOBAL_READ, "7919\n", 1, 0);
-    h.value_row("S4-R10-aliased-read", R2_ALIASED_READ, "7919\n7919\n", 3, 1);
+    h.value_row("S4-R9-global-read", R2_GLOBAL_READ, "7919\n", 0, 0);
+    h.value_row("S4-R10-aliased-read", R2_ALIASED_READ, "7919\n7919\n", 1, 1);
     h.assert_legs(16);
 }
 
@@ -834,9 +834,9 @@ fn s4_n1_n3_a_write_through_a_shared_view_is_e0422_with_its_repair() {
             "{id}: the refusal must name the view and the repair, not a bare `&`:\n{rendered}"
         );
     }
-    h.value_row("S4-N1t", S4_N1T, "8\n", 1, 0);
-    h.value_row("S4-N2t", S4_N2T, "9\n", 1, 0);
-    h.value_row("S4-N3t", S4_N3T, "99\n", 1, 0);
+    h.value_row("S4-N1t", S4_N1T, "8\n", 0, 0);
+    h.value_row("S4-N2t", S4_N2T, "9\n", 0, 0);
+    h.value_row("S4-N3t", S4_N3T, "99\n", 0, 0);
     h.assert_legs(3 * 4 + 3 * 8);
 }
 
@@ -871,7 +871,7 @@ fn s4_n6_n14_a_view_formed_before_its_base_is_aliased_is_e0713() {
     h.fenced_row("S4-N13a", S4_N13A, "E0713");
     h.fenced_row("S4-N14", S4_N14, "E0713");
     // the repaired shape for s4-n6 is s4-h4: alias first, then form the view
-    h.value_row("S4-H4", S4_H4, "101\n7919\n", 4, 2);
+    h.value_row("S4-H4", S4_H4, "101\n7919\n", 2, 2);
     h.assert_legs(4 * 4 + 8);
 }
 
@@ -895,7 +895,7 @@ fn s4_n9_n10_the_fences_this_design_depends_on_but_does_not_own_still_fire() {
     let h = Harness::new();
     // realloc invalidation is held by the borrow checker's write conflict
     h.fenced_row("S4-N9", S4_N9, "E0711");
-    h.value_row("S4-N9t", S4_N9T, "1\n", 2, 1);
+    h.value_row("S4-N9t", S4_N9T, "1\n", 1, 1);
     h.fenced_row("S4-N10", S4_N10, "E0423");
     h.assert_legs(4 + 8 + 4);
 }
@@ -910,9 +910,9 @@ fn s4_n15_a_mutable_view_of_a_global_is_e0424_and_the_reads_are_not() {
          {rendered}"
     );
     h.fenced_row("S4-N15L", S4_N15L, "E0713");
-    h.value_row("S4-N15t1", S4_N15T1, "7919\n", 1, 0);
-    h.value_row("S4-N15t2", S4_N15T2, "7919\n", 1, 0);
-    h.value_row("S4-N15t3", S4_N15T3, "7919\n", 1, 0);
+    h.value_row("S4-N15t1", S4_N15T1, "7919\n", 0, 0);
+    h.value_row("S4-N15t2", S4_N15T2, "7919\n", 0, 0);
+    h.value_row("S4-N15t3", S4_N15T3, "7919\n", 0, 0);
     h.assert_legs(4 + 4 + 3 * 8);
 }
 
@@ -1069,9 +1069,9 @@ fn every_spine_shape_that_roots_at_a_global_is_e0424() {
 fn the_projected_global_and_its_local_twin_point_the_same_way() {
     let h = Harness::new();
     h.fenced_row("SP-local-twin", SP_LOCAL_TWIN, "E0713");
-    h.value_row("SP-local-writes", SP_LOCAL_WRITES, "42\n", 1, 0);
-    h.value_row("SP-shared-hatch", SP_SHARED_HATCH, "7919\n", 1, 0);
-    h.value_row("SP-nonmut-global", SP_NONMUT_GLOBAL, "7919\n", 1, 0);
+    h.value_row("SP-local-writes", SP_LOCAL_WRITES, "42\n", 0, 0);
+    h.value_row("SP-shared-hatch", SP_SHARED_HATCH, "7919\n", 0, 0);
+    h.value_row("SP-nonmut-global", SP_NONMUT_GLOBAL, "7919\n", 0, 0);
     h.assert_legs(4 + 3 * 8);
 }
 
@@ -1146,9 +1146,9 @@ fn the_over_rejection_reaches_one_view_plus_any_use_of_the_base() {
     let h = Harness::new();
     h.fenced_row("S4-O3", S4_O3, "E0713");
     h.fenced_row("S4-O4", S4_O4, "E0713");
-    h.value_row("S4-O3h", S4_O3H, "7919\n7919\n", 2, 0);
-    h.value_row("S4-O4h", S4_O4H, "7919\n7919\n", 3, 1);
-    h.value_row("S4-O7", S4_O7, "7919\n2\n3\n", 3, 0);
+    h.value_row("S4-O3h", S4_O3H, "7919\n7919\n", 0, 0);
+    h.value_row("S4-O4h", S4_O4H, "7919\n7919\n", 1, 1);
+    h.value_row("S4-O7", S4_O7, "7919\n2\n3\n", 0, 0);
     h.assert_legs(2 * 4 + 3 * 8);
 }
 
@@ -1162,7 +1162,7 @@ fn on_a_global_the_over_rejection_reaches_a_single_read_only_view() {
          makes a WRITE through a global view legal:\n{rendered}"
     );
     h.fenced_row("S4-O6", S4_O6, "E0424");
-    h.value_row("S4-O5h", S4_O5H, "7919\n", 1, 0);
+    h.value_row("S4-O5h", S4_O5H, "7919\n", 0, 0);
     h.assert_legs(2 * 4 + 8);
 }
 
@@ -1204,8 +1204,8 @@ fn the_declared_over_rejections_carry_their_post_flip_oracles() {
     let h = Harness::new();
     h.fenced_row("S4-O1", S4_O1, "E0713");
     h.fenced_row("S4-O2", S4_O2, "E0713");
-    h.value_row("S4-O1h", S4_O1H, "7919\n7919\n", 3, 1);
-    h.value_row("S4-O2h", S4_O2H, "7919\n7919\n", 2, 0);
+    h.value_row("S4-O1h", S4_O1H, "7919\n7919\n", 1, 1);
+    h.value_row("S4-O2h", S4_O2H, "7919\n7919\n", 0, 0);
     h.assert_legs(2 * 4 + 2 * 8);
 }
 
@@ -1237,7 +1237,7 @@ fn e0426_is_discharged_and_what_replaced_it_is_named() {
         "the formation detach is what discharges the obligation; without it the fence came down \
          over nothing"
     );
-    // e0415 fences a `&mut t` into an element, which is a different spelling of a mutable
+    // E0415 fences a `&mut t` into an element, which is a different spelling of a mutable
     assert!(
         aelys_common::diagnostic::registry::lookup("E0415").is_some(),
         "E0415 has been found holding things nobody chose in five consecutive stages; this design \
@@ -1313,7 +1313,7 @@ fn main() -> i64 {
 #[test]
 fn s4_r1_vec_len_and_as_slice_are_effect_free_reads() {
     let h = Harness::new();
-    h.value_row("S4-R1", S4_R1_VEC_READS, "3\n7919\n", 3, 1);
+    h.value_row("S4-R1", S4_R1_VEC_READS, "3\n7919\n", 1, 1);
     h.assert_legs(8);
 }
 
@@ -1361,7 +1361,7 @@ fn main() -> i64 { return 0 }
 #[test]
 fn s4_r2_compute_normals_uses_vec_read_and_unique_write_views() {
     let h = Harness::new();
-    h.value_row("S4-R2", S4_R2_COMPUTE_NORMALS, "101\n7919\n", 4, 2);
+    h.value_row("S4-R2", S4_R2_COMPUTE_NORMALS, "101\n7919\n", 2, 2);
     let root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("workspace root");
@@ -1479,11 +1479,11 @@ const S2B_FE_VEC: &str = "fn main() -> i64 {\n\
 #[test]
 fn s2b_a_slice_iterates_by_value_at_every_level() {
     let h = Harness::new();
-    h.value_row("S2B-FE-shared", S2B_FE_SHARED, "6\n", 1, 0);
-    h.value_row("S2B-FE-mut", S2B_FE_MUT, "6\n", 1, 0);
-    h.value_row("S2B-FE-empty", S2B_FE_EMPTY, "0\n", 1, 0);
-    h.value_row("S2B-FE-reslice", S2B_FE_RESLICE, "3\n", 1, 0);
-    h.value_row("S2B-FE-bytes", S2B_FE_BYTES, "294\n", 1, 0);
+    h.value_row("S2B-FE-shared", S2B_FE_SHARED, "6\n", 0, 0);
+    h.value_row("S2B-FE-mut", S2B_FE_MUT, "6\n", 0, 0);
+    h.value_row("S2B-FE-empty", S2B_FE_EMPTY, "0\n", 0, 0);
+    h.value_row("S2B-FE-reslice", S2B_FE_RESLICE, "3\n", 0, 0);
+    h.value_row("S2B-FE-bytes", S2B_FE_BYTES, "294\n", 0, 0);
     h.assert_legs(40);
 }
 
@@ -1494,7 +1494,7 @@ fn s2b_iterating_a_slice_takes_a_loan_on_it() {
     h.assert_legs(4);
 }
 
-// a `for` header is not a member access, so the refusal left e0304's family
+// a `for` header is not a member access, so the refusal left E0304's family
 #[test]
 fn s2b_a_non_iterable_for_header_names_its_own_code() {
     let h = Harness::new();

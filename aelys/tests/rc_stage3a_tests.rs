@@ -493,12 +493,14 @@ fn asan_probe(src: &str, expected_exit: i32, label: &str) {
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, src).expect("write source");
 
-    match compile_file_with_llvm_variant(
-        &source_path,
-        OptimizationLevel::None,
-        false,
-        RuntimeVariant::Rc,
-    ) {
+    match crate::common::with_outline_str_counts(|| {
+        compile_file_with_llvm_variant(
+            &source_path,
+            OptimizationLevel::None,
+            false,
+            RuntimeVariant::Rc,
+        )
+    }) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {

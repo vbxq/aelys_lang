@@ -378,9 +378,9 @@ const W3_MUT_STILL_WRITES: &str = "fn main() -> i64 {\n\
 #[test]
 fn the_safe_weakening_still_compiles_and_still_reads() {
     let h = Harness::new();
-    h.value_row("W1-weaken-let", W1_WEAKEN_LET, "7919\n", 1, 0);
-    h.value_row("W2-weaken-arg", W2_WEAKEN_ARG, "7919\n", 1, 0);
-    h.value_row("W3-mut-still-writes", W3_MUT_STILL_WRITES, "101\n", 1, 0);
+    h.value_row("W1-weaken-let", W1_WEAKEN_LET, "7919\n", 0, 0);
+    h.value_row("W2-weaken-arg", W2_WEAKEN_ARG, "7919\n", 0, 0);
+    h.value_row("W3-mut-still-writes", W3_MUT_STILL_WRITES, "101\n", 0, 0);
     h.assert_legs(3 * 8);
 }
 
@@ -416,7 +416,7 @@ const DIRECT_SPELLING: &str = "fn poke(r: &mut Vec<i64>) -> i64 {\n\
 #[test]
 fn the_direct_spelling_still_detaches() {
     let h = Harness::new();
-    h.value_row("C07-direct", DIRECT_SPELLING, "101\n7919\n", 4, 2);
+    h.value_row("C07-direct", DIRECT_SPELLING, "101\n7919\n", 2, 2);
     h.assert_legs(8);
 }
 

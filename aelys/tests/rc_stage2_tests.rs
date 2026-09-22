@@ -203,12 +203,14 @@ fn main() -> i64 {
     )
     .expect("write source");
 
-    match compile_file_with_llvm_variant(
-        &source_path,
-        OptimizationLevel::None,
-        false,
-        RuntimeVariant::Rc,
-    ) {
+    match crate::common::with_outline_str_counts(|| {
+        compile_file_with_llvm_variant(
+            &source_path,
+            OptimizationLevel::None,
+            false,
+            RuntimeVariant::Rc,
+        )
+    }) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {

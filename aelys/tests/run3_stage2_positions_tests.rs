@@ -323,7 +323,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -344,7 +344,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -367,7 +367,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -396,7 +396,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "101\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -421,7 +421,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -440,7 +440,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -459,7 +459,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -484,7 +484,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -633,7 +633,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -658,7 +658,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -679,7 +679,7 @@ const GROUP_A: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -864,7 +864,7 @@ const CONTROL_PLAIN_ELEMENT: (&str, &str, i64, i64) = (
      \x20   return 0\n\
      }\n",
     "7919\n",
-    2,
+    1,
     1,
 );
 
@@ -894,7 +894,7 @@ const GROUP_B: &[Row] = &[
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         }),
     },
@@ -923,7 +923,7 @@ const GROUP_B: &[Row] = &[
                   }\n",
             stdout: "7919\n1\n",
             exit: 0,
-            allocs: 5,
+            allocs: 3,
             frees: 3,
         }),
     },
@@ -1387,7 +1387,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "7919\n7919\n",
             exit: 0,
-            allocs: 3,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -1422,7 +1422,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         }),
     },
@@ -1565,7 +1565,7 @@ const GROUP_C: &[Row] = &[
               }\n",
         twin: None,
     },
-    // reclassified: the projection yields i64, so e0714 was over-rejecting and c39 pins the closure
+    // reclassified: the projection yields i64, so E0714 was over-rejecting and c39 pins the closure
     Row {
         id: "C21",
         position: "ArrayLiteral.elements, projected",
@@ -1577,7 +1577,7 @@ const GROUP_C: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
-    // reclassified: the projection yields i64, so e0714 was over-rejecting and c40 pins the closure
+    // reclassified: the projection yields i64, so E0714 was over-rejecting and c40 pins the closure
     Row {
         id: "C22",
         position: "StructLiteral.fields, projected",
@@ -1706,7 +1706,7 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C35",
         position: "F3 callable, a concrete signature over a managed carrier",
-        // the `no definition` family left e0412 for its own code, the refusal itself is unmoved
+        // the `no definition` family left E0412 for its own code, the refusal itself is unmoved
         class: Class::MustNotMoveRejected("E0430"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
@@ -1758,7 +1758,7 @@ const GROUP_C: &[Row] = &[
                   }\n",
             stdout: "7919\n",
             exit: 0,
-            allocs: 2,
+            allocs: 1,
             frees: 1,
         }),
     },
@@ -2012,7 +2012,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2032,7 +2032,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2051,7 +2051,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2069,7 +2069,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2092,7 +2092,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2111,7 +2111,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "7920\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2131,7 +2131,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the detach now fires under a projection, and this is what it owed",
@@ -2151,7 +2151,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the whole-element store already detaches",
@@ -2174,7 +2174,7 @@ const GROUP_D: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: the whole-element store already detaches",
@@ -2382,7 +2382,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing, and the debt was discharged rather than deferred: the condition this \
@@ -2407,7 +2407,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "already correct, and it is what proves the lambda is not the cause",
@@ -2430,7 +2430,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
-            allocs: 4,
+            allocs: 2,
             frees: 2,
         },
         owed: "nothing: there is no boundary left to escape across, which is what closed L01",
@@ -2467,7 +2467,7 @@ const GROUP_L: &[Store] = &[
               }\n",
         verdict: Verdict::Runs {
             stdout: "7\n",
-            allocs: 1,
+            allocs: 0,
             frees: 0,
         },
         owed: "nothing today, and it is the sharpest A14 witness: a store E0429 refuses one \
@@ -3006,7 +3006,7 @@ fn the_four_consumers_of_the_operand_list_are_each_re_pinned() {
     );
 
     let h = Harness::new();
-    // e0714's loop is carried by rows a23 c39 c40 c45, and liveness by rows c41 c42 c43 c44
+    // E0714's loop is carried by rows a23 c39 c40 c45, and liveness by rows c41 c42 c43 c44
     expect_reject(
         &h,
         "S2B-conflict-aggregate",
