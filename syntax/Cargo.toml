@@ -4,6 +4,3 @@ version.workspace = true
 edition = "2024"
 
 [dependencies]
-
-[lib]
-doctest = false

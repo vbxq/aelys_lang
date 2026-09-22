@@ -1,3 +1,4 @@
+
 use super::analyze::{BlockReason, InlineDecision, ProgramAnalysis};
 use super::expand::InlineExpander;
 use crate::passes::{OptimizationLevel, OptimizationPass, OptimizationStats};
@@ -5,7 +6,6 @@ use aelys_common::{Warning, WarningKind};
 use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedProgram, TypedStmt, TypedStmtKind};
 use std::collections::{HashMap, HashSet};
 
-// TODO: we should make this somewhat configurable
 const BLOAT_BUDGET: f64 = 0.20;
 
 pub struct FunctionInliner {
@@ -110,7 +110,6 @@ impl FunctionInliner {
     }
 
     fn inline_in_expr(&mut self, expr: &mut TypedExpr, analysis: &ProgramAnalysis) {
-        // recurse first so nested calls get processed
         match &mut expr.kind {
             TypedExprKind::Binary { left, right, .. } => {
                 self.inline_in_expr(left, analysis);
@@ -147,7 +146,14 @@ impl FunctionInliner {
                     self.inline_in_expr(e, analysis);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => self.inline_in_expr(size, analysis),
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
+                self.inline_in_expr(size, analysis);
+                if let Some(fv) = fill_value {
+                    self.inline_in_expr(fv, analysis);
+                }
+            }
             TypedExprKind::Index { object, index } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
@@ -159,6 +165,10 @@ impl FunctionInliner {
             } => {
                 self.inline_in_expr(object, analysis);
                 self.inline_in_expr(index, analysis);
+                self.inline_in_expr(value, analysis);
+            }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.inline_in_expr(object, analysis);
                 self.inline_in_expr(value, analysis);
             }
             TypedExprKind::Range { start, end, .. } => {
@@ -178,10 +188,35 @@ impl FunctionInliner {
                     self.inline_in_stmt(s, analysis);
                 }
             }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.inline_in_expr(scrutinee, analysis);
+                for arm in arms.iter_mut() {
+                    self.inline_in_expr(&mut arm.body, analysis);
+                }
+            }
+            TypedExprKind::Block { stmts, tail } => {
+                for s in stmts.iter_mut() {
+                    self.inline_in_stmt(s, analysis);
+                }
+                self.inline_in_expr(tail, analysis);
+            }
+            TypedExprKind::StructLiteral { fields, .. } => {
+                for (_, val) in fields.iter_mut() {
+                    self.inline_in_expr(val, analysis);
+                }
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args.iter_mut() {
+                    self.inline_in_expr(arg, analysis);
+                }
+            }
+            TypedExprKind::Cast { expr, .. } => self.inline_in_expr(expr, analysis),
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.inline_in_expr(scrutinee, analysis)
+            }
             _ => {}
         }
 
-        // now check if this is a call we should inline
         if let TypedExprKind::Call { callee, args } = &expr.kind
             && let TypedExprKind::Identifier(name) = &callee.kind
             && let Some(func) = self.functions.get(name).cloned()
@@ -191,7 +226,10 @@ impl FunctionInliner {
 
             match decision {
                 InlineDecision::Inline => {
-                    if let Some(inlined) = self.expander.expand_call(&func, args, expr.span) {
+                    // the analysis diagnoses at every level, only the rewrite is gated on -o
+                    if self.level != OptimizationLevel::None
+                        && let Some(inlined) = self.expander.expand_call(&func, args, expr.span)
+                    {
                         *expr = inlined;
                         self.stats.functions_inlined += 1;
                     }
@@ -217,11 +255,12 @@ impl FunctionInliner {
             BlockReason::Recursive => WarningKind::InlineRecursive,
             BlockReason::MutualRecursion(cycle) => WarningKind::InlineMutualRecursion { cycle },
             BlockReason::HasCaptures => WarningKind::InlineHasCaptures,
+            BlockReason::HasTypeParams => WarningKind::InlineHasCaptures, // reuse warning kind for now
+            BlockReason::VecParam => WarningKind::InlineHasCaptures,
         };
 
         let has_always = func.decorators.iter().any(|d| d.name == "inline_always");
 
-        // @inline_always suppresses non-fatal warnings
         let is_fatal = matches!(
             kind,
             WarningKind::InlineRecursive
@@ -244,10 +283,6 @@ impl OptimizationPass for FunctionInliner {
     }
 
     fn run(&mut self, program: &mut TypedProgram) -> OptimizationStats {
-        if self.level == OptimizationLevel::None {
-            return OptimizationStats::new();
-        }
-
         self.stats = OptimizationStats::new();
         self.warnings.clear();
         self.warned_functions.clear();

@@ -5,9 +5,12 @@ fn empty_program() -> AirProgram {
     AirProgram {
         functions: vec![],
         structs: vec![],
+        enums: vec![],
         globals: vec![],
         source_files: vec![],
         mono_instances: vec![],
+        struct_sizes: std::collections::HashMap::new(),
+        rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
     }
 }
 

@@ -1,0 +1,22 @@
+aelys	aelys	doc+asan-invariants	lib carries no ``` doc example
+aelys	aelys	doc	lib carries no ``` doc example
+aelys	aelys	lib+asan-invariants	crate carries no #[cfg(test)] unit test module
+aelys	aelys	lib	crate carries no #[cfg(test)] unit test module
+aelys-air	aelys_air	doc	lib carries no ``` doc example
+aelys-cli	aelys-cli	bin	the binary is a thin main over the lib and carries no #[cfg(test)] module
+aelys-cli	aelys_cli	doc	lib carries no ``` doc example
+aelys-cli	aelys_cli	lib	crate carries no #[cfg(test)] unit test module
+aelys-codegen	aelys_codegen	doc	lib carries no ``` doc example
+aelys-codegen	aelys_codegen	lib	crate carries no #[cfg(test)] unit test module
+aelys-common	aelys_common	doc	lib carries no ``` doc example
+aelys-common	aelys_common	lib	crate carries no #[cfg(test)] unit test module
+aelys-core	aelys_core	doc	lib carries no ``` doc example
+aelys-core	aelys_core	lib	crate carries no #[cfg(test)] unit test module
+aelys-driver	aelys_driver	doc	lib carries no ``` doc example
+aelys-frontend	aelys_frontend	doc	lib carries no ``` doc example
+aelys-frontend	aelys_frontend	lib	crate carries no #[cfg(test)] unit test module
+aelys-opt	aelys_opt	doc	lib carries no ``` doc example
+aelys-opt	aelys_opt	lib	crate carries no #[cfg(test)] unit test module
+aelys-sema	aelys_sema	doc	lib carries no ``` doc example
+aelys-syntax	aelys_syntax	doc	lib carries no ``` doc example
+aelys-syntax	aelys_syntax	lib	crate carries no #[cfg(test)] unit test module

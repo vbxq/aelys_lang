@@ -2,12 +2,12 @@ use super::GlobalConstantPropagator;
 use aelys_sema::{TypedExpr, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl GlobalConstantPropagator {
-    // can this expr be evaluated at compile time?
     pub(super) fn is_constant_expr(&self, expr: &TypedExpr) -> bool {
         match &expr.kind {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => true,
             TypedExprKind::Identifier(name) => self.constants.contains_key(name),
@@ -34,8 +34,6 @@ impl GlobalConstantPropagator {
     }
 
     pub(super) fn collect_global_constants(&mut self, stmts: &[TypedStmt]) {
-        // iterate until fixpoint (handles `let B = A + 1` after `let A = 1`)
-        // cap at 10 to avoid infinite loops on weird edge cases
         for _ in 0..10 {
             let prev_count = self.constants.len();
 
@@ -64,7 +62,6 @@ impl GlobalConstantPropagator {
         }
     }
 
-    // substitute known constants during collection phase (for chained constants)
     pub(super) fn substitute_in_expr_for_collection(&self, expr: &mut TypedExpr) {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {

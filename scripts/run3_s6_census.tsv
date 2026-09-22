@@ -1,0 +1,167 @@
+# Run 3 · Stage 6 · the retro-discrimination census. One line per row, TAB separated:
+#   <fixture id>	<bucket>	<witness>
+#
+# The row set is generated from the run's own test sources by `scripts/extract_rows.py`, so it
+# equals the tree's row set by construction. `scripts/s6_census.sh` re-derives every bucket and
+# fails if this file and the tree disagree.
+#
+# ANCHOR         the row reads differently at one of the four anchors, so a compiler from before
+#                the run fails it. the witness names which anchors.
+# PREFIX         it agrees with every anchor but differs at a run-internal prefix, so it
+#                discriminates a commit this run made.
+# CTRL-ABLATION  it agrees everywhere in history AND moves when a named rule is deleted.
+# CTRL-NOSTORE   it reaches managed memory but forms no element address, so no rule this run
+#                wrote can move it. the witness says why, per row.
+# CTRL-INERT     accepted at allocs=0: it reaches no managed memory at all.
+# CTRL-FENCE     refused. it pins a fence rather than a value.
+#
+# The last four buckets are controls, not claims. A control that started discriminating would be
+# a rule change nobody declared, which is why they are pinned here rather than left implicit.
+run3_stage2_positions__F3_EXPLICIT_NOGC_BOUND	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage2_positions__F3_GENERIC_ENUM	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage2_positions__F3_GENERIC_STRUCT_AS_RETURN	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage2_positions__F3_GENERIC_STRUCT_BY_REF	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage2_positions__F3_GENERIC_STRUCT_BY_VALUE	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage3_cow__S3_01	ANCHOR	run25_sentinel
+run3_stage3_cow__S3_02	CTRL-ABLATION	detach
+run3_stage3_cow__S3_03	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_04	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_05	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_06	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_07	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_08	PREFIX	p2_stage2tip
+run3_stage3_cow__S3_09	CTRL-NOSTORE	two owners, reads only: no store, so no address is formed to detach
+run3_stage3_cow__S3_10	ANCHOR	run25_sentinel
+run3_stage3_cow__S3_11	CTRL-NOSTORE	one owner, reads only
+run3_stage3_cow__S3_12	CTRL-FENCE	refused by E0415
+run3_stage3_cow__S3_13	CTRL-FENCE	refused by E0415
+run3_stage3_cow__S3_14	CTRL-FENCE	refused by E0415
+run3_stage3_cow__S3_15	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_15_ALIASED	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_16	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_16_ALIASED	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_17	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage3_cow__S3_18	CTRL-FENCE	refused by E0713
+run3_stage3_cow__S3_19	CTRL-FENCE	refused by E0711
+run3_stage3_cow__S3_20	CTRL-FENCE	refused by E0412
+run3_stage3_cow__S3_20B	CTRL-FENCE	refused by E0412
+run3_stage3_cow__S3_20C	CTRL-FENCE	refused by E0412
+run3_stage3_cow__S3_21_RC	CTRL-FENCE	refused by E0410
+run3_stage3_cow__S3_21_STRUCT	CTRL-FENCE	refused by E0410
+run3_stage3_cow__S3_22_READS	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_22_STORE	CTRL-FENCE	refused by E0727
+run3_stage3_cow__S3_26	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_27	CTRL-ABLATION	detach
+run3_stage3_cow__S3_28	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_29	CTRL-NOSTORE	a captured scalar, no Vec at all; the frees=0 is the declared closure-env leak
+run3_stage3_cow__S3_30	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_31	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_32	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_33	ANCHOR	run25_stage1tip,run25_stage2base,run3_base
+run3_stage3_cow__S3_34	CTRL-ABLATION	detach
+run3_stage3_cow__S3_35	CTRL-NOSTORE	the whole Vec is replaced through &mut, so the header moves and no element address is formed
+run3_stage4_ref_mutability__A21_SHARED_READ	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__DIRECT_SPELLING	ANCHOR	run25_sentinel
+run3_stage4_ref_mutability__P1_WHOLE_ELEMENT	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__P2_FIELD_OF_ELEMENT	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__P3_FIELD_ALONE	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__P4_VIA_LOCAL_SLICE	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__P5_DYNAMIC_INDEX	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__P6_CALL_THROUGH_PROJECTION	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R1_LET	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R2_ARG	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R3_RET	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R4_ASSIGN	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R5_IF_ARMS	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__R6_BLOCK_TAIL	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_ref_mutability__W1_WEAKEN_LET	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_ref_mutability__W2_WEAKEN_ARG	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_ref_mutability__W3_MUT_STILL_WRITES	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__R2_ALIASED_READ	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__R2_GLOBAL_READ	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__R2_MATCH	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__R2_MIXED	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__R2_NESTED	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__R2_PRE	CTRL-FENCE	refused by E0101
+run3_stage4_slice_views__R2_RETURN	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_H1	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H10	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H11	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_H12	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H1N	PREFIX	p2_stage2tip
+run3_stage4_slice_views__S4_H1X	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H2	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_H3	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_H4	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H5	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H6	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H7	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H8	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_H9	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N1	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N10	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_N11	CTRL-FENCE	refused by E0301
+run3_stage4_slice_views__S4_N12	CTRL-FENCE	refused by E0410
+run3_stage4_slice_views__S4_N13	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N13A	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N14	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N15	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N15L	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N15T1	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_N15T2	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_N15T3	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_N1T	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_N2	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N2T	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_N3	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N3T	ANCHOR	run25_sentinel
+run3_stage4_slice_views__S4_N4	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N5	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N5T	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N6	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N7	CTRL-ABLATION	k9
+run3_stage4_slice_views__S4_N7T	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_N8	CTRL-ABLATION	k9
+run3_stage4_slice_views__S4_N9	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_N9T	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_O1	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O1H	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_O2	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O2H	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_O3	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O3H	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_O4	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O4H	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base
+run3_stage4_slice_views__S4_O5	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O5H	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__S4_O6	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__S4_O7	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__SP_LOCAL_TWIN	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage4_slice_views__SP_LOCAL_WRITES	ANCHOR	run25_sentinel
+run3_stage4_slice_views__SP_NONMUT_GLOBAL	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage4_slice_views__SP_SHARED_HATCH	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_B1	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_B2	CTRL-ABLATION	k9
+run3_stage6_boundary__S6_H1	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_H2	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_H2_NOREGION	CTRL-ABLATION	detach
+run3_stage6_boundary__S6_H3	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_KEPT	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_M1	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_M2	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_T1	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_T2	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_T3	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_T3_KEPT	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_T4	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_T5	CTRL-ABLATION	E_PARAM
+run3_stage6_boundary__S6_T6	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R1	ANCHOR	run3_base
+run3_stage6_boundary__S6_R2	ANCHOR	run3_base
+run3_stage6_boundary__S6_R3	ANCHOR	run3_base
+run3_stage6_boundary__S6_R4	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R4_KEEP	ANCHOR	run25_sentinel,run25_stage1tip,run25_stage2base,run3_base
+run3_stage6_boundary__S6_R5	CTRL-FENCE	refused by E0727
+run3_stage6_boundary__S6_R5_KEEP	CTRL-INERT	allocs=0: the row reaches no managed memory
+run3_stage6_boundary__S6_R6	ANCHOR	run3_base
+run3_stage6_boundary__S6_R6_KEEP	ANCHOR	run3_base

@@ -1,10 +1,9 @@
-// lexer: chars -> tokens
-// TODO: consider switching to logos for speed
 
 use aelys_common::error::AelysError;
 use aelys_syntax::{Source, Token, TokenKind};
 use std::sync::Arc;
 
+mod character;
 mod comment;
 mod cursor;
 mod identifier;
@@ -27,6 +26,7 @@ pub struct Lexer {
     start_column: u32,
     pending_semicolon: bool,
     nesting_depth: u32,
+    brace_saved_depths: Vec<u32>,
 }
 
 impl Lexer {
@@ -42,6 +42,7 @@ impl Lexer {
             start_column: 1,
             pending_semicolon: false,
             nesting_depth: 0,
+            brace_saved_depths: Vec::new(),
         }
     }
 
@@ -58,6 +59,7 @@ impl Lexer {
             start_column: 1,
             pending_semicolon: false,
             nesting_depth: 0,
+            brace_saved_depths: Vec::new(),
         }
     }
 

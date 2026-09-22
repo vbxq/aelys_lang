@@ -2,9 +2,51 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## 0.22.x - memory model, safety checking, error handling
+
+- Managed memory is non-atomic reference counting, not a tracing GC, with a trial-deletion cycle collector behind `--runtime rc+cycles` and an Immix-style allocator (`AELYS_ALLOC=malloc` to switch)
+- `Vec<T>` has copy-on-write value semantics; the surface where they are guaranteed is fail-closed behind `E0412`-`E0414`
+- a borrow checker on a dedicated IR (BIR), non-lexical, with inferred origins and no user-written lifetime annotations (`E0701`-`E0704`, `E0711`-`E0714`, `E0723`-`E0726`)
+- `nogc` as a checked effect declaration, inferred across the call graph, part of the function type, with a `T: nogc` structural bound (`E0727`-`E0730`)
+- error handling: `?`, `catch`, `discard`, `.unwrap()`/`.expect()`, `.map_error()`, must-use on dropped `Result`
+
+## 0.21.x - LLVM backend implementation
+
+**0.21.5-a**
+- LLVM codegen: Windows x64 MSVC sret ABI fix for struct returns (fixes bootstrap println segfault)
+- string comparison (==, !=), logical not (!), println` accepts i64/f64/bool (bootstrap to_string)
+- Delete the legacy VM backend
+
+#### Note about that : 
+
+The previous VM served its purpose for prototyping, but Aelys is a systems programming language, not a scripting engine.  
+
+A compact alternative VM will return later once LLVM is mature enough (meta-programming?)
+
+**0.21.4-a**
+- LLVM codegen: SSA-aware local lowering, no more round-tripping with alloca/store/load
+- LLVM backend hardening, no panic/todo path now, unsupported AIR node will give a compile time error
+- Stable native entrypoint for LLVM: `__aelys_user_main` + C runtime main
+
+**0.21.3-a**
+- Hardened Aelys string ABI: `str` is now consistently lowered as `{ ptr, len }`
+- Temporary `print/println` bootstrap, they're reserved during LLVM bootstrap and lowered to `__aelys_write(ptr, len)`; added regression tests for IR ABI and internal `\0` handling.
+- Added `s.len` field access on `Str` (untiil proper bootstrapping)
+
+**0.21.2-a**
+- Added `core/` crate (`aelys-core`) as a C runtime static library built via `cc` (`build.rs` + `src/aelys_core.c`).
+- LLVM native linking now auto-resolves and links `aelys-core` for `--backend llvm` executables.
+
+**0.21.1-a**
+- AIR pass `copy_elim`: élimination des copies paramètre -> local en single-assignment.
+- AIR pass `dead_locals`: suppression des `AirLocal` jamais référencés.
+
+**0.21.0-a**
+- LLVM backend bootstrap: inkwell integration, AIR->LLVM type lowering, function declaration/body codegen, `module.verify()`, and `--backend llvm --emit-llvm-ir`.
+
 ## 0.20.x - Preparing for LLVM
 
-Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
+Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that.  is mature enough.
 
 **0.20.4-a**
 - AIR pretty-printer, `--emit-air` CLI flag for `compile` command
@@ -60,7 +102,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 - String indexing with `s[i]` (unicode-aware, returns single-character string)
 - `for c in "hello" { }` iteration syntax
 
-**0.19.10-a** (i'll squash all of these updates)
+**0.19.10-a**
 - fn foo(mut param: type) now working
 
 **0.19.9-a** (not a "real" update again sorry, needed a new tag
@@ -109,7 +151,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 
 ## 0.18.x - Native Binary Data Manipulation 
 
-This update adds real memory manipulation for @no_gc mode
+This update adds real memory manipulation for @no_gc mode & some bug fixes
 
 **0.18.6-a**
 - Fixed call site cache using stale entries after global mutation

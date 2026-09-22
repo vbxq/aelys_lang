@@ -1,0 +1,772 @@
+/* this need to be kept as minimal as possible. */
+
+/* shared by every runtime variant; only the rc_* unit changes at link time */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+
+#include "aelys_rc.h"
+#include "aelys_alloc_immix.h"
+
+#if defined(_MSC_VER)
+#define AELYS_NORETURN __declspec(noreturn)
+#else
+#define AELYS_NORETURN _Noreturn
+#endif
+
+/* a byte slice, may contain '\0' */
+typedef struct {
+    const char *ptr;
+    long long len;
+} AelysString;
+
+extern long long __aelys_user_main(void);
+
+/* non-static so the variant unit can bump the free counter through extern */
+long long __aelys_alloc_count = 0;
+long long __aelys_free_count = 0;
+
+/* raw libc malloc done by this unit, invisible to the managed counters above */
+long long __aelys_raw_alloc_count = 0;
+long long __aelys_raw_free_count = 0;
+
+/* only the rc+cycles unit ever assigns this; it stays NULL under rc and leak, so a
+   program calling __aelys_collect() still links and simply does nothing */
+void (*__aelys_collect_hook)(void) = 0;
+
+void __aelys_collect(void) {
+    if (__aelys_collect_hook) {
+        __aelys_collect_hook();
+    }
+}
+
+AELYS_NORETURN void __aelys_panic(const char *ptr, long long len);
+
+void __aelys_write(const char *ptr, long long len) {
+    fwrite(ptr, 1, (size_t)len, stdout);
+    fflush(stdout);
+}
+
+void __aelys_write_err(const char *ptr, long long len) {
+    fwrite(ptr, 1, (size_t)len, stderr);
+}
+
+/* the width walk must match __aelys_str_char_at or a loop bounded by this count runs past its last index */
+long long __aelys_str_char_count(const char *str_ptr, long long str_len) {
+    const unsigned char *data = (const unsigned char *)str_ptr;
+    long long chars = 0;
+    long long pos = 0;
+    while (pos < str_len) {
+        unsigned char byte = data[pos];
+        long long step = 1;
+        if ((byte & 0xE0) == 0xC0) {
+            step = 2;
+        } else if ((byte & 0xF0) == 0xE0) {
+            step = 3;
+        } else if ((byte & 0xF8) == 0xF0) {
+            step = 4;
+        }
+        pos += step;
+        chars++;
+    }
+    return chars;
+}
+
+/* the byte length is what `.len` reports, so the message must say both counts or the reader trusts the wrong one */
+static AELYS_NORETURN void __aelys_str_index_panic(const char *str_ptr,
+                                                   long long str_len,
+                                                   long long index) {
+    long long chars = __aelys_str_char_count(str_ptr, str_len);
+
+    char message[192];
+    int written = snprintf(message, sizeof message,
+                           "string index %lld out of bounds: the string has %lld character%s "
+                           "and %lld byte%s, and `.len` reports the byte count",
+                           index, chars, chars == 1 ? "" : "s", str_len,
+                           str_len == 1 ? "" : "s");
+    if (written < 0) {
+        __aelys_panic("string index out of bounds", 26);
+    }
+    if (written > (int)sizeof message - 1) {
+        written = (int)sizeof message - 1;
+    }
+    __aelys_panic(message, written);
+}
+
+/* strings cross the ABI as a flat (ptr, len) pair, not a struct, because 16-byte struct
+   passing does not agree between MSVC and LLVM on windows x64 */
+AelysString __aelys_str_char_at(const char *str_ptr, long long str_len,
+                                long long index) {
+    if (index < 0) {
+        __aelys_str_index_panic(str_ptr, str_len, index);
+    }
+
+    const unsigned char *data = (const unsigned char *)str_ptr;
+    long long byte_pos = 0;
+    long long char_index = 0;
+
+    while (byte_pos < str_len && char_index < index) {
+        unsigned char byte = data[byte_pos];
+
+        if ((byte & 0x80) == 0) {
+            byte_pos += 1;
+        } else if ((byte & 0xE0) == 0xC0) {
+            byte_pos += 2;
+        } else if ((byte & 0xF0) == 0xE0) {
+            byte_pos += 3;
+        } else if ((byte & 0xF8) == 0xF0) {
+            byte_pos += 4;
+        } else {
+            __aelys_panic("invalid UTF-8", 13);
+        }
+
+        char_index++;
+    }
+
+    if (char_index < index || byte_pos >= str_len) {
+        __aelys_str_index_panic(str_ptr, str_len, index);
+    }
+
+    unsigned char start_byte = data[byte_pos];
+    long long char_len = 1;
+
+    if ((start_byte & 0x80) == 0) {
+        char_len = 1;
+    } else if ((start_byte & 0xE0) == 0xC0) {
+        char_len = 2;
+    } else if ((start_byte & 0xF0) == 0xE0) {
+        char_len = 3;
+    } else if ((start_byte & 0xF8) == 0xF0) {
+        char_len = 4;
+    } else {
+        __aelys_panic("invalid UTF-8", 13);
+    }
+
+    if (byte_pos + char_len > str_len) {
+        __aelys_panic("invalid UTF-8", 13);
+    }
+
+    AelysString result;
+    result.ptr = str_ptr + byte_pos;
+    result.len = char_len;
+    return result;
+}
+
+/* the same width walk as __aelys_str_char_at, decoded to the scalar instead of aliasing bytes */
+unsigned int __aelys_str_char_at_scalar(const char *str_ptr, long long str_len,
+                                        long long index) {
+    AelysString one = __aelys_str_char_at(str_ptr, str_len, index);
+    const unsigned char *b = (const unsigned char *)one.ptr;
+
+    if (one.len == 1) {
+        return (unsigned int)b[0];
+    }
+    if (one.len == 2) {
+        return (unsigned int)(((b[0] & 0x1F) << 6) | (b[1] & 0x3F));
+    }
+    if (one.len == 3) {
+        return (unsigned int)(((b[0] & 0x0F) << 12) | ((b[1] & 0x3F) << 6) | (b[2] & 0x3F));
+    }
+    if (one.len == 4) {
+        return (unsigned int)(((b[0] & 0x07) << 18) | ((b[1] & 0x3F) << 12) |
+                              ((b[2] & 0x3F) << 6) | (b[3] & 0x3F));
+    }
+    __aelys_panic("invalid UTF-8", 13);
+}
+
+/* the width rides in the high 32 bits: a next-byte-offset there would cap a string at 4 gib */
+long long __aelys_str_decode_at(const char *str_ptr, long long str_len,
+                                long long byte_off) {
+    if (byte_off < 0 || byte_off >= str_len) {
+        __aelys_str_index_panic(str_ptr, str_len, byte_off);
+    }
+
+    const unsigned char *data = (const unsigned char *)str_ptr;
+    unsigned char start_byte = data[byte_off];
+    long long width;
+    unsigned int scalar;
+
+    if ((start_byte & 0x80) == 0) {
+        width = 1;
+        scalar = (unsigned int)start_byte;
+    } else if ((start_byte & 0xE0) == 0xC0) {
+        width = 2;
+        scalar = (unsigned int)(start_byte & 0x1F);
+    } else if ((start_byte & 0xF0) == 0xE0) {
+        width = 3;
+        scalar = (unsigned int)(start_byte & 0x0F);
+    } else if ((start_byte & 0xF8) == 0xF0) {
+        width = 4;
+        scalar = (unsigned int)(start_byte & 0x07);
+    } else {
+        __aelys_panic("invalid UTF-8", 13);
+    }
+
+    if (byte_off + width > str_len) {
+        __aelys_panic("invalid UTF-8", 13);
+    }
+
+    for (long long k = 1; k < width; k++) {
+        scalar = (scalar << 6) | (unsigned int)(data[byte_off + k] & 0x3F);
+    }
+
+    return (width << 32) | (long long)scalar;
+}
+
+long long __aelys_char_is_scalar(long long value) {
+    if (value < 0 || value > 0x10FFFF) {
+        return 0;
+    }
+    if (value >= 0xD800 && value <= 0xDFFF) {
+        return 0;
+    }
+    return 1;
+}
+
+unsigned int __aelys_char_from_i64(long long value) {
+    if (__aelys_char_is_scalar(value)) {
+        return (unsigned int)value;
+    }
+
+    char message[160];
+    int written = snprintf(message, sizeof message,
+                           "char::from_i64: %lld is not a unicode scalar value, "
+                           "the valid ranges are 0..=1114111 excluding 55296..=57343",
+                           value);
+    if (written < 0) {
+        __aelys_panic("char::from_i64: not a unicode scalar value", 42);
+    }
+    if (written > (int)sizeof message - 1) {
+        written = (int)sizeof message - 1;
+    }
+    __aelys_panic(message, written);
+}
+
+/* the caller sizes the buffer, 4 bytes is the widest utf-8 sequence there is */
+static long long aelys_encode_utf8(unsigned int cp, char *out) {
+    if (cp < 0x80) {
+        out[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        out[0] = (char)(0xC0 | (cp >> 6));
+        out[1] = (char)(0x80 | (cp & 0x3F));
+        return 2;
+    }
+    if (cp < 0x10000) {
+        out[0] = (char)(0xE0 | (cp >> 12));
+        out[1] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        out[2] = (char)(0x80 | (cp & 0x3F));
+        return 3;
+    }
+    out[0] = (char)(0xF0 | (cp >> 18));
+    out[1] = (char)(0x80 | ((cp >> 12) & 0x3F));
+    out[2] = (char)(0x80 | ((cp >> 6) & 0x3F));
+    out[3] = (char)(0x80 | (cp & 0x3F));
+    return 4;
+}
+
+/* this wrapper is the only place the alloc counter is bumped; free_count is bumped at
+   the rc_* call sites, so the internal immix entry points must never touch either */
+void *__aelys_alloc(long long size) {
+    void *p = aelys_immix_alloc(size);
+    if (!p && size > 0) {
+        __aelys_panic("out of memory", 13);
+    }
+    __aelys_alloc_count++;
+    return p;
+}
+
+void __aelys_free(void *ptr) {
+    aelys_immix_free(ptr);
+}
+
+void *__aelys_realloc(void *ptr, long long size) {
+    void *p = aelys_immix_realloc(ptr, size);
+    if (!p && size > 0) {
+        __aelys_panic("out of memory", 13);
+    }
+    return p;
+}
+
+/* a NULL buffer counts as uniquely owned, so an empty vec pushes into a fresh buffer
+   instead of dereferencing NULL-16 */
+unsigned __aelys_rc_refcount(void *ptr) {
+    if (!ptr) {
+        return 1;
+    }
+    return *(uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
+}
+
+/* the buffer gets NO_TRACE and an inert type_id 0: without the flag the collector would
+   read its primitive elements as rc child pointers, since a real type also owns id 0 */
+void *__aelys_vec_new(long long elem_size, long long cap) {
+    long long bytes = AELYS_RC_HEADER_SIZE + (cap > 0 ? elem_size * cap : 0);
+    char *base = (char *)__aelys_alloc(bytes > 0 ? bytes : AELYS_RC_HEADER_SIZE);
+    *(uint32_t *)(base + 0) = 1u;
+    *(uint8_t *)(base + 4) = AELYS_FLAG_NO_TRACE;
+    *(uint8_t *)(base + 5) = 0u;
+    *(uint8_t *)(base + 6) = 0u;
+    *(uint8_t *)(base + 7) = 0u;
+    *(uint32_t *)(base + 8) = 0u;
+    *(uint32_t *)(base + 12) = 0u;
+    return base + AELYS_RC_HEADER_SIZE;
+}
+
+/* only valid once the caller has proven refcount==1: growing a shared buffer would move
+   it under the other owner's feet */
+void *__aelys_vec_grow(void *ptr, long long elem_size, long long new_cap) {
+    char *base = (char *)ptr - AELYS_RC_HEADER_SIZE;
+    long long bytes = AELYS_RC_HEADER_SIZE + elem_size * new_cap;
+    char *nbase = (char *)__aelys_realloc(base, bytes);
+    return nbase + AELYS_RC_HEADER_SIZE;
+}
+
+/* must mirror AirType::Vec's llvm struct in codegen/src/infra/types.rs */
+typedef struct {
+    void *ptr;
+    long long len;
+    long long cap;
+} AelysVec;
+
+typedef struct {
+    void *ptr;
+    long long len;
+} AelysMutSlice;
+
+AelysMutSlice __aelys_vec_try_as_unique_mut_slice(void *vecptr, long long elem_size) {
+    (void)elem_size;
+    AelysMutSlice out = {NULL, 0};
+    if (!vecptr) {
+        return out;
+    }
+    AelysVec *v = (AelysVec *)vecptr;
+    if (__aelys_rc_refcount(v->ptr) == 1) {
+        out.ptr = v->ptr;
+        out.len = v->len;
+    }
+    return out;
+}
+
+void __aelys_vec_init(void *vecptr, long long elem_size, long long count) {
+    AelysVec *v = (AelysVec *)vecptr;
+    v->ptr = __aelys_vec_new(elem_size, count);
+    v->len = count;
+    v->cap = count;
+}
+
+extern void __aelys_rc_retain(void *ptr);
+extern void __aelys_rc_release(void *ptr);
+
+void __aelys_vec_retain(void *vecptr) {
+    __aelys_rc_retain(((AelysVec *)vecptr)->ptr);
+}
+
+void __aelys_vec_release(void *vecptr) {
+    __aelys_rc_release(((AelysVec *)vecptr)->ptr);
+}
+
+/* the inline string retain lands here, so this one alone pays for the tombstone */
+void __aelys_rc_retain_checked(void *ptr) {
+    if (ptr == NULL) {
+        return;
+    }
+    if (aelys_immix_is_dead((char *)ptr - AELYS_RC_HEADER_SIZE)) {
+        __aelys_panic(AELYS_RC_RETAIN_FREED_MSG, (long long)(sizeof(AELYS_RC_RETAIN_FREED_MSG) - 1));
+    }
+    uint32_t *count = (uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
+    if (*count == AELYS_RC_DEAD) {
+        __aelys_panic(AELYS_RC_RETAIN_FREED_MSG, (long long)(sizeof(AELYS_RC_RETAIN_FREED_MSG) - 1));
+    }
+    /* one below dead saturates, or the next count would read as freed */
+    if (*count == AELYS_RC_DEAD - 1u) {
+        *count = UINT32_MAX;
+        return;
+    }
+    __aelys_rc_retain(ptr);
+}
+
+/* the argument is the address of the {ptr,len} slot, never the bytes the program holds */
+void __aelys_str_retain(void *strptr) {
+    __aelys_rc_retain_checked((void *)((AelysString *)strptr)->ptr);
+}
+
+void __aelys_str_release(void *strptr) {
+    __aelys_rc_release((void *)((AelysString *)strptr)->ptr);
+}
+
+/* make the buffer uniquely owned before any write. rc-bearing elements are rejected at the
+   push site, so a string is the only element that needs its own retain in the copy.
+   `extra` is headroom the caller needs beyond len, so push keeps its one-allocation shape */
+typedef void (*AelysElemGlue)(void *elem);
+
+static void vec_detach(void *vecptr, long long elem_size, long long extra, int strings,
+                       AelysElemGlue dup) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (__aelys_rc_refcount(v->ptr) <= 1) {
+        return;
+    }
+
+    long long want = v->len + extra;
+    long long newcap = v->cap > want ? v->cap : want;
+    void *newbuf = __aelys_vec_new(elem_size, newcap);
+    if (v->len > 0) {
+        memcpy(newbuf, v->ptr, (size_t)(v->len * elem_size));
+    }
+    /* both buffers now hold every string, and each buffer releases its own when it dies */
+    if (strings) {
+        for (long long i = 0; i < v->len; i++) {
+            __aelys_str_retain((AelysString *)newbuf + i);
+        }
+    } else if (dup != NULL) {
+        for (long long i = 0; i < v->len; i++) {
+            dup((char *)newbuf + i * elem_size);
+        }
+    }
+    __aelys_rc_release(v->ptr); /* drop our share, the aliased vec is untouched */
+    v->ptr = newbuf;
+    v->cap = newcap;
+}
+
+void __aelys_vec_detach(void *vecptr, long long elem_size, long long extra) {
+    vec_detach(vecptr, elem_size, extra, 0, NULL);
+}
+
+void __aelys_vec_detach_str(void *vecptr, long long elem_size, long long extra) {
+    vec_detach(vecptr, elem_size, extra, 1, NULL);
+}
+
+/* a carrier element counts its own strings through the glue its type was given */
+void __aelys_vec_detach_glue(void *vecptr, long long elem_size, long long extra, void *dup) {
+    vec_detach(vecptr, elem_size, extra, 0, (AelysElemGlue)dup);
+}
+
+/* the strings belong to the buffer, so only the share that frees it lets them go */
+void __aelys_vec_release_str(void *vecptr) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->ptr != NULL && __aelys_rc_refcount(v->ptr) == 1) {
+        for (long long i = 0; i < v->len; i++) {
+            __aelys_str_release((AelysString *)v->ptr + i);
+        }
+    }
+    __aelys_rc_release(v->ptr);
+}
+
+void __aelys_vec_release_glue(void *vecptr, long long elem_size, void *drop) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->ptr != NULL && drop != NULL && __aelys_rc_refcount(v->ptr) == 1) {
+        for (long long i = 0; i < v->len; i++) {
+            ((AelysElemGlue)drop)((char *)v->ptr + i * elem_size);
+        }
+    }
+    __aelys_rc_release(v->ptr);
+}
+
+/* copy-on-write push: a shared buffer is copied before it is touched, so the other owner
+   keeps value semantics. detaching with extra==1 leaves cap > len, so the grow branch
+   below is provably dead on that path and the original `else if` short-circuit survives */
+static void vec_push(void *vecptr, void *elemptr, long long elem_size, int strings,
+                     AelysElemGlue dup) {
+    AelysVec *v = (AelysVec *)vecptr;
+    vec_detach(vecptr, elem_size, 1, strings, dup);
+
+    if (v->len == v->cap) {
+        long long newcap = v->cap > 0 ? v->cap * 2 : 1;
+        v->ptr = __aelys_vec_grow(v->ptr, elem_size, newcap);
+        v->cap = newcap;
+    }
+
+    memcpy((char *)v->ptr + v->len * elem_size, elemptr, (size_t)elem_size);
+    v->len += 1;
+}
+
+void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
+    vec_push(vecptr, elemptr, elem_size, 0, NULL);
+}
+
+void __aelys_vec_push_str(void *vecptr, void *elemptr, long long elem_size) {
+    vec_push(vecptr, elemptr, elem_size, 1, NULL);
+}
+
+void __aelys_vec_push_glue(void *vecptr, void *elemptr, long long elem_size, void *dup) {
+    vec_push(vecptr, elemptr, elem_size, 0, (AelysElemGlue)dup);
+}
+
+/* the length must match the 21-byte literal */
+static void vec_pop(void *vecptr, void *outptr, long long elem_size, int strings,
+                    AelysElemGlue dup) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->len == 0) {
+        __aelys_panic("pop from an empty Vec", 21);
+    }
+    vec_detach(vecptr, elem_size, 0, strings, dup);
+    v->len -= 1;
+    memcpy(outptr, (char *)v->ptr + v->len * elem_size, (size_t)elem_size);
+}
+
+void __aelys_vec_pop(void *vecptr, void *outptr, long long elem_size) {
+    vec_pop(vecptr, outptr, elem_size, 0, NULL);
+}
+
+void __aelys_vec_pop_str(void *vecptr, void *outptr, long long elem_size) {
+    vec_pop(vecptr, outptr, elem_size, 1, NULL);
+}
+
+void __aelys_vec_pop_glue(void *vecptr, void *outptr, long long elem_size, void *dup) {
+    vec_pop(vecptr, outptr, elem_size, 0, (AelysElemGlue)dup);
+}
+
+/* arc is reserved, not implemented; the length must match the 19-byte literal */
+void __aelys_arc_retain(void *ptr) {
+    (void)ptr;
+    __aelys_panic("arc not implemented", 19);
+}
+
+void __aelys_arc_release(void *ptr) {
+    (void)ptr;
+    __aelys_panic("arc not implemented", 19);
+}
+
+AELYS_NORETURN void __aelys_panic(const char *ptr, long long len) {
+    fwrite(ptr, 1, (size_t)len, stderr);
+    fputc('\n', stderr);
+    fflush(stderr);
+    abort();
+}
+
+AELYS_NORETURN void __aelys_exit(int code) {
+    exit(code);
+}
+
+
+/* string bytes are never child pointers, so the collector must not trace them */
+/* __aelys_alloc panics rather than returning NULL, so only the zero case needs a floor */
+static char *aelys_str_alloc(long long bytes) {
+    char *base = (char *)__aelys_alloc(AELYS_RC_HEADER_SIZE + (bytes > 0 ? bytes : 1));
+    *(uint32_t *)(base + 0) = 1u;
+    *(uint8_t *)(base + 4) = AELYS_FLAG_NO_TRACE;
+    *(uint8_t *)(base + 5) = 0u;
+    *(uint8_t *)(base + 6) = 0u;
+    *(uint8_t *)(base + 7) = 0u;
+    *(uint32_t *)(base + 8) = 0u;
+    *(uint32_t *)(base + 12) = 0u;
+    return base + AELYS_RC_HEADER_SIZE;
+}
+
+/* the fields must land on the rc header offsets, so flags is its own byte and not a slice of a u32 */
+typedef struct {
+    _Alignas(AELYS_RC_HEADER_SIZE) uint32_t refcount;
+    uint8_t flags;
+    uint8_t pad0[3];
+    uint32_t type_id;
+    uint32_t pad1;
+    char data[8];
+} AelysStaticStr;
+
+_Static_assert(_Alignof(AelysStaticStr) == AELYS_RC_HEADER_SIZE,
+               "a static string must sit on a header boundary, and its natural alignment is 4");
+
+/* the codegen never emits these, so they carry the pinned count themselves or a release faults */
+static const AelysStaticStr aelys_str_true = {UINT32_MAX, AELYS_FLAG_NO_TRACE, {0, 0, 0}, 0, 0, "true"};
+static const AelysStaticStr aelys_str_false = {UINT32_MAX, AELYS_FLAG_NO_TRACE, {0, 0, 0}, 0, 0, "false"};
+
+/* codegen sizes the caller's stack slot from these, keep both sides in step */
+#define AELYS_I64_STR_BUF 21
+#define AELYS_F64_STR_BUF 64
+#define AELYS_CHAR_STR_BUF 4
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_i64(long long value) {
+    char *buffer = aelys_str_alloc(AELYS_I64_STR_BUF);
+
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%lld", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_i64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* buffer is the caller's frame and must hold AELYS_I64_STR_BUF bytes; nothing here allocates */
+AelysString __aelys_to_string_i64_into(char *buffer, long long value) {
+    int len = snprintf(buffer, AELYS_I64_STR_BUF, "%lld", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_i64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_f64(double value) {
+    char *buffer = aelys_str_alloc(AELYS_F64_STR_BUF);
+
+    int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_f64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* buffer is the caller's frame and must hold AELYS_F64_STR_BUF bytes; nothing here allocates */
+AelysString __aelys_to_string_f64_into(char *buffer, double value) {
+    int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
+    if (len < 0) {
+        __aelys_panic("snprintf failed in to_string_f64", 33);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)len;
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_bool(long long value) {
+    if (value) {
+        AelysString result;
+        result.ptr = aelys_str_true.data;
+        result.len = 4;
+        return result;
+    } else {
+        AelysString result;
+        result.ptr = aelys_str_false.data;
+        result.len = 5;
+        return result;
+    }
+}
+
+AelysString __aelys_str_from_char(unsigned int cp) {
+    char *buffer = aelys_str_alloc(AELYS_CHAR_STR_BUF);
+    long long len = aelys_encode_utf8(cp, buffer);
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = len;
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_to_string_char(unsigned int cp) {
+    char *buffer = aelys_str_alloc(AELYS_CHAR_STR_BUF);
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = aelys_encode_utf8(cp, buffer);
+    return result;
+}
+
+/* buffer is the caller's frame and must hold AELYS_CHAR_STR_BUF bytes; nothing here allocates */
+AelysString __aelys_to_string_char_into(char *buffer, unsigned int cp) {
+    AelysString result;
+    result.ptr = buffer;
+    result.len = aelys_encode_utf8(cp, buffer);
+    return result;
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+AelysString __aelys_str_concat(const char *a_ptr, long long a_len,
+                               const char *b_ptr, long long b_len) {
+    long long total = a_len + b_len;
+    char *buffer = aelys_str_alloc(total);
+    if (a_len > 0) {
+        memcpy(buffer, a_ptr, (size_t)a_len);
+    }
+    if (b_len > 0) {
+        memcpy(buffer + a_len, b_ptr, (size_t)b_len);
+    }
+
+    AelysString result;
+    result.ptr = buffer;
+    result.len = total;
+    return result;
+}
+
+/* the range comes from a string that is already valid utf-8, so only the two ends need a test and validity holds by induction */
+AelysString __aelys_str_substring_bytes(const char *s_ptr, long long s_len,
+                                        long long lo, long long hi) {
+    char message[224];
+    int written;
+
+    if (lo < 0 || hi < lo || hi > s_len) {
+        written = snprintf(message, sizeof message,
+                           "string::substring_bytes: the byte range %lld..%lld is not inside "
+                           "a string of %lld byte%s",
+                           lo, hi, s_len, s_len == 1 ? "" : "s");
+        if (written < 0) {
+            __aelys_panic("string::substring_bytes: byte range out of bounds", 49);
+        }
+        if (written > (int)sizeof message - 1) {
+            written = (int)sizeof message - 1;
+        }
+        __aelys_panic(message, written);
+    }
+
+    const unsigned char *data = (const unsigned char *)s_ptr;
+    long long cut = -1;
+    if (lo < s_len && (data[lo] & 0xC0) == 0x80) {
+        cut = lo;
+    } else if (hi < s_len && (data[hi] & 0xC0) == 0x80) {
+        cut = hi;
+    }
+    if (cut >= 0) {
+        written = snprintf(message, sizeof message,
+                           "string::substring_bytes: byte %lld is not a character boundary; "
+                           "it holds 0x%02x, a utf-8 continuation byte, so the range %lld..%lld "
+                           "would cut a character in half",
+                           cut, (unsigned)data[cut], lo, hi);
+        if (written < 0) {
+            __aelys_panic("string::substring_bytes: byte range splits a character", 53);
+        }
+        if (written > (int)sizeof message - 1) {
+            written = (int)sizeof message - 1;
+        }
+        __aelys_panic(message, written);
+    }
+
+    /* concat already allocates a_len + b_len and copies both operands, and it floors a zero total at one byte */
+    return __aelys_str_concat(s_ptr + lo, hi - lo, "", 0);
+}
+
+/* TODO BOOTSTRAP ONLY ! move to std.string when ready */
+long long __aelys_str_eq(const char *a_ptr, long long a_len,
+                         const char *b_ptr, long long b_len) {
+    if (a_len != b_len) {
+        return 0;
+    }
+
+    if (a_len == 0) {
+        return 1;
+    }
+
+    return (memcmp(a_ptr, b_ptr, (size_t)a_len) == 0) ? 1 : 0;
+}
+
+int main(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+
+    long long ret = __aelys_user_main();
+    int code = (int)(ret & 0xFF);
+    /* collect before printing the stats so the collector's frees are counted */
+    __aelys_collect();
+    if (getenv("AELYS_RC_STATS")) {
+        fprintf(stderr, "[rc] allocs=%lld frees=%lld\n", __aelys_alloc_count,
+                __aelys_free_count);
+        fprintf(stderr, "[raw] allocs=%lld frees=%lld\n", __aelys_raw_alloc_count,
+                __aelys_raw_free_count);
+    }
+    return code;
+}
