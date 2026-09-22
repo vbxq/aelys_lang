@@ -16,6 +16,7 @@ impl<'a> LoweringContext<'a> {
         let start_span = Some(self.span(&start.span));
         let iter_ty = self.lower_type_from_infer(&start.ty);
 
+        let before = self.str_temp_ids();
         // evaluate range bounds before allocating the iterator local so that
         let start_op = self.lower_expr(start);
         let end_op = self.lower_expr(end);
@@ -69,6 +70,8 @@ impl<'a> LoweringContext<'a> {
         let incr_id = self.alloc_block_id();
         let exit_id = self.alloc_block_id();
 
+        self.release_arm_str_temps(&before);
+        let dominated = self.str_temps_posed_here();
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
@@ -190,6 +193,7 @@ impl<'a> LoweringContext<'a> {
             header: incr_id,
             exit: exit_id,
             body_scope_depth: self.locals_by_name.len(),
+            str_temps_at_entry: self.str_temp_ids(),
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
@@ -213,6 +217,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        self.restamp_str_temps(&dominated);
         // iterator locals are never rc today, this just keeps the registry honest
         self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
@@ -226,16 +231,40 @@ impl<'a> LoweringContext<'a> {
         body: &TypedStmt,
         sp: Option<Span>,
     ) {
-        let collection = self.lower_expr(iterable);
+        let before = self.str_temp_ids();
+        let mut collection = self.lower_expr(iterable);
         let col_ty = self.lower_type_from_infer(&iterable.ty);
-        let col_local = self.alloc_temp(col_ty.clone());
-        self.emit(
-            AirStmtKind::Assign {
-                place: Place::Local(col_local),
-                rvalue: Rvalue::Use(collection),
-            },
-            sp,
-        );
+        let mut owned_col = None;
+        // a stable binding cannot be written by the body, so the loop reads it in place
+        let stable_binding = match &collection {
+            Operand::Copy(id) | Operand::Move(id) if self.counted_air(&col_ty) => {
+                self.str_binding_is_stable(*id).then_some(*id)
+            }
+            Operand::Copy(_) | Operand::Move(_) | Operand::Const(_) => None,
+        };
+        let col_local = match stable_binding {
+            Some(id) => id,
+            None => {
+                let str_init = self
+                    .counted_air(&col_ty)
+                    .then(|| self.claim_str_init(&mut collection));
+                let col_local = self.alloc_temp(col_ty.clone());
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(col_local),
+                        rvalue: Rvalue::Use(collection),
+                    },
+                    sp,
+                );
+                if let Some(kind) = str_init {
+                    if !matches!(kind, super::StrInit::Own) {
+                        self.emit_str_retain(col_local, sp);
+                    }
+                    owned_col = Some(col_local);
+                }
+                col_local
+            }
+        };
 
         let idx_local = self.alloc_temp_mut(AirType::I64);
         self.emit(
@@ -286,15 +315,23 @@ impl<'a> LoweringContext<'a> {
 
         // save scope so the iterator variable doesn't leak after the loop.
         let scope_depth = self.locals_by_name.len();
+        if let Some(col) = owned_col {
+            self.str_locals.push((col, scope_depth + 1));
+        }
 
         let elem_air_ty = self.lower_type_from_infer(elem_type);
         let elem_local = self.alloc_named_local(iterator, elem_air_ty.clone(), false, sp);
+        let borrows_collection = owned_col.is_some() || stable_binding.is_some();
+        let elem_owned =
+            self.counted_air(&elem_air_ty) && col_ty != AirType::Str && !borrows_collection;
 
         let header_id = self.alloc_block_id();
         let body_id = self.alloc_block_id();
         let incr_id = self.alloc_block_id();
         let exit_id = self.alloc_block_id();
 
+        self.release_arm_str_temps(&before);
+        let dominated = self.str_temps_posed_here();
         self.seal_block(AirTerminator::Goto(header_id));
         self.fixup_block_id_noop(header_id);
 
@@ -361,17 +398,34 @@ impl<'a> LoweringContext<'a> {
             },
             None,
         );
+        if elem_owned {
+            self.emit_str_retain(elem_local, None);
+            self.str_locals.push((elem_local, scope_depth + 1));
+        }
 
+        // the element is rebound every turn, so continue and break must release it like a body local
+        let body_scope_depth = if elem_owned {
+            scope_depth
+        } else {
+            self.locals_by_name.len()
+        };
         self.loop_stack.push(super::LoopBlocks {
             header: incr_id,
             exit: exit_id,
-            body_scope_depth: self.locals_by_name.len(),
+            body_scope_depth,
+            str_temps_at_entry: self.str_temp_ids(),
         });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {
+            if elem_owned {
+                self.emit_str_release(elem_local, None);
+            }
             self.seal_block(AirTerminator::Goto(incr_id));
         }
         self.loop_stack.pop();
+        if elem_owned {
+            self.forget_str_local(elem_local);
+        }
 
         self.fixup_block_id_noop(incr_id);
         if let (Some(cursor), Some(width)) = (byte_local, width_local) {
@@ -401,6 +455,7 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(exit_id);
+        self.restamp_str_temps(&dominated);
         self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
     }

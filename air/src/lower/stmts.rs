@@ -1,6 +1,6 @@
 use super::{LoweringContext, StrInit};
 use crate::*;
-use aelys_sema::{InferType, TypedExprKind, TypedStmt, TypedStmtKind};
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedStmt, TypedStmtKind};
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_body(&mut self, stmts: &[TypedStmt], scope_span: aelys_syntax::Span) {
@@ -56,23 +56,160 @@ impl<'a> LoweringContext<'a> {
         self.emit_cow_buffer_call("__aelys_vec_release", local, sp);
     }
 
-    fn emit_str_slot_call(&mut self, fn_name: &str, local: LocalId, sp: Option<Span>) {
-        let addr = self.addr_of_own_temp(local, &AirType::Str, sp);
+    fn emit_str_slot_call(&mut self, retain: bool, local: LocalId, sp: Option<Span>) {
+        let ty = self.counted_local_type(local);
+        let addr = self.addr_of_own_temp(local, &ty, sp);
         self.emit(
             AirStmtKind::CallVoid {
-                func: Callee::Named(fn_name.to_string()),
+                func: Callee::Named(crate::counts::count_callee(&ty, retain).to_string()),
                 args: vec![addr],
             },
             sp,
         );
     }
 
+    // the slot keeps its own type: the resolution after mono decides what the count becomes
+    fn counted_local_type(&self, local: LocalId) -> AirType {
+        self.local_air_type(local).unwrap_or(AirType::Str)
+    }
+
+    pub(super) fn counted_operand_type(&self, val: &Operand) -> AirType {
+        match val {
+            Operand::Copy(id) | Operand::Move(id) => self.counted_local_type(*id),
+            Operand::Const(_) => AirType::Str,
+        }
+    }
+
     pub(super) fn emit_str_retain(&mut self, local: LocalId, sp: Option<Span>) {
-        self.emit_str_slot_call("__aelys_str_retain", local, sp);
+        self.emit_str_slot_call(true, local, sp);
     }
 
     pub(super) fn emit_str_release(&mut self, local: LocalId, sp: Option<Span>) {
-        self.emit_str_slot_call("__aelys_str_release", local, sp);
+        self.emit_str_slot_call(false, local, sp);
+    }
+
+    pub(super) fn emit_posed_release(&mut self, local: LocalId, sp: Option<Span>) {
+        if matches!(self.local_air_type(local), Some(AirType::Vec(_))) {
+            self.emit_cow_release(local, sp);
+        } else {
+            self.emit_str_release(local, sp);
+        }
+    }
+
+    pub(super) fn pose_vec_call_result(&mut self, result: &Operand) {
+        if let Operand::Copy(id) | Operand::Move(id) = result
+            && matches!(self.local_air_type(*id), Some(AirType::Vec(_)))
+            && !self.last_block_is_terminated()
+        {
+            self.stmt_str_temps.push((*id, self.current_blocks.len()));
+        }
+    }
+
+    pub(super) fn claim_str_init(&mut self, val: &mut Operand) -> StrInit {
+        if let Operand::Copy(id) | Operand::Move(id) = *val
+            && let Some(at) = self.stmt_str_temps.iter().position(|(l, _)| *l == id)
+        {
+            self.stmt_str_temps.remove(at);
+            *val = Operand::Move(id);
+            return StrInit::Own;
+        }
+        self.str_init_kind(val)
+    }
+
+    pub(super) fn retained_str_copy(&mut self, val: Operand, sp: Option<Span>) -> Operand {
+        let copy = self.alloc_temp(self.counted_operand_type(&val));
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(copy),
+                rvalue: Rvalue::Use(val),
+            },
+            sp,
+        );
+        self.emit_str_retain(copy, sp);
+        Operand::Copy(copy)
+    }
+
+    pub(super) fn own_for_store(&mut self, mut val: Operand, sp: Option<Span>) -> Operand {
+        if matches!(self.claim_str_init(&mut val), StrInit::Own) {
+            return val;
+        }
+        self.retained_str_copy(val, sp)
+    }
+
+    pub(super) fn own_str_for_store(
+        &mut self,
+        val: Operand,
+        ty: &InferType,
+        sp: Option<Span>,
+    ) -> Operand {
+        if self.counted(ty) {
+            self.own_for_store(val, sp)
+        } else {
+            val
+        }
+    }
+
+    pub(super) fn claim_owned_str_temp(&mut self, val: &Operand) -> bool {
+        let (Operand::Copy(id) | Operand::Move(id)) = val else {
+            return false;
+        };
+        let Some(at) = self.stmt_str_temps.iter().position(|(l, _)| l == id) else {
+            return false;
+        };
+        self.stmt_str_temps.remove(at);
+        true
+    }
+
+    pub(super) fn str_temps_posed_here(&self) -> Vec<LocalId> {
+        let now = self.current_blocks.len();
+        self.stmt_str_temps
+            .iter()
+            .filter(|(_, sealed)| *sealed == now)
+            .map(|(id, _)| *id)
+            .collect()
+    }
+
+    // capture right before sealing the branch, or the merge is not dominated by what was posed
+    pub(super) fn restamp_str_temps(&mut self, dominated: &[LocalId]) {
+        let now = self.current_blocks.len();
+        for (id, sealed) in self.stmt_str_temps.iter_mut() {
+            if dominated.contains(id) {
+                *sealed = now;
+            }
+        }
+    }
+
+    pub(super) fn str_temp_ids(&self) -> Vec<LocalId> {
+        self.stmt_str_temps.iter().map(|(id, _)| *id).collect()
+    }
+
+    pub(super) fn release_arm_str_temps(&mut self, before: &[LocalId]) {
+        let now = self.current_blocks.len();
+        let reachable = !self.last_block_is_terminated();
+        let arm: Vec<(LocalId, usize)> = self
+            .stmt_str_temps
+            .iter()
+            .filter(|(id, _)| !before.contains(id))
+            .copied()
+            .collect();
+        for (id, sealed) in &arm {
+            if reachable && *sealed == now {
+                self.emit_posed_release(*id, None);
+            }
+        }
+        self.stmt_str_temps.retain(|(id, _)| before.contains(id));
+    }
+
+    fn release_posed_str_temps(&mut self, keep: &[LocalId]) {
+        let posed: Vec<LocalId> = self
+            .stmt_str_temps
+            .iter()
+            .map(|(id, _)| *id)
+            .filter(|id| !keep.contains(id))
+            .collect();
+        for id in posed {
+            self.emit_posed_release(id, None);
+        }
     }
 
     pub(super) fn str_init_kind(&self, val: &Operand) -> StrInit {
@@ -84,12 +221,26 @@ impl<'a> LoweringContext<'a> {
         {
             return StrInit::Share;
         }
-        // a library producer (trim, substring, repeat, join, from_int) hands back fresh bytes, so this leaks
         StrInit::Borrow
     }
 
     pub(super) fn str_local_is_owned(&self, id: LocalId) -> bool {
         self.str_locals.iter().any(|(local, _)| *local == id)
+    }
+
+    pub(super) fn local_is_named(&self, id: LocalId) -> bool {
+        self.current_locals
+            .iter()
+            .any(|l| l.id == id && l.name.is_some())
+    }
+
+    pub(super) fn str_binding_is_stable(&self, id: LocalId) -> bool {
+        !self.capture_slots.contains_key(&id)
+            && !self.stmt_str_temps.iter().any(|(l, _)| *l == id)
+            && self
+                .current_locals
+                .iter()
+                .any(|l| l.id == id && l.name.is_some() && !l.is_mut)
     }
 
     pub(super) fn forget_str_local(&mut self, id: LocalId) {
@@ -100,6 +251,9 @@ impl<'a> LoweringContext<'a> {
         let (Operand::Copy(id) | Operand::Move(id)) = val else {
             return false;
         };
+        if self.fresh_str_results.contains(id) {
+            return true;
+        }
         let Some(last) = self.current_stmts.last() else {
             return false;
         };
@@ -110,15 +264,28 @@ impl<'a> LoweringContext<'a> {
         else {
             return false;
         };
-        if def != id || self.local_air_type(*id) != Some(AirType::Str) {
+        if def != id
+            || !self
+                .local_air_type(*id)
+                .is_some_and(|ty| self.counted_air(&ty))
+        {
             return false;
         }
         match rvalue {
             Rvalue::Call {
                 func: Callee::Named(name),
                 ..
-            } => crate::symbols::STRING_PRODUCER_SYMBOLS.contains(&name.as_str()),
+            } => {
+                crate::symbols::STRING_PRODUCER_SYMBOLS.contains(&name.as_str())
+                    || self.fresh_returns.contains(name)
+            }
+            Rvalue::Call {
+                func: Callee::FnPtr(_),
+                ..
+            } => true,
             Rvalue::BinaryOp(BinOp::Add, _, _) => true,
+            // a literal took a share for every leaf as it was built
+            Rvalue::StructInit { .. } | Rvalue::EnumInit { .. } => true,
             _ => false,
         }
     }
@@ -326,9 +493,52 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals.retain(|(_, d)| *d != 0);
     }
 
+    pub(super) fn emit_param_str_releases_on_fallthrough(&mut self) {
+        if !self.str_locals.iter().any(|(_, d)| *d == 0) {
+            return;
+        }
+        if !self.last_block_is_terminated() {
+            let to_release: Vec<LocalId> = self
+                .str_locals
+                .iter()
+                .filter(|(_, d)| *d == 0)
+                .map(|(id, _)| *id)
+                .collect();
+            for id in to_release {
+                self.emit_str_release(id, None);
+            }
+        }
+        self.str_locals.retain(|(_, d)| *d != 0);
+    }
+
     pub(super) fn rc_live_below(&self, threshold: usize) -> bool {
         self.rc_locals.iter().any(|(_, d)| *d > threshold)
             || self.carrier_locals.iter().any(|c| c.depth > threshold)
+    }
+
+    // a local kept open past its block may never have run on this path, so it stays for the scope end
+    fn emit_cow_releases_below(&mut self, threshold: usize) {
+        let below: Vec<LocalId> = self
+            .cow_locals
+            .iter()
+            .filter(|(id, d)| *d > threshold && !self.cow_zombies.contains(id))
+            .map(|(id, _)| *id)
+            .collect();
+        for id in below {
+            self.emit_cow_release(id, None);
+        }
+    }
+
+    fn emit_str_releases_below(&mut self, threshold: usize) {
+        let below: Vec<LocalId> = self
+            .str_locals
+            .iter()
+            .filter(|(_, d)| *d > threshold)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in below {
+            self.emit_str_release(id, None);
+        }
     }
 
     pub(super) fn affine_live_below(&self, threshold: usize) -> bool {
@@ -479,6 +689,21 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn lower_stmt(&mut self, stmt: &TypedStmt) {
+        let mark = self.stmt_str_temps.len();
+        self.lower_stmt_kind(stmt);
+        let pending: Vec<(LocalId, usize)> = self.stmt_str_temps.drain(mark..).collect();
+        if self.last_block_is_terminated() {
+            return;
+        }
+        for (id, sealed) in pending {
+            // a block sealed since the value was made may skip it on some path, leaving the slot unset
+            if sealed == self.current_blocks.len() {
+                self.emit_posed_release(id, None);
+            }
+        }
+    }
+
+    fn lower_stmt_kind(&mut self, stmt: &TypedStmt) {
         let sp = Some(self.span(&stmt.span));
         match &stmt.kind {
             TypedStmtKind::Expression(expr) => {
@@ -492,6 +717,7 @@ impl<'a> LoweringContext<'a> {
                 ..
             } => {
                 let ty = self.lower_type_from_infer(var_type);
+                let air_ty = ty.clone();
                 let declared_len = match &ty {
                     AirType::Array(_, n) => Some(*n),
                     _ => None,
@@ -499,8 +725,8 @@ impl<'a> LoweringContext<'a> {
                 if let Some(declared_len) = declared_len {
                     match &initializer.kind {
                         TypedExprKind::ArrayLiteral { elements, .. } => {
-                            let elem_ops: Vec<Operand> =
-                                elements.iter().map(|e| self.lower_expr(e)).collect();
+                            let refs: Vec<&TypedExpr> = elements.iter().collect();
+                            let elem_ops = self.lower_pinned_operands_owning(&refs, true, sp);
                             let local = self.alloc_named_local(name, ty, true, sp);
                             for (i, elem_op) in elem_ops.into_iter().enumerate() {
                                 self.emit(
@@ -514,6 +740,10 @@ impl<'a> LoweringContext<'a> {
                                     sp,
                                 );
                             }
+                            if self.counted_air(&air_ty) {
+                                let depth = self.locals_by_name.len();
+                                self.str_locals.push((local, depth));
+                            }
                             return;
                         }
                         TypedExprKind::ArraySized { fill_value, .. } => {
@@ -525,7 +755,12 @@ impl<'a> LoweringContext<'a> {
                             };
                             self.check_stack_array_size(&elem_air_ty, n);
                             let fill_op = if let Some(fv) = fill_value {
-                                self.lower_expr(fv)
+                                let op = self.lower_expr(fv);
+                                if n > 0 {
+                                    self.own_str_for_store(op, &fv.ty, sp)
+                                } else {
+                                    op
+                                }
                             } else {
                                 let elem_ty = match var_type {
                                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
@@ -535,6 +770,9 @@ impl<'a> LoweringContext<'a> {
                             };
                             let local = self.alloc_named_local(name, ty, true, sp);
                             for i in 0..n {
+                                if i > 0 {
+                                    self.retain_str_fill(&fill_op, sp);
+                                }
                                 self.emit(
                                     AirStmtKind::Assign {
                                         place: Place::Index(
@@ -546,15 +784,24 @@ impl<'a> LoweringContext<'a> {
                                     sp,
                                 );
                             }
+                            if self.counted_air(&air_ty) {
+                                let depth = self.locals_by_name.len();
+                                self.str_locals.push((local, depth));
+                            }
                             return;
                         }
                         _ => {}
                     }
                 }
-                let operand = self.lower_expr(initializer);
-                let str_init =
-                    matches!(var_type, InferType::String).then(|| self.str_init_kind(&operand));
+                let mut operand = self.lower_expr(initializer);
+                let str_init = self
+                    .counted(var_type)
+                    .then(|| self.claim_str_init(&mut operand));
+                let from_param = matches!(&operand, Operand::Copy(id) | Operand::Move(id)
+                    if self.str_param_borrows.contains(id));
 
+                let vec_claimed =
+                    matches!(var_type, InferType::Vec(_)) && self.claim_owned_str_temp(&operand);
                 let is_rc_binding = matches!(var_type, InferType::Rc(_));
                 let is_clone = is_rc_binding
                     && matches!(
@@ -604,20 +851,24 @@ impl<'a> LoweringContext<'a> {
                 }
 
                 if matches!(var_type, InferType::Vec(_)) {
-                    self.emit_vec_slot_acquire(
-                        true,
-                        Some(&initializer.kind),
-                        &Operand::Copy(local),
-                        sp,
-                    );
+                    if !vec_claimed {
+                        self.emit_vec_slot_acquire(
+                            true,
+                            Some(&initializer.kind),
+                            &Operand::Copy(local),
+                            sp,
+                        );
+                    }
                     let depth = self.locals_by_name.len();
                     self.cow_locals.push((local, depth));
                 }
 
                 match str_init {
-                    Some(StrInit::Borrow) | None => {}
+                    None => {}
+                    // a parameter outlives the call and an immutable binding cannot, so it borrows
+                    Some(StrInit::Borrow) if from_param && !*mutable => {}
                     Some(kind) => {
-                        if matches!(kind, StrInit::Share) {
+                        if !matches!(kind, StrInit::Own) {
                             self.emit_str_retain(local, sp);
                         }
                         let depth = self.locals_by_name.len();
@@ -678,11 +929,62 @@ impl<'a> LoweringContext<'a> {
                         return;
                     }
                 }
-                let operand = val.as_ref().map(|e| self.lower_expr(e));
+                let returns_str = val.as_ref().is_some_and(|e| self.counted(&e.ty));
+                // the environment keeps its own share, so what the closure hands out takes one
+                let returns_capture = val.as_ref().is_some_and(|e| {
+                    matches!(&e.kind, TypedExprKind::Identifier(n)
+                        if self.lookup_local(n).is_some_and(|id| self.capture_slots.contains_key(&id)))
+                });
+                let operand = match val.as_ref().map(|e| self.lower_expr(e)) {
+                    Some(Operand::Copy(id)) if self.str_local_is_owned(id) => {
+                        Some(Operand::Move(id))
+                    }
+                    Some(op @ (Operand::Copy(id) | Operand::Move(id)))
+                        if self.claim_owned_str_temp(&op) =>
+                    {
+                        Some(Operand::Move(id))
+                    }
+                    // a named binding hands its own share over, or the rc leaves it shares are released under it
+                    Some(Operand::Copy(id) | Operand::Move(id))
+                        if returns_str
+                            && !self.str_operand_is_fresh(&Operand::Copy(id))
+                            && !self.position_is_dead()
+                            && self.local_is_named(id) =>
+                    {
+                        self.emit_str_retain(id, sp);
+                        Some(Operand::Move(id))
+                    }
+                    Some(op @ (Operand::Copy(_) | Operand::Move(_)))
+                        if returns_str
+                            && !self.str_operand_is_fresh(&op)
+                            && !self.position_is_dead() =>
+                    {
+                        let r = self.alloc_temp(self.counted_operand_type(&op));
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Local(r),
+                                rvalue: Rvalue::Use(op),
+                            },
+                            sp,
+                        );
+                        self.emit_str_retain(r, sp);
+                        Some(Operand::Move(r))
+                    }
+                    other => other,
+                };
+                if returns_capture
+                    && val
+                        .as_ref()
+                        .is_some_and(|e| matches!(e.ty, InferType::Vec(_)))
+                    && let Some(op) = operand.as_ref()
+                {
+                    self.emit_vec_slot_acquire(true, None, op, sp);
+                }
                 if self.position_is_dead() {
                     self.seal_block(AirTerminator::Unreachable);
                     return;
                 }
+                self.release_posed_str_temps(&[]);
                 self.emit_rc_releases_for_return(operand.as_ref());
                 self.emit_affine_drops_for_return(stmt.span);
                 self.seal_block(AirTerminator::Return(operand));
@@ -691,6 +993,7 @@ impl<'a> LoweringContext<'a> {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let exit = loop_ctx.exit;
                     let body_depth = loop_ctx.body_scope_depth;
+                    let at_entry = loop_ctx.str_temps_at_entry.clone();
                     if self.rc_live_below(body_depth) {
                         self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `break`; \
@@ -706,6 +1009,9 @@ impl<'a> LoweringContext<'a> {
                         );
                         self.seal_block(AirTerminator::Unreachable);
                     } else {
+                        self.emit_str_releases_below(body_depth);
+                        self.emit_cow_releases_below(body_depth);
+                        self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(exit));
                     }
                 } else {
@@ -718,6 +1024,7 @@ impl<'a> LoweringContext<'a> {
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     let header = loop_ctx.header;
                     let body_depth = loop_ctx.body_scope_depth;
+                    let at_entry = loop_ctx.str_temps_at_entry.clone();
                     if self.rc_live_below(body_depth) {
                         self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `continue`; \
@@ -733,6 +1040,9 @@ impl<'a> LoweringContext<'a> {
                         );
                         self.seal_block(AirTerminator::Unreachable);
                     } else {
+                        self.emit_str_releases_below(body_depth);
+                        self.emit_cow_releases_below(body_depth);
+                        self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(header));
                     }
                 } else {
@@ -756,6 +1066,7 @@ impl<'a> LoweringContext<'a> {
         else_branch: Option<&TypedStmt>,
         _sp: Option<Span>,
     ) {
+        let before = self.str_temp_ids();
         let cond = self.lower_expr(condition);
         // seal_block never passes through emit, so a dead condition would still build its branch
         if self.position_is_dead() {
@@ -765,6 +1076,8 @@ impl<'a> LoweringContext<'a> {
         let else_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
 
+        self.release_arm_str_temps(&before);
+        let dominated = self.str_temps_posed_here();
         self.seal_block(AirTerminator::Branch {
             cond,
             then_block: then_id,
@@ -790,6 +1103,7 @@ impl<'a> LoweringContext<'a> {
         }
 
         self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
     }
 
     pub(super) fn lower_while(
@@ -802,13 +1116,16 @@ impl<'a> LoweringContext<'a> {
         let body_id = self.alloc_block_id();
         let exit_id = self.alloc_block_id();
 
+        let dominated = self.str_temps_posed_here();
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
+        let before = self.str_temp_ids();
         let cond = self.lower_expr(condition);
         if self.position_is_dead() {
             return;
         }
+        self.release_arm_str_temps(&before);
         self.seal_block(AirTerminator::Branch {
             cond,
             then_block: body_id,
@@ -819,6 +1136,7 @@ impl<'a> LoweringContext<'a> {
             header: header_id,
             exit: exit_id,
             body_scope_depth: self.locals_by_name.len(),
+            str_temps_at_entry: self.str_temp_ids(),
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
@@ -828,6 +1146,7 @@ impl<'a> LoweringContext<'a> {
         self.loop_stack.pop();
 
         self.fixup_block_id_noop(exit_id);
+        self.restamp_str_temps(&dominated);
     }
 
     pub(super) fn fixup_block_id_noop(&mut self, target: BlockId) {

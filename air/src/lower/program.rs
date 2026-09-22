@@ -9,7 +9,6 @@ pub(super) enum ConstFoldFailure {
     NotAConstant,
     // the value is fixed at compile time and this compiler does not materialize it yet
     FoldNotImplemented,
-    Invariant,
 }
 
 impl ConstFoldFailure {
@@ -17,7 +16,6 @@ impl ConstFoldFailure {
         match self {
             ConstFoldFailure::NotAConstant => Fault::Program,
             ConstFoldFailure::FoldNotImplemented => Fault::Unsupported,
-            ConstFoldFailure::Invariant => Fault::Compiler,
         }
     }
 
@@ -25,7 +23,6 @@ impl ConstFoldFailure {
         match self {
             ConstFoldFailure::FoldNotImplemented => 0,
             ConstFoldFailure::NotAConstant => 1,
-            ConstFoldFailure::Invariant => 2,
         }
     }
 
@@ -146,7 +143,14 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+        let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
+        let saved_loop_stack = std::mem::take(&mut self.loop_stack);
+        let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
+        let saved_type_params_map = self.type_params_map.clone();
+        let saved_stmt_str_temps = std::mem::take(&mut self.stmt_str_temps);
+        let saved_str_param_borrows = std::mem::take(&mut self.str_param_borrows);
+        let saved_fresh_str_results = std::mem::take(&mut self.fresh_str_results);
         // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
@@ -179,7 +183,14 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.cow_zombies = saved_cow_zombies;
         self.str_locals = saved_str_locals;
+        self.loop_stack = saved_loop_stack;
+        self.carrier_locals = saved_carrier_locals;
+        self.type_params_map = saved_type_params_map;
+        self.stmt_str_temps = saved_stmt_str_temps;
+        self.str_param_borrows = saved_str_param_borrows;
+        self.fresh_str_results = saved_fresh_str_results;
         self.capture_slots = saved_capture_slots;
         self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
@@ -238,11 +249,13 @@ impl<'a> LoweringContext<'a> {
         let type_params = self.lower_type_params(&func.type_params);
         let params = self.lower_params(&func.params);
         self.retain_vec_params(&func.params, &params);
+        self.register_str_params(&func.params, &params);
         self.register_affine_params(&func.params, &params);
         let ret_ty = self.lowered_return_type(func, "function");
 
         self.lower_body(&func.body, func.span);
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
         self.resolve_block_aliases();
@@ -316,11 +329,13 @@ impl<'a> LoweringContext<'a> {
 
         let user_params = self.lower_params(&func.params);
         self.retain_vec_params(&func.params, &user_params);
+        self.register_str_params(&func.params, &user_params);
         self.register_affine_params(&func.params, &user_params);
         let ret_ty = self.lowered_return_type(func, "closure");
 
         self.lower_body(&func.body, func.span);
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
         self.resolve_block_aliases();
@@ -358,7 +373,14 @@ impl<'a> LoweringContext<'a> {
         let saved_names = std::mem::take(&mut self.locals_by_name);
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
+        let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
+        let saved_loop_stack = std::mem::take(&mut self.loop_stack);
+        let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
+        let saved_type_params_map = self.type_params_map.clone();
+        let saved_stmt_str_temps = std::mem::take(&mut self.stmt_str_temps);
+        let saved_str_param_borrows = std::mem::take(&mut self.str_param_borrows);
+        let saved_fresh_str_results = std::mem::take(&mut self.fresh_str_results);
         // next_local_id resets to 0 below, so a stale outer capture_slots would false-positive on
         let saved_capture_slots = std::mem::take(&mut self.capture_slots);
         let saved_affine_locals = std::mem::take(&mut self.affine_locals);
@@ -382,7 +404,14 @@ impl<'a> LoweringContext<'a> {
         self.locals_by_name = saved_names;
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
+        self.cow_zombies = saved_cow_zombies;
         self.str_locals = saved_str_locals;
+        self.loop_stack = saved_loop_stack;
+        self.carrier_locals = saved_carrier_locals;
+        self.type_params_map = saved_type_params_map;
+        self.stmt_str_temps = saved_stmt_str_temps;
+        self.str_param_borrows = saved_str_param_borrows;
+        self.fresh_str_results = saved_fresh_str_results;
         self.capture_slots = saved_capture_slots;
         self.affine_locals = saved_affine_locals;
         self.block_aliases = saved_aliases;
@@ -421,6 +450,20 @@ impl<'a> LoweringContext<'a> {
                 }
             })
             .collect()
+    }
+
+    pub(super) fn register_str_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
+        for (p, air) in params.iter().zip(air_params.iter()) {
+            if !self.counted(&p.ty) {
+                continue;
+            }
+            if p.mutable {
+                self.emit_str_retain(air.id, Some(self.span(&p.span)));
+                self.str_locals.push((air.id, 0));
+            } else {
+                self.str_param_borrows.push(air.id);
+            }
+        }
     }
 
     // a vec param aliases the caller's buffer, so without this retain the callee would see
@@ -666,8 +709,9 @@ impl<'a> LoweringContext<'a> {
                     .iter()
                     .map(|arg| self.try_const_expr(arg))
                     .collect::<Result<Vec<_>, _>>()?;
+                // `vec::new` and its kin wear variant syntax without being enums, so they are unfolded constructors, never a broken invariant
                 let AirType::Enum(enum_ref) = self.lower_type_from_infer(&expr.ty) else {
-                    return Err(ConstFoldFailure::Invariant);
+                    return Err(ConstFoldFailure::FoldNotImplemented);
                 };
                 Ok(AirConst::Enum {
                     enum_ref,

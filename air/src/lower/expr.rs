@@ -117,8 +117,15 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Binary { left, op, right } => {
-                let l = self.lower_expr(left);
-                let r = self.lower_expr(right);
+                let mut pair = self
+                    .lower_pinned_operands(&[left.as_ref(), right.as_ref()], sp)
+                    .into_iter();
+                let (Some(l), Some(r)) = (pair.next(), pair.next()) else {
+                    self.report_ice(
+                        "ICE: a binary operation lowered fewer than two operands".to_string(),
+                    );
+                    return Operand::Const(AirConst::Null);
+                };
                 let air_op = lower_binop(op);
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
@@ -142,8 +149,8 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Or { left, right } => self.lower_short_circuit(left, right, false, expr),
 
             TypedExprKind::Call { callee, args } => {
-                let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
-                let func = self.lower_callee(callee);
+                let func = self.lower_callee(callee, args);
+                let lowered_args = self.lower_call_args(callee, args, sp);
                 self.lower_call_common(func, lowered_args, &expr.ty, sp)
             }
 
@@ -178,6 +185,7 @@ impl<'a> LoweringContext<'a> {
                     return self.lower_len_member(object, sp);
                 }
                 let base = self.lower_expr(object);
+                self.pose_fresh_temp(&base);
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::FieldAccess {
@@ -190,8 +198,11 @@ impl<'a> LoweringContext<'a> {
 
             TypedExprKind::StructLiteral { name, fields } => {
                 let mut lowered_fields: Vec<(String, Operand)> = Vec::with_capacity(fields.len());
-                for (fname, fval) in fields {
+                let values: Vec<&TypedExpr> = fields.iter().map(|(_, e)| e.as_ref()).collect();
+                for (i, (fname, fval)) in fields.iter().enumerate() {
                     let op = self.lower_expr(fval);
+                    let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
+                    let op = self.own_str_for_store(op, &fval.ty, sp);
                     if let Some(field_air_ty) = self.air_field_type_of(name, fname) {
                         self.emit_construction_field_retain(
                             &field_air_ty,
@@ -214,7 +225,8 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::ArrayLiteral { elements, .. } => {
-                let lowered: Vec<Operand> = elements.iter().map(|e| self.lower_expr(e)).collect();
+                let refs: Vec<&TypedExpr> = elements.iter().collect();
+                let lowered = self.lower_pinned_operands_owning(&refs, true, sp);
                 let n = lowered.len() as u64;
                 let elem_ty = match &expr.ty {
                     InferType::Array(inner, _) => self.lower_type_from_infer(inner),
@@ -228,6 +240,9 @@ impl<'a> LoweringContext<'a> {
                 };
                 let arr_ty = AirType::Array(Box::new(elem_ty), n);
                 let arr_local = self.alloc_temp_mut(arr_ty);
+                if self.counted(&expr.ty) {
+                    self.fresh_str_results.insert(arr_local);
+                }
                 for (i, elem_op) in lowered.into_iter().enumerate() {
                     self.emit(
                         AirStmtKind::Assign {
@@ -277,12 +292,23 @@ impl<'a> LoweringContext<'a> {
                 self.check_stack_array_size(&elem_ty, n);
                 let arr_ty = AirType::Array(Box::new(elem_ty.clone()), n);
                 let arr_local = self.alloc_temp_mut(arr_ty);
+                if self.counted(&expr.ty) {
+                    self.fresh_str_results.insert(arr_local);
+                }
                 let fill_op = if let Some(fv) = fill_value {
-                    self.lower_expr(fv)
+                    let op = self.lower_expr(fv);
+                    if n > 0 {
+                        self.own_str_for_store(op, &fv.ty, sp)
+                    } else {
+                        op
+                    }
                 } else {
                     Operand::Const(AirConst::ZeroInit(elem_ty))
                 };
                 for i in 0..n {
+                    if i > 0 {
+                        self.retain_str_fill(&fill_op, sp);
+                    }
                     self.emit(
                         AirStmtKind::Assign {
                             place: Place::Index(
@@ -298,7 +324,8 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::VecLiteral { elements, .. } => {
-                let lowered: Vec<Operand> = elements.iter().map(|e| self.lower_expr(e)).collect();
+                let refs: Vec<&TypedExpr> = elements.iter().collect();
+                let lowered = self.lower_pinned_operands_owning(&refs, true, sp);
                 let vec_ty = self.lower_type_from_infer(&expr.ty);
                 let elem_ty = match &vec_ty {
                     AirType::Vec(inner) => (**inner).clone(),
@@ -313,7 +340,27 @@ impl<'a> LoweringContext<'a> {
             }
 
             TypedExprKind::Index { object, index } => {
-                let obj = self.lower_expr(object);
+                let obj = if let TypedExprKind::Member {
+                    object: text,
+                    member,
+                } = &super::pin::peel(object).kind
+                    && member == "bytes"
+                    && matches!(text.ty, InferType::String)
+                    && super::pin::may_free(index)
+                {
+                    let text_op = self.lower_expr(text);
+                    let pinned = self.pin_str_read(text_op, sp);
+                    self.emit_rvalue_to_temp(
+                        self.lower_type_from_infer(&object.ty),
+                        Rvalue::FieldAccess {
+                            base: pinned,
+                            field: member.clone(),
+                        },
+                        sp,
+                    )
+                } else {
+                    self.lower_expr(object)
+                };
                 let idx = self.lower_expr(index);
                 self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
@@ -382,11 +429,19 @@ impl<'a> LoweringContext<'a> {
                 let target_ptr_ty = self.lower_type_from_infer(&target.ty);
                 let t = self.operand_to_local(target_op, &target_ptr_ty);
                 let v = self.lower_expr(value);
+                let v = self.own_str_for_store(v, &value.ty, sp);
                 let pointee_is_vec = matches!(value.ty, InferType::Vec(_));
-                self.emit_vec_slot_acquire(pointee_is_vec, Some(&value.kind), &v, sp);
+                if !(pointee_is_vec && self.claim_owned_str_temp(&v)) {
+                    self.emit_vec_slot_acquire(pointee_is_vec, Some(&value.kind), &v, sp);
+                }
                 if pointee_is_vec {
                     self.emit_cow_release_through_ptr(Operand::Copy(t), sp);
                 }
+                let through_mut = matches!(target.ty, InferType::Ref { mutable: true, .. });
+                let old_pointee = (through_mut && self.counted(&value.ty)).then(|| {
+                    let pointee_ty = self.lower_type_from_infer(&value.ty);
+                    self.emit_rvalue_to_temp(pointee_ty, Rvalue::Deref(Operand::Copy(t)), sp)
+                });
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Deref(t),
@@ -394,6 +449,9 @@ impl<'a> LoweringContext<'a> {
                     },
                     sp,
                 );
+                if let Some(Operand::Copy(old) | Operand::Move(old)) = old_pointee {
+                    self.emit_str_release(old, sp);
+                }
                 Operand::Const(AirConst::Null)
             }
 
@@ -480,8 +538,8 @@ impl<'a> LoweringContext<'a> {
                     );
                 }
                 if enum_name == "string" && variant == "substring_bytes" {
-                    let lowered: Vec<Operand> =
-                        args.iter().map(|arg| self.lower_expr(arg)).collect();
+                    let refs: Vec<&TypedExpr> = args.iter().collect();
+                    let lowered = self.lower_pinned_operands(&refs, sp);
                     return self.emit_rvalue_to_temp(
                         AirType::Str,
                         Rvalue::Call {
@@ -492,8 +550,11 @@ impl<'a> LoweringContext<'a> {
                     );
                 }
                 let mut payload: Vec<Operand> = Vec::with_capacity(args.len());
-                for arg in args {
+                let values: Vec<&TypedExpr> = args.iter().collect();
+                for (i, arg) in args.iter().enumerate() {
                     let op = self.lower_expr(arg);
+                    let op = self.hold_operand(op, arg, &values[i + 1..], false, sp);
+                    let op = self.own_str_for_store(op, &arg.ty, sp);
                     let payload_air_ty = self.lower_type_from_infer(&arg.ty);
                     self.emit_construction_field_retain(
                         &payload_air_ty,
@@ -525,7 +586,59 @@ impl<'a> LoweringContext<'a> {
                 for stmt in stmts {
                     self.lower_stmt(stmt);
                 }
-                let result = self.lower_expr(tail);
+                let mut result = self.lower_expr(tail);
+                let mut owned_tail = None;
+                if let Operand::Copy(id) | Operand::Move(id) = &result {
+                    let id = *id;
+                    if self
+                        .str_locals
+                        .iter()
+                        .any(|(l, d)| *l == id && *d > scope_depth)
+                    {
+                        self.forget_str_local(id);
+                        owned_tail = Some(id);
+                    } else if self.str_operand_is_fresh(&result) {
+                        self.fresh_str_results.insert(id);
+                    } else if self.claim_owned_str_temp(&result) {
+                        owned_tail = Some(id);
+                    } else if self.counted(&tail.ty) && !self.last_block_is_terminated() {
+                        let r = self.alloc_temp(self.counted_operand_type(&result));
+                        self.emit(
+                            AirStmtKind::Assign {
+                                place: Place::Local(r),
+                                rvalue: Rvalue::Use(result.clone()),
+                            },
+                            None,
+                        );
+                        self.emit_str_retain(r, None);
+                        owned_tail = Some(r);
+                        result = Operand::Copy(r);
+                    }
+                }
+                if !self.last_block_is_terminated() {
+                    let deeper: Vec<LocalId> = self
+                        .str_locals
+                        .iter()
+                        .filter(|(_, d)| *d > scope_depth)
+                        .map(|(l, _)| *l)
+                        .collect();
+                    for id in deeper {
+                        self.emit_str_release(id, None);
+                    }
+                }
+                self.str_locals.retain(|(_, d)| *d <= scope_depth);
+                // a result that may point into a deeper local keeps it open, or releasing it here would free what it points to
+                if !self.affine_category(&tail.ty).is_managed() && !self.may_hold_a_view(&tail.ty) {
+                    self.emit_scope_rc_releases(scope_depth);
+                } else {
+                    let kept = self.cow_locals.iter().filter(|(_, d)| *d > scope_depth);
+                    self.cow_zombies.extend(kept.map(|(id, _)| *id));
+                }
+                if let Some(id) = owned_tail
+                    && !self.last_block_is_terminated()
+                {
+                    self.stmt_str_temps.push((id, self.current_blocks.len()));
+                }
                 self.emit_scope_affine_drops(scope_depth, tail.span);
                 self.locals_by_name.truncate(scope_depth);
                 result
@@ -546,8 +659,8 @@ impl<'a> LoweringContext<'a> {
         let sp = Some(self.span(&expr.span));
         match &expr.kind {
             TypedExprKind::Call { callee, args } => {
-                let lowered_args: Vec<Operand> = args.iter().map(|a| self.lower_expr(a)).collect();
-                let func = self.lower_callee(callee);
+                let func = self.lower_callee(callee, args);
+                let lowered_args = self.lower_call_args(callee, args, sp);
                 let ret_ty = self.lower_type_from_infer(&expr.ty);
                 if Self::is_void_like(&ret_ty) {
                     self.emit(
@@ -558,7 +671,7 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                 } else {
-                    self.emit_rvalue_to_temp(
+                    let result = self.emit_rvalue_to_temp(
                         ret_ty,
                         Rvalue::Call {
                             func,
@@ -566,6 +679,7 @@ impl<'a> LoweringContext<'a> {
                         },
                         sp,
                     );
+                    self.pose_vec_call_result(&result);
                 }
             }
             TypedExprKind::Assign { name, value } => {
@@ -604,13 +718,25 @@ impl<'a> LoweringContext<'a> {
             self.emit(AirStmtKind::CallVoid { func, args }, sp);
             Operand::Const(AirConst::Null)
         } else {
-            self.emit_rvalue_to_temp(result_ty, Rvalue::Call { func, args }, sp)
+            let result = self.emit_rvalue_to_temp(result_ty, Rvalue::Call { func, args }, sp);
+            self.pose_vec_call_result(&result);
+            result
         }
     }
 
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
-        let val = self.lower_expr(value);
-        let str_val = self.str_init_kind(&val);
+        let mut val = self.lower_expr(value);
+        let str_val = self.claim_str_init(&mut val);
+        let kept_unretained = match self.lookup_local(name) {
+            Some(id) => self.capture_slots.contains_key(&id),
+            None => true,
+        };
+        if kept_unretained
+            && self.counted(&value.ty)
+            && !matches!(str_val, crate::lower::StrInit::Own)
+        {
+            val = self.retained_str_copy(val, sp);
+        }
         if let Some(id) = self.lookup_local(name) {
             if let Some(key) = Self::air_drop_key(sp) {
                 let old_drops = self.collect_affine_drops(key, |_| true);
@@ -621,7 +747,10 @@ impl<'a> LoweringContext<'a> {
             // previous buffer, so `v = v` (rc 1 -> 2 -> 1) never frees the buffer it keeps.
             let is_capture = self.capture_slots.contains_key(&id);
             let slot_is_vec = matches!(value.ty, InferType::Vec(_));
-            self.emit_vec_slot_acquire(slot_is_vec, Some(&value.kind), &val, sp);
+            let vec_claimed = slot_is_vec && matches!(str_val, crate::lower::StrInit::Own);
+            if !vec_claimed {
+                self.emit_vec_slot_acquire(slot_is_vec, Some(&value.kind), &val, sp);
+            }
             if slot_is_vec {
                 if is_capture {
                     self.emit_cow_release_through_ptr(Operand::Copy(id), sp);
@@ -633,11 +762,8 @@ impl<'a> LoweringContext<'a> {
             let str_self_assign = matches!(val, Operand::Copy(v) | Operand::Move(v) if v == id);
             let mut str_share_taken = false;
             if !is_capture && !str_self_assign && self.str_local_is_owned(id) {
-                str_share_taken = matches!(str_val, crate::lower::StrInit::Share);
+                str_share_taken = !matches!(str_val, crate::lower::StrInit::Own);
                 self.emit_str_release(id, sp);
-                if matches!(str_val, crate::lower::StrInit::Borrow) {
-                    self.forget_str_local(id);
-                }
             }
             let place = if is_capture {
                 Place::Deref(id)
@@ -659,6 +785,17 @@ impl<'a> LoweringContext<'a> {
             }
             Operand::Copy(id)
         } else {
+            // the global owns what it holds, and the value replacing it has taken its own share
+            let old = self.counted(&value.ty).then(|| {
+                self.emit_rvalue_to_temp(
+                    self.lower_type_from_infer(&value.ty),
+                    Rvalue::Call {
+                        func: Callee::Named(format!("__aelys_global_get_{}", name)),
+                        args: Vec::new(),
+                    },
+                    sp,
+                )
+            });
             self.emit(
                 AirStmtKind::CallVoid {
                     func: Callee::Named(format!("__aelys_global_set_{}", name)),
@@ -666,6 +803,9 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            if let Some(Operand::Copy(id) | Operand::Move(id)) = old {
+                self.emit_str_release(id, sp);
+            }
             Operand::Const(AirConst::Null)
         }
     }
@@ -866,7 +1006,8 @@ impl<'a> LoweringContext<'a> {
 
         let idx = self.lower_expr(index);
         let val = if compound_info.is_none() {
-            self.lower_expr(value)
+            let op = self.lower_expr(value);
+            self.own_str_for_store(op, &value.ty, sp)
         } else {
             Operand::Const(AirConst::Null)
         };
@@ -890,9 +1031,19 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            let current = if matches!(value.ty, InferType::String)
+                && Self::roots_a_vec(&object.ty)
+                && super::pin::may_free(rhs_expr)
+            {
+                self.pin_str_read(current, sp)
+            } else {
+                current
+            };
             let rhs = self.lower_expr(rhs_expr);
             let air_op = super::lower_binop(&op);
-            self.emit_rvalue_to_temp(elem_ty, Rvalue::BinaryOp(air_op, current, rhs), sp)
+            let combined =
+                self.emit_rvalue_to_temp(elem_ty, Rvalue::BinaryOp(air_op, current, rhs), sp);
+            self.own_str_for_store(combined, &value.ty, sp)
         } else {
             val
         };
@@ -900,6 +1051,22 @@ impl<'a> LoweringContext<'a> {
         if Self::roots_a_vec(&object.ty) {
             self.emit_cow_detach(base.ptr, sp);
         }
+        // the old value leaves only after the new one is in, so `v[0] = v[0]` keeps its string
+        let owned_array = Self::roots_an_array(&object.ty) && self.store_root_owns(object);
+        // a mutable slice is a unique borrow, so its slots keep one share each like an array's
+        let drops_old =
+            Self::roots_a_vec(&object.ty) || owned_array || Self::slice_is_mutable(&object.ty);
+        let old_elem = (drops_old && self.counted(&value.ty)).then(|| {
+            let elem_ty = self.lower_type_from_infer(&value.ty);
+            self.emit_rvalue_to_temp(
+                elem_ty,
+                Rvalue::Index {
+                    base: Operand::Copy(base.ptr),
+                    index: idx.clone(),
+                },
+                sp,
+            )
+        });
         self.emit(
             AirStmtKind::Assign {
                 place: Place::Index(base.ptr, idx),
@@ -907,6 +1074,9 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
+        if let Some(Operand::Copy(old) | Operand::Move(old)) = old_elem {
+            self.emit_str_release(old, sp);
+        }
         Operand::Const(AirConst::Null)
     }
 
@@ -930,7 +1100,8 @@ impl<'a> LoweringContext<'a> {
         };
 
         let val = if compound_info.is_none() {
-            self.lower_expr(value)
+            let op = self.lower_expr(value);
+            self.own_str_for_store(op, &value.ty, sp)
         } else {
             Operand::Const(AirConst::Null)
         };
@@ -956,7 +1127,9 @@ impl<'a> LoweringContext<'a> {
             );
             let rhs = self.lower_expr(rhs_expr);
             let air_op = super::lower_binop(&op);
-            self.emit_rvalue_to_temp(field_ty, Rvalue::BinaryOp(air_op, current, rhs), sp)
+            let combined =
+                self.emit_rvalue_to_temp(field_ty, Rvalue::BinaryOp(air_op, current, rhs), sp);
+            self.own_str_for_store(combined, &value.ty, sp)
         } else {
             val
         };
@@ -1013,6 +1186,17 @@ impl<'a> LoweringContext<'a> {
                 _ => {}
             }
         } else {
+            let old_field = (self.counted(&value.ty) && self.store_root_owns(object)).then(|| {
+                let field_ty = self.lower_type_from_infer(&value.ty);
+                self.emit_rvalue_to_temp(
+                    field_ty,
+                    Rvalue::FieldAccess {
+                        base: Operand::Copy(base.ptr),
+                        field: field.to_string(),
+                    },
+                    sp,
+                )
+            });
             self.emit(
                 AirStmtKind::Assign {
                     place: Place::Field(base.ptr, field.to_string()),
@@ -1020,51 +1204,78 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            if let Some(Operand::Copy(old) | Operand::Move(old)) = old_field {
+                self.emit_str_release(old, sp);
+            }
         }
 
         Operand::Const(AirConst::Null)
     }
 
-    fn lower_callee(&mut self, callee: &TypedExpr) -> Callee {
+    pub(super) fn named_callee(&self, callee: &TypedExpr) -> Option<Callee> {
         match &callee.kind {
-            TypedExprKind::Identifier(name) => {
-                if let Some(id) = self.lookup_local(name) {
-                    if self.capture_slots.contains_key(&id) {
-                        let op = self.lower_expr(callee);
-                        let ty = self.lower_type_from_infer(&callee.ty);
-                        return Callee::FnPtr(self.operand_to_local(op, &ty));
-                    }
-                    Callee::FnPtr(id)
-                } else if self.is_global_name(name) {
-                    let op = self.lower_expr(callee);
-                    let ty = self.lower_type_from_infer(&callee.ty);
-                    Callee::FnPtr(self.operand_to_local(op, &ty))
-                } else {
-                    Callee::Named(name.clone())
-                }
-            }
-            TypedExprKind::Member { object, member } => {
-                if let TypedExprKind::Identifier(mod_name) = &object.kind {
+            TypedExprKind::Identifier(name) => (self.lookup_local(name).is_none()
+                && !self.is_global_name(name))
+            .then(|| Callee::Named(name.clone())),
+            TypedExprKind::Member { object, member } => match &object.kind {
+                TypedExprKind::Identifier(mod_name) => {
                     let is_runtime_value = self.lookup_local(mod_name).is_some()
                         || self.globals.iter().any(|global| global.name == *mod_name);
-                    if !is_runtime_value {
-                        Callee::Named(format!("{}.{}", mod_name, member))
-                    } else {
-                        let op = self.lower_expr(callee);
-                        let ty = self.lower_type_from_infer(&callee.ty);
-                        Callee::FnPtr(self.operand_to_local(op, &ty))
-                    }
-                } else {
-                    let op = self.lower_expr(callee);
-                    let ty = self.lower_type_from_infer(&callee.ty);
-                    Callee::FnPtr(self.operand_to_local(op, &ty))
+                    (!is_runtime_value).then(|| Callee::Named(format!("{}.{}", mod_name, member)))
                 }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    fn lower_callee(&mut self, callee: &TypedExpr, args: &[TypedExpr]) -> Callee {
+        if let Some(named) = self.named_callee(callee) {
+            return named;
+        }
+        if let TypedExprKind::Identifier(name) = &callee.kind
+            && let Some(id) = self.lookup_local(name)
+            && !self.capture_slots.contains_key(&id)
+        {
+            if !args.iter().any(|a| super::pin::may_write_local(a, name)) {
+                return Callee::FnPtr(id);
             }
-            _ => {
-                let op = self.lower_expr(callee);
-                let ty = self.lower_type_from_infer(&callee.ty);
-                Callee::FnPtr(self.operand_to_local(op, &ty))
-            }
+            let copy = self.alloc_temp(self.lower_type_from_infer(&callee.ty));
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(copy),
+                    rvalue: Rvalue::Use(Operand::Copy(id)),
+                },
+                None,
+            );
+            return Callee::FnPtr(copy);
+        }
+        let op = self.lower_expr(callee);
+        let ty = self.lower_type_from_infer(&callee.ty);
+        Callee::FnPtr(self.operand_to_local(op, &ty))
+    }
+
+    // a generic or external callee may keep an argument without retaining it, so it gets a share
+    fn lower_call_args(
+        &mut self,
+        callee: &TypedExpr,
+        args: &[TypedExpr],
+        sp: Option<Span>,
+    ) -> Vec<Operand> {
+        let keeps_unretained = matches!(self.named_callee(callee), Some(Callee::Named(name))
+            if !self.retaining_fns.contains(&name)
+                && !crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()));
+        let refs: Vec<&TypedExpr> = args.iter().collect();
+        self.lower_pinned_operands_owning(&refs, keeps_unretained, sp)
+    }
+
+    pub(super) fn retain_str_fill(&mut self, fill: &Operand, sp: Option<Span>) {
+        if let Operand::Copy(id) | Operand::Move(id) = fill
+            && self
+                .local_air_type(*id)
+                .is_some_and(|ty| self.counted_air(&ty))
+        {
+            self.emit_str_retain(*id, sp);
         }
     }
 
@@ -1091,6 +1302,7 @@ impl<'a> LoweringContext<'a> {
 
         let eval_right_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
 
         if is_and {
             self.seal_block(AirTerminator::Branch {
@@ -1107,6 +1319,7 @@ impl<'a> LoweringContext<'a> {
         }
 
         self.fixup_block_id_noop(eval_right_id);
+        let before = self.str_temp_ids();
         let rhs = self.lower_expr(right);
         self.emit(
             AirStmtKind::Assign {
@@ -1115,9 +1328,11 @@ impl<'a> LoweringContext<'a> {
             },
             None,
         );
+        self.release_arm_str_temps(&before);
         self.seal_block(AirTerminator::Goto(merge_id));
 
         self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
         Operand::Copy(result)
     }
 
@@ -1135,6 +1350,7 @@ impl<'a> LoweringContext<'a> {
         } else {
             Some(self.alloc_temp_mut(result_ty))
         };
+        let str_result = result.is_some() && self.counted(&parent.ty);
 
         let cond = self.lower_expr(condition);
         if self.position_is_dead() {
@@ -1143,6 +1359,7 @@ impl<'a> LoweringContext<'a> {
         let then_id = self.alloc_block_id();
         let else_id = self.alloc_block_id();
         let merge_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
 
         self.seal_block(AirTerminator::Branch {
             cond,
@@ -1151,37 +1368,66 @@ impl<'a> LoweringContext<'a> {
         });
 
         self.fixup_block_id_noop(then_id);
+        let before = self.str_temp_ids();
         if let Some(result) = result {
             let then_val = self.lower_expr(then_branch);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(result),
-                    rvalue: Rvalue::Use(then_val),
-                },
-                None,
-            );
+            self.store_arm_result(result, then_val, str_result);
         } else {
             self.lower_expr_discard(then_branch);
         }
+        self.release_arm_str_temps(&before);
         self.seal_block(AirTerminator::Goto(merge_id));
 
         self.fixup_block_id_noop(else_id);
+        let before = self.str_temp_ids();
         if let Some(result) = result {
             let else_val = self.lower_expr(else_branch);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(result),
-                    rvalue: Rvalue::Use(else_val),
-                },
-                None,
-            );
+            self.store_arm_result(result, else_val, str_result);
         } else {
             self.lower_expr_discard(else_branch);
         }
+        self.release_arm_str_temps(&before);
         self.seal_block(AirTerminator::Goto(merge_id));
 
         self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
+        self.pose_owned_str_result(result, str_result);
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
+    fn store_arm_result(&mut self, result: LocalId, mut val: Operand, str_result: bool) {
+        let vec_result = matches!(self.local_air_type(result), Some(AirType::Vec(_)));
+        let claimed = (str_result || vec_result) && self.claim_owned_str_temp(&val);
+        if let (true, Operand::Copy(id)) = (claimed, &val) {
+            val = Operand::Move(*id);
+        }
+        let owned = !(str_result || vec_result)
+            || claimed
+            || (str_result
+                && (matches!(val, Operand::Const(_)) || self.str_operand_is_fresh(&val)));
+        let reachable = !self.last_block_is_terminated();
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(result),
+                rvalue: Rvalue::Use(val),
+            },
+            None,
+        );
+        if !owned && reachable {
+            if vec_result {
+                self.emit_cow_retain(result, None);
+            } else {
+                self.emit_str_retain(result, None);
+            }
+        }
+    }
+
+    fn pose_owned_str_result(&mut self, result: Option<LocalId>, str_result: bool) {
+        if let Some(local) = result
+            && (str_result || matches!(self.local_air_type(local), Some(AirType::Vec(_))))
+        {
+            self.stmt_str_temps.push((local, self.current_blocks.len()));
+        }
     }
 
     // cannot know whether it got a named function, a non-capturing lambda, or a
@@ -1237,6 +1483,7 @@ impl<'a> LoweringContext<'a> {
         };
         let elem_ty = self.lower_type_from_infer(&args[1].ty);
         let elem_op = self.lower_expr(&args[1]);
+        let elem_op = self.own_str_for_store(elem_op, &args[1].ty, sp);
         let elem_slot = self.alloc_temp_mut(elem_ty.clone());
         self.emit(
             AirStmtKind::Assign {
@@ -1291,6 +1538,10 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
+        if self.counted_air(&elem_ty) && !self.last_block_is_terminated() {
+            self.stmt_str_temps
+                .push((out_slot, self.current_blocks.len()));
+        }
         Operand::Copy(out_slot)
     }
 
@@ -1397,7 +1648,10 @@ impl<'a> LoweringContext<'a> {
 
         let data_op = args
             .first()
-            .map(|a| self.lower_expr(a))
+            .map(|a| {
+                let op = self.lower_expr(a);
+                self.own_str_for_store(op, &a.ty, sp)
+            })
             .unwrap_or(Operand::Const(AirConst::ZeroInit(data_ty.clone())));
 
         let ptr_local = self.alloc_temp(ptr_ty);
@@ -1525,6 +1779,7 @@ impl<'a> LoweringContext<'a> {
                     ));
                     continue;
                 };
+                let cap_val = self.own_str_for_store(cap_val, cap_ty, sp);
                 // takes a share here. there is no matching release: the env is deliberately leaked
                 self.emit_vec_slot_acquire(matches!(cap_ty, InferType::Vec(_)), None, &cap_val, sp);
                 self.emit(
@@ -1546,6 +1801,16 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    // a fresh aggregate no binding holds is this frame's, released when the statement ends
+    fn pose_fresh_temp(&mut self, operand: &Operand) {
+        let (Operand::Copy(id) | Operand::Move(id)) = operand else {
+            return;
+        };
+        if self.str_operand_is_fresh(operand) {
+            self.stmt_str_temps.push((*id, self.current_blocks.len()));
+        }
+    }
+
     fn lower_match_expr(
         &mut self,
         scrutinee: &TypedExpr,
@@ -1560,11 +1825,13 @@ impl<'a> LoweringContext<'a> {
         } else {
             Some(self.alloc_temp_mut(result_ty))
         };
+        let str_result = result.is_some() && self.counted(&parent.ty);
 
         let scrutinee_op = self.lower_expr(scrutinee);
         if self.position_is_dead() {
             return Operand::Const(AirConst::Null);
         }
+        self.pose_fresh_temp(&scrutinee_op);
 
         let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
             AirType::Enum(r) => r,
@@ -1606,6 +1873,7 @@ impl<'a> LoweringContext<'a> {
         }
 
         let default_id = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
 
         self.seal_block(AirTerminator::Switch {
             discr: tag_op,
@@ -1617,6 +1885,7 @@ impl<'a> LoweringContext<'a> {
             self.fixup_block_id_noop(block_id);
 
             let arm_scope_depth = self.locals_by_name.len();
+            let before = self.str_temp_ids();
 
             if let TypedPattern::Variant { tag, bindings, .. } = &arm.pattern {
                 for (field_index, (name, ty)) in bindings.iter().enumerate() {
@@ -1634,45 +1903,55 @@ impl<'a> LoweringContext<'a> {
                         },
                         sp,
                     );
+                    if self.counted_air(&field_ty) {
+                        self.emit_str_retain(field_local, sp);
+                        self.str_locals
+                            .push((field_local, self.locals_by_name.len()));
+                    }
                 }
             }
 
             if let Some(result) = result {
                 let arm_val = self.lower_expr(&arm.body);
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Local(result),
-                        rvalue: Rvalue::Use(arm_val),
-                    },
-                    None,
-                );
+                self.store_arm_result(result, arm_val, str_result);
             } else {
                 self.lower_expr_discard(&arm.body);
             }
+            self.release_arm_str_temps(&before);
+            if !self.last_block_is_terminated() {
+                let binders: Vec<LocalId> = self
+                    .str_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in binders {
+                    self.emit_str_release(id, None);
+                }
+            }
+            self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
 
         self.fixup_block_id_noop(default_id);
         if let Some(wildcard) = wildcard_arm {
+            let before = self.str_temp_ids();
             if let Some(result) = result {
                 let wc_val = self.lower_expr(&wildcard.body);
-                self.emit(
-                    AirStmtKind::Assign {
-                        place: Place::Local(result),
-                        rvalue: Rvalue::Use(wc_val),
-                    },
-                    None,
-                );
+                self.store_arm_result(result, wc_val, str_result);
             } else {
                 self.lower_expr_discard(&wildcard.body);
             }
+            self.release_arm_str_temps(&before);
             self.seal_block(AirTerminator::Goto(merge_id));
         } else {
             self.seal_block(AirTerminator::Unreachable);
         }
 
         self.fixup_block_id_noop(merge_id);
+        self.restamp_str_temps(&dominated);
+        self.pose_owned_str_result(result, str_result);
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
@@ -1697,6 +1976,7 @@ impl<'a> LoweringContext<'a> {
         if self.position_is_dead() {
             return Operand::Const(AirConst::Null);
         }
+        self.pose_fresh_temp(&scrutinee_op);
         let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
             AirType::Enum(r) => r,
             _ => {
@@ -1720,6 +2000,7 @@ impl<'a> LoweringContext<'a> {
         let ok_block = self.alloc_block_id();
         let err_block = self.alloc_block_id();
         let merge = self.alloc_block_id();
+        let dominated = self.str_temps_posed_here();
 
         self.seal_block(AirTerminator::Switch {
             discr: tag_op,
@@ -1754,11 +2035,20 @@ impl<'a> LoweringContext<'a> {
         });
 
         self.fixup_block_id_noop(merge);
+        self.restamp_str_temps(&dominated);
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 
     fn lower_fmt_string(&mut self, parts: &[TypedFmtStringPart], sp: Option<Span>) -> Operand {
         let mut operands: Vec<Operand> = Vec::new();
+        let exprs: Vec<&TypedExpr> = parts
+            .iter()
+            .filter_map(|part| match part {
+                TypedFmtStringPart::Expr(expr) => Some(expr.as_ref()),
+                TypedFmtStringPart::Literal(_) | TypedFmtStringPart::Placeholder => None,
+            })
+            .collect();
+        let mut lowered = self.lower_pinned_operands(&exprs, sp).into_iter();
 
         for part in parts {
             match part {
@@ -1766,7 +2056,7 @@ impl<'a> LoweringContext<'a> {
                     operands.push(Operand::Const(AirConst::Str(s.clone())));
                 }
                 TypedFmtStringPart::Expr(expr) => {
-                    let val = self.lower_expr(expr);
+                    let val = lowered.next().expect("one operand per part");
                     if matches!(expr.ty, InferType::String) {
                         operands.push(val);
                     } else {
@@ -1816,4 +2106,24 @@ pub(super) fn non_constant_array_size_message(size: &TypedExpr) -> String {
          if the length is known",
         size.span.line, size.span.column
     )
+}
+
+impl LoweringContext<'_> {
+    // a type parameter or an unresolved type may become a view or a managed value after monomorphization
+    fn may_hold_a_view(&self, ty: &InferType) -> bool {
+        match ty {
+            InferType::Ref { .. }
+            | InferType::Slice { .. }
+            | InferType::Var(_)
+            | InferType::Dynamic => true,
+            InferType::Struct(name) => self.type_params_map.iter().any(|(n, _)| n == name),
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => {
+                self.may_hold_a_view(inner)
+            }
+            InferType::Tuple(items) | InferType::Enum(_, items) => {
+                items.iter().any(|item| self.may_hold_a_view(item))
+            }
+            _ => false,
+        }
+    }
 }

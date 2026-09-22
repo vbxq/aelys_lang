@@ -181,6 +181,31 @@ impl<'a> LoweringContext<'a> {
         matches!(t, InferType::Vec(_))
     }
 
+    pub(super) fn roots_an_array(ty: &InferType) -> bool {
+        let mut t = ty;
+        while let InferType::Ref { referent, .. } = t {
+            t = referent;
+        }
+        matches!(t, InferType::Array(_, _))
+    }
+
+    // a mutable slice is a unique borrow, so each of its slots keeps exactly one share
+    pub(super) fn slice_is_mutable(ty: &InferType) -> bool {
+        let mut t = ty;
+        while let InferType::Ref { referent, .. } = t {
+            t = referent;
+        }
+        matches!(t, InferType::Slice { mutable: true, .. })
+    }
+
+    pub(super) fn views_a_slice(ty: &InferType) -> bool {
+        let mut t = ty;
+        while let InferType::Ref { referent, .. } = t {
+            t = referent;
+        }
+        matches!(t, InferType::Slice { .. })
+    }
+
     pub(super) fn addr_of_env_field(
         &mut self,
         env: LocalId,
@@ -220,4 +245,3 @@ impl<'a> LoweringContext<'a> {
         tmp
     }
 }
-

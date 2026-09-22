@@ -1,9 +1,13 @@
 mod expr;
 mod loops;
+mod pin;
 mod place;
 mod program;
 mod stmts;
 mod str_escape;
+mod str_temps;
+
+pub use str_temps::{fresh_returning_functions, retaining_functions};
 
 use crate::*;
 use aelys_common::Fault;
@@ -41,12 +45,14 @@ fn build_and_check_bir(
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Imported {
     pub globals: std::collections::HashSet<String>,
     pub structs: Vec<AirStructDef>,
     pub enums: Vec<AirEnumDef>,
     pub bir: crate::bir::Imports,
+    pub fresh_returns: std::collections::HashSet<String>,
+    pub retaining_fns: std::collections::HashSet<String>,
 }
 
 pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, LowerFailure> {
@@ -58,11 +64,47 @@ pub fn try_lower_with_imports(
     imported: Imported,
 ) -> Result<AirProgram, LowerFailure> {
     let drops = build_and_check_bir(program, &imported.bir).map_err(LowerFailure::Borrow)?;
-    let mut cx = LoweringContext::new(program);
-    cx.imported = imported;
-    cx.affine_drops = drops;
-    cx.lower_program();
-    cx.finish().map_err(LowerFailure::Lowering)
+    lower_against_proven_returns(program, &imported, &drops, None)
+}
+
+fn lower_against_proven_returns(
+    program: &TypedProgram,
+    imported: &Imported,
+    drops: &std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
+    file_gc_mode: Option<GcMode>,
+) -> Result<AirProgram, LowerFailure> {
+    let mut assumed: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut widened = false;
+    loop {
+        let mut cx = LoweringContext::new(program);
+        cx.imported = imported.clone();
+        if let Some(mode) = file_gc_mode {
+            cx.file_gc_mode = mode;
+        }
+        cx.affine_drops = drops.clone();
+        cx.fresh_returns = imported.fresh_returns.union(&assumed).cloned().collect();
+        cx.retaining_fns = str_temps::retaining_declarations(program)
+            .union(&imported.retaining_fns)
+            .cloned()
+            .collect();
+        cx.lower_program();
+        let air = cx.finish().map_err(LowerFailure::Lowering)?;
+        let carriers = crate::counts::Carriers {
+            structs: &air.structs,
+            imported: &imported.structs,
+            enums: &air.enums,
+        };
+        let proven = fresh_returning_functions(&air.functions, &carriers, &imported.fresh_returns);
+        if !assumed.is_subset(&proven) {
+            assumed = assumed.intersection(&proven).cloned().collect();
+            continue;
+        }
+        if widened || proven.is_empty() {
+            return Ok(air);
+        }
+        widened = true;
+        assumed = proven;
+    }
 }
 
 pub fn lower_with_gc_mode(program: &TypedProgram, file_gc_mode: GcMode) -> AirProgram {
@@ -76,11 +118,7 @@ pub fn try_lower_with_gc_mode(
 ) -> Result<AirProgram, LowerFailure> {
     let drops = build_and_check_bir(program, &crate::bir::Imports::default())
         .map_err(LowerFailure::Borrow)?;
-    let mut cx = LoweringContext::new(program);
-    cx.file_gc_mode = file_gc_mode;
-    cx.affine_drops = drops;
-    cx.lower_program();
-    cx.finish().map_err(LowerFailure::Lowering)
+    lower_against_proven_returns(program, &Imported::default(), &drops, Some(file_gc_mode))
 }
 
 pub(crate) struct LoweringContext<'a> {
@@ -105,7 +143,11 @@ pub(crate) struct LoweringContext<'a> {
     // never fed from lower_params: releasing a borrowed carrier param callee-side would
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
+    pub(super) cow_zombies: std::collections::HashSet<LocalId>,
     pub(super) str_locals: Vec<(LocalId, usize)>,
+    pub(super) stmt_str_temps: Vec<(LocalId, usize)>,
+    pub(super) str_param_borrows: Vec<LocalId>,
+    pub(super) fresh_str_results: std::collections::HashSet<LocalId>,
     pub(super) affine_locals: Vec<AffineLocal>,
     pub(super) affine_drops:
         std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
@@ -116,6 +158,8 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) closure_env_param: Option<LocalId>,
     pub(super) capture_slots: std::collections::HashMap<LocalId, String>,
     pub(super) lowering_errors: Vec<LowerError>,
+    pub(super) fresh_returns: std::collections::HashSet<String>,
+    pub(super) retaining_fns: std::collections::HashSet<String>,
 }
 
 pub(super) enum StrInit {
@@ -142,6 +186,7 @@ pub(super) struct LoopBlocks {
     pub(super) header: BlockId,
     pub(super) exit: BlockId,
     pub(super) body_scope_depth: usize,
+    pub(super) str_temps_at_entry: Vec<LocalId>,
 }
 
 impl<'a> LoweringContext<'a> {
@@ -166,7 +211,11 @@ impl<'a> LoweringContext<'a> {
             rc_locals: Vec::new(),
             carrier_locals: Vec::new(),
             cow_locals: Vec::new(),
+            cow_zombies: std::collections::HashSet::new(),
             str_locals: Vec::new(),
+            stmt_str_temps: Vec::new(),
+            str_param_borrows: Vec::new(),
+            fresh_str_results: std::collections::HashSet::new(),
             affine_locals: Vec::new(),
             affine_drops: std::collections::HashMap::new(),
             loop_stack: Vec::new(),
@@ -176,6 +225,8 @@ impl<'a> LoweringContext<'a> {
             closure_env_param: None,
             capture_slots: std::collections::HashMap::new(),
             lowering_errors: Vec::new(),
+            fresh_returns: std::collections::HashSet::new(),
+            retaining_fns: std::collections::HashSet::new(),
         }
     }
 
@@ -183,9 +234,46 @@ impl<'a> LoweringContext<'a> {
         if !self.lowering_errors.is_empty() {
             return Err(self.lowering_errors);
         }
+        let structs = self.structs.clone();
+        let imported_structs = self.imported.structs.clone();
+        let enums = self.enums.clone();
+        let carriers = crate::counts::Carriers {
+            structs: &structs,
+            imported: &imported_structs,
+            enums: &enums,
+        };
         // finish runs before mono, copy_elim, dead_locals and rc_elision, so their work is unseen
         for function in &mut self.functions {
-            str_escape::guard_escaping_str_locals(function);
+            str_temps::release_unbound_str_temps(
+                function,
+                &carriers,
+                &self.fresh_returns,
+                &self.retaining_fns,
+            );
+            str_escape::guard_escaping_str_locals(function, &carriers, &self.retaining_fns);
+        }
+        let fresh = |name: &str| self.fresh_returns.contains(name);
+        let unowned: Vec<String> = self
+            .functions
+            .iter()
+            .filter(|f| !f.is_extern && carriers.counted(&f.ret_ty))
+            // an unresolved parameter type survives mono, and the vec surface check reports it
+            .filter(|f| {
+                !f.params
+                    .iter()
+                    .any(|p| crate::passes::validate::contains_opaque(&p.ty))
+            })
+            .filter(|f| !str_temps::returns_only_fresh(f, &carriers, &fresh))
+            .map(|f| f.name.clone())
+            .collect();
+        for name in unowned {
+            self.report_ice(format!(
+                "ICE: `{name}` returns a string it does not own; every string return must hand \
+                 over a share"
+            ));
+        }
+        if !self.lowering_errors.is_empty() {
+            return Err(self.lowering_errors);
         }
         Ok(AirProgram {
             functions: self.functions,
@@ -365,6 +453,38 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn report_program(&mut self, message: String) {
         self.report(Fault::Program, message);
+    }
+
+    pub(super) fn carriers(&self) -> crate::counts::Carriers<'_> {
+        crate::counts::Carriers {
+            structs: &self.structs,
+            imported: &self.imported.structs,
+            enums: &self.enums,
+        }
+    }
+
+    pub(super) fn counted_air(&self, ty: &AirType) -> bool {
+        self.carriers().counted(ty)
+    }
+
+    pub(super) fn counted(&self, ty: &InferType) -> bool {
+        if matches!(ty, InferType::String) {
+            return true;
+        }
+        if let InferType::Array(inner, _) = ty {
+            return self.counted(inner);
+        }
+        if let InferType::Enum(..) = ty {
+            let air = self.lower_type_from_infer(ty);
+            return self.carriers().carries_string(&air);
+        }
+        let InferType::Struct(name) = ty else {
+            return false;
+        };
+        self.type_params_map.iter().any(|(n, _)| n == name)
+            || self
+                .carriers()
+                .carries_string(&AirType::Struct(name.clone()))
     }
 
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
