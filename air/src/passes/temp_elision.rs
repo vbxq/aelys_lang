@@ -303,6 +303,11 @@ fn elide_interpolation_temps(function: &mut AirFunction) {
             if only.kind != UseKind::PrintArg || only.block != block_index {
                 continue;
             }
+            if only.stmt <= stmt_index
+                || !frame_buffer_untouched(&block.stmts[stmt_index + 1..only.stmt])
+            {
+                continue;
+            }
             rewrite.push((block_index, stmt_index));
         }
     }
@@ -316,6 +321,20 @@ fn elide_interpolation_temps(function: &mut AirFunction) {
             *func = Callee::Named(TO_STRING_INTO.to_string());
         }
     }
+}
+
+fn frame_buffer_untouched(between: &[AirStmt]) -> bool {
+    between.iter().all(|stmt| {
+        let func = match &stmt.kind {
+            AirStmtKind::CallVoid { func, .. } => func,
+            AirStmtKind::Assign {
+                rvalue: Rvalue::Call { func, .. },
+                ..
+            } => func,
+            _ => return true,
+        };
+        !is_print(func) && !is_named(func, TO_STRING) && !is_named(func, TO_STRING_INTO)
+    })
 }
 
 /// a literal's temp that is never handed on still owns the +1 vec_init took, and nobody frees it

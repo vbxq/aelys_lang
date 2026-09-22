@@ -18,7 +18,7 @@ fn eliminate_function_copies(function: &mut AirFunction) {
 
     let writes = collect_write_counts(function);
     let address_taken = collect_address_taken(function);
-    let direct_aliases = collect_direct_aliases(function, &writes, &address_taken);
+    let direct_aliases = collect_direct_aliases(function, &writes, &address_taken, &params);
     let replacements = resolve_to_params(&direct_aliases, &params);
     if replacements.is_empty() {
         return;
@@ -59,6 +59,7 @@ fn collect_direct_aliases(
     function: &AirFunction,
     writes: &HashMap<LocalId, u32>,
     address_taken: &HashSet<LocalId>,
+    params: &HashSet<LocalId>,
 ) -> HashMap<LocalId, LocalId> {
     let mut aliases = HashMap::new();
     for block in &function.blocks {
@@ -70,13 +71,11 @@ fn collect_direct_aliases(
             if dst == src {
                 continue;
             }
-            if address_taken.contains(&dst) || address_taken.contains(&src) {
+            if address_taken.contains(&dst) || address_taken.contains(&src) || params.contains(&dst)
+            {
                 continue;
             }
-            // Only safe to alias when dst is written exactly once (the copy itself)
-            // AND src is never written in the body (it's immutable). If src is
-            // modified later (e.g. a param reassigned in a loop), the alias would
-            // replace dst with a stale/wrong value.
+            // aliasing holds only when dst is written once, the copy itself, and src is never written in the body
             if writes.get(&dst).copied().unwrap_or(0) == 1
                 && writes.get(&src).copied().unwrap_or(0) == 0
             {

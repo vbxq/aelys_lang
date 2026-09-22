@@ -22,6 +22,14 @@ pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
     "__aelys_to_string",
 ];
 
+// each of these copies out of its string arguments and keeps no pointer to them past the call
+pub const STRING_READER_SYMBOLS: &[&str] = &[
+    "__aelys_str_concat",
+    "__aelys_str_substring_bytes",
+    "__aelys_str_char_count",
+    "__aelys_str_decode_at",
+];
+
 pub fn function_symbol_name(function: &AirFunction) -> String {
     if !function.is_extern && function.name == "main" {
         USER_MAIN_SYMBOL.to_string()

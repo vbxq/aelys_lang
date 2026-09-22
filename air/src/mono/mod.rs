@@ -73,6 +73,7 @@ pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<MonoError
         return Err(errors);
     }
 
+    crate::counts::resolve_counts(&mut program);
     Ok(program)
 }
 

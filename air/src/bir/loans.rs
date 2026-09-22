@@ -55,7 +55,7 @@ fn local_is_ref(body: &BirBody, l: BirLocalId) -> bool {
         .unwrap_or(false)
 }
 
-// e0714 asks whether the operand is a reference, and a projection off a reference base need not be one
+// E0714 asks whether the operand is a reference, and a projection off a reference base need not be one
 fn projected_is_ref(body: &BirBody, place: &BirPlace) -> bool {
     let Some(local) = body.locals.get(place.local.0 as usize) else {
         return false;
@@ -553,6 +553,33 @@ fn push_operand_event<'a>(o: &'a BirOperand, out: &mut Vec<(&'a BirPlace, Access
     }
 }
 
+// handing a `&mut` on by its name reborrows what it points at, for as long as the callee runs
+fn reborrows_of_arguments(body: &BirBody, rv: &BirRvalue) -> Vec<(BirPlace, Access)> {
+    let BirRvalue::Call { args, .. } = rv else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for arg in args {
+        let (BirOperand::Copy(place) | BirOperand::Move(place)) = arg else {
+            continue;
+        };
+        if !place.proj.is_empty() {
+            continue;
+        }
+        let mutable = body
+            .locals
+            .get(place.local.0 as usize)
+            .is_some_and(|l| matches!(l.ty, InferType::Ref { mutable: true, .. }));
+        if !mutable {
+            continue;
+        }
+        let mut through = place.clone();
+        through.proj.push(BirProjection::Deref);
+        out.push((through, Access::BorrowMut));
+    }
+    out
+}
+
 fn rvalue_operand_events<'a>(rv: &'a BirRvalue, out: &mut Vec<(&'a BirPlace, Access)>) {
     match rv {
         BirRvalue::Use(o) | BirRvalue::UnOp(o) => push_operand_event(o, out),
@@ -570,7 +597,7 @@ fn rvalue_operand_events<'a>(rv: &'a BirRvalue, out: &mut Vec<(&'a BirPlace, Acc
     }
 }
 
-fn stmt_events(stmt: &BirStmt) -> Vec<(&BirPlace, Access)> {
+fn stmt_events<'a>(body: &'a BirBody, stmt: &'a BirStmt) -> Vec<(&'a BirPlace, Access)> {
     let mut out = Vec::new();
     if let BirStmtKind::Assign { dest, rvalue } = &stmt.kind {
         out.push((dest, Access::Write));
@@ -586,6 +613,7 @@ fn stmt_events(stmt: &BirStmt) -> Vec<(&BirPlace, Access)> {
             _ => rvalue_operand_events(rvalue, &mut out),
         }
     }
+    let _ = body;
     out
 }
 
@@ -616,7 +644,12 @@ fn check_conflicts(
     for (bi, block) in body.blocks.iter().enumerate() {
         for (i, stmt) in block.stmts.iter().enumerate() {
             let created = created_loan_id(loans, block.id, i);
-            let events = stmt_events(stmt);
+            let reborrows = match &stmt.kind {
+                BirStmtKind::Assign { rvalue, .. } => reborrows_of_arguments(body, rvalue),
+                _ => Vec::new(),
+            };
+            let mut events = stmt_events(body, stmt);
+            events.extend(reborrows.iter().map(|(place, access)| (place, *access)));
             check_events(
                 body,
                 loans,

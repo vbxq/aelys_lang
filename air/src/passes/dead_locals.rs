@@ -23,7 +23,7 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
         .locals
         .retain(|local| referenced.contains(&local.id));
 
-    // Transform or remove statements that assign to dead locals, dead store elimination
+    // transform or remove statements that assign to dead locals, dead store elimination
     for block in &mut function.blocks {
         for stmt in &mut block.stmts {
             if let AirStmtKind::Assign {
@@ -32,19 +32,18 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
             } = &stmt.kind
             {
                 if !referenced.contains(local) {
-                    // Dead store - transform Call into CallVoid (preserves side effects)
+                    // dead store - transform call into callvoid (preserves side effects)
                     if let Rvalue::Call { func, args } = rvalue {
                         stmt.kind = AirStmtKind::CallVoid {
                             func: func.clone(),
                             args: args.clone(),
                         };
                     }
-                    // other rvalues without side effects can be left as-is and will be removed in a second pass
                 }
             }
         }
 
-        // remove remaining dead stores (non-Call assigns to dead locals)
+        // remove remaining dead stores (non-call assigns to dead locals)
         block.stmts.retain(|stmt| {
             if let AirStmtKind::Assign {
                 place: Place::Local(local),
@@ -59,7 +58,7 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
     }
 }
 
-fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
+pub(crate) fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
     match stmt {
         AirStmtKind::Assign { place, rvalue } => {
             collect_place_locals(place, out);
@@ -85,7 +84,7 @@ fn collect_stmt_locals(stmt: &AirStmtKind, out: &mut HashSet<LocalId>) {
     }
 }
 
-fn collect_terminator_locals(term: &AirTerminator, out: &mut HashSet<LocalId>) {
+pub(crate) fn collect_terminator_locals(term: &AirTerminator, out: &mut HashSet<LocalId>) {
     match term {
         AirTerminator::Return(Some(op)) => collect_operand_locals(op, out),
         AirTerminator::Branch { cond, .. } => collect_operand_locals(cond, out),
@@ -164,14 +163,12 @@ fn collect_rvalue_locals(rvalue: &Rvalue, out: &mut HashSet<LocalId>) {
 fn collect_place_locals(place: &Place, out: &mut HashSet<LocalId>) {
     match place {
         Place::Local(_) | Place::Global(_) => {
-            // this is just a write destination, don't mark as referenced, only Field/Index/Deref need the base local to exist because they read it
         }
         Place::Field(local, _) | Place::Deref(local) => {
             // must read the base to access field/deref
             out.insert(*local);
         }
         Place::Index(local, operand) => {
-            // same thing
             out.insert(*local);
             collect_operand_locals(operand, out); // index expression uses this operand
         }

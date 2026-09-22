@@ -348,7 +348,7 @@ pub fn enum_has_data(def: &AirEnumDef) -> bool {
     def.variants.iter().any(|v| !v.payload.is_empty())
 }
 
-fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>) -> u32 {
+pub fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>) -> u32 {
     def.variants
         .iter()
         .flat_map(|v| v.payload.iter())

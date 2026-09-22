@@ -42,6 +42,7 @@ pub enum AirValidationDetail {
     },
     UnknownEnumReference { enum_name: String, context: String },
     TypeParamSurvived { rendered: String, context: String },
+    UnresolvedCount { detail: String },
     UnknownGlobalReference {
         global_name: String,
         context: String,
@@ -147,6 +148,7 @@ impl fmt::Display for AirValidationError {
                     "`{rendered}` still names a type parameter after monomorphization ({context})"
                 )
             }
+            AirValidationDetail::UnresolvedCount { detail } => write!(f, "{detail}"),
             AirValidationDetail::UnknownGlobalReference {
                 global_name,
                 context,
@@ -247,7 +249,7 @@ fn check_function_ptrness(
     }
 }
 
-fn contains_opaque(ty: &AirType) -> bool {
+pub(crate) fn contains_opaque(ty: &AirType) -> bool {
     match ty {
         AirType::Opaque => true,
         AirType::Ptr(inner)
@@ -367,6 +369,14 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
     for function in &program.functions {
         validate_function(function, &known_enums, &known_globals, &mut errors);
         check_function_ptrness(function, program, &mut errors);
+        if function.type_params.is_empty() {
+            for detail in crate::counts::unresolved_counts(function) {
+                errors.push(AirValidationError {
+                    function_name: function.name.clone(),
+                    detail: AirValidationDetail::UnresolvedCount { detail },
+                });
+            }
+        }
     }
 
     if errors.is_empty() {
@@ -576,7 +586,7 @@ fn terminator_targets(term: &AirTerminator) -> Vec<BlockId> {
     }
 }
 
-fn reachable_blocks(function: &AirFunction) -> HashSet<BlockId> {
+pub(crate) fn reachable_blocks(function: &AirFunction) -> HashSet<BlockId> {
     let mut has_predecessors: HashSet<BlockId> = HashSet::new();
     for block in &function.blocks {
         has_predecessors.extend(terminator_targets(&block.terminator));

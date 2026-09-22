@@ -1,6 +1,7 @@
 
 pub mod analysis;
 pub mod bir;
+pub mod counts;
 pub mod layout;
 pub mod lower;
 pub mod modules;
