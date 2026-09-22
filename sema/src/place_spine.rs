@@ -68,8 +68,11 @@ pub fn denotes_a_place(e: &TypedExpr) -> bool {
         TypedExprKind::Identifier(_) => true,
         TypedExprKind::Deref(_) => true,
         _ if is_rc_get(e) => rc_get_receiver(e).is_some_and(denotes_a_place),
+        // `.bytes` is a view the compiler forms on demand, so it has no address of its own
         TypedExprKind::Member { object, member } => {
-            !is_computed_len(&object.ty, member) && denotes_a_place(object)
+            !is_computed_len(&object.ty, member)
+                && !(member == "bytes" && matches!(object.ty, InferType::String))
+                && denotes_a_place(object)
         }
         TypedExprKind::Index { object, .. } => denotes_a_place(object),
         _ => false,
@@ -152,4 +155,3 @@ pub fn target_ptr_is_shared(target: &TypedExpr) -> bool {
     }
     deref_is_shared(&t.ty)
 }
-

@@ -408,6 +408,8 @@ fn air_stage(
 ) -> Result<aelys_air::AirProgram, AelysError> {
     let mut programs: Vec<aelys_air::AirProgram> = Vec::with_capacity(fronts.len());
     let mut bir_imports = aelys_air::bir::Imports::default();
+    let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut retaining_fns: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (front, typed_program) in fronts.iter().zip(typed.iter().copied()) {
         let src = front.source.clone();
@@ -416,6 +418,8 @@ fn air_stage(
             structs: programs.iter().flat_map(|p| p.structs.clone()).collect(),
             enums: programs.iter().flat_map(|p| p.enums.clone()).collect(),
             bir: bir_imports.clone(),
+            fresh_returns: fresh_returns.clone(),
+            retaining_fns: retaining_fns.clone(),
         };
 
         let mut air = aelys_air::lower::try_lower_with_imports(typed_program, imported).map_err(
@@ -459,6 +463,11 @@ fn air_stage(
         }
 
         aelys_air::modules::qualify(&mut air, &front.dotted);
+        let carriers = aelys_air::counts::Carriers::merged(&air.structs, &air.enums);
+        let proven =
+            aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
+        fresh_returns.extend(proven);
+        retaining_fns.extend(aelys_air::lower::retaining_functions(&air.functions));
 
         let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
         if !runtime_claims.is_empty() {

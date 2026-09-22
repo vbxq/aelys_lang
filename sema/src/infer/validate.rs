@@ -581,8 +581,10 @@ impl TypeInference {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(range, generic_scope, declared_type_params);
                 if !denotes_a_place(object) {
-                    self.errors
-                        .push(TypeError::no_place("the base of a slice", expr.span));
+                    self.errors.push(TypeError::no_place(
+                        Self::no_place_subject(object, "the base of a slice"),
+                        expr.span,
+                    ));
                 }
                 if !Self::is_indexable_type(&object.ty)
                     && !self.is_active_generic_placeholder_type(
@@ -618,8 +620,10 @@ impl TypeInference {
                     self.errors
                         .push(TypeError::computed_len(ty.clone(), false, expr.span));
                 } else if !denotes_a_place(operand) {
-                    self.errors
-                        .push(TypeError::no_place("the operand of `&`", expr.span));
+                    self.errors.push(TypeError::no_place(
+                        Self::no_place_subject(operand, "the operand of `&`"),
+                        expr.span,
+                    ));
                 }
                 // `&mut *<shared &>` reborrows a shared borrow mutably
                 if *mutable && spine_is_shared(operand) {
@@ -900,6 +904,24 @@ impl TypeInference {
                 format!("a slice of a `{}`, which carries no length", object.ty),
                 expr.span,
             ));
+        }
+    }
+
+    fn no_place_subject(e: &TypedExpr, fallback: &'static str) -> String {
+        let mut cur = e;
+        loop {
+            match &cur.kind {
+                TypedExprKind::Grouping(inner) => cur = inner,
+                TypedExprKind::Index { object, .. } | TypedExprKind::Slice { object, .. } => {
+                    cur = object
+                }
+                TypedExprKind::Member { object, member }
+                    if member == "bytes" && matches!(object.ty, InferType::String) =>
+                {
+                    return "the receiver of `.bytes`".to_string();
+                }
+                _ => return fallback.to_string(),
+            }
         }
     }
 
