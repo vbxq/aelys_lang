@@ -58,6 +58,7 @@ aelys	group_std_data_tests	test
 aelys	group_std_io_tests	test
 aelys	group_surface_tests	test
 aelys	group_v01_tests	test
+aelys	group_v01b_tests	test
 aelys	ice_surface_tests	test
 aelys	implicit_widening_tests	test
 aelys	len_surface_tests	test

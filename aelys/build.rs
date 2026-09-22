@@ -27,9 +27,12 @@ fn main() {
             let re = regex::Regex::new(pattern).unwrap();
             let new_content = re.replace_all(&content, replacement.as_str());
 
+            // a build that rewrites a tracked file makes every clean tree a lie, so it only says so
             if content != new_content {
-                fs::write(&full_path, new_content.as_ref()).unwrap();
-                println!("cargo:warning=Updated version in {}", file_path);
+                println!(
+                    "cargo:warning={file_path} carries a stale version stamp; it should read \
+                     `{replacement}`"
+                );
             }
         }
     }
