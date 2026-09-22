@@ -368,19 +368,42 @@ void __aelys_vec_release(void *vecptr) {
     __aelys_rc_release(((AelysVec *)vecptr)->ptr);
 }
 
+/* the inline string retain lands here, so this one alone pays for the tombstone */
+void __aelys_rc_retain_checked(void *ptr) {
+    if (ptr == NULL) {
+        return;
+    }
+    if (aelys_immix_is_dead((char *)ptr - AELYS_RC_HEADER_SIZE)) {
+        __aelys_panic(AELYS_RC_RETAIN_FREED_MSG, (long long)(sizeof(AELYS_RC_RETAIN_FREED_MSG) - 1));
+    }
+    uint32_t *count = (uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
+    if (*count == AELYS_RC_DEAD) {
+        __aelys_panic(AELYS_RC_RETAIN_FREED_MSG, (long long)(sizeof(AELYS_RC_RETAIN_FREED_MSG) - 1));
+    }
+    /* one below dead saturates, or the next count would read as freed */
+    if (*count == AELYS_RC_DEAD - 1u) {
+        *count = UINT32_MAX;
+        return;
+    }
+    __aelys_rc_retain(ptr);
+}
+
 /* the argument is the address of the {ptr,len} slot, never the bytes the program holds */
 void __aelys_str_retain(void *strptr) {
-    __aelys_rc_retain((void *)((AelysString *)strptr)->ptr);
+    __aelys_rc_retain_checked((void *)((AelysString *)strptr)->ptr);
 }
 
 void __aelys_str_release(void *strptr) {
     __aelys_rc_release((void *)((AelysString *)strptr)->ptr);
 }
 
-/* make the buffer uniquely owned before any write. a plain memcpy is sound because
-   rc-bearing elements are rejected at the push site, so no element needs its own retain.
+/* make the buffer uniquely owned before any write. rc-bearing elements are rejected at the
+   push site, so a string is the only element that needs its own retain in the copy.
    `extra` is headroom the caller needs beyond len, so push keeps its one-allocation shape */
-void __aelys_vec_detach(void *vecptr, long long elem_size, long long extra) {
+typedef void (*AelysElemGlue)(void *elem);
+
+static void vec_detach(void *vecptr, long long elem_size, long long extra, int strings,
+                       AelysElemGlue dup) {
     AelysVec *v = (AelysVec *)vecptr;
     if (__aelys_rc_refcount(v->ptr) <= 1) {
         return;
@@ -392,17 +415,62 @@ void __aelys_vec_detach(void *vecptr, long long elem_size, long long extra) {
     if (v->len > 0) {
         memcpy(newbuf, v->ptr, (size_t)(v->len * elem_size));
     }
+    /* both buffers now hold every string, and each buffer releases its own when it dies */
+    if (strings) {
+        for (long long i = 0; i < v->len; i++) {
+            __aelys_str_retain((AelysString *)newbuf + i);
+        }
+    } else if (dup != NULL) {
+        for (long long i = 0; i < v->len; i++) {
+            dup((char *)newbuf + i * elem_size);
+        }
+    }
     __aelys_rc_release(v->ptr); /* drop our share, the aliased vec is untouched */
     v->ptr = newbuf;
     v->cap = newcap;
 }
 
+void __aelys_vec_detach(void *vecptr, long long elem_size, long long extra) {
+    vec_detach(vecptr, elem_size, extra, 0, NULL);
+}
+
+void __aelys_vec_detach_str(void *vecptr, long long elem_size, long long extra) {
+    vec_detach(vecptr, elem_size, extra, 1, NULL);
+}
+
+/* a carrier element counts its own strings through the glue its type was given */
+void __aelys_vec_detach_glue(void *vecptr, long long elem_size, long long extra, void *dup) {
+    vec_detach(vecptr, elem_size, extra, 0, (AelysElemGlue)dup);
+}
+
+/* the strings belong to the buffer, so only the share that frees it lets them go */
+void __aelys_vec_release_str(void *vecptr) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->ptr != NULL && __aelys_rc_refcount(v->ptr) == 1) {
+        for (long long i = 0; i < v->len; i++) {
+            __aelys_str_release((AelysString *)v->ptr + i);
+        }
+    }
+    __aelys_rc_release(v->ptr);
+}
+
+void __aelys_vec_release_glue(void *vecptr, long long elem_size, void *drop) {
+    AelysVec *v = (AelysVec *)vecptr;
+    if (v->ptr != NULL && drop != NULL && __aelys_rc_refcount(v->ptr) == 1) {
+        for (long long i = 0; i < v->len; i++) {
+            ((AelysElemGlue)drop)((char *)v->ptr + i * elem_size);
+        }
+    }
+    __aelys_rc_release(v->ptr);
+}
+
 /* copy-on-write push: a shared buffer is copied before it is touched, so the other owner
    keeps value semantics. detaching with extra==1 leaves cap > len, so the grow branch
    below is provably dead on that path and the original `else if` short-circuit survives */
-void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
+static void vec_push(void *vecptr, void *elemptr, long long elem_size, int strings,
+                     AelysElemGlue dup) {
     AelysVec *v = (AelysVec *)vecptr;
-    __aelys_vec_detach(vecptr, elem_size, 1);
+    vec_detach(vecptr, elem_size, 1, strings, dup);
 
     if (v->len == v->cap) {
         long long newcap = v->cap > 0 ? v->cap * 2 : 1;
@@ -414,15 +482,40 @@ void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
     v->len += 1;
 }
 
+void __aelys_vec_push(void *vecptr, void *elemptr, long long elem_size) {
+    vec_push(vecptr, elemptr, elem_size, 0, NULL);
+}
+
+void __aelys_vec_push_str(void *vecptr, void *elemptr, long long elem_size) {
+    vec_push(vecptr, elemptr, elem_size, 1, NULL);
+}
+
+void __aelys_vec_push_glue(void *vecptr, void *elemptr, long long elem_size, void *dup) {
+    vec_push(vecptr, elemptr, elem_size, 0, (AelysElemGlue)dup);
+}
+
 /* the length must match the 21-byte literal */
-void __aelys_vec_pop(void *vecptr, void *outptr, long long elem_size) {
+static void vec_pop(void *vecptr, void *outptr, long long elem_size, int strings,
+                    AelysElemGlue dup) {
     AelysVec *v = (AelysVec *)vecptr;
     if (v->len == 0) {
         __aelys_panic("pop from an empty Vec", 21);
     }
-    __aelys_vec_detach(vecptr, elem_size, 0);
+    vec_detach(vecptr, elem_size, 0, strings, dup);
     v->len -= 1;
     memcpy(outptr, (char *)v->ptr + v->len * elem_size, (size_t)elem_size);
+}
+
+void __aelys_vec_pop(void *vecptr, void *outptr, long long elem_size) {
+    vec_pop(vecptr, outptr, elem_size, 0, NULL);
+}
+
+void __aelys_vec_pop_str(void *vecptr, void *outptr, long long elem_size) {
+    vec_pop(vecptr, outptr, elem_size, 1, NULL);
+}
+
+void __aelys_vec_pop_glue(void *vecptr, void *outptr, long long elem_size, void *dup) {
+    vec_pop(vecptr, outptr, elem_size, 0, (AelysElemGlue)dup);
 }
 
 /* arc is reserved, not implemented; the length must match the 19-byte literal */

@@ -21,6 +21,8 @@ _Static_assert(AELYS_RC_HEADER_SIZE == 16,
 #define AELYS_RC_DEAD ((uint32_t)0xAE11DEADu)
 #define AELYS_RC_FREED_MSG \
     "__aelys_rc_release: the object was already freed, a release with no matching retain"
+#define AELYS_RC_RETAIN_FREED_MSG \
+    "__aelys_rc_retain: the object was already freed, a retain after its last release"
 
 /* set when an object is registered as a cycle candidate, owned by aelys_rc_cycles.c */
 #define AELYS_FLAG_CANDIDATE ((unsigned char)0x01)

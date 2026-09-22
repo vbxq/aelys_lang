@@ -51,7 +51,7 @@ static long long g_block_count = 0;
 static int g_mode = -1;                            /* -1 uninit, 0 = malloc, 1 = immix */
 /* under AELYS_ALLOC=malloc this is the only record of a free that a release may still read */
 /* an integer, never a pointer: a pointer whose target went back to free is indeterminate and gcc folds the comparison from -O1 up */
-static uintptr_t g_last_freed = 0;
+uintptr_t __aelys_last_freed = 0;
 
 static void immix_init_mode(void) {
     const char *e = getenv("AELYS_ALLOC");
@@ -183,8 +183,8 @@ static void *immix_alloc_slot(long long size) {
 
 /* handing the tombstoned address back out must retire it, or an honest release aborts */
 static void *retire_tombstone(void *p) {
-    if (p && (uintptr_t)p == g_last_freed) {
-        g_last_freed = 0;
+    if (p && (uintptr_t)p == __aelys_last_freed) {
+        __aelys_last_freed = 0;
     }
     return p;
 }
@@ -194,7 +194,7 @@ void *aelys_immix_alloc(long long size) {
 }
 
 int aelys_immix_is_dead(const void *base) {
-    return base != NULL && (uintptr_t)base == g_last_freed;
+    return base != NULL && (uintptr_t)base == __aelys_last_freed;
 }
 
 void aelys_immix_free(void *base) {
@@ -202,11 +202,11 @@ void aelys_immix_free(void *base) {
         return;
     }
     if (!immix_enabled()) {
-        g_last_freed = (uintptr_t)base;
+        __aelys_last_freed = (uintptr_t)base;
         free(base);
         return;
     }
-    g_last_freed = (uintptr_t)base;
+    __aelys_last_freed = (uintptr_t)base;
     char *prefix = (char *)base - AELYS_PREFIX_SIZE;
 
     /* asan cannot see a double-free through a region allocator, the magic can */
@@ -236,7 +236,7 @@ void *aelys_immix_realloc(void *base, long long size) {
         void *nbase = retire_tombstone(realloc(base, (size_t)(size > 0 ? size : 0)));
         /* a move leaves the old address freed, and only a non-null return proves the move happened */
         if (base && nbase && (uintptr_t)nbase != old) {
-            g_last_freed = old;
+            __aelys_last_freed = old;
         }
         return nbase;
     }
