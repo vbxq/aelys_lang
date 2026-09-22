@@ -200,7 +200,6 @@ fn main() -> i64 {
     );
 }
 
-// the row-6 marquee, and the three-point proof: creation, conflict, last-use on distinct lines.
 #[test]
 fn push_while_element_borrowed_renders_three_point() {
     let err = reject(
@@ -581,6 +580,41 @@ fn main() -> i64 {
     assert!(
         err.contains("module.aelys:6:14"),
         "primary caret must anchor at the nested borrow: {err}"
+    );
+}
+
+#[test]
+fn a_mut_handed_on_by_name_reborrows_what_it_points_at() {
+    let err = reject(
+        r#"
+fn peek<T>(s: &[T], out: &mut Vec<string>) -> i64 {
+    *out = Vec::new()
+    println(s[0])
+    return 1
+}
+fn g(r: &mut Vec<string>) -> i64 {
+    return peek(Vec::as_slice(*r), r)
+}
+fn main() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    Vec::push(v, "ab" + "1")
+    g(&mut v)
+    return 0
+}
+"#,
+    );
+    assert!(
+        err.contains("[borrow]"),
+        "must carry the borrow marker: {err}"
+    );
+    assert!(
+        err.contains("as mutable"),
+        "handing `r` on reborrows `*r`, which the shared slice already holds: {err}"
+    );
+    assert!(err.contains("[E0713]"), "must carry the E0713 code: {err}");
+    assert!(
+        err.contains("`*r`"),
+        "must name what is reborrowed, not the reference itself: {err}"
     );
 }
 

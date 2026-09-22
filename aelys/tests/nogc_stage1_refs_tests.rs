@@ -153,7 +153,9 @@ fn p6_asan_clean_probe() {
     let source_path = dir.path().join("module.aelys");
     fs::write(&source_path, P6_SRC).expect("write source");
 
-    match compile_file_with_llvm(&source_path, OptimizationLevel::None, false) {
+    match crate::common::with_outline_str_counts(|| {
+        compile_file_with_llvm(&source_path, OptimizationLevel::None, false)
+    }) {
         Ok(()) => {}
         Err(err) => {
             if linker_unavailable(&err.to_string()) {
