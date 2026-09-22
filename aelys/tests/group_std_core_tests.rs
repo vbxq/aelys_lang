@@ -194,9 +194,9 @@ impl Harness {
                     });
                     assert_eq!(
                         got, want,
-                        "{id} at {tag}/{alloc_name}: MUST be allocs={} frees={}; the count is \
-                         derived from the pinned stdout, one managed string per printed line, so \
-                         a higher one means the nogc surface allocated on its own",
+                        "{id} at {tag}/{alloc_name}: MUST be allocs={} frees={}; a printed \
+                         line takes the frame buffer and allocates nothing, so any count at all \
+                         means the nogc surface allocated on its own",
                         want.0, want.1
                     );
                 }
@@ -209,7 +209,7 @@ impl Harness {
     }
 
     fn nogc_row(&self, id: &str, src: &str, stdout: &str) {
-        self.row(id, src, stdout, Some((stdout.lines().count() as i64, 0)));
+        self.row(id, src, stdout, Some((0, 0)));
     }
 
     fn assert_legs(&self, expected: usize) {
@@ -775,7 +775,7 @@ fn group_std_result_is_callable_from_nogc_and_allocates_nothing() {
     h.assert_legs(6);
 }
 
-// `result.result::ok(s[i])` is refused by e0714, so the element is bound before it is wrapped
+// `result.result::ok(s[i])` is refused by E0714, so the element is bound before it is wrapped
 const COMPOSITION: &str = r#"
 needs std.math
 needs std.slice

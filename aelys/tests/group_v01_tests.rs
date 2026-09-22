@@ -404,7 +404,7 @@ fn group_v01_r06_rc_carrier_from_a_conditional_runs() {
         ),
         0,
         "7\n",
-        Some((3, 2)),
+        Some((2, 2)),
     );
 }
 
@@ -518,7 +518,7 @@ fn group_v01_r10_char_class_eab() {
          }\n",
         0,
         "4\né\n233\né\na\n97\na\nb\n98\nb\n",
-        Some((7, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -541,7 +541,7 @@ fn group_v01_r11_char_literals_and_six_operators() {
          }\n",
         0,
         "0\n1\n0\n0\n1\n1\n",
-        Some((6, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -651,7 +651,7 @@ fn group_v01_r17_bytes_of_a_literal_runs() {
          }\n",
         0,
         "104\n2\n",
-        Some((2, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -671,7 +671,7 @@ fn group_v01_r18_bytes_of_a_bound_rc_runs() {
         ),
         0,
         "104\n",
-        Some((2, 1)),
+        Some((1, 1)),
     );
 }
 
@@ -789,7 +789,7 @@ fn group_v01_r23_character_loop_values() {
          }\n",
         0,
         "15\n1870\n19\n",
-        Some((3, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -811,7 +811,7 @@ fn group_v01_r24_plain_arithmetic_control() {
          }\n",
         0,
         "30\n",
-        Some((1, 0)),
+        Some((0, 0)),
     );
 }
 
@@ -833,7 +833,7 @@ fn group_v01_r25_byte_view_loop_control() {
          }\n",
         0,
         "795\n6\n",
-        Some((2, 0)),
+        Some((0, 0)),
     );
 }
 

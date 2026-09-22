@@ -213,7 +213,7 @@ impl Harness {
     }
 
     fn nogc_row(&self, id: &str, src: &str, stdout: &str) {
-        self.row(id, src, stdout, Some((stdout.lines().count() as i64, 0)));
+        self.row(id, src, stdout, Some((0, 0)));
     }
 
     fn rejects_at_every_level(&self, id: &str, src: &str, code: &str, says: &str) {

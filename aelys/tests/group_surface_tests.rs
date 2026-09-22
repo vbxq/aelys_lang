@@ -242,7 +242,7 @@ impl Harness {
             rendered.contains(says),
             "{id} at {tag}: the refusal MUST say {says:?}\n{src}\nrendered:\n{rendered}"
         );
-        // e0901 reads "your program is not at fault", so a refusable program landing there is a lie
+        // E0901 reads "your program is not at fault", so a refusable program landing there is a lie
         assert!(
             !rendered.contains("[E0901]"),
             "{id} at {tag}: this program is refusable, it must not be reported as a compiler \
@@ -411,7 +411,7 @@ fn group_surface_an_interpolation_that_goes_nowhere_allocates_nothing() {
          \x20   return 0\n\
          }\n",
         "é7\n",
-        Some((2, 0)),
+        Some((2, 2)),
         Some((0, 0)),
     );
 }
@@ -427,7 +427,7 @@ fn group_surface_a_vec_temporary_read_for_its_length_is_freed() {
          \x20   return 0\n\
          }\n",
         "2\n",
-        Some((2, 1)),
+        Some((1, 1)),
         None,
     );
 }
@@ -766,7 +766,7 @@ fn group_surface_a_vec_gives_back_and_a_missing_method_names_what_exists() {
          \x20   return 0\n\
          }\n",
         "3\n2\n",
-        Some((3, 1)),
+        Some((1, 1)),
         None,
     );
     h.refuses(

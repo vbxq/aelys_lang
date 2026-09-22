@@ -209,7 +209,7 @@ impl Harness {
     }
 
     fn nogc_row(&self, id: &str, src: &str, stdout: &str) {
-        self.row(id, src, stdout, Some((stdout.lines().count() as i64, 0)));
+        self.row(id, src, stdout, Some((0, 0)));
     }
 
     fn assert_legs(&self, expected: usize) {
@@ -274,7 +274,7 @@ fn group_std_vec_reads_answer_and_allocate_only_the_source_vec() {
         "STD-VEC-1",
         VEC_READS,
         "5\n0\n4\n-777\n-777\n3\n5\n2\n-1\n1\n0\n14\n1\n0\n",
-        Some((15, 1)),
+        Some((1, 1)),
     );
     h.assert_legs(6);
 }
@@ -307,7 +307,7 @@ fn group_std_vec_answers_on_an_empty_vec_without_reading_out_of_bounds() {
         "STD-VEC-2",
         VEC_EMPTY,
         "0\n1\n1\n1\n1\n-1\n0\n1\n-1\n1\n",
-        Some((11, 1)),
+        Some((1, 1)),
     );
     h.assert_legs(6);
 }
@@ -358,12 +358,11 @@ fn group_std_vec_builders_allocate_exactly_one_vec_each() {
         "STD-VEC-3",
         VEC_BUILDERS,
         "14\n7\n25\n5\n3\n1\n3\n28\n4\n10\n114\n1\n0\n14\n",
-        Some((22, 8)),
+        Some((8, 8)),
     );
     h.assert_legs(6);
 }
 
-// a defect of the compiler, not of the library: a `vec` consumed as a temporary is never dropped
 const VEC_TEMPORARY: &str = r#"
 needs std.vec
 
@@ -378,9 +377,9 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn group_std_vec_an_unbound_temporary_is_allocated_and_never_freed() {
+fn group_std_vec_an_unbound_temporary_is_freed_at_the_end_of_its_statement() {
     let h = Harness::new();
-    h.row("STD-VEC-4", VEC_TEMPORARY, "3\n", Some((3, 1)));
+    h.row("STD-VEC-4", VEC_TEMPORARY, "3\n", Some((2, 2)));
     h.assert_legs(6);
 }
 
@@ -401,7 +400,7 @@ fn main() -> i64 {
 #[test]
 fn group_std_vec_the_same_value_bound_to_a_local_is_freed() {
     let h = Harness::new();
-    h.row("STD-VEC-5", VEC_TEMPORARY_BOUND, "12\n", Some((3, 2)));
+    h.row("STD-VEC-5", VEC_TEMPORARY_BOUND, "12\n", Some((2, 2)));
     h.assert_legs(6);
 }
 
@@ -423,7 +422,7 @@ fn main() -> i64 {
 #[test]
 fn group_std_vec_find_answers_an_option_where_index_of_answers_a_sentinel() {
     let h = Harness::new();
-    h.row("STD-VEC-6", VEC_FIND, "1\n1\n-1\n18\n", Some((5, 1)));
+    h.row("STD-VEC-6", VEC_FIND, "1\n1\n-1\n18\n", Some((1, 1)));
     h.assert_legs(6);
 }
 
@@ -530,7 +529,7 @@ fn group_std_str_builders_answer_and_every_concatenation_is_counted() {
         "STD-STR-3",
         STR_BUILDERS,
         "hello\nworld\nhe\nlo world\n[]\nababab\n[]\n[hi]\n[]\n[hi]\n",
-        Some((21, 2)),
+        Some((21, 21)),
     );
     h.assert_legs(6);
 }
@@ -569,7 +568,7 @@ fn group_std_str_split_and_join_round_trip_and_keep_the_empty_parts() {
         "STD-STR-4",
         STR_SPLIT_JOIN,
         "4\na\n[]\nc\na-b--c\n1\nabc\n1\nabc\n3\nb\nabc\n",
-        Some((30, 14)),
+        Some((26, 26)),
     );
     h.assert_legs(6);
 }
@@ -597,7 +596,7 @@ fn group_std_str_substring_allocates_once_per_call_whatever_it_copies() {
             "STD-STR-5",
             &substring_growth(n),
             &format!("{n}\n"),
-            Some((2, 0)),
+            Some((1, 1)),
         );
     }
     h.assert_legs(18);
@@ -661,7 +660,7 @@ fn group_std_str_the_building_surface_answers_on_a_multibyte_string() {
         "STD-STR-7",
         STR_MULTIBYTE_BUILDERS,
         "élé\nphant\n[]\n[élé]\n3\nà\né-à-ü\n",
-        Some((18, 5)),
+        Some((17, 17)),
     );
     h.assert_legs(6);
 }
@@ -820,7 +819,7 @@ fn group_std_str_from_int_and_parse_int_round_trip_across_the_whole_range() {
         "STD-STR-8",
         STR_INT_ROUND_TRIP,
         "0\n-42\n9223372036854775807\n-9223372036854775808\n1\n1\n1\n1\n1\n",
-        Some((14, 0)),
+        Some((9, 9)),
     );
     h.assert_legs(6);
 }

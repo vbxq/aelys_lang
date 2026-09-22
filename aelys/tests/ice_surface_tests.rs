@@ -299,8 +299,7 @@ fn main() -> i64 {
 #[test]
 fn ice1_a_length_of_a_temporary_answers_the_length() {
     let h = Harness::new();
-    // only the literal temporary is released; the two returned by mkv() still leak
-    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 6, 1);
+    h.value_row("ICE-1", I1_LEN_OF_A_TEMPORARY, "5\n5\n2\n", 3, 3);
     h.assert_legs(6);
 }
 
@@ -422,10 +421,10 @@ fn main() -> i64 {
 #[test]
 fn ice5_the_shapes_that_were_already_fine_are_untouched() {
     let h = Harness::new();
-    h.value_row("ICE-5a", I5_LEN_ON_A_PLACE, "3\n4\n", 3, 1);
-    h.value_row("ICE-5b", I5_AS_SLICE_ON_A_PLACE, "3\n3\n", 3, 1);
-    h.value_row("ICE-5c", I5_AS_SLICE_THROUGH_A_DEREF, "10\n", 2, 1);
-    h.value_row("ICE-5d", I5_RC_GET_ONE_LAYER, "101\n", 2, 1);
+    h.value_row("ICE-5a", I5_LEN_ON_A_PLACE, "3\n4\n", 1, 1);
+    h.value_row("ICE-5b", I5_AS_SLICE_ON_A_PLACE, "3\n3\n", 1, 1);
+    h.value_row("ICE-5c", I5_AS_SLICE_THROUGH_A_DEREF, "10\n", 1, 1);
+    h.value_row("ICE-5d", I5_RC_GET_ONE_LAYER, "101\n", 1, 1);
     h.assert_legs(24);
 }
 
@@ -457,7 +456,7 @@ fn ice6_every_builtin_intercept_still_answers_on_a_place_receiver() {
         "ICE-6",
         I6_EVERY_INTERCEPT_ON_A_PLACE,
         "7\n2\n3\n2\n40\n",
-        9,
+        4,
         4,
     );
     h.assert_legs(6);
@@ -510,6 +509,45 @@ fn main() -> i64 {
     return Vec::len(mkv())
 }
 "#;
+
+const I8_GLOBAL_VEC: &str = r#"
+let mut gv: Vec<string> = Vec::new()
+fn main() -> i64 {
+    println("{Vec::len(gv)}")
+    return 0
+}
+"#;
+
+const I8_GLOBAL_RC: &str = r#"
+let gr: Rc<i64> = Rc::new(7)
+fn main() -> i64 {
+    println("{Rc::get(gr)}")
+    return 0
+}
+"#;
+
+#[test]
+fn ice8_a_constructor_a_global_cannot_fold_is_unsupported_not_a_compiler_bug() {
+    let h = Harness::new();
+    for (id, src) in [("ICE-8a", I8_GLOBAL_VEC), ("ICE-8b", I8_GLOBAL_RC)] {
+        for (tag, opt) in LEVELS {
+            let path = h.write(id, tag, src);
+            h.legs.set(h.legs.get() + 1);
+            let Err(rendered) = lower_file_to_air(&path, *opt) else {
+                panic!("{id} at {tag}: a global a constructor initializes must be refused");
+            };
+            assert!(
+                rendered.contains("E0902"),
+                "{id} at {tag}: a constructor no global can fold is not supported yet,                  it is not a broken invariant\n{rendered}"
+            );
+            assert!(
+                !rendered.contains("E0901"),
+                "{id} at {tag}: the refusal must not tell the reader they found a compiler                  bug\n{rendered}"
+            );
+        }
+    }
+    h.assert_legs(6);
+}
 
 #[test]
 fn ice7_no_builtin_intercept_reports_a_compiler_bug_on_a_non_place_receiver() {

@@ -281,6 +281,32 @@ fn main() -> i64 {
 }
 "#;
 
+const S11_ADDRESS_OF_A_BYTE: &str = r#"
+fn main() -> i64 {
+    let s: string = "abc"
+    let b = &s.bytes[0]
+    println("{*b}")
+    return 0
+}
+"#;
+
+const S11_SLICE_OF_THE_BYTES: &str = r#"
+fn main() -> i64 {
+    let s: string = "abc"
+    let b = s.bytes[0..2]
+    println("{b.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn s11_7_the_bytes_view_has_no_address_of_its_own_and_says_so_rather_than_ice() {
+    let h = Harness::new();
+    h.rejects_at_every_level("S1.1-7a", S11_ADDRESS_OF_A_BYTE, "E0421", NO_PLACE_SAYS);
+    h.rejects_at_every_level("S1.1-7b", S11_SLICE_OF_THE_BYTES, "E0421", NO_PLACE_SAYS);
+    h.assert_legs(8);
+}
+
 #[test]
 fn s11_1_a_byte_view_of_a_receiver_with_no_storage_is_refused_at_every_level() {
     let h = Harness::new();
