@@ -182,11 +182,7 @@ impl<'a> FunctionCodegen<'a> {
                         ))
                     })?;
 
-                let tmp = self
-                    .builder
-                    .build_alloca(enum_ty, "enum_tmp")
-                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                self.align_alloca(tmp, enum_ty.into())?;
+                let tmp = self.entry_alloca(enum_ty.into(), "enum_tmp")?;
 
                 let tag_ptr = self
                     .builder
@@ -200,7 +196,9 @@ impl<'a> FunctionCodegen<'a> {
                         .builder
                         .build_struct_gep(enum_ty, tmp, 1, "enum_payload_ptr")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                    let payload_arr_ty = self.context.i8_type().array_type(max_payload);
+                    let payload_arr_ty = enum_ty
+                        .get_field_type_at_index(1)
+                        .expect("a data enum declares its payload cell");
                     let zero = payload_arr_ty.const_zero();
                     self.store_value(payload_ptr, zero.into())?;
                 }
@@ -223,11 +221,7 @@ impl<'a> FunctionCodegen<'a> {
                     ))
                 })?;
 
-            let tmp = self
-                .builder
-                .build_alloca(enum_ty, "enum_tmp")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.align_alloca(tmp, enum_ty.into())?;
+            let tmp = self.entry_alloca(enum_ty.into(), "enum_tmp")?;
 
             let tag_ptr = self
                 .builder
@@ -241,7 +235,9 @@ impl<'a> FunctionCodegen<'a> {
                     .builder
                     .build_struct_gep(enum_ty, tmp, 1, "enum_payload_ptr")
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                let payload_arr_ty = self.context.i8_type().array_type(max_payload);
+                let payload_arr_ty = enum_ty
+                    .get_field_type_at_index(1)
+                    .expect("a data enum declares its payload cell");
                 let zero = payload_arr_ty.const_zero();
                 self.store_value(payload_ptr, zero.into())?;
             }
@@ -282,7 +278,7 @@ impl<'a> FunctionCodegen<'a> {
                 let value = self.generate_operand(operand)?;
 
                 // alignment is 4, so the payload base is 4-byte aligned. we must
-                let field_align = alignment_of(field_llvm_ty).min(4);
+                let field_align = alignment_of(field_llvm_ty);
                 let store = self
                     .builder
                     .build_store(field_ptr, value)
@@ -320,11 +316,7 @@ impl<'a> FunctionCodegen<'a> {
                 })?;
 
             let val = self.generate_operand(operand)?;
-            let tmp = self
-                .builder
-                .build_alloca(enum_ty, "match_enum_tmp")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.align_alloca(tmp, enum_ty.into())?;
+            let tmp = self.entry_alloca(enum_ty.into(), "match_enum_tmp")?;
             self.store_value(tmp, val)?;
 
             let tag_ptr = self
@@ -381,11 +373,7 @@ impl<'a> FunctionCodegen<'a> {
             })?;
 
         let val = self.generate_operand(operand)?;
-        let tmp = self
-            .builder
-            .build_alloca(enum_ty, "match_payload_tmp")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        self.align_alloca(tmp, enum_ty.into())?;
+        let tmp = self.entry_alloca(enum_ty.into(), "match_payload_tmp")?;
         self.store_value(tmp, val)?;
 
         let payload_base_ptr = self
@@ -414,7 +402,7 @@ impl<'a> FunctionCodegen<'a> {
         }
         .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        let field_align = alignment_of(field_llvm_ty).min(4);
+        let field_align = alignment_of(field_llvm_ty);
         let load = self
             .builder
             .build_load(

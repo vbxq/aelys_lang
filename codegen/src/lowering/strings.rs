@@ -184,11 +184,7 @@ impl<'a> FunctionCodegen<'a> {
         name: &str,
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         if self.target_is_windows() {
-            let result_ptr = self
-                .builder
-                .build_alloca(ret_ty, "sret_slot")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.align_alloca(result_ptr, ret_ty)?;
+            let result_ptr = self.entry_alloca(ret_ty, "sret_slot")?;
             let mut all_args: Vec<BasicMetadataValueEnum<'static>> = vec![result_ptr.into()];
             all_args.extend_from_slice(args);
             let call = self

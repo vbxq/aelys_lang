@@ -1,6 +1,9 @@
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::lowering::stmts::RC_HEADER_SIZE;
+
+// must stay equal to aelys_rc_dead in core/src/aelys_rc.h
+const RC_DEAD: u32 = 0xAE11_DEAD;
 use crate::types::aelys_string_type;
 use aelys_air::{AirType, LocalId};
 use inkwell::AddressSpace;
@@ -54,8 +57,187 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_rc_release", fn_ty, None)
     }
 
-    pub(crate) fn ensure_vec_detach_function(&self) -> FunctionValue<'static> {
-        if let Some(function) = self.module.get_function("__aelys_vec_detach") {
+    fn last_freed_global(&self) -> PointerValue<'static> {
+        match self.module.get_global("__aelys_last_freed") {
+            Some(global) => global.as_pointer_value(),
+            None => self
+                .module
+                .add_global(self.context.i64_type(), None, "__aelys_last_freed")
+                .as_pointer_value(),
+        }
+    }
+
+    // the tombstone is read before the header, which a freed cell may no longer hold
+    pub(crate) fn emit_inline_str_count(
+        &mut self,
+        retain: bool,
+        slot: PointerValue<'static>,
+    ) -> Result<(), CodegenError> {
+        let slow_fn = if retain {
+            self.ensure_rc_retain_checked_function()
+        } else {
+            self.ensure_rc_release_function()
+        };
+        let ptr_ty = self.context.ptr_type(AddressSpace::default());
+        let i8_ty = self.context.i8_type();
+        let i32_ty = self.context.i32_type();
+        let i64_ty = self.context.i64_type();
+        let err = |e: inkwell::builder::BuilderError| CodegenError::LlvmError(e.to_string());
+
+        let data_ptr = self
+            .builder
+            .build_load(ptr_ty, slot, "str_rc_data")
+            .map_err(err)?
+            .into_pointer_value();
+        let current_fn = self.function;
+        let tomb_block = self.context.append_basic_block(current_fn, "str_rc_tomb");
+        let count_block = self.context.append_basic_block(current_fn, "str_rc_count");
+        let test_block = self.context.append_basic_block(current_fn, "str_rc_test");
+        let fast_block = self.context.append_basic_block(current_fn, "str_rc_fast");
+        let slow_block = self.context.append_basic_block(current_fn, "str_rc_slow");
+        let cont_block = self.context.append_basic_block(current_fn, "str_rc_cont");
+
+        let is_nonnull = self
+            .builder
+            .build_is_not_null(data_ptr, "str_rc_nn")
+            .map_err(err)?;
+        self.builder
+            .build_conditional_branch(is_nonnull, tomb_block, cont_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(tomb_block);
+        let neg_header = i64_ty.const_int((RC_HEADER_SIZE as i64).wrapping_neg() as u64, true);
+        let header_ptr = unsafe {
+            self.builder
+                .build_in_bounds_gep(i8_ty, data_ptr, &[neg_header], "str_rc_hdr")
+                .map_err(err)?
+        };
+        let last_freed = self
+            .builder
+            .build_load(i64_ty, self.last_freed_global(), "str_rc_last_freed")
+            .map_err(err)?
+            .into_int_value();
+        let header_addr = self
+            .builder
+            .build_ptr_to_int(header_ptr, i64_ty, "str_rc_hdr_addr")
+            .map_err(err)?;
+        let is_tomb = self
+            .builder
+            .build_int_compare(IntPredicate::EQ, header_addr, last_freed, "str_rc_is_tomb")
+            .map_err(err)?;
+        self.builder
+            .build_conditional_branch(is_tomb, slow_block, count_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(count_block);
+        let count = self
+            .builder
+            .build_load(i32_ty, header_ptr, "str_rc_count")
+            .map_err(err)?
+            .into_int_value();
+        let is_immortal = self
+            .builder
+            .build_int_compare(
+                IntPredicate::EQ,
+                count,
+                i32_ty.const_int(u32::MAX as u64, false),
+                "str_rc_immortal",
+            )
+            .map_err(err)?;
+        self.builder
+            .build_conditional_branch(is_immortal, cont_block, test_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(test_block);
+        let not_dead = self
+            .builder
+            .build_int_compare(
+                IntPredicate::NE,
+                count,
+                i32_ty.const_int(RC_DEAD as u64, false),
+                "str_rc_not_dead",
+            )
+            .map_err(err)?;
+        let fast = if retain {
+            // one below dead saturates in the runtime, or the next count would read as freed
+            let from_edge = self
+                .builder
+                .build_int_sub(
+                    count,
+                    i32_ty.const_int((RC_DEAD - 1) as u64, false),
+                    "str_rc_from_edge",
+                )
+                .map_err(err)?;
+            self.builder
+                .build_int_compare(
+                    IntPredicate::UGT,
+                    from_edge,
+                    i32_ty.const_int(1, false),
+                    "str_rc_off_edge",
+                )
+                .map_err(err)?
+        } else {
+            let shared = self
+                .builder
+                .build_int_compare(
+                    IntPredicate::UGT,
+                    count,
+                    i32_ty.const_int(1, false),
+                    "str_rc_shared",
+                )
+                .map_err(err)?;
+            self.builder
+                .build_and(not_dead, shared, "str_rc_fast_ok")
+                .map_err(err)?
+        };
+        self.builder
+            .build_conditional_branch(fast, fast_block, slow_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(fast_block);
+        let one = i32_ty.const_int(1, false);
+        let next = if retain {
+            self.builder.build_int_add(count, one, "str_rc_inc")
+        } else {
+            self.builder.build_int_sub(count, one, "str_rc_dec")
+        }
+        .map_err(err)?;
+        self.builder.build_store(header_ptr, next).map_err(err)?;
+        self.builder
+            .build_unconditional_branch(cont_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(slow_block);
+        self.builder
+            .build_call(slow_fn, &[data_ptr.into()], "")
+            .map_err(err)?;
+        self.builder
+            .build_unconditional_branch(cont_block)
+            .map_err(err)?;
+
+        self.builder.position_at_end(cont_block);
+        Ok(())
+    }
+
+    fn ensure_rc_retain_checked_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_rc_retain_checked") {
+            return function;
+        }
+        let fn_ty = self.context.void_type().fn_type(
+            &[self.context.ptr_type(AddressSpace::default()).into()],
+            false,
+        );
+        self.module
+            .add_function("__aelys_rc_retain_checked", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_vec_detach_function(&self, strings: bool) -> FunctionValue<'static> {
+        let name = if strings {
+            "__aelys_vec_detach_str"
+        } else {
+            "__aelys_vec_detach"
+        };
+        if let Some(function) = self.module.get_function(name) {
             return function;
         }
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
@@ -64,7 +246,64 @@ impl<'a> FunctionCodegen<'a> {
             .context
             .void_type()
             .fn_type(&[ptr_ty, i64_ty, i64_ty], false);
-        self.module.add_function("__aelys_vec_detach", fn_ty, None)
+        self.module.add_function(name, fn_ty, None)
+    }
+
+    pub(crate) fn vec_elem_glue(
+        &self,
+        elem: &AirType,
+        retain: bool,
+    ) -> Option<FunctionValue<'static>> {
+        if *elem == AirType::Str {
+            return None;
+        }
+        let carriers =
+            aelys_air::counts::Carriers::merged(&self.program.structs, &self.program.enums);
+        if !carriers.carries_string(elem) {
+            return None;
+        }
+        self.module
+            .get_function(&aelys_air::counts::glue_name(elem, retain))
+    }
+
+    pub(crate) fn ensure_vec_detach_glue_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_vec_detach_glue") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[ptr_ty, i64_ty, i64_ty, ptr_ty], false);
+        self.module
+            .add_function("__aelys_vec_detach_glue", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_vec_release_glue_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_vec_release_glue") {
+            return function;
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        let fn_ty = self
+            .context
+            .void_type()
+            .fn_type(&[ptr_ty, i64_ty, ptr_ty], false);
+        self.module
+            .add_function("__aelys_vec_release_glue", fn_ty, None)
+    }
+
+    pub(crate) fn ensure_vec_release_str_function(&self) -> FunctionValue<'static> {
+        if let Some(function) = self.module.get_function("__aelys_vec_release_str") {
+            return function;
+        }
+        let fn_ty = self.context.void_type().fn_type(
+            &[self.context.ptr_type(AddressSpace::default()).into()],
+            false,
+        );
+        self.module
+            .add_function("__aelys_vec_release_str", fn_ty, None)
     }
 
     /// itself in an out-of-line cold block, so an unshared write pays no call and never allocates.
@@ -74,7 +313,11 @@ impl<'a> FunctionCodegen<'a> {
         inner: &AirType,
         through_ptr: bool,
     ) -> Result<(), CodegenError> {
-        let detach_fn = self.ensure_vec_detach_function();
+        let glue = self.vec_elem_glue(inner, true);
+        let detach_fn = match glue {
+            Some(_) => self.ensure_vec_detach_glue_function(),
+            None => self.ensure_vec_detach_function(*inner == AirType::Str),
+        };
         let elem_size = self.air_type_size(inner)? as u64;
         let v_alloca = if through_ptr {
             let p = self.load_local(local)?.into_pointer_value();
@@ -137,12 +380,13 @@ impl<'a> FunctionCodegen<'a> {
         self.builder.position_at_end(slow_block);
         let elem_size_val = self.context.i64_type().const_int(elem_size, false);
         let zero = self.context.i64_type().const_zero();
+        let mut detach_args: Vec<inkwell::values::BasicMetadataValueEnum<'static>> =
+            vec![v_alloca.into(), elem_size_val.into(), zero.into()];
+        if let Some(dup) = glue {
+            detach_args.push(dup.as_global_value().as_pointer_value().into());
+        }
         self.builder
-            .build_call(
-                detach_fn,
-                &[v_alloca.into(), elem_size_val.into(), zero.into()],
-                "",
-            )
+            .build_call(detach_fn, &detach_args, "")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
         self.builder
             .build_unconditional_branch(cont_block)

@@ -9,10 +9,11 @@ use crate::lowering::strings::{
 use crate::types::{aelys_string_type, air_basic_type_to_llvm, closure_fat_ptr_type};
 use aelys_air::{
     AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, EnumRef, Operand,
-    layout::{enum_has_data, enum_max_payload_size, resolved_layout},
+    layout::{enum_has_data, enum_max_payload_align, enum_max_payload_size, resolved_layout},
 };
 use inkwell::AddressSpace;
 use inkwell::module::Linkage;
+use inkwell::types::StructType;
 use inkwell::values::{BasicValueEnum, IntValue, PointerValue};
 
 pub(crate) const GLOBAL_GET_PREFIX: &str = "__aelys_global_get_";
@@ -408,12 +409,18 @@ impl CodegenContext {
                     enum_struct_name
                 ))
             })?;
-        let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
-        let payload = self.context.i8_type().array_type(payload_len).const_zero();
+        let payload = enum_ty
+            .get_field_type_at_index(1)
+            .ok_or_else(|| {
+                CodegenError::UnsupportedType(format!(
+                    "enum type {enum_struct_name} has no payload cell"
+                ))
+            })?
+            .const_zero();
         Ok(enum_ty
             .const_named_struct(&[
                 self.context.i32_type().const_int(tag as u64, false).into(),
-                payload.into(),
+                payload,
             ])
             .into())
     }
@@ -491,12 +498,12 @@ impl CodegenContext {
         let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
         let payload_bytes =
             self.enum_payload_initializer_bytes(global_name, enum_def, variant, payload, program)?;
-        let payload = self.context.i8_type().const_array(&payload_bytes);
         debug_assert_eq!(payload_len as usize, payload_bytes.len());
+        let payload = self.enum_payload_cell(global_name, enum_ty, &payload_bytes)?;
         Ok(enum_ty
             .const_named_struct(&[
                 self.context.i32_type().const_int(tag as u64, false).into(),
-                payload.into(),
+                payload,
             ])
             .into())
     }
@@ -599,6 +606,39 @@ impl CodegenContext {
         } else {
             Ok(fn_ptr.into())
         }
+    }
+
+    fn enum_payload_cell(
+        &self,
+        global_name: &str,
+        enum_ty: StructType<'static>,
+        bytes: &[IntValue<'static>],
+    ) -> Result<BasicValueEnum<'static>, CodegenError> {
+        let cell = enum_ty.get_field_type_at_index(1).ok_or_else(|| {
+            CodegenError::UnsupportedType(format!(
+                "global '{global_name}' names an enum type with no payload cell"
+            ))
+        })?;
+        let element = cell.into_array_type().get_element_type().into_int_type();
+        let width = (element.get_bit_width() / 8) as usize;
+        if width <= 1 {
+            return Ok(self.context.i8_type().const_array(bytes).into());
+        }
+        let mut cells = Vec::new();
+        for chunk in bytes.chunks(width) {
+            let mut value: u64 = 0;
+            for (index, byte) in chunk.iter().enumerate() {
+                let byte = byte.get_zero_extended_constant().ok_or_else(|| {
+                    CodegenError::UnsupportedInstruction(format!(
+                        "global '{global_name}' serializes a payload byte that is not a plain \
+                         constant"
+                    ))
+                })?;
+                value |= (byte & 0xff) << (8 * index);
+            }
+            cells.push(element.const_int(value, false));
+        }
+        Ok(element.const_array(&cells).into())
     }
 
     fn enum_payload_initializer_bytes(
@@ -737,7 +777,7 @@ impl CodegenContext {
             &AirType::Enum(EnumRef::plain(enum_name)),
             &program.struct_sizes,
         );
-        let payload_offset: u32 = 4;
+        let payload_offset = align_to(4, enum_max_payload_align(enum_def, &program.struct_sizes));
         let variant = enum_def
             .variants
             .iter()

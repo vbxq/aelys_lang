@@ -2,7 +2,7 @@ use crate::CodegenContext;
 use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::types::air_basic_type_to_llvm;
-use aelys_air::layout::{enum_has_data, enum_max_payload_size};
+use aelys_air::layout::{enum_has_data, enum_max_payload_align, enum_max_payload_size};
 use aelys_air::{AirProgram, AirType, Operand};
 use inkwell::types::StructType;
 use inkwell::values::{BasicValue, BasicValueEnum, PointerValue};
@@ -18,10 +18,17 @@ impl CodegenContext {
         for enum_def in &program.enums {
             if enum_has_data(enum_def) {
                 let max_payload = enum_max_payload_size(enum_def, &program.struct_sizes);
+                let payload_align = enum_max_payload_align(enum_def, &program.struct_sizes);
                 let name = crate::types::enum_struct_name(&enum_def.name);
                 let enum_ty = self.context.opaque_struct_type(&name);
                 let tag_ty = self.context.i32_type().into();
-                let payload_ty = self.context.i8_type().array_type(max_payload).into();
+                let cells = max_payload.div_ceil(payload_align.max(1));
+                let payload_ty = match payload_align {
+                    8 => self.context.i64_type().array_type(cells).into(),
+                    4 => self.context.i32_type().array_type(cells).into(),
+                    2 => self.context.i16_type().array_type(cells).into(),
+                    _ => self.context.i8_type().array_type(max_payload).into(),
+                };
                 enum_ty.set_body(&[tag_ty, payload_ty], false);
             } else {
                 let marker = crate::types::enum_tag_marker_name(&enum_def.name);
@@ -65,11 +72,7 @@ impl<'a> FunctionCodegen<'a> {
             .context
             .get_struct_type(name)
             .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown struct {}", name)))?;
-        let tmp = self
-            .builder
-            .build_alloca(struct_ty, "struct_tmp")
-            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-        self.align_alloca(tmp, struct_ty.into())?;
+        let tmp = self.entry_alloca(struct_ty.into(), "struct_tmp")?;
 
         for (field_name, operand) in fields {
             let index = self.struct_field_index(name, field_name)?;

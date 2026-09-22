@@ -334,7 +334,7 @@ impl<'a> FunctionCodegen<'a> {
         Ok(ptr)
     }
 
-    fn entry_block(&self) -> Result<BasicBlock<'static>, CodegenError> {
+    pub(crate) fn entry_block(&self) -> Result<BasicBlock<'static>, CodegenError> {
         self.lookup_block(self.entry_block_id)
     }
 

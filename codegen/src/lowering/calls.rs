@@ -70,9 +70,57 @@ impl<'a> FunctionCodegen<'a> {
             }
         }
 
+        if let Callee::Named(name) = callee
+            && (name == "__aelys_dup" || name == "__aelys_drop")
+        {
+            return Err(CodegenError::UnsupportedInstruction(format!(
+                "`{name}` reached codegen: mono resolves every abstract count"
+            )));
+        }
+
         let mut arg_values = Vec::with_capacity(args.len());
         for arg in args {
             arg_values.push(self.generate_operand(arg)?);
+        }
+
+        if let Callee::Named(name) = callee
+            && name == "__aelys_vec_release"
+            && let [vec] = args
+            && let Some(elem) = self.vec_element_of(vec)?
+        {
+            if elem == AirType::Str {
+                let function = self.ensure_vec_release_str_function();
+                self.builder
+                    .build_call(function, &[arg_values[0].into()], "")
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(None);
+            }
+            if let Some(drop) = self.vec_elem_glue(&elem, false) {
+                let function = self.ensure_vec_release_glue_function();
+                let size = self
+                    .context
+                    .i64_type()
+                    .const_int(self.air_type_size(&elem)? as u64, false);
+                let glue_ptr = drop.as_global_value().as_pointer_value();
+                self.builder
+                    .build_call(
+                        function,
+                        &[arg_values[0].into(), size.into(), glue_ptr.into()],
+                        "",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+                return Ok(None);
+            }
+        }
+
+        if let Callee::Named(name) = callee
+            && (name == "__aelys_str_retain" || name == "__aelys_str_release")
+            && let [slot] = arg_values.as_slice()
+            && slot.is_pointer_value()
+            && !crate::outline_str_counts()
+        {
+            self.emit_inline_str_count(name == "__aelys_str_retain", slot.into_pointer_value())?;
+            return Ok(None);
         }
 
         if let Callee::Named(name) = callee {
@@ -329,11 +377,7 @@ impl<'a> FunctionCodegen<'a> {
                     let fn_ptr = self.load_local(*local)?.into_pointer_value();
                     if let Some(ret_air_ty) = sret_ret {
                         let ret_ty = air_basic_type_to_llvm(&ret_air_ty, self.context)?;
-                        let result_ptr = self
-                            .builder
-                            .build_alloca(ret_ty, "sret_slot")
-                            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-                        self.align_alloca(result_ptr, ret_ty)?;
+                        let result_ptr = self.entry_alloca(ret_ty, "sret_slot")?;
                         let mut all_args: Vec<BasicMetadataValueEnum<'static>> =
                             vec![result_ptr.into()];
                         all_args.extend(metadata_args.iter().copied());
@@ -490,7 +534,7 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Enum(ref enum_ref) => {
                 return self.generate_enum_print(enum_ref, &args[0], value, newline, expected_ret);
             }
-            _ => self.emit_scalar_to_string(&arg_type, value)?,
+            _ => self.emit_scalar_to_string_into(&arg_type, value)?,
         };
 
         let (ptr, len) = if string_value.is_struct_value() {
@@ -807,11 +851,7 @@ impl<'a> FunctionCodegen<'a> {
                         enum_struct_name
                     ))
                 })?;
-            let tmp = self
-                .builder
-                .build_alloca(enum_ty, "print_enum_tmp")
-                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-            self.align_alloca(tmp, enum_ty.into())?;
+            let tmp = self.entry_alloca(enum_ty.into(), "print_enum_tmp")?;
             self.store_value(tmp, value)?;
             let tag_ptr = self
                 .builder
@@ -886,6 +926,16 @@ impl<'a> FunctionCodegen<'a> {
         }
     }
 
+    fn vec_element_of(&self, vec: &Operand) -> Result<Option<AirType>, CodegenError> {
+        let AirType::Ptr(outer) = self.operand_type(vec)? else {
+            return Ok(None);
+        };
+        let AirType::Vec(elem) = outer.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some((**elem).clone()))
+    }
+
     fn generate_vec_runtime_call(
         &mut self,
         name: &str,
@@ -910,6 +960,20 @@ impl<'a> FunctionCodegen<'a> {
         };
         let elem_size = self.air_type_size(&elem_ty)? as u64;
         let size_val = self.context.i64_type().const_int(elem_size, false);
+        let moves_element = name == "__aelys_vec_push" || name == "__aelys_vec_pop";
+        let elem_glue = moves_element
+            .then(|| self.vec_elem_glue(&elem_ty, true))
+            .flatten();
+        let variant_name;
+        let name = if elem_ty == AirType::Str && moves_element {
+            variant_name = format!("{name}_str");
+            variant_name.as_str()
+        } else if elem_glue.is_some() {
+            variant_name = format!("{name}_glue");
+            variant_name.as_str()
+        } else {
+            name
+        };
         let ptr_ty = self.context.ptr_type(inkwell::AddressSpace::default());
         let i64_ty = self.context.i64_type();
 
@@ -947,6 +1011,22 @@ impl<'a> FunctionCodegen<'a> {
                         .void_type()
                         .fn_type(&[ptr_ty.into(), i64_ty.into(), i64_ty.into()], false),
                     vec![vec_ptr.into(), size_val.into(), count.into()],
+                )
+            } else if let Some(dup) = elem_glue {
+                let vec_ptr = arg_values[0].into_pointer_value();
+                let elem_ptr = arg_values[1].into_pointer_value();
+                let glue_ptr = dup.as_global_value().as_pointer_value();
+                (
+                    self.context.void_type().fn_type(
+                        &[ptr_ty.into(), ptr_ty.into(), i64_ty.into(), ptr_ty.into()],
+                        false,
+                    ),
+                    vec![
+                        vec_ptr.into(),
+                        elem_ptr.into(),
+                        size_val.into(),
+                        glue_ptr.into(),
+                    ],
                 )
             } else {
                 let vec_ptr = arg_values[0].into_pointer_value();

@@ -39,6 +39,28 @@ impl<'a> FunctionCodegen<'a> {
         Ok(value)
     }
 
+    pub(crate) fn entry_alloca(
+        &mut self,
+        ty: BasicTypeEnum<'static>,
+        name: &str,
+    ) -> Result<PointerValue<'static>, CodegenError> {
+        let entry = self.entry_block()?;
+        let resume = self.builder.get_insert_block();
+        match entry.get_first_instruction() {
+            Some(first) => self.builder.position_before(&first),
+            None => self.builder.position_at_end(entry),
+        }
+        let ptr = self
+            .builder
+            .build_alloca(ty, name)
+            .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        self.align_alloca(ptr, ty)?;
+        if let Some(block) = resume {
+            self.builder.position_at_end(block);
+        }
+        Ok(ptr)
+    }
+
     pub(crate) fn align_alloca(
         &self,
         ptr: PointerValue<'static>,
