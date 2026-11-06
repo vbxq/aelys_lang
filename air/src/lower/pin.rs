@@ -307,7 +307,9 @@ impl<'a> LoweringContext<'a> {
             .iter()
             .enumerate()
             .map(|(i, e)| {
+                let held = self.view_hold(e);
                 let op = self.lower_expr(e);
+                self.view_hold_done(held);
                 let op = self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp);
                 if own_each {
                     self.own_str_for_store(op, &e.ty, sp)

@@ -8,11 +8,11 @@ air/src/counts.rs	vec_elements	1	AirType	_	{  }	correct-as-is	carrier-walk
 air/src/layout.rs	field_struct_deps	1	AirType	_	{  }	correct-as-is	carrier-walk
 air/src/layout.rs	references_by_value	1	AirType	_	false	correct-as-is	carrier-walk
 air/src/layout.rs	resolved_layout	1	AirType	other	layout_of(other)	correct-as-is	delegates-to-a-decided-arm
-air/src/lower/expr.rs	lower_expr	1	InferType	other	{ self.report_ice(format!( , other )); AirType }	correct-as-is	aggregate-only
-air/src/lower/expr.rs	lower_expr	2	InferType	other	{ self.report_ice(format!( , other )); (AirTyp }	correct-as-is	aggregate-only
-air/src/lower/expr.rs	lower_expr	3	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
-air/src/lower/expr.rs	lower_expr	4	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
-air/src/lower/expr.rs	lower_expr	5	AirType	_	EnumRef::plain(enum_name.clone())	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr_kind	1	InferType	other	{ self.report_ice(format!( , other )); AirType }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr_kind	2	InferType	other	{ self.report_ice(format!( , other )); (AirTyp }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr_kind	3	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr_kind	4	AirType	other	{ self.report_ice(format!( )); AirType::I64 }	correct-as-is	aggregate-only
+air/src/lower/expr.rs	lower_expr_kind	5	AirType	_	EnumRef::plain(enum_name.clone())	correct-as-is	aggregate-only
 air/src/lower/expr.rs	lower_field_assign	1	AirType	_	None	correct-as-is	aggregate-only
 air/src/lower/expr.rs	lower_field_assign	2	AirType	_	None	correct-as-is	aggregate-only
 air/src/lower/expr.rs	lower_match_expr	1	AirType	_	{ self.report_ice(format!( , scrutinee.ty ));  }	correct-as-is	aggregate-only

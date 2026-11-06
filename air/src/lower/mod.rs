@@ -6,6 +6,7 @@ mod program;
 mod stmts;
 mod str_escape;
 mod str_temps;
+mod view_owner;
 
 pub use str_temps::{fresh_returning_functions, retaining_functions};
 
@@ -43,6 +44,17 @@ fn build_and_check_bir(
     } else {
         Err(check.errors)
     }
+}
+
+#[derive(Default)]
+pub(super) struct ViewState {
+    pub(super) owners: view_owner::ViewOwners,
+    pub(super) slot_of: std::collections::HashMap<LocalId, Vec<LocalId>>,
+    pub(super) slots: Vec<(LocalId, usize)>,
+    pub(super) captures: Vec<(usize, Vec<LocalId>, bool)>,
+    pub(super) overflow: std::collections::HashSet<LocalId>,
+    pub(super) held: Vec<LocalId>,
+    pub(super) entry_nulls: Vec<LocalId>,
 }
 
 #[derive(Default, Clone)]
@@ -145,6 +157,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
     pub(super) cow_zombies: std::collections::HashSet<LocalId>,
+    pub(super) views: ViewState,
     pub(super) str_locals: Vec<(LocalId, usize)>,
     pub(super) stmt_str_temps: Vec<(LocalId, usize)>,
     pub(super) str_param_borrows: Vec<LocalId>,
@@ -213,6 +226,7 @@ impl<'a> LoweringContext<'a> {
             carrier_locals: Vec::new(),
             cow_locals: Vec::new(),
             cow_zombies: std::collections::HashSet::new(),
+            views: ViewState::default(),
             str_locals: Vec::new(),
             stmt_str_temps: Vec::new(),
             str_param_borrows: Vec::new(),

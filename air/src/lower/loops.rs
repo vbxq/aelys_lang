@@ -232,7 +232,9 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) {
         let before = self.str_temp_ids();
+        let held = self.view_hold(iterable);
         let mut collection = self.lower_expr(iterable);
+        self.view_hold_done(held);
         let col_ty = self.lower_type_from_infer(&iterable.ty);
         let mut owned_col = None;
         // a stable binding cannot be written by the body, so the loop reads it in place

@@ -144,6 +144,7 @@ impl<'a> LoweringContext<'a> {
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
+        let saved_views = std::mem::take(&mut self.views);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
         let saved_loop_stack = std::mem::take(&mut self.loop_stack);
         let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
@@ -184,6 +185,7 @@ impl<'a> LoweringContext<'a> {
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
         self.cow_zombies = saved_cow_zombies;
+        self.views = saved_views;
         self.str_locals = saved_str_locals;
         self.loop_stack = saved_loop_stack;
         self.carrier_locals = saved_carrier_locals;
@@ -252,12 +254,15 @@ impl<'a> LoweringContext<'a> {
         self.register_str_params(&func.params, &params);
         self.register_affine_params(&func.params, &params);
         let ret_ty = self.lowered_return_type(func, "function");
+        self.view_prepare(&func.params, &func.body);
 
         self.lower_body(&func.body, func.span);
+        self.view_release_params_on_fallthrough();
         self.emit_param_cow_releases_on_fallthrough();
         self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
+        self.view_hoist_nulls();
         self.resolve_block_aliases();
 
         let air_func = AirFunction {
@@ -332,12 +337,15 @@ impl<'a> LoweringContext<'a> {
         self.register_str_params(&func.params, &user_params);
         self.register_affine_params(&func.params, &user_params);
         let ret_ty = self.lowered_return_type(func, "closure");
+        self.view_prepare(&func.params, &func.body);
 
         self.lower_body(&func.body, func.span);
+        self.view_release_params_on_fallthrough();
         self.emit_param_cow_releases_on_fallthrough();
         self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
+        self.view_hoist_nulls();
         self.resolve_block_aliases();
 
         self.closure_env_param = saved_env_param;
@@ -374,6 +382,7 @@ impl<'a> LoweringContext<'a> {
         let saved_rc_locals = std::mem::take(&mut self.rc_locals);
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
+        let saved_views = std::mem::take(&mut self.views);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
         let saved_loop_stack = std::mem::take(&mut self.loop_stack);
         let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
@@ -405,6 +414,7 @@ impl<'a> LoweringContext<'a> {
         self.rc_locals = saved_rc_locals;
         self.cow_locals = saved_cow_locals;
         self.cow_zombies = saved_cow_zombies;
+        self.views = saved_views;
         self.str_locals = saved_str_locals;
         self.loop_stack = saved_loop_stack;
         self.carrier_locals = saved_carrier_locals;

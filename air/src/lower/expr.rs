@@ -48,6 +48,14 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
+        let op = self.lower_expr_kind(expr);
+        if !self.views.captures.is_empty() {
+            self.view_capture(expr, Some(&op));
+        }
+        op
+    }
+
+    fn lower_expr_kind(&mut self, expr: &TypedExpr) -> Operand {
         let sp = Some(self.span(&expr.span));
         match &expr.kind {
             TypedExprKind::Int(v) => {
@@ -639,6 +647,7 @@ impl<'a> LoweringContext<'a> {
                 if !self.affine_category(&tail.ty).is_managed() && !self.may_hold_a_view(&tail.ty) {
                     self.emit_scope_rc_releases(scope_depth);
                 } else {
+                    self.view_release_below(scope_depth, true);
                     let kept = self.cow_locals.iter().filter(|(_, d)| *d > scope_depth);
                     self.cow_zombies.extend(kept.map(|(id, _)| *id));
                 }
@@ -733,7 +742,16 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
+        let view_tmps = if super::view_owner::is_view(&value.ty) {
+            self.view_assign_begin(name, value)
+        } else {
+            None
+        };
         let mut val = self.lower_expr(value);
+        if let Some(tmps) = view_tmps {
+            let slots = self.lookup_local(name).and_then(|id| self.view_slots_of(id));
+            self.view_rhs_end(tmps, slots, true);
+        }
         let str_val = self.claim_str_init(&mut val);
         let kept_unretained = match self.lookup_local(name) {
             Some(id) => self.capture_slots.contains_key(&id),

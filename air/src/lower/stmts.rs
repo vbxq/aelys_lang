@@ -338,6 +338,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn emit_scope_rc_releases(&mut self, scope_depth: usize) {
+        self.view_release_below(scope_depth, true);
         let has_rc = self.rc_locals.iter().any(|(_, d)| *d > scope_depth);
         let has_carrier = self.carrier_locals.iter().any(|c| c.depth > scope_depth);
         let has_cow = self.cow_locals.iter().any(|(_, d)| *d > scope_depth);
@@ -433,6 +434,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn emit_rc_releases_for_return(&mut self, returned: Option<&Operand>) {
+        self.view_release_all_for_return();
         let escaped: Option<LocalId> = match returned {
             Some(Operand::Copy(id) | Operand::Move(id)) => Some(*id),
             _ => None,
@@ -690,7 +692,9 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn lower_stmt(&mut self, stmt: &TypedStmt) {
         let mark = self.stmt_str_temps.len();
+        let held_mark = self.views.held.len();
         self.lower_stmt_kind(stmt);
+        self.view_release_held(held_mark);
         let pending: Vec<(LocalId, usize)> = self.stmt_str_temps.drain(mark..).collect();
         if self.last_block_is_terminated() {
             return;
@@ -793,6 +797,12 @@ impl<'a> LoweringContext<'a> {
                         _ => {}
                     }
                 }
+                let is_view = super::view_owner::is_view(var_type);
+                let view_width = if is_view { self.view_let_width(stmt) } else { None };
+                let view_tmps = match view_width {
+                    Some(_) => self.view_rhs_begin(initializer),
+                    None => Vec::new(),
+                };
                 let mut operand = self.lower_expr(initializer);
                 let str_init = self
                     .counted(var_type)
@@ -828,6 +838,17 @@ impl<'a> LoweringContext<'a> {
                     sp,
                 );
 
+                match view_width {
+                    Some(w) => {
+                        let slots = self.view_slots_for_let(w);
+                        self.view_rhs_end(view_tmps, slots.clone(), false);
+                        if let Some(slots) = slots {
+                            self.view_bind(local, slots);
+                        }
+                    }
+                    None if is_view => self.view_mark_overflow(local),
+                    None => {}
+                }
                 if is_rc_binding {
                     let depth = self.locals_by_name.len();
                     self.rc_locals.push((local, depth));
@@ -1011,6 +1032,7 @@ impl<'a> LoweringContext<'a> {
                     } else {
                         self.emit_str_releases_below(body_depth);
                         self.emit_cow_releases_below(body_depth);
+                        self.view_release_below(body_depth, false);
                         self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(exit));
                     }
@@ -1042,6 +1064,7 @@ impl<'a> LoweringContext<'a> {
                     } else {
                         self.emit_str_releases_below(body_depth);
                         self.emit_cow_releases_below(body_depth);
+                        self.view_release_below(body_depth, false);
                         self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(header));
                     }

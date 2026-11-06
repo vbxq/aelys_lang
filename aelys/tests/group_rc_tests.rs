@@ -1,3 +1,5 @@
+mod common;
+
 use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_opt::OptimizationLevel;
 use std::cell::Cell;
@@ -298,7 +300,7 @@ impl Harness {
     // malloc, so the blocks lsan scans are the ones the program freed or kept, unlike immix
     fn lsan_run(&self, id: &str, leg: &str, src: &str, files: &[(&str, &str)], opt: OptimizationLevel, variant: RuntimeVariant) -> (i32, String, String) {
         let root = self.stage(id, leg, src, files);
-        compile_file_with_llvm_variant(&root, opt, false, variant)
+        common::with_outline_str_counts(|| compile_file_with_llvm_variant(&root, opt, false, variant))
             .unwrap_or_else(|e| panic!("{id} at {leg} must compile:\n{e}"));
         let object = root.with_extension("o");
         assert!(object.is_file(), "{id} at {leg}: the driver left no object");
@@ -407,4 +409,273 @@ fn rc_2_an_imported_enum_owns_its_string() {
     h.differential_row("rc-2", RC2_IMPORTED_ENUM_OWNS_ITS_STRING, &files, "30\n", (20, 20));
     h.lsan_row("rc-2", RC2_IMPORTED_ENUM_OWNS_ITS_STRING, &files, "30\n");
     h.assert_legs(24);
+}
+
+const RC3_Q10: &str = r#"
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < 3 {
+        let base: [i64; 2] = [0, 0]
+        let mut s: &[i64] = base[0..2]
+        if i >= 0 {
+            let a: Rc<[i64; 4]> = Rc::new([i, 5, 6, 7])
+            s = Rc::get(a)[0..2]
+        }
+        let p: Rc<[i64; 4]> = Rc::new([9, 9, 9, 9])
+        n = n + s[0] * 1000 + Rc::get(p)[0]
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn rc_3_q10_a_slice_into_a_dying_rc_payload_keeps_the_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-3", RC3_Q10, &[], "3027\n", (6, 6));
+    h.lsan_row("rc-3", RC3_Q10, &[], "3027\n");
+    h.assert_legs(24);
+}
+
+const RC4_LOOP_ASSIGN: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    let mut i: i64 = 0
+    while i < 3 {
+        let a: Rc<[i64; 2]> = Rc::new([i, 5])
+        s = Rc::get(a)[0..2]
+        i = i + 1
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_4_a_view_assigned_in_a_loop_holds_the_payload_of_its_turn() {
+    let h = Harness::new();
+    h.differential_row("rc-4", RC4_LOOP_ASSIGN, &[], "2009\n", (4, 4));
+    h.lsan_row("rc-4", RC4_LOOP_ASSIGN, &[], "2009\n");
+    h.assert_legs(24);
+}
+
+const RC5_VIEW_COPY: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    let c: bool = true
+    if c {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        let t: &[i64] = Rc::get(a)[0..2]
+        s = t
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_5_a_view_copied_from_another_view_binding_takes_its_own_share() {
+    let h = Harness::new();
+    h.differential_row("rc-5", RC5_VIEW_COPY, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC6_REF_ELEM: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &i64 = &base[0]
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        s = &Rc::get(a)[0]
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(*s * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_6_a_reference_into_an_rc_payload_keeps_the_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-6", RC6_REF_ELEM, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC7_CARRIER_FIELD: &str = r#"
+struct H { r: Rc<[i64; 2]> }
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    {
+        let h: H = H { r: Rc::new([1, 5]) }
+        s = Rc::get(h.r)[0..2]
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_7_a_view_through_a_carrier_field_keeps_the_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-7", RC7_CARRIER_FIELD, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC8_BACKEDGE: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    let mut t: &[i64] = base[0..2]
+    let mut i: i64 = 0
+    while i < 2 {
+        s = t
+        {
+            let a: Rc<[i64; 2]> = Rc::new([i + 1, 5])
+            t = Rc::get(a)[0..2]
+        }
+        i = i + 1
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_8_a_view_copied_before_its_source_is_lowered_survives_the_back_edge() {
+    let h = Harness::new();
+    h.differential_row("rc-8", RC8_BACKEDGE, &[], "1009\n", (3, 3));
+    h.assert_legs(18);
+}
+
+const RC9_ARG_HOLDER: &str = r#"
+fn f(s: &[i64], z: i64) -> i64 {
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    return s[0] * 1000 + Rc::get(p)[0]
+}
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut t: &[i64] = base[0..2]
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        t = Rc::get(a)[0..2]
+    }
+    println(f(t, { t = base[0..2]; 0 }))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_9_a_call_argument_holds_its_view_while_a_sibling_rebinds_the_source() {
+    let h = Harness::new();
+    h.differential_row("rc-9", RC9_ARG_HOLDER, &[], "1009\n", (2, 2));
+    h.lsan_row("rc-9", RC9_ARG_HOLDER, &[], "1009\n");
+    h.assert_legs(24);
+}
+
+const RC10_FOR_HOLDER: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut t: &[i64] = base[0..2]
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        t = Rc::get(a)[0..2]
+    }
+    let mut n: i64 = 0
+    for x in t {
+        t = base[0..2]
+        let p: Rc<[i64; 2]> = Rc::new([9, 9])
+        n = n * 100 + x * 10 + Rc::get(p)[0]
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn rc_10_a_for_loop_holds_its_collection_while_the_body_rebinds_it() {
+    let h = Harness::new();
+    h.differential_row("rc-10", RC10_FOR_HOLDER, &[], "1959\n", (3, 3));
+    h.lsan_row("rc-10", RC10_FOR_HOLDER, &[], "1959\n");
+    h.assert_legs(24);
+}
+
+const RC11_RETURN_IN_ARG: &str = r#"
+fn keep(x: &[i64], k: i64) -> &[i64] { return x }
+fn f(c: bool) -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        s = keep(Rc::get(a)[0..2], {
+            if c { return 7 }
+            1
+        })
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    return s[0] * 1000 + Rc::get(p)[0]
+}
+fn main() -> i64 {
+    println(f(false))
+    println(f(true))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_11_a_return_inside_a_view_argument_releases_the_captured_share() {
+    let h = Harness::new();
+    h.differential_row("rc-11", RC11_RETURN_IN_ARG, &[], "1009\n7\n", (3, 3));
+    h.assert_legs(18);
+}
+
+const RC12_WHILE_COND: &str = r#"
+fn first(x: &[i64]) -> i64 { return x[0] }
+fn main() -> i64 {
+    let a: Rc<[i64; 2]> = Rc::new([1, 5])
+    let mut i: i64 = 0
+    while i < first(Rc::get(a)[0..2]) * 3 {
+        i = i + 1
+    }
+    println(i)
+    return 0
+}
+"#;
+
+#[test]
+fn rc_12_a_view_argument_in_a_loop_condition_is_released_each_turn() {
+    let h = Harness::new();
+    h.differential_row("rc-12", RC12_WHILE_COND, &[], "3\n", (1, 1));
+    h.assert_legs(18);
+}
+
+const RC13_SELF_PICK: &str = r#"
+fn pick<T>(c: bool, x: T, y: T) -> T { if c { return x } return y }
+fn main() -> i64 {
+    let base: [i64; 2] = [3, 4]
+    let a: Rc<[i64; 2]> = Rc::new([1, 5])
+    let mut s: &[i64] = base[0..2]
+    s = pick(true, Rc::get(a)[0..2], s)
+    println(s[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_13_a_view_that_may_point_into_itself_and_a_new_rc_is_refused() {
+    let dir = tempdir().expect("tempdir");
+    let root = dir.path().join("root.aelys");
+    fs::write(&root, RC13_SELF_PICK).expect("write");
+    let err = compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
+        .expect_err("rc-13 must be refused");
+    let text = err.to_string();
+    assert!(text.contains("E0902") && text.contains("[rc-view]"), "rc-13: {text}");
 }

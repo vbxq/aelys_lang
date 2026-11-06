@@ -37,6 +37,9 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Grouping(inner) => self.place_addr_mode(inner, mode),
 
             TypedExprKind::Identifier(name) => {
+                if !self.views.captures.is_empty() {
+                    self.view_capture(e, None);
+                }
                 if let Some(id) = self.lookup_local(name) {
                     if self.capture_slots.contains_key(&id) {
                         let pointee = self.lower_type_from_infer(&e.ty);
