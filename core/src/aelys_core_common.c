@@ -300,8 +300,7 @@ unsigned __aelys_rc_refcount(void *ptr) {
     return *(uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
 }
 
-/* the buffer gets NO_TRACE and the reserved type_id 0, whose pointer map and drop glue are
-   empty, so the collector never registers it and its release frees the bytes alone */
+/* type_id 0 is reserved and has no drop glue, so a vec buffer release frees bytes only */
 void *__aelys_vec_new(long long elem_size, long long cap) {
     long long bytes = AELYS_RC_HEADER_SIZE + (cap > 0 ? elem_size * cap : 0);
     char *base = (char *)__aelys_alloc(bytes > 0 ? bytes : AELYS_RC_HEADER_SIZE);
