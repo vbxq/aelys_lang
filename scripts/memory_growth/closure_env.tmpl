@@ -1,0 +1,14 @@
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < NN {
+        let s: string = victim(i % 1000)
+        let f = fn () -> i64 { return s.len }
+        n = n + f()
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

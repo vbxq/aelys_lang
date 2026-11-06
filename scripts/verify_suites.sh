@@ -477,6 +477,7 @@ sweep_argv() {
         place_addressing_sweep.sh) SWEEP_ARGS=() ;;
         corpus_sweep.sh)           SWEEP_ARGS=(xo "$RELEASE_CLI") ;;
         m_neutral.sh)              SWEEP_ARGS=(--selftest) ;;
+        memory_growth_sweep.sh)    SWEEP_ARGS=("$RELEASE_CLI") ;;
         *) return 1 ;;
     esac
     return 0
