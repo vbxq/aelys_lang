@@ -1368,3 +1368,68 @@ fn rc_35_a_long_list_is_released_in_linear_time_under_the_cycle_collector() {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
+const RC36_WHOLE_LIBRARY: &str = r#"
+needs std.str
+needs std.vec
+needs std.slice
+needs std.sort
+needs std.math
+needs std.result
+needs std.io
+
+struct Entry { key: string, score: Rc<i64> }
+
+fn line_for(i: i64) -> string {
+    return "  id" + str.from_int(i % 37) + " , " + str.from_int((i * 7) % 101) + " , x" + str.from_int(i % 5) + "  "
+}
+
+fn score_of(e: Entry) -> i64 {
+    return Rc::get(e.score)
+}
+
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        let raw: string = line_for(i)
+        let clean: string = str.trim(raw)
+        let parts: Vec<string> = str.split(clean, ",")
+        let key: string = str.trim(parts[0])
+        let value: i64 = result.unwrap_or(str.parse_int(str.trim(parts[1])), 0)
+        let tag: string = str.substring(str.trim(parts[2]), 0, 2)
+        let e: Entry = Entry { key: key, score: Rc::new(value) }
+        let mut names: Vec<string> = Vec::new()
+        Vec::push(names, tag)
+        Vec::push(names, e.key)
+        Vec::push(names, "zz")
+        let mut view: &mut [string] = Vec::try_as_unique_mut_slice(names)
+        sort.strings(view)
+        let joined: string = str.join(&names, "|")
+        let mut nums: Vec<i64> = Vec::new()
+        Vec::push(nums, value)
+        Vec::push(nums, math.gcd(value, 12))
+        Vec::push(nums, math.clamp(value - 50, 0, 9))
+        let k: i64 = joined.len
+        let shifted: Vec<i64> = vec.map(&nums, fn (x: i64) -> i64 { return x + k })
+        let kept: Vec<i64> = vec.filter(&shifted, fn (x: i64) -> bool { return x % 2 == 0 })
+        let acc: i64 = vec.fold(&kept, 0, fn (a: i64, b: i64) -> i64 { return a + b })
+        let sorted: Vec<i64> = vec.sorted(&shifted)
+        let first: i64 = result.some_or(slice.first(Vec::as_slice(sorted)), 0)
+        let hit: i64 = if str.contains(joined, "id1") { 1 } else { 0 }
+        let ch: i64 = str.char_count(joined) + str.index_of(joined, "|") + str.compare(tag, "x2")
+        total = total + score_of(e) + acc + first + hit + ch + math.abs(math.sign(value - 50)) + vec.sum(&nums) % 7
+        i = i + 1
+    }
+    io.print_out(str.from_int(total) + "\n")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_36_an_ordinary_program_over_the_whole_library_is_balanced() {
+    let h = Harness::new();
+    h.differential_row("rc-36", RC36_WHOLE_LIBRARY, &[], "36631\n", (9002, 9002));
+    h.lsan_row("rc-36", RC36_WHOLE_LIBRARY, &[], "36631\n");
+    h.assert_legs(24);
+}
