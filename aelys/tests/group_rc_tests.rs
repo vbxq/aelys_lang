@@ -132,7 +132,6 @@ impl Harness {
         }
     }
 
-    // `needs std.str` resolves under the root file, so the library is copied beside every root
     fn stage(&self, id: &str, tag: &str, src: &str, files: &[(&str, &str)]) -> PathBuf {
         let dir = self.dir.path().join(slug(id, tag));
         fs::create_dir_all(&dir).expect("stage dir");
@@ -167,7 +166,6 @@ impl Harness {
         exe.is_file().then_some(exe)
     }
 
-    // leak never frees, so its answer is right by construction and any divergence is an early free
     fn differential_row(
         &self,
         id: &str,
@@ -182,7 +180,6 @@ impl Harness {
             ("rc+cycles", RuntimeVariant::RcCycles),
         ];
         for (tag, opt) in LEVELS {
-            // the allocator is an env var, so the two legs of a level share one compiled binary
             for (alloc_name, alloc) in ALLOCATORS {
                 let mut answers: Vec<String> = Vec::new();
                 let mut seen_counts: Vec<(&str, (i64, i64))> = Vec::new();
@@ -206,7 +203,6 @@ impl Harness {
                     let seen_out = String::from_utf8_lossy(&out.stdout).into_owned();
                     let seen_err = String::from_utf8_lossy(&out.stderr).into_owned();
                     self.legs.set(self.legs.get() + 1);
-                    // leak carries the release guard too, so a nonzero code can be a double release
                     assert_eq!(
                         exit_code(&out.status),
                         0,
@@ -223,7 +219,6 @@ impl Harness {
                     }
                     answers.push(seen_out);
                 }
-                // the divergence is asserted before the counts: the counts read 6/6 through a double free
                 for (i, (runtime, _)) in VARIANTS.iter().enumerate().skip(1) {
                     assert_eq!(
                         answers[i], answers[0],
@@ -264,47 +259,73 @@ impl Harness {
 static ASAN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 fn asan_archives() -> PathBuf {
-    ASAN_DIR.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("aelys-group-rc-asan-{}", std::process::id()));
-        fs::create_dir_all(&dir).expect("asan dir");
-        let core = repo_root().join("core").join("src");
-        for (lib, rc) in [("core-rc", "aelys_rc_real.c"), ("core-leak", "aelys_rc_leak.c")] {
-            let mut objects = Vec::new();
-            for unit in ["aelys_core_common.c", "aelys_alloc_immix.c", rc] {
-                let obj = dir.join(format!("{lib}-{unit}")).with_extension("o");
-                let out = Command::new("clang")
-                    .args(["-fsanitize=address", "-g", "-c"])
-                    .arg(core.join(unit))
-                    .arg(format!("-I{}", core.display()))
-                    .arg("-o")
-                    .arg(&obj)
+    ASAN_DIR
+        .get_or_init(|| {
+            let dir =
+                std::env::temp_dir().join(format!("aelys-group-rc-asan-{}", std::process::id()));
+            fs::create_dir_all(&dir).expect("asan dir");
+            let core = repo_root().join("core").join("src");
+            for (lib, rc) in [
+                ("core-rc", "aelys_rc_real.c"),
+                ("core-leak", "aelys_rc_leak.c"),
+            ] {
+                let mut objects = Vec::new();
+                for unit in ["aelys_core_common.c", "aelys_alloc_immix.c", rc] {
+                    let obj = dir.join(format!("{lib}-{unit}")).with_extension("o");
+                    let out = Command::new("clang")
+                        .args(["-fsanitize=address", "-g", "-c"])
+                        .arg(core.join(unit))
+                        .arg(format!("-I{}", core.display()))
+                        .arg("-o")
+                        .arg(&obj)
+                        .output()
+                        .expect("clang is required for the lsan rows");
+                    assert!(
+                        out.status.success(),
+                        "{unit}: {}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                    objects.push(obj);
+                }
+                let out = Command::new("ar")
+                    .arg("rcs")
+                    .arg(dir.join(format!("lib{lib}.a")))
+                    .args(&objects)
                     .output()
-                    .expect("clang is required for the lsan rows");
-                assert!(out.status.success(), "{unit}: {}", String::from_utf8_lossy(&out.stderr));
-                objects.push(obj);
+                    .expect("ar");
+                assert!(
+                    out.status.success(),
+                    "ar: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
             }
-            let out = Command::new("ar")
-                .arg("rcs")
-                .arg(dir.join(format!("lib{lib}.a")))
-                .args(&objects)
-                .output()
-                .expect("ar");
-            assert!(out.status.success(), "ar: {}", String::from_utf8_lossy(&out.stderr));
-        }
-        dir
-    })
-    .clone()
+            dir
+        })
+        .clone()
 }
 
 impl Harness {
-    // malloc, so the blocks lsan scans are the ones the program freed or kept, unlike immix
-    fn lsan_run(&self, id: &str, leg: &str, src: &str, files: &[(&str, &str)], opt: OptimizationLevel, variant: RuntimeVariant) -> (i32, String, String) {
+    fn lsan_run(
+        &self,
+        id: &str,
+        leg: &str,
+        src: &str,
+        files: &[(&str, &str)],
+        opt: OptimizationLevel,
+        variant: RuntimeVariant,
+    ) -> (i32, String, String) {
         let root = self.stage(id, leg, src, files);
-        common::with_outline_str_counts(|| compile_file_with_llvm_variant(&root, opt, false, variant))
-            .unwrap_or_else(|e| panic!("{id} at {leg} must compile:\n{e}"));
+        common::with_outline_str_counts(|| {
+            compile_file_with_llvm_variant(&root, opt, false, variant)
+        })
+        .unwrap_or_else(|e| panic!("{id} at {leg} must compile:\n{e}"));
         let object = root.with_extension("o");
         assert!(object.is_file(), "{id} at {leg}: the driver left no object");
-        let lib = if matches!(variant, RuntimeVariant::Leak) { "core-leak" } else { "core-rc" };
+        let lib = if matches!(variant, RuntimeVariant::Leak) {
+            "core-leak"
+        } else {
+            "core-rc"
+        };
         let exe = root.with_file_name("asan_exe");
         let link = Command::new("clang")
             .args(["-fsanitize=address", "-g"])
@@ -315,7 +336,11 @@ impl Harness {
             .arg(&exe)
             .output()
             .expect("clang link");
-        assert!(link.status.success(), "{id}: link failed:\n{}", String::from_utf8_lossy(&link.stderr));
+        assert!(
+            link.status.success(),
+            "{id}: link failed:\n{}",
+            String::from_utf8_lossy(&link.stderr)
+        );
         let out = Command::new(&exe)
             .env("AELYS_ALLOC", "malloc")
             .env("ASAN_OPTIONS", "detect_leaks=1:verbosity=1")
@@ -331,14 +356,40 @@ impl Harness {
 
     fn lsan_row(&self, id: &str, src: &str, files: &[(&str, &str)], stdout: &str) {
         for (tag, opt) in LEVELS {
-            let (code, out, err) = self.lsan_run(id, &format!("{tag}_lsan_rc"), src, files, *opt, RuntimeVariant::Rc);
-            assert!(err.contains("AddressSanitizer"), "{id} at {tag}: asan is not armed");
-            assert!(!err.contains("ERROR: AddressSanitizer"), "{id} at {tag}: asan reports\n{err}");
-            assert!(!err.contains("leaked in"), "{id} at {tag}: lsan reports a leak\n{err}");
+            let (code, out, err) = self.lsan_run(
+                id,
+                &format!("{tag}_lsan_rc"),
+                src,
+                files,
+                *opt,
+                RuntimeVariant::Rc,
+            );
+            assert!(
+                err.contains("AddressSanitizer"),
+                "{id} at {tag}: asan is not armed"
+            );
+            assert!(
+                !err.contains("ERROR: AddressSanitizer"),
+                "{id} at {tag}: asan reports\n{err}"
+            );
+            assert!(
+                !err.contains("leaked in"),
+                "{id} at {tag}: lsan reports a leak\n{err}"
+            );
             assert_eq!(code, 0, "{id} at {tag}: exit\n{err}");
             assert_eq!(out, stdout, "{id} at {tag}");
-            let (_, _, err) = self.lsan_run(id, &format!("{tag}_lsan_leak"), src, files, *opt, RuntimeVariant::Leak);
-            assert!(err.contains("leaked in"), "{id} at {tag}: the leak control must make lsan fire\n{err}");
+            let (_, _, err) = self.lsan_run(
+                id,
+                &format!("{tag}_lsan_leak"),
+                src,
+                files,
+                *opt,
+                RuntimeVariant::Leak,
+            );
+            assert!(
+                err.contains("leaked in"),
+                "{id} at {tag}: the leak control must make lsan fire\n{err}"
+            );
         }
     }
 }
@@ -377,7 +428,13 @@ fn main() -> i64 {
 fn rc_1_an_imported_carrier_literal_takes_its_share() {
     let h = Harness::new();
     let files = [("m.aelys", RC1_MODULE)];
-    h.differential_row("rc-1", RC1_IMPORTED_CARRIER_LITERAL, &files, "3027\n", (6, 6));
+    h.differential_row(
+        "rc-1",
+        RC1_IMPORTED_CARRIER_LITERAL,
+        &files,
+        "3027\n",
+        (6, 6),
+    );
     h.lsan_row("rc-1", RC1_IMPORTED_CARRIER_LITERAL, &files, "3027\n");
     h.assert_legs(24);
 }
@@ -406,7 +463,13 @@ fn main() -> i64 {
 fn rc_2_an_imported_enum_owns_its_string() {
     let h = Harness::new();
     let files = [("m.aelys", RC1_MODULE)];
-    h.differential_row("rc-2", RC2_IMPORTED_ENUM_OWNS_ITS_STRING, &files, "30\n", (20, 20));
+    h.differential_row(
+        "rc-2",
+        RC2_IMPORTED_ENUM_OWNS_ITS_STRING,
+        &files,
+        "30\n",
+        (20, 20),
+    );
     h.lsan_row("rc-2", RC2_IMPORTED_ENUM_OWNS_ITS_STRING, &files, "30\n");
     h.assert_legs(24);
 }
@@ -674,8 +737,155 @@ fn rc_13_a_view_that_may_point_into_itself_and_a_new_rc_is_refused() {
     let dir = tempdir().expect("tempdir");
     let root = dir.path().join("root.aelys");
     fs::write(&root, RC13_SELF_PICK).expect("write");
-    let err = compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
-        .expect_err("rc-13 must be refused");
+    let err =
+        compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
+            .expect_err("rc-13 must be refused");
     let text = err.to_string();
-    assert!(text.contains("E0902") && text.contains("[rc-view]"), "rc-13: {text}");
+    assert!(
+        text.contains("E0902") && text.contains("[rc-view]"),
+        "rc-13: {text}"
+    );
+}
+
+const RC14_IF_EXPR: &str = r#"
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    let c: bool = true
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        s = if c { Rc::get(a)[0..2] } else { base[0..2] }
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_14_a_view_chosen_by_an_if_expression_keeps_its_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-14", RC14_IF_EXPR, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC15_MATCH_EXPR: &str = r#"
+enum K {
+    A,
+    B,
+}
+
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let mut s: &[i64] = base[0..2]
+    let k: K = K::A
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        s = match k {
+            K::A => Rc::get(a)[0..2],
+            K::B => base[0..2],
+        }
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(s[0] * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_15_a_view_chosen_by_a_match_expression_keeps_its_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-15", RC15_MATCH_EXPR, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC16_REF_FROM_VIEW: &str = r#"
+fn first<T>(x: &[T]) -> &T {
+    return &x[0]
+}
+
+fn main() -> i64 {
+    let z: i64 = 0
+    let mut r: &i64 = &z
+    {
+        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        let s: &[i64] = Rc::get(a)[0..2]
+        r = first(s)
+    }
+    let p: Rc<[i64; 2]> = Rc::new([9, 9])
+    println(*r * 1000 + Rc::get(p)[0])
+    return 0
+}
+"#;
+
+#[test]
+fn rc_16_a_reference_returned_from_a_view_argument_keeps_the_payload_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-16", RC16_REF_FROM_VIEW, &[], "1009\n", (2, 2));
+    h.assert_legs(18);
+}
+
+const RC17_CONTINUE_IN_ARG: &str = r#"
+fn sum2(x: &[i64], y: &[i64]) -> i64 {
+    return x[0] + y[0]
+}
+
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let a: Rc<[i64; 2]> = Rc::new([1, 5])
+    let mut acc: i64 = 0
+    for i in 0..4 {
+        acc = acc + sum2(Rc::get(a)[0..2], {
+            if i >= 2 {
+                continue
+            }
+            base[0..2]
+        })
+    }
+    println(acc)
+    return 0
+}
+"#;
+
+#[test]
+fn rc_17_a_continue_inside_a_held_argument_releases_the_held_share() {
+    let h = Harness::new();
+    h.differential_row("rc-17", RC17_CONTINUE_IN_ARG, &[], "2\n", (1, 1));
+    h.lsan_row("rc-17", RC17_CONTINUE_IN_ARG, &[], "2\n");
+    h.assert_legs(24);
+}
+
+const RC18_BREAK_IN_RHS: &str = r#"
+fn pick(c: bool, x: &[i64], y: &[i64]) -> &[i64] {
+    if c {
+        return x
+    }
+    return y
+}
+
+fn main() -> i64 {
+    let base: [i64; 2] = [0, 0]
+    let a: Rc<[i64; 2]> = Rc::new([1, 5])
+    let mut acc: i64 = 0
+    let mut i: i64 = 0
+    while i < 4 {
+        i = i + 1
+        let t: &[i64] = pick(true, Rc::get(a)[0..2], {
+            if i >= 2 {
+                break
+            }
+            base[0..2]
+        })
+        acc = acc + t[0]
+    }
+    println(acc)
+    return 0
+}
+"#;
+
+#[test]
+fn rc_18_a_break_inside_a_view_right_hand_side_releases_the_captured_share() {
+    let h = Harness::new();
+    h.differential_row("rc-18", RC18_BREAK_IN_RHS, &[], "1\n", (1, 1));
+    h.assert_legs(18);
 }

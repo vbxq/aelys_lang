@@ -201,6 +201,7 @@ pub(super) struct LoopBlocks {
     pub(super) exit: BlockId,
     pub(super) body_scope_depth: usize,
     pub(super) str_temps_at_entry: Vec<LocalId>,
+    pub(super) views_at_entry: (usize, usize),
 }
 
 impl<'a> LoweringContext<'a> {

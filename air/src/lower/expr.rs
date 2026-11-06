@@ -21,8 +21,7 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
         what: &str,
     ) {
-        let paths = match crate::rc_paths::rc_field_paths_in(field_air_ty, self.defs())
-        {
+        let paths = match crate::rc_paths::rc_field_paths_in(field_air_ty, self.defs()) {
             crate::rc_paths::RcScan::None => return,
             crate::rc_paths::RcScan::Paths(paths) => paths,
             // skipping is only sound while generic structs never reach codegen; once they

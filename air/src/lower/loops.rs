@@ -194,6 +194,7 @@ impl<'a> LoweringContext<'a> {
             exit: exit_id,
             body_scope_depth: self.locals_by_name.len(),
             str_temps_at_entry: self.str_temp_ids(),
+            views_at_entry: (self.views.captures.len(), self.views.held.len()),
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);
@@ -416,6 +417,7 @@ impl<'a> LoweringContext<'a> {
             exit: exit_id,
             body_scope_depth,
             str_temps_at_entry: self.str_temp_ids(),
+            views_at_entry: (self.views.captures.len(), self.views.held.len()),
         });
         self.lower_stmt(body);
         if !self.last_block_is_terminated() {

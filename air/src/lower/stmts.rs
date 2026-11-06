@@ -1015,6 +1015,7 @@ impl<'a> LoweringContext<'a> {
                     let exit = loop_ctx.exit;
                     let body_depth = loop_ctx.body_scope_depth;
                     let at_entry = loop_ctx.str_temps_at_entry.clone();
+                    let views_at_entry = loop_ctx.views_at_entry;
                     if self.rc_live_below(body_depth) {
                         self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `break`; \
@@ -1033,6 +1034,7 @@ impl<'a> LoweringContext<'a> {
                         self.emit_str_releases_below(body_depth);
                         self.emit_cow_releases_below(body_depth);
                         self.view_release_below(body_depth, false);
+                        self.view_release_in_flight(views_at_entry);
                         self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(exit));
                     }
@@ -1047,6 +1049,7 @@ impl<'a> LoweringContext<'a> {
                     let header = loop_ctx.header;
                     let body_depth = loop_ctx.body_scope_depth;
                     let at_entry = loop_ctx.str_temps_at_entry.clone();
+                    let views_at_entry = loop_ctx.views_at_entry;
                     if self.rc_live_below(body_depth) {
                         self.report_unsupported(
                             "[rc] an Rc<T> live in a loop body is abandoned by `continue`; \
@@ -1065,6 +1068,7 @@ impl<'a> LoweringContext<'a> {
                         self.emit_str_releases_below(body_depth);
                         self.emit_cow_releases_below(body_depth);
                         self.view_release_below(body_depth, false);
+                        self.view_release_in_flight(views_at_entry);
                         self.release_posed_str_temps(&at_entry);
                         self.seal_block(AirTerminator::Goto(header));
                     }
@@ -1160,6 +1164,7 @@ impl<'a> LoweringContext<'a> {
             exit: exit_id,
             body_scope_depth: self.locals_by_name.len(),
             str_temps_at_entry: self.str_temp_ids(),
+            views_at_entry: (self.views.captures.len(), self.views.held.len()),
         });
         self.fixup_block_id_noop(body_id);
         self.lower_stmt(body);

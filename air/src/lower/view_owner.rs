@@ -12,7 +12,6 @@ pub(super) fn key<T>(x: &T) -> usize {
     x as *const T as usize
 }
 
-
 pub(super) const MAX_WIDTH: usize = 8;
 
 #[derive(Default)]
@@ -34,7 +33,6 @@ enum SrcRef {
     Decl(usize),
 }
 
-// the nodes whose lowered value or slots own what the view points into, with their width
 pub(super) fn sources(expr: &TypedExpr, owners: &ViewOwners) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     collect(expr, &mut |e| {
@@ -49,7 +47,6 @@ pub(super) fn sources(expr: &TypedExpr, owners: &ViewOwners) -> Vec<(usize, usiz
     out
 }
 
-// a view roots in one place: walk projections down to it, or through a call's arguments
 fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
     match &expr.kind {
         TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => collect(inner, f),
@@ -69,11 +66,24 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
         }
         TypedExprKind::Identifier(_) => f(expr),
         TypedExprKind::Block { tail, .. } => collect(tail, f),
+        TypedExprKind::If {
+            then_branch,
+            else_branch,
+            ..
+        } => {
+            collect(then_branch, f);
+            collect(else_branch, f);
+        }
+        TypedExprKind::Match { arms, .. } => {
+            for arm in arms {
+                collect(&arm.body, f);
+            }
+        }
         TypedExprKind::Call { args, .. } if is_view(&expr.ty) => {
             for a in args {
                 if matches!(a.ty, InferType::Rc(_)) {
                     f(a);
-                } else if a.ty == expr.ty {
+                } else if is_view(&a.ty) {
                     collect(a, f);
                 }
             }
@@ -139,36 +149,25 @@ impl Pass {
         for e in found {
             if matches!(e.ty, InferType::Rc(_)) {
                 out.push(SrcRef::Rc);
-            } else if let TypedExprKind::Identifier(n) = &e.kind
-                && let Some(d) = self.resolve(n)
-            {
-                self.ident_decl.insert(key(e), d);
-                out.push(SrcRef::Decl(d));
+            } else if let Some(d) = self.ident_decl.get(&key(e)) {
+                out.push(SrcRef::Decl(*d));
             }
         }
         out
     }
 
-    fn block<'e>(&mut self, stmts: &'e [TypedStmt], tail: Option<&'e TypedExpr>) -> Vec<SrcRef> {
+    fn block(&mut self, stmts: &[TypedStmt], tail: Option<&TypedExpr>) {
         self.scopes.push(HashMap::new());
         for s in stmts {
             self.stmt(s);
         }
-        let srcs = match tail {
-            Some(t) => {
-                self.expr(t);
-                self.srcs_of(t)
-            }
-            None => Vec::new(),
-        };
+        if let Some(t) = tail {
+            self.expr(t);
+        }
         self.scopes.pop();
-        srcs
     }
 
     fn view_rhs(&mut self, rhs: &TypedExpr) -> Vec<SrcRef> {
-        if let TypedExprKind::Block { stmts, tail } = &rhs.kind {
-            return self.block(stmts, Some(tail));
-        }
         self.expr(rhs);
         self.srcs_of(rhs)
     }
@@ -185,15 +184,16 @@ impl Pass {
                 if is_view(var_type) {
                     let srcs = self.view_rhs(initializer);
                     self.edges.push((key(s), srcs));
-                    self.scopes.last_mut().unwrap().insert(name.clone(), Some(key(s)));
+                    self.scopes
+                        .last_mut()
+                        .unwrap()
+                        .insert(name.clone(), Some(key(s)));
                 } else {
                     self.expr(initializer);
                     self.scopes.last_mut().unwrap().insert(name.clone(), None);
                 }
             }
-            TypedStmtKind::Block(stmts) => {
-                self.block(stmts, None);
-            }
+            TypedStmtKind::Block(stmts) => self.block(stmts, None),
             TypedStmtKind::If {
                 condition,
                 then_branch,
@@ -272,15 +272,13 @@ impl Pass {
                     self.ident_decl.insert(key(e), d);
                 }
             }
-            TypedExprKind::Assign { name, value } => {
-                match self.resolve(name) {
-                    Some(d) => {
-                        let srcs = self.view_rhs(value);
-                        self.edges.push((d, srcs));
-                    }
-                    None => self.expr(value),
+            TypedExprKind::Assign { name, value } => match self.resolve(name) {
+                Some(d) => {
+                    let srcs = self.view_rhs(value);
+                    self.edges.push((d, srcs));
                 }
-            }
+                None => self.expr(value),
+            },
             TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => self.expr(inner),
             TypedExprKind::Unary { operand, .. } | TypedExprKind::Reference { operand, .. } => {
                 self.expr(operand)
@@ -384,9 +382,7 @@ impl Pass {
                 }
             }
             TypedExprKind::ResultAssert { scrutinee, .. } => self.expr(scrutinee),
-            TypedExprKind::Block { stmts, tail } => {
-                self.block(stmts, Some(tail));
-            }
+            TypedExprKind::Block { stmts, tail } => self.block(stmts, Some(tail)),
         }
     }
 }
@@ -436,7 +432,13 @@ impl super::LoweringContext<'_> {
     pub(super) fn view_prepare(&mut self, params: &[TypedParam], body: &[TypedStmt]) {
         self.views.owners = analyze(params, body);
         for param in params {
-            let raw = self.views.owners.width.get(&key(param)).copied().unwrap_or(0);
+            let raw = self
+                .views
+                .owners
+                .width
+                .get(&key(param))
+                .copied()
+                .unwrap_or(0);
             let w = self.view_width(key(param), param.span.line);
             let Some(local) = self.lookup_local(&param.name) else {
                 continue;
@@ -452,7 +454,13 @@ impl super::LoweringContext<'_> {
     }
 
     pub(super) fn view_let_width(&mut self, stmt: &TypedStmt) -> Option<usize> {
-        let w = self.views.owners.width.get(&key(stmt)).copied().unwrap_or(0);
+        let w = self
+            .views
+            .owners
+            .width
+            .get(&key(stmt))
+            .copied()
+            .unwrap_or(0);
         if w > MAX_WIDTH {
             self.view_width(key(stmt), stmt.span.line);
             return None;
@@ -471,8 +479,11 @@ impl super::LoweringContext<'_> {
         self.views.overflow.insert(local);
     }
 
-    // none when the target cannot hold an owner, after a refusal that already says why
-    pub(super) fn view_assign_begin(&mut self, name: &str, rhs: &TypedExpr) -> Option<Vec<crate::LocalId>> {
+    pub(super) fn view_assign_begin(
+        &mut self,
+        name: &str,
+        rhs: &TypedExpr,
+    ) -> Option<Vec<crate::LocalId>> {
         let target = self.lookup_local(name);
         if target.is_some_and(|id| self.views.overflow.contains(&id)) {
             return None;
@@ -502,7 +513,6 @@ impl super::LoweringContext<'_> {
         self.views.slot_of.get(&local).cloned()
     }
 
-    // the share is taken at the owner's own node, on the path that actually runs
     pub(super) fn view_rhs_begin(&mut self, rhs: &TypedExpr) -> Vec<crate::LocalId> {
         let srcs = sources(rhs, &self.views.owners);
         let depth = self.locals_by_name.len();
@@ -619,7 +629,6 @@ impl super::LoweringContext<'_> {
         }
     }
 
-    // a view consumed by a call or a loop is held until its statement ends
     pub(super) fn view_hold(&mut self, e: &TypedExpr) -> Option<Vec<crate::LocalId>> {
         if !is_view(&e.ty) || sources(e, &self.views.owners).is_empty() {
             return None;
@@ -677,6 +686,26 @@ impl super::LoweringContext<'_> {
             })
             .collect();
         entry.stmts.splice(0..0, stmts);
+    }
+
+    pub(super) fn view_release_in_flight(&mut self, (captures, held): (usize, usize)) {
+        if self.last_block_is_terminated() {
+            return;
+        }
+        let mut tmps: Vec<crate::LocalId> = self.views.captures
+            [captures.min(self.views.captures.len())..]
+            .iter()
+            .flat_map(|c| c.1.iter().copied())
+            .collect();
+        tmps.extend(
+            self.views.held[held.min(self.views.held.len())..]
+                .iter()
+                .copied(),
+        );
+        for tmp in tmps {
+            self.emit_rc_release(tmp, None);
+            self.view_null(tmp);
+        }
     }
 
     pub(super) fn view_release_params_on_fallthrough(&mut self) {
