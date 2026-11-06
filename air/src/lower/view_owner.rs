@@ -64,7 +64,7 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
                 f(h);
             }
         }
-        TypedExprKind::Identifier(_) => f(expr),
+        TypedExprKind::Identifier(_) if !matches!(expr.ty, InferType::Rc(_)) => f(expr),
         TypedExprKind::Block { tail, .. } => collect(tail, f),
         TypedExprKind::If {
             then_branch,
