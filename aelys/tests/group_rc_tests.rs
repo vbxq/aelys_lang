@@ -1264,3 +1264,56 @@ fn rc_31_a_store_through_an_rc_handle_keeps_an_element_argument_alive() {
     h.differential_row("rc-31", RC31, &[], "111\n", (9, 8));
     h.assert_legs(18);
 }
+
+fn refused(id: &str, src: &str, code: &str) {
+    let dir = tempdir().expect("tempdir");
+    let root = dir.path().join("root.aelys");
+    fs::write(&root, src).expect("write");
+    let err =
+        compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
+            .expect_err(id);
+    let text = err.to_string();
+    assert!(text.contains(code), "{id}: {text}");
+}
+
+#[test]
+fn rc_32_an_array_of_rc_is_refused() {
+    refused(
+        "rc-32",
+        "fn main() -> i64 {\n    let a: [Rc<i64>; 2] = [Rc::new(1), Rc::new(2)]\n    return Rc::get(a[0])\n}\n",
+        "E0410",
+    );
+}
+
+#[test]
+fn rc_33_a_vec_as_a_type_argument_is_refused() {
+    refused(
+        "rc-33",
+        "fn keep<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let v: Vec<i64> = Vec::new()\n    let w: Vec<i64> = keep(v)\n    return Vec::len(w)\n}\n",
+        "E0412",
+    );
+}
+
+const RC34_GENERIC_FRESH_RC: &str = r#"
+fn use_it(x: Rc<i64>) -> i64 {
+    return Rc::get(x)
+}
+fn mk() -> Rc<i64> {
+    return Rc::new(7)
+}
+fn app<T>(f: fn() -> T) -> T {
+    return f()
+}
+fn main() -> i64 {
+    let a: Rc<i64> = app(mk)
+    println(use_it(app(mk)) + Rc::get(a))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_34_a_fresh_rc_returned_as_a_bare_type_parameter_leaks() {
+    let h = Harness::new();
+    h.differential_row("rc-34", RC34_GENERIC_FRESH_RC, &[], "14\n", (2, 0));
+    h.assert_legs(18);
+}
