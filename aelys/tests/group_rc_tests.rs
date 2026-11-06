@@ -1317,3 +1317,54 @@ fn rc_34_a_fresh_rc_returned_as_a_bare_type_parameter_leaks() {
     h.differential_row("rc-34", RC34_GENERIC_FRESH_RC, &[], "14\n", (2, 0));
     h.assert_legs(18);
 }
+
+const RC35_LONG_LIST: &str = r#"
+struct N { v: i64, next: Rc<N> }
+struct H { r: Rc<N> }
+fn main() -> i64 {
+    let mut h = H { r: Rc::null() }
+    let mut i: i64 = 0
+    while i < 1000000 {
+        h = H { r: Rc::new(N { v: i, next: h.r }) }
+        i = i + 1
+    }
+    println("{Rc::get(h.r).v}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_35_a_long_list_is_released_in_linear_time_under_the_cycle_collector() {
+    let h = Harness::new();
+    let root = h.stage("rc-35", "o2_cycles", RC35_LONG_LIST, &[]);
+    let exe = h
+        .compile_at(
+            "rc-35",
+            "o2_cycles",
+            &root,
+            OptimizationLevel::Standard,
+            RuntimeVariant::RcCycles,
+        )
+        .expect("rc-35 must link");
+    let mut child = Command::new(&exe)
+        .env("AELYS_RC_STATS", "1")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("run rc-35");
+    let start = std::time::Instant::now();
+    while child.try_wait().expect("wait rc-35").is_none() {
+        if start.elapsed() > std::time::Duration::from_secs(30) {
+            let _ = child.kill();
+            panic!("rc-35: releasing a list of 10^6 nodes took more than 30 s");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let out = child.wait_with_output().expect("rc-35 output");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "999999\n");
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("[rc] allocs=1000000 frees=1000000"),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}

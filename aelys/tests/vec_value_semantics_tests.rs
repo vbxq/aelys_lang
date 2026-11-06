@@ -388,16 +388,12 @@ fn main() -> i64 {
 }
 "#;
     assert_exit("v12", src, 1);
-    // the captured buffer leaks with the env
     let Some(exe) = compile(src, OptimizationLevel::None) else {
         return;
     };
     let (_, stderr) = run(&exe, None);
     let (allocs, frees) = parse_stats(&stderr).expect("stats");
-    assert!(
-        frees < allocs,
-        "the captured buffer leaks with the deliberately-leaked env (allocs={allocs} frees={frees})"
-    );
+    assert_eq!(frees, allocs, "the env and its captured buffer are released");
 }
 
 #[test]
@@ -426,7 +422,6 @@ fn main() -> i64 {
 
 #[test]
 fn v29_closure_capture_leak_is_per_creation_not_a_wrap() {
-    // m-1: a closure created in a loop leaks one env + one buffer per creation. the count must not
     let src = r#"
 fn main() -> i64 {
     let mut i = 0
@@ -447,8 +442,8 @@ fn main() -> i64 {
     let (_, stderr) = run(&exe, None);
     let (allocs, frees) = parse_stats(&stderr).expect("stats");
     assert!(
-        allocs >= 200 && frees == 0,
-        "100 envs + 100 buffers leak per creation, none freed (allocs={allocs} frees={frees})"
+        allocs >= 200 && frees == allocs,
+        "100 envs and 100 buffers are made and all released (allocs={allocs} frees={frees})"
     );
 }
 

@@ -8,7 +8,8 @@ target triple = "x86_64-pc-linux-gnu"
 %__closure_env___lambda_6 = type { i64 }
 
 @__aelys_global_g = internal global i64 3
-@__aelys_rc_type_table = constant [3 x i32] [i32 1, i32 0, i32 3]
+@__aelys_rc_type_table = constant [5 x i32] [i32 2, i32 0, i32 5, i32 0, i32 5]
+@__aelys_rc_drop_table = constant [2 x ptr] zeroinitializer
 @str_6_0 = private constant { i32, i8, i8, i8, i8, i32, i32, [25 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [25 x i8] c"null pointer dereference\00" }, align 16
 @str_5_0 = private constant { i32, i8, i8, i8, i8, i32, i32, [5 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [5 x i8] c"base\00" }, align 16
 @str_5_1 = private constant { i32, i8, i8, i8, i8, i32, i32, [2 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [2 x i8] c"\0A\00" }, align 16
@@ -114,8 +115,14 @@ bb0:
   call void @__aelys_write(ptr getelementptr inbounds ({ i32, i8, i8, i8, i8, i32, i32, [2 x i8] }, ptr @str_5_1, i32 0, i32 7, i32 0), i64 1)
   store i64 10, ptr %l0, align 8
   store { ptr, ptr } { ptr @seven, ptr null }, ptr %l2, align 8
-  %alloc_raw = call ptr @__aelys_alloc(i64 8)
-  store ptr %alloc_raw, ptr %l3, align 8
+  %rc_alloc_raw = call ptr @__aelys_alloc(i64 24)
+  store i32 1, ptr %rc_alloc_raw, align 4
+  %rc_hdr_ptr = getelementptr inbounds i8, ptr %rc_alloc_raw, i64 4
+  store i8 0, ptr %rc_hdr_ptr, align 1
+  %rc_hdr_ptr1 = getelementptr inbounds i8, ptr %rc_alloc_raw, i64 8
+  store i32 1, ptr %rc_hdr_ptr1, align 4
+  %rc_data_ptr = getelementptr inbounds i8, ptr %rc_alloc_raw, i64 16
+  store ptr %rc_data_ptr, ptr %l3, align 8
   %ld0 = load i64, ptr %l0, align 8
   %ld3 = load ptr, ptr %l3, align 8
   %deref_null_cmp = icmp eq ptr %ld3, null
@@ -128,12 +135,12 @@ deref_null:                                       ; preds = %bb0
 deref_ok:                                         ; preds = %bb0
   %place_field = getelementptr inbounds %__closure_env___lambda_6, ptr %ld3, i32 0, i32 0
   store i64 %ld0, ptr %place_field, align 8
-  %ld31 = load ptr, ptr %l3, align 8
-  %closure_env = insertvalue { ptr, ptr } { ptr @__lambda_6, ptr undef }, ptr %ld31, 1
+  %ld32 = load ptr, ptr %l3, align 8
+  %closure_env = insertvalue { ptr, ptr } { ptr @__lambda_6, ptr undef }, ptr %ld32, 1
   store { ptr, ptr } %closure_env, ptr %l5, align 8
   %call_direct = call fastcc i64 @helper(ptr null, i64 1)
-  %call_direct2 = call fastcc %Holder @wrap(ptr null, i64 %call_direct)
-  store %Holder %call_direct2, ptr %l8, align 8
+  %call_direct3 = call fastcc %Holder @wrap(ptr null, i64 %call_direct)
+  store %Holder %call_direct3, ptr %l8, align 8
   %field_ptr = getelementptr inbounds %Holder, ptr %l8, i32 0, i32 0
   %field_load = load i64, ptr %field_ptr, align 8
   %enum_tag_ptr = getelementptr inbounds %__aelys_enum_Tagged, ptr %enum_tmp, i32 0, i32 0
@@ -144,21 +151,23 @@ deref_ok:                                         ; preds = %bb0
   %enum_field_0_ptr = getelementptr inbounds i8, ptr %enum_payload_base, i32 0
   store i64 4, ptr %enum_field_0_ptr, align 8
   %enum_value = load %__aelys_enum_Tagged, ptr %enum_tmp, align 8
-  %call_direct3 = call fastcc i64 @unwrap(ptr null, %__aelys_enum_Tagged %enum_value)
-  %iadd = add i64 %field_load, %call_direct3
+  %call_direct4 = call fastcc i64 @unwrap(ptr null, %__aelys_enum_Tagged %enum_value)
+  %iadd = add i64 %field_load, %call_direct4
   %ld2 = load { ptr, ptr }, ptr %l2, align 8
   %closure_fn = extractvalue { ptr, ptr } %ld2, 0
-  %closure_env4 = extractvalue { ptr, ptr } %ld2, 1
-  %call_closure = call fastcc i64 %closure_fn(ptr %closure_env4)
-  %iadd5 = add i64 %iadd, %call_closure
+  %closure_env5 = extractvalue { ptr, ptr } %ld2, 1
+  %call_closure = call fastcc i64 %closure_fn(ptr %closure_env5)
+  %iadd6 = add i64 %iadd, %call_closure
   %ld5 = load { ptr, ptr }, ptr %l5, align 8
-  %closure_fn6 = extractvalue { ptr, ptr } %ld5, 0
-  %closure_env7 = extractvalue { ptr, ptr } %ld5, 1
-  %call_closure8 = call fastcc i64 %closure_fn6(ptr %closure_env7, i64 2)
-  %iadd9 = add i64 %iadd5, %call_closure8
-  %call_direct10 = call fastcc i64 @"__mono_ident$1$i64"(ptr null, i64 6)
-  %iadd11 = add i64 %iadd9, %call_direct10
-  ret i64 %iadd11
+  %closure_fn7 = extractvalue { ptr, ptr } %ld5, 0
+  %closure_env8 = extractvalue { ptr, ptr } %ld5, 1
+  %call_closure9 = call fastcc i64 %closure_fn7(ptr %closure_env8, i64 2)
+  %iadd10 = add i64 %iadd6, %call_closure9
+  %call_direct11 = call fastcc i64 @"__mono_ident$1$i64"(ptr null, i64 6)
+  %iadd12 = add i64 %iadd10, %call_direct11
+  call void @__aelys_fn_release(ptr %l2)
+  call void @__aelys_fn_release(ptr %l5)
+  ret i64 %iadd12
 }
 
 define fastcc i64 @"__mono_ident$1$i64"(ptr %0, i64 %1) {
@@ -172,6 +181,8 @@ declare void @__aelys_panic(ptr, i64) #0
 declare void @__aelys_write(ptr, i64)
 
 declare ptr @__aelys_alloc(i64)
+
+declare void @__aelys_fn_release(ptr)
 
 define i64 @__aelys_user_main() {
 entry:

@@ -583,7 +583,8 @@ fn intercepted_in_generate_call() -> BTreeSet<String> {
     runtime_literals_after(body, "name == ")
 }
 
-const GUARD_CARVE_OUTS: [&str; 4] = [
+const GUARD_CARVE_OUTS: [&str; 5] = [
+    "__aelys_",
     "__aelys_main",
     "__aelys_user_main",
     "__aelys_global_get_",
@@ -650,8 +651,11 @@ fn the_admitted_runtime_set_is_pinned_and_its_linked_half_is_what_nm_defines() {
     let admitted = admitted_runtime_symbols();
     let pinned: BTreeSet<String> = [
         "__aelys_collect",
+        "__aelys_fn_release",
+        "__aelys_fn_retain",
         "__aelys_len",
         "__aelys_range",
+        "__aelys_rc_release_slot",
         "__aelys_str_release",
         "__aelys_str_retain",
         "__aelys_vec_release",

@@ -19,6 +19,10 @@ static inline uint32_t *aelys_rc_refcount(void *ptr) {
 static inline uint8_t *aelys_rc_flags(void *ptr) {
     return (uint8_t *)((char *)ptr - AELYS_RC_HEADER_SIZE + 4);
 }
+/* header word 12 holds the candidate index, read only after comparing the entry's pointer */
+static inline uint32_t *aelys_rc_candidate_slot(void *ptr) {
+    return (uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE + 12);
+}
 static inline uint32_t aelys_rc_type_id(void *ptr) {
     return *(uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE + 8);
 }
@@ -90,6 +94,7 @@ static void candidates_push(void *ptr) {
     g_candidates[g_count].ptr = ptr;
     g_candidates[g_count].gc_refcount = 0;
     g_candidates[g_count].live = 0;
+    *aelys_rc_candidate_slot(ptr) = (uint32_t)g_count;
     g_count++;
 }
 
@@ -97,21 +102,18 @@ static AelysCandidate *candidate_find(void *ptr) {
     if (ptr == NULL) {
         return NULL;
     }
-    for (size_t i = 0; i < g_count; i++) {
-        if (g_candidates[i].ptr == ptr) {
-            return &g_candidates[i];
-        }
+    uint32_t i = *aelys_rc_candidate_slot(ptr);
+    if (i < g_count && g_candidates[i].ptr == ptr) {
+        return &g_candidates[i];
     }
     return NULL;
 }
 
 /* nulls the slot rather than compacting, so every phase must skip NULL slots */
 static void candidate_remove(void *ptr) {
-    for (size_t i = 0; i < g_count; i++) {
-        if (g_candidates[i].ptr == ptr) {
-            g_candidates[i].ptr = NULL;
-            return;
-        }
+    AelysCandidate *c = candidate_find(ptr);
+    if (c != NULL) {
+        c->ptr = NULL;
     }
 }
 
@@ -308,6 +310,7 @@ void __aelys_cycle_collect(void) {
     size_t kept = 0;
     for (size_t i = gc_garbage_bound; i < g_count; i++) {
         if (g_candidates[i].ptr != NULL) {
+            *aelys_rc_candidate_slot(g_candidates[i].ptr) = (uint32_t)kept;
             g_candidates[kept++] = g_candidates[i];
         }
     }

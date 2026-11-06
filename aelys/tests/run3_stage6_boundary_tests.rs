@@ -770,16 +770,18 @@ mod asan {
     }
 
     // the leak oracle above is only worth its zero if a leak would be seen. a capturing closure
-    const S6_LEAK: &str = "fn main() -> i64 {\n\
-                           \x20   let mut v: Vec<i64> = vec[7919]\n\
-                           \x20   let w: Vec<i64> = v\n\
-                           \x20   let g = fn() -> i64 {\n\
-                           \x20       v[0] = 101\n\
-                           \x20       return 0\n\
-                           \x20   }\n\
-                           \x20   let q = g()\n\
-                           \x20   println(v[0])\n\
-                           \x20   println(w[0])\n\
+    const S6_LEAK: &str = "fn use_it(x: Rc<i64>) -> i64 {\n\
+                           \x20   return Rc::get(x)\n\
+                           }\n\
+                           fn mk() -> Rc<i64> {\n\
+                           \x20   return Rc::new(7)\n\
+                           }\n\
+                           fn app<T>(f: fn() -> T) -> T {\n\
+                           \x20   return f()\n\
+                           }\n\
+                           fn main() -> i64 {\n\
+                           \x20   let a: Rc<i64> = app(mk)\n\
+                           \x20   println(use_it(app(mk)) + Rc::get(a))\n\
                            \x20   return 0\n\
                            }\n";
 
@@ -796,29 +798,28 @@ mod asan {
         assert_eq!(
             immix.stacks(),
             0,
-            "immix serves the planted buffer and its detached copy from a block it keeps \
-             reachable, so LSan sees nothing at all here\nstderr:\n{}",
+            "immix serves the two planted rc objects from a block it keeps reachable, so LSan \
+             sees nothing at all here\nstderr:\n{}",
             immix.stderr
         );
         assert!(
-            immix.stderr.contains("[rc] allocs=3 frees=1"),
+            immix.stderr.contains("[rc] allocs=2 frees=0"),
             "immix has no leak stack left to count, so the managed counter is the only witness \
-             that two of the three allocations are still held\nstderr:\n{}",
+             that the two rc objects are still held\nstderr:\n{}",
             immix.stderr
         );
         assert!(
             !immix.stderr.contains("in __aelys_alloc"),
-            "immix serves this buffer from its arena, so LSan cannot name it\nstderr:\n{}",
+            "immix serves these objects from its arena, so LSan cannot name them\nstderr:\n{}",
             immix.stderr
         );
 
         let malloc = run_asan_with(&exe, true, true);
-        // three was never honest: the same binary under lsan use_stacks=0 reports these four stacks
         assert_eq!(
             malloc.stacks(),
-            2,
-            "under malloc the planted buffer and the copy the closure detaches are the only two \
-             stacks, the printed lines take the frame buffer\nstderr:\n{}",
+            1,
+            "under malloc the two rc objects a generic returning a bare type parameter lends share \
+             one allocation site and are the only stack\nstderr:\n{}",
             malloc.stderr
         );
         assert!(
@@ -833,15 +834,14 @@ mod asan {
         assert_eq!(
             malloc.stderr.matches("__aelys_to_string_i64").count(),
             0,
-            "no stack is the integer printer, so the two stacks are the planted vec and the copy \
-             it is detached into, and nothing else\nstderr:\n{}",
+            "no stack is the integer printer, so the stack is the planted rc objects and nothing \
+             else\nstderr:\n{}",
             malloc.stderr
         );
-        assert_eq!(
-            malloc.stderr.matches("__aelys_vec_detach").count(),
-            1,
-            "the second stack is the copy the capturing closure detaches, and naming it is what \
-             stops it being swapped for some other leak later\nstderr:\n{}",
+        assert!(
+            malloc.stderr.contains(" in mk "),
+            "the stack is the rc that mk allocates, naming it stops the plant being swapped for \
+             some other leak later\nstderr:\n{}",
             malloc.stderr
         );
         assert!(
@@ -851,7 +851,7 @@ mod asan {
             malloc.stderr
         );
         assert!(
-            malloc.stderr.contains("[rc] allocs=3 frees=1"),
+            malloc.stderr.contains("[rc] allocs=2 frees=0"),
             "stderr:\n{}",
             malloc.stderr
         );

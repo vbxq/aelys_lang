@@ -175,6 +175,9 @@ pub fn count_callee(slot: &AirType, retain: bool) -> &'static str {
     if mentions_param(slot) {
         return if retain { DUP_PARAM } else { DROP_PARAM };
     }
+    if is_closure(slot) {
+        return if retain { FN_RETAIN } else { FN_RELEASE };
+    }
     match (matches!(slot, AirType::Str), retain) {
         (true, true) => STR_RETAIN,
         (true, false) => STR_RELEASE,
