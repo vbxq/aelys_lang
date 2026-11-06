@@ -680,9 +680,9 @@ mod asan {
         cmd.env("AELYS_RC_STATS", "1").env(
             "ASAN_OPTIONS",
             if leaks {
-                "detect_leaks=1"
+                "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"
             } else {
-                "detect_leaks=0"
+                "detect_leaks=0:max_free_fill_size=4096:free_fill_byte=170"
             },
         );
         if malloc {

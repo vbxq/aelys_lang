@@ -477,7 +477,7 @@ fn asan_run(src: &str) -> Option<Output> {
 
     Some(
         Command::new(&asan_exe)
-            .env("ASAN_OPTIONS", "detect_leaks=1")
+            .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
             .output()
             .expect("run asan-instrumented exe"),
     )

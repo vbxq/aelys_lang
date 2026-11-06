@@ -105,7 +105,7 @@ fn count_rc_calls_air(src: &str, elision: bool) -> (usize, usize) {
 const RC_ENV: &[(&str, &str)] = &[
     ("AELYS_RC_STATS", "1"),
     ("AELYS_ALLOC", "immix"),
-    ("ASAN_OPTIONS", "detect_leaks=1"),
+    ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
 ];
 
 fn assert_balanced_run(src: &str, opt: OptimizationLevel, oracle: i32, ctx: &str) -> Option<()> {

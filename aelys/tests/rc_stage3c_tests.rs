@@ -140,7 +140,7 @@ fn asan_run_cycles(src: &str) -> Option<(i32, String)> {
 
     let run = Command::new(&asan_exe)
         .env("AELYS_RC_STATS", "1")
-        .env("ASAN_OPTIONS", "detect_leaks=1")
+        .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
         .output()
         .expect("run ASan-instrumented exe");
     let code = run.status.code().expect("exit code");

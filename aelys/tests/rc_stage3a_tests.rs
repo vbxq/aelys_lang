@@ -551,7 +551,7 @@ fn asan_probe(src: &str, expected_exit: i32, label: &str) {
 
     let run = Command::new(&asan_exe)
         .env("AELYS_RC_STATS", "1")
-        .env("ASAN_OPTIONS", "detect_leaks=1")
+        .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
         .output()
         .expect("run ASan-instrumented exe");
     let stderr = String::from_utf8_lossy(&run.stderr);

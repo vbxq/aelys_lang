@@ -168,7 +168,7 @@ fn seam1_probe_no_trace_excludes_vec_buffer_from_collector() {
     };
     let out = Command::new(&exe)
         .env("AELYS_ALLOC", "immix")
-        .env("ASAN_OPTIONS", "detect_leaks=1")
+        .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
         .output()
         .expect("run NO_TRACE probe");
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -194,7 +194,7 @@ fn seam1_probe_no_trace_excludes_vec_buffer_from_collector() {
     };
     let out2 = Command::new(&exe2)
         .env("AELYS_ALLOC", "immix")
-        .env("ASAN_OPTIONS", "detect_leaks=1")
+        .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
         .output()
         .expect("run flags-0 probe");
     let stderr2 = String::from_utf8_lossy(&out2.stderr);
@@ -262,7 +262,7 @@ fn seam1_vec_buffer_not_mistraced_asan_clean() {
         &[
             ("AELYS_RC_STATS", "1"),
             ("AELYS_ALLOC", "immix"),
-            ("ASAN_OPTIONS", "detect_leaks=1"),
+            ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
         ],
     ) else {
         return;
@@ -298,7 +298,7 @@ fn seam1_vec_buffer_no_rc_type_no_oob_table_read() {
         &[
             ("AELYS_RC_STATS", "1"),
             ("AELYS_ALLOC", "immix"),
-            ("ASAN_OPTIONS", "detect_leaks=1"),
+            ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
         ],
     ) else {
         return;
@@ -331,7 +331,7 @@ fn main() -> i64 {
         &[
             ("AELYS_RC_STATS", "1"),
             ("AELYS_ALLOC", "immix"),
-            ("ASAN_OPTIONS", "detect_leaks=1"),
+            ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
         ],
     ) else {
         return;
@@ -377,7 +377,7 @@ fn main() -> i64 {
         &[
             ("AELYS_RC_STATS", "1"),
             ("AELYS_ALLOC", "immix"),
-            ("ASAN_OPTIONS", "detect_leaks=1"),
+            ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
         ],
     ) else {
         return;
@@ -432,7 +432,7 @@ fn run_seam4(opt: OptimizationLevel) -> Option<(i32, i64, i64)> {
         &[
             ("AELYS_RC_STATS", "1"),
             ("AELYS_ALLOC", "immix"),
-            ("ASAN_OPTIONS", "detect_leaks=1"),
+            ("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170"),
         ],
     )?;
     assert!(
