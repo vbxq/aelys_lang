@@ -649,6 +649,20 @@ fn g4_every_tracked_shell_script_can_be_invoked() {
     let modes = git_index_modes(&root, &rel_paths);
 
     let mut script_problems = Vec::new();
+    let tracked_sh = Command::new("git")
+        .arg("-C")
+        .arg(&root)
+        .args(["ls-files", "--", "*.sh"])
+        .output()
+        .unwrap_or_else(|e| panic!("G4: `git ls-files` could not be run: {e}"));
+    assert!(tracked_sh.status.success(), "G4: `git ls-files -- *.sh` failed");
+    for path in String::from_utf8_lossy(&tracked_sh.stdout).lines() {
+        if !rel_paths.iter().any(|p| p == path) {
+            script_problems.push(format!(
+                "{path} is a tracked shell script outside scripts/"
+            ));
+        }
+    }
     for rel_path in &rel_paths {
         match modes.get(rel_path.as_str()) {
             None => script_problems.push(format!(
@@ -3339,5 +3353,103 @@ fn g8_the_verification_inventories_still_describe_the_tree() {
         target_moves.len(),
         name_moves.len(),
         shown.join("\n")
+    );
+}
+
+const ANCHOR_PIN_REL: &str = "scripts/anchor_tags.tsv";
+
+fn git_out(root: &Path, args: &[&str]) -> (bool, String) {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .unwrap_or_else(|e| panic!("G9: `git {}` could not be run: {e}", args.join(" ")));
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stdout).trim().to_string(),
+    )
+}
+
+#[test]
+fn g9_every_anchor_tag_resolves_to_its_pinned_tree() {
+    let root = repo_root();
+    let raw = fs::read_to_string(root.join(ANCHOR_PIN_REL))
+        .unwrap_or_else(|e| panic!("G9: cannot read {ANCHOR_PIN_REL}: {e}"));
+
+    let mut pinned: BTreeMap<String, String> = BTreeMap::new();
+    for (i, line) in raw.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let cols: Vec<&str> = line.split('\t').collect();
+        assert!(
+            cols.len() == 2 && cols[1].len() == 40,
+            "G9: {ANCHOR_PIN_REL}:{}: expected `tag<TAB>tree sha`, got: {line}",
+            i + 1
+        );
+        pinned.insert(cols[0].to_string(), cols[1].to_string());
+    }
+    assert!(
+        !pinned.is_empty(),
+        "G9: {ANCHOR_PIN_REL} is empty"
+    );
+
+    let mut problems = Vec::new();
+    for (tag, tree) in &pinned {
+        let (ok, got) = git_out(&root, &["rev-parse", "--verify", "-q", &format!("{tag}^{{tree}}")]);
+        if !ok {
+            problems.push(format!("{tag} does not resolve"));
+        } else if &got != tree {
+            problems.push(format!(
+                "{tag} resolves to tree {got}, pinned {tree}"
+            ));
+        }
+    }
+
+    let (ok, tags) = git_out(&root, &["tag", "-l"]);
+    assert!(ok, "G9: `git tag -l` failed");
+    for tag in tags.lines().filter(|t| !t.is_empty()) {
+        if !pinned.contains_key(tag) {
+            problems.push(format!("{tag} is not in {ANCHOR_PIN_REL}"));
+        }
+    }
+
+    let mut prefixes = BTreeSet::new();
+    let mut suffixes = BTreeSet::new();
+    for tag in pinned.keys() {
+        if let Some((p, s)) = tag.split_once('/') {
+            prefixes.insert(p.to_string());
+            suffixes.insert(s.to_string());
+        }
+    }
+    assert!(
+        !prefixes.is_empty(),
+        "G9: no pinned tag has the `run/name` shape"
+    );
+    let pattern = format!(
+        "\\b({})/({})\\b",
+        prefixes.iter().cloned().collect::<Vec<_>>().join("|"),
+        suffixes.iter().cloned().collect::<Vec<_>>().join("|")
+    );
+    let (_, hits) = git_out(
+        &root,
+        &["grep", "-hoE", &pattern, "--", ".", &format!(":!{ANCHOR_PIN_REL}")],
+    );
+    let referenced: BTreeSet<&str> = hits.lines().filter(|h| !h.is_empty()).collect();
+    assert!(
+        !referenced.is_empty(),
+        "G9: no anchor reference found in tracked files"
+    );
+    for name in referenced {
+        if !pinned.contains_key(name) {
+            problems.push(format!("`{name}` is referenced but not pinned"));
+        }
+    }
+
+    assert!(
+        problems.is_empty(),
+        "G9: anchor tags disagree with {ANCHOR_PIN_REL}:\n{}",
+        problems.join("\n")
     );
 }
