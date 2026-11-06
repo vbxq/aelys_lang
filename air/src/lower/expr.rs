@@ -12,29 +12,26 @@ impl<'a> LoweringContext<'a> {
             || matches!(ty, AirType::Ptr(inner) if matches!(inner.as_ref(), AirType::Void))
     }
 
-    // already owns its +1, so retaining it again would double-count
-    fn emit_construction_field_retain(
+    // a pointer held by an aggregate is always an rc, an aggregate never holds a reference
+    fn own_field_value(
         &mut self,
+        op: Operand,
+        value: &TypedExpr,
         field_air_ty: &AirType,
-        value_op: &Operand,
-        value_expr: &TypedExpr,
         sp: Option<Span>,
-        what: &str,
-    ) {
-        let paths = match crate::rc_paths::rc_field_paths_in(field_air_ty, self.defs()) {
-            crate::rc_paths::RcScan::None => return,
-            crate::rc_paths::RcScan::Paths(paths) => paths,
-            // skipping is only sound while generic structs never reach codegen; once they
-            crate::rc_paths::RcScan::Undecidable(_) => return,
-            crate::rc_paths::RcScan::RejectedMultiVariant(_) => return,
-        };
-        match aelys_sema::rc_init::rc_init_provenance(value_expr) {
-            aelys_sema::rc_init::RcInit::Fresh => {}
-            aelys_sema::rc_init::RcInit::Borrowed => {
-                self.emit_carrier_field_retains(value_op.clone(), field_air_ty, &paths, sp);
+    ) -> Operand {
+        match crate::rc_paths::rc_field_paths_in(field_air_ty, self.defs()) {
+            crate::rc_paths::RcScan::Paths(paths) => {
+                let shape = super::RcShape {
+                    ty: field_air_ty.clone(),
+                    paths,
+                };
+                self.own_rc_value(op, &value.ty, &shape, Some(value), sp)
             }
-            aelys_sema::rc_init::RcInit::Unaccountable(blocker) => {
-                self.report_unsupported(aelys_sema::rc_init::rc_init_refusal(blocker, what));
+            crate::rc_paths::RcScan::None
+            | crate::rc_paths::RcScan::Undecidable(_)
+            | crate::rc_paths::RcScan::RejectedMultiVariant(_) => {
+                self.own_str_for_store(op, &value.ty, sp)
             }
         }
     }
@@ -213,30 +210,28 @@ impl<'a> LoweringContext<'a> {
                 for (i, (fname, fval)) in fields.iter().enumerate() {
                     let op = self.lower_expr(fval);
                     let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
-                    let op = self.own_str_for_store(op, &fval.ty, sp);
-                    match self.air_field_type_of(&air_name, fname) {
-                        Some(field_air_ty) => self.emit_construction_field_retain(
-                            &field_air_ty,
-                            &op,
-                            fval,
-                            sp,
-                            &format!("field `{name}.{fname}`"),
-                        ),
-                        None => self.report_ice(format!(
-                            "ICE: struct literal `{name}` has no AIR definition for field \
-                             `{fname}` under `{air_name}`"
-                        )),
-                    }
+                    let op = match self.air_field_type_of(&air_name, fname) {
+                        Some(field_air_ty) => self.own_field_value(op, fval, &field_air_ty, sp),
+                        None => {
+                            self.report_ice(format!(
+                                "ICE: struct literal `{name}` has no AIR definition for field \
+                                 `{fname}` under `{air_name}`"
+                            ));
+                            op
+                        }
+                    };
                     lowered_fields.push((fname.clone(), op));
                 }
-                self.emit_rvalue_to_temp(
+                let literal = self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::StructInit {
                         name: name.clone(),
                         fields: lowered_fields,
                     },
                     sp,
-                )
+                );
+                self.pose_rc_value(&literal, &expr.ty);
+                literal
             }
 
             TypedExprKind::ArrayLiteral { elements, .. } => {
@@ -569,15 +564,8 @@ impl<'a> LoweringContext<'a> {
                 for (i, arg) in args.iter().enumerate() {
                     let op = self.lower_expr(arg);
                     let op = self.hold_operand(op, arg, &values[i + 1..], false, sp);
-                    let op = self.own_str_for_store(op, &arg.ty, sp);
                     let payload_air_ty = self.lower_type_from_infer(&arg.ty);
-                    self.emit_construction_field_retain(
-                        &payload_air_ty,
-                        &op,
-                        arg,
-                        sp,
-                        &format!("payload of `{enum_name}::{variant}`"),
-                    );
+                    let op = self.own_field_value(op, arg, &payload_air_ty, sp);
                     payload.push(op);
                 }
                 let air_ty = self.lower_type_from_infer(&expr.ty);
@@ -585,7 +573,7 @@ impl<'a> LoweringContext<'a> {
                     AirType::Enum(r) => r.clone(),
                     _ => EnumRef::plain(enum_name.clone()),
                 };
-                self.emit_rvalue_to_temp(
+                let literal = self.emit_rvalue_to_temp(
                     air_ty,
                     Rvalue::EnumInit {
                         enum_ref,
@@ -594,7 +582,9 @@ impl<'a> LoweringContext<'a> {
                         payload,
                     },
                     sp,
-                )
+                );
+                self.pose_rc_value(&literal, &expr.ty);
+                literal
             }
             TypedExprKind::Block { stmts, tail } => {
                 let scope_depth = self.locals_by_name.len();
@@ -603,7 +593,26 @@ impl<'a> LoweringContext<'a> {
                 }
                 let mut result = self.lower_expr(tail);
                 let mut owned_tail = None;
-                if let Operand::Copy(id) | Operand::Move(id) = &result {
+                let rc_tail = self.rc_shape(&tail.ty);
+                if let Some(shape) = rc_tail.as_ref() {
+                    if !self.last_block_is_terminated() {
+                        let id = match result {
+                            Operand::Copy(id) | Operand::Move(id)
+                                if self.rc_tracked_below(id, scope_depth) =>
+                            {
+                                self.untrack_rc_local(id);
+                                id
+                            }
+                            other => {
+                                let owned =
+                                    self.own_rc_value(other, &tail.ty, shape, Some(tail), None);
+                                self.operand_to_local(owned, &shape.ty)
+                            }
+                        };
+                        owned_tail = Some(id);
+                        result = Operand::Copy(id);
+                    }
+                } else if let Operand::Copy(id) | Operand::Move(id) = &result {
                     let id = *id;
                     if self
                         .str_locals
@@ -643,7 +652,10 @@ impl<'a> LoweringContext<'a> {
                 }
                 self.str_locals.retain(|(_, d)| *d <= scope_depth);
                 // a result that may point into a deeper local keeps it open, or releasing it here would free what it points to
-                if !self.affine_category(&tail.ty).is_managed() && !self.may_hold_a_view(&tail.ty) {
+                if rc_tail.is_some()
+                    || (!self.affine_category(&tail.ty).is_managed()
+                        && !self.may_hold_a_view(&tail.ty))
+                {
                     self.emit_scope_rc_releases(scope_depth);
                 } else {
                     self.view_release_below(scope_depth, true);
@@ -687,6 +699,7 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                 } else {
+                    let lent = self.call_lends(&func, &expr.ty);
                     let result = self.emit_rvalue_to_temp(
                         ret_ty,
                         Rvalue::Call {
@@ -696,6 +709,9 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                     self.pose_vec_call_result(&result);
+                    if !lent {
+                        self.pose_rc_value(&result, &expr.ty);
+                    }
                 }
             }
             TypedExprKind::Assign { name, value } => {
@@ -734,10 +750,19 @@ impl<'a> LoweringContext<'a> {
             self.emit(AirStmtKind::CallVoid { func, args }, sp);
             Operand::Const(AirConst::Null)
         } else {
+            let lent = self.call_lends(&func, result_infer_ty);
             let result = self.emit_rvalue_to_temp(result_ty, Rvalue::Call { func, args }, sp);
             self.pose_vec_call_result(&result);
+            if !lent {
+                self.pose_rc_value(&result, result_infer_ty);
+            }
             result
         }
+    }
+
+    fn call_lends(&self, func: &Callee, ty: &InferType) -> bool {
+        matches!(ty, InferType::Rc(_))
+            && matches!(func, Callee::Named(name) if self.lent_returns.contains(name))
     }
 
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
@@ -750,6 +775,29 @@ impl<'a> LoweringContext<'a> {
         if let Some(tmps) = view_tmps {
             let slots = self.lookup_local(name).and_then(|id| self.view_slots_of(id));
             self.view_rhs_end(tmps, slots, true);
+        }
+        if let Some(shape) = self.rc_shape(&value.ty)
+            && let Some(id) = self.lookup_local(name)
+            && !self.capture_slots.contains_key(&id)
+        {
+            let val = self.own_rc_value(val, &value.ty, &shape, Some(value), sp);
+            if let Some(old) = self.carrier_locals.iter().find(|c| c.local == id) {
+                let (ty, paths) = (old.ty.clone(), old.paths.clone());
+                self.emit_carrier_field_releases(id, &ty, &paths, sp);
+            } else if self.rc_locals.iter().any(|(l, _)| *l == id) {
+                self.emit_rc_release(id, sp);
+            }
+            if self.str_local_is_owned(id) {
+                self.emit_str_release(id, sp);
+            }
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(id),
+                    rvalue: Rvalue::Use(val),
+                },
+                sp,
+            );
+            return Operand::Copy(id);
         }
         let str_val = self.claim_str_init(&mut val);
         let kept_unretained = match self.lookup_local(name) {
@@ -1176,6 +1224,15 @@ impl<'a> LoweringContext<'a> {
             None
         };
         if let Some(field_ty) = lift_field_ty {
+            let prov_expr = match &compound_info {
+                Some((_, rhs_expr)) => *rhs_expr,
+                None => value,
+            };
+            let fresh = aelys_sema::rc_init::rc_init_provenance(prov_expr)
+                == aelys_sema::rc_init::RcInit::Fresh;
+            if !(fresh && self.claim_owned_str_temp(&final_val)) {
+                self.emit_rc_retain(final_val.clone(), sp);
+            }
             let old = self.emit_rvalue_to_temp(
                 field_ty,
                 Rvalue::FieldAccess {
@@ -1192,24 +1249,6 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
-            let prov_expr = match &compound_info {
-                Some((_, rhs_expr)) => *rhs_expr,
-                None => value,
-            };
-            let mut prov = prov_expr;
-            while let TypedExprKind::Grouping(inner) = &prov.kind {
-                prov = inner;
-            }
-            match &prov.kind {
-                TypedExprKind::EnumVariant {
-                    enum_name, variant, ..
-                } if enum_name == "Rc" && variant == "new" => {}
-                TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => {}
-                TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => {
-                    self.emit_rc_retain(final_val, sp);
-                }
-                _ => {}
-            }
         } else {
             let old_field = (self.counted(&value.ty) && self.store_root_owns(object)).then(|| {
                 let field_ty = self.lower_type_from_infer(&value.ty);
@@ -1376,6 +1415,7 @@ impl<'a> LoweringContext<'a> {
             Some(self.alloc_temp_mut(result_ty))
         };
         let str_result = result.is_some() && self.counted(&parent.ty);
+        let rc_result = result.and_then(|_| self.rc_shape(&parent.ty));
 
         let cond = self.lower_expr(condition);
         if self.position_is_dead() {
@@ -1396,7 +1436,14 @@ impl<'a> LoweringContext<'a> {
         let before = self.str_temp_ids();
         if let Some(result) = result {
             let then_val = self.lower_expr(then_branch);
-            self.store_arm_result(result, then_val, str_result);
+            self.store_arm_value(
+                result,
+                then_val,
+                str_result,
+                rc_result.as_ref(),
+                then_branch,
+                &parent.ty,
+            );
         } else {
             self.lower_expr_discard(then_branch);
         }
@@ -1407,7 +1454,14 @@ impl<'a> LoweringContext<'a> {
         let before = self.str_temp_ids();
         if let Some(result) = result {
             let else_val = self.lower_expr(else_branch);
-            self.store_arm_result(result, else_val, str_result);
+            self.store_arm_value(
+                result,
+                else_val,
+                str_result,
+                rc_result.as_ref(),
+                else_branch,
+                &parent.ty,
+            );
         } else {
             self.lower_expr_discard(else_branch);
         }
@@ -1416,8 +1470,35 @@ impl<'a> LoweringContext<'a> {
 
         self.fixup_block_id_noop(merge_id);
         self.restamp_str_temps(&dominated);
-        self.pose_owned_str_result(result, str_result);
+        self.pose_owned_str_result(result, str_result || rc_result.is_some());
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
+    fn store_arm_value(
+        &mut self,
+        result: LocalId,
+        val: Operand,
+        str_result: bool,
+        rc_result: Option<&super::RcShape>,
+        arm: &TypedExpr,
+        ty: &InferType,
+    ) {
+        let Some(shape) = rc_result else {
+            self.store_arm_result(result, val, str_result);
+            return;
+        };
+        let val = if self.last_block_is_terminated() {
+            val
+        } else {
+            self.own_rc_value(val, ty, shape, Some(arm), None)
+        };
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(result),
+                rvalue: Rvalue::Use(val),
+            },
+            None,
+        );
     }
 
     fn store_arm_result(&mut self, result: LocalId, mut val: Operand, str_result: bool) {
@@ -1675,7 +1756,10 @@ impl<'a> LoweringContext<'a> {
             .first()
             .map(|a| {
                 let op = self.lower_expr(a);
-                self.own_str_for_store(op, &a.ty, sp)
+                match self.rc_shape(&a.ty) {
+                    Some(shape) => self.own_rc_value(op, &a.ty, &shape, Some(a), sp),
+                    None => self.own_str_for_store(op, &a.ty, sp),
+                }
             })
             .unwrap_or(Operand::Const(AirConst::ZeroInit(data_ty.clone())));
 
@@ -1694,6 +1778,7 @@ impl<'a> LoweringContext<'a> {
             },
             sp,
         );
+        self.pose_owned_temp(&Operand::Copy(ptr_local));
         Operand::Copy(ptr_local)
     }
 
@@ -1719,7 +1804,10 @@ impl<'a> LoweringContext<'a> {
         };
         let data_ty = self.lower_type_from_infer(inner_infer);
         let ptr_ty = AirType::Ptr(Box::new(data_ty));
-        self.emit_rvalue_to_temp(ptr_ty, Rvalue::Use(Operand::Const(AirConst::Null)), None)
+        let handle =
+            self.emit_rvalue_to_temp(ptr_ty, Rvalue::Use(Operand::Const(AirConst::Null)), None);
+        self.pose_owned_temp(&handle);
+        handle
     }
 
     fn lower_lambda(
@@ -1832,7 +1920,7 @@ impl<'a> LoweringContext<'a> {
             return;
         };
         if self.str_operand_is_fresh(operand) {
-            self.stmt_str_temps.push((*id, self.current_blocks.len()));
+            self.pose_owned_temp(&Operand::Copy(*id));
         }
     }
 
@@ -1851,6 +1939,7 @@ impl<'a> LoweringContext<'a> {
             Some(self.alloc_temp_mut(result_ty))
         };
         let str_result = result.is_some() && self.counted(&parent.ty);
+        let rc_result = result.and_then(|_| self.rc_shape(&parent.ty));
 
         let scrutinee_op = self.lower_expr(scrutinee);
         if self.position_is_dead() {
@@ -1938,7 +2027,14 @@ impl<'a> LoweringContext<'a> {
 
             if let Some(result) = result {
                 let arm_val = self.lower_expr(&arm.body);
-                self.store_arm_result(result, arm_val, str_result);
+                self.store_arm_value(
+                    result,
+                    arm_val,
+                    str_result,
+                    rc_result.as_ref(),
+                    &arm.body,
+                    &parent.ty,
+                );
             } else {
                 self.lower_expr_discard(&arm.body);
             }
@@ -1964,7 +2060,14 @@ impl<'a> LoweringContext<'a> {
             let before = self.str_temp_ids();
             if let Some(result) = result {
                 let wc_val = self.lower_expr(&wildcard.body);
-                self.store_arm_result(result, wc_val, str_result);
+                self.store_arm_value(
+                    result,
+                    wc_val,
+                    str_result,
+                    rc_result.as_ref(),
+                    &wildcard.body,
+                    &parent.ty,
+                );
             } else {
                 self.lower_expr_discard(&wildcard.body);
             }
@@ -1976,7 +2079,7 @@ impl<'a> LoweringContext<'a> {
 
         self.fixup_block_id_noop(merge_id);
         self.restamp_str_temps(&dominated);
-        self.pose_owned_str_result(result, str_result);
+        self.pose_owned_str_result(result, str_result || rc_result.is_some());
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
     }
 

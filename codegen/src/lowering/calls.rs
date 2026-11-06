@@ -71,7 +71,10 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         if let Callee::Named(name) = callee
-            && (name == "__aelys_dup" || name == "__aelys_drop")
+            && (name == "__aelys_dup"
+                || name == "__aelys_drop"
+                || name == "__aelys_dup_param"
+                || name == "__aelys_drop_param")
         {
             return Err(CodegenError::UnsupportedInstruction(format!(
                 "`{name}` reached codegen: mono resolves every abstract count"

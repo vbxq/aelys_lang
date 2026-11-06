@@ -1852,7 +1852,7 @@ const UNCOMPARED_REJECTION_RESIDUE: &[(&str, &str)] = &[
 
 // per file, the air lowering sites that turn a program into e0902 or e0904
 const AIR_REJECTION_CENSUS: &[(&str, usize)] = &[
-    ("air/src/lower/expr.rs", 3),
+    ("air/src/lower/expr.rs", 2),
     ("air/src/lower/mod.rs", 1),
     ("air/src/lower/stmts.rs", 7),
     ("air/src/lower/view_owner.rs", 3),

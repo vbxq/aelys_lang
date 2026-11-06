@@ -410,6 +410,7 @@ fn air_stage(
     let mut bir_imports = aelys_air::bir::Imports::default();
     let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut retaining_fns: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut lent_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (front, typed_program) in fronts.iter().zip(typed.iter().copied()) {
         let src = front.source.clone();
@@ -420,6 +421,7 @@ fn air_stage(
             bir: bir_imports.clone(),
             fresh_returns: fresh_returns.clone(),
             retaining_fns: retaining_fns.clone(),
+            lent_returns: lent_returns.clone(),
         };
 
         let mut air = aelys_air::lower::try_lower_with_imports(typed_program, imported).map_err(
@@ -468,6 +470,9 @@ fn air_stage(
             aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
         fresh_returns.extend(proven);
         retaining_fns.extend(aelys_air::lower::retaining_functions(&air.functions));
+        for name in aelys_air::lower::lent_returning_generics(typed_program) {
+            lent_returns.insert(aelys_sema::modules::qualify_value(&front.dotted, &name));
+        }
 
         let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
         if !runtime_claims.is_empty() {

@@ -11,6 +11,8 @@ pub const STR_RETAIN: &str = "__aelys_str_retain";
 pub const STR_RELEASE: &str = "__aelys_str_release";
 pub const DUP: &str = "__aelys_dup";
 pub const DROP: &str = "__aelys_drop";
+pub const DUP_PARAM: &str = "__aelys_dup_param";
+pub const DROP_PARAM: &str = "__aelys_drop_param";
 
 const UNROLL_LIMIT: u64 = 8;
 const INLINE_LIMIT: u64 = 4;
@@ -154,11 +156,44 @@ enum Leaf {
 }
 
 pub fn count_callee(slot: &AirType, retain: bool) -> &'static str {
+    if mentions_param(slot) {
+        return if retain { DUP_PARAM } else { DROP_PARAM };
+    }
     match (matches!(slot, AirType::Str), retain) {
         (true, true) => STR_RETAIN,
         (true, false) => STR_RELEASE,
         (false, true) => DUP,
         (false, false) => DROP,
+    }
+}
+
+fn mentions_param(ty: &AirType) -> bool {
+    match ty {
+        AirType::Param(_) => true,
+        AirType::Ptr(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner)
+        | AirType::Vec(inner) => mentions_param(inner),
+        AirType::Enum(r) => r.args.iter().any(mentions_param),
+        AirType::FnPtr { params, ret, .. } => {
+            params.iter().any(mentions_param) || mentions_param(ret)
+        }
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Opaque
+        | AirType::Void => false,
     }
 }
 
@@ -171,11 +206,11 @@ pub fn glue_name(ty: &AirType, retain: bool) -> String {
 }
 
 pub fn is_retain(name: &str) -> bool {
-    name == STR_RETAIN || name == DUP
+    name == STR_RETAIN || name == DUP || name == DUP_PARAM
 }
 
 pub fn is_release(name: &str) -> bool {
-    name == STR_RELEASE || name == DROP
+    name == STR_RELEASE || name == DROP || name == DROP_PARAM
 }
 
 fn local_types(function: &AirFunction) -> HashMap<LocalId, AirType> {
@@ -286,10 +321,11 @@ fn resolve_function(function: &mut AirFunction, glue: &mut GlueSet<'_>) {
             else {
                 return true;
             };
-            if name != DUP && name != DROP {
+            let param_origin = name == DUP_PARAM || name == DROP_PARAM;
+            if name != DUP && name != DROP && !param_origin {
                 return true;
             }
-            let retain = name == DUP;
+            let retain = name == DUP || name == DUP_PARAM;
             let Some(arg) = count_arg(args) else {
                 return true;
             };
@@ -300,7 +336,12 @@ fn resolve_function(function: &mut AirFunction, glue: &mut GlueSet<'_>) {
                 *name = if retain { STR_RETAIN } else { STR_RELEASE }.to_string();
                 return true;
             }
-            if glue.carriers().carries_string(&slot) {
+            if param_origin {
+                if let Some(callee) = glue.param_glue_for(&slot, retain) {
+                    *name = callee;
+                    return true;
+                }
+            } else if glue.carriers().carries_string(&slot) {
                 *name = glue.glue_for(&slot, retain);
                 return true;
             }
@@ -373,6 +414,140 @@ impl<'a> GlueSet<'a> {
         let function = self.build(&name, ty, retain);
         self.functions.push(function);
         name
+    }
+
+    // a pointer a type argument put in an enum payload may be a reference, a declared one is an rc
+    fn param_rc_paths(&self, ty: &AirType) -> Vec<crate::rc_paths::RcLeafPath> {
+        if !matches!(ty, AirType::Struct(_) | AirType::Enum(_)) {
+            return Vec::new();
+        }
+        match crate::rc_paths::rc_field_paths(ty, self.structs, self.enums) {
+            crate::rc_paths::RcScan::Paths(paths) => paths
+                .into_iter()
+                .filter(|path| {
+                    !path.steps.iter().any(|step| {
+                        matches!(step, crate::rc_paths::RcPathStep::EnumPayload { enum_ref, .. }
+                            if !enum_ref.args.is_empty())
+                    })
+                })
+                .collect(),
+            crate::rc_paths::RcScan::None
+            | crate::rc_paths::RcScan::Undecidable(_)
+            | crate::rc_paths::RcScan::RejectedMultiVariant(_) => Vec::new(),
+        }
+    }
+
+    fn param_glue_for(&mut self, ty: &AirType, retain: bool) -> Option<String> {
+        let strings = self.carriers().carries_string(ty);
+        let paths = self.param_rc_paths(ty);
+        if !strings && paths.is_empty() {
+            return None;
+        }
+        if paths.is_empty() {
+            return Some(self.glue_for(ty, retain));
+        }
+        let key = (
+            format!("param:{}", crate::mono::substitute::type_to_string(ty)),
+            retain,
+        );
+        if let Some(name) = self.made.get(&key) {
+            return Some(name.clone());
+        }
+        let name = format!(
+            "__glue_p{}${}",
+            if retain { "dup" } else { "drop" },
+            crate::mono::substitute::type_to_string(ty)
+        );
+        self.made.insert(key, name.clone());
+        let mut body = GlueBody::new(AirType::Ptr(Box::new(ty.clone())));
+        if strings {
+            let callee = self.glue_for(ty, retain);
+            body.call(&callee, body.param);
+        }
+        let count = if retain {
+            "__aelys_rc_retain"
+        } else {
+            "__aelys_rc_release"
+        };
+        for path in &paths {
+            let leaf = self.load_rc_leaf(&mut body, ty, path);
+            body.emit(AirStmtKind::CallVoid {
+                func: Callee::Named(count.to_string()),
+                args: vec![Operand::Copy(leaf)],
+            });
+        }
+        let id = FunctionId(self.next_function_id);
+        self.next_function_id += 1;
+        let calls = paths.len() as u64 + u64::from(strings);
+        self.functions
+            .push(body.finish(id, &name, calls <= INLINE_LIMIT));
+        Some(name)
+    }
+
+    fn load_rc_leaf(
+        &self,
+        body: &mut GlueBody,
+        ty: &AirType,
+        path: &crate::rc_paths::RcLeafPath,
+    ) -> LocalId {
+        let mut cur = body.temp(ty.clone(), false);
+        body.emit(AirStmtKind::Assign {
+            place: Place::Local(cur),
+            rvalue: Rvalue::Deref(Operand::Copy(body.param)),
+        });
+        let mut cur_ty = ty.clone();
+        for step in &path.steps {
+            let (next_ty, rvalue) = match step {
+                crate::rc_paths::RcPathStep::Field(field) => {
+                    let owner = if let AirType::Struct(name) = &cur_ty {
+                        self.structs.iter().find(|def| &def.name == name)
+                    } else {
+                        None
+                    };
+                    let field_ty = owner
+                        .and_then(|def| def.fields.iter().find(|f| &f.name == field))
+                        .map_or(AirType::Ptr(Box::new(AirType::Void)), |f| f.ty.clone());
+                    (
+                        field_ty,
+                        Rvalue::FieldAccess {
+                            base: Operand::Copy(cur),
+                            field: field.clone(),
+                        },
+                    )
+                }
+                crate::rc_paths::RcPathStep::EnumPayload {
+                    enum_ref,
+                    tag,
+                    field_index,
+                } => {
+                    let symbol = enum_ref.symbol();
+                    let payload_ty = self
+                        .enums
+                        .iter()
+                        .find(|def| def.name == symbol)
+                        .and_then(|def| def.variants.iter().find(|v| v.tag == *tag))
+                        .and_then(|v| v.payload.get(*field_index as usize).cloned())
+                        .unwrap_or(AirType::Ptr(Box::new(AirType::Void)));
+                    (
+                        payload_ty,
+                        Rvalue::EnumPayload {
+                            enum_ref: enum_ref.clone(),
+                            tag: *tag,
+                            operand: Operand::Copy(cur),
+                            field_index: *field_index,
+                        },
+                    )
+                }
+            };
+            let next = body.temp(next_ty.clone(), false);
+            body.emit(AirStmtKind::Assign {
+                place: Place::Local(next),
+                rvalue,
+            });
+            cur = next;
+            cur_ty = next_ty;
+        }
+        cur
     }
 
     fn build(&mut self, name: &str, ty: &AirType, retain: bool) -> AirFunction {
@@ -664,7 +839,7 @@ pub fn unresolved_counts(function: &AirFunction) -> Vec<String> {
         else {
             continue;
         };
-        if name == DUP || name == DROP {
+        if name == DUP || name == DROP || name == DUP_PARAM || name == DROP_PARAM {
             out.push(format!("`{name}` survived the resolution after mono"));
         } else if name == STR_RETAIN || name == STR_RELEASE {
             let slot = count_arg(args).and_then(|arg| counted_slot_type(arg, &types, &addr_of));

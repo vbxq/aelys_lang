@@ -10,7 +10,6 @@ pub enum RcInitBlocker {
 pub enum RcInit {
     Fresh,
     Borrowed,
-    Unaccountable(RcInitBlocker),
 }
 
 pub const RUNTIME_CARRIER_EXEMPT: &[&str] = &["Rc", "Vec", "string", "char"];
@@ -18,26 +17,65 @@ pub const RUNTIME_CARRIER_EXEMPT: &[&str] = &["Rc", "Vec", "string", "char"];
 pub fn rc_init_provenance(expr: &TypedExpr) -> RcInit {
     match &expr.kind {
         TypedExprKind::Grouping(inner) => rc_init_provenance(inner),
-        TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => RcInit::Fresh,
-        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => RcInit::Borrowed,
+        TypedExprKind::EnumVariant {
+            enum_name, variant, ..
+        } => {
+            let fresh = if enum_name == "Rc" {
+                variant == "new" || variant == "null"
+            } else {
+                !RUNTIME_CARRIER_EXEMPT.contains(&enum_name.as_str())
+            };
+            if fresh {
+                RcInit::Fresh
+            } else {
+                RcInit::Borrowed
+            }
+        }
+        TypedExprKind::StructLiteral { .. }
+        | TypedExprKind::Call { .. }
+        | TypedExprKind::Block { .. }
+        | TypedExprKind::If { .. }
+        | TypedExprKind::Match { .. } => RcInit::Fresh,
+        _ => RcInit::Borrowed,
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Surface {
+    Literal,
+    Reference,
+    Blocked(RcInitBlocker),
+}
+
+fn carrier_surface(expr: &TypedExpr) -> Surface {
+    match &expr.kind {
+        TypedExprKind::Grouping(inner) => carrier_surface(inner),
+        TypedExprKind::StructLiteral { .. } | TypedExprKind::EnumVariant { .. } => Surface::Literal,
+        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => Surface::Reference,
         TypedExprKind::If {
             then_branch,
             else_branch,
             ..
         } => {
-            let taken = rc_init_provenance(then_branch);
-            if taken == rc_init_provenance(else_branch) {
+            let taken = carrier_surface(then_branch);
+            if taken == carrier_surface(else_branch) {
                 taken
             } else {
-                RcInit::Unaccountable(RcInitBlocker::Compound)
+                Surface::Blocked(RcInitBlocker::Compound)
             }
         }
-        TypedExprKind::Call { .. } => RcInit::Unaccountable(RcInitBlocker::Call),
-        _ => RcInit::Unaccountable(RcInitBlocker::Compound),
+        TypedExprKind::Call { .. } => Surface::Blocked(RcInitBlocker::Call),
+        _ => Surface::Blocked(RcInitBlocker::Compound),
     }
 }
 
-// sema refuses and lowering accounts, so both have to read the same words
+pub fn rc_carrier_init_blocker(expr: &TypedExpr) -> Option<RcInitBlocker> {
+    match carrier_surface(expr) {
+        Surface::Blocked(blocker) => Some(blocker),
+        Surface::Literal | Surface::Reference => None,
+    }
+}
+
 pub fn rc_init_refusal(blocker: RcInitBlocker, what: &str) -> String {
     match blocker {
         RcInitBlocker::Call => format!(

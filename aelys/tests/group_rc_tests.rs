@@ -354,6 +354,17 @@ impl Harness {
         )
     }
 
+    fn lsan_leaks(&self, id: &str, src: &str, stdout: &str) {
+        for (tag, opt) in LEVELS {
+            let (code, out, err) =
+                self.lsan_run(id, &format!("{tag}_lsan_rc"), src, &[], *opt, RuntimeVariant::Rc);
+            assert!(err.contains("AddressSanitizer"), "{id} at {tag}: asan is not armed");
+            assert!(err.contains("leaked in"), "{id} at {tag}: lsan no longer reports a leak\n{err}");
+            assert_ne!(code, 0, "{id} at {tag}: lsan exits nonzero on a leak");
+            assert_eq!(out, stdout, "{id} at {tag}");
+        }
+    }
+
     fn lsan_row(&self, id: &str, src: &str, files: &[(&str, &str)], stdout: &str) {
         for (tag, opt) in LEVELS {
             let (code, out, err) = self.lsan_run(
@@ -887,5 +898,250 @@ fn main() -> i64 {
 fn rc_18_a_break_inside_a_view_right_hand_side_releases_the_captured_share() {
     let h = Harness::new();
     h.differential_row("rc-18", RC18_BREAK_IN_RHS, &[], "1\n", (1, 1));
+    h.assert_legs(18);
+}
+
+const RC19_BORROWED_TAIL: &str = r#"
+struct W { r: Rc<i64> }
+
+fn get(x: Rc<i64>) -> i64 {
+    return Rc::get(x)
+}
+
+fn from_param(p: W) -> i64 {
+    let w: W = {
+        let k: i64 = 1
+        p
+    }
+    return Rc::get(w.r)
+}
+
+fn rc_param(x: Rc<i64>, c: bool) -> i64 {
+    return get(if c { x } else { x })
+}
+
+fn main() -> i64 {
+    let o: W = W { r: Rc::new(5) }
+    println(from_param(o))
+    println(rc_param(o.r, true))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_19_a_carrier_bound_from_a_borrowed_block_tail_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc-19", RC19_BORROWED_TAIL, &[], "5\n5\n", (1, 1));
+    h.assert_legs(18);
+}
+
+const RC20_GENERIC_CARRIER: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn churn() -> Vec<string> {
+    let mut keep: Vec<string> = Vec::new()
+    let mut i: i64 = 10
+    while i < 50 {
+        Vec::push(keep, "Q" + "{i}")
+        i = i + 1
+    }
+    return keep
+}
+
+struct B { r: Rc<i64> }
+fn keep<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let b: B = B { r: a }
+    let c: B = keep(b)
+    let k = churn()
+    println("{Rc::get(c.r) + 1}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_20_a_carrier_through_a_generic_identity_keeps_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc-20", RC20_GENERIC_CARRIER, &[], "42\n", (82, 82));
+    h.assert_legs(18);
+}
+
+const RC21_LET_FROM_CALL: &str = r#"
+fn mk(v: i64) -> Rc<i64> {
+    return Rc::new(v)
+}
+
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 3 {
+        let a: Rc<i64> = mk(i + 4)
+        n = n + Rc::get(a)
+        i = i + 1
+    }
+    let b: Rc<i64> = mk(1)
+    println(n + Rc::get(b))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_21_an_rc_binding_initialized_by_a_call_claims_the_returned_share() {
+    let h = Harness::new();
+    h.differential_row("rc-21", RC21_LET_FROM_CALL, &[], "16\n", (4, 4));
+    h.assert_legs(18);
+}
+
+const RC22_MATCH_ARM_BORROW: &str = r#"
+struct W { r: Rc<i64> }
+enum H { Cell(Rc<i64>) }
+
+fn mkh(v: i64) -> H {
+    return H::Cell(Rc::new(v))
+}
+
+fn f(q: W, v: i64) -> i64 {
+    let w: W = match mkh(v) {
+        H::Cell(r) => q,
+    }
+    return Rc::get(w.r)
+}
+
+fn main() -> i64 {
+    let o: W = W { r: Rc::new(7) }
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 3 {
+        n = n + f(o, i)
+        i = i + 1
+    }
+    let p: Rc<i64> = Rc::new(9)
+    println(n * 100 + Rc::get(o.r) + Rc::get(p))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_22_a_match_arm_handing_back_a_borrowed_carrier_shares_it() {
+    let h = Harness::new();
+    h.differential_row("rc-22", RC22_MATCH_ARM_BORROW, &[], "2116\n", (5, 5));
+    h.assert_legs(18);
+}
+
+const RC23_TWO_DISCIPLINES: &str = r#"
+struct M { s: string, r: Rc<i64> }
+
+fn rm(m: M) -> M {
+    return m
+}
+
+fn f(m: M) -> i64 {
+    let k: M = rm(m)
+    return Rc::get(k.r) + k.s.len
+}
+
+fn main() -> i64 {
+    let mut t: string = "x"
+    let mut j: i64 = 0
+    while j < 3 {
+        t = t + "{j}"
+        j = j + 1
+    }
+    let om: M = M { s: t, r: Rc::new(1) }
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 3 {
+        n = n + f(om)
+        i = i + 1
+    }
+    let p: Rc<i64> = Rc::new(9)
+    println(n * 100 + Rc::get(om.r) + om.s.len + Rc::get(p))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_23_a_returned_two_discipline_carrier_shares_its_string_and_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc-23", RC23_TWO_DISCIPLINES, &[], "1514\n", (8, 8));
+    h.lsan_row("rc-23", RC23_TWO_DISCIPLINES, &[], "1514\n");
+    h.assert_legs(24);
+}
+
+const RC24_FRESH_ARG: &str = r#"
+fn use_it(x: Rc<i64>) -> i64 {
+    return Rc::get(x)
+}
+
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 3 {
+        n = n + use_it(Rc::new(i + 3))
+        i = i + 1
+    }
+    let p: Rc<i64> = Rc::new(9)
+    println(n * 100 + Rc::get(p))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_24_a_fresh_rc_passed_as_an_argument_is_released_after_the_call() {
+    let h = Harness::new();
+    h.differential_row("rc-24", RC24_FRESH_ARG, &[], "1209\n", (4, 4));
+    h.lsan_row("rc-24", RC24_FRESH_ARG, &[], "1209\n");
+    h.assert_legs(24);
+}
+
+const RC25_CLOSURE_ENV: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < 5 {
+        let s: string = victim(i)
+        let f = fn () -> i64 { return s.len }
+        n = n + f()
+        i = i + 1
+    }
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_25_a_closure_environment_is_never_released() {
+    let h = Harness::new();
+    h.lsan_leaks("rc-25", RC25_CLOSURE_ENV, "15\n");
+    h.assert_legs(3);
+}
+
+const RC26_MODULE: &str = r#"pub fn keep<T>(x: T) -> T {
+    return x
+}
+"#;
+
+const RC26_IMPORTED_GENERIC_LENDS: &str = r#"needs m
+
+fn use_it(x: Rc<i64>) -> i64 {
+    return Rc::get(x)
+}
+
+fn main() -> i64 {
+    let o: Rc<i64> = Rc::new(41)
+    println(use_it(m.keep(o)))
+    let a: Rc<i64> = m.keep(o)
+    println(use_it(a))
+    println(Rc::get(o))
+    return 0
+}
+"#;
+
+#[test]
+fn rc_26_an_imported_generic_returning_its_parameter_lends_an_rc() {
+    let h = Harness::new();
+    let files = [("m.aelys", RC26_MODULE)];
+    h.differential_row("rc-26", RC26_IMPORTED_GENERIC_LENDS, &files, "41\n41\n41\n", (1, 1));
     h.assert_legs(18);
 }

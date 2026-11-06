@@ -259,6 +259,7 @@ impl<'a> LoweringContext<'a> {
         self.lower_body(&func.body, func.span);
         self.view_release_params_on_fallthrough();
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_param_rc_releases_on_fallthrough();
         self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
@@ -342,6 +343,7 @@ impl<'a> LoweringContext<'a> {
         self.lower_body(&func.body, func.span);
         self.view_release_params_on_fallthrough();
         self.emit_param_cow_releases_on_fallthrough();
+        self.emit_param_rc_releases_on_fallthrough();
         self.emit_param_str_releases_on_fallthrough();
         self.emit_affine_param_drops_on_fallthrough(func.span);
         self.finalize_function_body();
@@ -464,6 +466,22 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn register_str_params(&mut self, params: &[TypedParam], air_params: &[AirParam]) {
         for (p, air) in params.iter().zip(air_params.iter()) {
+            if p.mutable
+                && let Some(shape) = self.rc_shape(&p.ty)
+            {
+                let sp = Some(self.span(&p.span));
+                self.emit_carrier_field_retains(Operand::Copy(air.id), &shape.ty, &shape.paths, sp);
+                if matches!(p.ty, InferType::Rc(_)) {
+                    self.rc_locals.push((air.id, 0));
+                } else {
+                    self.carrier_locals.push(crate::lower::CarrierLocal {
+                        local: air.id,
+                        ty: shape.ty,
+                        paths: shape.paths,
+                        depth: 0,
+                    });
+                }
+            }
             if !self.counted(&p.ty) {
                 continue;
             }

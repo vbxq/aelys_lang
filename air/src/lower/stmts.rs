@@ -1,4 +1,4 @@
-use super::{LoweringContext, StrInit};
+use super::{LoweringContext, RcShape, StrInit};
 use crate::*;
 use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedStmt, TypedStmtKind};
 
@@ -88,12 +88,138 @@ impl<'a> LoweringContext<'a> {
         self.emit_str_slot_call(false, local, sp);
     }
 
+    // only an rc handle is ever posed with a pointer type, a view never is
     pub(super) fn emit_posed_release(&mut self, local: LocalId, sp: Option<Span>) {
-        if matches!(self.local_air_type(local), Some(AirType::Vec(_))) {
+        let ty = self.local_air_type(local);
+        if matches!(ty, Some(AirType::Vec(_))) {
             self.emit_cow_release(local, sp);
-        } else {
-            self.emit_str_release(local, sp);
+            return;
         }
+        if matches!(ty, Some(AirType::Ptr(_))) {
+            self.emit_rc_release(local, sp);
+            return;
+        }
+        if let Some(ty) = ty.as_ref()
+            && let Some(paths) = self.aggregate_rc_paths(ty)
+        {
+            self.emit_carrier_field_releases(local, ty, &paths, sp);
+            if !self.counted_air(ty) {
+                return;
+            }
+        }
+        self.emit_str_release(local, sp);
+    }
+
+    pub(super) fn aggregate_rc_paths(
+        &self,
+        ty: &AirType,
+    ) -> Option<Vec<crate::rc_paths::RcLeafPath>> {
+        if !matches!(ty, AirType::Struct(_) | AirType::Enum(_)) {
+            return None;
+        }
+        match crate::rc_paths::rc_field_paths_in(ty, self.defs()) {
+            crate::rc_paths::RcScan::Paths(paths) => Some(paths),
+            crate::rc_paths::RcScan::None
+            | crate::rc_paths::RcScan::Undecidable(_)
+            | crate::rc_paths::RcScan::RejectedMultiVariant(_) => None,
+        }
+    }
+
+    pub(super) fn rc_shape(&self, ty: &InferType) -> Option<RcShape> {
+        if matches!(ty, InferType::Rc(_)) {
+            return Some(RcShape {
+                ty: self.lower_type_from_infer(ty),
+                paths: vec![crate::rc_paths::RcLeafPath { steps: Vec::new() }],
+            });
+        }
+        if !matches!(ty, InferType::Struct(_) | InferType::Enum(_, _)) {
+            return None;
+        }
+        let air = self.lower_type_from_infer(ty);
+        self.aggregate_rc_paths(&air)
+            .map(|paths| RcShape { ty: air, paths })
+    }
+
+    fn rc_binding_shape(&mut self, ty: &InferType) -> Option<RcShape> {
+        if matches!(ty, InferType::Rc(_)) {
+            return self.rc_shape(ty);
+        }
+        self.carrier_paths_for(ty)
+            .map(|(ty, paths)| RcShape { ty, paths })
+    }
+
+    pub(super) fn rc_tracked(&self, id: LocalId) -> bool {
+        self.rc_locals.iter().any(|(l, _)| *l == id)
+            || self.carrier_locals.iter().any(|c| c.local == id)
+    }
+
+    pub(super) fn rc_tracked_below(&self, id: LocalId, depth: usize) -> bool {
+        self.rc_locals.iter().any(|(l, d)| *l == id && *d > depth)
+            || self
+                .carrier_locals
+                .iter()
+                .any(|c| c.local == id && c.depth > depth)
+    }
+
+    pub(super) fn untrack_rc_local(&mut self, id: LocalId) {
+        self.rc_locals.retain(|(l, _)| *l != id);
+        self.carrier_locals.retain(|c| c.local != id);
+        self.forget_str_local(id);
+    }
+
+    pub(super) fn pose_owned_temp(&mut self, op: &Operand) {
+        if let Operand::Copy(id) | Operand::Move(id) = op
+            && !self.last_block_is_terminated()
+            && !self.stmt_str_temps.iter().any(|(l, _)| l == id)
+        {
+            self.stmt_str_temps.push((*id, self.current_blocks.len()));
+        }
+    }
+
+    pub(super) fn pose_rc_value(&mut self, op: &Operand, ty: &InferType) {
+        if self.rc_shape(ty).is_some() {
+            self.pose_owned_temp(op);
+        }
+    }
+
+    pub(super) fn own_rc_value(
+        &mut self,
+        op: Operand,
+        ty: &InferType,
+        shape: &RcShape,
+        source: Option<&TypedExpr>,
+        sp: Option<Span>,
+    ) -> Operand {
+        let may_own = source.is_none_or(|e| {
+            aelys_sema::rc_init::rc_init_provenance(e) == aelys_sema::rc_init::RcInit::Fresh
+        });
+        if let Operand::Copy(id) | Operand::Move(id) = op
+            && may_own
+            && self.claim_owned_str_temp(&op)
+        {
+            return Operand::Move(id);
+        }
+        if self.counted(ty) {
+            return self.retained_str_copy(op, sp);
+        }
+        if matches!(shape.ty, AirType::Ptr(_)) {
+            if !self.last_block_is_terminated() {
+                self.emit_rc_retain(op.clone(), sp);
+            }
+            return op;
+        }
+        let copy = self.alloc_temp(shape.ty.clone());
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(copy),
+                rvalue: Rvalue::Use(op),
+            },
+            sp,
+        );
+        if !self.last_block_is_terminated() {
+            self.emit_carrier_field_retains(Operand::Copy(copy), &shape.ty, &shape.paths, sp);
+        }
+        Operand::Copy(copy)
     }
 
     pub(super) fn pose_vec_call_result(&mut self, result: &Operand) {
@@ -126,6 +252,10 @@ impl<'a> LoweringContext<'a> {
             sp,
         );
         self.emit_str_retain(copy, sp);
+        let ty = self.counted_operand_type(&Operand::Copy(copy));
+        if let Some(paths) = self.aggregate_rc_paths(&ty) {
+            self.emit_carrier_field_retains(Operand::Copy(copy), &ty, &paths, sp);
+        }
         Operand::Copy(copy)
     }
 
@@ -495,6 +625,31 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals.retain(|(_, d)| *d != 0);
     }
 
+    pub(super) fn emit_param_rc_releases_on_fallthrough(&mut self) {
+        if !self.last_block_is_terminated() {
+            let handles: Vec<LocalId> = self
+                .rc_locals
+                .iter()
+                .filter(|(_, d)| *d == 0)
+                .map(|(id, _)| *id)
+                .collect();
+            for id in handles {
+                self.emit_rc_release(id, None);
+            }
+            let carriers: Vec<(LocalId, AirType, Vec<crate::rc_paths::RcLeafPath>)> = self
+                .carrier_locals
+                .iter()
+                .filter(|c| c.depth == 0)
+                .map(|c| (c.local, c.ty.clone(), c.paths.clone()))
+                .collect();
+            for (local, ty, paths) in &carriers {
+                self.emit_carrier_field_releases(*local, ty, paths, None);
+            }
+        }
+        self.rc_locals.retain(|(_, d)| *d != 0);
+        self.carrier_locals.retain(|c| c.depth != 0);
+    }
+
     pub(super) fn emit_param_str_releases_on_fallthrough(&mut self) {
         if !self.str_locals.iter().any(|(_, d)| *d == 0) {
             return;
@@ -804,6 +959,40 @@ impl<'a> LoweringContext<'a> {
                     None => Vec::new(),
                 };
                 let mut operand = self.lower_expr(initializer);
+                if let Some(shape) = self.rc_binding_shape(var_type) {
+                    let owned = self.own_rc_value(operand, var_type, &shape, Some(initializer), sp);
+                    let local = self.alloc_named_local(name, ty, *mutable, sp);
+                    self.emit(
+                        AirStmtKind::Assign {
+                            place: Place::Local(local),
+                            rvalue: Rvalue::Use(owned),
+                        },
+                        sp,
+                    );
+                    let depth = self.locals_by_name.len();
+                    if matches!(var_type, InferType::Rc(_)) {
+                        self.rc_locals.push((local, depth));
+                    } else {
+                        self.carrier_locals.push(crate::lower::CarrierLocal {
+                            local,
+                            ty: shape.ty,
+                            paths: shape.paths,
+                            depth,
+                        });
+                    }
+                    if self.counted(var_type) {
+                        self.str_locals.push((local, depth));
+                    }
+                    if self.affine_category(var_type).is_affine() {
+                        self.affine_locals.push(crate::lower::AffineLocal {
+                            local,
+                            depth,
+                            id_field: "id".to_string(),
+                            decl_key: crate::bir::drop_key(&stmt.span),
+                        });
+                    }
+                    return;
+                }
                 let str_init = self
                     .counted(var_type)
                     .then(|| self.claim_str_init(&mut operand));
@@ -812,22 +1001,6 @@ impl<'a> LoweringContext<'a> {
 
                 let vec_claimed =
                     matches!(var_type, InferType::Vec(_)) && self.claim_owned_str_temp(&operand);
-                let is_rc_binding = matches!(var_type, InferType::Rc(_));
-                let is_clone = is_rc_binding
-                    && matches!(
-                        initializer.kind,
-                        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. }
-                    );
-                if is_clone {
-                    self.emit_rc_retain(operand.clone(), sp);
-                }
-
-                let carrier_info = self.carrier_paths_for(var_type);
-                let is_carrier_copy = carrier_info.is_some()
-                    && matches!(
-                        initializer.kind,
-                        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. }
-                    );
 
                 let local = self.alloc_named_local(name, ty, *mutable, sp);
                 self.emit(
@@ -848,27 +1021,6 @@ impl<'a> LoweringContext<'a> {
                     }
                     None if is_view => self.view_mark_overflow(local),
                     None => {}
-                }
-                if is_rc_binding {
-                    let depth = self.locals_by_name.len();
-                    self.rc_locals.push((local, depth));
-                }
-                if let Some((carrier_ty, paths)) = carrier_info {
-                    if is_carrier_copy {
-                        self.emit_carrier_field_retains(
-                            Operand::Copy(local),
-                            &carrier_ty,
-                            &paths,
-                            sp,
-                        );
-                    }
-                    let depth = self.locals_by_name.len();
-                    self.carrier_locals.push(crate::lower::CarrierLocal {
-                        local,
-                        ty: carrier_ty,
-                        paths,
-                        depth,
-                    });
                 }
 
                 if matches!(var_type, InferType::Vec(_)) {
@@ -949,6 +1101,29 @@ impl<'a> LoweringContext<'a> {
                         self.seal_block(AirTerminator::Return(None));
                         return;
                     }
+                }
+                if let Some(e) = val.as_ref()
+                    && let Some(shape) = self.rc_shape(&e.ty)
+                {
+                    let op = self.lower_expr(e);
+                    if self.position_is_dead() {
+                        self.seal_block(AirTerminator::Unreachable);
+                        return;
+                    }
+                    let operand = match op {
+                        Operand::Copy(id) | Operand::Move(id) if self.rc_tracked(id) => {
+                            Operand::Move(id)
+                        }
+                        other => {
+                            let owned = self.own_rc_value(other, &e.ty, &shape, Some(e), sp);
+                            Operand::Move(self.operand_to_local(owned, &shape.ty))
+                        }
+                    };
+                    self.release_posed_str_temps(&[]);
+                    self.emit_rc_releases_for_return(Some(&operand));
+                    self.emit_affine_drops_for_return(stmt.span);
+                    self.seal_block(AirTerminator::Return(Some(operand)));
+                    return;
                 }
                 let returns_str = val.as_ref().is_some_and(|e| self.counted(&e.ty));
                 // the environment keeps its own share, so what the closure hands out takes one

@@ -65,6 +65,18 @@ pub struct Imported {
     pub bir: crate::bir::Imports,
     pub fresh_returns: std::collections::HashSet<String>,
     pub retaining_fns: std::collections::HashSet<String>,
+    pub lent_returns: std::collections::HashSet<String>,
+}
+
+// a bare type parameter return shares its instance between a reference and an rc, so it only lends
+pub fn lent_returning_generics(program: &TypedProgram) -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    crate::bir::build::for_each_fn_decl(&program.stmts, &mut |func, _| {
+        if matches!(&func.return_type, InferType::Struct(name) if func.type_params.contains(name)) {
+            out.insert(func.name.clone());
+        }
+    });
+    out
 }
 
 pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, LowerFailure> {
@@ -90,6 +102,10 @@ fn lower_against_proven_returns(
     loop {
         let mut cx = LoweringContext::new(program);
         cx.imported = imported.clone();
+        cx.lent_returns = lent_returning_generics(program)
+            .union(&imported.lent_returns)
+            .cloned()
+            .collect();
         if let Some(mode) = file_gc_mode {
             cx.file_gc_mode = mode;
         }
@@ -153,7 +169,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) locals_by_name: Vec<(String, LocalId)>,
     // these three registries are all fed from the sema type, never the air type, which
     pub(super) rc_locals: Vec<(LocalId, usize)>,
-    // never fed from lower_params: releasing a borrowed carrier param callee-side would
+    // a param is fed only when mutable, after it took its own share
     pub(super) carrier_locals: Vec<CarrierLocal>,
     pub(super) cow_locals: Vec<(LocalId, usize)>,
     pub(super) cow_zombies: std::collections::HashSet<LocalId>,
@@ -174,12 +190,19 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) lowering_errors: Vec<LowerError>,
     pub(super) fresh_returns: std::collections::HashSet<String>,
     pub(super) retaining_fns: std::collections::HashSet<String>,
+    pub(super) lent_returns: std::collections::HashSet<String>,
 }
 
 pub(super) enum StrInit {
     Own,
     Share,
     Borrow,
+}
+
+#[derive(Clone)]
+pub(super) struct RcShape {
+    pub(super) ty: AirType,
+    pub(super) paths: Vec<crate::rc_paths::RcLeafPath>,
 }
 
 pub(super) struct CarrierLocal {
@@ -243,6 +266,7 @@ impl<'a> LoweringContext<'a> {
             lowering_errors: Vec::new(),
             fresh_returns: std::collections::HashSet::new(),
             retaining_fns: std::collections::HashSet::new(),
+            lent_returns: std::collections::HashSet::new(),
         }
     }
 

@@ -67,9 +67,7 @@ impl TypeInference {
         if !self.type_table.contains_rc_nominal(&value.ty) {
             return;
         }
-        if let crate::rc_init::RcInit::Unaccountable(blocker) =
-            crate::rc_init::rc_init_provenance(value)
-        {
+        if let Some(blocker) = crate::rc_init::rc_carrier_init_blocker(value) {
             self.errors.push(TypeError::rc_carrier_out_of_surface(
                 crate::rc_init::rc_init_refusal(blocker, what),
                 value.span,

@@ -103,25 +103,32 @@ impl TypeInference {
                     ),
                 );
             }
+            let mut init = initializer;
+            while let ExprKind::Grouping(inner) = &init.kind {
+                init = inner;
+            }
             let direct_init = matches!(
-                &initializer.kind,
+                &init.kind,
                 ExprKind::EnumVariant { enum_name, variant, .. }
                     if enum_name == "Rc" && (variant == "new" || variant == "null")
             ) || matches!(
-                initializer.kind,
-                ExprKind::Identifier(_) | ExprKind::Member { .. }
+                init.kind,
+                ExprKind::Identifier(_)
+                    | ExprKind::Member { .. }
+                    | ExprKind::Call { .. }
+                    | ExprKind::Block { .. }
+                    | ExprKind::Match { .. }
             );
             if !direct_init {
-                self.errors.push(
-                    crate::constraint::TypeError::rc_out_of_surface(
+                self.errors
+                    .push(crate::constraint::TypeError::rc_out_of_surface(
                         format!(
-                            "`Rc<T>` binding `{name}` must be initialized directly by `Rc::new(..)`, \
-                             `Rc::null()`, by cloning another Rc binding, or by reading an Rc field; \
-                             indirect/conditional init is not supported yet"
+                            "`Rc<T>` binding `{name}` must be initialized by `Rc::new(..)`, \
+                             `Rc::null()`, another Rc binding, an Rc field, a call, a block or a \
+                             match; conditional init is not supported yet"
                         ),
                         span,
-                    ),
-                );
+                    ));
             }
         } else if var_type.contains_rc() || self.aggregate_embeds_rc_nominal(var_type) {
             self.errors
