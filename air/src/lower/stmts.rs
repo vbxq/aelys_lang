@@ -667,7 +667,7 @@ impl<'a> LoweringContext<'a> {
             return None;
         }
         let air_ty = self.lower_type_from_infer(sema_ty);
-        match crate::rc_paths::rc_field_paths(&air_ty, &self.structs, &self.enums) {
+        match crate::rc_paths::rc_field_paths_in(&air_ty, self.defs()) {
             crate::rc_paths::RcScan::None => None,
             crate::rc_paths::RcScan::Paths(paths) => Some((air_ty, paths)),
             // skipping is only sound while generic structs never reach codegen; once they

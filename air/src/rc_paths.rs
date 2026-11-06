@@ -29,17 +29,47 @@ enum ScanReject {
     MultiVariant(String),
 }
 
+#[derive(Clone, Copy)]
+pub struct Defs<'a> {
+    pub structs: &'a [AirStructDef],
+    pub imported_structs: &'a [AirStructDef],
+    pub enums: &'a [AirEnumDef],
+    pub imported_enums: &'a [AirEnumDef],
+}
+
+impl<'a> Defs<'a> {
+    pub fn local(structs: &'a [AirStructDef], enums: &'a [AirEnumDef]) -> Self {
+        Defs {
+            structs,
+            imported_structs: &[],
+            enums,
+            imported_enums: &[],
+        }
+    }
+
+    pub fn find_struct(&self, name: &str) -> Option<&'a AirStructDef> {
+        self.structs
+            .iter()
+            .chain(self.imported_structs.iter())
+            .find(|s| s.name == name)
+    }
+
+    pub fn find_enum(&self, name: &str) -> Option<&'a AirEnumDef> {
+        self.enums
+            .iter()
+            .chain(self.imported_enums.iter())
+            .find(|e| e.name == name)
+    }
+}
+
 pub fn rc_field_paths(ty: &AirType, structs: &[AirStructDef], enums: &[AirEnumDef]) -> RcScan {
+    rc_field_paths_in(ty, Defs::local(structs, enums))
+}
+
+pub fn rc_field_paths_in(ty: &AirType, defs: Defs<'_>) -> RcScan {
     let mut paths = Vec::new();
     let mut visited = HashSet::new();
-    match scan(
-        ty,
-        structs,
-        enums,
-        &mut Vec::new(),
-        &mut paths,
-        &mut visited,
-    ) {
+    match scan(ty, defs, &mut Vec::new(), &mut paths, &mut visited) {
         Ok(()) => {
             if paths.is_empty() {
                 RcScan::None
@@ -53,13 +83,16 @@ pub fn rc_field_paths(ty: &AirType, structs: &[AirStructDef], enums: &[AirEnumDe
 }
 
 pub fn air_type_has_rc(ty: &AirType, structs: &[AirStructDef], enums: &[AirEnumDef]) -> bool {
-    !matches!(rc_field_paths(ty, structs, enums), RcScan::None)
+    air_type_has_rc_in(ty, Defs::local(structs, enums))
+}
+
+pub fn air_type_has_rc_in(ty: &AirType, defs: Defs<'_>) -> bool {
+    !matches!(rc_field_paths_in(ty, defs), RcScan::None)
 }
 
 fn scan(
     ty: &AirType,
-    structs: &[AirStructDef],
-    enums: &[AirEnumDef],
+    defs: Defs<'_>,
     prefix: &mut Vec<RcPathStep>,
     out: &mut Vec<RcLeafPath>,
     visited: &mut HashSet<String>,
@@ -72,7 +105,7 @@ fn scan(
             Ok(())
         }
         AirType::Struct(name) => {
-            let Some(def) = structs.iter().find(|s| &s.name == name) else {
+            let Some(def) = defs.find_struct(name) else {
                 return Err(ScanReject::Undecidable(format!(
                     "`{name}` (unresolved/generic struct instantiation; its Rc-ness is undecidable at AIR level)"
                 )));
@@ -88,7 +121,7 @@ fn scan(
             }
             for f in &def.fields {
                 prefix.push(RcPathStep::Field(f.name.clone()));
-                let r = scan(&f.ty, structs, enums, prefix, out, visited);
+                let r = scan(&f.ty, defs, prefix, out, visited);
                 prefix.pop();
                 r?;
             }
@@ -97,7 +130,7 @@ fn scan(
         }
         AirType::Enum(r) => {
             let name = r.symbol();
-            let Some(def) = enums.iter().find(|e| e.name == name) else {
+            let Some(def) = defs.find_enum(&name) else {
                 return Ok(());
             };
             if def
@@ -118,7 +151,7 @@ fn scan(
                 let mut probe = Vec::new();
                 for v in &def.variants {
                     for pty in &v.payload {
-                        scan(pty, structs, enums, &mut Vec::new(), &mut probe, visited)?;
+                        scan(pty, defs, &mut Vec::new(), &mut probe, visited)?;
                     }
                 }
                 visited.remove(&name);
@@ -138,7 +171,7 @@ fn scan(
                         tag: v.tag,
                         field_index: field_index as u32,
                     });
-                    let res = scan(pty, structs, enums, prefix, out, visited);
+                    let res = scan(pty, defs, prefix, out, visited);
                     prefix.pop();
                     res?;
                 }
@@ -147,7 +180,7 @@ fn scan(
             Ok(())
         }
         AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
-            match rc_field_paths(inner, structs, enums) {
+            match rc_field_paths_in(inner, defs) {
                 RcScan::None => Ok(()),
                 _ => Err(ScanReject::Undecidable(
                     "an array/slice field whose element carries an `Rc<T>` is not supported yet"

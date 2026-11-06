@@ -251,7 +251,7 @@ impl<'a> LoweringContext<'a> {
             | InferType::Function { .. } => true,
             InferType::Array(inner, _) if self.counted(inner) => true,
             InferType::Array(..) | InferType::Struct(_) | InferType::Enum(..) => {
-                !crate::rc_paths::air_type_has_rc(&ty, &self.structs, &self.enums)
+                !crate::rc_paths::air_type_has_rc_in(&ty, self.defs())
             }
             // a value mono may still turn into a string is never copied without its share
             InferType::String

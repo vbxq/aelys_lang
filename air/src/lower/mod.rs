@@ -93,6 +93,7 @@ fn lower_against_proven_returns(
             structs: &air.structs,
             imported: &imported.structs,
             enums: &air.enums,
+            imported_enums: &imported.enums,
         };
         let proven = fresh_returning_functions(&air.functions, &carriers, &imported.fresh_returns);
         if !assumed.is_subset(&proven) {
@@ -237,10 +238,12 @@ impl<'a> LoweringContext<'a> {
         let structs = self.structs.clone();
         let imported_structs = self.imported.structs.clone();
         let enums = self.enums.clone();
+        let imported_enums = self.imported.enums.clone();
         let carriers = crate::counts::Carriers {
             structs: &structs,
             imported: &imported_structs,
             enums: &enums,
+            imported_enums: &imported_enums,
         };
         // finish runs before mono, copy_elim, dead_locals and rc_elision, so their work is unseen
         for function in &mut self.functions {
@@ -460,6 +463,16 @@ impl<'a> LoweringContext<'a> {
             structs: &self.structs,
             imported: &self.imported.structs,
             enums: &self.enums,
+            imported_enums: &self.imported.enums,
+        }
+    }
+
+    pub(super) fn defs(&self) -> crate::rc_paths::Defs<'_> {
+        crate::rc_paths::Defs {
+            structs: &self.structs,
+            imported_structs: &self.imported.structs,
+            enums: &self.enums,
+            imported_enums: &self.imported.enums,
         }
     }
 

@@ -19,6 +19,7 @@ pub struct Carriers<'a> {
     pub structs: &'a [AirStructDef],
     pub imported: &'a [AirStructDef],
     pub enums: &'a [AirEnumDef],
+    pub imported_enums: &'a [AirEnumDef],
 }
 
 impl<'a> Carriers<'a> {
@@ -27,6 +28,7 @@ impl<'a> Carriers<'a> {
             structs,
             imported: &[],
             enums,
+            imported_enums: &[],
         }
     }
 }
@@ -85,7 +87,10 @@ impl Carriers<'_> {
     }
 
     fn enum_def(&self, name: &str) -> Option<&AirEnumDef> {
-        self.enums.iter().find(|def| def.name == name)
+        self.enums
+            .iter()
+            .chain(self.imported_enums.iter())
+            .find(|def| def.name == name)
     }
 
     fn find(&self, name: &str) -> Option<&AirStructDef> {
@@ -354,6 +359,7 @@ impl<'a> GlueSet<'a> {
             structs: self.structs,
             imported: self.imported,
             enums: self.enums,
+            imported_enums: &[],
         }
     }
 

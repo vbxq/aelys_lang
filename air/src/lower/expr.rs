@@ -21,7 +21,7 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
         what: &str,
     ) {
-        let paths = match crate::rc_paths::rc_field_paths(field_air_ty, &self.structs, &self.enums)
+        let paths = match crate::rc_paths::rc_field_paths_in(field_air_ty, self.defs())
         {
             crate::rc_paths::RcScan::None => return,
             crate::rc_paths::RcScan::Paths(paths) => paths,
@@ -41,9 +41,8 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn air_field_type_of(&self, struct_name: &str, field: &str) -> Option<AirType> {
-        self.structs
-            .iter()
-            .find(|s| s.name == struct_name)
+        self.defs()
+            .find_struct(struct_name)
             .and_then(|d| d.fields.iter().find(|f| f.name == field))
             .map(|f| f.ty.clone())
     }
@@ -199,18 +198,27 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::StructLiteral { name, fields } => {
                 let mut lowered_fields: Vec<(String, Operand)> = Vec::with_capacity(fields.len());
                 let values: Vec<&TypedExpr> = fields.iter().map(|(_, e)| e.as_ref()).collect();
+                let air_name = if let AirType::Struct(n) = self.lower_type_from_infer(&expr.ty) {
+                    n
+                } else {
+                    name.clone()
+                };
                 for (i, (fname, fval)) in fields.iter().enumerate() {
                     let op = self.lower_expr(fval);
                     let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
                     let op = self.own_str_for_store(op, &fval.ty, sp);
-                    if let Some(field_air_ty) = self.air_field_type_of(name, fname) {
-                        self.emit_construction_field_retain(
+                    match self.air_field_type_of(&air_name, fname) {
+                        Some(field_air_ty) => self.emit_construction_field_retain(
                             &field_air_ty,
                             &op,
                             fval,
                             sp,
                             &format!("field `{name}.{fname}`"),
-                        );
+                        ),
+                        None => self.report_ice(format!(
+                            "ICE: struct literal `{name}` has no AIR definition for field \
+                             `{fname}` under `{air_name}`"
+                        )),
                     }
                     lowered_fields.push((fname.clone(), op));
                 }
@@ -1733,7 +1741,7 @@ impl<'a> LoweringContext<'a> {
             let cap_air = self.lower_type_from_infer(cap_ty);
             // only a resolved carrier rejects; an undecidable generic must not
             let carrier_capture = matches!(
-                crate::rc_paths::rc_field_paths(&cap_air, &self.structs, &self.enums),
+                crate::rc_paths::rc_field_paths_in(&cap_air, self.defs()),
                 crate::rc_paths::RcScan::Paths(_)
             );
             if cap_ty.is_rc() || cap_ty.contains_rc() || carrier_capture {
