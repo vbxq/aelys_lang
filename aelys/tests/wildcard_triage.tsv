@@ -26,6 +26,7 @@ air/src/lower/pin.rs	store_root_owns	1	InferType	_	false	correct-as-is	aggregate
 air/src/lower/stmts.rs	lower_stmt_kind	1	AirType	_	None	correct-as-is	aggregate-only
 air/src/lower/stmts.rs	lower_stmt_kind	2	InferType	_	AirType::I64	correct-as-is	aggregate-only
 air/src/lower/stmts.rs	lower_stmt_kind	3	InferType	_	AirType::I64	correct-as-is	aggregate-only
+air/src/lower/view_owner.rs	collect	1	InferType	_	{  }	correct-as-is	carrier-walk
 air/src/modules.rs	qualify_type	1	AirType	_	{  }	correct-as-is	carrier-walk
 air/src/mono/mod.rs	substitute_type_params	1	AirType	other	other.clone()	correct-as-is	carrier-walk
 air/src/mono/mod.rs	ty	1	AirType	_	{  }	correct-as-is	carrier-walk

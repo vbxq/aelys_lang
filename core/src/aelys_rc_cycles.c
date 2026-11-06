@@ -35,6 +35,45 @@ static size_t g_capacity = 0;
 
 /* the pointer map emitted by the compiler, indexed by type_id */
 extern const uint32_t __aelys_rc_type_table[];
+extern const AelysDropGlue __aelys_rc_drop_table[];
+
+/* a glue's releases queue here, so a long chain is freed in a loop, not a frame per link */
+static void **g_pending = NULL;
+static size_t g_pending_len = 0;
+static size_t g_pending_cap = 0;
+static int g_draining = 0;
+
+static void pending_push(void *ptr) {
+    if (g_pending_len == g_pending_cap) {
+        size_t cap = g_pending_cap ? g_pending_cap * 2 : 64;
+        void **grown = (void **)realloc(g_pending, cap * sizeof(void *));
+        if (!grown) {
+            __aelys_panic("out of memory", 13);
+        }
+        g_pending = grown;
+        g_pending_cap = cap;
+    }
+    g_pending[g_pending_len++] = ptr;
+}
+
+static void run_drop_glue(void *ptr) {
+    AelysDropGlue glue = __aelys_rc_drop_table[aelys_rc_type_id(ptr)];
+    if (glue != NULL) {
+        glue(ptr);
+    }
+}
+
+static void drain_pending(void) {
+    g_draining = 1;
+    while (g_pending_len > 0) {
+        void *ptr = g_pending[--g_pending_len];
+        run_drop_glue(ptr);
+        __aelys_free_count++;
+        *aelys_rc_refcount(ptr) = AELYS_RC_DEAD;
+        __aelys_free((char *)ptr - AELYS_RC_HEADER_SIZE);
+    }
+    g_draining = 0;
+}
 
 /* collector scratch, never counted: a bookkeeping bump would falsify every balanced row */
 static void candidates_push(void *ptr) {
@@ -134,9 +173,10 @@ void __aelys_rc_release(void *ptr) {
         if ((*aelys_rc_flags(ptr) & AELYS_FLAG_CANDIDATE) != 0) {
             candidate_remove(ptr);
         }
-        __aelys_free_count++;
-        rc[0] = AELYS_RC_DEAD;
-        __aelys_free((char *)ptr - AELYS_RC_HEADER_SIZE);
+        pending_push(ptr);
+        if (!g_draining) {
+            drain_pending();
+        }
         return;
     }
     uint8_t *flags = aelys_rc_flags(ptr);
@@ -249,10 +289,12 @@ void __aelys_cycle_collect(void) {
             continue;
         }
         void *c = g_candidates[i].ptr;
-        __aelys_free_count++;
-        *aelys_rc_refcount(c) = AELYS_RC_DEAD;
-        __aelys_free((char *)c - AELYS_RC_HEADER_SIZE);
         g_candidates[i].ptr = NULL;
+        /* the rc fields are already null, so the glue lets go of the strings and closures alone */
+        pending_push(c);
+    }
+    if (!g_draining) {
+        drain_pending();
     }
 
     /* survivors lose the candidate bit so a later release can register them again */

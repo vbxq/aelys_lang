@@ -520,7 +520,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn counted(&self, ty: &InferType) -> bool {
-        if matches!(ty, InferType::String) {
+        if matches!(ty, InferType::String | InferType::Function { .. }) {
             return true;
         }
         if let InferType::Array(inner, _) = ty {

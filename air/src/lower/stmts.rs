@@ -416,6 +416,7 @@ impl<'a> LoweringContext<'a> {
             Rvalue::BinaryOp(BinOp::Add, _, _) => true,
             // a literal took a share for every leaf as it was built
             Rvalue::StructInit { .. } | Rvalue::EnumInit { .. } => true,
+            Rvalue::ClosureCreate { .. } => true,
             _ => false,
         }
     }

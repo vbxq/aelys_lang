@@ -65,7 +65,9 @@ pub fn check_vec_surface(program: &AirProgram) -> Result<(), Vec<VecSurfaceError
         }
         for block in &func.blocks {
             for stmt in &block.stmts {
-                if let AirStmtKind::RcAlloc { ty, .. } = &stmt.kind {
+                if let AirStmtKind::RcAlloc { ty, .. } = &stmt.kind
+                    && !scan.is_closure_env(ty)
+                {
                     scan.held(
                         ty,
                         &format!("the `Rc` payload allocated in `{}`", func.name),
@@ -165,6 +167,14 @@ fn reject_error(reject: Reject, ty: &AirType, what: &str, span: Option<Span>) ->
 struct Scan<'a> {
     structs: HashMap<&'a str, &'a crate::AirStructDef>,
     enums: HashMap<&'a str, &'a crate::AirEnumDef>,
+}
+
+impl Scan<'_> {
+    // a closure environment releases its vec captures through its own glue
+    fn is_closure_env(&self, ty: &AirType) -> bool {
+        matches!(ty, AirType::Struct(name)
+            if self.structs.get(name.as_str()).is_some_and(|def| def.is_closure_env))
+    }
 }
 
 impl Scan<'_> {

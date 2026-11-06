@@ -354,17 +354,6 @@ impl Harness {
         )
     }
 
-    fn lsan_leaks(&self, id: &str, src: &str, stdout: &str) {
-        for (tag, opt) in LEVELS {
-            let (code, out, err) =
-                self.lsan_run(id, &format!("{tag}_lsan_rc"), src, &[], *opt, RuntimeVariant::Rc);
-            assert!(err.contains("AddressSanitizer"), "{id} at {tag}: asan is not armed");
-            assert!(err.contains("leaked in"), "{id} at {tag}: lsan no longer reports a leak\n{err}");
-            assert_ne!(code, 0, "{id} at {tag}: lsan exits nonzero on a leak");
-            assert_eq!(out, stdout, "{id} at {tag}");
-        }
-    }
-
     fn lsan_row(&self, id: &str, src: &str, files: &[(&str, &str)], stdout: &str) {
         for (tag, opt) in LEVELS {
             let (code, out, err) = self.lsan_run(
@@ -1111,10 +1100,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc_25_a_closure_environment_is_never_released() {
+fn rc_25_a_closure_environment_is_released() {
     let h = Harness::new();
-    h.lsan_leaks("rc-25", RC25_CLOSURE_ENV, "15\n");
-    h.assert_legs(3);
+    h.differential_row("rc-25", RC25_CLOSURE_ENV, &[], "15\n", (15, 15));
+    h.lsan_row("rc-25", RC25_CLOSURE_ENV, &[], "15\n");
+    h.assert_legs(24);
 }
 
 const RC26_MODULE: &str = r#"pub fn keep<T>(x: T) -> T {

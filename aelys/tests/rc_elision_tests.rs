@@ -219,12 +219,12 @@ fn positive_seam4_let_r2_r_elided() {
     let on = count_rc_calls_air(SEAM4_SRC, true);
     assert_eq!(
         off,
-        (3, 6),
+        (3, 7),
         "SEAM4 before-elision baseline (retain, release)"
     );
     assert_eq!(
         on,
-        (2, 5),
+        (2, 6),
         "SEAM4 after-elision (one retain+release pair removed)"
     );
     assert_balanced_run(SEAM4_SRC, OptimizationLevel::None, 85, "SEAM4 @ -O0");

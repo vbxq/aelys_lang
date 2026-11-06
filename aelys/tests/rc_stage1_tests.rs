@@ -259,7 +259,7 @@ fn main() -> i64 { return make() }
     );
     let body = function_body(&ir, "@make");
     assert!(
-        body.contains("call ptr @__aelys_alloc(i64 8)"),
+        body.contains("call ptr @__aelys_alloc(i64 24)"),
         "expected the closure env to be heap-allocated; got:\n{body}"
     );
     assert_eq!(

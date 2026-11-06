@@ -30,4 +30,6 @@ _Static_assert(AELYS_RC_HEADER_SIZE == 16,
    collector must never trace them or it would read garbage through the pointer map */
 #define AELYS_FLAG_NO_TRACE  ((unsigned char)0x02)
 
+typedef void (*AelysDropGlue)(void *data);
+
 #endif /* AELYS_RC_H */

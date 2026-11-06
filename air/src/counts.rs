@@ -13,6 +13,11 @@ pub const DUP: &str = "__aelys_dup";
 pub const DROP: &str = "__aelys_drop";
 pub const DUP_PARAM: &str = "__aelys_dup_param";
 pub const DROP_PARAM: &str = "__aelys_drop_param";
+pub const FN_RETAIN: &str = "__aelys_fn_retain";
+pub const FN_RELEASE: &str = "__aelys_fn_release";
+pub const RC_RELEASE: &str = "__aelys_rc_release";
+pub const RC_RELEASE_SLOT: &str = "__aelys_rc_release_slot";
+pub const VEC_RELEASE: &str = "__aelys_vec_release";
 
 const UNROLL_LIMIT: u64 = 8;
 const INLINE_LIMIT: u64 = 4;
@@ -49,6 +54,7 @@ impl Carriers<'_> {
         match ty {
             // before mono a type parameter may become a string, so a type that holds one is counted
             AirType::Str | AirType::Param(_) => true,
+            AirType::FnPtr { .. } => is_closure(ty),
             AirType::Array(inner, _) => self.carries(inner, seen),
             AirType::Struct(name) => {
                 if !seen.insert(name.clone()) {
@@ -155,6 +161,16 @@ enum Leaf {
     Variants(EnumRef, Vec<(u32, Vec<(u32, AirType)>)>),
 }
 
+pub fn is_closure(ty: &AirType) -> bool {
+    matches!(
+        ty,
+        AirType::FnPtr {
+            conv: CallingConv::Aelys,
+            ..
+        }
+    )
+}
+
 pub fn count_callee(slot: &AirType, retain: bool) -> &'static str {
     if mentions_param(slot) {
         return if retain { DUP_PARAM } else { DROP_PARAM };
@@ -206,11 +222,18 @@ pub fn glue_name(ty: &AirType, retain: bool) -> String {
 }
 
 pub fn is_retain(name: &str) -> bool {
-    name == STR_RETAIN || name == DUP || name == DUP_PARAM
+    name == STR_RETAIN || name == DUP || name == DUP_PARAM || name == FN_RETAIN
 }
 
 pub fn is_release(name: &str) -> bool {
-    name == STR_RELEASE || name == DROP || name == DROP_PARAM
+    name == STR_RELEASE || name == DROP || name == DROP_PARAM || name == FN_RELEASE
+}
+
+pub fn rc_drop_glue_name(ty: &AirType) -> String {
+    format!(
+        "__glue_rcdrop${}",
+        crate::mono::substitute::type_to_string(ty)
+    )
 }
 
 fn local_types(function: &AirFunction) -> HashMap<LocalId, AirType> {
@@ -285,6 +308,22 @@ pub fn resolve_counts(program: &mut AirProgram) {
     for function in &mut program.functions {
         resolve_function(function, &mut glue);
     }
+    let mut payloads: Vec<AirType> = Vec::new();
+    for stmt in program
+        .functions
+        .iter()
+        .flat_map(|f| f.blocks.iter())
+        .flat_map(|b| b.stmts.iter())
+    {
+        if let AirStmtKind::RcAlloc { ty, .. } = &stmt.kind
+            && !payloads.contains(ty)
+        {
+            payloads.push(ty.clone());
+        }
+    }
+    for ty in payloads {
+        glue.payload_glue_for(&ty);
+    }
     program.functions.extend(glue.functions);
 }
 
@@ -334,6 +373,10 @@ fn resolve_function(function: &mut AirFunction, glue: &mut GlueSet<'_>) {
             };
             if slot == AirType::Str {
                 *name = if retain { STR_RETAIN } else { STR_RELEASE }.to_string();
+                return true;
+            }
+            if is_closure(&slot) {
+                *name = if retain { FN_RETAIN } else { FN_RELEASE }.to_string();
                 return true;
             }
             if param_origin {
@@ -490,10 +533,21 @@ impl<'a> GlueSet<'a> {
         ty: &AirType,
         path: &crate::rc_paths::RcLeafPath,
     ) -> LocalId {
+        let param = body.param;
+        self.load_rc_leaf_at(body, ty, path, param)
+    }
+
+    fn load_rc_leaf_at(
+        &self,
+        body: &mut GlueBody,
+        ty: &AirType,
+        path: &crate::rc_paths::RcLeafPath,
+        addr: LocalId,
+    ) -> LocalId {
         let mut cur = body.temp(ty.clone(), false);
         body.emit(AirStmtKind::Assign {
             place: Place::Local(cur),
-            rvalue: Rvalue::Deref(Operand::Copy(body.param)),
+            rvalue: Rvalue::Deref(Operand::Copy(addr)),
         });
         let mut cur_ty = ty.clone();
         for step in &path.steps {
@@ -550,8 +604,94 @@ impl<'a> GlueSet<'a> {
         cur
     }
 
+    fn payload_glue_for(&mut self, ty: &AirType) {
+        let mut body = GlueBody::new(AirType::Ptr(Box::new(ty.clone())));
+        let param = body.param;
+        let calls = self.release_payload(&mut body, ty, param);
+        if calls == 0 {
+            return;
+        }
+        let id = FunctionId(self.next_function_id);
+        self.next_function_id += 1;
+        self.functions
+            .push(body.finish(id, &rc_drop_glue_name(ty), false));
+    }
+
+    fn release_payload(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
+        if let AirType::Ptr(_) = ty {
+            body.call(RC_RELEASE_SLOT, addr);
+            return 1;
+        }
+        if let AirType::Vec(_) = ty {
+            return self.release_vec(body, ty, addr);
+        }
+        let mut calls = 0;
+        if self.carriers().counted(ty) {
+            let callee = self.callee_for(ty, false);
+            body.call(&callee, addr);
+            calls += 1;
+        }
+        for path in self.param_rc_paths(ty) {
+            let leaf = self.load_rc_leaf_at(body, ty, &path, addr);
+            body.call(RC_RELEASE, leaf);
+            calls += 1;
+        }
+        calls + self.release_vec_fields(body, ty, addr)
+    }
+
+    fn release_vec(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
+        if let AirType::Vec(elem) = ty
+            && **elem != AirType::Str
+            && self.carriers().carries_string(elem)
+        {
+            self.glue_for(elem, true);
+            self.glue_for(elem, false);
+        }
+        body.call(VEC_RELEASE, addr);
+        1
+    }
+
+    fn release_vec_fields(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
+        let AirType::Struct(name) = ty else {
+            return 0;
+        };
+        let fields: Vec<(String, AirType)> = self
+            .carriers()
+            .find(name)
+            .map(|def| {
+                def.fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.ty.clone()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let mut calls = 0;
+        for (field, field_ty) in fields {
+            if !struct_holds_vec(
+                &field_ty,
+                &self.carriers(),
+                &mut HashSet::from([name.clone()]),
+            ) {
+                continue;
+            }
+            let field_addr = body.address_of(Place::Field(addr, field), &field_ty);
+            calls += if matches!(field_ty, AirType::Vec(_)) {
+                self.release_vec(body, &field_ty, field_addr)
+            } else {
+                self.release_vec_fields(body, &field_ty, field_addr)
+            };
+        }
+        calls
+    }
+
     fn build(&mut self, name: &str, ty: &AirType, retain: bool) -> AirFunction {
         let mut body = GlueBody::new(AirType::Ptr(Box::new(ty.clone())));
+        if is_closure(ty) {
+            body.call(if retain { FN_RETAIN } else { FN_RELEASE }, body.param);
+            let id = FunctionId(self.next_function_id);
+            self.next_function_id += 1;
+            return body.finish(id, name, true);
+        }
         let leaves = self.carriers().leaves(ty);
         let calls: u64 = leaves
             .iter()
@@ -610,8 +750,25 @@ impl<'a> GlueSet<'a> {
         if ty == &AirType::Str {
             return count_callee(ty, retain).to_string();
         }
+        if is_closure(ty) {
+            return if retain { FN_RETAIN } else { FN_RELEASE }.to_string();
+        }
         self.glue_for(ty, retain)
     }
+}
+
+fn struct_holds_vec(ty: &AirType, carriers: &Carriers<'_>, seen: &mut HashSet<String>) -> bool {
+    let AirType::Struct(name) = ty else {
+        return matches!(ty, AirType::Vec(_));
+    };
+    if !seen.insert(name.clone()) {
+        return false;
+    }
+    carriers.find(name).is_some_and(|def| {
+        def.fields
+            .iter()
+            .any(|f| struct_holds_vec(&f.ty, carriers, seen))
+    })
 }
 
 struct GlueBody {
@@ -845,6 +1002,11 @@ pub fn unresolved_counts(function: &AirFunction) -> Vec<String> {
             let slot = count_arg(args).and_then(|arg| counted_slot_type(arg, &types, &addr_of));
             if slot != Some(AirType::Str) {
                 out.push(format!("`{name}` counts a slot that is not a string"));
+            }
+        } else if name == FN_RETAIN || name == FN_RELEASE {
+            let slot = count_arg(args).and_then(|arg| counted_slot_type(arg, &types, &addr_of));
+            if !slot.as_ref().is_some_and(is_closure) {
+                out.push(format!("`{name}` counts a slot that is not a closure"));
             }
         }
     }

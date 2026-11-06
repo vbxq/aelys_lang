@@ -103,6 +103,29 @@ impl CodegenContext {
         global_value.set_linkage(Linkage::External);
         global_value.set_constant(true);
         global_value.set_initializer(&i32_ty.const_array(&vals));
+        self.emit_rc_drop_table(program)
+    }
+
+    fn emit_rc_drop_table(&self, program: &AirProgram) -> Result<(), CodegenError> {
+        const SYMBOL: &str = "__aelys_rc_drop_table";
+        if self.module.get_global(SYMBOL).is_some() {
+            return Ok(());
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default());
+        let mut slots = vec![ptr_ty.const_null()];
+        for entry in &program.rc_type_table.entries {
+            let glue = self
+                .module
+                .get_function(&aelys_air::counts::rc_drop_glue_name(&entry.ty));
+            slots.push(glue.map_or(ptr_ty.const_null(), |f| {
+                f.as_global_value().as_pointer_value()
+            }));
+        }
+        let array_ty = ptr_ty.array_type(slots.len() as u32);
+        let global_value = self.module.add_global(array_ty, None, SYMBOL);
+        global_value.set_linkage(Linkage::External);
+        global_value.set_constant(true);
+        global_value.set_initializer(&ptr_ty.const_array(&slots));
         Ok(())
     }
 

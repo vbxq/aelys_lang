@@ -1649,8 +1649,7 @@ fn main() -> i64 {
         let src = format!(
             "{STRUCT_S}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    let s = x.a[..]\n    s[0] = 9\n    println(s[0])\n    return 0\n}}\n"
         );
-        // the capture a closure never gives back is the planted leak now that a global gives its own back
-        let control = "fn main() -> i64 {\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n    while i < 5 {\n        let s: string = \"row \" + \"{i}\"\n        let f = fn () -> i64 { return s.len }\n        n = n + f()\n        i = i + 1\n    }\n    return n\n}\n";
+        let control = "fn use_it(x: Rc<i64>) -> i64 {\n    return Rc::get(x)\n}\nfn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn app<T>(f: fn() -> T) -> T {\n    return f()\n}\nfn main() -> i64 {\n    let a: Rc<i64> = app(mk)\n    return use_it(app(mk)) + Rc::get(a)\n}\n";
         let run = |id: &str, src: &str, allocator: &str| {
             let Some(exe) = link_instrumented(dir.path(), id, src) else {
                 panic!("the ASan tier must link");
@@ -1683,17 +1682,11 @@ fn main() -> i64 {
         }
 
         // a region block stays reachable through g_all_blocks, so lsan cannot see an object leaked inside one
-        let (_, planted) = run("captured_string", control, "malloc");
+        let (_, planted) = run("lent_generic_rc", control, "malloc");
+        assert!(planted.contains("[rc] allocs=2 frees=0"), "stderr:\n{planted}");
         assert!(
-            planted.contains("[rc] allocs=15 frees=5"),
-            "a closure keeps no share of what it captures, so the counter must still see the ten \
-             strings its environments hold;\nstderr:\n{planted}"
-        );
-        assert!(
-            planted.contains("LeakSanitizer: detected memory leaks")
-                && planted.contains("185 byte(s) leaked in 10 allocation(s)"),
-            "the strings the closures capture are the planted leak that keeps this detector \
-             armed, so a clean row above cannot be a silent oracle;\nstderr:\n{planted}"
+            planted.contains("LeakSanitizer: detected memory leaks"),
+            "the planted leak no longer fires, the detector is not armed;\nstderr:\n{planted}"
         );
     }
 
@@ -1716,8 +1709,7 @@ fn main() -> i64 {
             "",
         );
         let unbound = loop_body("", "        let s: string = \"row \" + \"{i}\"\n", "");
-        // the capture a closure never gives back is the planted leak now that a global gives its own back
-        let held = "fn main() -> i64 {\n    let mut i: i64 = 0\n    let mut n: i64 = 0\n    while i < 5 {\n        let s: string = \"row \" + \"{i}\"\n        let f = fn () -> i64 { return s.len }\n        n = n + f()\n        i = i + 1\n    }\n    return n\n}\n".to_string();
+        let held = "fn use_it(x: Rc<i64>) -> i64 {\n    return Rc::get(x)\n}\nfn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn app<T>(f: fn() -> T) -> T {\n    return f()\n}\nfn main() -> i64 {\n    let a: Rc<i64> = app(mk)\n    return use_it(app(mk)) + Rc::get(a)\n}\n".to_string();
 
         // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
         let run = |id: &str, src: &str, allocator: &str, clean: bool| {
@@ -1757,11 +1749,10 @@ fn main() -> i64 {
             }
         }
 
-        let held_malloc = run("s1d_captured", &held, "malloc", false);
+        let held_malloc = run("s1d_lent_generic_rc", &held, "malloc", false);
         assert!(
             held_malloc.contains("LeakSanitizer: detected memory leaks"),
-            "a closure keeps no share of the string it captures, and it is the leak that keeps \
-             this row armed;\nstderr:\n{held_malloc}"
+            "the planted leak no longer fires, the detector is not armed;\nstderr:\n{held_malloc}"
         );
     }
 }

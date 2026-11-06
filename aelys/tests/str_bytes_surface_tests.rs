@@ -2487,7 +2487,7 @@ fn sb49_a_string_kept_by_an_rc_or_a_closure_takes_a_share_of_its_own() {
         "SB-55",
         SB55_A_STRING_KEPT_BY_AN_RC_OR_A_CLOSURE,
         "ab1\nab2\nx\nab3\nQQ8\nQQ9\n",
-        (13, 8),
+        (13, 13),
     );
     h.assert_legs(18);
 }
@@ -5239,7 +5239,7 @@ fn sb118_a_closure_that_returns_its_captured_vec_hands_out_a_share() {
         "SB-125",
         SB125_A_CLOSURE_HANDS_OUT_A_SHARE_OF_ITS_CAPTURE,
         "1\nab1ab1\nab1\n",
-        (86, 83),
+        (86, 86),
     );
     h.assert_legs(18);
 }

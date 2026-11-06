@@ -843,6 +843,17 @@ impl<'a> LoweringContext<'a> {
             } else {
                 Place::Local(id)
             };
+            // the environment owns the replaced value, and the new one already holds its share
+            if is_capture && self.counted(&value.ty) {
+                let slot = self.lower_type_from_infer(&value.ty);
+                self.emit(
+                    AirStmtKind::CallVoid {
+                        func: Callee::Named(crate::counts::count_callee(&slot, false).to_string()),
+                        args: vec![Operand::Copy(id)],
+                    },
+                    sp,
+                );
+            }
             self.emit(
                 AirStmtKind::Assign {
                     place,
@@ -1304,17 +1315,20 @@ impl<'a> LoweringContext<'a> {
             if !args.iter().any(|a| super::pin::may_write_local(a, name)) {
                 return Callee::FnPtr(id);
             }
-            let copy = self.alloc_temp(self.lower_type_from_infer(&callee.ty));
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(copy),
-                    rvalue: Rvalue::Use(Operand::Copy(id)),
-                },
-                None,
-            );
-            return Callee::FnPtr(copy);
+            let pinned = self.pin_str_read(Operand::Copy(id), None);
+            let ty = self.lower_type_from_infer(&callee.ty);
+            return Callee::FnPtr(self.operand_to_local(pinned, &ty));
         }
         let op = self.lower_expr(callee);
+        // the callee runs while it is held, and it may replace the place it was read from
+        let capture_read = matches!(&super::pin::peel(callee).kind,
+            TypedExprKind::Identifier(name)
+                if self.lookup_local(name).is_some_and(|id| self.capture_slots.contains_key(&id)));
+        let op = if self.reads_a_borrowed_place(callee) || capture_read {
+            self.pin_str_read(op, None)
+        } else {
+            op
+        };
         let ty = self.lower_type_from_infer(&callee.ty);
         Callee::FnPtr(self.operand_to_local(op, &ty))
     }
@@ -1326,11 +1340,15 @@ impl<'a> LoweringContext<'a> {
         args: &[TypedExpr],
         sp: Option<Span>,
     ) -> Vec<Operand> {
-        let keeps_unretained = matches!(self.named_callee(callee), Some(Callee::Named(name))
-            if !self.retaining_fns.contains(&name)
+        let named = self.named_callee(callee);
+        let keeps_unretained = matches!(&named, Some(Callee::Named(name))
+            if !self.retaining_fns.contains(name)
                 && !crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()));
+        let runs_code = !matches!(&named, Some(Callee::Named(name))
+            if crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str())
+                || name.starts_with("__aelys_"));
         let refs: Vec<&TypedExpr> = args.iter().collect();
-        self.lower_pinned_operands_owning(&refs, keeps_unretained, sp)
+        self.lower_call_operands(&refs, keeps_unretained, runs_code, sp)
     }
 
     pub(super) fn retain_str_fill(&mut self, fill: &Operand, sp: Option<Span>) {
@@ -1871,7 +1889,7 @@ impl<'a> LoweringContext<'a> {
             let env_ptr_ty = AirType::Ptr(Box::new(AirType::Struct(env_name.clone())));
             let env_ptr = self.alloc_temp(env_ptr_ty.clone());
             self.emit(
-                AirStmtKind::Alloc {
+                AirStmtKind::RcAlloc {
                     local: env_ptr,
                     ty: AirType::Struct(env_name.clone()),
                 },
@@ -1893,7 +1911,6 @@ impl<'a> LoweringContext<'a> {
                     continue;
                 };
                 let cap_val = self.own_str_for_store(cap_val, cap_ty, sp);
-                // takes a share here. there is no matching release: the env is deliberately leaked
                 self.emit_vec_slot_acquire(matches!(cap_ty, InferType::Vec(_)), None, &cap_val, sp);
                 self.emit(
                     AirStmtKind::Assign {

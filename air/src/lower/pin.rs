@@ -214,14 +214,14 @@ impl<'a> LoweringContext<'a> {
     // the old value dies only where the store roots in a binding this frame owns
     pub(super) fn store_root_owns(&self, expr: &TypedExpr) -> bool {
         let e = peel(expr);
+        // a payload owns its fields, so a store through any handle to it replaces an owned value
+        if matches!(e.ty, InferType::Rc(_)) {
+            return true;
+        }
         match &e.kind {
-            TypedExprKind::Identifier(name) => {
-                self.lookup_local(name).is_some() && !matches!(e.ty, InferType::Rc(_))
-            }
+            TypedExprKind::Identifier(name) => self.lookup_local(name).is_some(),
             TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
-                !matches!(object.ty, InferType::Rc(_))
-                    && !Self::views_a_slice(&object.ty)
-                    && self.store_root_owns(object)
+                !Self::views_a_slice(&object.ty) && self.store_root_owns(object)
             }
             TypedExprKind::Deref(inner) => matches!(inner.ty, InferType::Ref { mutable: true, .. }),
             _ => false,
@@ -293,11 +293,77 @@ impl<'a> LoweringContext<'a> {
         self.lower_pinned_operands_owning(exprs, false, sp)
     }
 
-    // the share is taken as each operand is read, so a later sibling cannot change what it holds
     pub(super) fn lower_pinned_operands_owning(
         &mut self,
         exprs: &[&TypedExpr],
         own_each: bool,
+        sp: Option<Span>,
+    ) -> Vec<Operand> {
+        self.lower_call_operands(exprs, own_each, false, sp)
+    }
+
+    pub(super) fn roots_in_global(&self, expr: &TypedExpr) -> bool {
+        let e = peel(expr);
+        match &e.kind {
+            TypedExprKind::Identifier(name) => {
+                self.lookup_local(name).is_none() && self.is_global_name(name)
+            }
+            TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+                self.roots_in_global(object)
+            }
+            TypedExprKind::EnumVariant {
+                enum_name,
+                variant,
+                args,
+                ..
+            } => {
+                enum_name == "Rc"
+                    && variant == "get"
+                    && args.iter().any(|a| self.roots_in_global(a))
+            }
+            _ => false,
+        }
+    }
+
+    // a callee may replace the global it was handed, so the call holds its own share
+    pub(super) fn hold_global_read(
+        &mut self,
+        op: Operand,
+        e: &TypedExpr,
+        sp: Option<Span>,
+    ) -> Operand {
+        if self.counted(&e.ty) || matches!(e.ty, InferType::Vec(_)) {
+            return self.snapshot_value(op, e, sp);
+        }
+        let Some(shape) = self.rc_shape(&e.ty) else {
+            return op;
+        };
+        let copy = self.alloc_temp(shape.ty.clone());
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(copy),
+                rvalue: Rvalue::Use(op),
+            },
+            sp,
+        );
+        if self.last_block_is_terminated() {
+            return Operand::Copy(copy);
+        }
+        if matches!(shape.ty, AirType::Ptr(_)) {
+            self.emit_rc_retain(Operand::Copy(copy), sp);
+        } else {
+            self.emit_carrier_field_retains(Operand::Copy(copy), &shape.ty, &shape.paths, sp);
+        }
+        self.stmt_str_temps.push((copy, self.current_blocks.len()));
+        Operand::Copy(copy)
+    }
+
+    // the share is taken as each operand is read, so a later sibling cannot change what it holds
+    pub(super) fn lower_call_operands(
+        &mut self,
+        exprs: &[&TypedExpr],
+        own_each: bool,
+        runs_code: bool,
         sp: Option<Span>,
     ) -> Vec<Operand> {
         let consumer_takes_mut = exprs
@@ -310,7 +376,11 @@ impl<'a> LoweringContext<'a> {
                 let held = self.view_hold(e);
                 let op = self.lower_expr(e);
                 self.view_hold_done(held);
-                let op = self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp);
+                let op = if runs_code && self.roots_in_global(e) {
+                    self.hold_global_read(op, e, sp)
+                } else {
+                    self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp)
+                };
                 if own_each {
                     self.own_str_for_store(op, &e.ty, sp)
                 } else {

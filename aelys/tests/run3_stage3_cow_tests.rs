@@ -405,7 +405,7 @@ fn s3_11_a_vec_literals_element_stores_allocate_nothing() {
 #[test]
 fn s3_27_a_capturing_closure_writing_a_whole_element_is_already_by_value() {
     let h = Harness::new();
-    h.value_row("S3-27", S3_27, "7919\n7919\n", 3, 1);
+    h.value_row("S3-27", S3_27, "7919\n7919\n", 3, 3);
     h.assert_legs(8);
 }
 
@@ -858,14 +858,14 @@ const S3_29: &str = "fn main() -> i64 {\n\
 #[test]
 fn s3_26_a_capturing_closure_cannot_mutate_an_outer_vec_at_depth_two_either() {
     let h = Harness::new();
-    h.value_row("S3-26", S3_26, "7919\n7919\n", 3, 1);
+    h.value_row("S3-26", S3_26, "7919\n7919\n", 3, 3);
     h.assert_legs(8);
 }
 
 #[test]
 fn s3_29_a_capture_is_by_value_for_storage_the_closure_writes() {
     let h = Harness::new();
-    h.value_row("S3-29", S3_29, "101\n7919\n", 1, 0);
+    h.value_row("S3-29", S3_29, "101\n7919\n", 1, 1);
     h.assert_legs(8);
 }
 

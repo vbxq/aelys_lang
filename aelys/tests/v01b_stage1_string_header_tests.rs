@@ -885,6 +885,7 @@ extern void __aelys_str_retain(void *strptr);
 extern void __aelys_str_release(void *strptr);
 
 const unsigned __aelys_rc_type_table[8] = {0};
+void (*const __aelys_rc_drop_table[8])(void *) = {0};
 
 long long __aelys_user_main(void) {
     char *base = (char *)__aelys_alloc(24);

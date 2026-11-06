@@ -125,6 +125,7 @@ void *__aelys_alloc(long long s){ void*p=aelys_immix_alloc(s); if(!p)abort(); __
 void __aelys_free(void *p){ aelys_immix_free(p); }
 void __aelys_panic(const char*p,long long n){ fwrite(p,1,(size_t)n,stderr); fputc('\n',stderr); abort(); }
 const uint32_t __aelys_rc_type_table[] = { 1u, 1u, 4u, 0u, 0u };
+void (*const __aelys_rc_drop_table[1])(void *) = { 0 };
 extern void __aelys_rc_retain(void*); extern void __aelys_rc_release(void*); extern void __aelys_cycle_collect(void);
 static void *make_obj(long long b, uint32_t rc, uint32_t tid, uint8_t flags){
     char*base=(char*)__aelys_alloc(16+b);

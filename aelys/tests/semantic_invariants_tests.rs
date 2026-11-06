@@ -508,7 +508,6 @@ fn main() -> i64 {
         Oracle::Balanced(6),
     ),
     (
-        // the env slot owns a share, so the closure write detaches; the env leak is by design
         "SI-V06",
         r#"
 fn make() -> fn() -> i64 {
@@ -526,10 +525,7 @@ fn main() -> i64 {
     return g()
 }
 "#,
-        Oracle::Leaks(
-            1,
-            "the captured buffer leaks with the deliberately leaked closure env",
-        ),
+        Oracle::Balanced(1),
     ),
     (
         "SI-V07",
@@ -1914,10 +1910,7 @@ fn main() -> i64 {
     return f() - 7
 }
 "#,
-        Oracle::Leaks(
-            0,
-            "the closure env is a deliberate owner of the captured Vec buffer",
-        ),
+        Oracle::Balanced(0),
     ),
     (
         "SI-PA19",
@@ -2183,7 +2176,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "9\n1\n", 3, 1),
+        Oracle::ExitOutStats(0, "9\n1\n", 3, 3),
     ),
     (
         "SI-PA34",
@@ -2489,7 +2482,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "7\n7\n", 3, 1),
+        Oracle::ExitOutStats(0, "7\n7\n", 3, 3),
     ),
     (
         "SI-PAA04",
@@ -2536,7 +2529,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "", 2, 1),
+        Oracle::ExitOutStats(0, "", 2, 2),
     ),
     (
         "SI-PA55",
@@ -4683,7 +4676,6 @@ fn main() -> i64 {
         Oracle::ExitOutStats(0, "22\n44\n", 1, 1),
     ),
     (
-        // by-value capture holds this: the env's share detaches on push, and frees=1 is the leak
         "S2-F11",
         r#"
 fn main() -> i64 {
@@ -4700,7 +4692,7 @@ fn main() -> i64 {
     return 0
 }
 "#,
-        Oracle::ExitOutStats(0, "22\n", 3, 1),
+        Oracle::ExitOutStats(0, "22\n", 3, 3),
     ),
     (
         "S2-T01",

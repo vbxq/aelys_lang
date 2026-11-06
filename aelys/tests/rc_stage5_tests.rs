@@ -153,6 +153,7 @@ long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
+void (*const __aelys_rc_drop_table[8])(void *) = {0};
 
 void __aelys_panic(const char *p, long long n) {
     fwrite(p, 1, (size_t)n, stderr);
@@ -265,6 +266,7 @@ long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
+void (*const __aelys_rc_drop_table[8])(void *) = {0};
 
 void __aelys_panic(const char *p, long long n) {
     fwrite(p, 1, (size_t)n, stderr);
@@ -387,6 +389,7 @@ long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
+void (*const __aelys_rc_drop_table[8])(void *) = {0};
 
 void __aelys_panic(const char *p, long long n) {
     fwrite(p, 1, (size_t)n, stderr);

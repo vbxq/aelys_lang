@@ -57,7 +57,7 @@ fn note_call(
         _ => Read::Held,
     };
     if let Callee::FnPtr(id) = func {
-        out.push((*id, Read::Held));
+        out.push((*id, Read::Consumed));
     }
     for arg in args {
         note(out, arg, read);
@@ -180,6 +180,7 @@ fn produces_fresh_str(rvalue: &Rvalue, fresh_fn: &dyn Fn(&str) -> bool) -> bool 
         Rvalue::BinaryOp(BinOp::Add, _, _) => true,
         // a literal took a share for every leaf as it was built
         Rvalue::StructInit { .. } | Rvalue::EnumInit { .. } => true,
+        Rvalue::ClosureCreate { .. } => true,
         _ => false,
     }
 }

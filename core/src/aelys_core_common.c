@@ -300,8 +300,8 @@ unsigned __aelys_rc_refcount(void *ptr) {
     return *(uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
 }
 
-/* the buffer gets NO_TRACE and an inert type_id 0: without the flag the collector would
-   read its primitive elements as rc child pointers, since a real type also owns id 0 */
+/* the buffer gets NO_TRACE and the reserved type_id 0, whose pointer map and drop glue are
+   empty, so the collector never registers it and its release frees the bytes alone */
 void *__aelys_vec_new(long long elem_size, long long cap) {
     long long bytes = AELYS_RC_HEADER_SIZE + (cap > 0 ? elem_size * cap : 0);
     char *base = (char *)__aelys_alloc(bytes > 0 ? bytes : AELYS_RC_HEADER_SIZE);
@@ -395,6 +395,24 @@ void __aelys_str_retain(void *strptr) {
 
 void __aelys_str_release(void *strptr) {
     __aelys_rc_release((void *)((AelysString *)strptr)->ptr);
+}
+
+/* must mirror the aelys closure fat pointer {fn, env}; a plain function has a null env */
+typedef struct {
+    void *fn;
+    void *env;
+} AelysClosure;
+
+void __aelys_rc_release_slot(void *slot) {
+    __aelys_rc_release(*(void **)slot);
+}
+
+void __aelys_fn_retain(void *slot) {
+    __aelys_rc_retain_checked(((AelysClosure *)slot)->env);
+}
+
+void __aelys_fn_release(void *slot) {
+    __aelys_rc_release(((AelysClosure *)slot)->env);
 }
 
 /* make the buffer uniquely owned before any write. rc-bearing elements are rejected at the
