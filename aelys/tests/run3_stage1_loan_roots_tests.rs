@@ -1617,7 +1617,7 @@ fn main() -> i64 {
             }
             let run = Command::new(&exe)
                 .env("AELYS_RC_STATS", "1")
-                .env("ASAN_OPTIONS", "detect_leaks=1")
+                .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
                 .output()
                 .expect("run the instrumented exe");
             let err = String::from_utf8_lossy(&run.stderr);
@@ -1656,7 +1656,7 @@ fn main() -> i64 {
             };
             let out = Command::new(&exe)
                 .env("AELYS_RC_STATS", "1")
-                .env("ASAN_OPTIONS", "detect_leaks=1")
+                .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
                 .env("AELYS_ALLOC", allocator)
                 .output()
                 .expect("run the instrumented exe");
@@ -1718,7 +1718,7 @@ fn main() -> i64 {
             };
             let out = Command::new(&exe)
                 .env("AELYS_RC_STATS", "1")
-                .env("ASAN_OPTIONS", "detect_leaks=1")
+                .env("ASAN_OPTIONS", "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170")
                 .env("AELYS_ALLOC", allocator)
                 .output()
                 .expect("run the instrumented exe");

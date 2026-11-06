@@ -343,7 +343,10 @@ impl Harness {
         );
         let out = Command::new(&exe)
             .env("AELYS_ALLOC", "malloc")
-            .env("ASAN_OPTIONS", "detect_leaks=1:verbosity=1")
+            .env(
+                "ASAN_OPTIONS",
+                "detect_leaks=1:verbosity=1:max_free_fill_size=4096:free_fill_byte=170",
+            )
             .output()
             .expect("run asan exe");
         self.legs.set(self.legs.get() + 1);
@@ -1132,6 +1135,132 @@ fn main() -> i64 {
 fn rc_26_an_imported_generic_returning_its_parameter_lends_an_rc() {
     let h = Harness::new();
     let files = [("m.aelys", RC26_MODULE)];
-    h.differential_row("rc-26", RC26_IMPORTED_GENERIC_LENDS, &files, "41\n41\n41\n", (1, 1));
+    h.differential_row(
+        "rc-26",
+        RC26_IMPORTED_GENERIC_LENDS,
+        &files,
+        "41\n41\n41\n",
+        (1, 1),
+    );
+    h.assert_legs(18);
+}
+
+const RC27: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn zero() -> i64 { return 0 }
+struct W { f: fn() -> i64 }
+fn clobber(h: Rc<W>, f: fn() -> i64) -> i64 {
+    h.f = zero
+    let t: string = victim(88888)
+    return f() + t.len
+}
+fn main() -> i64 {
+    let s: string = victim(12345)
+    let a = Rc::new(W { f: fn () -> i64 { return s.len + s.bytes[0] } })
+    let n = clobber(a, Rc::get(a).f)
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_27_a_store_through_an_rc_handle_keeps_a_closure_field_alive_for_a_running_call() {
+    let h = Harness::new();
+    h.differential_row("rc-27", RC27, &[], "111\n", (6, 4));
+    h.assert_legs(18);
+}
+
+const RC28: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let n = clobber(a, Rc::get(a).s)
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_28_a_store_through_an_rc_handle_keeps_a_string_argument_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-28", RC28, &[], "111\n", (7, 6));
+    h.assert_legs(18);
+}
+
+const RC29: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let b = a
+    let bs = Rc::get(a).s.bytes
+    b.s = victim(1)
+    let t: string = other(88888)
+    println("{bs[0]}|{bs.len}|{t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_29_a_store_through_an_rc_handle_keeps_a_bytes_view_of_the_field_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-29", RC29, &[], "97|7|7\n", (14, 13));
+    h.assert_legs(18);
+}
+
+const RC30: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string, k: i64 }
+struct W { i: In }
+fn clobber(h: Rc<W>, x: In) -> i64 {
+    h.i = In { s: victim(1), k: 0 }
+    let t: string = other(88888)
+    return x.s.bytes[0] + x.s.len + t.len + x.k
+}
+fn main() -> i64 {
+    let a = Rc::new(W { i: In { s: victim(12345), k: 5 } })
+    let n = clobber(a, Rc::get(a).i)
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_30_a_store_through_an_rc_handle_keeps_a_carrier_argument_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-30", RC30, &[], "116\n", (7, 6));
+    h.assert_legs(18);
+}
+
+const RC31: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { a: [string; 2] }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.a[1] = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] })
+    let n = clobber(a, Rc::get(a).a[1])
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc_31_a_store_through_an_rc_handle_keeps_an_element_argument_alive() {
+    let h = Harness::new();
+    h.differential_row("rc-31", RC31, &[], "111\n", (9, 8));
     h.assert_legs(18);
 }
