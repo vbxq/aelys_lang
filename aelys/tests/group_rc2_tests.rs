@@ -2839,3 +2839,723 @@ fn rc2_102_a_tuple_expression_says_tuples_are_unsupported() {
         &["expected ), found ,"],
     );
 }
+
+const LATE_HELP: &str = "no implicit conversion applies to a value that crosses a binding whose \
+                         type is only inferred later";
+
+const RC2_103: &str = r#"
+struct In { b: i64 }
+struct Out { a: In }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let o = id(Out { a: In { b: 7 } })
+    println("{o.a.b}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_103_a_field_chain_through_a_generic_result_reads_the_inner_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-103", RC2_103, &[], "7\n", (0, 0));
+    h.assert_legs(18);
+}
+
+const RC2_104: &str = r#"
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let s = id("abc")
+    if s.len > 2 { println("{s.len}") } else { println("small") }
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_104_the_length_of_a_string_returned_by_a_generic_is_its_byte_count() {
+    let h = Harness::new();
+    h.differential_row("rc2-104", RC2_104, &[], "3\n", (0, 0));
+    h.assert_legs(18);
+}
+
+const RC2_105: &str = r#"
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let v: i64 = 41
+    let p = id(&v)
+    let y: i64 = *p + 1
+    println("{y}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_105_a_reference_returned_by_a_generic_dereferences_to_its_referent() {
+    let h = Harness::new();
+    h.differential_row("rc2-105", RC2_105, &[], "42\n", (0, 0));
+    h.assert_legs(18);
+}
+
+const RC2_106: &str = r#"
+struct P { a: i32, b: i32 }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let mut p = id(P { a: 3, b: 4 })
+    let v: i32 = -9
+    p.a = v
+    println("{p.a} {p.b}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_106_a_field_write_into_a_generic_result_keeps_its_neighbour() {
+    let h = Harness::new();
+    h.differential_row("rc2-106", RC2_106, &[], "-9 4\n", (4, 4));
+    h.assert_legs(18);
+}
+
+const RC2_107: &str = r#"
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let b: [i32; 2] = [1, 2]
+    let mut a = id(b)
+    let v: i32 = -7
+    a[0] = v
+    println("{a[0]} {a[1]}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_107_an_element_write_into_a_generic_result_keeps_its_neighbour() {
+    let h = Harness::new();
+    h.differential_row("rc2-107", RC2_107, &[], "-7 2\n", (4, 4));
+    h.assert_legs(18);
+}
+
+const RC2_108: &str = r#"
+struct P { a: i64, b: i64 }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let mut p = id(P { a: 3, b: 4 })
+    p.a += 10
+    let mut a = id([1, 2])
+    a[1] *= 21
+    println("{p.a} {p.b} {a[1]}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_108_a_compound_assignment_into_a_generic_result_reads_and_writes_the_same_slot() {
+    let h = Harness::new();
+    h.differential_row("rc2-108", RC2_108, &[], "13 4 42\n", (7, 7));
+    h.assert_legs(18);
+}
+
+const RC2_109: &str = r#"
+struct P { a: i32, b: i32 }
+enum May<T> { Yes(T), No }
+fn main() -> i64 {
+    let m = May::Yes(P { a: -1, b: 1 })
+    match m {
+        May::Yes(p) => { println("{p.a}") }
+        May::No => { println("no") }
+    }
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_109_a_field_of_a_generic_enum_payload_keeps_its_sign() {
+    let h = Harness::new();
+    h.differential_row("rc2-109", RC2_109, &[], "-1\n", (0, 0));
+    h.assert_legs(18);
+}
+
+const RC2_110: &str = r#"
+struct O { arr: [i64; 3] }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let o = id(O { arr: [1, 2, 3] })
+    println("{o.arr[1]}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_110_an_element_of_a_field_of_a_generic_result_is_read_at_its_type() {
+    let h = Harness::new();
+    h.differential_row("rc2-110", RC2_110, &[], "2\n", (0, 0));
+    h.assert_legs(18);
+}
+
+#[test]
+fn rc2_111_a_narrow_field_stored_into_a_wide_local_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-111",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn main() -> i64 {\n    let p = id(P { a: -1, b: 100 })\n    let mut y: i64 = 7777777777\n\
+         \x20   y = p.a\n    println(\"{y}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i64`, found `i32`", LATE_HELP],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_112_a_narrow_field_bound_to_a_wide_annotation_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-112",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn main() -> i64 {\n    let p = id(P { a: -1, b: 100 })\n    let y: i64 = p.a\n\
+         \x20   println(\"{y}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i64`, found `i32`", LATE_HELP],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_113_a_narrow_field_of_a_generic_enum_payload_stored_wide_is_refused() {
+    refusal_row_full(
+        "rc2-113",
+        "struct P { a: i32, b: i32 }\nenum May<T> { Yes(T), No }\n\
+         fn main() -> i64 {\n    let m = May::Yes(P { a: -1, b: 1 })\n    let mut y: i64 = 0\n\
+         \x20   match m { May::Yes(p) => { y = p.a } May::No => { y = 0 } }\n\
+         \x20   println(\"{y}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i64`, found `i32`", LATE_HELP],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_114_an_integer_field_bound_as_a_string_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-114",
+        "struct P { a: i64 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn main() -> i64 {\n    let p = id(P { a: 123456 })\n    let s: string = p.a\n\
+         \x20   println(\"{s.len}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `string`, found `i64`"],
+        &["E0901", LATE_HELP],
+    );
+}
+
+#[test]
+fn rc2_115_an_integer_element_bound_as_a_string_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-115",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
+         \x20   let a: [i64; 2] = [123456, 7]\n    let b = id(a)\n    let s: string = b[0]\n\
+         \x20   println(\"{s.len}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `string`, found `i64`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_116_an_integer_loop_element_bound_as_a_string_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-116",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
+         \x20   let a: [i64; 2] = [123456, 7]\n    let b = id(a)\n    let mut t: i64 = 0\n\
+         \x20   for s in b {\n        let q: string = s\n        t = t + q.len\n    }\n\
+         \x20   println(\"{t}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `string`, found `i64`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_117_a_narrow_field_of_an_unannotated_lambda_parameter_stored_wide_is_refused() {
+    refusal_row_full(
+        "rc2-117",
+        "struct P { a: i32, b: i32 }\nfn main() -> i64 {\n\
+         \x20   let f = fn(p) -> i64 {\n        let y: i64 = p.a\n        return y\n    }\n\
+         \x20   println(\"{f(P { a: -1, b: 1 })}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &[
+            "expected `i64`, found `i32`",
+            "field `a` of a value whose type is only inferred after this use",
+            LATE_HELP,
+        ],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_118_a_string_stored_into_an_integer_field_of_a_generic_result_is_refused() {
+    refusal_row_full(
+        "rc2-118",
+        "struct P { a: i64, b: i64 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn get(p: P) -> i64 { return p.a }\nfn main() -> i64 {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 })\n    p.a = \"hello\"\n\
+         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &[
+            "expected `i64`, found `string`",
+            "assignment to field `a` of a value whose type is only inferred after this use",
+        ],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_119_a_wide_value_stored_into_a_narrow_field_of_a_generic_result_is_refused() {
+    refusal_row_full(
+        "rc2-119",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn get(p: P) -> i32 { return p.b }\nfn main() -> i64 {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 })\n    let big: i64 = 77777777777\n    p.a = big\n\
+         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i32`, found `i64`", LATE_HELP],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_120_a_string_stored_into_an_integer_element_of_a_generic_result_is_refused() {
+    refusal_row_full(
+        "rc2-120",
+        "fn id<T>(x: T) -> T { return x }\nfn get(a: [i64; 2]) -> i64 { return a[0] + a[1] }\n\
+         fn main() -> i64 {\n    let mut a = id([1, 2])\n    a[0] = \"hello\"\n\
+         \x20   println(\"{get(a)}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i64`, found `string`", "element assignment"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_121_a_wide_value_stored_into_a_narrow_element_of_a_generic_result_is_refused() {
+    refusal_row_full(
+        "rc2-121",
+        "fn id<T>(x: T) -> T { return x }\nfn get(a: [i32; 2]) -> i32 { return a[1] }\n\
+         fn main() -> i64 {\n    let b: [i32; 2] = [1, 2]\n    let mut a = id(b)\n\
+         \x20   let big: i64 = 77777777777\n    a[0] = big\n    println(\"{get(a)}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i32`, found `i64`", LATE_HELP],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_122_an_rc_field_write_into_a_generic_result_is_refused_like_its_concrete_twin() {
+    refusal_row_full(
+        "rc2-122",
+        "struct N { s: string }\nstruct H { r: Rc<N>, k: i64 }\n\
+         fn victim(n: i64) -> string { return \"ab\" + \"{n}\" }\nfn id<T>(x: T) -> T { return x }\n\
+         fn main() -> i64 {\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n    while i < 1000 {\n\
+         \x20       let mut h = id(H { r: Rc::new(N { s: victim(i) }), k: 1 })\n\
+         \x20       let q = Rc::new(N { s: victim(i + 7) })\n        h.r = q\n\
+         \x20       t = t + h.k\n        i = i + 1\n    }\n    println(\"{t}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        &["in-place reassignment of field `r` (type `Rc<N>`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_123_a_wide_value_written_through_a_reference_from_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-123",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let mut x: i32 = 5\n\
+         \x20   let p = id(&mut x)\n    let big: i64 = 77777777777\n    *p = big\n\
+         \x20   println(\"{x}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &[
+            "expected `i32`, found `i64`",
+            "assignment through a reference of a value whose type is only inferred after this use",
+        ],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_124_a_narrow_slice_element_stored_wide_after_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-124",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
+         \x20   let a: [i32; 3] = [-1, 2, 3]\n    let b = id(a)\n    let s = b[0..2]\n\
+         \x20   let y: i64 = s[0]\n    println(\"{y}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i64`, found `i32`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_125_a_field_of_a_value_whose_type_is_never_inferred_asks_for_an_annotation() {
+    refusal_row_full(
+        "rc2-125",
+        "fn main() -> i64 {\n    let f = fn(p) -> i64 { return p.a }\n    println(\"ok\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0301",
+        &[
+            "the type of this value is never inferred, so its field `a` cannot be resolved; \
+             annotate the binding it comes from",
+            "return p.a",
+        ],
+        &["E0412", "survived lowering", "E0304"],
+    );
+}
+
+#[test]
+fn rc2_126_a_private_field_write_into_a_generic_result_is_refused() {
+    refusal_row_full(
+        "rc2-126",
+        "needs m\nfn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
+         \x20   let mut p = id(m.mk())\n    p.b = 5\n    println(\"{m.getb(p)}\")\n    return 0\n}\n",
+        &[(
+            "m.aelys",
+            "pub struct P { pub a: i64, b: i64 }\npub fn mk() -> P { return P { a: 1, b: 2 } }\n\
+             pub fn getb(p: P) -> i64 { return p.b }\n",
+        )],
+        "E0610",
+        &["field `b` of `m.P` is not public"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_127_rc_get_of_a_value_typed_only_later_asks_for_an_annotation() {
+    refusal_row_full(
+        "rc2-127",
+        "struct N { k: i64 }\nfn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
+         \x20   let r = Rc::new(N { k: 4 })\n    let q = id(r)\n    println(\"{Rc::get(q).k}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0301",
+        &[
+            "the argument of `Rc::get` has a type that is only inferred after this use; annotate \
+             the binding it comes from as `Rc<T>`",
+        ],
+        &["E0901", "τ"],
+    );
+}
+
+#[test]
+fn rc2_128_a_constant_index_past_an_array_returned_by_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-128",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let a = id([1, 2, 3])\n\
+         \x20   println(\"{a[5]}\")\n    return 0\n}\n",
+        &[],
+        "E0433",
+        &["index 5 is outside `[_; 3]`"],
+        &["E0412", "E0901"],
+    );
+}
+
+#[test]
+fn rc2_129_an_integer_index_into_a_string_returned_by_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-129",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let s = id(\"abc\")\n\
+         \x20   println(\"{s[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0304",
+        &["a `string` cannot be indexed by integer"],
+        &["E0412", "E0901"],
+    );
+}
+
+#[test]
+fn rc2_130_a_compound_assignment_of_a_wide_value_into_a_narrow_generic_field_is_refused() {
+    refusal_row_full(
+        "rc2-130",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
+         fn get(p: P) -> i32 { return p.b }\nfn main() -> i64 {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 })\n    let big: i64 = 77777777777\n    p.a += big\n\
+         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        &[],
+        "E0301",
+        &["expected `i32`, found `i64`"],
+        &["E0901"],
+    );
+}
+
+const RC2_131: &str = r#"
+struct P { a: i32, b: i32 }
+fn main() -> i64 {
+    let mut p = P { a: -1, b: 100 }
+    let y: i64 = p.a
+    p.a = 5
+    let z = p.a * 2
+    let mut arr: [i32; 2] = [1, 2]
+    arr[0] = 3
+    let w: i64 = arr[0]
+    println("{y} {z} {p.b} {w}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_131_concrete_field_and_element_accesses_still_widen_and_narrow() {
+    let h = Harness::new();
+    h.differential_row("rc2-131", RC2_131, &[], "-1 10 100 3\n", (10, 10));
+    h.assert_legs(18);
+}
+
+#[test]
+fn rc2_132_an_rc_field_write_into_a_concrete_local_is_still_refused() {
+    refusal_row_full(
+        "rc2-132",
+        "struct N { s: string }\nstruct H { r: Rc<N>, k: i64 }\n\
+         fn victim(n: i64) -> string { return \"ab\" + \"{n}\" }\nfn main() -> i64 {\n\
+         \x20   let mut h = H { r: Rc::new(N { s: victim(1) }), k: 1 }\n\
+         \x20   let q = Rc::new(N { s: victim(8) })\n    h.r = q\n    return 0\n}\n",
+        &[],
+        "E0410",
+        &["in-place reassignment of field `r` (type `Rc<N>`"],
+        &["E0901"],
+    );
+}
+
+const SHARED_RESLICE: &str = "[shared-mut] a mutable slice writes through a shared";
+
+#[test]
+fn rc2_133_a_mutable_reslice_of_string_bytes_from_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-133",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let s: string = \"hello\"\n\
+         \x20   let mut t = id(s.bytes)\n    let u = t[0..2]\n    let h: u8 = 72\n    u[0] = h\n\
+         \x20   println(\"{s}\")\n    return 0\n}\n",
+        &[],
+        "E0422",
+        &[SHARED_RESLICE, "`&[u8]`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_134_a_mutable_reslice_of_heap_string_bytes_from_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-134",
+        "fn id<T>(x: T) -> T { return x }\nfn mk(n: i64) -> string { return \"ab\" + \"{n}\" }\n\
+         fn main() -> i64 {\n    let s: string = mk(5)\n    let k = s\n    let mut t = id(s.bytes)\n\
+         \x20   let u = t[0..2]\n    let h: u8 = 90\n    u[0] = h\n    println(\"{k} {s}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0422",
+        &[SHARED_RESLICE, "`&[u8]`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_135_a_mutable_reslice_of_a_shared_slice_from_a_generic_is_refused() {
+    refusal_row_full(
+        "rc2-135",
+        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n\
+         \x20   let s = a[0..3]\n    let mut t = id(s)\n    let u = t[0..2]\n    u[0] = 9\n\
+         \x20   println(\"{a[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0422",
+        &[SHARED_RESLICE, "`&[i64]`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_136_a_shared_slice_from_a_generic_resliced_into_a_mutable_parameter_is_refused() {
+    refusal_row_full(
+        "rc2-136",
+        "fn id<T>(x: T) -> T { return x }\nfn poke(s: &mut [i64]) -> i64 { s[0] = 9\n return 0 }\n\
+         fn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n    let mut t = id(a[0..3])\n\
+         \x20   poke(t[0..3])\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0422",
+        &[SHARED_RESLICE, "`&[i64]`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_137_a_mutable_reslice_of_a_shared_slice_through_a_lambda_parameter_is_refused() {
+    refusal_row_full(
+        "rc2-137",
+        "fn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n    let f = fn(mut t) -> i64 {\n\
+         \x20       let u = t[0..2]\n        u[0] = 9\n        return 0\n    }\n\
+         \x20   let s = a[0..3]\n    f(s)\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0422",
+        &[SHARED_RESLICE, "`&[i64]`"],
+        &["E0901"],
+    );
+}
+
+const RC2_138: &str = r#"
+fn id<T>(x: T) -> T { return x }
+fn poke(s: &mut [i64]) -> i64 { s[0] = 9
+ return 0 }
+fn main() -> i64 {
+    let mut a: [i64; 3] = [1, 2, 3]
+    let mut t = id(a[0..3])
+    poke(t[0..3])
+    println("{a[0]}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_138_a_mutable_slice_from_a_generic_still_reslices_into_a_mutable_parameter() {
+    let h = Harness::new();
+    h.differential_row("rc2-138", RC2_138, &[], "9\n", (0, 0));
+    h.assert_legs(18);
+}
+
+const RC2_LATE_CARRIER: &str = "struct N { s: string }\nstruct H { r: Rc<N>, k: i64 }\n\
+     fn victim(n: i64) -> string { return \"ab\" + \"{n}\" }\nfn id<T>(x: T) -> T { return x }\n\
+     enum May<T> { Yes(T), No }\n";
+
+const GENERIC_ENUM_RC: &str = "payload 0 of enum variant `May::Yes` stores a value of type \
+                               `Rc<N>` carrying an `Rc<T>` straight into a generic enum";
+
+#[test]
+fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_is_refused() {
+    let src = format!(
+        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
+         \x20       let m = May::Yes(h.r)\n        let junk = victim(3)\n\
+         \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
+         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+    );
+    refusal_row_full(
+        "rc2-139",
+        &src,
+        &[],
+        "E0410",
+        &[GENERIC_ENUM_RC],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_is_refused() {
+    let src = format!(
+        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
+         \x20   while i < 1000 {{\n        let r = Rc::new(N {{ s: victim(i) }})\n        let q = id(r)\n\
+         \x20       let m = May::Yes(q)\n        let junk = victim(3)\n\
+         \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
+         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+    );
+    refusal_row_full(
+        "rc2-140",
+        &src,
+        &[],
+        "E0410",
+        &[GENERIC_ENUM_RC],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_is_refused() {
+    let src = format!(
+        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
+         \x20       let m = May::Yes(h.r)\n        let junk = victim(3)\n\
+         \x20       match m {{ May::Yes(x) => {{ let y: Rc<N> = x\n t = t + Rc::get(y).s.len }} \
+         May::No => {{ t = t + 0 }} }}\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n\
+         \x20   return 0\n}}\n"
+    );
+    refusal_row_full(
+        "rc2-141",
+        &src,
+        &[],
+        "E0410",
+        &[GENERIC_ENUM_RC],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_142_an_array_of_rc_fields_of_a_generic_result_is_refused() {
+    let src = format!(
+        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
+         \x20       let arr = [h.r, h.r]\n        let junk = victim(3)\n        t = t + arr.len\n\
+         \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+    );
+    refusal_row_full(
+        "rc2-142",
+        &src,
+        &[],
+        "E0410",
+        &["element of array literal is a value of type `Rc<N>` which embeds an `Rc<T>`"],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_143_an_rc_field_of_a_generic_result_pushed_into_a_vec_is_refused() {
+    let src = format!(
+        "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
+         \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
+         \x20       let mut v = Vec::new()\n        Vec::push(v, h.r)\n        let junk = victim(3)\n\
+         \x20       t = t + v.len\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
+    );
+    refusal_row_full(
+        "rc2-143",
+        &src,
+        &[],
+        "E0410",
+        &["element pushed to a Vec has type `Rc<N>` which embeds an `Rc<T>`"],
+        &["E0901"],
+    );
+}
+
+const RC2_144: &str = r#"
+fn id<T>(x: T) -> T { return x }
+enum May<T> { Yes(T), No }
+fn main() -> i64 {
+    let m = May::Yes(id(5))
+    match m {
+        May::Yes(x) => { println("{x}") }
+        May::No => { println("no") }
+    }
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_144_a_plain_value_returned_by_a_generic_still_fills_a_generic_enum() {
+    let h = Harness::new();
+    h.differential_row("rc2-144", RC2_144, &[], "5\n", (0, 0));
+    h.assert_legs(18);
+}
+
+#[test]
+fn rc2_145_a_slice_of_a_value_whose_type_is_never_inferred_asks_for_an_annotation() {
+    refusal_row_full(
+        "rc2-145",
+        "fn main() -> i64 {\n    let s = fn(t) -> i64 { let x = t[0..1]\n return 0 }\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0301",
+        &["the type of this value is never inferred, so it cannot be sliced"],
+        &["E0425", "τ", "E0901"],
+    );
+}

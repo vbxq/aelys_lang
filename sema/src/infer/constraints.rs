@@ -57,6 +57,7 @@ impl TypeInference {
 
     pub(super) fn solve_constraints(&mut self) -> Substitution {
         let mut subst = Substitution::new();
+        let mut pending: Vec<usize> = (0..self.deferred.len()).collect();
 
         for constraint in self.constraints.clone() {
             if let Constraint::Equal {
@@ -76,16 +77,27 @@ impl TypeInference {
                     Err(e) => {
                         subst.restore(saved);
 
-                        let err = self
+                        let mut err = self
                             .name_the_type_params(unify_error_to_type_error(e, span, reason, dir));
+                        if err.help.is_none()
+                            && (self.names_a_deferred_result(&left)
+                                || self.names_a_deferred_result(&right))
+                            && TypeError::late_projection_converts(&left_resolved, &right_resolved)
+                        {
+                            err.help = Some(TypeError::late_projection_help());
+                        }
                         self.errors.push(err);
 
                         self.force_dynamic(&left_resolved, &mut subst);
                         self.force_dynamic(&right_resolved, &mut subst);
                     }
                 }
+                if !pending.is_empty() {
+                    self.resolve_deferred(&mut pending, &mut subst);
+                }
             }
         }
+        self.resolve_deferred(&mut pending, &mut subst);
 
         for constraint in self.constraints.clone() {
             if let Constraint::OneOf {
@@ -129,6 +141,9 @@ impl TypeInference {
                 }
             }
         }
+
+        self.resolve_deferred(&mut pending, &mut subst);
+        self.report_unresolved(&pending);
 
         subst
     }

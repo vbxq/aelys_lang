@@ -222,7 +222,12 @@ impl TypeInference {
                 let typed_operand = self.infer_expr(operand);
                 let result_ty = match &typed_operand.ty {
                     InferType::Ref { referent, .. } => (**referent).clone(),
-                    InferType::Dynamic | InferType::Var(_) => InferType::Dynamic,
+                    InferType::Var(_) => self.defer_read(
+                        &typed_operand.ty,
+                        crate::infer::projection::ProjKind::Deref,
+                        expr.span,
+                    ),
+                    InferType::Dynamic => InferType::Dynamic,
                     other => {
                         self.errors.push(TypeError::member_access(
                             format!(
@@ -246,6 +251,13 @@ impl TypeInference {
                         expr.span,
                         ConstraintReason::Other("write through reference".to_string()),
                     ));
+                } else if matches!(typed_target.ty, InferType::Var(_)) {
+                    self.defer_write(
+                        &typed_target.ty,
+                        crate::infer::projection::ProjKind::DerefWrite,
+                        &typed_value.ty,
+                        expr.span,
+                    );
                 }
                 (
                     TypedExprKind::DerefAssign {

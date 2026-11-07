@@ -3,6 +3,9 @@ use crate::types::{InferType, TypeVarId};
 use aelys_syntax::Span;
 use std::fmt;
 
+const LATE_PROJECTION_HELP: &str = "no implicit conversion applies to a value that crosses a \
+     binding whose type is only inferred later; annotate that binding or convert with `as`";
+
 #[derive(Debug, Clone)]
 pub struct TypeErrorSuggestion {
     pub message: String,
@@ -712,6 +715,64 @@ impl TypeError {
             kind: TypeErrorKind::ReservedTypeName { name },
             span,
             reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn late_projection_help() -> String {
+        LATE_PROJECTION_HELP.to_string()
+    }
+
+    pub fn late_projection(expected: InferType, found: InferType, what: &str, span: Span) -> Self {
+        let help = Self::late_projection_converts(&expected, &found)
+            .then(|| LATE_PROJECTION_HELP.to_string());
+        TypeError {
+            kind: TypeErrorKind::Mismatch { expected, found },
+            span,
+            reason: ConstraintReason::Other(format!(
+                "{what} of a value whose type is only inferred after this use"
+            )),
+            secondary_spans: Vec::new(),
+            help,
+            suggestion: None,
+        }
+    }
+
+    pub fn late_projection_converts(left: &InferType, right: &InferType) -> bool {
+        left != right && (left.can_implicit_widen_to(right) || right.can_implicit_widen_to(left))
+    }
+
+    pub fn unresolved_projection(what: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(format!(
+                "the type of this value is never inferred, so {what}; annotate the binding it \
+                 comes from"
+            )),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn rc_get_unresolved(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(
+                "the argument of `Rc::get` has a type that is only inferred after this use; \
+                 annotate the binding it comes from as `Rc<T>`"
+                    .to_string(),
+            ),
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,

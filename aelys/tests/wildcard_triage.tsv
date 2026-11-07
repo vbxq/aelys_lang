@@ -33,7 +33,7 @@ sema/src/infer/bounds.rs	type_mentions	1	InferType	_	false	correct-as-is	carrier
 sema/src/infer/constraints.rs	recover_param_name	1	InferType	other	other.clone()	correct-as-is	carrier-walk
 sema/src/infer/constraints.rs	solve_constraints	1	InferType	concrete	{ let mut matched = false; for opt in &options }	correct-as-is	aggregate-only
 sema/src/infer/entry.rs	infer_program_full	1	InferType	_	InferType::Dynamic	correct-as-is	aggregate-only
-sema/src/infer/expr/array.rs	infer_index_assign_expr	1	InferType	InferType::Dynamic | InferType::Var(_) | _	{  }	correct-as-is	aggregate-only
+sema/src/infer/expr/array.rs	infer_index_assign_expr	1	InferType	_	{  }	correct-as-is	aggregate-only
 sema/src/infer/expr/array.rs	infer_index_expr	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
 sema/src/infer/expr/array.rs	infer_slice_expr	1	InferType	_other	InferType::Dynamic	correct-as-is	aggregate-only
 sema/src/infer/expr/call.rs	infer_map_error	1	InferType	_	unreachable!( )	correct-as-is	aggregate-only
@@ -60,6 +60,16 @@ sema/src/infer/expr/try_expr.rs	infer_try_expr	2	InferType	_	{ self.errors.push(
 sema/src/infer/finalize.rs	finalize_expr	1	InferType	_	None	correct-as-is	aggregate-only
 sema/src/infer/finalize.rs	finalize_type	1	InferType	other	other	correct-as-is	carrier-walk
 sema/src/infer/functions.rs	infer_function	1	InferType	_	(None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	check_deferred_read	1	InferType	_	{  }	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	check_deferred_write	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	check_deferred_write	2	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	check_deferred_write	3	InferType	_	{  }	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	project	1	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	project	2	InferType	_	self.struct_field_type(object	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	project	3	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	project	5	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	struct_field_type	1	InferType	_	return None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	struct_field_type	2	InferType	_	return None	correct-as-is	aggregate-only
 sema/src/infer/stmt/let_stmt.rs	aggregate_embeds_rc_nominal	1	InferType	_	false	correct-as-is	carrier-walk
 sema/src/infer/stmt/let_stmt.rs	check_vec_let_surface	1	InferType	_	false	correct-as-is	aggregate-only
 sema/src/infer/substitute/expr.rs	apply_substitution_expr	1	InferType	_	None	correct-as-is	carrier-walk

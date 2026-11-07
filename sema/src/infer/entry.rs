@@ -46,6 +46,11 @@ impl Default for TypeInference {
             imported_globals: HashSet::new(),
             imported_types: HashSet::new(),
             module_is_importable: false,
+            deferred: Vec::new(),
+            deferred_sites: HashSet::new(),
+            reported_sites: HashSet::new(),
+            deferred_results: HashSet::new(),
+            deferred_carriers: Vec::new(),
         }
     }
 }
@@ -372,6 +377,7 @@ impl TypeInference {
         let typed_stmts = inf.infer_stmts(&stmts);
 
         let subst = inf.solve_constraints();
+        inf.replay_carrier_checks(&subst);
 
         let resolved_stmts = inf.apply_substitution_stmts(&typed_stmts, &subst);
 

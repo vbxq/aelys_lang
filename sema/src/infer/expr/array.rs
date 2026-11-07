@@ -1,5 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
+use crate::infer::projection::{CarrierCheck, ProjKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::{InferType, ResolvedType};
 use aelys_syntax::{BinaryOp, Expr, ExprKind, Span, TypeAnnotation, UnaryOp};
@@ -40,7 +41,11 @@ impl TypeInference {
     }
 
     // decided here and not on the air, so the optimizer cannot fold a local into the answer
-    fn reject_const_index_out_of_bounds(&mut self, object: &TypedExpr, index: &TypedExpr) {
+    pub(crate) fn reject_const_index_out_of_bounds(
+        &mut self,
+        object: &TypedExpr,
+        index: &TypedExpr,
+    ) {
         let InferType::Array(_, Some(len)) = &object.ty else {
             return;
         };
@@ -55,19 +60,11 @@ impl TypeInference {
 
     fn reject_rc_aggregate_elements(&mut self, elements: &[TypedExpr], kind: &str) {
         for elem in elements {
-            if elem.ty.is_rc()
-                || elem.ty.contains_rc()
-                || self.type_table.contains_rc_nominal(&elem.ty)
-            {
-                self.errors.push(TypeError::rc_out_of_surface(
-                    format!(
-                        "element of {} is a value of type `{}` which embeds an `Rc<T>`; \
-                         storing an Rc inside an array/vec is not supported in Stage 1",
-                        kind, elem.ty
-                    ),
-                    elem.span,
-                ));
-            }
+            self.check_carrier(CarrierCheck::AggregateElement {
+                ty: elem.ty.clone(),
+                kind: kind.to_string(),
+                span: elem.span,
+            });
         }
     }
 
@@ -262,7 +259,7 @@ impl TypeInference {
                 InferType::Dynamic
             }
             InferType::Dynamic => InferType::Dynamic,
-            InferType::Var(_) => self.type_gen.fresh(),
+            InferType::Var(_) => self.defer_read(&typed_object.ty, ProjKind::Index, _span),
             _other => InferType::Dynamic,
         };
 
@@ -273,6 +270,36 @@ impl TypeInference {
             },
             elem_ty,
         )
+    }
+
+    pub(crate) fn reject_rc_aggregate_element(&mut self, ty: &InferType, kind: &str, span: Span) {
+        if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "element of {} is a value of type `{}` which embeds an `Rc<T>`; \
+                     storing an Rc inside an array/vec is not supported in Stage 1",
+                    kind, ty
+                ),
+                span,
+            ));
+        }
+    }
+
+    pub(crate) fn reject_vec_into_element(&mut self, object_ty: &InferType, value: &TypedExpr) {
+        if matches!(object_ty, InferType::Array(_, _) | InferType::Vec(_))
+            && self.type_table.contains_vec_by_value(&value.ty)
+        {
+            self.errors.push(TypeError::vec_out_of_surface(
+                format!(
+                    "value stored into an element of `{}` has type `{}`, which holds a `Vec<T>` \
+                     by value; a Vec inside a Vec/array is not supported yet (the buffer would \
+                     be shared without a retain, the transitive Vec retain/release is not \
+                     implemented)",
+                    object_ty, value.ty
+                ),
+                value.span,
+            ));
+        }
     }
 
     pub(super) fn infer_index_assign_expr(
@@ -321,20 +348,7 @@ impl TypeInference {
         self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
 
         // r1-r3 already refuse the construction forms; this is the fail-closed backstop
-        if matches!(typed_object.ty, InferType::Array(_, _) | InferType::Vec(_))
-            && self.type_table.contains_vec_by_value(&typed_value.ty)
-        {
-            self.errors.push(TypeError::vec_out_of_surface(
-                format!(
-                    "value stored into an element of `{}` has type `{}`, which holds a `Vec<T>` \
-                     by value; a Vec inside a Vec/array is not supported yet (the buffer would \
-                     be shared without a retain, the transitive Vec retain/release is not \
-                     implemented)",
-                    typed_object.ty, typed_value.ty
-                ),
-                typed_value.span,
-            ));
-        }
+        self.reject_vec_into_element(&typed_object.ty, &typed_value);
 
         match &typed_object.ty {
             InferType::Array(elem_ty, _)
@@ -371,7 +385,15 @@ impl TypeInference {
                 self.errors
                     .push(TypeError::string_index_removed(true, object.span));
             }
-            InferType::Dynamic | InferType::Var(_) | _ => {}
+            InferType::Var(_) => {
+                self.defer_write(
+                    &typed_object.ty,
+                    ProjKind::IndexWrite,
+                    &typed_value.ty,
+                    _span,
+                );
+            }
+            _ => {}
         }
 
         (
@@ -398,7 +420,7 @@ impl TypeInference {
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
             InferType::Dynamic => InferType::Dynamic,
-            InferType::Var(_) => self.type_gen.fresh(),
+            InferType::Var(_) => self.defer_read(&typed_object.ty, ProjKind::Slice, _span),
             _other => InferType::Dynamic,
         };
 

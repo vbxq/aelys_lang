@@ -8,6 +8,7 @@ mod finalize;
 mod functions;
 mod imports;
 mod lambda;
+pub(crate) mod projection;
 mod returns;
 mod signatures;
 mod stmt;
@@ -62,4 +63,9 @@ pub struct TypeInference {
     pub(crate) imported_globals: HashSet<String>,
     pub(crate) imported_types: HashSet<String>,
     pub(crate) module_is_importable: bool,
+    deferred: Vec<projection::DeferredProjection>,
+    deferred_sites: HashSet<projection::SiteKey>,
+    reported_sites: HashSet<projection::SiteKey>,
+    deferred_results: HashSet<crate::types::TypeVarId>,
+    deferred_carriers: Vec<projection::CarrierCheck>,
 }

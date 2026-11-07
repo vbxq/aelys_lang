@@ -54,7 +54,12 @@ impl TypeInference {
         }
 
         let typed_object = self.infer_expr(object);
-        let ty = self.member_result_type(&typed_object.ty, member);
+        let ty = if matches!(typed_object.ty, InferType::Var(_)) {
+            let kind = crate::infer::projection::ProjKind::Field(member.to_string());
+            self.defer_read(&typed_object.ty, kind, _span)
+        } else {
+            self.member_result_type(&typed_object.ty, member)
+        };
 
         (
             TypedExprKind::Member {
@@ -115,14 +120,31 @@ impl TypeInference {
         }
     }
 
-    fn is_direct_rc_producer(kind: &TypedExprKind) -> bool {
-        matches!(
-            kind,
-            TypedExprKind::EnumVariant { .. }
-                | TypedExprKind::Identifier(_)
-                | TypedExprKind::Member { .. }
-                | TypedExprKind::Call { .. }
-        )
+    pub(crate) fn reject_rc_field_write(
+        &mut self,
+        field: &str,
+        field_ty: &InferType,
+        object_is_rc_handle: bool,
+        value: &TypedExpr,
+        span: Span,
+    ) {
+        let field_is_rc = field_ty.is_rc();
+        let field_is_nominal_carrier =
+            !field_is_rc && self.type_table.contains_rc_nominal(field_ty);
+        if field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle) {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "in-place reassignment of field `{field}` (type `{field_ty}`, \
+                 which carries an `Rc<T>`) is not supported here; \
+                 reassigning would leak the previously-held reference"
+                ),
+                span,
+            ));
+        }
+        if field_is_rc && object_is_rc_handle && !Self::is_direct_rc_producer(&value.kind) {
+            self.errors
+                .push(TypeError::rc_field_assign_indirect(value.span));
+        }
     }
 
     pub(super) fn infer_field_assign_expr(
@@ -174,27 +196,13 @@ impl TypeInference {
             if let Some(def) = self.type_table.get_struct(struct_name) {
                 if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
                     let field_ty = field_def.ty.clone();
-                    let field_is_rc = field_ty.is_rc();
-                    let field_is_nominal_carrier =
-                        !field_is_rc && self.type_table.contains_rc_nominal(&field_ty);
-                    let reject = field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle);
-                    if reject {
-                        self.errors.push(TypeError::rc_out_of_surface(
-                            format!(
-                                "in-place reassignment of field `{field}` (type `{field_ty}`, \
-                             which carries an `Rc<T>`) is not supported here; \
-                             reassigning would leak the previously-held reference"
-                            ),
-                            span,
-                        ));
-                    }
-                    if field_is_rc
-                        && object_is_rc_handle
-                        && !Self::is_direct_rc_producer(&typed_value.kind)
-                    {
-                        self.errors
-                            .push(TypeError::rc_field_assign_indirect(typed_value.span));
-                    }
+                    self.reject_rc_field_write(
+                        field,
+                        &field_ty,
+                        object_is_rc_handle,
+                        &typed_value,
+                        span,
+                    );
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
@@ -231,6 +239,13 @@ impl TypeInference {
                     ));
                 }
             }
+        } else if matches!(typed_object.ty, InferType::Var(_)) {
+            self.defer_write(
+                &typed_object.ty,
+                crate::infer::projection::ProjKind::FieldWrite(field.to_string()),
+                &typed_value.ty,
+                span,
+            );
         }
 
         (
@@ -315,12 +330,12 @@ impl TypeInference {
                     .type_table
                     .get_struct(name)
                     .is_some_and(|d| !d.type_params.is_empty());
-                self.reject_rc_out_of_carrier_surface(
-                    &typed_value.ty,
-                    container_is_generic,
-                    f.span,
-                    &format!("field `{}` of struct literal `{}`", f.name, name),
-                );
+                self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
+                    ty: typed_value.ty.clone(),
+                    generic: container_is_generic,
+                    span: f.span,
+                    what: format!("field `{}` of struct literal `{}`", f.name, name),
+                });
 
                 if let Some(field_ty) = self
                     .type_table

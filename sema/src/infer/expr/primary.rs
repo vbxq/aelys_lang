@@ -227,12 +227,12 @@ impl TypeInference {
                     for (i, arg_expr) in args.iter().enumerate() {
                         let mut typed_arg = self.infer_expr(arg_expr);
 
-                        self.reject_rc_out_of_carrier_surface(
-                            &typed_arg.ty,
-                            is_generic,
-                            arg_expr.span,
-                            &format!("payload {i} of enum variant `{enum_name}::{variant}`"),
-                        );
+                        self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
+                            ty: typed_arg.ty.clone(),
+                            generic: is_generic,
+                            span: arg_expr.span,
+                            what: format!("payload {i} of enum variant `{enum_name}::{variant}`"),
+                        });
 
                         let expected_ty = if is_generic {
                             self.instantiate_enum_type_param(
@@ -400,6 +400,10 @@ impl TypeInference {
         let typed_arg = self.infer_expr(&args[0]);
         let result_ty = match &typed_arg.ty {
             InferType::Rc(inner) => inner.as_ref().clone(),
+            InferType::Var(_) => {
+                self.errors.push(TypeError::rc_get_unresolved(span));
+                InferType::Dynamic
+            }
             other => {
                 self.errors.push(TypeError {
                     kind: TypeErrorKind::Mismatch {
@@ -496,6 +500,19 @@ impl TypeInference {
         )
     }
 
+    pub(crate) fn reject_rc_vec_push(&mut self, ty: &InferType, span: Span) {
+        if self.type_table.contains_rc_nominal(ty) {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "element pushed to a Vec has type `{}` which embeds an `Rc<T>`; \
+                     storing an Rc (directly or inside a struct/enum) in a Vec is not supported yet",
+                    ty
+                ),
+                span,
+            ));
+        }
+    }
+
     fn infer_vec_push(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
         if args.len() != 2 {
             self.errors.push(TypeError::rc_out_of_surface(
@@ -550,16 +567,10 @@ impl TypeInference {
             }
         }
 
-        if self.type_table.contains_rc_nominal(&typed_elem.ty) {
-            self.errors.push(TypeError::rc_out_of_surface(
-                format!(
-                    "element pushed to a Vec has type `{}` which embeds an `Rc<T>`; \
-                     storing an Rc (directly or inside a struct/enum) in a Vec is not supported yet",
-                    typed_elem.ty
-                ),
-                args[1].span,
-            ));
-        }
+        self.check_carrier(crate::infer::projection::CarrierCheck::VecPush {
+            ty: typed_elem.ty.clone(),
+            span: args[1].span,
+        });
 
         // the copy-on-write path memcpys elements flat, so an element that owns a vec buffer
         if self.type_table.contains_vec_by_value(&typed_elem.ty) {

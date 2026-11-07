@@ -1,4 +1,5 @@
 use super::TypeInference;
+use super::projection::ProjKind;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::place_spine::{
     bytes_receiver_is_backed, computed_len_receiver, denotes_a_place, is_computed_len,
@@ -169,6 +170,13 @@ impl TypeInference {
             } => {
                 self.validate_expr(iterable, generic_scope, declared_type_params);
                 self.validate_type(elem_type, stmt.span, generic_scope, declared_type_params);
+                self.check_deferred_read(
+                    ProjKind::Element,
+                    iterable,
+                    None,
+                    elem_type,
+                    iterable.span,
+                );
 
                 if matches!(iterable.ty, InferType::Vec(_)) {
                     self.errors
@@ -408,6 +416,8 @@ impl TypeInference {
             TypedExprKind::Member { object, member } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_type(&expr.ty, expr.span, generic_scope, declared_type_params);
+                let deferred = ProjKind::Field(member.clone());
+                self.check_deferred_read(deferred.clone(), object, None, &expr.ty, expr.span);
                 match &object.ty {
                     InferType::String => {
                         if member != "len" && member != "bytes" {
@@ -492,6 +502,7 @@ impl TypeInference {
                         }
                     }
                     InferType::Dynamic => {}
+                    InferType::Var(_) if self.is_deferred_site(expr.span, &deferred) => {}
                     other => {
                         self.errors.push(TypeError::member_access(
                             format!("field access on non-struct type {}", other),
@@ -515,6 +526,7 @@ impl TypeInference {
             TypedExprKind::Index { object, index } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(index, generic_scope, declared_type_params);
+                self.check_deferred_read(ProjKind::Index, object, Some(index), &expr.ty, expr.span);
 
                 if self.is_active_generic_placeholder_type(
                     &object.ty,
@@ -539,6 +551,13 @@ impl TypeInference {
                 self.validate_expr(index, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
                 self.check_write_target(object, "an indexed assignment", expr.span);
+                self.check_deferred_write(
+                    ProjKind::IndexWrite,
+                    object,
+                    Some(index),
+                    value,
+                    expr.span,
+                );
 
                 if !Self::is_index_assignable_type(&object.ty)
                     && !self.is_active_generic_placeholder_type(
@@ -560,6 +579,8 @@ impl TypeInference {
             } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
+                let deferred = ProjKind::FieldWrite(field.clone());
+                self.check_deferred_write(deferred, object, None, value, expr.span);
                 if is_computed_len(&object.ty, field) {
                     self.errors
                         .push(TypeError::computed_len(object.ty.clone(), true, expr.span));
@@ -578,6 +599,22 @@ impl TypeInference {
             TypedExprKind::Slice { object, range } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_expr(range, generic_scope, declared_type_params);
+                if let InferType::Slice { elem, mutable } = &expr.ty {
+                    self.check_deferred_read(ProjKind::Slice, object, None, elem, expr.span);
+                    let shared_base = matches!(
+                        object.ty,
+                        InferType::Slice { mutable: false, .. }
+                            | InferType::Ref { mutable: false, .. }
+                    );
+                    if *mutable && shared_base && self.is_deferred_site(expr.span, &ProjKind::Slice)
+                    {
+                        self.errors.push(TypeError::shared_mut_view(
+                            "a mutable slice",
+                            Some(object.ty.clone()),
+                            expr.span,
+                        ));
+                    }
+                }
                 if !denotes_a_place(object) {
                     self.errors.push(TypeError::no_place(
                         Self::no_place_subject(object, "the base of a slice"),
@@ -648,10 +685,12 @@ impl TypeInference {
             }
             TypedExprKind::Deref(operand) => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
+                self.check_deferred_read(ProjKind::Deref, operand, None, &expr.ty, expr.span);
             }
             TypedExprKind::DerefAssign { target, value } => {
                 self.validate_expr(target, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
+                self.check_deferred_write(ProjKind::DerefWrite, target, None, value, expr.span);
                 if target_ptr_is_shared(target) {
                     self.errors.push(TypeError::shared_mut(
                         "an assignment through `*p`",
@@ -880,6 +919,11 @@ impl TypeInference {
     ) {
         if matches!(object.ty, InferType::String) {
             self.errors.push(TypeError::string_slice(expr.span));
+            return;
+        }
+        if matches!(object.ty, InferType::Var(_))
+            && self.is_deferred_site(expr.span, &ProjKind::Slice)
+        {
             return;
         }
         if let TypedExprKind::Range { start: Some(s), .. } = &range.kind {

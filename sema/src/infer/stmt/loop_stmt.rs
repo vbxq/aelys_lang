@@ -127,8 +127,11 @@ impl TypeInference {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
             InferType::Dynamic => InferType::Dynamic,
-            // when the iterable is an unresolved type variable, return a fresh var for the element type instead of dynamic
-            InferType::Var(_) => self.type_gen.fresh(),
+            InferType::Var(_) => self.defer_read(
+                &typed_iterable.ty,
+                crate::infer::projection::ProjKind::Element,
+                typed_iterable.span,
+            ),
             _other => InferType::Dynamic,
         };
 
