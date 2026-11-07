@@ -36,6 +36,8 @@ typedef struct {
 static AelysCandidate *g_candidates = NULL;
 static size_t g_count = 0;
 static size_t g_capacity = 0;
+/* a collect holds candidate indices across releases that push, so never compact during one */
+static int g_collecting = 0;
 
 /* the pointer map emitted by the compiler, indexed by type_id */
 extern const uint32_t __aelys_rc_type_table[];
@@ -79,17 +81,33 @@ static void drain_pending(void) {
     g_draining = 0;
 }
 
+static void candidates_compact_from(size_t start) {
+    size_t kept = 0;
+    for (size_t i = start; i < g_count; i++) {
+        if (g_candidates[i].ptr != NULL) {
+            *aelys_rc_candidate_slot(g_candidates[i].ptr) = (uint32_t)kept;
+            g_candidates[kept++] = g_candidates[i];
+        }
+    }
+    g_count = kept;
+}
+
 /* collector scratch, never counted: a bookkeeping bump would falsify every balanced row */
 static void candidates_push(void *ptr) {
     if (g_count == g_capacity) {
-        size_t new_cap = g_capacity ? g_capacity * 2 : 16;
-        AelysCandidate *grown =
-            (AelysCandidate *)realloc(g_candidates, new_cap * sizeof(AelysCandidate));
-        if (!grown) {
-            return; /* on OOM a missed collect only leaks, it is never UB */
+        if (!g_collecting) {
+            candidates_compact_from(0);
         }
-        g_candidates = grown;
-        g_capacity = new_cap;
+        if (g_capacity == 0 || g_count > g_capacity / 2) {
+            size_t new_cap = g_capacity ? g_capacity * 2 : 16;
+            AelysCandidate *grown =
+                (AelysCandidate *)realloc(g_candidates, new_cap * sizeof(AelysCandidate));
+            if (!grown) {
+                return; /* on OOM a missed collect only leaks, it is never UB */
+            }
+            g_candidates = grown;
+            g_capacity = new_cap;
+        }
     }
     g_candidates[g_count].ptr = ptr;
     g_candidates[g_count].gc_refcount = 0;
@@ -198,6 +216,7 @@ void __aelys_cycle_collect(void) {
     if (g_count == 0) {
         return;
     }
+    g_collecting = 1;
 
     /* snapshot each candidate's real refcount into its side node */
     for (size_t i = 0; i < g_count; i++) {
@@ -307,14 +326,8 @@ void __aelys_cycle_collect(void) {
     }
     /* keep the candidates registered during P4: dropping them while their dedup bit is
        still set would make them unpushable forever */
-    size_t kept = 0;
-    for (size_t i = gc_garbage_bound; i < g_count; i++) {
-        if (g_candidates[i].ptr != NULL) {
-            *aelys_rc_candidate_slot(g_candidates[i].ptr) = (uint32_t)kept;
-            g_candidates[kept++] = g_candidates[i];
-        }
-    }
-    g_count = kept;
+    candidates_compact_from(gc_garbage_bound);
+    g_collecting = 0;
 }
 
 /* under rc/leak this file is absent, so the hook stays NULL and collecting is a no-op */

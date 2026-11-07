@@ -41,7 +41,7 @@ failures = 0
 for t in templates:
     body = open(os.path.join(tdir, t)).read()
     for level in ("0", "2"):
-        for rt in ("rc", "leak"):
+        for rt in ("rc", "rc+cycles", "leak"):
             exes = {}
             for n in (small, large):
                 src = os.path.join(work, f"{t}_{n}.aelys")
@@ -64,7 +64,7 @@ for t in templates:
                     continue
                 ratio = b / a
                 line = f"{t} -O{level} {rt}/{alloc}: {a/1024:.1f} MB -> {b/1024:.1f} MB (x{ratio:.2f})"
-                if rt == "rc" and ratio > 1.2:
+                if rt != "leak" and ratio > 1.2:
                     print("FAIL grows " + line); failures += 1
                 elif rt == "leak" and ratio < 2.0:
                     print("FAIL blind " + line); failures += 1
