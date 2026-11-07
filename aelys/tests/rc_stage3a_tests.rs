@@ -405,8 +405,8 @@ fn main() -> i64 { return 0 }
 }
 
 #[test]
-fn trej_c_field_assign_rc_field_is_rejected() {
-    let err = rc_reject(
+fn trej_c_field_assign_rc_field_releases_the_old_value() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 struct Node { next: Rc<i64> }
 fn main() -> i64 {
@@ -414,13 +414,16 @@ fn main() -> i64 {
     let b: Rc<i64> = Rc::new(2)
     let mut n: Node = Node { next: a }
     n.next = b
-    return 0
+    return Rc::get(n.next) + Rc::get(a) * 10
 }
 "#,
-    );
+    ) else {
+        return;
+    };
+    assert_eq!(code, 12, "the new field value and the old handle; stderr:\n{stderr}");
     assert!(
-        err.contains("[rc-stage1]"),
-        "T-Rej(c): in-place reassign of an Rc field must be rejected; got:\n{err}"
+        stderr.contains("[rc] allocs=2 frees=2"),
+        "the replaced field value is released once; got stderr:\n{stderr}"
     );
 }
 

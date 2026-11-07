@@ -368,19 +368,14 @@ and can't be overwritten inside the body.
 release the compiler can point at. Forms where that accounting cannot be
 proven are refused rather than silently miscompiled. A binding, and an
 `Rc` put straight into a generic enum, carry `[rc-stage1]`; a struct field
-or an enum payload initialized from a call carries `[rc-stage3a]`; the
-refusal of an enum with more than one variant carries no marker.
+or an enum payload initialized from a conditional carries `[rc-stage3a]`;
+the refusal of an enum with more than one variant carries no marker.
 
 Five shapes are refused today.
 
-An `Rc` binding declared `mut`, because an Rc is single-assignment for
-now and the overwrite would drop a retain:
-
-    let mut r = Rc::new(1)      // E0410
-    let r = Rc::new(1)          // ok
-
 An indirect initializer. The right-hand side has to be `Rc::new(..)`,
-`Rc::null()`, another Rc binding, or a read of an Rc field:
+`Rc::null()`, another Rc binding, a read of an Rc field, a call, a block or
+a match:
 
     let r = if c { a } else { b }   // E0410
     let r = a                       // ok
@@ -401,16 +396,21 @@ instantiated with an `Rc`:
     enum Link { Nil, Cons(Rc<Node>) }   // E0410
     enum One { It(Rc<Node>) }           // ok, a single variant
 
-A struct field or an enum payload initialized from a value whose count the
-compiler cannot account for. It has to be a fresh literal, a read of an
-existing binding or field, or a conditional whose branches are both one or
-both the other. A call is refused because nothing in a signature says
-whether the callee hands over its count or only lends it, and guessing
-either way is a leak or a use-after-free:
+A struct field or an enum payload initialized from a conditional whose
+branches disagree, one reading an existing binding and the other making a
+fresh value: the read needs a retain and the fresh value does not. A fresh
+literal, a call, a read of an existing binding or field, or a conditional
+whose branches are both one or both the other is accepted:
 
-    let w = W{ r: mkrc() }              // E0410, a call
+    let w = W{ r: if c { a } else { Rc::new(1) } }   // E0410
+    let w = W{ r: mkrc() }                  // ok, a call hands over its count
     let w = W{ r: if c { a } else { b } }   // ok, both branches read
-    let w = W{ r: Rc::new(1) }              // ok, a fresh literal
+
+An `Rc` read out of a reference with `*`, which would copy the handle
+without its count:
+
+    fn rd(x: &Rc<N>) -> Rc<N> { return *x }   // E0410
+    fn rd(x: Rc<N>) -> Rc<N> { return x }     // ok
 
 Keep the `Rc` in a direct local and read through it where you need it.",
         severity: Severity::Error,

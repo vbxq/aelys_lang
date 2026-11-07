@@ -445,8 +445,8 @@ fn main() -> i64 {
 }
 
 #[test]
-fn n1_rc_mut_reassigned_is_rejected() {
-    let err = rc_reject(
+fn n1_rc_mut_reassigned_releases_the_old_handle() {
+    let ir = rc_ir(
         r#"
 fn main() -> i64 {
     let mut a: Rc<i64> = Rc::new(0)
@@ -455,9 +455,10 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(
-        err.contains("[rc-stage1]"),
-        "N1 must carry the marker: {err}"
+    assert_eq!(
+        call_count(&ir, "@__aelys_rc_release"),
+        2,
+        "the old handle at the reassignment and the new one at scope exit:\n{ir}"
     );
 }
 

@@ -66,7 +66,7 @@ impl TypeInference {
             typed_init.ty.clone()
         };
 
-        self.check_rc_let_surface(name, mutable, &var_type, initializer, span);
+        self.check_rc_let_surface(name, &var_type, initializer, span);
         self.check_vec_let_surface(name, &var_type, span);
 
         self.env
@@ -87,7 +87,6 @@ impl TypeInference {
     fn check_rc_let_surface(
         &mut self,
         name: &str,
-        mutable: bool,
         var_type: &crate::types::InferType,
         initializer: &Expr,
         span: Span,
@@ -95,14 +94,6 @@ impl TypeInference {
         use aelys_syntax::ExprKind;
 
         if var_type.is_rc() {
-            if mutable {
-                self.errors.push(
-                    crate::constraint::TypeError::rc_out_of_surface(
-                        format!("`Rc<T>` binding `{name}` cannot be `mut`: an Rc is single-assignment (not supported yet)"),
-                        span,
-                    ),
-                );
-            }
             let mut init = initializer;
             while let ExprKind::Grouping(inner) = &init.kind {
                 init = inner;

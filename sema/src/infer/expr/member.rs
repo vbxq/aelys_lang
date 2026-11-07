@@ -124,14 +124,16 @@ impl TypeInference {
         &mut self,
         field: &str,
         field_ty: &InferType,
-        object_is_rc_handle: bool,
+        object: &TypedExpr,
         value: &TypedExpr,
         span: Span,
     ) {
+        let releases_old =
+            object.ty.is_rc() || (!self.in_nogc_fn && crate::place_spine::owns_field_place(object));
         let field_is_rc = field_ty.is_rc();
         let field_is_nominal_carrier =
             !field_is_rc && self.type_table.contains_rc_nominal(field_ty);
-        if field_is_nominal_carrier || (field_is_rc && !object_is_rc_handle) {
+        if field_is_nominal_carrier || (field_is_rc && !releases_old) {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(
                     "in-place reassignment of field `{field}` (type `{field_ty}`, \
@@ -141,7 +143,7 @@ impl TypeInference {
                 span,
             ));
         }
-        if field_is_rc && object_is_rc_handle && !Self::is_direct_rc_producer(&value.kind) {
+        if field_is_rc && releases_old && !Self::is_direct_rc_producer(&value.kind) {
             self.errors
                 .push(TypeError::rc_field_assign_indirect(value.span));
         }
@@ -188,7 +190,6 @@ impl TypeInference {
             },
             _ => None,
         };
-        let object_is_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));
         if let Some(struct_name) = object_struct.clone() {
             self.reject_private_field(&struct_name, field, span);
         }
@@ -196,13 +197,7 @@ impl TypeInference {
             if let Some(def) = self.type_table.get_struct(struct_name) {
                 if let Some(field_def) = def.fields.iter().find(|f| f.name == field) {
                     let field_ty = field_def.ty.clone();
-                    self.reject_rc_field_write(
-                        field,
-                        &field_ty,
-                        object_is_rc_handle,
-                        &typed_value,
-                        span,
-                    );
+                    self.reject_rc_field_write(field, &field_ty, &typed_object, &typed_value, span);
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {

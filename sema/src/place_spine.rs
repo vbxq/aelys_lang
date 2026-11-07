@@ -61,6 +61,19 @@ pub fn computed_len_receiver(e: &TypedExpr) -> Option<&InferType> {
     }
 }
 
+pub fn owns_field_place(e: &TypedExpr) -> bool {
+    match &e.kind {
+        TypedExprKind::Grouping(inner) => owns_field_place(inner),
+        TypedExprKind::Identifier(_) => matches!(e.ty, InferType::Struct(_)),
+        TypedExprKind::Deref(inner) => matches!(inner.ty, InferType::Ref { mutable: true, .. }),
+        TypedExprKind::Member { object, .. } => {
+            matches!(e.ty, InferType::Struct(_))
+                && (matches!(object.ty, InferType::Rc(_)) || owns_field_place(object))
+        }
+        _ => is_rc_get(e),
+    }
+}
+
 // an rc temporary owns the cell it hands out, so the object's type cannot answer for its storage
 pub fn denotes_a_place(e: &TypedExpr) -> bool {
     match &e.kind {

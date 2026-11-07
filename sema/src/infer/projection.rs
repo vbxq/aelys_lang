@@ -452,8 +452,7 @@ impl TypeInference {
         }
         match &kind {
             ProjKind::FieldWrite(field) => {
-                let through_handle = matches!(object.ty, InferType::Rc(_));
-                self.reject_rc_field_write(field, &projected, through_handle, value, span);
+                self.reject_rc_field_write(field, &projected, object, value, span);
             }
             ProjKind::IndexWrite => self.reject_vec_into_element(&object.ty, value),
             _ => {}

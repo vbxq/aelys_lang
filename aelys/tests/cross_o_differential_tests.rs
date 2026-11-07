@@ -1430,10 +1430,7 @@ enum S03bExpect {
 const S03B_ROWS: &[(&str, S03bExpect, &str)] = &[
     (
         "S0.3b-K01 a carrier field from a call",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc-stage3a]", "field `W.r`", "transfers its count or lends it"],
-        ),
+        S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
 struct W { r: Rc<i64> }
 fn mkrc() -> Rc<i64> { return Rc::new(7) }
@@ -1445,10 +1442,7 @@ fn main() -> i64 {
     ),
     (
         "S0.3b-K03 an enum payload from a call",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc-stage3a]", "payload of `W::V`", "transfers its count or lends it"],
-        ),
+        S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
 enum W { V(Rc<i64>) }
 fn mkrc() -> Rc<i64> { return Rc::new(7) }
@@ -1458,10 +1452,7 @@ fn main() -> i64 { let w: W = W::V(mkrc())
     ),
     (
         "S0.3b-N1 the same call whose callee cannot be inlined away",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc-stage3a]", "field `W.r`", "transfers its count or lends it"],
-        ),
+        S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
 struct W { r: Rc<i64> }
 fn seven() -> i64 { return 7 }
@@ -1473,11 +1464,8 @@ fn main() -> i64 {
 "#,
     ),
     (
-        "S0.3b-N2 a callee that lends its count instead of transferring it",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc-stage3a]", "field `W.r`", "transfers its count or lends it"],
-        ),
+        "S0.3b-N2 a callee that returns a field of its argument",
+        S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
 struct W { r: Rc<i64> }
 fn get(w: W) -> Rc<i64> { return w.r }
@@ -1489,11 +1477,8 @@ fn main() -> i64 {
 "#,
     ),
     (
-        "S0.3b-N3 the same lend, with an allocation after it to reuse the slab",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc-stage3a]", "field `W.r`", "transfers its count or lends it"],
-        ),
+        "S0.3b-N3 the same field return, with an allocation after it to reuse the slab",
+        S03bExpect::Ran(13, "", "[rc] allocs=4 frees=4"),
         S03B_LENT_COUNT_THEN_REUSE,
     ),
     (
@@ -1614,7 +1599,6 @@ fn main() -> i64 {
     ),
 ];
 
-// admitting the lend this program spells aborts in malloc: the cell is released twice
 const S03B_LENT_COUNT_THEN_REUSE: &str = r#"
 struct W { r: Rc<i64> }
 fn get(w: W) -> Rc<i64> { return w.r }

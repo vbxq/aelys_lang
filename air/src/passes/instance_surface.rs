@@ -1,6 +1,7 @@
 use crate::rc_paths::{RcScan, rc_field_paths};
 use crate::{
-    AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, Callee, Operand, Rvalue, Span,
+    AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, Callee, Operand, Place, Rvalue,
+    Span,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -19,13 +20,19 @@ enum Finding {
     UncountedRc(AirType),
     RcInVec(AirType),
     NestedRcRead(AirType),
+    RcThroughRef(AirType),
+    RcWriteThroughRef(AirType),
 }
 
 impl Finding {
     fn code(&self) -> &'static str {
         match self {
             Finding::Reference(_) => REF_CODE,
-            Finding::UncountedRc(_) | Finding::RcInVec(_) | Finding::NestedRcRead(_) => RC_CODE,
+            Finding::UncountedRc(_)
+            | Finding::RcInVec(_)
+            | Finding::NestedRcRead(_)
+            | Finding::RcThroughRef(_)
+            | Finding::RcWriteThroughRef(_) => RC_CODE,
         }
     }
 }
@@ -89,32 +96,47 @@ pub fn check_instance_surface(program: &AirProgram) -> Vec<InstanceSurfaceError>
     if verdicts.is_empty() {
         return Vec::new();
     }
-    let origins: Vec<String> = verdicts.keys().cloned().collect();
-    loop {
-        let mut grown = false;
-        for function in &program.functions {
-            if !type_args.contains_key(function.name.as_str())
-                || verdicts.contains_key(&function.name)
-            {
-                continue;
-            }
-            let inherited = calls(function)
+    let intrinsic: HashMap<String, Verdict> = verdicts
+        .iter()
+        .filter(|(name, verdict)| {
+            let args = type_args.get(name.as_str()).copied().unwrap_or(&[]);
+            !scan.comes_from(&verdict.finding, args)
+        })
+        .map(|(name, verdict)| (name.clone(), verdict.clone()))
+        .collect();
+    for name in intrinsic.keys() {
+        verdicts.remove(name);
+    }
+    let mut blamed: HashSet<String> = HashSet::new();
+    inherit(program, &type_args, &mut verdicts, &intrinsic);
+    for (name, verdict) in &intrinsic {
+        let function = program.functions.iter().find(|f| &f.name == name);
+        let explained = function.is_some_and(|f| {
+            calls(f)
                 .into_iter()
-                .find_map(|(callee, _)| verdicts.get(callee).cloned());
-            if let Some(verdict) = inherited {
-                verdicts.insert(function.name.clone(), verdict);
-                grown = true;
-            }
-        }
-        if !grown {
-            break;
+                .any(|(callee, _)| verdicts.contains_key(callee))
+        });
+        if explained {
+            blamed.insert(name.clone());
+        } else {
+            verdicts.insert(name.clone(), verdict.clone());
         }
     }
+    let skip: HashMap<String, Verdict> = intrinsic
+        .into_iter()
+        .filter(|(name, _)| blamed.contains(name))
+        .collect();
+    inherit(program, &type_args, &mut verdicts, &skip);
+    let origins: Vec<String> = verdicts
+        .iter()
+        .filter(|(name, verdict)| &verdict.origin == *name)
+        .map(|(name, _)| name.clone())
+        .collect();
     let mut errors = Vec::new();
     let mut reported: HashSet<&str> = HashSet::new();
     let mut covered: HashSet<&str> = HashSet::new();
     for caller in &program.functions {
-        if type_args.contains_key(caller.name.as_str()) {
+        if type_args.contains_key(caller.name.as_str()) && !blamed.contains(&caller.name) {
             continue;
         }
         for (callee, span) in calls(caller) {
@@ -162,6 +184,35 @@ pub fn check_instance_surface(program: &AirProgram) -> Vec<InstanceSurfaceError>
     errors
 }
 
+fn inherit(
+    program: &AirProgram,
+    type_args: &HashMap<&str, &[AirType]>,
+    verdicts: &mut HashMap<String, Verdict>,
+    skip: &HashMap<String, Verdict>,
+) {
+    loop {
+        let mut grown = false;
+        for function in &program.functions {
+            if !type_args.contains_key(function.name.as_str())
+                || verdicts.contains_key(&function.name)
+                || skip.contains_key(&function.name)
+            {
+                continue;
+            }
+            let inherited = calls(function)
+                .into_iter()
+                .find_map(|(callee, _)| verdicts.get(callee).cloned());
+            if let Some(verdict) = inherited {
+                verdicts.insert(function.name.clone(), verdict);
+                grown = true;
+            }
+        }
+        if !grown {
+            break;
+        }
+    }
+}
+
 fn message(verdict: &Verdict, called: &str, caller: &str, args: &[AirType]) -> String {
     let args = args.iter().map(user_type).collect::<Vec<_>>().join(", ");
     let head = format!(
@@ -192,6 +243,18 @@ fn message(verdict: &Verdict, called: &str, caller: &str, args: &[AirType]) -> S
         Finding::NestedRcRead(inner) => format!(
             "{head}{which} reads an `{}` out of an `Rc<{}>`: a nested `Rc` payload is not \
              supported yet, store one `Rc<T>` layer instead",
+            user_type(inner),
+            user_type(inner)
+        ),
+        Finding::RcWriteThroughRef(inner) => format!(
+            "{head}{which} writes an `{}` through a `&mut {}` with `*`: writing an `Rc` through \
+             a reference is not supported yet, return the new `Rc` instead",
+            user_type(inner),
+            user_type(inner)
+        ),
+        Finding::RcThroughRef(inner) => format!(
+            "{head}{which} reads an `{}` out of a `&{}` with `*`: reading an `Rc` through a \
+             reference is not supported yet, pass the `Rc` itself",
             user_type(inner),
             user_type(inner)
         ),
@@ -248,6 +311,33 @@ struct Scan<'a> {
 }
 
 impl Scan<'_> {
+    fn comes_from(&self, finding: &Finding, args: &[AirType]) -> bool {
+        let leaf: fn(&AirType) -> bool = match finding {
+            Finding::Reference(_) => |t| matches!(t, AirType::Ptr(_) | AirType::Slice(_)),
+            Finding::UncountedRc(_)
+            | Finding::RcInVec(_)
+            | Finding::NestedRcRead(_)
+            | Finding::RcThroughRef(_)
+            | Finding::RcWriteThroughRef(_) => |t| matches!(t, AirType::Rc(_)),
+        };
+        args.iter()
+            .any(|arg| self.mentions(arg, leaf, &mut HashSet::new()))
+    }
+
+    fn mentions(
+        &self,
+        ty: &AirType,
+        leaf: fn(&AirType) -> bool,
+        seen: &mut HashSet<String>,
+    ) -> bool {
+        if self.holds(ty, leaf, seen) {
+            return true;
+        }
+        Self::children(ty)
+            .into_iter()
+            .any(|inner| self.mentions(inner, leaf, seen))
+    }
+
     fn function(&self, function: &AirFunction) -> Option<Finding> {
         let types = function
             .params
@@ -276,6 +366,27 @@ impl Scan<'_> {
                 .map(|p| &p.ty)
                 .or_else(|| function.locals.iter().find(|l| l.id == id).map(|l| &l.ty))
         };
+        let write = function
+            .blocks
+            .iter()
+            .flat_map(|b| &b.stmts)
+            .find_map(|stmt| {
+                let AirStmtKind::Assign {
+                    place: Place::Deref(id),
+                    ..
+                } = &stmt.kind
+                else {
+                    return None;
+                };
+                match local_ty(*id) {
+                    Some(AirType::Ptr(inner)) => matches!(inner.as_ref(), AirType::Rc(_))
+                        .then(|| Finding::RcWriteThroughRef((**inner).clone())),
+                    _ => None,
+                }
+            });
+        if write.is_some() {
+            return write;
+        }
         function
             .blocks
             .iter()
@@ -288,11 +399,13 @@ impl Scan<'_> {
                 else {
                     return None;
                 };
-                let Some(AirType::Rc(inner)) = local_ty(*id) else {
-                    return None;
-                };
-                matches!(inner.as_ref(), AirType::Rc(_))
-                    .then(|| Finding::NestedRcRead((**inner).clone()))
+                match local_ty(*id) {
+                    Some(AirType::Rc(inner)) => matches!(inner.as_ref(), AirType::Rc(_))
+                        .then(|| Finding::NestedRcRead((**inner).clone())),
+                    Some(AirType::Ptr(inner)) => matches!(inner.as_ref(), AirType::Rc(_))
+                        .then(|| Finding::RcThroughRef((**inner).clone())),
+                    _ => None,
+                }
             })
     }
 

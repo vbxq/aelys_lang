@@ -48,6 +48,7 @@ impl TypeInference {
             std::mem::replace(&mut self.type_params_in_scope, func.type_params.clone());
         let saved_bounds = std::mem::replace(&mut self.type_param_bounds, Self::bounds_of(func));
         let saved_literal_inits = self.literal_init_vars.clone();
+        let saved_nogc = std::mem::replace(&mut self.in_nogc_fn, func.is_nogc);
 
         let mut typed_params = Vec::with_capacity(func.params.len());
         for (i, p) in func.params.iter().enumerate() {
@@ -142,6 +143,7 @@ impl TypeInference {
         self.type_param_bounds = saved_bounds;
         self.literal_init_vars = saved_literal_inits;
         self.nogc_fn_params = saved_nogc_fn_params;
+        self.in_nogc_fn = saved_nogc;
 
         TypedFunction {
             name: func.name.clone(),

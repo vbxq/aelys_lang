@@ -129,6 +129,9 @@ impl TypeInference {
         if enum_name == "Rc" && variant == "null" {
             return self.infer_rc_null(args, span);
         }
+        if enum_name == "Rc" && variant == "is_null" {
+            return self.infer_rc_is_null(args, span);
+        }
         if enum_name == "Vec" && variant == "new" {
             return self.infer_vec_new(args, span);
         }
@@ -468,6 +471,58 @@ impl TypeInference {
                 args: vec![],
             },
             InferType::Rc(Box::new(inner)),
+        )
+    }
+
+    fn infer_rc_is_null(&mut self, args: &[Expr], span: Span) -> (TypedExprKind, InferType) {
+        let typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if typed_args.len() != 1 {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "Rc::is_null expects exactly 1 argument, got {}",
+                    typed_args.len()
+                ),
+                span,
+            ));
+        } else {
+            match &typed_args[0].ty {
+                InferType::Rc(_) => {}
+                InferType::Var(_) => {
+                    let inner = self.type_gen.fresh();
+                    self.constraints.push(Constraint::equal(
+                        typed_args[0].ty.clone(),
+                        InferType::Rc(Box::new(inner)),
+                        typed_args[0].span,
+                        ConstraintReason::Other(
+                            "Rc::is_null expects an `Rc<T>` argument".to_string(),
+                        ),
+                    ));
+                }
+                other => {
+                    self.errors.push(TypeError {
+                        kind: TypeErrorKind::Mismatch {
+                            expected: InferType::Rc(Box::new(InferType::Dynamic)),
+                            found: other.clone(),
+                        },
+                        span,
+                        reason: ConstraintReason::Other(format!(
+                            "Rc::is_null expects an `Rc<T>` argument, got `{other}`"
+                        )),
+                        secondary_spans: Vec::new(),
+                        help: None,
+                        suggestion: None,
+                    });
+                }
+            }
+        }
+        (
+            TypedExprKind::EnumVariant {
+                enum_name: "Rc".to_string(),
+                variant: "is_null".to_string(),
+                tag: 0,
+                args: typed_args,
+            },
+            InferType::Bool,
         )
     }
 
@@ -941,7 +996,7 @@ fn intrinsic_methods(head: &str) -> Option<&'static [&'static str]> {
             "as_slice",
             "try_as_unique_mut_slice",
         ]),
-        "Rc" => Some(&["new", "get", "null"]),
+        "Rc" => Some(&["new", "get", "null", "is_null"]),
         "string" => Some(&["substring_bytes", "from_char"]),
         "char" => Some(&["from_i64", "is_scalar"]),
         _ => None,

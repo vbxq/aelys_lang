@@ -37,7 +37,7 @@ const CENSUS: &[(&str, Bucket, &str)] = &[
     ("r02_array_length_mismatch_refused", Bucket::Anchor, ""),
     ("r03_const_index_outside_array_refused", Bucket::Anchor, ""),
     ("r04_array_nonconst_length_refused", Bucket::Anchor, ""),
-    ("r05_rc_carrier_from_a_call_refused", Bucket::Anchor, ""),
+    ("r05_rc_carrier_from_a_call_runs", Bucket::Anchor, ""),
     ("r06_rc_carrier_from_a_conditional_runs", Bucket::Anchor, ""),
     ("r07_werror_input_is_the_same_at_every_level", Bucket::Anchor, ""),
     ("r08_net_names_both_verdicts", Bucket::Anchor, ""),
@@ -367,10 +367,10 @@ fn group_v01_r04_array_nonconst_length_refused() {
 const RC_CARRIER: &str = "struct W { r: Rc<i64> }\n\n";
 
 #[test]
-fn group_v01_r05_rc_carrier_from_a_call_refused() {
+fn group_v01_r05_rc_carrier_from_a_call_runs() {
     let h = Harness::new();
-    let _pin = pin_legs("r05", LEVELS.len());
-    h.refuses(
+    let _pin = pin_legs("r05", LEVELS.len() * ALLOCATORS.len());
+    h.runs(
         "r05",
         &format!(
             "{RC_CARRIER}fn mkrc() -> Rc<i64> {{ return Rc::new(7) }}\n\
@@ -381,8 +381,9 @@ fn group_v01_r05_rc_carrier_from_a_call_refused() {
              \x20   return 0\n\
              }}\n"
         ),
-        "E0410",
-        "is initialized from a call returning an `Rc<T>`-bearing value",
+        0,
+        "7\n",
+        Some((1, 1)),
     );
 }
 

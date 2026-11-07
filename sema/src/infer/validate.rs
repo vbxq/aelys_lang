@@ -76,6 +76,60 @@ impl TypeInference {
         }
     }
 
+    fn check_equality_operands(
+        &mut self,
+        op: aelys_syntax::BinaryOp,
+        left: &TypedExpr,
+        right: &TypedExpr,
+        generic_scope: &HashSet<String>,
+        span: Span,
+    ) {
+        for operand in [left, right] {
+            let ty = &operand.ty;
+            let answers = match ty {
+                InferType::Struct(name) => {
+                    generic_scope.contains(name) || self.errors.iter().any(|e| e.span == span)
+                }
+                InferType::Enum(name, _) => {
+                    self.type_table
+                        .get_enum(name)
+                        .is_none_or(|def| def.variants.iter().all(|v| v.data.is_empty()))
+                        || self.errors.iter().any(|e| e.span == span)
+                }
+                InferType::I8
+                | InferType::I16
+                | InferType::I32
+                | InferType::I64
+                | InferType::U8
+                | InferType::U16
+                | InferType::U32
+                | InferType::U64
+                | InferType::F32
+                | InferType::F64
+                | InferType::Bool
+                | InferType::Char
+                | InferType::String
+                | InferType::Rc(_)
+                | InferType::Null
+                | InferType::Never
+                | InferType::Var(_)
+                | InferType::Dynamic => true,
+                InferType::Array(..)
+                | InferType::Vec(_)
+                | InferType::Ref { .. }
+                | InferType::Slice { .. }
+                | InferType::Function { .. }
+                | InferType::Tuple(_)
+                | InferType::Range => false,
+            };
+            if !answers {
+                self.errors
+                    .push(TypeError::equality_unsupported(&op.to_string(), ty, span));
+                return;
+            }
+        }
+    }
+
     fn is_a_live_global(&self, name: &str) -> bool {
         self.module_globals.contains(name) && !self.shadowed_globals.contains(name)
     }
@@ -269,6 +323,7 @@ impl TypeInference {
             self.validate_type(capture_ty, func.span, &generic_scope, declared_type_params);
         }
         let saved_shadow = std::mem::take(&mut self.shadowed_globals);
+        let saved_nogc = std::mem::replace(&mut self.in_nogc_fn, func.declared_nogc);
         let mut bound: HashSet<String> = func.params.iter().map(|p| p.name.clone()).collect();
         Self::collect_bound_names(&func.body, &mut bound);
         self.shadowed_globals = bound;
@@ -284,6 +339,7 @@ impl TypeInference {
         );
         self.type_params_in_scope = saved_params;
         self.type_param_bounds = saved_bounds;
+        self.in_nogc_fn = saved_nogc;
     }
 
     fn validate_expr(
@@ -293,9 +349,14 @@ impl TypeInference {
         declared_type_params: &HashSet<String>,
     ) {
         match &expr.kind {
-            TypedExprKind::Binary { left, right, .. }
-            | TypedExprKind::And { left, right }
-            | TypedExprKind::Or { left, right } => {
+            TypedExprKind::Binary { left, op, right } => {
+                self.validate_expr(left, generic_scope, declared_type_params);
+                self.validate_expr(right, generic_scope, declared_type_params);
+                if matches!(op, aelys_syntax::BinaryOp::Eq | aelys_syntax::BinaryOp::Ne) {
+                    self.check_equality_operands(*op, left, right, generic_scope, expr.span);
+                }
+            }
+            TypedExprKind::And { left, right } | TypedExprKind::Or { left, right } => {
                 self.validate_expr(left, generic_scope, declared_type_params);
                 self.validate_expr(right, generic_scope, declared_type_params);
             }
@@ -686,11 +747,32 @@ impl TypeInference {
             TypedExprKind::Deref(operand) => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
                 self.check_deferred_read(ProjKind::Deref, operand, None, &expr.ty, expr.span);
+                // a nogc function leaves this read to the effect rule
+                if expr.ty.is_rc() && !self.in_nogc_fn {
+                    self.errors.push(TypeError::rc_out_of_surface(
+                        format!(
+                            "`*` here reads an `{}` out of a reference: reading an `Rc` through \
+                             a reference is not supported yet, pass the `Rc` itself",
+                            expr.ty
+                        ),
+                        expr.span,
+                    ));
+                }
             }
             TypedExprKind::DerefAssign { target, value } => {
                 self.validate_expr(target, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
                 self.check_deferred_write(ProjKind::DerefWrite, target, None, value, expr.span);
+                if value.ty.is_rc() && !self.in_nogc_fn {
+                    self.errors.push(TypeError::rc_out_of_surface(
+                        format!(
+                            "`*r = ..` here writes an `{}` through a reference: writing an `Rc` \
+                             through a reference is not supported yet, return the new `Rc` instead",
+                            value.ty
+                        ),
+                        expr.span,
+                    ));
+                }
                 if target_ptr_is_shared(target) {
                     self.errors.push(TypeError::shared_mut(
                         "an assignment through `*p`",

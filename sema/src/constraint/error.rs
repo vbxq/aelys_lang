@@ -985,6 +985,10 @@ impl TypeError {
             "ord" => {
                 "the integers, the floats and `char` are `ord`; `string` is not, use `str.compare`"
             }
+            _ if matches!(found, InferType::Rc(_)) => {
+                "an `Rc` answers `==` by identity, but it is not `eq`: a bound `==` compares \
+                 values, and two handles to equal values are different handles"
+            }
             _ => "the integers, the floats, `bool`, `char` and `string` are `eq`",
         };
         TypeError {
@@ -1200,6 +1204,23 @@ impl TypeError {
             help: Some(
                 "take a container instead of a bare type parameter: `Vec<T>`, `[T; N]` and \
                  `&[T]` all index to a `T`"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn equality_unsupported(op: &str, found: &InferType, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MemberAccess {
+                message: format!("comparison (`{op}`) is not supported for `{found}`"),
+            },
+            span,
+            reason: ConstraintReason::Comparison,
+            secondary_spans: Vec::new(),
+            help: Some(
+                "`==` and `!=` compare numbers, `bool`, `char`, `string`, enums without data, \
+                 and `Rc` handles by identity"
                     .to_string(),
             ),
             suggestion: None,

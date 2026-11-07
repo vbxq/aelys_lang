@@ -530,6 +530,17 @@ impl<'a> LoweringContext<'a> {
                 if enum_name == "Rc" && variant == "null" {
                     return self.lower_rc_null(&expr.ty);
                 }
+                if enum_name == "Rc" && variant == "is_null" {
+                    let handle = args
+                        .first()
+                        .map(|a| self.lower_expr(a))
+                        .unwrap_or(Operand::Const(AirConst::Null));
+                    return self.emit_rvalue_to_temp(
+                        AirType::Bool,
+                        Rvalue::BinaryOp(BinOp::Eq, handle, Operand::Const(AirConst::Null)),
+                        sp,
+                    );
+                }
                 if enum_name == "Vec" && variant == "new" {
                     let vec_ty = self.lower_type_from_infer(&expr.ty);
                     let elem_ty = match &vec_ty {
@@ -1298,7 +1309,7 @@ impl<'a> LoweringContext<'a> {
             obj = inner;
         }
         let object_is_rc_handle = matches!(obj.ty, InferType::Rc(_));
-        let lift_field_ty: Option<AirType> = if object_is_rc_handle {
+        let lift_field_ty: Option<AirType> = if object_is_rc_handle || self.store_root_owns(obj) {
             match &base.pointee {
                 AirType::Struct(name) => match self.air_field_type_of(name, field) {
                     Some(fty @ AirType::Rc(_)) => Some(fty),

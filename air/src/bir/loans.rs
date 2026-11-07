@@ -68,6 +68,8 @@ fn projected_is_ref(body: &BirBody, place: &BirPlace) -> bool {
                 BirProjection::Index,
                 InferType::Slice { elem, .. } | InferType::Array(elem, _) | InferType::Vec(elem),
             ) => elem,
+            // a field never holds a reference, since this check refuses every store of one
+            (BirProjection::Field(_), _) => return false,
             _ => return is_ref_ty(&local.ty),
         };
     }

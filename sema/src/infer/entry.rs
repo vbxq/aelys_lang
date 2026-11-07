@@ -40,6 +40,7 @@ impl Default for TypeInference {
             module_globals: HashSet::new(),
             shadowed_globals: HashSet::new(),
             lambda_depth: 0,
+            in_nogc_fn: false,
             lambda_captures: HashSet::new(),
             module_imports: crate::modules::ModuleImports::default(),
             import_aliases: HashMap::new(),

@@ -45,6 +45,31 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         let left_ty = self.operand_type(left)?;
+        if matches!(left_ty, AirType::Rc(_))
+            && matches!(op, BinOp::Eq | BinOp::Ne)
+            && left_val.is_pointer_value()
+            && right_val.is_pointer_value()
+        {
+            let i64t = self.context.i64_type();
+            let l = self
+                .builder
+                .build_ptr_to_int(left_val.into_pointer_value(), i64t, "rc_l")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            let r = self
+                .builder
+                .build_ptr_to_int(right_val.into_pointer_value(), i64t, "rc_r")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            let pred = if matches!(op, BinOp::Eq) {
+                IntPredicate::EQ
+            } else {
+                IntPredicate::NE
+            };
+            return self
+                .builder
+                .build_int_compare(pred, l, r, "rc_cmp")
+                .map(Into::into)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()));
+        }
         if matches!(left_ty, AirType::Enum(_)) {
             return Err(CodegenError::UnsupportedInstruction(format!(
                 "comparison on data enum type `{:?}` is not supported; use `match` instead",
