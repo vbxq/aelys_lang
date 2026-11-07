@@ -187,7 +187,7 @@ impl TypeInference {
                             offenders.push((
                                 field_ast.name.clone(),
                                 field_ast.span,
-                                field_def.ty.to_string(),
+                                vec_spelling(&field_def.ty),
                             ));
                         }
                     }
@@ -195,7 +195,8 @@ impl TypeInference {
                         self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
                                 "field `{fname}` of struct `{name}` has type `{fty}`: a Vec inside \
-                                 a struct or enum is not supported yet"
+                                 a struct is not supported in 0.1; keep the Vec in its own binding \
+                                 and pass it with `&mut`, or use a fixed-size array field"
                             ),
                             fspan,
                         ));
@@ -222,7 +223,7 @@ impl TypeInference {
                                 offenders.push((
                                     variant_ast.name.clone(),
                                     payload_ann.span,
-                                    payload_ty.to_string(),
+                                    vec_spelling(payload_ty),
                                 ));
                             }
                         }
@@ -231,7 +232,8 @@ impl TypeInference {
                         self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
                                 "variant `{vname}` of enum `{name}` has a payload of type `{vty}`: \
-                                 a Vec inside a struct or enum is not supported yet"
+                                 a Vec inside an enum is not supported in 0.1; keep the Vec in its \
+                                 own binding and pass it with `&mut`"
                             ),
                             vspan,
                         ));
@@ -240,5 +242,13 @@ impl TypeInference {
                 _ => {}
             }
         }
+    }
+}
+
+fn vec_spelling(ty: &InferType) -> String {
+    if let InferType::Vec(elem) = ty {
+        format!("Vec<{elem}>")
+    } else {
+        ty.to_string()
     }
 }

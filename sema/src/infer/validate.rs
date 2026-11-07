@@ -701,7 +701,6 @@ impl TypeInference {
                             .push(TypeError::global_borrow(name, true, expr.span));
                     }
                 }
-                // the bir never builds a lambda body, so a borrow of storage outside it is unchecked
                 if self.lambda_depth > 0 && self.slice_in_a_lambda_is_unchecked(object) {
                     self.errors.push(TypeError::closure_ref_unchecked(
                         "a slice is formed",

@@ -1368,7 +1368,7 @@ fn main() -> i64 { return go(pick) }
         &[
             r#"LOANROOT fn=go loan=0 root=%2 proj=[] ty=Rc(I64) class=Managed"#,
             r#"LOANROOT fn=go loan=1 root=%5 proj=[] ty=Struct("S") class=Unmanaged"#,
-            r#"LOANROOT fn=go loan=2 root=%9 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
+            r#"LOANROOT fn=go loan=2 root=%10 proj=[Deref,Field(a)] ty=Ref { referent: Struct("S"), mutable: false } class=Unknown"#,
         ],
     );
 }

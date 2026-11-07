@@ -164,7 +164,12 @@ pub fn check_with_imports(
     if !result.errors.is_empty() {
         return Err(result.errors);
     }
-    let own: std::collections::HashSet<&str> = bir.bodies.iter().map(|b| b.name.as_str()).collect();
+    let own: std::collections::HashSet<&str> = bir
+        .bodies
+        .iter()
+        .filter(|b| !b.is_lambda)
+        .map(|b| b.name.as_str())
+        .collect();
     let mut effects = result.effects;
     let mut chains = std::collections::HashMap::new();
     for body in &bir.bodies {
@@ -285,6 +290,7 @@ pub struct BirBody {
     pub intrinsic_effects: EffectSet,
     pub managed_witness: Option<(aelys_syntax::Span, String)>,
     pub declared_nogc: bool,
+    pub is_lambda: bool,
 }
 
 // every named non-parameter local dying at a lexical scope exit; read by the escape pass

@@ -70,6 +70,7 @@ fn body(name: &str, stmts: Vec<BirStmt>) -> BirBody {
         intrinsic_effects: EffectSet::EMPTY,
         managed_witness: None,
         declared_nogc: false,
+        is_lambda: false,
     }
 }
 

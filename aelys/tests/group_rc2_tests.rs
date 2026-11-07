@@ -2808,8 +2808,9 @@ fn rc2_100_a_vec_field_refusal_does_not_mention_rc() {
         &[],
         "E0902",
         &[
-            "field `items` of struct `Bag` has type `vec[i64]`: a Vec inside a struct or enum is \
-             not supported yet",
+            "field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not \
+             supported in 0.1; keep the Vec in its own binding and pass it with `&mut`, or use a \
+             fixed-size array field",
         ],
         &["Rc used outside", "[rc-stage1]", "Rc"],
     );
@@ -4517,6 +4518,715 @@ fn rc2_182_an_rc_field_written_in_a_nogc_function_is_still_refused() {
         &[],
         "E0410",
         &["in-place reassignment of field `head` (type `Rc<N>`"],
+        &[],
+    );
+}
+
+const RC2_183: &str = r#"
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let s = Vec::as_slice(v)
+        for i in 0..1000 { Vec::push(v, i) }
+        return s[0]
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_183_a_view_of_a_captured_vec_held_across_a_push_in_the_closure_is_refused() {
+    refusal_row_full(
+        "rc2-183",
+        RC2_183,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_184: &str = r#"
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let s = Vec::as_slice(v)
+        v = Vec::new()
+        for i in 0..1000 { Vec::push(v, i) }
+        return s[0]
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_184_a_view_of_a_captured_vec_held_across_its_reassignment_in_the_closure_is_refused() {
+    refusal_row_full(
+        "rc2-184",
+        RC2_184,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_185: &str = r#"
+fn main() -> i64 {
+    let f = fn() -> i64 {
+        let mut v: Vec<i64> = Vec::new()
+        Vec::push(v, 41)
+        let s = Vec::as_slice(v)
+        for i in 0..1000 { Vec::push(v, i) }
+        return s[0]
+    }
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_185_a_view_of_a_vec_local_to_a_closure_held_across_a_push_is_refused() {
+    refusal_row_full(
+        "rc2-185",
+        RC2_185,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_186: &str = r#"
+fn main() -> i64 {
+    let mut w: Vec<i64> = Vec::new()
+    Vec::push(w, 41)
+    let f = fn(mut v: Vec<i64>) -> i64 {
+        let s = Vec::as_slice(v)
+        v = Vec::new()
+        for i in 0..1000 { Vec::push(v, i) }
+        return s[0]
+    }
+    println("{f(w)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_186_a_view_of_a_closure_parameter_vec_held_across_its_reassignment_is_refused() {
+    refusal_row_full(
+        "rc2-186",
+        RC2_186,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_187: &str = r#"
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let g = fn() -> i64 {
+            let s = Vec::as_slice(v)
+            for i in 0..1000 { Vec::push(v, i) }
+            return s[0]
+        }
+        return g()
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_187_a_view_of_a_captured_vec_in_a_nested_closure_held_across_a_push_is_refused() {
+    refusal_row_full(
+        "rc2-187",
+        RC2_187,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_188: &str = r#"
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let mut t = 0
+        for x in Vec::as_slice(v) {
+            for i in 0..1000 { Vec::push(v, i) }
+            t = t + x
+        }
+        return t
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_188_a_loop_over_a_captured_vec_slice_that_pushes_is_refused() {
+    refusal_row_full(
+        "rc2-188",
+        RC2_188,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_189: &str = r#"
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
+        for i in 0..1000 { Vec::push(v, i) }
+        return s[0]
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_189_a_mutable_view_of_a_captured_vec_held_across_a_push_is_refused() {
+    refusal_row_full(
+        "rc2-189",
+        RC2_189,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_190: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mkf() -> fn() -> i64 {
+    let mut s = mk(1)
+    return fn() -> i64 {
+        let b = s.bytes
+        s = mk(2)
+        return b[0] as i64
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_190_the_bytes_of_a_captured_string_held_across_its_reassignment_are_refused() {
+    refusal_row_full(
+        "rc2-190",
+        RC2_190,
+        &[],
+        "E0711",
+        &["cannot write to `s` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_191: &str = r#"
+struct B { s: string, k: i64 }
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mkf() -> fn() -> i64 {
+    let mut bb = B { s: mk(1), k: 0 }
+    return fn() -> i64 {
+        let b = bb.s.bytes
+        bb.s = mk(2)
+        return b[0] as i64
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_191_the_bytes_of_a_captured_struct_field_held_across_a_field_store_are_refused() {
+    refusal_row_full(
+        "rc2-191",
+        RC2_191,
+        &[],
+        "E0711",
+        &["cannot write to `bb.s` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_192: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    Vec::push(v, mk(1))
+    return fn() -> i64 {
+        let b = v[0].bytes
+        v[0] = mk(2)
+        return b[0] as i64
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    println("{f()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_192_the_bytes_of_a_captured_vec_element_held_across_an_element_store_are_refused() {
+    refusal_row_full(
+        "rc2-192",
+        RC2_192,
+        &[],
+        "E0711",
+        &["cannot write to `v[..]` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_193: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    return fn() -> i64 {
+        let s = Vec::as_slice(v)
+        let g = fn() -> i64 {
+            for i in 0..1000 { Vec::push(v, i) }
+            return v.len
+        }
+        let n = g()
+        return s[0] + n
+    }
+}
+fn main() -> i64 {
+    let f = mkf()
+    let a = f()
+    let b = f()
+    let mut w: Vec<string> = Vec::new()
+    Vec::push(w, mk(1))
+    let s = Vec::as_slice(w)
+    let h = fn() -> i64 {
+        for i in 0..100 { Vec::push(w, mk(i)) }
+        return w.len
+    }
+    let n = h()
+    println("{a} {b} {s[0]} {n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_193_a_captured_vec_viewed_without_a_conflicting_write_stays_accepted() {
+    let h = Harness::new();
+    h.differential_row("rc2-193", RC2_193, &[], "1042 1042 ab1 101\n", (220, 220));
+    h.lsan_row("rc2-193", RC2_193, &[], "1042 1042 ab1 101\n");
+    h.assert_legs(24);
+}
+
+const RC2_194: &str = r#"
+fn mk(n: i64) -> string { return "s" + "{n}" }
+fn mkf() -> fn() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    for i in 0..3 { Vec::push(v, mk(i)) }
+    return fn() -> i64 { return v.len }
+}
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..1000 { let f = mkf()
+        t = t + f() }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_194_closures_returning_a_captured_vec_length_stay_balanced() {
+    let h = Harness::new();
+    h.differential_row("rc2-194", RC2_194, &[], "3000\n", (8000, 8000));
+    h.lsan_row("rc2-194", RC2_194, &[], "3000\n");
+    h.assert_legs(24);
+}
+
+const RC2_195: &str = r#"
+fn mk(n: i64) -> string { return "s" + "{n}" }
+fn main() -> i64 {
+    let mut t = 0
+    for k in 0..1000 {
+        let mut v: Vec<string> = Vec::new()
+        Vec::push(v, mk(1))
+        let f = fn() -> i64 { Vec::push(v, mk(2))
+            return v.len }
+        let a = f()
+        Vec::push(v, mk(3))
+        let b = f()
+        let g = f
+        let c = g()
+        t = t + a * 100 + b * 10 + c + v.len * 1000
+    }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_195_a_closure_pushing_into_its_captured_vec_stays_balanced() {
+    let h = Harness::new();
+    h.differential_row("rc2-195", RC2_195, &[], "2234000\n", (13000, 13000));
+    h.lsan_row("rc2-195", RC2_195, &[], "2234000\n");
+    h.assert_legs(24);
+}
+
+const RC2_196: &str = r#"
+fn mk(n: i64) -> string { return "item" + "{n}" }
+fn add(items: &mut Vec<string>, total: &mut i64, x: string) {
+    Vec::push(*items, x)
+    *total = *total + 1
+}
+fn main() -> i64 {
+    let mut t = 0
+    for k in 0..1000 {
+        let mut items: Vec<string> = Vec::new()
+        let mut total = 0
+        for i in 0..3 { add(&mut items, &mut total, mk(i)) }
+        let snap = items
+        add(&mut items, &mut total, mk(9))
+        t = t + items.len + snap.len + total
+    }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_196_two_vec_locals_passed_by_mutable_reference_replace_a_vec_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-196", RC2_196, &[], "11000\n", (10000, 10000));
+    h.lsan_row("rc2-196", RC2_196, &[], "11000\n");
+    h.assert_legs(24);
+}
+
+const RC2_197: &str = r#"
+struct Bag { items: [string; 8], n: i64 }
+fn mk(n: i64) -> string { return "item" + "{n}" }
+fn add(b: &mut Bag, x: string) {
+    (*b).items[(*b).n] = x
+    (*b).n = (*b).n + 1
+}
+fn main() -> i64 {
+    let mut t = 0
+    for k in 0..1000 {
+        let mut b = Bag { items: ["", "", "", "", "", "", "", ""], n: 0 }
+        for i in 0..3 { add(&mut b, mk(i)) }
+        let c = b
+        add(&mut b, mk(9))
+        t = t + b.n + c.n + b.items[3].len + c.items[3].len
+    }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_197_a_fixed_size_array_field_replaces_a_vec_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-197", RC2_197, &[], "12000\n", (8000, 8000));
+    h.lsan_row("rc2-197", RC2_197, &[], "12000\n");
+    h.assert_legs(24);
+}
+
+const RC2_198: &str = r#"
+enum E { A(Vec<string>), B }
+fn main() -> i64 { return 0 }
+"#;
+
+#[test]
+fn rc2_198_a_vec_enum_payload_names_the_own_binding_workaround() {
+    refusal_row_full(
+        "rc2-198",
+        RC2_198,
+        &[],
+        "E0902",
+        &[
+            "variant `A` of enum `E` has a payload of type `Vec<string>`: a Vec inside an enum is \
+             not supported in 0.1; keep the Vec in its own binding and pass it with `&mut`",
+        ],
+        &["struct or enum"],
+    );
+}
+
+const RC2_199: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
+fn id(x: i64) -> i64 { return x }
+fn getf(v: &mut Vec<i64>) -> fn(i64) -> i64 {
+    for i in 0..1000 { Vec::push(*v, i) }
+    return fn(x: i64) -> i64 { return x }
+}
+fn main() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    let r = Vec::as_slice(v)
+    let z = getf(&mut v)(0)
+    println("{r[0]} {z}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_199_a_callee_expression_that_borrows_mutably_while_a_view_lives_is_refused() {
+    refusal_row_full(
+        "rc2-199",
+        RC2_199,
+        &[],
+        "E0713",
+        &["cannot borrow `v` as mutable while it is already borrowed"],
+        &[],
+    );
+}
+
+const RC2_200: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
+fn id(x: i64) -> i64 { return x }
+fn main() -> i64 {
+    let mut s = mk(1)
+    let r = s.bytes
+    let f = fn(x: i64) -> i64 { return x }
+    let z = (if true { s = mk(2) + mk(3)
+        f } else { f })(0)
+    println("{r[0]} {z}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_200_a_callee_if_expression_that_reassigns_a_viewed_string_is_refused() {
+    refusal_row_full(
+        "rc2-200",
+        RC2_200,
+        &[],
+        "E0711",
+        &["cannot write to `s` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_201: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
+fn id(x: i64) -> i64 { return x }
+fn main() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    let r = Vec::as_slice(v)
+    let f = fn(x: i64) -> i64 { return x }
+    let z = { for i in 0..1000 { Vec::push(v, i) }
+        f }(0)
+    println("{r[0]} {z}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_201_a_callee_block_that_pushes_into_a_viewed_vec_is_refused() {
+    refusal_row_full(
+        "rc2-201",
+        RC2_201,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_202: &str = r#"
+fn id(x: i64) -> i64 { return x }
+fn main() -> i64 {
+    let k = fn() -> i64 {
+        let mut v: Vec<i64> = Vec::new()
+        Vec::push(v, 41)
+        let r = Vec::as_slice(v)
+        let f = fn(x: i64) -> i64 { return x }
+        let z = { for i in 0..1000 { Vec::push(v, i) }
+            f }(0)
+        return r[0] + z
+    }
+    println("{k()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_202_a_callee_block_that_pushes_into_a_viewed_vec_inside_a_closure_is_refused() {
+    refusal_row_full(
+        "rc2-202",
+        RC2_202,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_203: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn pick(b: bool) -> fn(i64) -> i64 {
+    if b { return fn(x: i64) -> i64 { return x + 1 } }
+    return fn(x: i64) -> i64 { return x * 2 }
+}
+fn main() -> i64 {
+    let mut t = 0
+    for k in 0..100 {
+        let mut v: Vec<string> = Vec::new()
+        Vec::push(v, mk(k))
+        let mut w: Vec<i64> = Vec::new()
+        let r = Vec::as_slice(v)
+        let f = fn(x: i64) -> i64 { return x + 10 }
+        let a = pick(true)(r[0].len)
+        let b = (if r[0].len > 3 { f } else { pick(false) })(3)
+        let c = { Vec::push(w, 5)
+            f }(w.len)
+        t = t + a + b + c + r[0].len
+    }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_203_complex_callee_expressions_without_a_conflict_stay_accepted() {
+    let h = Harness::new();
+    h.differential_row("rc2-203", RC2_203, &[], "3210\n", (400, 400));
+    h.lsan_row("rc2-203", RC2_203, &[], "3210\n");
+    h.assert_legs(24);
+}
+
+const RC2_204: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
+fn id(x: i64) -> i64 { return x }
+let F = fn() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 41)
+    let r = Vec::as_slice(v)
+    for i in 0..1000 { Vec::push(v, i) }
+    return r[0]
+}
+fn main() -> i64 {
+    println("{F()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_204_a_view_in_a_closure_bound_at_file_level_held_across_a_push_is_refused() {
+    refusal_row_full(
+        "rc2-204",
+        RC2_204,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_205: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
+fn id(x: i64) -> i64 { return x }
+fn outer() -> i64 {
+    fn inner() -> i64 {
+        let f = fn() -> i64 {
+            let mut v: Vec<i64> = Vec::new()
+            Vec::push(v, 41)
+            let r = Vec::as_slice(v)
+            for i in 0..1000 { Vec::push(v, i) }
+            return r[0]
+        }
+        return f()
+    }
+    return inner()
+}
+fn main() -> i64 {
+    println("{outer()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_205_a_view_in_a_closure_inside_a_nested_function_held_across_a_push_is_refused() {
+    refusal_row_full(
+        "rc2-205",
+        RC2_205,
+        &[],
+        "E0711",
+        &["cannot write to `v` while it is borrowed"],
+        &[],
+    );
+}
+
+const RC2_206: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn take(s: string) -> i64 { return s.len }
+struct B { s: string, k: i64 }
+fn main() -> i64 {
+    let f = fn(a: &[i64]) -> fn() -> i64 {
+        return fn() -> i64 { return a[0] }
+    }
+    let mut g = fn() -> i64 { return 0 }
+    if true {
+        let mut v: Vec<i64> = Vec::new()
+        Vec::push(v, 41)
+        g = f(Vec::as_slice(v))
+    }
+    let mut w: Vec<i64> = Vec::new()
+    for i in 0..1000 { Vec::push(w, 7) }
+    println("{g()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_206_a_closure_capturing_a_slice_parameter_of_another_closure_is_refused() {
+    refusal_row_full(
+        "rc2-206",
+        RC2_206,
+        &[],
+        "E0725",
+        &["a closure that captures a reference is not supported"],
         &[],
     );
 }

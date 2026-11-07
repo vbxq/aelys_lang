@@ -341,9 +341,8 @@ impl fmt::Display for TypeError {
             ),
             TypeErrorKind::ClosureRefUnchecked { what } => write!(
                 f,
-                "[closure-unchecked] {what} inside a closure body; a lambda body carries no \
-                 borrow-check, so the reference would be unchecked. form the reference outside \
-                 the lambda and pass it as a parameter"
+                "[closure-unchecked] {what} inside a closure body, which is not supported. form \
+                 the reference outside the lambda and pass it as a parameter"
             ),
             TypeErrorKind::GlobalBorrow { name, mutable } => write!(
                 f,

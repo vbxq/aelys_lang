@@ -784,7 +784,7 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         TypeErrorKind::ClosureRefUnchecked { .. } => (
             "E0423",
             error.to_string(),
-            "unchecked reference inside a closure body".to_string(),
+            "reference inside a closure body".to_string(),
         ),
         TypeErrorKind::GlobalBorrow { .. } => (
             "E0424",

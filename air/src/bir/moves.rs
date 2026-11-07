@@ -45,7 +45,11 @@ pub fn check_program_with_chains(
     let mut errors: Vec<BirDiagnostic> = Vec::new();
     let mut drops: HashMap<DropKey, Vec<DropKey>> = HashMap::new();
     for body in &bir.bodies {
-        check_body(body, &mut errors, &mut drops);
+        if body.is_lambda {
+            check_body(body, &mut errors, &mut HashMap::new());
+        } else {
+            check_body(body, &mut errors, &mut drops);
+        }
     }
     // origin summaries + the d1/floor return-escape diagnostics
     let summaries = super::origins::summaries(bir, &mut errors);

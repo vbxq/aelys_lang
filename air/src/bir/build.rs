@@ -38,6 +38,7 @@ pub fn build_program_with_imports(
         })
         .collect();
     bodies.push(build_toplevel(tt, &toplevel, program, &fn_names));
+    build_lambdas(tt, toplevel.iter().copied(), &fn_names, &mut bodies);
 
     let mut externs = std::collections::HashMap::new();
     for_each_fn_decl(&program.stmts, &mut |func, _parent| {
@@ -52,36 +53,62 @@ pub fn build_program_with_imports(
             return;
         }
         bodies.push(build_function(tt, func, &fn_names));
+        build_lambdas(tt, &func.body, &fn_names, &mut bodies);
     });
 
     BirProgram { bodies, externs }
+}
+
+enum Decl<'t> {
+    Fn(&'t TypedFunction),
+    Lambda(&'t TypedExpr),
 }
 
 pub fn for_each_fn_decl<F>(stmts: &[TypedStmt], f: &mut F)
 where
     F: FnMut(&TypedFunction, Option<&str>),
 {
+    let mut visit = |decl: Decl<'_>, parent: Option<&str>| {
+        if let Decl::Fn(func) = decl {
+            f(func, parent);
+        }
+        true
+    };
     for stmt in stmts {
-        fn_decls_in_stmt(stmt, None, f);
+        decls_in_stmt(stmt, None, &mut visit);
     }
 }
 
-fn fn_decls_in_stmt<F>(stmt: &TypedStmt, parent: Option<&str>, f: &mut F)
+fn lambdas_in<'t>(stmts: impl IntoIterator<Item = &'t TypedStmt>) -> Vec<&'t TypedExpr> {
+    let mut out = Vec::new();
+    let mut visit = |decl: Decl<'t>, _parent: Option<&'t str>| {
+        if let Decl::Lambda(expr) = decl {
+            out.push(expr);
+        }
+        false
+    };
+    for stmt in stmts {
+        decls_in_stmt(stmt, None, &mut visit);
+    }
+    out
+}
+
+fn decls_in_stmt<'t, F>(stmt: &'t TypedStmt, parent: Option<&'t str>, f: &mut F)
 where
-    F: FnMut(&TypedFunction, Option<&str>),
+    F: FnMut(Decl<'t>, Option<&'t str>) -> bool,
 {
     match &stmt.kind {
-        TypedStmtKind::Expression(expr) => fn_decls_in_expr(expr, parent, f),
+        TypedStmtKind::Expression(expr) => decls_in_expr(expr, parent, f),
         TypedStmtKind::Let {
             name: _,
             mutable: _,
             initializer,
             var_type: _,
             is_pub: _,
-        } => fn_decls_in_expr(initializer, parent, f),
+        } => decls_in_expr(initializer, parent, f),
         TypedStmtKind::Block(stmts) => {
             for s in stmts {
-                fn_decls_in_stmt(s, parent, f);
+                decls_in_stmt(s, parent, f);
             }
         }
         TypedStmtKind::If {
@@ -89,15 +116,15 @@ where
             then_branch,
             else_branch,
         } => {
-            fn_decls_in_expr(condition, parent, f);
-            fn_decls_in_stmt(then_branch, parent, f);
+            decls_in_expr(condition, parent, f);
+            decls_in_stmt(then_branch, parent, f);
             if let Some(alt) = else_branch {
-                fn_decls_in_stmt(alt, parent, f);
+                decls_in_stmt(alt, parent, f);
             }
         }
         TypedStmtKind::While { condition, body } => {
-            fn_decls_in_expr(condition, parent, f);
-            fn_decls_in_stmt(body, parent, f);
+            decls_in_expr(condition, parent, f);
+            decls_in_stmt(body, parent, f);
         }
         TypedStmtKind::For {
             iterator: _,
@@ -107,12 +134,12 @@ where
             step,
             body,
         } => {
-            fn_decls_in_expr(start, parent, f);
-            fn_decls_in_expr(end, parent, f);
+            decls_in_expr(start, parent, f);
+            decls_in_expr(end, parent, f);
             if let Some(step) = step.as_ref() {
-                fn_decls_in_expr(step, parent, f);
+                decls_in_expr(step, parent, f);
             }
-            fn_decls_in_stmt(body, parent, f);
+            decls_in_stmt(body, parent, f);
         }
         TypedStmtKind::ForEach {
             iterator: _,
@@ -120,19 +147,20 @@ where
             elem_type: _,
             body,
         } => {
-            fn_decls_in_expr(iterable, parent, f);
-            fn_decls_in_stmt(body, parent, f);
+            decls_in_expr(iterable, parent, f);
+            decls_in_stmt(body, parent, f);
         }
         TypedStmtKind::Return(value) => {
             if let Some(expr) = value {
-                fn_decls_in_expr(expr, parent, f);
+                decls_in_expr(expr, parent, f);
             }
         }
         TypedStmtKind::Break | TypedStmtKind::Continue => {}
         TypedStmtKind::Function(func) => {
-            f(func, parent);
-            for s in &func.body {
-                fn_decls_in_stmt(s, Some(&func.name), f);
+            if f(Decl::Fn(func), parent) {
+                for s in &func.body {
+                    decls_in_stmt(s, Some(&func.name), f);
+                }
             }
         }
         TypedStmtKind::Needs(_) => {}
@@ -151,9 +179,9 @@ where
     }
 }
 
-fn fn_decls_in_expr<F>(expr: &TypedExpr, parent: Option<&str>, f: &mut F)
+fn decls_in_expr<'t, F>(expr: &'t TypedExpr, parent: Option<&'t str>, f: &mut F)
 where
-    F: FnMut(&TypedFunction, Option<&str>),
+    F: FnMut(Decl<'t>, Option<&'t str>) -> bool,
 {
     match &expr.kind {
         TypedExprKind::Int(_)
@@ -165,56 +193,58 @@ where
         | TypedExprKind::Identifier(_) => {}
         TypedExprKind::FmtString(parts) => {
             for part in parts {
-                fn_decls_in_fmt_part(part, parent, f);
+                decls_in_fmt_part(part, parent, f);
             }
         }
         TypedExprKind::Binary { left, op: _, right } => {
-            fn_decls_in_expr(left, parent, f);
-            fn_decls_in_expr(right, parent, f);
+            decls_in_expr(left, parent, f);
+            decls_in_expr(right, parent, f);
         }
-        TypedExprKind::Unary { op: _, operand } => fn_decls_in_expr(operand, parent, f),
+        TypedExprKind::Unary { op: _, operand } => decls_in_expr(operand, parent, f),
         TypedExprKind::And { left, right } | TypedExprKind::Or { left, right } => {
-            fn_decls_in_expr(left, parent, f);
-            fn_decls_in_expr(right, parent, f);
+            decls_in_expr(left, parent, f);
+            decls_in_expr(right, parent, f);
         }
         TypedExprKind::Call { callee, args } => {
-            fn_decls_in_expr(callee, parent, f);
+            decls_in_expr(callee, parent, f);
             for arg in args {
-                fn_decls_in_expr(arg, parent, f);
+                decls_in_expr(arg, parent, f);
             }
         }
-        TypedExprKind::Assign { name: _, value } => fn_decls_in_expr(value, parent, f),
-        TypedExprKind::Grouping(inner) => fn_decls_in_expr(inner, parent, f),
+        TypedExprKind::Assign { name: _, value } => decls_in_expr(value, parent, f),
+        TypedExprKind::Grouping(inner) => decls_in_expr(inner, parent, f),
         TypedExprKind::If {
             condition,
             then_branch,
             else_branch,
         } => {
-            fn_decls_in_expr(condition, parent, f);
-            fn_decls_in_expr(then_branch, parent, f);
-            fn_decls_in_expr(else_branch, parent, f);
+            decls_in_expr(condition, parent, f);
+            decls_in_expr(then_branch, parent, f);
+            decls_in_expr(else_branch, parent, f);
         }
-        TypedExprKind::Lambda(inner) => fn_decls_in_expr(inner, parent, f),
+        TypedExprKind::Lambda(inner) => decls_in_expr(inner, parent, f),
         TypedExprKind::LambdaInner {
             params: _,
             return_type: _,
             body,
             captures: _,
         } => {
-            for s in body {
-                fn_decls_in_stmt(s, parent, f);
+            if f(Decl::Lambda(expr), parent) {
+                for s in body {
+                    decls_in_stmt(s, parent, f);
+                }
             }
         }
-        TypedExprKind::Member { object, member: _ } => fn_decls_in_expr(object, parent, f),
+        TypedExprKind::Member { object, member: _ } => decls_in_expr(object, parent, f),
         TypedExprKind::ArrayLiteral { elements } => {
             for e in elements {
-                fn_decls_in_expr(e, parent, f);
+                decls_in_expr(e, parent, f);
             }
         }
         TypedExprKind::ArraySized { size, fill_value } => {
-            fn_decls_in_expr(size, parent, f);
+            decls_in_expr(size, parent, f);
             if let Some(fill) = fill_value {
-                fn_decls_in_expr(fill, parent, f);
+                decls_in_expr(fill, parent, f);
             }
         }
         TypedExprKind::VecLiteral {
@@ -222,29 +252,29 @@ where
             elements,
         } => {
             for e in elements {
-                fn_decls_in_expr(e, parent, f);
+                decls_in_expr(e, parent, f);
             }
         }
         TypedExprKind::Index { object, index } => {
-            fn_decls_in_expr(object, parent, f);
-            fn_decls_in_expr(index, parent, f);
+            decls_in_expr(object, parent, f);
+            decls_in_expr(index, parent, f);
         }
         TypedExprKind::IndexAssign {
             object,
             index,
             value,
         } => {
-            fn_decls_in_expr(object, parent, f);
-            fn_decls_in_expr(index, parent, f);
-            fn_decls_in_expr(value, parent, f);
+            decls_in_expr(object, parent, f);
+            decls_in_expr(index, parent, f);
+            decls_in_expr(value, parent, f);
         }
         TypedExprKind::FieldAssign {
             object,
             field: _,
             value,
         } => {
-            fn_decls_in_expr(object, parent, f);
-            fn_decls_in_expr(value, parent, f);
+            decls_in_expr(object, parent, f);
+            decls_in_expr(value, parent, f);
         }
         TypedExprKind::Range {
             start,
@@ -252,31 +282,31 @@ where
             inclusive: _,
         } => {
             if let Some(start) = start {
-                fn_decls_in_expr(start, parent, f);
+                decls_in_expr(start, parent, f);
             }
             if let Some(end) = end {
-                fn_decls_in_expr(end, parent, f);
+                decls_in_expr(end, parent, f);
             }
         }
         TypedExprKind::Slice { object, range } => {
-            fn_decls_in_expr(object, parent, f);
-            fn_decls_in_expr(range, parent, f);
+            decls_in_expr(object, parent, f);
+            decls_in_expr(range, parent, f);
         }
         TypedExprKind::Reference {
             mutable: _,
             operand,
-        } => fn_decls_in_expr(operand, parent, f),
-        TypedExprKind::Deref(inner) => fn_decls_in_expr(inner, parent, f),
+        } => decls_in_expr(operand, parent, f),
+        TypedExprKind::Deref(inner) => decls_in_expr(inner, parent, f),
         TypedExprKind::DerefAssign { target, value } => {
-            fn_decls_in_expr(target, parent, f);
-            fn_decls_in_expr(value, parent, f);
+            decls_in_expr(target, parent, f);
+            decls_in_expr(value, parent, f);
         }
         TypedExprKind::StructLiteral { name: _, fields } => {
             for (_, value) in fields {
-                fn_decls_in_expr(value, parent, f);
+                decls_in_expr(value, parent, f);
             }
         }
-        TypedExprKind::Cast { expr, target: _ } => fn_decls_in_expr(expr, parent, f),
+        TypedExprKind::Cast { expr, target: _ } => decls_in_expr(expr, parent, f),
         TypedExprKind::EnumVariant {
             enum_name: _,
             variant: _,
@@ -284,13 +314,13 @@ where
             args,
         } => {
             for arg in args {
-                fn_decls_in_expr(arg, parent, f);
+                decls_in_expr(arg, parent, f);
             }
         }
         TypedExprKind::Match { scrutinee, arms } => {
-            fn_decls_in_expr(scrutinee, parent, f);
+            decls_in_expr(scrutinee, parent, f);
             for arm in arms {
-                fn_decls_in_expr(&arm.body, parent, f);
+                decls_in_expr(&arm.body, parent, f);
             }
         }
         TypedExprKind::ResultAssert {
@@ -298,23 +328,23 @@ where
             ok_tag: _,
             payload_ty: _,
             on_err: _,
-        } => fn_decls_in_expr(scrutinee, parent, f),
+        } => decls_in_expr(scrutinee, parent, f),
         TypedExprKind::Block { stmts, tail } => {
             for s in stmts {
-                fn_decls_in_stmt(s, parent, f);
+                decls_in_stmt(s, parent, f);
             }
-            fn_decls_in_expr(tail, parent, f);
+            decls_in_expr(tail, parent, f);
         }
     }
 }
 
-fn fn_decls_in_fmt_part<F>(part: &TypedFmtStringPart, parent: Option<&str>, f: &mut F)
+fn decls_in_fmt_part<'t, F>(part: &'t TypedFmtStringPart, parent: Option<&'t str>, f: &mut F)
 where
-    F: FnMut(&TypedFunction, Option<&str>),
+    F: FnMut(Decl<'t>, Option<&'t str>) -> bool,
 {
     match part {
         TypedFmtStringPart::Literal(_) | TypedFmtStringPart::Placeholder => {}
-        TypedFmtStringPart::Expr(expr) => fn_decls_in_expr(expr, parent, f),
+        TypedFmtStringPart::Expr(expr) => decls_in_expr(expr, parent, f),
     }
 }
 
@@ -388,6 +418,49 @@ fn build_function(tt: &TypeTable, func: &TypedFunction, fn_names: &HashSet<Strin
     b.finish()
 }
 
+fn build_lambdas<'t>(
+    tt: &TypeTable,
+    stmts: impl IntoIterator<Item = &'t TypedStmt>,
+    fn_names: &HashSet<String>,
+    bodies: &mut Vec<BirBody>,
+) {
+    for lambda in lambdas_in(stmts) {
+        let TypedExprKind::LambdaInner {
+            params,
+            return_type,
+            body,
+            captures,
+        } = &lambda.kind
+        else {
+            continue;
+        };
+        let (lo, hi) = drop_key(&lambda.span);
+        let mut b = BodyBuilder::new(
+            tt,
+            format!("<lambda@{lo}..{hi}>"),
+            lambda.span,
+            false,
+            fn_names,
+            return_type.clone(),
+        );
+        b.is_lambda = true;
+        b.open_scope(lambda.span);
+        for p in params {
+            b.new_named(&p.name, p.ty.clone(), p.span, p.mutable);
+        }
+        for (name, ty) in captures {
+            b.new_named(name, ty.clone(), lambda.span, true);
+        }
+        b.arg_count = b.locals.len();
+        for stmt in body {
+            b.build_stmt(stmt);
+        }
+        b.close_scope();
+        bodies.push(b.finish());
+        build_lambdas(tt, body, fn_names, bodies);
+    }
+}
+
 struct ScopeFrame {
     span: Span,
     name_len: usize,
@@ -419,6 +492,7 @@ struct BodyBuilder<'a> {
     intrinsic_effects: EffectSet,
     managed_witness: Option<(Span, String)>,
     declared_nogc: bool,
+    is_lambda: bool,
 }
 
 impl<'a> BodyBuilder<'a> {
@@ -455,6 +529,7 @@ impl<'a> BodyBuilder<'a> {
             intrinsic_effects: EffectSet::EMPTY,
             managed_witness: None,
             declared_nogc: false,
+            is_lambda: false,
         }
     }
 
@@ -479,6 +554,7 @@ impl<'a> BodyBuilder<'a> {
             intrinsic_effects: self.intrinsic_effects,
             managed_witness: self.managed_witness,
             declared_nogc: self.declared_nogc,
+            is_lambda: self.is_lambda,
         }
     }
 
@@ -823,6 +899,9 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Call { callee, args } => {
                 let recovered = self.recover_callee(callee);
                 let indirect_nogc = self.indirect_nogc_callee(&recovered, callee);
+                if recovered.is_none() {
+                    self.read_operand(callee);
+                }
                 let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
                 self.emit_to_temp(
                     BirRvalue::Call {
@@ -1366,6 +1445,9 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Call { callee, args } => {
                 let recovered = self.recover_callee(callee);
                 let indirect_nogc = self.indirect_nogc_callee(&recovered, callee);
+                if recovered.is_none() {
+                    self.read_operand(callee);
+                }
                 let ops: Vec<BirOperand> = args.iter().map(|a| self.build_operand(a)).collect();
                 let temp = self.new_temp(expr.ty.clone(), span);
                 self.push(
