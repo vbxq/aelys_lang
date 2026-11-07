@@ -349,17 +349,6 @@ impl Harness {
     }
 
     fn lsan_row(&self, id: &str, src: &str, files: &[(&str, &str)], stdout: &str) {
-        self.lsan_row_with(id, src, files, stdout, None);
-    }
-
-    fn lsan_row_with(
-        &self,
-        id: &str,
-        src: &str,
-        files: &[(&str, &str)],
-        stdout: &str,
-        store_leak: Option<&str>,
-    ) {
         for (tag, opt) in LEVELS {
             let (code, out, err) = self.lsan_run(
                 id,
@@ -377,22 +366,11 @@ impl Harness {
                 !err.contains("ERROR: AddressSanitizer"),
                 "{id} at {tag}: asan reports\n{err}"
             );
-            match store_leak {
-                None => {
-                    assert!(
-                        !err.contains("leaked in"),
-                        "{id} at {tag}: lsan reports a leak\n{err}"
-                    );
-                    assert_eq!(code, 0, "{id} at {tag}: exit\n{err}");
-                }
-                Some(summary) => {
-                    assert!(
-                        err.contains(&format!("SUMMARY: AddressSanitizer: {summary}")),
-                        "{id} at {tag}: lsan summary\n{err}"
-                    );
-                    assert_eq!(code, 1, "{id} at {tag}: exit\n{err}");
-                }
-            }
+            assert!(
+                !err.contains("leaked in"),
+                "{id} at {tag}: lsan reports a leak\n{err}"
+            );
+            assert_eq!(code, 0, "{id} at {tag}: exit\n{err}");
             assert_eq!(out, stdout, "{id} at {tag}");
             let (_, _, err) = self.lsan_run(
                 id,
@@ -1010,14 +988,8 @@ fn main() -> i64 {
 #[test]
 fn rc2_21_a_compound_field_append_keeps_the_old_value_while_the_right_side_replaces_it() {
     let h = Harness::new();
-    h.differential_row("rc2-21", RC2_21, &[], "111\n", (10, 9));
-    h.lsan_row_with(
-        "rc2-21",
-        RC2_21,
-        &[],
-        "111\n",
-        Some("19 byte(s) leaked in 1 allocation(s)"),
-    );
+    h.differential_row("rc2-21", RC2_21, &[], "111\n", (10, 10));
+    h.lsan_row("rc2-21", RC2_21, &[], "111\n");
     h.assert_legs(24);
 }
 
@@ -1043,14 +1015,8 @@ fn main() -> i64 {
 #[test]
 fn rc2_22_a_compound_element_append_keeps_the_old_value_while_the_right_side_replaces_it() {
     let h = Harness::new();
-    h.differential_row("rc2-22", RC2_22, &[], "111\n", (12, 11));
-    h.lsan_row_with(
-        "rc2-22",
-        RC2_22,
-        &[],
-        "111\n",
-        Some("19 byte(s) leaked in 1 allocation(s)"),
-    );
+    h.differential_row("rc2-22", RC2_22, &[], "111\n", (12, 12));
+    h.lsan_row("rc2-22", RC2_22, &[], "111\n");
     h.assert_legs(24);
 }
 
@@ -1108,5 +1074,728 @@ fn rc2_24_a_byte_view_from_a_vector_of_strings_holds_the_buffer_and_leaves_copy_
     let h = Harness::new();
     h.differential_row("rc2-24", RC2_24, &[], "104 7 2 3 ab7 ab8\n", (22, 22));
     h.lsan_row("rc2-24", RC2_24, &[], "104 7 2 3 ab7 ab8\n");
+    h.assert_legs(24);
+}
+
+const RC2_25: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { i: In }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.i.s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { i: In { s: victim(12345) } })
+    println("{clobber(a, Rc::get(a).i.s)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_25_a_nested_field_argument_read_through_rc_get_survives_the_callee_replacing_it() {
+    let h = Harness::new();
+    h.differential_row("rc2-25", RC2_25, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-25", RC2_25, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_26: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    println("{clobber(a, a.s)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_26_a_field_argument_read_through_the_handle_survives_the_callee_replacing_it() {
+    let h = Harness::new();
+    h.differential_row("rc2-26", RC2_26, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-26", RC2_26, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_27: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let b = a
+    let bs = a.s.bytes
+    b.s = victim(1)
+    let t: string = other(88888)
+    println("{bs[0] + bs.len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_27_a_bytes_view_of_a_field_read_through_the_handle_survives_a_store_through_an_alias() {
+    let h = Harness::new();
+    h.differential_row("rc2-27", RC2_27, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-27", RC2_27, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_28: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { i: In }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.i = In { s: victim(1) }
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn mid(h: Rc<W>) -> i64 { return clobber(h, h.i.s) }
+fn main() -> i64 {
+    let a = Rc::new(W { i: In { s: victim(12345) } })
+    println("{mid(a)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_28_a_nested_field_argument_through_a_parameter_handle_survives_its_owner_being_replaced() {
+    let h = Harness::new();
+    h.differential_row("rc2-28", RC2_28, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-28", RC2_28, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_29: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn zero(h: Rc<W>) -> i64 { return 0 }
+struct W { f: fn(Rc<W>) -> i64 }
+fn run(h: Rc<W>, f: fn(Rc<W>) -> i64) -> i64 { return f(h) }
+fn main() -> i64 {
+    let s: string = victim(12345)
+    let a = Rc::new(W { f: fn (h: Rc<W>) -> i64 {
+        h.f = zero
+        let t: string = other(88888)
+        return s.len + s.bytes[0] + t.len
+    } })
+    println("{run(a, a.f)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_29_a_closure_field_passed_as_argument_survives_replacing_itself_through_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-29", RC2_29, &[], "111\n", (6, 6));
+    h.lsan_row("rc2-29", RC2_29, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_30: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { s: string, a: [string; 2], i: In }
+fn clob(h: Rc<W>) -> string {
+    h.s = victim(1)
+    h.a[1] = victim(1)
+    h.i.s = victim(1)
+    let t: string = other(88888)
+    return ""
+}
+fn mk() -> Rc<W> {
+    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+}
+fn main() -> i64 {
+    let a = mk()
+    a.s += clob(a)
+    let b = mk()
+    b.s = b.s + clob(b)
+    let t: string = other(77777)
+    println("{a.s.bytes[0] + a.s.len + t.len} {b.s.bytes[0] + b.s.len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_30_a_compound_field_append_keeps_the_old_value_while_the_callee_writes_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-30", RC2_30, &[], "111 111\n", (42, 42));
+    h.lsan_row("rc2-30", RC2_30, &[], "111 111\n");
+    h.assert_legs(24);
+}
+
+const RC2_31: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { s: string, a: [string; 2], i: In }
+fn clob(h: Rc<W>) -> string {
+    h.s = victim(1)
+    h.a[1] = victim(1)
+    h.i.s = victim(1)
+    let t: string = other(88888)
+    return ""
+}
+fn mk() -> Rc<W> {
+    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+}
+fn main() -> i64 {
+    let a = mk()
+    a.a[1] += clob(a)
+    let b = mk()
+    b.a[1] = b.a[1] + clob(b)
+    let t: string = other(77777)
+    println("{a.a[1].bytes[0] + a.a[1].len + t.len} {b.a[1].bytes[0] + b.a[1].len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_31_a_compound_element_append_keeps_the_old_value_while_the_callee_writes_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-31", RC2_31, &[], "111 111\n", (42, 42));
+    h.lsan_row("rc2-31", RC2_31, &[], "111 111\n");
+    h.assert_legs(24);
+}
+
+const RC2_32: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { s: string, a: [string; 2], i: In }
+fn clob(h: Rc<W>) -> string {
+    h.s = victim(1)
+    h.a[1] = victim(1)
+    h.i.s = victim(1)
+    let t: string = other(88888)
+    return ""
+}
+fn mk() -> Rc<W> {
+    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+}
+fn main() -> i64 {
+    let a = mk()
+    a.i.s += clob(a)
+    let b = mk()
+    b.i.s = b.i.s + clob(b)
+    let t: string = other(77777)
+    println("{a.i.s.bytes[0] + a.i.s.len + t.len} {b.i.s.bytes[0] + b.i.s.len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_32_a_compound_nested_append_keeps_the_old_value_while_the_callee_writes_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-32", RC2_32, &[], "111 111\n", (42, 42));
+    h.lsan_row("rc2-32", RC2_32, &[], "111 111\n");
+    h.assert_legs(24);
+}
+
+const RC2_33: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn clobber(h: Rc<W>, bs: &[u8]) -> i64 {
+    h.s = victim(1)
+    let t: string = other(88888)
+    return bs[0] + bs.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    println("{clobber(a, Rc::get(a).s.bytes)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_33_a_bytes_view_argument_of_a_payload_field_survives_the_callee_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-33", RC2_33, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-33", RC2_33, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_34: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn w(h: Rc<W>) -> i64 {
+    h.s = victim(1)
+    return 0
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let mut n: i64 = 0
+    for b in Rc::get(a).s.bytes {
+        let z = w(a)
+        let t: string = other(88888)
+        n = n + b + z
+    }
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_34_a_for_over_the_bytes_of_a_payload_field_survives_the_body_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-34", RC2_34, &[], "450\n", (31, 31));
+    h.lsan_row("rc2-34", RC2_34, &[], "450\n");
+    h.assert_legs(24);
+}
+
+const RC2_35: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn w(h: Rc<W>) -> i64 {
+    h.s = victim(1)
+    return 0
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let b = a
+    let bs = bytes_of(&Rc::get(a))
+    b.s = victim(1)
+    let cs = bytes_of(&Rc::get(a))
+    let z = w(a)
+    let t: string = other(88888)
+    println("{bs[0] + bs.len + t.len} {cs[0] + cs.len + z}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_35_a_bound_view_returned_by_a_call_survives_a_store_through_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-35", RC2_35, &[], "111 100\n", (13, 13));
+    h.lsan_row("rc2-35", RC2_35, &[], "111 100\n");
+    h.assert_legs(24);
+}
+
+const RC2_36: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn g(k: i64) -> i64 { return k }
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let b = a
+    let k: string = other(5)
+    let bs = if g(1) == 1 { Rc::get(a).s.bytes } else { k.bytes }
+    b.s = victim(1)
+    let t: string = other(88888)
+    println("{bs[0] + bs.len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_36_a_view_chosen_by_an_if_survives_a_store_through_an_alias() {
+    let h = Harness::new();
+    h.differential_row("rc2-36", RC2_36, &[], "111\n", (9, 9));
+    h.lsan_row("rc2-36", RC2_36, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_37: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { a: [string; 2] }
+fn clobber(h: Rc<W>, s: string) -> i64 {
+    h.a[1] = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] })
+    let v = Rc::get(a).a[0..2]
+    println("{clobber(a, v[1])}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_37_a_slice_element_into_a_payload_passed_as_argument_survives_the_callee_replacing_it() {
+    let h = Harness::new();
+    h.differential_row("rc2-37", RC2_37, &[], "111\n", (9, 9));
+    h.lsan_row("rc2-37", RC2_37, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_38: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { a: [string; 2] }
+fn main() -> i64 {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] })
+    let b = a
+    let v = Rc::get(a).a[0..2]
+    let bs = v[1].bytes
+    b.a[1] = victim(1)
+    let t: string = other(88888)
+    println("{bs[0] + bs.len + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_38_a_bytes_view_of_a_slice_element_into_a_payload_survives_a_store_through_an_alias() {
+    let h = Harness::new();
+    h.differential_row("rc2-38", RC2_38, &[], "111\n", (9, 9));
+    h.lsan_row("rc2-38", RC2_38, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_39: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn clobber(h: Rc<W>, e: string) -> i64 {
+    h.s = victim(1)
+    let t: string = other(88888)
+    return e.bytes[0] + e.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let b = Rc::new(W { s: victim(12345) })
+    println("{clobber(a, "{a.s}")} {clobber(b, "{Rc::get(b).s}")}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_39_a_single_part_interpolation_argument_survives_the_callee_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-39", RC2_39, &[], "111 111\n", (18, 18));
+    h.lsan_row("rc2-39", RC2_39, &[], "111 111\n");
+    h.assert_legs(24);
+}
+
+const RC2_40: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { e: E }
+fn clobber(h: Rc<W>, e: E) -> i64 {
+    h.e = E::A(victim(1))
+    let t: string = other(88888)
+    return match e { E::A(x) => x.bytes[0] + x.len + t.len, E::B => 0 }
+}
+fn main() -> i64 {
+    let a = Rc::new(W { e: E::A(victim(12345)) })
+    println("{clobber(a, a.e)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_40_an_enum_field_argument_survives_the_callee_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-40", RC2_40, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-40", RC2_40, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_41: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { a: [string; 2] }
+fn clobber(h: Rc<W>, e: [string; 2]) -> i64 {
+    h.a = [victim(1), victim(2)]
+    let t: string = other(88888)
+    return e[1].bytes[0] + e[1].len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] })
+    println("{clobber(a, a.a)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_41_an_array_field_argument_survives_the_callee_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-41", RC2_41, &[], "111\n", (11, 11));
+    h.lsan_row("rc2-41", RC2_41, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_42: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn w(h: Rc<W>) -> i64 {
+    h.s = victim(1)
+    return 0
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    let mut n: i64 = 0
+    for b in bytes_of(&Rc::get(a)) {
+        let z = w(a)
+        let t: string = other(88888)
+        n = n + b + z
+    }
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_42_a_for_over_a_view_returned_by_a_call_survives_the_body_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-42", RC2_42, &[], "450\n", (31, 31));
+    h.lsan_row("rc2-42", RC2_42, &[], "450\n");
+    h.assert_legs(24);
+}
+
+const RC2_43: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn w(h: Rc<W>) -> i64 {
+    h.s = victim(1)
+    return 0
+}
+fn clob(h: Rc<W>, bs: &[u8]) -> i64 {
+    let z = w(h)
+    let t: string = other(88888)
+    return bs[0] + bs.len + t.len + z
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345) })
+    println("{clob(a, bytes_of(&Rc::get(a)))}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_43_a_view_argument_returned_by_a_call_survives_the_callee_replacing_the_field() {
+    let h = Harness::new();
+    h.differential_row("rc2-43", RC2_43, &[], "111\n", (7, 7));
+    h.lsan_row("rc2-43", RC2_43, &[], "111\n");
+    h.assert_legs(24);
+}
+
+const RC2_44: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct In { s: string }
+struct W { s: string, a: [string; 2], i: In, e: E }
+fn len_of(e: E) -> i64 { return match e { E::A(x) => x.bytes[0] + x.len, E::B => 0 } }
+fn cs(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h).s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn ci(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h).i.s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn ca(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h).a[1] = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn ce(h: Rc<W>, e: E) -> i64 {
+    Rc::get(h).e = E::A(victim(1))
+    let t: string = other(88888)
+    return len_of(e) + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) }, e: E::A(victim(12345)) })
+    println("{cs(a, a.s)} {ci(a, a.i.s)} {ca(a, Rc::get(a).a[1])} {ce(a, a.e)}")
+    println("{a.s} {a.i.s} {a.a[1]}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_44_a_field_written_through_rc_get_is_released_while_its_argument_reader_holds_it() {
+    let h = Harness::new();
+    h.differential_row(
+        "rc2-44",
+        RC2_44,
+        &[],
+        "111 111 111 111\nab1 ab1 ab1\n",
+        (41, 41),
+    );
+    h.lsan_row("rc2-44", RC2_44, &[], "111 111 111 111\nab1 ab1 ab1\n");
+    h.assert_legs(24);
+}
+
+const RC2_45: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct V { s: string }
+struct In { s: string }
+struct W { a: [string; 2], i: In, nx: Rc<V> }
+fn cw(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h).a = [victim(1), victim(2)]
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn ci(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h).i = In { s: victim(1) }
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn cn(h: Rc<W>, s: string) -> i64 {
+    Rc::get(h.nx).s = victim(1)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn cm(h: Rc<W>, s: string) -> i64 {
+    Rc::get(Rc::get(h).nx).s = victim(12)
+    let t: string = other(88888)
+    return s.bytes[0] + s.len + t.len
+}
+fn main() -> i64 {
+    let a = Rc::new(W { a: [victim(1), victim(12345)], i: In { s: victim(12345) }, nx: Rc::new(V { s: victim(12345) }) })
+    println("{cw(a, a.a[1])} {ci(a, a.i.s)} {cn(a, a.nx.s)} {cm(a, Rc::get(a.nx).s)}")
+    println("{a.a[1]} {a.i.s} {a.nx.s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_45_a_whole_field_or_inner_rc_written_through_rc_get_is_released_after_its_argument() {
+    let h = Harness::new();
+    h.differential_row(
+        "rc2-45",
+        RC2_45,
+        &[],
+        "111 111 111 107\nab2 ab1 ab12\n",
+        (42, 42),
+    );
+    h.lsan_row("rc2-45", RC2_45, &[], "111 111 111 107\nab2 ab1 ab12\n");
+    h.assert_legs(24);
+}
+
+const RC2_46: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { s: string, i: In }
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(12345), i: In { s: victim(12345) } })
+    let b = a
+    let bs = a.s.bytes
+    Rc::get(b).s = victim(1)
+    let cs = Rc::get(a).i.s.bytes
+    Rc::get(b).i.s += victim(7)
+    let t: string = other(88888)
+    println("{bs[0] + bs.len + t.len} {cs[0] + cs.len} {a.s} {a.i.s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_46_a_field_written_through_rc_get_is_released_while_a_bound_view_holds_it() {
+    let h = Harness::new();
+    h.differential_row("rc2-46", RC2_46, &[], "111 104 ab1 ab12345ab7\n", (20, 20));
+    h.lsan_row("rc2-46", RC2_46, &[], "111 104 ab1 ab12345ab7\n");
+    h.assert_legs(24);
+}
+
+const RC2_47: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct In { s: string }
+struct W { i: In }
+fn main() -> i64 {
+    let a = Rc::new(W { i: In { s: victim(12345) } })
+    let mut n: i64 = 0
+    for b in Rc::get(a).i.s.bytes {
+        Rc::get(a).i.s = victim(n)
+        let t: string = other(88888)
+        n = n + b
+    }
+    println("{n} {a.i.s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_47_a_field_written_through_rc_get_in_a_for_body_is_released_after_the_loop() {
+    let h = Harness::new();
+    h.differential_row("rc2-47", RC2_47, &[], "450 ab397\n", (34, 34));
+    h.lsan_row("rc2-47", RC2_47, &[], "450 ab397\n");
+    h.assert_legs(24);
+}
+
+const RC2_48: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct V { s: string }
+struct W { s: string, nx: Rc<V> }
+fn main() -> i64 {
+    let a = Rc::new(W { s: victim(1), nx: Rc::new(V { s: victim(4) }) })
+    let w = W { s: victim(9), nx: Rc::new(V { s: victim(12345) }) }
+    let mut n: i64 = 0
+    while n < 3 {
+        let r = &mut Rc::get(a)
+        *r = W { s: victim(n), nx: Rc::new(V { s: victim(n) }) }
+        let q = &mut Rc::get(a)
+        *q = w
+        n = n + 1
+    }
+    println("{a.s} {a.nx.s} {w.s} {w.nx.s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_48_a_whole_payload_written_through_a_mutable_reference_releases_its_old_rc_leaves() {
+    let h = Harness::new();
+    h.differential_row("rc2-48", RC2_48, &[], "ab9 ab12345 ab9 ab12345\n", (32, 32));
+    h.lsan_row("rc2-48", RC2_48, &[], "ab9 ab12345 ab9 ab12345\n");
+    h.assert_legs(24);
+}
+
+const RC2_49: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct V { s: string }
+struct W { nx: Rc<V> }
+fn main() -> i64 {
+    let a = Rc::new(W { nx: Rc::new(V { s: victim(4) }) })
+    let w = W { nx: Rc::new(V { s: victim(12345) }) }
+    let mut n: i64 = 0
+    while n < 3 {
+        let r = &mut Rc::get(a)
+        *r = w
+        let q = &mut Rc::get(a)
+        *q = W { nx: Rc::new(V { s: victim(n) }) }
+        n = n + 1
+    }
+    println("{a.nx.s} {w.nx.s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_49_a_payload_of_only_rc_leaves_copied_through_a_mutable_reference_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-49", RC2_49, &[], "ab2 ab12345\n", (18, 18));
+    h.lsan_row("rc2-49", RC2_49, &[], "ab2 ab12345\n");
     h.assert_legs(24);
 }

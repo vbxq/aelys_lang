@@ -1166,8 +1166,9 @@ fn main() -> i64 {
 #[test]
 fn rc_27_a_store_through_an_rc_handle_keeps_a_closure_field_alive_for_a_running_call() {
     let h = Harness::new();
-    h.differential_row("rc-27", RC27, &[], "111\n", (6, 4));
-    h.assert_legs(18);
+    h.differential_row("rc-27", RC27, &[], "111\n", (6, 6));
+    h.lsan_row("rc-27", RC27, &[], "111\n");
+    h.assert_legs(24);
 }
 
 const RC28: &str = r#"
@@ -1190,8 +1191,9 @@ fn main() -> i64 {
 #[test]
 fn rc_28_a_store_through_an_rc_handle_keeps_a_string_argument_alive() {
     let h = Harness::new();
-    h.differential_row("rc-28", RC28, &[], "111\n", (7, 6));
-    h.assert_legs(18);
+    h.differential_row("rc-28", RC28, &[], "111\n", (7, 7));
+    h.lsan_row("rc-28", RC28, &[], "111\n");
+    h.assert_legs(24);
 }
 
 const RC29: &str = r#"
@@ -1212,8 +1214,9 @@ fn main() -> i64 {
 #[test]
 fn rc_29_a_store_through_an_rc_handle_keeps_a_bytes_view_of_the_field_alive() {
     let h = Harness::new();
-    h.differential_row("rc-29", RC29, &[], "97|7|7\n", (14, 13));
-    h.assert_legs(18);
+    h.differential_row("rc-29", RC29, &[], "97|7|7\n", (14, 14));
+    h.lsan_row("rc-29", RC29, &[], "97|7|7\n");
+    h.assert_legs(24);
 }
 
 const RC30: &str = r#"
@@ -1237,8 +1240,9 @@ fn main() -> i64 {
 #[test]
 fn rc_30_a_store_through_an_rc_handle_keeps_a_carrier_argument_alive() {
     let h = Harness::new();
-    h.differential_row("rc-30", RC30, &[], "116\n", (7, 6));
-    h.assert_legs(18);
+    h.differential_row("rc-30", RC30, &[], "116\n", (7, 7));
+    h.lsan_row("rc-30", RC30, &[], "116\n");
+    h.assert_legs(24);
 }
 
 const RC31: &str = r#"
@@ -1261,8 +1265,9 @@ fn main() -> i64 {
 #[test]
 fn rc_31_a_store_through_an_rc_handle_keeps_an_element_argument_alive() {
     let h = Harness::new();
-    h.differential_row("rc-31", RC31, &[], "111\n", (9, 8));
-    h.assert_legs(18);
+    h.differential_row("rc-31", RC31, &[], "111\n", (9, 9));
+    h.lsan_row("rc-31", RC31, &[], "111\n");
+    h.assert_legs(24);
 }
 
 fn refused(id: &str, src: &str, code: &str) {

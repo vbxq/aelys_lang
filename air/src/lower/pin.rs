@@ -222,14 +222,16 @@ impl<'a> LoweringContext<'a> {
     // the old value dies only where the store roots in a binding this frame owns
     pub(super) fn store_root_owns(&self, expr: &TypedExpr) -> bool {
         let e = peel(expr);
+        if matches!(e.ty, InferType::Rc(_)) {
+            return true;
+        }
         match &e.kind {
-            TypedExprKind::Identifier(name) => {
-                self.lookup_local(name).is_some() && !matches!(e.ty, InferType::Rc(_))
-            }
+            TypedExprKind::EnumVariant {
+                enum_name, variant, ..
+            } if enum_name == "Rc" && variant == "get" => true,
+            TypedExprKind::Identifier(name) => self.lookup_local(name).is_some(),
             TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
-                !matches!(object.ty, InferType::Rc(_))
-                    && !Self::views_a_slice(&object.ty)
-                    && self.store_root_owns(object)
+                !Self::views_a_slice(&object.ty) && self.store_root_owns(object)
             }
             TypedExprKind::Deref(inner) => matches!(inner.ty, InferType::Ref { mutable: true, .. }),
             _ => false,

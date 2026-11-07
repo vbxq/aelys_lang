@@ -439,7 +439,18 @@ impl<'a> LoweringContext<'a> {
                 let target_ptr_ty = self.lower_type_from_infer(&target.ty);
                 let t = self.operand_to_local(target_op, &target_ptr_ty);
                 let v = self.lower_expr(value);
-                let v = self.own_str_for_store(v, &value.ty, sp);
+                let through_mut = matches!(target.ty, InferType::Ref { mutable: true, .. });
+                let rc_leaves = self.carrier_paths_for(&value.ty).filter(|_| through_mut);
+                let v = match &rc_leaves {
+                    Some((ty, paths)) if !self.counted(&value.ty) => {
+                        let shape = super::RcShape {
+                            ty: ty.clone(),
+                            paths: paths.clone(),
+                        };
+                        self.own_rc_value(v, &value.ty, &shape, Some(value), sp)
+                    }
+                    _ => self.own_str_for_store(v, &value.ty, sp),
+                };
                 let pointee_is_vec = matches!(value.ty, InferType::Vec(_));
                 if !(pointee_is_vec && self.claim_owned_str_temp(&v)) {
                     self.emit_vec_slot_acquire(pointee_is_vec, Some(&value.kind), &v, sp);
@@ -447,11 +458,11 @@ impl<'a> LoweringContext<'a> {
                 if pointee_is_vec {
                     self.emit_cow_release_through_ptr(Operand::Copy(t), sp);
                 }
-                let through_mut = matches!(target.ty, InferType::Ref { mutable: true, .. });
-                let old_pointee = (through_mut && self.counted(&value.ty)).then(|| {
-                    let pointee_ty = self.lower_type_from_infer(&value.ty);
-                    self.emit_rvalue_to_temp(pointee_ty, Rvalue::Deref(Operand::Copy(t)), sp)
-                });
+                let old_pointee = (through_mut && (self.counted(&value.ty) || rc_leaves.is_some()))
+                    .then(|| {
+                        let pointee_ty = self.lower_type_from_infer(&value.ty);
+                        self.emit_rvalue_to_temp(pointee_ty, Rvalue::Deref(Operand::Copy(t)), sp)
+                    });
                 self.emit(
                     AirStmtKind::Assign {
                         place: Place::Deref(t),
@@ -460,7 +471,12 @@ impl<'a> LoweringContext<'a> {
                     sp,
                 );
                 if let Some(Operand::Copy(old) | Operand::Move(old)) = old_pointee {
-                    self.emit_str_release(old, sp);
+                    if let Some((ty, paths)) = &rc_leaves {
+                        self.emit_carrier_field_releases(old, ty, paths, sp);
+                    }
+                    if self.counted(&value.ty) {
+                        self.emit_str_release(old, sp);
+                    }
                 }
                 Operand::Const(AirConst::Null)
             }
