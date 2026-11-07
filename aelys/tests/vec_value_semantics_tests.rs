@@ -371,7 +371,6 @@ fn main() -> i64 {
 
 #[test]
 fn v12_escaping_closure_reads_a_live_buffer() {
-    // stale-but-correct read cannot pass by luck. the env leaks by design, so a leak is expected.
     let src = r#"
 fn make() -> fn() -> i64 {
     let mut v = Vec::new()
