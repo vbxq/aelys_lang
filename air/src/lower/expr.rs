@@ -1115,10 +1115,7 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
-            let current = if matches!(value.ty, InferType::String)
-                && Self::roots_a_vec(&object.ty)
-                && super::pin::may_free(rhs_expr)
-            {
+            let current = if self.counted(&value.ty) && super::pin::may_free(rhs_expr) {
                 self.pin_str_read(current, sp)
             } else {
                 current
@@ -1209,6 +1206,11 @@ impl<'a> LoweringContext<'a> {
                 },
                 sp,
             );
+            let current = if self.counted(&value.ty) && super::pin::may_free(rhs_expr) {
+                self.pin_str_read(current, sp)
+            } else {
+                current
+            };
             let rhs = self.lower_expr(rhs_expr);
             let air_op = super::lower_binop(&op);
             let combined =
@@ -1324,7 +1326,10 @@ impl<'a> LoweringContext<'a> {
         let capture_read = matches!(&super::pin::peel(callee).kind,
             TypedExprKind::Identifier(name)
                 if self.lookup_local(name).is_some_and(|id| self.capture_slots.contains_key(&id)));
-        let op = if self.reads_a_borrowed_place(callee) || capture_read {
+        let op = if self.reads_a_borrowed_place(callee)
+            || capture_read
+            || self.needs_call_share(callee, &op)
+        {
             self.pin_str_read(op, None)
         } else {
             op

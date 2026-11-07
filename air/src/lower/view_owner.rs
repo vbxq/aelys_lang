@@ -2,7 +2,7 @@ use aelys_sema::{
     InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedPattern, TypedStmt,
     TypedStmtKind,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(super) fn is_view(ty: &InferType) -> bool {
     matches!(ty, InferType::Slice { .. } | InferType::Ref { .. })
@@ -14,46 +14,211 @@ pub(super) fn key<T>(x: &T) -> usize {
 
 pub(super) const MAX_WIDTH: usize = 8;
 
-#[derive(Default)]
-pub(crate) struct ViewOwners {
-    pub width: HashMap<usize, usize>,
-    pub ident_width: HashMap<usize, usize>,
+#[derive(Clone, Default, PartialEq, Eq, Debug)]
+pub(crate) struct Width(Vec<(crate::AirType, usize)>);
+
+pub(super) fn rc_slot_ty() -> crate::AirType {
+    crate::AirType::Ptr(Box::new(crate::AirType::Void))
+}
+
+impl Width {
+    pub(super) fn of(ty: crate::AirType, n: usize) -> Width {
+        Width(if n == 0 { Vec::new() } else { vec![(ty, n)] })
+    }
+
+    fn count(&self, ty: &crate::AirType) -> usize {
+        self.0.iter().find(|(t, _)| t == ty).map_or(0, |(_, n)| *n)
+    }
+
+    fn merged(&self, o: &Width, f: impl Fn(usize, usize) -> usize) -> Width {
+        let mut out = self.0.clone();
+        for (t, n) in &o.0 {
+            match out.iter_mut().find(|(u, _)| u == t) {
+                Some(slot) => slot.1 = f(slot.1, *n),
+                None => out.push((t.clone(), f(0, *n))),
+            }
+        }
+        Width(out)
+    }
+
+    fn plus(&self, o: &Width) -> Width {
+        self.merged(o, |a, b| (a + b).min(MAX_WIDTH + 1))
+    }
+
+    fn max(&self, o: &Width) -> Width {
+        self.merged(o, usize::max)
+    }
+
+    pub(super) fn rc(&self) -> usize {
+        self.count(&rc_slot_ty())
+    }
+
+    pub(super) fn text(&self) -> usize {
+        self.0
+            .iter()
+            .filter(|(t, _)| *t != rc_slot_ty())
+            .map(|(_, n)| *n)
+            .sum()
+    }
+
+    pub(super) fn over(&self) -> bool {
+        self.rc() > MAX_WIDTH || self.text() > MAX_WIDTH
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.0.iter().all(|(_, n)| *n == 0)
+    }
+
+    pub(super) fn slot_types(&self) -> Vec<crate::AirType> {
+        self.0
+            .iter()
+            .flat_map(|(t, n)| std::iter::repeat_n(t.clone(), *n))
+            .collect()
+    }
 }
 
 #[derive(Default)]
-struct Pass {
+pub(crate) struct ViewOwners {
+    pub width: HashMap<usize, Width>,
+    pub ident_width: HashMap<usize, Width>,
+    pub str_nodes: HashSet<usize>,
+    pub leaf_nodes: HashMap<usize, (Result<Width, &'static str>, u32)>,
+}
+
+struct Pass<'f> {
     scopes: Vec<HashMap<String, Option<usize>>>,
     edges: Vec<(usize, Vec<SrcRef>)>,
     ident_decl: HashMap<usize, usize>,
+    str_nodes: HashSet<usize>,
+    leaf_nodes: HashMap<usize, (Result<Width, &'static str>, u32)>,
+    leaves: &'f dyn Fn(&InferType) -> Result<Width, &'static str>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum SrcRef {
-    Rc,
+    Slots(Width),
     Decl(usize),
 }
 
-pub(super) fn sources(expr: &TypedExpr, owners: &ViewOwners) -> Vec<(usize, usize)> {
+#[derive(Clone, Copy)]
+enum Sig {
+    Plain,
+    BytesOf,
+    RefTarget(usize),
+}
+
+#[derive(Clone)]
+pub(super) enum Src {
+    Rc,
+    Text,
+    Leaves(Width, usize),
+    Ident(Width),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapKind {
+    Rc,
+    Text,
+    Leaves(usize),
+    Ident,
+}
+
+impl Src {
+    fn kind(&self) -> CapKind {
+        match self {
+            Src::Rc => CapKind::Rc,
+            Src::Text => CapKind::Text,
+            Src::Leaves(_, call) => CapKind::Leaves(*call),
+            Src::Ident(_) => CapKind::Ident,
+        }
+    }
+
+    fn width(&self) -> Width {
+        match self {
+            Src::Rc => Width::of(rc_slot_ty(), 1),
+            Src::Text => Width::of(crate::AirType::Str, 1),
+            Src::Leaves(w, _) | Src::Ident(w) => w.clone(),
+        }
+    }
+}
+
+pub(super) fn is_byte_view(ty: &InferType) -> bool {
+    matches!(ty, InferType::Slice { elem, .. } if matches!(elem.as_ref(), InferType::U8))
+}
+
+pub(super) fn sources(expr: &TypedExpr, owners: &ViewOwners) -> Vec<(usize, Src)> {
     let mut out = Vec::new();
-    collect(expr, &mut |e| {
-        if matches!(e.ty, InferType::Rc(_)) {
-            out.push((key(e), 1));
-        } else if let Some(w) = owners.ident_width.get(&key(e))
-            && *w <= MAX_WIDTH
-        {
-            out.push((key(e), *w));
+    collect(expr, &mut |e, sig| match sig {
+        Sig::Plain => {
+            if matches!(e.ty, InferType::Rc(_)) {
+                out.push((key(e), Src::Rc));
+            } else if let Some(w) = owners.ident_width.get(&key(e))
+                && !w.over()
+                && !w.is_empty()
+            {
+                out.push((key(e), Src::Ident(w.clone())));
+            }
+        }
+        Sig::BytesOf => {
+            if owners.str_nodes.contains(&key(e)) {
+                out.push((key(e), Src::Text));
+            }
+        }
+        Sig::RefTarget(call) => {
+            if let Some((Ok(w), _)) = owners.leaf_nodes.get(&key(e))
+                && !w.is_empty()
+            {
+                out.push((key(e), Src::Leaves(w.clone(), call)));
+            }
         }
     });
     out
 }
 
-fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
+pub(super) fn frame_held(expr: &TypedExpr, is_local: &dyn Fn(&str) -> bool) -> bool {
+    match &expr.kind {
+        TypedExprKind::Grouping(inner) => frame_held(inner, is_local),
+        TypedExprKind::Identifier(name) => is_local(name) && !is_view(&expr.ty),
+        TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
+            matches!(
+                object.ty,
+                InferType::Struct(_) | InferType::Enum(..) | InferType::Array(..)
+            ) && frame_held(object, is_local)
+        }
+        _ => false,
+    }
+}
+
+pub(super) fn target_held(arg: &TypedExpr, is_local: &dyn Fn(&str) -> bool) -> bool {
+    match &arg.kind {
+        TypedExprKind::Grouping(inner) => target_held(inner, is_local),
+        TypedExprKind::Reference { operand, .. } => frame_held(operand, is_local),
+        TypedExprKind::Slice { object, .. } => frame_held(object, is_local),
+        _ => false,
+    }
+}
+
+fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig)) {
+    if matches!(expr.ty, InferType::Rc(_)) {
+        f(expr, Sig::Plain);
+        return;
+    }
+    collect_place(expr, f);
+}
+
+fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig)) {
     match &expr.kind {
         TypedExprKind::Grouping(inner) | TypedExprKind::Deref(inner) => collect(inner, f),
+        TypedExprKind::Member { object, member }
+            if member == "bytes" && matches!(object.ty, InferType::String) =>
+        {
+            f(object, Sig::BytesOf);
+            collect(object, f);
+        }
         TypedExprKind::Slice { object, .. }
         | TypedExprKind::Index { object, .. }
         | TypedExprKind::Member { object, .. } => collect(object, f),
-        TypedExprKind::Reference { operand, .. } => collect(operand, f),
+        TypedExprKind::Reference { operand, .. } => collect_place(operand, f),
         TypedExprKind::EnumVariant {
             enum_name,
             variant,
@@ -61,10 +226,10 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
             ..
         } if enum_name == "Rc" && variant == "get" => {
             if let Some(h) = args.first() {
-                f(h);
+                collect(h, f);
             }
         }
-        TypedExprKind::Identifier(_) if !matches!(expr.ty, InferType::Rc(_)) => f(expr),
+        TypedExprKind::Identifier(_) if !matches!(expr.ty, InferType::Rc(_)) => f(expr, Sig::Plain),
         TypedExprKind::Block { tail, .. } => collect(tail, f),
         TypedExprKind::If {
             then_branch,
@@ -82,8 +247,11 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
         TypedExprKind::Call { args, .. } if is_view(&expr.ty) => {
             for a in args {
                 if matches!(a.ty, InferType::Rc(_)) {
-                    f(a);
+                    collect(a, f);
                 } else if is_view(&a.ty) {
+                    if is_byte_view(&expr.ty) {
+                        f(a, Sig::RefTarget(key(expr)));
+                    }
                     collect(a, f);
                 }
             }
@@ -92,9 +260,19 @@ fn collect<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr)) {
     }
 }
 
-pub(super) fn analyze(params: &[TypedParam], body: &[TypedStmt]) -> ViewOwners {
-    let mut p = Pass::default();
-    p.scopes.push(HashMap::new());
+pub(super) fn analyze(
+    params: &[TypedParam],
+    body: &[TypedStmt],
+    leaves: &dyn Fn(&InferType) -> Result<Width, &'static str>,
+) -> ViewOwners {
+    let mut p = Pass {
+        scopes: vec![HashMap::new()],
+        edges: Vec::new(),
+        ident_decl: HashMap::new(),
+        str_nodes: HashSet::new(),
+        leaf_nodes: HashMap::new(),
+        leaves,
+    };
     for param in params {
         let decl = is_view(&param.ty).then(|| key(param));
         p.scopes[0].insert(param.name.clone(), decl);
@@ -102,21 +280,20 @@ pub(super) fn analyze(params: &[TypedParam], body: &[TypedStmt]) -> ViewOwners {
     for s in body {
         p.stmt(s);
     }
-    let mut width: HashMap<usize, usize> = HashMap::new();
+    let mut width: HashMap<usize, Width> = HashMap::new();
     loop {
         let mut changed = false;
         for (decl, srcs) in &p.edges {
-            let need: usize = srcs
-                .iter()
-                .map(|s| match s {
-                    SrcRef::Rc => 1,
-                    SrcRef::Decl(d) => width.get(d).copied().unwrap_or(0),
+            let need = srcs.iter().fold(Width::default(), |acc, s| {
+                acc.plus(&match s {
+                    SrcRef::Slots(w) => w.clone(),
+                    SrcRef::Decl(d) => width.get(d).cloned().unwrap_or_default(),
                 })
-                .sum::<usize>()
-                .min(MAX_WIDTH + 1);
-            let have = width.get(decl).copied().unwrap_or(0);
-            if need > have {
-                width.insert(*decl, need);
+            });
+            let have = width.get(decl).cloned().unwrap_or_default();
+            let next = have.max(&need);
+            if next != have {
+                width.insert(*decl, next);
                 changed = true;
             }
         }
@@ -127,12 +304,17 @@ pub(super) fn analyze(params: &[TypedParam], body: &[TypedStmt]) -> ViewOwners {
     let ident_width = p
         .ident_decl
         .iter()
-        .filter_map(|(i, d)| width.get(d).map(|w| (*i, *w)))
+        .filter_map(|(i, d)| width.get(d).map(|w| (*i, w.clone())))
         .collect();
-    ViewOwners { width, ident_width }
+    ViewOwners {
+        width,
+        ident_width,
+        str_nodes: p.str_nodes,
+        leaf_nodes: p.leaf_nodes,
+    }
 }
 
-impl Pass {
+impl Pass<'_> {
     fn resolve(&self, name: &str) -> Option<usize> {
         for scope in self.scopes.iter().rev() {
             if let Some(d) = scope.get(name) {
@@ -142,18 +324,63 @@ impl Pass {
         None
     }
 
+    fn is_local(&self, name: &str) -> bool {
+        self.scopes.iter().any(|s| s.contains_key(name))
+    }
+
     fn srcs_of(&mut self, rhs: &TypedExpr) -> Vec<SrcRef> {
-        let mut found: Vec<&TypedExpr> = Vec::new();
-        collect(rhs, &mut |e| found.push(e));
+        let mut found: Vec<(&TypedExpr, Sig)> = Vec::new();
+        collect(rhs, &mut |e, sig| found.push((e, sig)));
         let mut out = Vec::new();
-        for e in found {
-            if matches!(e.ty, InferType::Rc(_)) {
-                out.push(SrcRef::Rc);
-            } else if let Some(d) = self.ident_decl.get(&key(e)) {
-                out.push(SrcRef::Decl(*d));
+        for (e, sig) in found {
+            match sig {
+                Sig::Plain => {
+                    if matches!(e.ty, InferType::Rc(_)) {
+                        out.push(SrcRef::Slots(Width::of(rc_slot_ty(), 1)));
+                    } else if let Some(d) = self.ident_decl.get(&key(e)) {
+                        out.push(SrcRef::Decl(*d));
+                    }
+                }
+                Sig::BytesOf => {
+                    if self.str_nodes.contains(&key(e)) {
+                        out.push(SrcRef::Slots(Width::of(crate::AirType::Str, 1)));
+                    }
+                }
+                Sig::RefTarget(_) => {
+                    if let Some((Ok(w), _)) = self.leaf_nodes.get(&key(e)) {
+                        out.push(SrcRef::Slots(w.clone()));
+                    }
+                }
             }
         }
         out
+    }
+
+    fn note_view_roots(&mut self, e: &TypedExpr) {
+        if let TypedExprKind::Member { object, member } = &e.kind
+            && member == "bytes"
+            && matches!(object.ty, InferType::String)
+        {
+            if !frame_held(object, &|n| self.is_local(n)) {
+                self.str_nodes.insert(key(object.as_ref()));
+            }
+            return;
+        }
+        let TypedExprKind::Call { args, .. } = &e.kind else {
+            return;
+        };
+        if !is_byte_view(&e.ty) {
+            return;
+        }
+        for a in args {
+            if !is_view(&a.ty) || target_held(a, &|n| self.is_local(n)) {
+                continue;
+            }
+            let plan = (self.leaves)(&a.ty);
+            if plan.as_ref().map_or(true, |w| !w.is_empty()) {
+                self.leaf_nodes.insert(key(a), (plan, a.span.line));
+            }
+        }
     }
 
     fn block(&mut self, stmts: &[TypedStmt], tail: Option<&TypedExpr>) {
@@ -258,6 +485,7 @@ impl Pass {
     }
 
     fn expr(&mut self, e: &TypedExpr) {
+        self.note_view_roots(e);
         match &e.kind {
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
@@ -387,9 +615,24 @@ impl Pass {
     }
 }
 
+#[derive(Clone)]
+pub(crate) enum LeafStep {
+    Field(String),
+    Index(u64),
+}
+
+pub(crate) enum LeafPlan {
+    Paths(Vec<Vec<(LeafStep, crate::AirType)>>),
+    Whole(crate::AirType),
+}
+
 impl super::LoweringContext<'_> {
-    fn view_ptr_ty() -> crate::AirType {
-        crate::AirType::Ptr(Box::new(crate::AirType::Void))
+    fn view_is_text(&self, slot: crate::LocalId) -> bool {
+        self.views.text_slots.contains(&slot)
+    }
+
+    fn view_slot_ty(&self, slot: crate::LocalId) -> crate::AirType {
+        self.local_air_type(slot).unwrap_or_else(rc_slot_ty)
     }
 
     fn view_set(&mut self, slot: crate::LocalId, value: crate::Operand) {
@@ -402,76 +645,247 @@ impl super::LoweringContext<'_> {
         );
     }
 
+    fn view_null_value(&self, slot: crate::LocalId) -> crate::Operand {
+        if self.view_is_text(slot) {
+            crate::Operand::Const(crate::AirConst::ZeroInit(self.view_slot_ty(slot)))
+        } else {
+            crate::Operand::Const(crate::AirConst::Null)
+        }
+    }
+
     fn view_null(&mut self, slot: crate::LocalId) {
-        self.view_set(slot, crate::Operand::Const(crate::AirConst::Null));
+        let null = self.view_null_value(slot);
+        self.view_set(slot, null);
     }
 
-    fn view_new_slots(&mut self, n: usize, depth: usize) -> Vec<crate::LocalId> {
-        (0..n)
-            .map(|_| {
-                let slot = self.alloc_temp_mut(Self::view_ptr_ty());
-                self.views.entry_nulls.push(slot);
-                self.views.slots.push((slot, depth));
-                slot
-            })
-            .collect()
+    fn view_release_slot(&mut self, slot: crate::LocalId) {
+        if self.view_is_text(slot) {
+            self.emit_posed_release(slot, None);
+        } else {
+            self.emit_rc_release(slot, None);
+        }
     }
 
-    fn view_width(&mut self, decl: usize, line: u32) -> usize {
-        let w = self.views.owners.width.get(&decl).copied().unwrap_or(0);
-        if w > MAX_WIDTH {
+    fn view_retain_slot(&mut self, slot: crate::LocalId) {
+        if !self.view_is_text(slot) {
+            self.emit_rc_retain(crate::Operand::Copy(slot), None);
+            return;
+        }
+        let ty = self.view_slot_ty(slot);
+        if matches!(ty, crate::AirType::Vec(_)) {
+            self.emit_cow_retain(slot, None);
+            return;
+        }
+        if self.counted_air(&ty) {
+            self.emit_str_retain(slot, None);
+        }
+        if let Some(paths) = self.aggregate_rc_paths(&ty) {
+            self.emit_carrier_field_retains(crate::Operand::Copy(slot), &ty, &paths, None);
+        }
+    }
+
+    fn view_new_slots(&mut self, w: &Width, depth: usize) -> Vec<crate::LocalId> {
+        let mut out = Vec::new();
+        for ty in w.slot_types() {
+            let text = ty != rc_slot_ty();
+            let slot = self.alloc_temp_mut(ty);
+            if text {
+                self.views.text_slots.insert(slot);
+            }
+            self.views.entry_nulls.push(slot);
+            self.views.slots.push((slot, depth));
+            out.push(slot);
+        }
+        out
+    }
+
+    fn view_width(&mut self, decl: usize, line: u32) -> Width {
+        let w = self
+            .views
+            .owners
+            .width
+            .get(&decl)
+            .cloned()
+            .unwrap_or_default();
+        if w.rc() > MAX_WIDTH {
             self.report_unsupported(format!(
                 "[rc-view] the view bound at line {line} may point into more than {MAX_WIDTH} \
                  `Rc` payloads"
             ));
-            return 0;
+            return Width::default();
+        }
+        if w.text() > MAX_WIDTH {
+            self.report_unsupported(format!(
+                "[rc-view] the view bound at line {line} may point into more than {MAX_WIDTH} \
+                 strings"
+            ));
+            return Width::default();
         }
         w
     }
 
+    fn view_leaf_plan(&self, view_ty: &InferType) -> Result<Option<LeafPlan>, &'static str> {
+        if let InferType::Ref { referent, .. } = view_ty {
+            let target = self.lower_type_from_infer(referent);
+            if let crate::AirType::Vec(elem) = &target {
+                if self.counted_air(elem) {
+                    return Ok(Some(LeafPlan::Whole(target)));
+                }
+                return Ok(None);
+            }
+            let mut out = Vec::new();
+            let ok = self.view_str_leaves(&target, &mut Vec::new(), &mut out);
+            if ok && out.len() <= MAX_WIDTH {
+                return Ok((!out.is_empty()).then_some(LeafPlan::Paths(out)));
+            }
+            return Ok(Some(LeafPlan::Whole(target)));
+        }
+        if !matches!(view_ty, InferType::Slice { .. }) {
+            return Ok(None);
+        }
+        let crate::AirType::Slice(elem) = self.lower_type_from_infer(view_ty) else {
+            return Ok(None);
+        };
+        let mut probe = Vec::new();
+        let ok = self.view_str_leaves(&elem, &mut Vec::new(), &mut probe);
+        if ok && probe.is_empty() {
+            return Ok(None);
+        }
+        Err("a slice of strings")
+    }
+
+    fn view_leaf_width(&self, view_ty: &InferType) -> Result<Width, &'static str> {
+        Ok(match self.view_leaf_plan(view_ty)? {
+            None => Width::default(),
+            Some(LeafPlan::Paths(p)) => Width::of(crate::AirType::Str, p.len()),
+            Some(LeafPlan::Whole(ty)) => Width::of(ty, 1),
+        })
+    }
+
+    fn view_str_leaves(
+        &self,
+        ty: &crate::AirType,
+        prefix: &mut Vec<(LeafStep, crate::AirType)>,
+        out: &mut Vec<Vec<(LeafStep, crate::AirType)>>,
+    ) -> bool {
+        match ty {
+            crate::AirType::Str => {
+                out.push(prefix.clone());
+                true
+            }
+            crate::AirType::Struct(name) => {
+                let Some(def) = self.defs().find_struct(name) else {
+                    return !self.counted_air(ty);
+                };
+                let fields: Vec<(String, crate::AirType)> = def
+                    .fields
+                    .iter()
+                    .map(|f| (f.name.clone(), f.ty.clone()))
+                    .collect();
+                for (fname, fty) in fields {
+                    prefix.push((LeafStep::Field(fname), fty.clone()));
+                    let ok = self.view_str_leaves(&fty, prefix, out);
+                    prefix.pop();
+                    if !ok {
+                        return false;
+                    }
+                }
+                true
+            }
+            crate::AirType::Array(inner, n) => {
+                for i in 0..*n {
+                    prefix.push((LeafStep::Index(i), (**inner).clone()));
+                    let ok = self.view_str_leaves(inner, prefix, out);
+                    prefix.pop();
+                    if !ok {
+                        return false;
+                    }
+                }
+                true
+            }
+            crate::AirType::Ptr(_)
+            | crate::AirType::I8
+            | crate::AirType::I16
+            | crate::AirType::I32
+            | crate::AirType::I64
+            | crate::AirType::U8
+            | crate::AirType::U16
+            | crate::AirType::U32
+            | crate::AirType::U64
+            | crate::AirType::F32
+            | crate::AirType::F64
+            | crate::AirType::Bool
+            | crate::AirType::Char
+            | crate::AirType::Slice(_)
+            | crate::AirType::FnPtr { .. }
+            | crate::AirType::Void => true,
+            crate::AirType::Enum(_)
+            | crate::AirType::Vec(_)
+            | crate::AirType::Param(_)
+            | crate::AirType::Opaque => !self.counted_air(ty),
+        }
+    }
+
     pub(super) fn view_prepare(&mut self, params: &[TypedParam], body: &[TypedStmt]) {
-        self.views.owners = analyze(params, body);
+        let leaves = |ty: &InferType| self.view_leaf_width(ty);
+        let owners = analyze(params, body, &leaves);
+        self.views.owners = owners;
+        let mut refused: Vec<(u32, &'static str)> = self
+            .views
+            .owners
+            .leaf_nodes
+            .values()
+            .filter_map(|(plan, line)| plan.as_ref().err().map(|what| (*line, *what)))
+            .collect();
+        refused.sort_unstable();
+        refused.dedup();
+        for (line, what) in refused {
+            self.report_unsupported(format!(
+                "[rc-view] a byte view returned from {what} this function does not own is not \
+                 supported yet (line {line})"
+            ));
+        }
         for param in params {
             let raw = self
                 .views
                 .owners
                 .width
                 .get(&key(param))
-                .copied()
-                .unwrap_or(0);
+                .cloned()
+                .unwrap_or_default();
             let w = self.view_width(key(param), param.span.line);
             let Some(local) = self.lookup_local(&param.name) else {
                 continue;
             };
-            if raw > MAX_WIDTH {
+            if raw.over() {
                 self.view_mark_overflow(local);
             }
-            if w > 0 {
-                let slots = self.view_new_slots(w, 0);
+            if !w.is_empty() {
+                let slots = self.view_new_slots(&w, 0);
                 self.views.slot_of.insert(local, slots);
             }
         }
     }
 
-    pub(super) fn view_let_width(&mut self, stmt: &TypedStmt) -> Option<usize> {
+    pub(super) fn view_let_width(&mut self, stmt: &TypedStmt) -> Option<Width> {
         let w = self
             .views
             .owners
             .width
             .get(&key(stmt))
-            .copied()
-            .unwrap_or(0);
-        if w > MAX_WIDTH {
+            .cloned()
+            .unwrap_or_default();
+        if w.over() {
             self.view_width(key(stmt), stmt.span.line);
             return None;
         }
         Some(w)
     }
 
-    pub(super) fn view_slots_for_let(&mut self, w: usize) -> Option<Vec<crate::LocalId>> {
-        (w > 0).then(|| {
+    pub(super) fn view_slots_for_let(&mut self, w: Width) -> Option<Vec<crate::LocalId>> {
+        (!w.is_empty()).then(|| {
             let depth = self.locals_by_name.len();
-            self.view_new_slots(w, depth)
+            self.view_new_slots(&w, depth)
         })
     }
 
@@ -517,10 +931,10 @@ impl super::LoweringContext<'_> {
         let srcs = sources(rhs, &self.views.owners);
         let depth = self.locals_by_name.len();
         let mut all = Vec::new();
-        for (node, w) in srcs {
-            let tmps = self.view_new_slots(w, depth);
+        for (node, src) in srcs {
+            let tmps = self.view_new_slots(&src.width(), depth);
             all.extend(tmps.iter().copied());
-            self.views.captures.push((node, tmps, false));
+            self.views.captures.push((node, tmps, false, src.kind()));
         }
         all
     }
@@ -528,10 +942,19 @@ impl super::LoweringContext<'_> {
     fn view_captures_end(&mut self, n_tmps: usize) {
         let mut seen = 0;
         while seen < n_tmps {
-            let Some((_, tmps, hit)) = self.views.captures.pop() else {
+            let Some((_, tmps, hit, _)) = self.views.captures.pop() else {
                 break;
             };
             seen += tmps.len();
+            if self.views.pending_leaves.iter().any(|p| p.1 == tmps) {
+                self.views.pending_leaves.retain(|p| p.1 != tmps);
+                if !self.last_block_is_terminated() {
+                    self.report_ice(
+                        "ICE: a call that returns a view was never lowered after its argument"
+                            .to_string(),
+                    );
+                }
+            }
             if !hit && !self.last_block_is_terminated() {
                 self.report_ice(
                     "ICE: the owner of a view was never lowered, so no share of its `Rc` was taken"
@@ -559,24 +982,43 @@ impl super::LoweringContext<'_> {
             }
             return;
         };
-        if tmps.len() > slots.len() {
-            self.report_ice(format!(
-                "ICE: a view needs {} owner slots and its binding has {}",
-                tmps.len(),
-                slots.len()
-            ));
-            return;
-        }
-        for (j, slot) in slots.iter().enumerate() {
-            if replaces {
-                self.emit_rc_release(*slot, None);
+        let mut kinds: Vec<crate::AirType> = Vec::new();
+        for slot in slots.iter().chain(tmps.iter()) {
+            let ty = self.view_slot_ty(*slot);
+            if !kinds.contains(&ty) {
+                kinds.push(ty);
             }
-            match tmps.get(j) {
-                Some(tmp) => {
-                    self.view_set(*slot, crate::Operand::Copy(*tmp));
-                    self.view_null(*tmp);
+        }
+        for kind in kinds {
+            let group_tmps: Vec<crate::LocalId> = tmps
+                .iter()
+                .copied()
+                .filter(|t| self.view_slot_ty(*t) == kind)
+                .collect();
+            let group_slots: Vec<crate::LocalId> = slots
+                .iter()
+                .copied()
+                .filter(|t| self.view_slot_ty(*t) == kind)
+                .collect();
+            if group_tmps.len() > group_slots.len() {
+                self.report_ice(format!(
+                    "ICE: a view needs {} owner slots and its binding has {}",
+                    group_tmps.len(),
+                    group_slots.len()
+                ));
+                return;
+            }
+            for (j, slot) in group_slots.iter().enumerate() {
+                if replaces {
+                    self.view_release_slot(*slot);
                 }
-                None => self.view_null(*slot),
+                match group_tmps.get(j) {
+                    Some(tmp) => {
+                        self.view_set(*slot, crate::Operand::Copy(*tmp));
+                        self.view_null(*tmp);
+                    }
+                    None => self.view_null(*slot),
+                }
             }
         }
     }
@@ -584,47 +1026,104 @@ impl super::LoweringContext<'_> {
     pub(super) fn view_hold_release(&mut self, tmps: &[crate::LocalId]) {
         if !self.last_block_is_terminated() {
             for tmp in tmps {
-                self.emit_rc_release(*tmp, None);
+                self.view_release_slot(*tmp);
                 self.view_null(*tmp);
             }
         }
         self.views.slots.retain(|(s, _)| !tmps.contains(s));
     }
 
+    // the callee may replace the string before it returns a view into the new one
+    fn view_load_pending_leaves(&mut self, call: usize) {
+        let (due, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.views.pending_leaves)
+            .into_iter()
+            .partition(|p| p.0 == call);
+        self.views.pending_leaves = keep;
+        if self.last_block_is_terminated() {
+            return;
+        }
+        for (_, tmps, base, plan) in due {
+            match plan {
+                LeafPlan::Paths(paths) => {
+                    for (tmp, path) in tmps.iter().zip(paths.iter()) {
+                        self.view_release_slot(*tmp);
+                        self.load_leaf(*tmp, base, path);
+                        self.view_retain_slot(*tmp);
+                    }
+                }
+                LeafPlan::Whole(_) => {
+                    for tmp in &tmps {
+                        self.view_release_slot(*tmp);
+                        self.load_leaf(*tmp, base, &[]);
+                        self.view_retain_slot(*tmp);
+                    }
+                }
+            }
+        }
+    }
+
     pub(super) fn view_capture(&mut self, e: &TypedExpr, value: Option<&crate::Operand>) {
         let k = key(e);
+        if value.is_some() && self.views.pending_leaves.iter().any(|p| p.0 == k) {
+            self.view_load_pending_leaves(k);
+        }
         let positions: Vec<usize> = (0..self.views.captures.len())
             .filter(|i| self.views.captures[*i].0 == k)
             .collect();
-        if positions.is_empty() {
-            return;
-        }
-        let is_rc = matches!(e.ty, InferType::Rc(_));
-        let values: Vec<crate::Operand> = if let (true, Some(v)) = (is_rc, value) {
-            vec![v.clone()]
-        } else {
-            let TypedExprKind::Identifier(name) = &e.kind else {
-                return;
-            };
-            let Some(slots) = self
-                .lookup_local(name)
-                .and_then(|l| self.views.slot_of.get(&l).cloned())
-            else {
-                self.report_ice(format!("ICE: view binding `{name}` has no owner slot"));
-                return;
-            };
-            slots.into_iter().map(crate::Operand::Copy).collect()
-        };
         for pos in positions {
-            self.views.captures[pos].2 = true;
+            let kind = self.views.captures[pos].3;
             let tmps = self.views.captures[pos].1.clone();
+            let values: Vec<crate::Operand> = match (kind, value) {
+                (CapKind::Rc | CapKind::Text, Some(v)) => vec![v.clone()],
+                (CapKind::Rc, None) => {
+                    let TypedExprKind::Identifier(name) = &e.kind else {
+                        continue;
+                    };
+                    let Some(id) = self.lookup_local(name) else {
+                        continue;
+                    };
+                    if self.capture_slots.contains_key(&id) {
+                        continue;
+                    }
+                    vec![crate::Operand::Copy(id)]
+                }
+                (CapKind::Text | CapKind::Leaves(_), None) => continue,
+                (CapKind::Leaves(call), Some(v)) => {
+                    self.views.captures[pos].2 = true;
+                    if self.last_block_is_terminated() {
+                        return;
+                    }
+                    let ptr_ty = self.lower_type_from_infer(&e.ty);
+                    let base = self.operand_to_local(v.clone(), &ptr_ty);
+                    let plan = self.view_leaf_plan(&e.ty).ok().flatten();
+                    if let Some(plan) = plan {
+                        self.views.pending_leaves.retain(|p| p.1 != tmps);
+                        self.views.pending_leaves.push((call, tmps, base, plan));
+                    }
+                    continue;
+                }
+                (CapKind::Ident, _) => {
+                    let TypedExprKind::Identifier(name) = &e.kind else {
+                        continue;
+                    };
+                    let Some(slots) = self
+                        .lookup_local(name)
+                        .and_then(|l| self.views.slot_of.get(&l).cloned())
+                    else {
+                        self.report_ice(format!("ICE: view binding `{name}` has no owner slot"));
+                        return;
+                    };
+                    slots.into_iter().map(crate::Operand::Copy).collect()
+                }
+            };
+            self.views.captures[pos].2 = true;
             if self.last_block_is_terminated() {
                 return;
             }
             for (tmp, v) in tmps.iter().zip(values.iter()) {
-                self.emit_rc_release(*tmp, None);
+                self.view_release_slot(*tmp);
                 self.view_set(*tmp, v.clone());
-                self.emit_rc_retain(crate::Operand::Copy(*tmp), None);
+                self.view_retain_slot(*tmp);
             }
         }
     }
@@ -660,7 +1159,7 @@ impl super::LoweringContext<'_> {
             .collect();
         if !self.last_block_is_terminated() {
             for slot in below {
-                self.emit_rc_release(slot, None);
+                self.view_release_slot(slot);
                 self.view_null(slot);
             }
         }
@@ -672,19 +1171,19 @@ impl super::LoweringContext<'_> {
     // the codegen leaves locals uninitialised and a slot is released before every write
     pub(super) fn view_hoist_nulls(&mut self) {
         let nulls = std::mem::take(&mut self.views.entry_nulls);
-        let Some(entry) = self.current_blocks.first_mut() else {
-            return;
-        };
         let stmts: Vec<crate::AirStmt> = nulls
             .into_iter()
             .map(|slot| crate::AirStmt {
                 kind: crate::AirStmtKind::Assign {
                     place: crate::Place::Local(slot),
-                    rvalue: crate::Rvalue::Use(crate::Operand::Const(crate::AirConst::Null)),
+                    rvalue: crate::Rvalue::Use(self.view_null_value(slot)),
                 },
                 span: None,
             })
             .collect();
+        let Some(entry) = self.current_blocks.first_mut() else {
+            return;
+        };
         entry.stmts.splice(0..0, stmts);
     }
 
@@ -703,7 +1202,7 @@ impl super::LoweringContext<'_> {
                 .copied(),
         );
         for tmp in tmps {
-            self.emit_rc_release(tmp, None);
+            self.view_release_slot(tmp);
             self.view_null(tmp);
         }
     }
@@ -718,7 +1217,7 @@ impl super::LoweringContext<'_> {
     pub(super) fn view_release_all_for_return(&mut self) {
         let all: Vec<crate::LocalId> = self.views.slots.iter().map(|(s, _)| *s).collect();
         for slot in all {
-            self.emit_rc_release(slot, None);
+            self.view_release_slot(slot);
         }
     }
 }

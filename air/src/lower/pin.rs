@@ -141,6 +141,14 @@ fn stmt_may_write_local(stmt: &TypedStmt, name: &str) -> bool {
     }
 }
 
+fn same_value(a: &Operand, b: &Operand) -> bool {
+    match (a, b) {
+        (Operand::Copy(x) | Operand::Move(x), Operand::Copy(y) | Operand::Move(y)) => x == y,
+        (Operand::Const(_), Operand::Const(_)) => true,
+        _ => false,
+    }
+}
+
 pub(super) fn peel(expr: &TypedExpr) -> &TypedExpr {
     let mut e = expr;
     while let TypedExprKind::Grouping(inner) = &e.kind {
@@ -358,6 +366,28 @@ impl<'a> LoweringContext<'a> {
         Operand::Copy(copy)
     }
 
+    pub(super) fn frame_held_here(&self, expr: &TypedExpr) -> bool {
+        super::view_owner::frame_held(peel(expr), &|n| {
+            self.lookup_local(n)
+                .is_some_and(|id| !self.capture_slots.contains_key(&id))
+        })
+    }
+
+    pub(super) fn owned_here(&self, op: &Operand) -> bool {
+        match op {
+            Operand::Const(_) => true,
+            Operand::Copy(id) | Operand::Move(id) => {
+                self.stmt_str_temps.iter().any(|(l, _)| l == id)
+                    || self.fresh_str_results.contains(id)
+                    || self.str_operand_is_fresh(op)
+            }
+        }
+    }
+
+    pub(super) fn needs_call_share(&self, e: &TypedExpr, op: &Operand) -> bool {
+        !self.in_nogc && !self.frame_held_here(e) && !self.owned_here(op)
+    }
+
     // the share is taken as each operand is read, so a later sibling cannot change what it holds
     pub(super) fn lower_call_operands(
         &mut self,
@@ -376,10 +406,11 @@ impl<'a> LoweringContext<'a> {
                 let held = self.view_hold(e);
                 let op = self.lower_expr(e);
                 self.view_hold_done(held);
-                let op = if runs_code && self.roots_in_global(e) {
-                    self.hold_global_read(op, e, sp)
-                } else {
-                    self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp)
+                let share = runs_code && (self.roots_in_global(e) || self.needs_call_share(e, &op));
+                let kept = share.then(|| self.hold_global_read(op.clone(), e, sp));
+                let op = match kept {
+                    Some(kept) if !same_value(&kept, &op) => kept,
+                    _ => self.hold_operand(op, e, &exprs[i + 1..], consumer_takes_mut, sp),
                 };
                 if own_each {
                     self.own_str_for_store(op, &e.ty, sp)

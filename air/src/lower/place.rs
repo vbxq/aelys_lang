@@ -1,4 +1,5 @@
 use super::LoweringContext;
+use super::view_owner::LeafStep;
 use crate::*;
 use aelys_sema::{InferType, TypedExpr, TypedExprKind, deref_is_shared};
 
@@ -246,5 +247,45 @@ impl<'a> LoweringContext<'a> {
             sp,
         );
         tmp
+    }
+
+    pub(super) fn load_leaf(&mut self, tmp: LocalId, base: LocalId, path: &[(LeafStep, AirType)]) {
+        let mut ptr = base;
+        let Some(((last, _), inner)) = path.split_last() else {
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(tmp),
+                    rvalue: Rvalue::Deref(Operand::Copy(ptr)),
+                },
+                None,
+            );
+            return;
+        };
+        for (step, ty) in inner {
+            let place = match step {
+                LeafStep::Field(f) => Place::Field(ptr, f.clone()),
+                LeafStep::Index(i) => {
+                    Place::Index(ptr, Operand::Const(AirConst::IntLiteral(*i as i64)))
+                }
+            };
+            ptr = self.emit_addr_of(place, ty, None);
+        }
+        let rvalue = match last {
+            LeafStep::Field(f) => Rvalue::FieldAccess {
+                base: Operand::Copy(ptr),
+                field: f.clone(),
+            },
+            LeafStep::Index(i) => Rvalue::Index {
+                base: Operand::Copy(ptr),
+                index: Operand::Const(AirConst::IntLiteral(*i as i64)),
+            },
+        };
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(tmp),
+                rvalue,
+            },
+            None,
+        );
     }
 }

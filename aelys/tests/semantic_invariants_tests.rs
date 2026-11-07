@@ -4101,7 +4101,7 @@ fn group_pa_choke_set_is_tracked() {
             occurrences(&all, "Rvalue::Deref("),
             occurrences(&repo_all, "addr_of_own_temp("),
         ),
-        (8, 6, 13, 8, 6),
+        (8, 6, 13, 9, 6),
         "the choke set moved; the first three are counted over air/src/lower minus place.rs, \
          `Rvalue::Deref(` over all of air/src/lower, and `addr_of_own_temp(` over the repo minus \
          target as one definition and five callers. str_escape.rs and str_temps.rs read these \
@@ -4111,7 +4111,8 @@ fn group_pa_choke_set_is_tracked() {
          str_escape.rs reads them again to tell an address that is only lent, to a place base or \
          to a callee that retains, from one that escapes, and expr.rs reads the old value of a \
          field, an element or a pointee before a store replaces it, and str_temps.rs reads them \
-         to find the array a literal built in place"
+         to find the array a literal built in place, and place.rs loads the string a returned \
+         view may point into"
     );
 }
 

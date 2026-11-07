@@ -1855,7 +1855,7 @@ const AIR_REJECTION_CENSUS: &[(&str, usize)] = &[
     ("air/src/lower/expr.rs", 2),
     ("air/src/lower/mod.rs", 1),
     ("air/src/lower/stmts.rs", 7),
-    ("air/src/lower/view_owner.rs", 3),
+    ("air/src/lower/view_owner.rs", 5),
 ];
 
 // a `#[cfg(test)]` item is not the compiler, so it must not read as a site in it

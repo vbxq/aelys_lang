@@ -145,6 +145,7 @@ impl<'a> LoweringContext<'a> {
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
         let saved_views = std::mem::take(&mut self.views);
+        let saved_nogc = std::mem::replace(&mut self.in_nogc, func.declared_nogc);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
         let saved_loop_stack = std::mem::take(&mut self.loop_stack);
         let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
@@ -186,6 +187,7 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals = saved_cow_locals;
         self.cow_zombies = saved_cow_zombies;
         self.views = saved_views;
+        self.in_nogc = saved_nogc;
         self.str_locals = saved_str_locals;
         self.loop_stack = saved_loop_stack;
         self.carrier_locals = saved_carrier_locals;
@@ -385,6 +387,7 @@ impl<'a> LoweringContext<'a> {
         let saved_cow_locals = std::mem::take(&mut self.cow_locals);
         let saved_cow_zombies = std::mem::take(&mut self.cow_zombies);
         let saved_views = std::mem::take(&mut self.views);
+        let saved_nogc = std::mem::replace(&mut self.in_nogc, func.declared_nogc);
         let saved_str_locals = std::mem::take(&mut self.str_locals);
         let saved_loop_stack = std::mem::take(&mut self.loop_stack);
         let saved_carrier_locals = std::mem::take(&mut self.carrier_locals);
@@ -417,6 +420,7 @@ impl<'a> LoweringContext<'a> {
         self.cow_locals = saved_cow_locals;
         self.cow_zombies = saved_cow_zombies;
         self.views = saved_views;
+        self.in_nogc = saved_nogc;
         self.str_locals = saved_str_locals;
         self.loop_stack = saved_loop_stack;
         self.carrier_locals = saved_carrier_locals;
