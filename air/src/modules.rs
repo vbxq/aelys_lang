@@ -359,6 +359,7 @@ fn qualify_type(ty: &mut AirType, q: &Qualifier) {
         }
         AirType::Enum(r) => qualify_enum_ref(r, q),
         AirType::Ptr(inner)
+        | AirType::Rc(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => qualify_type(inner, q),
@@ -368,7 +369,22 @@ fn qualify_type(ty: &mut AirType, q: &Qualifier) {
             }
             qualify_type(ret, q);
         }
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 

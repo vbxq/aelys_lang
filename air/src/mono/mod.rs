@@ -240,6 +240,7 @@ impl EnumUses<'_> {
         match ty {
             AirType::Enum(r) => self.note(r),
             AirType::Ptr(inner)
+            | AirType::Rc(inner)
             | AirType::Array(inner, _)
             | AirType::Slice(inner)
             | AirType::Vec(inner) => self.ty(inner),
@@ -249,7 +250,23 @@ impl EnumUses<'_> {
                 }
                 self.ty(ret);
             }
-            _ => {}
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Struct(_)
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {}
         }
     }
 
@@ -382,6 +399,11 @@ pub(crate) fn substitute_type_params(
             type_params,
             type_args,
         ))),
+        AirType::Rc(inner) => AirType::Rc(Box::new(substitute_type_params(
+            inner,
+            type_params,
+            type_args,
+        ))),
         AirType::Array(inner, n) => AirType::Array(
             Box::new(substitute_type_params(inner, type_params, type_args)),
             *n,
@@ -412,7 +434,22 @@ pub(crate) fn substitute_type_params(
                 .map(|a| substitute_type_params(a, type_params, type_args))
                 .collect(),
         }),
-        other => other.clone(),
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Opaque
+        | AirType::Void => ty.clone(),
     }
 }
 
@@ -612,6 +649,11 @@ impl MonoContext {
                     self.unify_param(inner, arg_inner, fn_type_params, resolved, conflicts);
                 }
             }
+            AirType::Rc(inner) => {
+                if let AirType::Rc(arg_inner) = arg_ty {
+                    self.unify_param(inner, arg_inner, fn_type_params, resolved, conflicts);
+                }
+            }
             AirType::Array(inner, _) => {
                 if let AirType::Array(arg_inner, _) = arg_ty {
                     self.unify_param(inner, arg_inner, fn_type_params, resolved, conflicts);
@@ -650,7 +692,22 @@ impl MonoContext {
                     }
                 }
             }
-            _ => {}
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Struct(_)
+            | AirType::Opaque
+            | AirType::Void => {}
         }
     }
 

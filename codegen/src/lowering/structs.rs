@@ -146,7 +146,27 @@ impl<'a> FunctionCodegen<'a> {
                     .const_int(n, false)
                     .as_basic_value_enum());
             }
-            _ => {}
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {}
         }
 
         if let Operand::Copy(local) | Operand::Move(local) = base {
@@ -212,7 +232,7 @@ impl<'a> FunctionCodegen<'a> {
                     })?;
                     Ok((name.clone(), ty, self.lookup_local_ptr(*local)?))
                 }
-                AirType::Ptr(inner) => match inner.as_ref() {
+                AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
                     AirType::Struct(name) => {
                         let ty = self.context.get_struct_type(name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
@@ -222,12 +242,54 @@ impl<'a> FunctionCodegen<'a> {
                         self.emit_null_check(base)?;
                         Ok((name, ty, base))
                     }
-                    other => Err(CodegenError::UnsupportedType(format!(
+                    other @ (AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                         "field access pointer to non-struct {:?}",
                         other
                     ))),
                 },
-                other => Err(CodegenError::UnsupportedType(format!(
+                other @ (AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Enum(_)
+                | AirType::Array(..)
+                | AirType::Slice(_)
+                | AirType::Vec(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                     "field access on non-struct type {:?}",
                     other
                 ))),

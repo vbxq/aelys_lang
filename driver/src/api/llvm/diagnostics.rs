@@ -245,6 +245,31 @@ pub(super) fn vec_surface_errors_to_error(
     AelysError::Multiple(diagnostics)
 }
 
+pub(super) fn instance_surface_errors_to_error(
+    errors: Vec<aelys_air::passes::instance_surface::InstanceSurfaceError>,
+    air: &aelys_air::AirProgram,
+    files: &[Arc<Source>],
+    root: Arc<Source>,
+) -> AelysError {
+    let diagnostics: Vec<Diagnostic> = errors
+        .iter()
+        .map(|err| {
+            let (source, span) = match err.span {
+                Some(s) => {
+                    let source = files.get(s.file as usize).cloned().unwrap_or(root.clone());
+                    let span = air_span_to_syntax_span(s, source.as_ref());
+                    (source, span)
+                }
+                None => (root.clone(), program_anchor_span(air, root.as_ref())),
+            };
+            Diagnostic::new(Severity::Error, &user_facing(err.message.as_str()))
+                .with_code(err.code)
+                .with_primary_label(source, span, Some("instantiated here".to_string()))
+        })
+        .collect();
+    AelysError::Multiple(diagnostics)
+}
+
 pub(super) fn duplicate_symbol_errors_to_error(
     duplicates: Vec<aelys_air::symbols::DuplicateSymbol>,
     typed: &aelys_sema::TypedProgram,

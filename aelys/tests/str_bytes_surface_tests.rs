@@ -1683,10 +1683,15 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn sb32_a_block_whose_result_wraps_a_type_parameter_keeps_the_locals_it_may_point_into() {
+fn sb32_a_block_whose_result_wraps_a_reference_type_argument_is_refused() {
     let h = Harness::new();
-    h.differential_row("SB-37", SB37_GENERIC_ENUM_BLOCK_RESULT, "3027\n", (6, 6));
-    h.assert_legs(18);
+    h.rejects(
+        "SB-37",
+        SB37_GENERIC_ENUM_BLOCK_RESULT,
+        "E0714",
+        "the call to `through` in `main` instantiates it with `&i64`",
+    );
+    h.assert_legs(1);
 }
 
 const SB38_BINDINGS_THAT_OWN: &str = r#"

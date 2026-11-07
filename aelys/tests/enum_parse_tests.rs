@@ -1559,6 +1559,7 @@ fn sweep_pool() -> Vec<AirType> {
         AirType::Opaque,
         // the derivation is injective only because the grammar forces a capitalized struct name
         AirType::Struct("Ptr".into()),
+        AirType::Struct("Rc".into()),
         AirType::Struct("Enum".into()),
         AirType::Struct("R".into()),
         AirType::Struct("A_B".into()),
@@ -1568,6 +1569,7 @@ fn sweep_pool() -> Vec<AirType> {
     let leaves = pool.clone();
     for leaf in &leaves {
         pool.push(AirType::Ptr(Box::new(leaf.clone())));
+        pool.push(AirType::Rc(Box::new(leaf.clone())));
         pool.push(AirType::Slice(Box::new(leaf.clone())));
         pool.push(AirType::Vec(Box::new(leaf.clone())));
         pool.push(AirType::Array(Box::new(leaf.clone()), 2));
@@ -1598,7 +1600,7 @@ fn the_derived_enum_symbol_is_injective_over_the_type_pool() {
     use std::collections::HashMap;
 
     let bases = [
-        "Q", "Q_ptr", "E", "E_x", "Opt", "Pair", "ptr", "enum", "param", "fnptr",
+        "Q", "Q_ptr", "E", "E_x", "Opt", "Pair", "ptr", "rc", "enum", "param", "fnptr",
     ];
     let pool = sweep_pool();
     let mut by_symbol: HashMap<String, String> = HashMap::new();

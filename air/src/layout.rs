@@ -58,7 +58,7 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::I16 | AirType::U16 => TypeLayout { size: 2, align: 2 },
         AirType::I32 | AirType::U32 | AirType::F32 | AirType::Char => TypeLayout { size: 4, align: 4 },
         AirType::I64 | AirType::U64 | AirType::F64 => TypeLayout { size: 8, align: 8 },
-        AirType::Ptr(_) => TypeLayout { size: 8, align: 8 },
+        AirType::Ptr(_) | AirType::Rc(_) => TypeLayout { size: 8, align: 8 },
         AirType::FnPtr { .. } => TypeLayout { size: 16, align: 8 },
         AirType::Str => TypeLayout { size: 16, align: 8 },
         AirType::Void => TypeLayout { size: 0, align: 1 },
@@ -208,6 +208,7 @@ fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
         | AirType::U64
         | AirType::F64
         | AirType::Ptr(_)
+        | AirType::Rc(_)
         | AirType::FnPtr { .. }
         | AirType::Str
         | AirType::Void
@@ -234,7 +235,27 @@ pub fn resolved_layout(ty: &AirType, sizes: &HashMap<String, TypeLayout>) -> Typ
                 align: el.align,
             }
         }
-        other => layout_of(other),
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => layout_of(ty),
     }
 }
 
@@ -284,7 +305,28 @@ fn references_by_value(ty: &AirType, target: &str) -> bool {
     match ty {
         AirType::Struct(name) => name == target,
         AirType::Array(inner, _) => references_by_value(inner, target),
-        _ => false,
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Enum(_)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => false,
     }
 }
 
@@ -294,7 +336,28 @@ fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
             deps.insert(name.clone());
         }
         AirType::Array(inner, _) => field_struct_deps(inner, deps),
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Enum(_)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 

@@ -152,13 +152,13 @@ impl<'a> LoweringContext<'a> {
         object: &TypedExpr,
         mode: PlaceMode,
     ) -> Option<Addr> {
-        if let AirType::Ptr(inner) = self.lower_type_from_infer(&object.ty) {
-            let ptr_ty = AirType::Ptr(inner.clone());
+        let object_ty = self.lower_type_from_infer(&object.ty);
+        if let Some(inner) = object_ty.pointee().cloned() {
             let op = self.lower_expr(object);
-            let ptr = self.operand_to_local(op, &ptr_ty);
+            let ptr = self.operand_to_local(op, &object_ty);
             return Some(Addr {
                 ptr,
-                pointee: *inner,
+                pointee: inner,
                 root: PlaceRoot::Pointee,
                 shared: deref_is_shared(&object.ty),
             });

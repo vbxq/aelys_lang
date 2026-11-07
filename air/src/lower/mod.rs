@@ -67,18 +67,7 @@ pub struct Imported {
     pub bir: crate::bir::Imports,
     pub fresh_returns: std::collections::HashSet<String>,
     pub retaining_fns: std::collections::HashSet<String>,
-    pub lent_returns: std::collections::HashSet<String>,
-}
-
-// a bare type parameter return shares its instance between a reference and an rc, so it only lends
-pub fn lent_returning_generics(program: &TypedProgram) -> std::collections::HashSet<String> {
-    let mut out = std::collections::HashSet::new();
-    crate::bir::build::for_each_fn_decl(&program.stmts, &mut |func, _| {
-        if matches!(&func.return_type, InferType::Struct(name) if func.type_params.contains(name)) {
-            out.insert(func.name.clone());
-        }
-    });
-    out
+    pub file: u32,
 }
 
 pub fn try_lower(program: &TypedProgram) -> Result<AirProgram, LowerFailure> {
@@ -104,10 +93,6 @@ fn lower_against_proven_returns(
     loop {
         let mut cx = LoweringContext::new(program);
         cx.imported = imported.clone();
-        cx.lent_returns = lent_returning_generics(program)
-            .union(&imported.lent_returns)
-            .cloned()
-            .collect();
         if let Some(mode) = file_gc_mode {
             cx.file_gc_mode = mode;
         }
@@ -193,7 +178,6 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) lowering_errors: Vec<LowerError>,
     pub(super) fresh_returns: std::collections::HashSet<String>,
     pub(super) retaining_fns: std::collections::HashSet<String>,
-    pub(super) lent_returns: std::collections::HashSet<String>,
 }
 
 pub(super) enum StrInit {
@@ -270,7 +254,6 @@ impl<'a> LoweringContext<'a> {
             lowering_errors: Vec::new(),
             fresh_returns: std::collections::HashSet::new(),
             retaining_fns: std::collections::HashSet::new(),
-            lent_returns: std::collections::HashSet::new(),
         }
     }
 
@@ -438,7 +421,7 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn span(&self, s: &aelys_syntax::Span) -> Span {
         Span {
-            file: 0,
+            file: self.imported.file,
             lo: s.start as u32,
             hi: s.end as u32,
         }
@@ -586,8 +569,7 @@ impl<'a> LoweringContext<'a> {
                 AirType::Slice(Box::new(self.lower_type_from_infer(inner)))
             }
             InferType::Vec(inner) => AirType::Vec(Box::new(self.lower_type_from_infer(inner))),
-            // lowering and the runtime, never in the type
-            InferType::Rc(inner) => AirType::Ptr(Box::new(self.lower_type_from_infer(inner))),
+            InferType::Rc(inner) => AirType::Rc(Box::new(self.lower_type_from_infer(inner))),
             // references erase to raw ptr / fat {ptr,len}, mutability is dropped
             InferType::Ref { referent, .. } => {
                 AirType::Ptr(Box::new(self.lower_type_from_infer(referent)))

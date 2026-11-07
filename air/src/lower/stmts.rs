@@ -95,7 +95,7 @@ impl<'a> LoweringContext<'a> {
             self.emit_cow_release(local, sp);
             return;
         }
-        if matches!(ty, Some(AirType::Ptr(_))) {
+        if matches!(ty, Some(AirType::Rc(_))) {
             self.emit_rc_release(local, sp);
             return;
         }
@@ -202,7 +202,7 @@ impl<'a> LoweringContext<'a> {
         if self.counted(ty) {
             return self.retained_str_copy(op, sp);
         }
-        if matches!(shape.ty, AirType::Ptr(_)) {
+        if matches!(shape.ty, AirType::Rc(_)) {
             if !self.last_block_is_terminated() {
                 self.emit_rc_retain(op.clone(), sp);
             }
@@ -732,8 +732,7 @@ impl<'a> LoweringContext<'a> {
                     tag,
                     field_index,
                 } => {
-                    let payload_ty =
-                        self.air_enum_payload_type(&enum_ref.symbol(), *tag, *field_index);
+                    let payload_ty = self.air_enum_payload_type(enum_ref, *tag, *field_index);
                     cur = self.emit_rvalue_to_temp(
                         payload_ty.clone(),
                         Rvalue::EnumPayload {
@@ -763,22 +762,18 @@ impl<'a> LoweringContext<'a> {
                 }
             }
         }
-        AirType::Ptr(Box::new(AirType::Void))
+        AirType::Rc(Box::new(AirType::Void))
     }
 
-    fn air_enum_payload_type(&self, enum_name: &str, tag: u32, field_index: u32) -> AirType {
-        let mine = self.enums.iter();
-        if let Some(def) = mine
-            .chain(self.imported.enums.iter())
-            .find(|e| e.name == enum_name)
-        {
+    fn air_enum_payload_type(&self, enum_ref: &EnumRef, tag: u32, field_index: u32) -> AirType {
+        if let Some(def) = crate::rc_paths::enum_instance(enum_ref, self.defs()) {
             if let Some(v) = def.variants.iter().find(|v| v.tag == tag) {
                 if let Some(ty) = v.payload.get(field_index as usize) {
                     return ty.clone();
                 }
             }
         }
-        AirType::Ptr(Box::new(AirType::Void))
+        AirType::Rc(Box::new(AirType::Void))
     }
 
     pub(super) fn emit_carrier_field_retains(
@@ -880,7 +875,29 @@ impl<'a> LoweringContext<'a> {
                 let air_ty = ty.clone();
                 let declared_len = match &ty {
                     AirType::Array(_, n) => Some(*n),
-                    _ => None,
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void => None,
                 };
                 if let Some(declared_len) = declared_len {
                     match &initializer.kind {

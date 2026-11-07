@@ -112,9 +112,9 @@ pub fn compute_offset_for_path(
         }
     }
 
-    if !matches!(cur, AirType::Ptr(_)) {
+    if !matches!(cur, AirType::Rc(_)) {
         return Err(RcOffsetError(format!(
-            "Rc path does not terminate on a pointer leaf (ended on {cur:?})"
+            "Rc path does not terminate on an rc leaf (ended on {cur:?})"
         )));
     }
     Ok(acc)

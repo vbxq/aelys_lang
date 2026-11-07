@@ -1799,3 +1799,630 @@ fn rc2_49_a_payload_of_only_rc_leaves_copied_through_a_mutable_reference_takes_i
     h.lsan_row("rc2-49", RC2_49, &[], "ab2 ab12345\n");
     h.assert_legs(24);
 }
+
+fn refusal_row(id: &str, src: &str, files: &[(&str, &str)], code: &str, needle: &str) {
+    let h = Harness::new();
+    for (tag, opt) in LEVELS {
+        let root = h.stage(id, &format!("{tag}_refuse"), src, files);
+        let err = compile_file_with_llvm_variant(&root, *opt, false, RuntimeVariant::Rc)
+            .expect_err(&format!("{id} at {tag} compiled"));
+        let text = err.to_string();
+        assert!(
+            text.contains(&format!("[{code}]")),
+            "{id} at {tag}: code\n{text}"
+        );
+        assert!(
+            !text.contains("E0432"),
+            "{id} at {tag}: verdict split\n{text}"
+        );
+        assert!(text.contains(needle), "{id} at {tag}: diagnostic\n{text}");
+    }
+}
+
+const RC2_50: &str = r#"
+fn boxit<T>(x: T) -> i64 {
+    let r: Rc<T> = Rc::new(x)
+    return 1
+}
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let n: i64 = boxit(a)
+    let b: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(a) + n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_50_an_rc_boxed_by_a_generic_takes_its_share_for_the_new_payload() {
+    let h = Harness::new();
+    h.differential_row("rc2-50", RC2_50, &[], "42\n", (3, 3));
+    h.lsan_row("rc2-50", RC2_50, &[], "42\n");
+    h.assert_legs(24);
+}
+
+const RC2_51: &str = r#"
+fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let r: Rc<Rc<i64>> = wrap(a)
+    let b: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(a)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_51_an_rc_wrapped_and_returned_by_a_generic_is_released_once() {
+    let h = Harness::new();
+    h.differential_row("rc2-51", RC2_51, &[], "41\n", (3, 3));
+    h.lsan_row("rc2-51", RC2_51, &[], "41\n");
+    h.assert_legs(24);
+}
+
+const RC2_52: &str = r#"
+fn boxit<T>(mut x: T, y: T) -> i64 {
+    let z: T = y
+    x = z
+    let r: Rc<T> = Rc::new(x)
+    return 1
+}
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let c: Rc<i64> = Rc::new(5)
+    let n: i64 = boxit(c, a)
+    let b: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(a) + Rc::get(c) + n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_52_a_generic_parameter_reassigned_from_another_rc_keeps_both_shares() {
+    let h = Harness::new();
+    h.differential_row("rc2-52", RC2_52, &[], "47\n", (4, 4));
+    h.lsan_row("rc2-52", RC2_52, &[], "47\n");
+    h.assert_legs(24);
+}
+
+const RC2_53: &str = r#"
+enum One<T> { It(T) }
+struct W { r: Rc<i64> }
+fn boxone<T>(x: T) -> i64 {
+    let r: Rc<One<T>> = Rc::new(One::It(x))
+    return 1
+}
+fn main() -> i64 {
+    let w: W = W { r: Rc::new(41) }
+    let n: i64 = boxone(w)
+    let b: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(w.r) + n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_53_an_rc_leaf_under_a_generic_enum_payload_is_released_with_the_payload() {
+    let h = Harness::new();
+    h.differential_row("rc2-53", RC2_53, &[], "42\n", (3, 3));
+    h.lsan_row("rc2-53", RC2_53, &[], "42\n");
+    h.assert_legs(24);
+}
+
+const RC2_54: &str = r#"
+enum One<T> { It(T) }
+fn f_match<T>(x: T) -> T {
+    let o: One<T> = One::It(x)
+    return match o { One::It(p) => p }
+}
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let v: Rc<i64> = f_match(a)
+    let z: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(v) + Rc::get(a)}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_54_an_rc_through_a_single_variant_generic_enum_comes_back_with_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-54", RC2_54, &[], "82\n", (2, 2));
+    h.lsan_row("rc2-54", RC2_54, &[], "82\n");
+    h.assert_legs(24);
+}
+
+const RC2_55_LIB: &str = r#"
+pub fn boxit<T>(x: T) -> i64 {
+    let r: Rc<T> = Rc::new(x)
+    return 1
+}
+"#;
+
+const RC2_55: &str = r#"
+needs lib1
+fn main() -> i64 {
+    let a: Rc<i64> = Rc::new(41)
+    let n: i64 = lib1.boxit(a)
+    let b: Rc<i64> = Rc::new(1000)
+    println("{Rc::get(a) + n}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_55_an_imported_generic_boxing_an_rc_takes_its_share() {
+    let h = Harness::new();
+    let files = [("lib1.aelys", RC2_55_LIB)];
+    h.differential_row("rc2-55", RC2_55, &files, "42\n", (3, 3));
+    h.lsan_row("rc2-55", RC2_55, &files, "42\n");
+    h.assert_legs(24);
+}
+
+#[test]
+fn rc2_56_a_reference_boxed_by_a_generic_is_refused_at_the_call() {
+    refusal_row(
+        "rc2-56",
+        "fn boxit<T>(x: T) -> i64 {\n    let r: Rc<T> = Rc::new(x)\n    return 1\n}\n\
+         fn main() -> i64 {\n    let a: [i64; 3] = [7, 0, 41]\n    let n: i64 = boxit(&a[2])\n\
+         \x20   println(\"{a[0]} {a[2] + n}\")\n    return 0\n}\n",
+        &[],
+        "E0714",
+        "the call to `boxit` in `main` instantiates it with `&i64`, which makes a `Rc<&i64>`",
+    );
+}
+
+#[test]
+fn rc2_57_a_reference_wrapped_in_an_rc_by_a_generic_in_a_loop_is_refused() {
+    refusal_row(
+        "rc2-57",
+        "fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\nfn main() -> i64 {\n\
+         \x20   let s: [i64; 3] = [1, 0, 41]\n    let mut i: i64 = 0\n    while i < 2 {\n\
+         \x20       let r: Rc<&i64> = wrap(&s[2])\n        i = i + 1\n    }\n\
+         \x20   println(\"{s[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0714",
+        "the call to `wrap` in `main`",
+    );
+}
+
+#[test]
+fn rc2_58_a_stack_reference_escaping_in_a_generic_enum_is_refused() {
+    refusal_row(
+        "rc2-58",
+        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> One<T> { return One::It(x) }\n\
+         fn mk() -> One<&i64> {\n    let v: [i64; 3] = [7, 8, 9]\n    return wrapone(&v[1])\n}\n\
+         fn main() -> i64 {\n    let o: One<&i64> = mk()\n\
+         \x20   let n: i64 = match o { One::It(p) => *p }\n    println(\"{n}\")\n    return 0\n}\n",
+        &[],
+        "E0714",
+        "the call to `wrapone` in `mk` instantiates it with `&i64`, which makes a `One<&i64>`",
+    );
+}
+
+#[test]
+fn rc2_59_a_stack_reference_escaping_in_an_rc_of_a_generic_enum_is_refused() {
+    refusal_row(
+        "rc2-59",
+        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> Rc<One<T>> { return Rc::new(One::It(x)) }\n\
+         fn mk() -> Rc<One<&i64>> {\n    let v: [i64; 3] = [7, 8, 9]\n    return wrapone(&v[1])\n}\n\
+         fn main() -> i64 {\n    let r: Rc<One<&i64>> = mk()\n    return 0\n}\n",
+        &[],
+        "E0714",
+        "which makes a `Rc<One<&i64>>`",
+    );
+}
+
+#[test]
+fn rc2_60_an_rc_placed_in_an_array_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-60",
+        "fn f_arr<T>(a: T, b: T) -> T {\n    let arr: [T; 2] = [a, b]\n    return arr[0]\n}\n\
+         fn main() -> i64 {\n    let a: Rc<i64> = Rc::new(41)\n    let b: Rc<i64> = Rc::new(2)\n\
+         \x20   let v: Rc<i64> = f_arr(a, b)\n    println(\"{Rc::get(v) + Rc::get(a)}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0410",
+        "the call to `f_arr` in `main` instantiates it with `Rc<i64>`, which makes a `[Rc<i64>; 2]`",
+    );
+}
+
+#[test]
+fn rc2_61_an_rc_carrier_placed_in_an_array_inside_an_rc_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-61",
+        "struct W { r: Rc<i64> }\nfn boxarr<T>(x: T) -> i64 {\n\
+         \x20   let r: Rc<[T; 2]> = Rc::new([x, x])\n    return 1\n}\n\
+         fn main() -> i64 {\n    let w: W = W { r: Rc::new(41) }\n    let n: i64 = boxarr(w)\n\
+         \x20   println(\"{Rc::get(w.r) + n}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "which makes a `[W; 2]`",
+    );
+}
+
+#[test]
+fn rc2_62_an_imported_generic_boxing_a_reference_is_refused() {
+    refusal_row(
+        "rc2-62",
+        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
+         \x20   let n: i64 = lib1.boxit(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        &[("lib1.aelys", RC2_55_LIB)],
+        "E0714",
+        "the call to `lib1.boxit` in `main`",
+    );
+}
+
+const RC2_63: &str = r#"
+struct N { s: string }
+struct W { r: Rc<N>, k: i64 }
+enum May<T> { Yes(T), No }
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn wrap<T>(x: T) -> May<T> { return May::Yes(x) }
+fn main() -> i64 {
+    let mut i = 0
+    let mut t = 0
+    while i < 1000 { let r = Rc::new(N { s: victim(i) })
+      let m = wrap(W { r: r, k: i })
+      match m { May::Yes(w) => { t = t + w.k } May::No => { t = t } }
+      i = i + 1 }
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_63_an_rc_carrier_in_a_multi_variant_generic_enum_is_refused() {
+    refusal_row("rc2-63", RC2_63, &[], "E0410", "which makes a `May<W>`");
+}
+
+#[test]
+fn rc2_64_an_rc_through_a_single_variant_enum_in_a_multi_variant_enum_is_refused() {
+    refusal_row(
+        "rc2-64",
+        "struct N { s: string }\nenum One { It(Rc<N>) }\nenum L { A(One), B(i64) }\n\
+         fn go(l: L) -> i64 { match l { L::A(o) => { match o { One::It(r) => { return Rc::get(r).s.len } } } L::B(k) => { return k } } }\n\
+         fn main() -> i64 {\n    let r = Rc::new(N { s: \"ab\" })\n\
+         \x20   println(\"{go(L::A(One::It(r)))}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "`L::A` is given a value of type `One`, which holds an `Rc`: an enum with more than one \
+         variant cannot carry an Rc yet",
+    );
+}
+
+const RC2_65: &str = r#"
+struct N { v: i64 }
+enum One<T> { It(T) }
+fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { return 1 }
+fn main() -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let p: Rc<N> = Rc::new(N { v: i })
+        s = s + use1(mk1(p))
+        i = i + 1
+    }
+    println("{s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_65_a_generic_enum_instance_passed_as_an_argument_releases_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc2-65", RC2_65, &[], "1000\n", (1000, 1000));
+    h.lsan_row("rc2-65", RC2_65, &[], "1000\n");
+    h.assert_legs(24);
+}
+
+const RC2_66: &str = r#"
+struct N { v: i64 }
+enum One<T> { It(T) }
+fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn get1<T>(o: One<T>) -> T {
+    return match o {
+        One::It(v) => v
+    }
+}
+fn main() -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let q: Rc<N> = get1(mk1(Rc::new(N { v: i })))
+        s = s + Rc::get(q).v
+        i = i + 1
+    }
+    println("{s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_66_a_generic_enum_instance_unwrapped_by_a_generic_releases_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc2-66", RC2_66, &[], "499500\n", (1000, 1000));
+    h.lsan_row("rc2-66", RC2_66, &[], "499500\n");
+    h.assert_legs(24);
+}
+
+const RC2_67: &str = r#"
+struct N { v: i64 }
+enum One<T> { It(T) }
+fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { return 1 }
+fn main() -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let p: Rc<N> = Rc::new(N { v: i })
+        let o = mk1(p)
+        s = s + use1(o)
+        i = i + 1
+    }
+    println("{s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_67_a_generic_enum_instance_bound_by_let_releases_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc2-67", RC2_67, &[], "1000\n", (1000, 1000));
+    h.lsan_row("rc2-67", RC2_67, &[], "1000\n");
+    h.assert_legs(24);
+}
+
+const RC2_68: &str = r#"
+struct N { v: i64 }
+enum One<T> { It(T) }
+fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { return 1 }
+fn go<T>(x: T) -> i64 { return use1(mk1(x)) }
+fn main() -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let p: Rc<N> = Rc::new(N { v: i })
+        s = s + go(p)
+        i = i + 1
+    }
+    println("{s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_68_a_generic_enum_instance_made_inside_a_generic_releases_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc2-68", RC2_68, &[], "1000\n", (1000, 1000));
+    h.lsan_row("rc2-68", RC2_68, &[], "1000\n");
+    h.assert_legs(24);
+}
+
+const RC2_69: &str = r#"
+struct N { v: i64 }
+enum One<T> { It(T) }
+struct H { o: One<Rc<N>>, k: i64 }
+fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn get1<T>(o: One<T>) -> T { return match o { One::It(v) => v } }
+fn main() -> i64 {
+    let mut s: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let p: Rc<N> = Rc::new(N { v: i })
+        mk1(p)
+        let k: i64 = match mk1(p) { One::It(q) => { let qq: Rc<N> = q
+            Rc::get(qq).v } }
+        let o = mk1(p)
+        let h: H = H { o: o, k: 2 }
+        let r: Rc<N> = get1(h.o)
+        s = s + k + h.k + Rc::get(r).v
+        i = i + 1
+    }
+    println("{s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_69_a_generic_enum_instance_discarded_matched_or_stored_in_a_field_releases_its_rc() {
+    let h = Harness::new();
+    h.differential_row("rc2-69", RC2_69, &[], "1001000\n", (1000, 1000));
+    h.lsan_row("rc2-69", RC2_69, &[], "1001000\n");
+    h.assert_legs(24);
+}
+
+#[test]
+fn rc2_70_an_rc_pushed_into_a_vec_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-70",
+        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
+         \x20   Vec::push(v, x)\n    Vec::push(v, x)\n    return Vec::len(v)\n}\n\
+         fn main() -> i64 {\n    let p: Rc<N> = Rc::new(N { v: 9 })\n    let n: i64 = mkv(p)\n\
+         \x20   println(\"{n} {Rc::get(p).v}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "the call to `mkv` in `main` instantiates it with `Rc<N>`, which makes a `Vec<Rc<N>>`: a \
+         `Vec` does not release the `Rc` it holds yet",
+    );
+}
+
+#[test]
+fn rc2_71_an_rc_pushed_into_a_vec_by_a_generic_in_a_loop_is_refused() {
+    refusal_row(
+        "rc2-71",
+        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
+         \x20   Vec::push(v, x)\n    return Vec::len(v)\n}\nfn main() -> i64 {\n\
+         \x20   let mut s: i64 = 0\n    let mut i: i64 = 0\n    while i < 1000 {\n\
+         \x20       let p: Rc<N> = Rc::new(N { v: i })\n        s = s + mkv(p)\n        i = i + 1\n\
+         \x20   }\n    println(\"{s}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "which makes a `Vec<Rc<N>>`",
+    );
+}
+
+#[test]
+fn rc2_72_an_rc_in_a_vec_copied_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-72",
+        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
+         \x20   Vec::push(v, x)\n    let w: Vec<T> = v\n    Vec::push(w, x)\n\
+         \x20   return Vec::len(v) + Vec::len(w)\n}\nfn main() -> i64 {\n\
+         \x20   let p: Rc<N> = Rc::new(N { v: 9 })\n    let n: i64 = two(p)\n\
+         \x20   println(\"{n} {Rc::get(p).v}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "the call to `two` in `main` instantiates it with `Rc<N>`, which makes a `Vec<Rc<N>>`",
+    );
+}
+
+#[test]
+fn rc2_73_a_byte_view_put_in_a_generic_enum_is_refused() {
+    refusal_row(
+        "rc2-73",
+        "enum One<T> { It(T) }\nfn mk1<T>(x: T) -> One<T> { return One::It(x) }\n\
+         fn first(o: One<&[u8]>) -> u8 {\n    return match o {\n        One::It(b) => b[0]\n    }\n}\n\
+         fn main() -> i64 {\n    let mut s: string = \"ab\" + \"cd\"\n    let o = mk1(s.bytes)\n\
+         \x20   s = \"zz\" + \"yy\"\n    let c: u8 = first(o)\n    println(\"{c} {s}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0714",
+        "the call to `mk1` in `main` instantiates it with `&[u8]`, which makes a `One<&[u8]>`",
+    );
+}
+
+#[test]
+fn rc2_74_a_byte_view_put_in_an_rc_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-74",
+        "fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\n\
+         fn first<T>(r: Rc<T>) -> T { return Rc::get(r) }\n\
+         fn byte0(b: &[u8]) -> u8 { return b[0] }\nfn main() -> i64 {\n\
+         \x20   let mut s: string = \"ab\" + \"cd\"\n    let r = wrap(s.bytes)\n\
+         \x20   s = \"zz\" + \"yy\"\n    let c: u8 = byte0(first(r))\n    println(\"{c} {s}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0714",
+        "the call to `wrap` in `main` instantiates it with `&[u8]`, which makes a `Rc<&[u8]>`",
+    );
+}
+
+const RC2_75_BURN: &str = "fn burn() -> i64 {\n\
+    \x20   let z: [i64; 16] = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]\n    return z[3]\n}\n\
+    fn main() -> i64 {\n    let v = esc(1)\n    let b: i64 = burn()\n    println(\"{*v[0]} {b}\")\n\
+    \x20   return 0\n}\n";
+
+#[test]
+fn rc2_75_a_reference_escaping_in_a_vec_made_by_a_generic_is_refused() {
+    let src = format!(
+        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new()\n    Vec::push(v, x)\n\
+         \x20   return v\n}}\nfn esc<T>(x: T) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41]\n\
+         \x20   return mkv(&a[2])\n}}\n{}",
+        RC2_75_BURN
+    );
+    refusal_row("rc2-75", &src, &[], "E0714", "which makes a `Vec<&i64>`");
+}
+
+#[test]
+fn rc2_76_a_reference_escaping_in_a_vec_made_by_a_generic_from_a_plain_function_is_refused() {
+    let src = format!(
+        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new()\n    Vec::push(v, x)\n\
+         \x20   return v\n}}\nfn esc(x: i64) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41]\n\
+         \x20   return mkv(&a[2])\n}}\n{}",
+        RC2_75_BURN
+    );
+    refusal_row(
+        "rc2-76",
+        &src,
+        &[],
+        "E0714",
+        "the call to `mkv` in `esc` instantiates it with `&i64`, which makes a `Vec<&i64>`",
+    );
+}
+
+#[test]
+fn rc2_77_an_rc_in_an_array_made_by_a_dead_local_is_refused_at_every_level() {
+    refusal_row(
+        "rc2-77",
+        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 { let a: [T; 2] = [x, x]; return 2 }\n\
+         fn main() -> i64 {\n    let p: Rc<N> = Rc::new(N { v: 9 })\n\
+         \x20   println(\"{two(p)} {Rc::get(p).v}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        "the call to `two` in `main` instantiates it with `Rc<N>`, which makes a `[Rc<N>; 2]`",
+    );
+}
+
+const RC2_78_LIB: &str = r#"
+pub fn boxit<T>(x: T) -> i64 {
+    let r: Rc<T> = Rc::new(x)
+    return 1
+}
+
+
+
+pub fn outer<T>(x: T) -> i64 {
+    let k: i64 = 5
+    let n: i64 = boxit(x)
+    return n + k
+}
+"#;
+
+#[test]
+fn rc2_78_a_refused_instance_from_a_module_points_at_the_call_in_the_root_file() {
+    refusal_row(
+        "rc2-78",
+        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
+         \x20   let n: i64 = lib1.outer(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        &[("lib1.aelys", RC2_78_LIB)],
+        "E0714",
+        "the call to `lib1.outer` in `main` instantiates it with `&i64`, which through \
+         `lib1.boxit` makes a `Rc<&i64>`",
+    );
+    let h = Harness::new();
+    let root = h.stage(
+        "rc2-78",
+        "span",
+        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
+         \x20   let n: i64 = lib1.outer(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        &[("lib1.aelys", RC2_78_LIB)],
+    );
+    let text =
+        compile_file_with_llvm_variant(&root, OptimizationLevel::None, false, RuntimeVariant::Rc)
+            .expect_err("rc2-78 compiled")
+            .to_string();
+    assert!(text.contains("lib1.outer(&s[2])"), "rc2-78: span\n{text}");
+}
+
+#[test]
+fn rc2_79_an_rc_read_out_of_an_rc_by_a_generic_is_refused() {
+    refusal_row(
+        "rc2-79",
+        "struct N { v: i64 }\nfn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\n\
+         fn unwrap<T>(r: Rc<T>) -> T { return Rc::get(r) }\nfn main() -> i64 {\n\
+         \x20   let p: Rc<N> = Rc::new(N { v: 9 })\n    let rr: Rc<Rc<N>> = wrap(p)\n\
+         \x20   let q: Rc<N> = unwrap(rr)\n    println(\"{Rc::get(q).v} {Rc::get(p).v}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0410",
+        "the call to `unwrap` in `main` instantiates it with `Rc<N>`, which reads an `Rc<N>` out of \
+         an `Rc<Rc<N>>`",
+    );
+}
+
+#[test]
+fn rc2_80_an_rc_put_straight_into_a_generic_enum_names_what_is_unsupported() {
+    refusal_row(
+        "rc2-80",
+        "struct N { v: i64 }\nenum One<T> { It(T) }\nfn get1<T>(o: One<T>) -> T {\n\
+         \x20   return match o {\n        One::It(v) => v\n    }\n}\nfn main() -> i64 {\n\
+         \x20   let q: Rc<N> = get1(One::It(Rc::new(N { v: 4 })))\n    println(\"{Rc::get(q).v}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0410",
+        "carrying an `Rc<T>` straight into a generic enum or struct, which is not supported yet",
+    );
+}

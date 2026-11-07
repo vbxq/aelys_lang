@@ -58,6 +58,10 @@ pub enum AirValidationDetail {
         rvalue: &'static str,
         place_ty: String,
     },
+    RcHandle {
+        context: String,
+        detail: String,
+    },
 }
 
 impl fmt::Display for AirValidationError {
@@ -185,6 +189,9 @@ impl fmt::Display for AirValidationError {
                     "`{rvalue}` assigns into a place of type {place_ty} ({context})"
                 )
             }
+            AirValidationDetail::RcHandle { context, detail } => {
+                write!(f, "{detail} ({context})")
+            }
         }
     }
 }
@@ -221,21 +228,29 @@ fn check_function_ptrness(
     if function.is_extern {
         return;
     }
+    // a count glue loads the rc handle out of the slot it is given, no source program does
+    let count_glue = function.name.starts_with("__glue_p");
     for block in &function.blocks {
         for (i, stmt) in block.stmts.iter().enumerate() {
             let AirStmtKind::Assign { place, rvalue } = &stmt.kind else {
                 continue;
             };
-            let (name, want_ptr) = match rvalue {
-                Rvalue::AddressOf(_) => ("addr", true),
-                Rvalue::Deref(_) => ("deref", false),
-                Rvalue::Len(_) => ("len", false),
+            let name = match rvalue {
+                Rvalue::AddressOf(_) => "addr",
+                Rvalue::Deref(_) => "deref",
+                Rvalue::Len(_) => "len",
                 _ => continue,
             };
             let Some(ty) = place_type(function, program, place) else {
                 continue;
             };
-            if matches!(ty, AirType::Ptr(_)) != want_ptr {
+            let holds = if name == "addr" {
+                matches!(ty, AirType::Ptr(_))
+            } else {
+                ty.pointee().is_none()
+                    || (name == "deref" && count_glue && matches!(ty, AirType::Rc(_)))
+            };
+            if !holds {
                 errors.push(AirValidationError {
                     function_name: function.name.clone(),
                     detail: AirValidationDetail::PtrnessMismatch {
@@ -249,17 +264,168 @@ fn check_function_ptrness(
     }
 }
 
+const RC_COUNTS: [&str; 2] = ["__aelys_rc_retain", "__aelys_rc_release"];
+
+fn check_rc_handles(
+    function: &AirFunction,
+    program: &AirProgram,
+    errors: &mut Vec<AirValidationError>,
+) {
+    if function.is_extern {
+        return;
+    }
+    let local_ty = |id: LocalId| {
+        function
+            .params
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| &p.ty)
+            .or_else(|| function.locals.iter().find(|l| l.id == id).map(|l| &l.ty))
+    };
+    let operand_ty = |op: &Operand| match op {
+        Operand::Copy(id) | Operand::Move(id) => local_ty(*id).cloned(),
+        Operand::Const(c) => Some(crate::mono::substitute::const_type(c)),
+    };
+    let mut fail = |context: String, detail: String| {
+        errors.push(AirValidationError {
+            function_name: function.name.clone(),
+            detail: AirValidationDetail::RcHandle { context, detail },
+        });
+    };
+    for block in &function.blocks {
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let context = format!("bb{}, stmt #{}", block.id.0, i);
+            match &stmt.kind {
+                AirStmtKind::RcAlloc { local, ty } => {
+                    let holds = local_ty(*local)
+                        .is_some_and(|t| matches!(t, AirType::Rc(inner) if inner.as_ref() == ty));
+                    if !holds {
+                        fail(
+                            context.clone(),
+                            format!(
+                                "`rc_alloc` writes %{} which is not an `Rc` of its payload",
+                                local.0
+                            ),
+                        );
+                    }
+                    if let Some(leaf) = ptr_payload_leaf(ty, program, &mut HashSet::new()) {
+                        fail(
+                            context,
+                            format!(
+                                "the payload `{}` holds a reference at `{leaf}` that its glue would release",
+                                crate::print::fmt_type(ty)
+                            ),
+                        );
+                    }
+                }
+                AirStmtKind::CallVoid {
+                    func: Callee::Named(name),
+                    args,
+                } => {
+                    let arg_ty = args.first().and_then(&operand_ty);
+                    if RC_COUNTS.contains(&name.as_str()) && !matches!(arg_ty, Some(AirType::Rc(_)))
+                    {
+                        fail(
+                            context,
+                            format!("`{name}` counts an operand that is not an `Rc` handle"),
+                        );
+                    } else if name == crate::counts::RC_RELEASE_SLOT
+                        && !matches!(&arg_ty, Some(AirType::Ptr(inner)) if matches!(inner.as_ref(), AirType::Rc(_)))
+                    {
+                        fail(
+                            context,
+                            format!("`{name}` releases a slot that does not hold an `Rc` handle"),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+// the glue walks struct fields and single variant payloads, so a reference or a view there would be released as an rc
+fn ptr_payload_leaf(
+    ty: &AirType,
+    program: &AirProgram,
+    seen: &mut HashSet<String>,
+) -> Option<String> {
+    match ty {
+        AirType::Ptr(_) | AirType::Slice(_) => Some(String::new()),
+        AirType::Struct(name) => {
+            let def = program.structs.iter().find(|d| &d.name == name)?;
+            if def.is_closure_env || !seen.insert(name.clone()) {
+                return None;
+            }
+            def.fields.iter().find_map(|f| {
+                ptr_payload_leaf(&f.ty, program, seen).map(|rest| format!(".{}{rest}", f.name))
+            })
+        }
+        AirType::Enum(r) => {
+            let symbol = r.symbol();
+            let def = program.enums.iter().find(|d| d.name == symbol)?;
+            if !seen.insert(symbol) {
+                return None;
+            }
+            def.variants.iter().find_map(|v| {
+                v.payload.iter().enumerate().find_map(|(i, p)| {
+                    ptr_payload_leaf(p, program, seen).map(|rest| format!(".{}.{i}{rest}", v.name))
+                })
+            })
+        }
+        AirType::Array(inner, _) => {
+            ptr_payload_leaf(inner, program, seen).map(|rest| format!("[]{rest}"))
+        }
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Rc(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => None,
+    }
+}
+
 pub(crate) fn contains_opaque(ty: &AirType) -> bool {
     match ty {
         AirType::Opaque => true,
         AirType::Ptr(inner)
+        | AirType::Rc(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => contains_opaque(inner),
         AirType::FnPtr { params, ret, .. } => {
             params.iter().any(contains_opaque) || contains_opaque(ret)
         }
-        _ => false,
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Enum(_)
+        | AirType::Param(_)
+        | AirType::Void => false,
     }
 }
 
@@ -280,6 +446,7 @@ fn collect_unknown_enum_names(
             }
         }
         AirType::Ptr(inner)
+        | AirType::Rc(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => {
@@ -291,7 +458,23 @@ fn collect_unknown_enum_names(
             }
             collect_unknown_enum_names(ret, known_enums, missing);
         }
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 
@@ -369,6 +552,7 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
     for function in &program.functions {
         validate_function(function, &known_enums, &known_globals, &mut errors);
         check_function_ptrness(function, program, &mut errors);
+        check_rc_handles(function, program, &mut errors);
         if function.type_params.is_empty() {
             for detail in crate::counts::unresolved_counts(function) {
                 errors.push(AirValidationError {
@@ -803,6 +987,7 @@ fn check_type_for_params(
             }
         }
         AirType::Ptr(inner)
+        | AirType::Rc(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => check_type_for_params(inner, owner, context, errors),
@@ -812,7 +997,21 @@ fn check_type_for_params(
             }
             check_type_for_params(ret, owner, context, errors);
         }
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 

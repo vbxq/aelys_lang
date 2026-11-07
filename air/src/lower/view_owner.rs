@@ -18,7 +18,7 @@ pub(super) const MAX_WIDTH: usize = 8;
 pub(crate) struct Width(Vec<(crate::AirType, usize)>);
 
 pub(super) fn rc_slot_ty() -> crate::AirType {
-    crate::AirType::Ptr(Box::new(crate::AirType::Void))
+    crate::AirType::Rc(Box::new(crate::AirType::Void))
 }
 
 impl Width {
@@ -804,6 +804,7 @@ impl super::LoweringContext<'_> {
                 true
             }
             crate::AirType::Ptr(_)
+            | crate::AirType::Rc(_)
             | crate::AirType::I8
             | crate::AirType::I16
             | crate::AirType::I32

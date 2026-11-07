@@ -31,7 +31,9 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::F64 => Ok(context.f64_type().into()),
         AirType::Bool => Ok(context.bool_type().into()),
         AirType::Str => Ok(aelys_string_type(context).into()),
-        AirType::Ptr(inner) => Ok(pointer_to_air_type(inner, context)?.into()),
+        AirType::Ptr(inner) | AirType::Rc(inner) => {
+            Ok(pointer_to_air_type(inner, context)?.into())
+        }
         AirType::Enum(r) => {
             let name = r.symbol();
             if let Some(st) = context.get_struct_type(&enum_struct_name(&name)) {
@@ -92,7 +94,31 @@ pub fn air_type_to_llvm<'ctx>(
                 }
                 let fn_ty = match ret.as_ref() {
                     AirType::Void => context.void_type().fn_type(&llvm_params, false),
-                    _ => air_basic_type_to_llvm(ret, context)?.fn_type(&llvm_params, false),
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque => {
+                        air_basic_type_to_llvm(ret, context)?.fn_type(&llvm_params, false)
+                    }
                 };
                 #[allow(deprecated)]
                 {

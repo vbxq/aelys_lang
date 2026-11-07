@@ -17,9 +17,8 @@ impl TypeInference {
             if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
                 self.errors.push(TypeError::rc_out_of_surface(
                     format!(
-                        "{what} stores a value of type `{ty}` carrying an `Rc<T>` into a \
-                     generic carrier; a generic field/payload of `Rc<T>` is erased at \
-                     the AIR boundary and is not supported yet"
+                        "{what} stores a value of type `{ty}` carrying an `Rc<T>` straight \
+                     into a generic enum or struct, which is not supported yet"
                     ),
                     span,
                 ));

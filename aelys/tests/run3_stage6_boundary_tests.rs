@@ -590,6 +590,10 @@ mod asan {
     use super::*;
 
     fn build_asan_archive(dir: &Path) -> Option<PathBuf> {
+        build_asan_archive_with(dir, "aelys_rc_real.c", "aelys-core-rc-asan")
+    }
+
+    fn build_asan_archive_with(dir: &Path, rc_unit: &str, lib: &str) -> Option<PathBuf> {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let core_src = manifest
             .parent()
@@ -597,16 +601,12 @@ mod asan {
             .join("core")
             .join("src");
         let mut objects = Vec::new();
-        for unit in [
-            "aelys_core_common.c",
-            "aelys_alloc_immix.c",
-            "aelys_rc_real.c",
-        ] {
+        for unit in ["aelys_core_common.c", "aelys_alloc_immix.c", rc_unit] {
             let src = core_src.join(unit);
             if !src.is_file() {
                 return None;
             }
-            let obj = dir.join(unit).with_extension("o");
+            let obj = dir.join(format!("{lib}-{unit}")).with_extension("o");
             match Command::new("clang")
                 .args(["-fsanitize=address", "-g", "-c"])
                 .arg(&src)
@@ -623,7 +623,7 @@ mod asan {
                 Err(_) => return None,
             }
         }
-        let archive = dir.join("libaelys-core-rc-asan.a");
+        let archive = dir.join(format!("lib{lib}.a"));
         match Command::new("ar")
             .arg("rcs")
             .arg(&archive)
@@ -637,6 +637,10 @@ mod asan {
     }
 
     fn link_instrumented(dir: &Path, id: &str, src: &str) -> PathBuf {
+        link_instrumented_with(dir, id, src, "aelys-core-rc-asan")
+    }
+
+    fn link_instrumented_with(dir: &Path, id: &str, src: &str, lib: &str) -> PathBuf {
         let path = dir.join(format!("{id}.aelys"));
         fs::write(&path, src).expect("write source");
         crate::common::with_outline_str_counts(|| {
@@ -655,7 +659,7 @@ mod asan {
             .args(["-fsanitize=address", "-g"])
             .arg(&object)
             .arg(format!("-L{}", dir.display()))
-            .arg("-laelys-core-rc-asan")
+            .arg(format!("-l{lib}"))
             .arg("-o")
             .arg(&exe)
             .output()
@@ -770,18 +774,16 @@ mod asan {
     }
 
     // the leak oracle above is only worth its zero if a leak would be seen. a capturing closure
-    const S6_LEAK: &str = "fn use_it(x: Rc<i64>) -> i64 {\n\
-                           \x20   return Rc::get(x)\n\
-                           }\n\
-                           fn mk() -> Rc<i64> {\n\
+    const S6_LEAK: &str = "fn mk() -> Rc<i64> {\n\
                            \x20   return Rc::new(7)\n\
                            }\n\
-                           fn app<T>(f: fn() -> T) -> T {\n\
-                           \x20   return f()\n\
+                           fn burn() -> i64 {\n\
+                           \x20   let a: Rc<i64> = mk()\n\
+                           \x20   let b: Rc<i64> = mk()\n\
+                           \x20   return Rc::get(a) + Rc::get(b)\n\
                            }\n\
                            fn main() -> i64 {\n\
-                           \x20   let a: Rc<i64> = app(mk)\n\
-                           \x20   println(use_it(app(mk)) + Rc::get(a))\n\
+                           \x20   println(burn())\n\
                            \x20   return 0\n\
                            }\n";
 
@@ -792,7 +794,21 @@ mod asan {
         let Some(_archive) = build_asan_archive(dir.path()) else {
             panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
-        let exe = link_instrumented(dir.path(), "planted_leak", S6_LEAK);
+        let Some(_leak) =
+            build_asan_archive_with(dir.path(), "aelys_rc_leak.c", "aelys-core-leak-asan")
+        else {
+            panic!("the ASan tier must build its leak archive on a machine with clang and ar");
+        };
+        let counted = link_instrumented(dir.path(), "planted_leak_rc", S6_LEAK);
+        let clean = run_asan_with(&counted, true, true);
+        assert_eq!(clean.stacks(), 0, "stderr:\n{}", clean.stderr);
+        assert!(
+            clean.stderr.contains("[rc] allocs=2 frees=2"),
+            "stderr:\n{}",
+            clean.stderr
+        );
+        let exe =
+            link_instrumented_with(dir.path(), "planted_leak", S6_LEAK, "aelys-core-leak-asan");
 
         let immix = run_asan_with(&exe, false, true);
         assert_eq!(
@@ -818,8 +834,8 @@ mod asan {
         assert_eq!(
             malloc.stacks(),
             1,
-            "under malloc the two rc objects a generic returning a bare type parameter lends share \
-             one allocation site and are the only stack\nstderr:\n{}",
+            "under malloc the two rc objects the leak runtime never frees share one allocation \
+             site and are the only stack\nstderr:\n{}",
             malloc.stderr
         );
         assert!(

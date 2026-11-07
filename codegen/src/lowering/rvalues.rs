@@ -36,8 +36,29 @@ impl<'a> FunctionCodegen<'a> {
                 let ptr = self.generate_operand(operand)?.into_pointer_value();
                 self.emit_null_check(ptr)?;
                 let inner = match self.operand_type(operand)? {
-                    AirType::Ptr(inner) => *inner,
-                    other => {
+                    AirType::Ptr(inner) | AirType::Rc(inner) => *inner,
+                    other @ (AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void) => {
                         return Err(CodegenError::UnsupportedType(format!(
                             "cannot dereference operand of type {:?}",
                             other
@@ -77,9 +98,9 @@ impl<'a> FunctionCodegen<'a> {
         let idx_val = self.generate_operand(index)?.into_int_value();
         let base_ty = self.operand_type(base)?;
 
-        if let AirType::Ptr(inner) = &base_ty {
+        if let Some(inner) = base_ty.pointee() {
             if matches!(
-                inner.as_ref(),
+                inner,
                 AirType::Array(_, _) | AirType::Slice(_) | AirType::Vec(_)
             ) {
                 let root = match base {
@@ -92,9 +113,29 @@ impl<'a> FunctionCodegen<'a> {
                 };
                 let elem_ptr =
                     self.index_ptr(root, idx_val, crate::lowering::stmts::BoundsCheck::Checked)?;
-                let elem_air = match inner.as_ref() {
+                let elem_air = match inner {
                     AirType::Array(e, _) | AirType::Slice(e) | AirType::Vec(e) => (**e).clone(),
-                    _ => unreachable!(),
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void => unreachable!(),
                 };
                 let elem_ty = air_basic_type_to_llvm(&elem_air, self.context)?;
                 return self.load_value(elem_ty, elem_ptr, "idx_load");
@@ -149,7 +190,26 @@ impl<'a> FunctionCodegen<'a> {
             AirType::Str => Err(CodegenError::UnsupportedType(
                 "index of a string reached codegen; sema must reject it (E0304)".to_string(),
             )),
-            other => Err(CodegenError::UnsupportedType(format!(
+            other @ (AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",
                 other
             ))),
@@ -459,7 +519,7 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let (ptr_val, base_len) = match ptr {
             Operand::Copy(local) | Operand::Move(local) => match self.local_air_type(*local)? {
-                AirType::Ptr(inner)
+                AirType::Ptr(inner) | AirType::Rc(inner)
                     if matches!(
                         inner.as_ref(),
                         AirType::Array(_, _) | AirType::Slice(_) | AirType::Vec(_)
@@ -473,7 +533,30 @@ impl<'a> FunctionCodegen<'a> {
                     )?;
                     (p.as_basic_value_enum(), base_len)
                 }
-                other => {
+                other @ (AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Ptr(_)
+                | AirType::Rc(_)
+                | AirType::Struct(_)
+                | AirType::Enum(_)
+                | AirType::Array(..)
+                | AirType::Slice(_)
+                | AirType::Vec(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void) => {
                     return Err(CodegenError::UnsupportedType(format!(
                         "slice of a base with no derivable length: {:?}; sema must reject it \
                          (E0425)",

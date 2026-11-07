@@ -16,6 +16,7 @@ pub(crate) fn type_to_string(ty: &AirType) -> String {
         AirType::Char => "char".to_string(),
         AirType::Str => "str".to_string(),
         AirType::Ptr(inner) => format!("ptr_{}", type_to_string(inner)),
+        AirType::Rc(inner) => format!("rc_{}", type_to_string(inner)),
         AirType::Struct(name) => name.clone(),
         AirType::Enum(r) => format!("enum_{}", r.symbol()),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
@@ -72,10 +73,11 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
                 *ty = replacement.clone();
             }
         }
-        AirType::Ptr(inner) => substitute_type(inner, type_params, type_args),
-        AirType::Array(inner, _) => substitute_type(inner, type_params, type_args),
-        AirType::Slice(inner) => substitute_type(inner, type_params, type_args),
-        AirType::Vec(inner) => substitute_type(inner, type_params, type_args),
+        AirType::Ptr(inner)
+        | AirType::Rc(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner)
+        | AirType::Vec(inner) => substitute_type(inner, type_params, type_args),
         AirType::FnPtr { params, ret, .. } => {
             for p in params {
                 substitute_type(p, type_params, type_args);
@@ -87,7 +89,22 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
                 substitute_type(arg, type_params, type_args);
             }
         }
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 
@@ -137,32 +154,7 @@ pub(super) fn operand_type_from(
     locals: &[AirLocal],
 ) -> AirType {
     match operand {
-        Operand::Const(c) => match c {
-            AirConst::IntLiteral(_) => AirType::I64,
-            AirConst::Int(_, size) => match size {
-                AirIntSize::I8 => AirType::I8,
-                AirIntSize::I16 => AirType::I16,
-                AirIntSize::I32 => AirType::I32,
-                AirIntSize::I64 => AirType::I64,
-                AirIntSize::U8 => AirType::U8,
-                AirIntSize::U16 => AirType::U16,
-                AirIntSize::U32 => AirType::U32,
-                AirIntSize::U64 => AirType::U64,
-            },
-            AirConst::Float(_, size) => match size {
-                AirFloatSize::F32 => AirType::F32,
-                AirFloatSize::F64 => AirType::F64,
-            },
-            AirConst::Bool(_) => AirType::Bool,
-            AirConst::Char(_) => AirType::Char,
-            AirConst::Str(_) => AirType::Str,
-            AirConst::Null => AirType::Ptr(Box::new(AirType::Void)),
-            AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
-            AirConst::Enum { enum_ref, .. } => AirType::Enum(enum_ref.clone()),
-            AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
-            AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
-            AirConst::Struct { name, .. } => AirType::Struct(name.clone()),
-        },
+        Operand::Const(c) => const_type(c),
         Operand::Copy(id) | Operand::Move(id) => params
             .iter()
             .find(|p| p.id == *id)
@@ -174,5 +166,34 @@ pub(super) fn operand_type_from(
                     id.0
                 )
             }),
+    }
+}
+
+pub(crate) fn const_type(c: &AirConst) -> AirType {
+    match c {
+        AirConst::IntLiteral(_) => AirType::I64,
+        AirConst::Int(_, size) => match size {
+            AirIntSize::I8 => AirType::I8,
+            AirIntSize::I16 => AirType::I16,
+            AirIntSize::I32 => AirType::I32,
+            AirIntSize::I64 => AirType::I64,
+            AirIntSize::U8 => AirType::U8,
+            AirIntSize::U16 => AirType::U16,
+            AirIntSize::U32 => AirType::U32,
+            AirIntSize::U64 => AirType::U64,
+        },
+        AirConst::Float(_, size) => match size {
+            AirFloatSize::F32 => AirType::F32,
+            AirFloatSize::F64 => AirType::F64,
+        },
+        AirConst::Bool(_) => AirType::Bool,
+        AirConst::Char(_) => AirType::Char,
+        AirConst::Str(_) => AirType::Str,
+        AirConst::Null => AirType::Ptr(Box::new(AirType::Void)),
+        AirConst::FnRef(_) => AirType::Ptr(Box::new(AirType::Void)),
+        AirConst::Enum { enum_ref, .. } => AirType::Enum(enum_ref.clone()),
+        AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
+        AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
+        AirConst::Struct { name, .. } => AirType::Struct(name.clone()),
     }
 }

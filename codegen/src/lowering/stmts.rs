@@ -207,7 +207,7 @@ impl<'a> FunctionCodegen<'a> {
                         .build_struct_gep(struct_ty, ptr, index, "place_field")
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))
                 }
-                AirType::Ptr(inner) => match inner.as_ref() {
+                AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
                     AirType::Struct(name) => {
                         let struct_ty = self.context.get_struct_type(name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
@@ -219,12 +219,54 @@ impl<'a> FunctionCodegen<'a> {
                             .build_struct_gep(struct_ty, base_ptr, index, "place_field")
                             .map_err(|e| CodegenError::LlvmError(e.to_string()))
                     }
-                    _ => Err(CodegenError::UnsupportedType(format!(
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void => Err(CodegenError::UnsupportedType(format!(
                         "place field on non-struct pointer local {}",
                         local.0
                     ))),
                 },
-                _ => Err(CodegenError::UnsupportedType(format!(
+                AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Enum(_)
+                | AirType::Array(..)
+                | AirType::Slice(_)
+                | AirType::Vec(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void => Err(CodegenError::UnsupportedType(format!(
                     "place field on non-struct local {}",
                     local.0
                 ))),
@@ -244,12 +286,33 @@ impl<'a> FunctionCodegen<'a> {
     pub(crate) fn elem_base(&mut self, root: LocalId) -> Result<(ElemBase, AirType), CodegenError> {
         let root_ty = self.local_air_type(root)?.clone();
         let (header_ptr, collection) = match &root_ty {
-            AirType::Ptr(inner) => {
+            AirType::Ptr(inner) | AirType::Rc(inner) => {
                 let p = self.load_local(root)?.into_pointer_value();
                 self.emit_null_check(p)?;
                 (p, (**inner).clone())
             }
-            other => (self.lookup_local_ptr(root)?, other.clone()),
+            other @ (AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void) => (self.lookup_local_ptr(root)?, other.clone()),
         };
         match collection {
             AirType::Array(inner, n) => {
@@ -295,7 +358,27 @@ impl<'a> FunctionCodegen<'a> {
                     .into_int_value();
                 Ok((ElemBase::Buffer { data, len }, *inner))
             }
-            other => Err(CodegenError::UnsupportedType(format!(
+            other @ (AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                 "cannot index into {:?}",
                 other
             ))),
@@ -367,16 +450,58 @@ impl<'a> FunctionCodegen<'a> {
             Place::Field(local, field) => {
                 let struct_name = match self.local_air_type(*local)? {
                     AirType::Struct(name) => name.as_str(),
-                    AirType::Ptr(inner) => match inner.as_ref() {
+                    AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
                         AirType::Struct(name) => name.as_str(),
-                        _ => {
+                        AirType::I8
+                        | AirType::I16
+                        | AirType::I32
+                        | AirType::I64
+                        | AirType::U8
+                        | AirType::U16
+                        | AirType::U32
+                        | AirType::U64
+                        | AirType::F32
+                        | AirType::F64
+                        | AirType::Bool
+                        | AirType::Char
+                        | AirType::Str
+                        | AirType::Ptr(_)
+                        | AirType::Rc(_)
+                        | AirType::Enum(_)
+                        | AirType::Array(..)
+                        | AirType::Slice(_)
+                        | AirType::Vec(_)
+                        | AirType::FnPtr { .. }
+                        | AirType::Param(_)
+                        | AirType::Opaque
+                        | AirType::Void => {
                             return Err(CodegenError::UnsupportedType(format!(
                                 "field access on non-struct pointer local {}",
                                 local.0
                             )));
                         }
                     },
-                    _ => {
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void => {
                         return Err(CodegenError::UnsupportedType(format!(
                             "field access on non-struct local {}",
                             local.0
@@ -386,22 +511,84 @@ impl<'a> FunctionCodegen<'a> {
                 Ok(self.struct_field_type(struct_name, field)?.clone())
             }
             Place::Deref(local) => match self.local_air_type(*local)? {
-                AirType::Ptr(inner) => Ok((**inner).clone()),
-                other => Err(CodegenError::UnsupportedType(format!(
+                AirType::Ptr(inner) | AirType::Rc(inner) => Ok((**inner).clone()),
+                other @ (AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Struct(_)
+                | AirType::Enum(_)
+                | AirType::Array(..)
+                | AirType::Slice(_)
+                | AirType::Vec(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                     "cannot dereference non-pointer place {:?}",
                     other
                 ))),
             },
             Place::Index(local, _) => {
                 let root = match self.local_air_type(*local)? {
-                    AirType::Ptr(inner) => inner.as_ref(),
-                    other => other,
+                    AirType::Ptr(inner) | AirType::Rc(inner) => inner.as_ref(),
+                    other @ (AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void) => other,
                 };
                 match root {
                     AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
                         Ok((**inner).clone())
                     }
-                    other => Err(CodegenError::UnsupportedType(format!(
+                    other @ (AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void) => Err(CodegenError::UnsupportedType(format!(
                         "cannot index into {:?}",
                         other
                     ))),

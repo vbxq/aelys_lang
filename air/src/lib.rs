@@ -101,6 +101,7 @@ pub enum AirType {
     /// byte string slice abi: (ptr, len), never nul-terminated.
     Str,
     Ptr(Box<AirType>),
+    Rc(Box<AirType>),
     Struct(String),
     Enum(EnumRef),
     Array(Box<AirType>, u64),
@@ -119,6 +120,34 @@ pub enum AirType {
 }
 
 impl AirType {
+    pub fn pointee(&self) -> Option<&AirType> {
+        match self {
+            AirType::Ptr(inner) | AirType::Rc(inner) => Some(inner),
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => None,
+        }
+    }
+
     pub fn int_size(&self) -> Option<AirIntSize> {
         match self {
             AirType::I8 => Some(AirIntSize::I8),
@@ -130,7 +159,21 @@ impl AirType {
             AirType::U32 => Some(AirIntSize::U32),
             AirType::U64 => Some(AirIntSize::U64),
             AirType::Char => Some(AirIntSize::U32),
-            _ => None,
+            AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => None,
         }
     }
 }

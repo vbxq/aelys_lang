@@ -275,7 +275,9 @@ impl Scan<'_> {
                 "an unresolved `Dynamic` type survived lowering".to_string(),
             )),
             // a pointer, a slice and a fn pointer refer to a buffer, they never carry one
-            AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
+            AirType::Ptr(_) | AirType::Rc(_) | AirType::Slice(_) | AirType::FnPtr { .. } => {
+                Ok(false)
+            }
             AirType::I8
             | AirType::I16
             | AirType::I32
@@ -335,7 +337,9 @@ impl Scan<'_> {
             AirType::Opaque => Err(Reject::Undecidable(
                 "an unresolved `Dynamic` type survived lowering".to_string(),
             )),
-            AirType::Ptr(_) | AirType::Slice(_) | AirType::FnPtr { .. } => Ok(false),
+            AirType::Ptr(_) | AirType::Rc(_) | AirType::Slice(_) | AirType::FnPtr { .. } => {
+                Ok(false)
+            }
             AirType::I8
             | AirType::I16
             | AirType::I32

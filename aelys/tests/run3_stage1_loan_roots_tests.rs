@@ -1444,6 +1444,10 @@ mod asan {
     use std::path::{Path, PathBuf};
 
     fn build_asan_archive(dir: &Path) -> Option<PathBuf> {
+        build_asan_archive_with(dir, "aelys_rc_real.c", "aelys-core-rc-asan")
+    }
+
+    fn build_asan_archive_with(dir: &Path, rc_unit: &str, lib: &str) -> Option<PathBuf> {
         let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
         let core_src = manifest
             .parent()
@@ -1451,17 +1455,13 @@ mod asan {
             .join("core")
             .join("src");
         let mut objects = Vec::new();
-        for unit in [
-            "aelys_core_common.c",
-            "aelys_alloc_immix.c",
-            "aelys_rc_real.c",
-        ] {
+        for unit in ["aelys_core_common.c", "aelys_alloc_immix.c", rc_unit] {
             let src = core_src.join(unit);
             if !src.is_file() {
                 eprintln!("core source {unit} missing; skipping the ASan tier");
                 return None;
             }
-            let obj = dir.join(unit).with_extension("o");
+            let obj = dir.join(format!("{lib}-{unit}")).with_extension("o");
             match Command::new("clang")
                 .args(["-fsanitize=address", "-g", "-c"])
                 .arg(&src)
@@ -1481,7 +1481,7 @@ mod asan {
                 }
             }
         }
-        let archive = dir.join("libaelys-core-rc-asan.a");
+        let archive = dir.join(format!("lib{lib}.a"));
         match Command::new("ar")
             .arg("rcs")
             .arg(&archive)
@@ -1498,6 +1498,10 @@ mod asan {
     }
 
     fn link_instrumented(dir: &Path, id: &str, src: &str) -> Option<PathBuf> {
+        link_instrumented_with(dir, id, src, "aelys-core-rc-asan")
+    }
+
+    fn link_instrumented_with(dir: &Path, id: &str, src: &str, lib: &str) -> Option<PathBuf> {
         let path = dir.join(format!("{id}.aelys"));
         fs::write(&path, src).expect("write source");
         let guard = lock();
@@ -1519,7 +1523,7 @@ mod asan {
             .args(["-fsanitize=address", "-g"])
             .arg(&object)
             .arg(format!("-L{}", dir.display()))
-            .arg("-laelys-core-rc-asan")
+            .arg(format!("-l{lib}"))
             .arg("-o")
             .arg(&exe)
             .output()
@@ -1530,6 +1534,45 @@ mod asan {
             String::from_utf8_lossy(&link.stderr)
         );
         Some(exe)
+    }
+
+    const PLANTED_LEAK: &str = "fn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn burn() -> i64 {\n    let a: Rc<i64> = mk()\n    let b: Rc<i64> = mk()\n    return Rc::get(a) + Rc::get(b)\n}\nfn main() -> i64 {\n    println(burn())\n    return 0\n}\n";
+
+    fn planted_leak(dir: &Path) -> String {
+        let Some(_leak) = build_asan_archive_with(dir, "aelys_rc_leak.c", "aelys-core-leak-asan")
+        else {
+            panic!("the ASan tier must build its leak archive on a machine with clang and ar");
+        };
+        let run = |lib: &str| {
+            let Some(exe) =
+                link_instrumented_with(dir, &format!("planted_{lib}"), PLANTED_LEAK, lib)
+            else {
+                panic!("the ASan tier must link");
+            };
+            let out = Command::new(&exe)
+                .env("AELYS_RC_STATS", "1")
+                .env(
+                    "ASAN_OPTIONS",
+                    "detect_leaks=1:max_free_fill_size=4096:free_fill_byte=170",
+                )
+                .env("AELYS_ALLOC", "malloc")
+                .output()
+                .expect("run the instrumented exe");
+            (
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout).into_owned(),
+                String::from_utf8_lossy(&out.stderr).into_owned(),
+            )
+        };
+        let (code, stdout, clean) = run("aelys-core-rc-asan");
+        assert_eq!(
+            (code, stdout.as_str()),
+            (Some(0), "14\n"),
+            "stderr:\n{clean}"
+        );
+        assert!(clean.contains("[rc] allocs=2 frees=2"), "stderr:\n{clean}");
+        assert!(!clean.contains("LeakSanitizer"), "stderr:\n{clean}");
+        run("aelys-core-leak-asan").2
     }
 
     // a print-free row leaves no allocation behind, so the leak oracle below can stay strict
@@ -1649,7 +1692,6 @@ fn main() -> i64 {
         let src = format!(
             "{STRUCT_S}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    let s = x.a[..]\n    s[0] = 9\n    println(s[0])\n    return 0\n}}\n"
         );
-        let control = "fn use_it(x: Rc<i64>) -> i64 {\n    return Rc::get(x)\n}\nfn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn app<T>(f: fn() -> T) -> T {\n    return f()\n}\nfn main() -> i64 {\n    let a: Rc<i64> = app(mk)\n    return use_it(app(mk)) + Rc::get(a)\n}\n";
         let run = |id: &str, src: &str, allocator: &str| {
             let Some(exe) = link_instrumented(dir.path(), id, src) else {
                 panic!("the ASan tier must link");
@@ -1682,7 +1724,7 @@ fn main() -> i64 {
         }
 
         // a region block stays reachable through g_all_blocks, so lsan cannot see an object leaked inside one
-        let (_, planted) = run("lent_generic_rc", control, "malloc");
+        let planted = planted_leak(dir.path());
         assert!(planted.contains("[rc] allocs=2 frees=0"), "stderr:\n{planted}");
         assert!(
             planted.contains("LeakSanitizer: detected memory leaks"),
@@ -1709,7 +1751,6 @@ fn main() -> i64 {
             "",
         );
         let unbound = loop_body("", "        let s: string = \"row \" + \"{i}\"\n", "");
-        let held = "fn use_it(x: Rc<i64>) -> i64 {\n    return Rc::get(x)\n}\nfn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn app<T>(f: fn() -> T) -> T {\n    return f()\n}\nfn main() -> i64 {\n    let a: Rc<i64> = app(mk)\n    return use_it(app(mk)) + Rc::get(a)\n}\n".to_string();
 
         // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
         let run = |id: &str, src: &str, allocator: &str, clean: bool| {
@@ -1749,7 +1790,7 @@ fn main() -> i64 {
             }
         }
 
-        let held_malloc = run("s1d_lent_generic_rc", &held, "malloc", false);
+        let held_malloc = planted_leak(dir.path());
         assert!(
             held_malloc.contains("LeakSanitizer: detected memory leaks"),
             "the planted leak no longer fires, the detector is not armed;\nstderr:\n{held_malloc}"

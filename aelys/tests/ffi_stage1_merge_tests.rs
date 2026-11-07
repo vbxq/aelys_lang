@@ -471,7 +471,7 @@ fn the_conflict_predicate_reads_the_typed_key_and_nothing_else() {
     assert!(foreign_conflict(&rc, &borrow).is_some());
 }
 
-// every air span is stamped `file: 0` at lowering, so a post-merge caret cannot point into a module file
+// the duplicate symbol diagnostic reads an air span against the root source, so its caret cannot reach a module file
 #[test]
 fn a_post_merge_caret_cannot_name_the_module_file_that_declared_the_symbol() {
     let run = run_root(&[
@@ -491,10 +491,12 @@ fn a_post_merge_caret_cannot_name_the_module_file_that_declared_the_symbol() {
         "owed: the second site lives in `m.aelys` and no caret can reach it today, found:\n{}",
         run.rendered
     );
-    let lower = fs::read_to_string(repo_root().join("air/src/lower/mod.rs")).expect("read lowering");
-    assert!(
-        lower.contains("file: 0,"),
-        "the reason is that an air span carries no file"
+    let diagnostics = fs::read_to_string(repo_root().join("driver/src/api/llvm/diagnostics.rs"))
+        .expect("read diagnostics");
+    assert_eq!(
+        diagnostics.matches("s.file as usize").count(),
+        1,
+        "only the instance refusal resolves an air span to its file"
     );
 }
 

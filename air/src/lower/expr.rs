@@ -339,7 +339,29 @@ impl<'a> LoweringContext<'a> {
                 let vec_ty = self.lower_type_from_infer(&expr.ty);
                 let elem_ty = match &vec_ty {
                     AirType::Vec(inner) => (**inner).clone(),
-                    other => {
+                    other @ (AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Enum(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void) => {
                         self.report_ice(format!(
                             "ICE: vec literal has non-Vec AIR type `{other:?}` at lowering"
                         ));
@@ -510,7 +532,29 @@ impl<'a> LoweringContext<'a> {
                     let vec_ty = self.lower_type_from_infer(&expr.ty);
                     let elem_ty = match &vec_ty {
                         AirType::Vec(inner) => (**inner).clone(),
-                        other => {
+                        other @ (AirType::I8
+                        | AirType::I16
+                        | AirType::I32
+                        | AirType::I64
+                        | AirType::U8
+                        | AirType::U16
+                        | AirType::U32
+                        | AirType::U64
+                        | AirType::F32
+                        | AirType::F64
+                        | AirType::Bool
+                        | AirType::Char
+                        | AirType::Str
+                        | AirType::Ptr(_)
+                        | AirType::Rc(_)
+                        | AirType::Struct(_)
+                        | AirType::Enum(_)
+                        | AirType::Array(..)
+                        | AirType::Slice(_)
+                        | AirType::FnPtr { .. }
+                        | AirType::Param(_)
+                        | AirType::Opaque
+                        | AirType::Void) => {
                             self.report_ice(format!(
                                 "ICE: Vec::new has non-Vec AIR type `{other:?}` at lowering"
                             ));
@@ -587,7 +631,29 @@ impl<'a> LoweringContext<'a> {
                 let air_ty = self.lower_type_from_infer(&expr.ty);
                 let enum_ref = match &air_ty {
                     AirType::Enum(r) => r.clone(),
-                    _ => EnumRef::plain(enum_name.clone()),
+                    AirType::I8
+                    | AirType::I16
+                    | AirType::I32
+                    | AirType::I64
+                    | AirType::U8
+                    | AirType::U16
+                    | AirType::U32
+                    | AirType::U64
+                    | AirType::F32
+                    | AirType::F64
+                    | AirType::Bool
+                    | AirType::Char
+                    | AirType::Str
+                    | AirType::Ptr(_)
+                    | AirType::Rc(_)
+                    | AirType::Struct(_)
+                    | AirType::Array(..)
+                    | AirType::Slice(_)
+                    | AirType::Vec(_)
+                    | AirType::FnPtr { .. }
+                    | AirType::Param(_)
+                    | AirType::Opaque
+                    | AirType::Void => EnumRef::plain(enum_name.clone()),
                 };
                 let literal = self.emit_rvalue_to_temp(
                     air_ty,
@@ -715,7 +781,6 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                 } else {
-                    let lent = self.call_lends(&func, &expr.ty);
                     let result = self.emit_rvalue_to_temp(
                         ret_ty,
                         Rvalue::Call {
@@ -725,9 +790,7 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                     self.pose_vec_call_result(&result);
-                    if !lent {
-                        self.pose_rc_value(&result, &expr.ty);
-                    }
+                    self.pose_rc_value(&result, &expr.ty);
                 }
             }
             TypedExprKind::Assign { name, value } => {
@@ -766,19 +829,11 @@ impl<'a> LoweringContext<'a> {
             self.emit(AirStmtKind::CallVoid { func, args }, sp);
             Operand::Const(AirConst::Null)
         } else {
-            let lent = self.call_lends(&func, result_infer_ty);
             let result = self.emit_rvalue_to_temp(result_ty, Rvalue::Call { func, args }, sp);
             self.pose_vec_call_result(&result);
-            if !lent {
-                self.pose_rc_value(&result, result_infer_ty);
-            }
+            self.pose_rc_value(&result, result_infer_ty);
             result
         }
-    }
-
-    fn call_lends(&self, func: &Callee, ty: &InferType) -> bool {
-        matches!(ty, InferType::Rc(_))
-            && matches!(func, Callee::Named(name) if self.lent_returns.contains(name))
     }
 
     fn lower_assign_common(&mut self, name: &str, value: &TypedExpr, sp: Option<Span>) -> Operand {
@@ -1244,10 +1299,57 @@ impl<'a> LoweringContext<'a> {
         let lift_field_ty: Option<AirType> = if object_is_rc_handle {
             match &base.pointee {
                 AirType::Struct(name) => match self.air_field_type_of(name, field) {
-                    Some(fty @ AirType::Ptr(_)) => Some(fty),
-                    _ => None,
+                    Some(fty @ AirType::Rc(_)) => Some(fty),
+                    Some(
+                        AirType::I8
+                        | AirType::I16
+                        | AirType::I32
+                        | AirType::I64
+                        | AirType::U8
+                        | AirType::U16
+                        | AirType::U32
+                        | AirType::U64
+                        | AirType::F32
+                        | AirType::F64
+                        | AirType::Bool
+                        | AirType::Char
+                        | AirType::Str
+                        | AirType::Ptr(_)
+                        | AirType::Struct(_)
+                        | AirType::Enum(_)
+                        | AirType::Array(..)
+                        | AirType::Slice(_)
+                        | AirType::Vec(_)
+                        | AirType::FnPtr { .. }
+                        | AirType::Param(_)
+                        | AirType::Opaque
+                        | AirType::Void,
+                    )
+                    | None => None,
                 },
-                _ => None,
+                AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Ptr(_)
+                | AirType::Rc(_)
+                | AirType::Enum(_)
+                | AirType::Array(..)
+                | AirType::Slice(_)
+                | AirType::Vec(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void => None,
             }
         } else {
             None
@@ -1789,7 +1891,7 @@ impl<'a> LoweringContext<'a> {
             _ => args.first().map(|a| &a.ty).unwrap_or(&InferType::Null),
         };
         let data_ty = self.lower_type_from_infer(inner_infer);
-        let ptr_ty = AirType::Ptr(Box::new(data_ty.clone()));
+        let ptr_ty = AirType::Rc(Box::new(data_ty.clone()));
 
         let data_op = args
             .first()
@@ -1842,7 +1944,7 @@ impl<'a> LoweringContext<'a> {
             _ => &InferType::Null,
         };
         let data_ty = self.lower_type_from_infer(inner_infer);
-        let ptr_ty = AirType::Ptr(Box::new(data_ty));
+        let ptr_ty = AirType::Rc(Box::new(data_ty));
         let handle =
             self.emit_rvalue_to_temp(ptr_ty, Rvalue::Use(Operand::Const(AirConst::Null)), None);
         self.pose_owned_temp(&handle);
@@ -1907,7 +2009,7 @@ impl<'a> LoweringContext<'a> {
             )
         } else {
             let env_name = format!("__closure_env_{}", lambda_name);
-            let env_ptr_ty = AirType::Ptr(Box::new(AirType::Struct(env_name.clone())));
+            let env_ptr_ty = AirType::Rc(Box::new(AirType::Struct(env_name.clone())));
             let env_ptr = self.alloc_temp(env_ptr_ty.clone());
             self.emit(
                 AirStmtKind::RcAlloc {
@@ -1987,7 +2089,29 @@ impl<'a> LoweringContext<'a> {
 
         let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
             AirType::Enum(r) => r,
-            _ => {
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {
                 self.report_ice(format!(
                     "match scrutinee is not an enum type: {:?}",
                     scrutinee.ty
@@ -2145,7 +2269,29 @@ impl<'a> LoweringContext<'a> {
         self.pose_fresh_temp(&scrutinee_op);
         let enum_ref = match self.lower_type_from_infer(&scrutinee.ty) {
             AirType::Enum(r) => r,
-            _ => {
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {
                 self.report_ice(format!(
                     "result assert scrutinee is not an enum type: {:?}",
                     scrutinee.ty

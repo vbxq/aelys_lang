@@ -359,7 +359,7 @@ impl<'a> LoweringContext<'a> {
         if self.last_block_is_terminated() {
             return Operand::Copy(copy);
         }
-        if matches!(shape.ty, AirType::Ptr(_)) {
+        if matches!(shape.ty, AirType::Rc(_)) {
             self.emit_rc_retain(Operand::Copy(copy), sp);
         } else {
             self.emit_carrier_field_retains(Operand::Copy(copy), &shape.ty, &shape.paths, sp);

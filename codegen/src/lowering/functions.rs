@@ -291,7 +291,25 @@ fn c_integer_extension(ty: &AirType) -> Option<&'static str> {
     match ty {
         AirType::I8 | AirType::I16 => Some("signext"),
         AirType::U8 | AirType::U16 | AirType::Bool => Some("zeroext"),
-        _ => None,
+        AirType::I32
+        | AirType::I64
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Struct(_)
+        | AirType::Enum(_)
+        | AirType::Array(..)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => None,
     }
 }
 
@@ -385,7 +403,7 @@ fn native_entry_type_name(ty: &AirType) -> &'static str {
         AirType::Bool => "bool",
         AirType::Char => "char",
         AirType::Str => "string",
-        AirType::Ptr(_) => "ptr",
+        AirType::Ptr(_) | AirType::Rc(_) => "ptr",
         AirType::Struct(_) => "struct",
         AirType::Enum(_) => "enum",
         AirType::Array(_, _) => "array",

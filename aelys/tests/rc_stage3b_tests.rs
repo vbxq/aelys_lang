@@ -81,7 +81,7 @@ fn struct_def(name: &str, fields: &[(&str, AirType)]) -> AirStructDef {
 }
 
 fn rc_i64() -> AirType {
-    AirType::Ptr(Box::new(AirType::I64))
+    AirType::Rc(Box::new(AirType::I64))
 }
 
 fn program_with(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> AirProgram {

@@ -83,7 +83,7 @@ impl<'a> FunctionCodegen<'a> {
             AirType::I16 | AirType::U16 => Ok((2, 2)),
             AirType::I32 | AirType::U32 | AirType::F32 | AirType::Char => Ok((4, 4)),
             AirType::I64 | AirType::U64 | AirType::F64 => Ok((8, 8)),
-            AirType::Ptr(_) => Ok((8, 8)),
+            AirType::Ptr(_) | AirType::Rc(_) => Ok((8, 8)),
             AirType::FnPtr { conv, .. } => {
                 if matches!(conv, aelys_air::CallingConv::Aelys) {
                     Ok((16, 8))

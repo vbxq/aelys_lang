@@ -24,10 +24,10 @@ use std::sync::Arc;
 use diagnostics::{
     FaultMessage, all_compiler, backend_diagnostic_error, bir_diagnostics_to_error,
     duplicate_symbol_errors_to_error, fallback_source_span, faulted_messages,
-    foreign_clash_errors_to_error, foreign_signature_errors_to_error, join_by_fault,
-    mono_errors_to_error, multiple_diagnostics, numbered, optimization_verdict_split,
-    program_anchor_span, reserved_name_errors_to_error, runtime_symbol_errors_to_error,
-    sema_errors_to_diagnostics, vec_surface_errors_to_error,
+    foreign_clash_errors_to_error, foreign_signature_errors_to_error,
+    instance_surface_errors_to_error, join_by_fault, mono_errors_to_error, multiple_diagnostics,
+    numbered, optimization_verdict_split, program_anchor_span, reserved_name_errors_to_error,
+    runtime_symbol_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::{compile_air_with_llvm, compile_air_with_llvm_linked};
 
@@ -398,6 +398,20 @@ fn front_stage(
     ))
 }
 
+struct StageFailure {
+    error: AelysError,
+    instance: bool,
+}
+
+impl From<AelysError> for StageFailure {
+    fn from(error: AelysError) -> Self {
+        StageFailure {
+            error,
+            instance: false,
+        }
+    }
+}
+
 // every check a -o level can change the input of is in here, so above -o0 this runs twice
 fn air_stage(
     fronts: &[ModuleFront],
@@ -405,14 +419,14 @@ fn air_stage(
     root: &Arc<Source>,
     sources: &ModuleSources,
     opt_level: OptimizationLevel,
-) -> Result<aelys_air::AirProgram, AelysError> {
+    judge_instances: bool,
+) -> Result<aelys_air::AirProgram, StageFailure> {
     let mut programs: Vec<aelys_air::AirProgram> = Vec::with_capacity(fronts.len());
     let mut bir_imports = aelys_air::bir::Imports::default();
     let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut retaining_fns: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut lent_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
 
-    for (front, typed_program) in fronts.iter().zip(typed.iter().copied()) {
+    for (file, (front, typed_program)) in fronts.iter().zip(typed.iter().copied()).enumerate() {
         let src = front.source.clone();
         let imported = aelys_air::lower::Imported {
             globals: front.globals.clone(),
@@ -421,7 +435,7 @@ fn air_stage(
             bir: bir_imports.clone(),
             fresh_returns: fresh_returns.clone(),
             retaining_fns: retaining_fns.clone(),
-            lent_returns: lent_returns.clone(),
+            file: file as u32,
         };
 
         let mut air = aelys_air::lower::try_lower_with_imports(typed_program, imported).map_err(
@@ -461,7 +475,8 @@ fn air_stage(
                 typed_program,
                 &air,
                 src.clone(),
-            ));
+            )
+            .into());
         }
 
         aelys_air::modules::qualify(&mut air, &front.dotted);
@@ -470,17 +485,10 @@ fn air_stage(
             aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
         fresh_returns.extend(proven);
         retaining_fns.extend(aelys_air::lower::retaining_functions(&air.functions));
-        for name in aelys_air::lower::lent_returning_generics(typed_program) {
-            lent_returns.insert(aelys_sema::modules::qualify_value(&front.dotted, &name));
-        }
 
         let runtime_claims = aelys_air::symbols::reserved_runtime_symbols(&air, BOOTSTRAP_BUILTINS);
         if !runtime_claims.is_empty() {
-            return Err(runtime_symbol_errors_to_error(
-                runtime_claims,
-                &air,
-                src.clone(),
-            ));
+            return Err(runtime_symbol_errors_to_error(runtime_claims, &air, src.clone()).into());
         }
 
         for (name, set) in &front.effects {
@@ -503,12 +511,9 @@ fn air_stage(
 
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
-        return Err(duplicate_symbol_errors_to_error(
-            duplicates,
-            typed_program,
-            &air,
-            src.clone(),
-        ));
+        return Err(
+            duplicate_symbol_errors_to_error(duplicates, typed_program, &air, src.clone()).into(),
+        );
     }
 
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
@@ -517,15 +522,24 @@ fn air_stage(
     // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
-        return Err(duplicate_symbol_errors_to_error(
-            duplicates,
-            typed_program,
-            &air,
-            src.clone(),
-        ));
+        return Err(
+            duplicate_symbol_errors_to_error(duplicates, typed_program, &air, src.clone()).into(),
+        );
+    }
+    let instance_errors = if judge_instances {
+        aelys_air::passes::instance_surface::check_instance_surface(&air)
+    } else {
+        Vec::new()
+    };
+    if !instance_errors.is_empty() {
+        let files: Vec<Arc<Source>> = fronts.iter().map(|f| f.source.clone()).collect();
+        return Err(StageFailure {
+            error: instance_surface_errors_to_error(instance_errors, &air, &files, src.clone()),
+            instance: true,
+        });
     }
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
-        return Err(vec_surface_errors_to_error(errors, &air, src.clone()));
+        return Err(vec_surface_errors_to_error(errors, &air, src.clone()).into());
     }
     let layout_errors = aelys_air::layout::compute_layouts(&mut air);
     if !layout_errors.is_empty() {
@@ -545,7 +559,8 @@ fn air_stage(
             owner.clone(),
             "air-layout",
             joined_with_semicolons,
-        ));
+        )
+        .into());
     }
 
     air.rc_type_table = aelys_air::rc_types::collect_rc_types(&air).map_err(|e| {
@@ -581,7 +596,8 @@ fn air_stage(
             owner.clone(),
             "air-validation",
             joined_with_newlines,
-        ));
+        )
+        .into());
     }
 
     Ok(air)
@@ -662,6 +678,7 @@ fn lower_file_to_air_with_source(
             &src,
             &module_sources,
             OptimizationLevel::None,
+            true,
         )
     });
 
@@ -676,22 +693,31 @@ fn lower_file_to_air_with_source(
     }
 
     let optimized_refs: Vec<&aelys_sema::TypedProgram> = optimized.iter().collect();
-    let actual = air_stage(&fronts, &optimized_refs, &src, &module_sources, opt_level);
+    // the instance verdict reads the declared types, which optimization may drop
+    let actual = air_stage(
+        &fronts,
+        &optimized_refs,
+        &src,
+        &module_sources,
+        opt_level,
+        opt_level == OptimizationLevel::None,
+    );
 
     let level = format!("-O{}", opt_level.numeric());
     let mut required_externs: Option<Vec<String>> = None;
     let air = match (reference, actual) {
-        (None, actual) => actual?,
+        (None, actual) => actual.map_err(|failure| failure.error)?,
         (Some(Ok(unoptimized)), Ok(air)) => {
             required_externs = Some(aelys_air::symbols::referenced_extern_symbols(&unoptimized));
             air
         }
-        (Some(Err(unoptimized)), Err(_)) => return Err(unoptimized),
+        (Some(Err(unoptimized)), Err(_)) => return Err(unoptimized.error),
+        (Some(Err(unoptimized)), Ok(_)) if unoptimized.instance => return Err(unoptimized.error),
         (Some(Err(unoptimized)), Ok(_)) => {
             return Err(optimization_verdict_split(
                 src.clone(),
                 UNOPTIMIZED_LEVEL.to_string(),
-                &unoptimized,
+                &unoptimized.error,
                 level,
             ));
         }
@@ -699,7 +725,7 @@ fn lower_file_to_air_with_source(
             return Err(optimization_verdict_split(
                 src.clone(),
                 level,
-                &optimized_error,
+                &optimized_error.error,
                 UNOPTIMIZED_LEVEL.to_string(),
             ));
         }

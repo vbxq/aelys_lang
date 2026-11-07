@@ -19,6 +19,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Str => "str".into(),
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
+        AirType::Rc(inner) => format!("Rc<{}>", fmt_type(inner)),
         AirType::Struct(name) => name.clone(),
         AirType::Enum(r) => format!("enum {}", r.symbol()),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
@@ -184,10 +185,8 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
             .map(|g| g.ty.clone())
             .unwrap_or(AirType::Void),
         Place::Field(id, name) => {
-            let root = match local_type(func, *id) {
-                AirType::Ptr(inner) => inner.as_ref(),
-                other => other,
-            };
+            let base = local_type(func, *id);
+            let root = base.pointee().unwrap_or(base);
             if let AirType::Struct(sname) = root {
                 program
                     .structs
@@ -200,20 +199,38 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
                 AirType::Void
             }
         }
-        Place::Deref(id) => match local_type(func, *id) {
-            AirType::Ptr(inner) => (**inner).clone(),
-            _ => AirType::Void,
-        },
+        Place::Deref(id) => local_type(func, *id)
+            .pointee()
+            .cloned()
+            .unwrap_or(AirType::Void),
         Place::Index(id, _) => {
-            let root = match local_type(func, *id) {
-                AirType::Ptr(inner) => inner.as_ref(),
-                other => other,
-            };
+            let base = local_type(func, *id);
+            let root = base.pointee().unwrap_or(base);
             match root {
                 AirType::Array(inner, _) | AirType::Slice(inner) | AirType::Vec(inner) => {
                     (**inner).clone()
                 }
-                _ => AirType::Void,
+                AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::F32
+                | AirType::F64
+                | AirType::Bool
+                | AirType::Char
+                | AirType::Str
+                | AirType::Ptr(_)
+                | AirType::Rc(_)
+                | AirType::Struct(_)
+                | AirType::Enum(_)
+                | AirType::FnPtr { .. }
+                | AirType::Param(_)
+                | AirType::Opaque
+                | AirType::Void => AirType::Void,
             }
         }
     }
@@ -430,7 +447,29 @@ fn type_layout_for_print(ty: &AirType, program: &AirProgram) -> (u32, u32) {
             .find(|s| s.name == *name)
             .map(|d| struct_size_align(d, program))
             .unwrap_or((0, 1)),
-        _ => {
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Enum(_)
+        | AirType::Array(..)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => {
             let l = layout::layout_of(ty);
             (l.size, l.align)
         }

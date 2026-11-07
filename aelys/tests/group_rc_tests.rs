@@ -1317,10 +1317,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc_34_a_fresh_rc_returned_as_a_bare_type_parameter_leaks() {
+fn rc_34_a_fresh_rc_returned_as_a_bare_type_parameter_is_released() {
     let h = Harness::new();
-    h.differential_row("rc-34", RC34_GENERIC_FRESH_RC, &[], "14\n", (2, 0));
-    h.assert_legs(18);
+    h.differential_row("rc-34", RC34_GENERIC_FRESH_RC, &[], "14\n", (2, 2));
+    h.lsan_row("rc-34", RC34_GENERIC_FRESH_RC, &[], "14\n");
+    h.assert_legs(24);
 }
 
 const RC35_LONG_LIST: &str = r#"

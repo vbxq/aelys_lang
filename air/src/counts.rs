@@ -87,10 +87,49 @@ impl Carriers<'_> {
                             .args
                             .get(p.0 as usize)
                             .is_none_or(|arg| self.carries(arg, seen)),
-                        other => self.carries(other, seen),
+                        other @ (AirType::I8
+                        | AirType::I16
+                        | AirType::I32
+                        | AirType::I64
+                        | AirType::U8
+                        | AirType::U16
+                        | AirType::U32
+                        | AirType::U64
+                        | AirType::F32
+                        | AirType::F64
+                        | AirType::Bool
+                        | AirType::Char
+                        | AirType::Str
+                        | AirType::Ptr(_)
+                        | AirType::Rc(_)
+                        | AirType::Struct(_)
+                        | AirType::Enum(_)
+                        | AirType::Array(..)
+                        | AirType::Slice(_)
+                        | AirType::Vec(_)
+                        | AirType::FnPtr { .. }
+                        | AirType::Opaque
+                        | AirType::Void) => self.carries(other, seen),
                     })
             }
-            _ => false,
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::Opaque
+            | AirType::Void => false,
         }
     }
 
@@ -149,7 +188,27 @@ impl Carriers<'_> {
                     out.push(Leaf::Variants(r.clone(), carrying));
                 }
             }
-            _ => {}
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Rc(_)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {}
         }
         out
     }
@@ -186,10 +245,11 @@ pub fn count_callee(slot: &AirType, retain: bool) -> &'static str {
     }
 }
 
-fn mentions_param(ty: &AirType) -> bool {
+pub(crate) fn mentions_param(ty: &AirType) -> bool {
     match ty {
         AirType::Param(_) => true,
         AirType::Ptr(inner)
+        | AirType::Rc(inner)
         | AirType::Array(inner, _)
         | AirType::Slice(inner)
         | AirType::Vec(inner) => mentions_param(inner),
@@ -280,7 +340,32 @@ fn counted_slot_type(
     }
     match types.get(&arg) {
         Some(AirType::Ptr(inner)) => Some((**inner).clone()),
-        _ => None,
+        Some(
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Rc(_)
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void,
+        )
+        | None => None,
     }
 }
 
@@ -338,15 +423,32 @@ fn vec_elements(ty: &AirType, out: &mut Vec<AirType>) {
             }
             vec_elements(inner, out);
         }
-        AirType::Ptr(inner) | AirType::Array(inner, _) | AirType::Slice(inner) => {
-            vec_elements(inner, out)
-        }
+        AirType::Ptr(inner)
+        | AirType::Rc(inner)
+        | AirType::Array(inner, _)
+        | AirType::Slice(inner) => vec_elements(inner, out),
         AirType::Enum(r) => r.args.iter().for_each(|a| vec_elements(a, out)),
         AirType::FnPtr { params, ret, .. } => {
             params.iter().for_each(|p| vec_elements(p, out));
             vec_elements(ret, out);
         }
-        _ => {}
+        AirType::I8
+        | AirType::I16
+        | AirType::I32
+        | AirType::I64
+        | AirType::U8
+        | AirType::U16
+        | AirType::U32
+        | AirType::U64
+        | AirType::F32
+        | AirType::F64
+        | AirType::Bool
+        | AirType::Char
+        | AirType::Str
+        | AirType::Struct(_)
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => {}
     }
 }
 
@@ -462,21 +564,34 @@ impl<'a> GlueSet<'a> {
         name
     }
 
-    // a pointer a type argument put in an enum payload may be a reference, a declared one is an rc
     fn param_rc_paths(&self, ty: &AirType) -> Vec<crate::rc_paths::RcLeafPath> {
-        if !matches!(ty, AirType::Struct(_) | AirType::Enum(_)) {
-            return Vec::new();
+        match ty {
+            AirType::Rc(_) => return vec![crate::rc_paths::RcLeafPath { steps: Vec::new() }],
+            AirType::Struct(_) | AirType::Enum(_) => {}
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Ptr(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::Vec(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => return Vec::new(),
         }
         match crate::rc_paths::rc_field_paths(ty, self.structs, self.enums) {
-            crate::rc_paths::RcScan::Paths(paths) => paths
-                .into_iter()
-                .filter(|path| {
-                    !path.steps.iter().any(|step| {
-                        matches!(step, crate::rc_paths::RcPathStep::EnumPayload { enum_ref, .. }
-                            if !enum_ref.args.is_empty())
-                    })
-                })
-                .collect(),
+            crate::rc_paths::RcScan::Paths(paths) => paths,
             crate::rc_paths::RcScan::None
             | crate::rc_paths::RcScan::Undecidable(_)
             | crate::rc_paths::RcScan::RejectedMultiVariant(_) => Vec::new(),
@@ -563,7 +678,7 @@ impl<'a> GlueSet<'a> {
                     };
                     let field_ty = owner
                         .and_then(|def| def.fields.iter().find(|f| &f.name == field))
-                        .map_or(AirType::Ptr(Box::new(AirType::Void)), |f| f.ty.clone());
+                        .map_or(AirType::Rc(Box::new(AirType::Void)), |f| f.ty.clone());
                     (
                         field_ty,
                         Rvalue::FieldAccess {
@@ -584,7 +699,7 @@ impl<'a> GlueSet<'a> {
                         .find(|def| def.name == symbol)
                         .and_then(|def| def.variants.iter().find(|v| v.tag == *tag))
                         .and_then(|v| v.payload.get(*field_index as usize).cloned())
-                        .unwrap_or(AirType::Ptr(Box::new(AirType::Void)));
+                        .unwrap_or(AirType::Rc(Box::new(AirType::Void)));
                     (
                         payload_ty,
                         Rvalue::EnumPayload {
@@ -621,12 +736,34 @@ impl<'a> GlueSet<'a> {
     }
 
     fn release_payload(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
-        if let AirType::Ptr(_) = ty {
-            body.call(RC_RELEASE_SLOT, addr);
-            return 1;
-        }
-        if let AirType::Vec(_) = ty {
-            return self.release_vec(body, ty, addr);
+        match ty {
+            AirType::Rc(_) => {
+                body.call(RC_RELEASE_SLOT, addr);
+                return 1;
+            }
+            AirType::Ptr(_) => return 0,
+            AirType::Vec(_) => return self.release_vec(body, ty, addr),
+            AirType::I8
+            | AirType::I16
+            | AirType::I32
+            | AirType::I64
+            | AirType::U8
+            | AirType::U16
+            | AirType::U32
+            | AirType::U64
+            | AirType::F32
+            | AirType::F64
+            | AirType::Bool
+            | AirType::Char
+            | AirType::Str
+            | AirType::Struct(_)
+            | AirType::Enum(_)
+            | AirType::Array(..)
+            | AirType::Slice(_)
+            | AirType::FnPtr { .. }
+            | AirType::Param(_)
+            | AirType::Opaque
+            | AirType::Void => {}
         }
         let mut calls = 0;
         if self.carriers().counted(ty) {
