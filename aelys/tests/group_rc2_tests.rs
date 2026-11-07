@@ -5230,3 +5230,162 @@ fn rc2_206_a_closure_capturing_a_slice_parameter_of_another_closure_is_refused()
         &[],
     );
 }
+
+const RC2_207: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+fn run() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
+    a.next = b
+    let v = vec[10, 20, 30]
+    let w = v
+    Vec::push(w, 40)
+    __aelys_collect()
+    return Rc::get(a).val + Rc::get(Rc::get(a).next).val + w[3] + v[0]
+}
+fn main() -> i64 {
+    println("{run()}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_207_an_rc_linked_by_a_field_write_beside_a_copied_vec_is_released() {
+    let h = Harness::new();
+    h.differential_row("rc2-207", RC2_207, &[], "53\n", (4, 4));
+    h.lsan_row("rc2-207", RC2_207, &[], "53\n");
+    h.assert_legs(24);
+}
+
+const RC2_208: &str = r#"
+needs std.str
+needs std.vec
+needs std.slice
+needs std.sort
+needs std.math
+needs std.result
+needs std.io
+
+struct Entry { key: string, score: Rc<i64> }
+struct Node { val: i64, next: Rc<Node> }
+struct List { head: Rc<Node>, len: i64 }
+struct Tags { names: [string; 4], n: i64 }
+
+fn line_for(i: i64) -> string {
+    return "  id" + str.from_int(i % 37) + " , " + str.from_int((i * 7) % 101) + " , x" + str.from_int(i % 5) + "  "
+}
+
+fn score_of(e: Entry) -> i64 {
+    return Rc::get(e.score)
+}
+
+fn mk_entry(key: string, value: i64) -> Entry {
+    return Entry { key: key, score: Rc::new(value) }
+}
+
+fn push(l: &mut List, v: i64) {
+    (*l).head = Rc::new(Node { val: v, next: (*l).head })
+    (*l).len = (*l).len + 1
+}
+
+fn pop(l: &mut List) -> i64 {
+    if Rc::is_null((*l).head) { return 0 }
+    let v = Rc::get((*l).head).val
+    (*l).head = Rc::get((*l).head).next
+    (*l).len = (*l).len - 1
+    return v
+}
+
+fn walk(l: &List) -> i64 {
+    let mut cur = (*l).head
+    let mut t = 0
+    while !Rc::is_null(cur) {
+        t = t + Rc::get(cur).val
+        cur = Rc::get(cur).next
+    }
+    return t
+}
+
+fn record(seen: &mut Vec<string>, count: &mut i64, s: string) {
+    Vec::push(*seen, s)
+    *count = *count + 1
+}
+
+fn tag_add(t: &mut Tags, s: string) {
+    (*t).names[(*t).n % 4] = s
+    (*t).n = (*t).n + 1
+}
+
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut l = List { head: Rc::null(), len: 0 }
+    push(&mut l, 5)
+    push(&mut l, 6)
+    let mut i: i64 = 0
+    while i < 300 {
+        let raw: string = line_for(i)
+        let clean: string = str.trim(raw)
+        let parts: Vec<string> = str.split(clean, ",")
+        let key: string = str.trim(parts[0])
+        let value: i64 = result.unwrap_or(str.parse_int(str.trim(parts[1])), 0)
+        let tag: string = str.substring(str.trim(parts[2]), 0, 2)
+        let e: Entry = mk_entry(key, value)
+        let mut names: Vec<string> = Vec::new()
+        Vec::push(names, tag)
+        Vec::push(names, e.key)
+        Vec::push(names, "zz")
+        let mut view: &mut [string] = Vec::try_as_unique_mut_slice(names)
+        sort.strings(view)
+        let joined: string = str.join(&names, "|")
+        let mut nums: Vec<i64> = Vec::new()
+        Vec::push(nums, value)
+        Vec::push(nums, math.gcd(value, 12))
+        Vec::push(nums, math.clamp(value - 50, 0, 9))
+        let k: i64 = joined.len
+        let shifted: Vec<i64> = vec.map(&nums, fn (x: i64) -> i64 { return x + k })
+        let kept: Vec<i64> = vec.filter(&shifted, fn (x: i64) -> bool { return x % 2 == 0 })
+        let acc: i64 = vec.fold(&kept, 0, fn (a: i64, b: i64) -> i64 { return a + b })
+        let sorted: Vec<i64> = vec.sorted(&shifted)
+        let first: i64 = result.some_or(slice.first(Vec::as_slice(sorted)), 0)
+        let hit: i64 = if str.contains(joined, "id1") { 1 } else { 0 }
+        let ch: i64 = str.char_count(joined) + str.index_of(joined, "|") + str.compare(tag, "x2")
+        total = total + score_of(e) + acc + first + hit + ch + math.abs(math.sign(value - 50)) + vec.sum(&nums) % 7
+        push(&mut l, value)
+        let top = l.head
+        push(&mut l, k)
+        let moved: i64 = if top == l.head { 0 } else { 1 }
+        let popped: i64 = pop(&mut l)
+        let back: i64 = if top == l.head { 1 } else { 0 }
+        total = total + moved + back + popped + pop(&mut l) + l.len
+        if i % 50 == 0 { total = total + walk(&l) }
+        let mut seen: Vec<string> = Vec::new()
+        let mut count: i64 = 0
+        record(&mut seen, &mut count, tag)
+        record(&mut seen, &mut count, joined)
+        let peek = fn () -> i64 {
+            let s = Vec::as_slice(seen)
+            return s.len + s[1].len
+        }
+        let lead = fn () -> i64 {
+            let b = joined.bytes
+            return b[0] + b.len
+        }
+        let mut tg = Tags { names: ["", "", "", ""], n: 0 }
+        tag_add(&mut tg, key)
+        tag_add(&mut tg, tag)
+        tag_add(&mut tg, str.from_int(value))
+        total = total + peek() + lead() + count + tg.n + tg.names[2].len + tg.names[0].len
+        i = i + 1
+    }
+    io.print_out(str.from_int(total) + " " + str.from_int(walk(&l)) + "\n")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_208_an_ordinary_program_over_the_whole_library_and_the_rc_list_surface_is_balanced() {
+    let h = Harness::new();
+    h.differential_row("rc2-208", RC2_208, &[], "96823 11\n", (10807, 10807));
+    h.lsan_row("rc2-208", RC2_208, &[], "96823 11\n");
+    h.assert_legs(24);
+}
