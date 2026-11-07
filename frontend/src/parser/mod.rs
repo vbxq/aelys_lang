@@ -105,6 +105,37 @@ impl Parser {
         CompileError::new(kind, self.peek().span, Arc::clone(&self.source)).into()
     }
 
+    pub(crate) fn unit_type_refusal(&self, open: aelys_syntax::Span) -> AelysError {
+        let kind = CompileErrorKind::UnexpectedToken {
+            expected: "a type, the unit type is written by leaving out the return type: \
+                       `fn f()` rather than `fn f() -> ()`"
+                .to_string(),
+            found: "()".to_string(),
+        };
+        let span = open.merge(self.previous().span);
+        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    }
+
+    pub(crate) fn tuple_refusal(&mut self, open: aelys_syntax::Span) -> AelysError {
+        let mut depth = 1usize;
+        while depth > 0 && !self.is_at_end() {
+            match self.advance().kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => depth -= 1,
+                _ => {}
+            }
+        }
+        let kind = CompileErrorKind::BackendDiagnostic {
+            backend: String::new(),
+            message: "tuples are not supported yet".to_string(),
+            note: None,
+            help: None,
+            fault: aelys_common::error::Fault::Unsupported,
+        };
+        let span = open.merge(self.previous().span);
+        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    }
+
     pub(crate) fn enter_recursion(&mut self) -> Result<()> {
         self.recursion_depth += 1;
         if self.recursion_depth > MAX_RECURSION_DEPTH {

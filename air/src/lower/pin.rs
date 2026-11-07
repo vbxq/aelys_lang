@@ -162,7 +162,8 @@ impl<'a> LoweringContext<'a> {
     pub(super) fn reads_a_borrowed_place(&self, expr: &TypedExpr) -> bool {
         let e = peel(expr);
         if !self.counted(&e.ty) {
-            return false;
+            return matches!(e.kind, TypedExprKind::Member { .. })
+                && self.rc_shape(&e.ty).is_some();
         }
         match &e.kind {
             TypedExprKind::Index { object, .. } => {
@@ -277,6 +278,9 @@ impl<'a> LoweringContext<'a> {
         if plain {
             return self.emit_rvalue_to_temp(ty, Rvalue::Use(op), sp);
         }
+        if let Some(shape) = self.rc_shape(&e.ty) {
+            return self.held_rc_copy(op, shape, sp);
+        }
         if !matches!(e.ty, InferType::Vec(_)) {
             return op;
         }
@@ -348,6 +352,10 @@ impl<'a> LoweringContext<'a> {
         let Some(shape) = self.rc_shape(&e.ty) else {
             return op;
         };
+        self.held_rc_copy(op, shape, sp)
+    }
+
+    fn held_rc_copy(&mut self, op: Operand, shape: super::RcShape, sp: Option<Span>) -> Operand {
         let copy = self.alloc_temp(shape.ty.clone());
         self.emit(
             AirStmtKind::Assign {

@@ -878,6 +878,10 @@ impl TypeInference {
         generic_scope: &HashSet<String>,
         declared_type_params: &HashSet<String>,
     ) {
+        if matches!(object.ty, InferType::String) {
+            self.errors.push(TypeError::string_slice(expr.span));
+            return;
+        }
         if let TypedExprKind::Range { start: Some(s), .. } = &range.kind {
             if !matches!(&s.kind, TypedExprKind::Int(0)) {
                 self.errors.push(TypeError::slice_form_unsupported(

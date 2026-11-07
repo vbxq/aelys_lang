@@ -115,6 +115,57 @@ impl TypeInference {
         }
     }
 
+    pub(super) fn reject_generic_structs(&mut self, stmts: &[Stmt]) -> bool {
+        let mut found = false;
+        for stmt in stmts {
+            if let StmtKind::StructDecl {
+                name, type_params, ..
+            } = &stmt.kind
+                && !type_params.is_empty()
+            {
+                found = true;
+                self.errors.push(TypeError::not_supported_yet(
+                    format!(
+                        "struct `{name}<{}>` is generic: generic structs are not supported yet",
+                        type_params.join(", ")
+                    ),
+                    stmt.span,
+                ));
+            }
+        }
+        found
+    }
+
+    pub(super) fn reject_multi_variant_rc_enums(&mut self, stmts: &[Stmt]) {
+        for stmt in stmts {
+            let StmtKind::EnumDecl { name, variants, .. } = &stmt.kind else {
+                continue;
+            };
+            let Some(def) = self.type_table.get_enum(name) else {
+                continue;
+            };
+            if def.variants.len() < 2 {
+                continue;
+            }
+            let offender = def
+                .variants
+                .iter()
+                .zip(variants.iter())
+                .flat_map(|(v, ast)| v.data.iter().zip(ast.fields.iter()).map(move |p| (v, p)))
+                .find(|(_, (ty, _))| ty.contains_rc() || self.type_table.contains_rc_nominal(ty))
+                .map(|(v, (ty, ann))| (v.name.clone(), ty.to_string(), ann.span));
+            if let Some((variant, ty, span)) = offender {
+                self.errors.push(TypeError::rc_carrier_out_of_surface(
+                    format!(
+                        "variant `{name}::{variant}` has a payload of type `{ty}`, which holds an \
+                         `Rc`: an enum with more than one variant cannot carry an Rc yet"
+                    ),
+                    span,
+                ));
+            }
+        }
+    }
+
     pub(super) fn reject_nominal_vec_carriers(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
             match &stmt.kind {
@@ -141,13 +192,10 @@ impl TypeInference {
                         }
                     }
                     for (fname, fspan, fty) in offenders {
-                        self.errors.push(crate::constraint::TypeError::rc_out_of_surface(
+                        self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
-                                "field `{}` of struct `{}` has type `{}`, which holds a `Vec<T>` \
-                                 by value; a Vec inside a struct/enum is not supported yet \
-                                 (its buffer would leak , the carrier-Vec retain/release is not \
-                                 implemented)",
-                                fname, name, fty
+                                "field `{fname}` of struct `{name}` has type `{fty}`: a Vec inside \
+                                 a struct or enum is not supported yet"
                             ),
                             fspan,
                         ));
@@ -180,13 +228,10 @@ impl TypeInference {
                         }
                     }
                     for (vname, vspan, vty) in offenders {
-                        self.errors.push(crate::constraint::TypeError::rc_out_of_surface(
+                        self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
-                                "variant `{}` of enum `{}` has a payload of type `{}`, which holds \
-                                 a `Vec<T>` by value; a Vec inside a struct/enum is not supported \
-                                 yet (its buffer would leak, the carrier-Vec retain/release \
-                                 is not implemented)",
-                                vname, name, vty
+                                "variant `{vname}` of enum `{name}` has a payload of type `{vty}`: \
+                                 a Vec inside a struct or enum is not supported yet"
                             ),
                             vspan,
                         ));

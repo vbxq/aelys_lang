@@ -349,6 +349,9 @@ impl Parser {
 
             TokenKind::LParen => {
                 let inner = self.expression()?;
+                if self.check(&TokenKind::Comma) {
+                    return Err(self.tuple_refusal(span));
+                }
                 self.consume(&TokenKind::RParen, ")")?;
                 let end_span = self.previous().span;
                 return Ok(Expr::new(

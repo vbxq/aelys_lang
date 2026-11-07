@@ -538,8 +538,8 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[air-lowering]"),
-        "N4 must carry the marker: {err}"
+        err.contains("[E0902]: [rc] an Rc<T> live in a loop body is abandoned by `break`"),
+        "N4 must name the abandoned Rc: {err}"
     );
 }
 
@@ -563,7 +563,7 @@ fn main() -> i64 { return make() }
 }
 
 #[test]
-fn n6_generic_struct_holding_rc_is_rejected() {
+fn n6_generic_struct_holding_rc_is_refused_as_a_generic_struct() {
     let err = rc_reject(
         r#"
 struct Box<T> { v: T }
@@ -576,13 +576,13 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
-        "N6 (generic struct holding Rc) must carry the marker: {err}"
+        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
+        "N6 (generic struct holding Rc) must be refused at the struct: {err}"
     );
 }
 
 #[test]
-fn n6_nested_generic_struct_holding_rc_is_rejected() {
+fn n6_nested_generic_struct_holding_rc_is_refused_as_a_generic_struct() {
     let err = rc_reject(
         r#"
 struct Box<T> { v: T }
@@ -593,8 +593,8 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
-        "N6(nested) must carry the marker: {err}"
+        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
+        "N6(nested) must be refused at the struct: {err}"
     );
 }
 

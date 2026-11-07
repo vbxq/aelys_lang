@@ -1037,7 +1037,7 @@ fn s3_20c_a_generic_instantiated_at_a_vec_is_the_other_half() {
 fn s3_21_the_rc_bearing_and_struct_nested_families_never_reach_it_either() {
     let h = Harness::new();
     h.fenced_row("S3-21-rc", S3_21_RC, "E0410");
-    h.fenced_row("S3-21-struct", S3_21_STRUCT, "E0410");
+    h.fenced_row("S3-21-struct", S3_21_STRUCT, "E0902");
     h.assert_legs(8);
 }
 

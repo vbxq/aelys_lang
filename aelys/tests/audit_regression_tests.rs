@@ -1069,9 +1069,9 @@ fn main() {
 }
 
 #[test]
-fn generic_struct_field_type_param_accepted() {
-    assert!(
-        sema_ok(
+fn generic_struct_field_type_param_is_refused_as_unsupported() {
+    assert_eq!(
+        sema_error_count(
             r#"
 struct Wrapper<T> { value: T }
 fn main() {
@@ -1079,7 +1079,8 @@ fn main() {
 }
 "#
         ),
-        "generic struct with type param field should pass"
+        1,
+        "a generic struct is refused once, at its declaration"
     );
 }
 

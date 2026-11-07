@@ -1801,6 +1801,17 @@ fn rc2_49_a_payload_of_only_rc_leaves_copied_through_a_mutable_reference_takes_i
 }
 
 fn refusal_row(id: &str, src: &str, files: &[(&str, &str)], code: &str, needle: &str) {
+    refusal_row_full(id, src, files, code, &[needle], &[]);
+}
+
+fn refusal_row_full(
+    id: &str,
+    src: &str,
+    files: &[(&str, &str)],
+    code: &str,
+    needles: &[&str],
+    absent: &[&str],
+) {
     let h = Harness::new();
     for (tag, opt) in LEVELS {
         let root = h.stage(id, &format!("{tag}_refuse"), src, files);
@@ -1815,7 +1826,12 @@ fn refusal_row(id: &str, src: &str, files: &[(&str, &str)], code: &str, needle: 
             !text.contains("E0432"),
             "{id} at {tag}: verdict split\n{text}"
         );
-        assert!(text.contains(needle), "{id} at {tag}: diagnostic\n{text}");
+        for needle in needles {
+            assert!(text.contains(needle), "{id} at {tag}: diagnostic\n{text}");
+        }
+        for gone in absent {
+            assert!(!text.contains(gone), "{id} at {tag}: stale text\n{text}");
+        }
     }
 }
 
@@ -2086,8 +2102,8 @@ fn rc2_64_an_rc_through_a_single_variant_enum_in_a_multi_variant_enum_is_refused
          \x20   println(\"{go(L::A(One::It(r)))}\")\n    return 0\n}\n",
         &[],
         "E0410",
-        "`L::A` is given a value of type `One`, which holds an `Rc`: an enum with more than one \
-         variant cannot carry an Rc yet",
+        "variant `L::A` has a payload of type `One`, which holds an `Rc`: an enum with more than \
+         one variant cannot carry an Rc yet",
     );
 }
 
@@ -2423,6 +2439,403 @@ fn rc2_80_an_rc_put_straight_into_a_generic_enum_names_what_is_unsupported() {
          \x20   return 0\n}\n",
         &[],
         "E0410",
-        "carrying an `Rc<T>` straight into a generic enum or struct, which is not supported yet",
+        "carrying an `Rc<T>` straight into a generic enum, which is not supported yet",
+    );
+}
+
+const RC2_81: &str = r#"
+struct N { s: string }
+struct W { r: Rc<N> }
+struct H { w: W }
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn f(w: W, k: i64) -> i64 {
+    let b: i64 = Rc::get(w.r).s.bytes[0]
+    return b * 1000 + Rc::get(w.r).s.len + k
+}
+fn main() -> i64 {
+    let mut h = H { w: W { r: Rc::new(N { s: victim(12345) }) } }
+    let v = f(h.w, { h = H { w: W { r: Rc::new(N { s: other(9) }) } }
+        let y = Rc::new(N { s: other(88888) })
+        Rc::get(y).s.len * 0 })
+    println("{v}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_81_a_carrier_field_argument_survives_a_sibling_reassigning_its_owner() {
+    let h = Harness::new();
+    h.differential_row("rc2-81", RC2_81, &[], "97007\n", (9, 9));
+    h.lsan_row("rc2-81", RC2_81, &[], "97007\n");
+    h.assert_legs(24);
+}
+
+const RC2_82: &str = r#"
+struct N { s: string }
+struct H { r: Rc<N> }
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn f(r: Rc<N>, k: i64) -> i64 {
+    let b: i64 = Rc::get(r).s.bytes[0]
+    return b * 1000 + Rc::get(r).s.len + k
+}
+fn main() -> i64 {
+    let mut h = H { r: Rc::new(N { s: victim(12345) }) }
+    let v = f(h.r, { h = H { r: Rc::new(N { s: other(9) }) }
+        let y = Rc::new(N { s: other(88888) })
+        Rc::get(y).s.len * 0 })
+    println("{v}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_82_an_rc_field_argument_survives_a_sibling_reassigning_its_owner() {
+    let h = Harness::new();
+    h.differential_row("rc2-82", RC2_82, &[], "97007\n", (9, 9));
+    h.lsan_row("rc2-82", RC2_82, &[], "97007\n");
+    h.assert_legs(24);
+}
+
+const RC2_83: &str = r#"
+struct N { k: i64 }
+struct W { r: Rc<N> }
+fn f(w: W, k: i64) -> i64 { return Rc::get(w.r).k * 100 + k }
+fn main() -> i64 {
+    let mut w = W { r: Rc::new(N { k: 1 }) }
+    let v = f(w, { w = W { r: Rc::new(N { k: 5 }) }
+        0 })
+    println("{v} {Rc::get(w.r).k}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_83_a_carrier_argument_keeps_its_value_when_a_sibling_reassigns_the_local() {
+    let h = Harness::new();
+    h.differential_row("rc2-83", RC2_83, &[], "100 5\n", (6, 6));
+    h.lsan_row("rc2-83", RC2_83, &[], "100 5\n");
+    h.assert_legs(24);
+}
+
+const RC2_84: &str = r#"
+struct N { k: i64 }
+struct W { r: Rc<N>, j: i64 }
+fn f(w: W, k: i64) -> i64 { return Rc::get(w.r).k * 100 + w.j * 10 + k }
+fn main() -> i64 {
+    let mut w = W { r: Rc::new(N { k: 1 }), j: 1 }
+    let v = f(w, { w.j = 7
+        0 })
+    println("{v} {w.j}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_84_a_carrier_argument_keeps_its_value_when_a_sibling_writes_one_of_its_fields() {
+    let h = Harness::new();
+    h.differential_row("rc2-84", RC2_84, &[], "110 7\n", (5, 5));
+    h.lsan_row("rc2-84", RC2_84, &[], "110 7\n");
+    h.assert_legs(24);
+}
+
+const RC2_85: &str = r#"
+struct N { k: i64 }
+struct M { s: string, r: Rc<N> }
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn f(a: M, k: i64) -> i64 {
+    let b: i64 = a.s.bytes[0]
+    return b * 1000 + Rc::get(a.r).k * 10 + k
+}
+fn main() -> i64 {
+    let mut x = M { s: victim(12345), r: Rc::new(N { k: 1 }) }
+    let v = f(x, { x = M { s: other(9), r: Rc::new(N { k: 5 }) }
+        let y = other(88888)
+        y.len * 0 })
+    println("{v}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_85_a_string_and_rc_argument_takes_one_share_when_a_sibling_reassigns_the_local() {
+    let h = Harness::new();
+    h.differential_row("rc2-85", RC2_85, &[], "97010\n", (8, 8));
+    h.lsan_row("rc2-85", RC2_85, &[], "97010\n");
+    h.assert_legs(24);
+}
+
+const MULTI_VARIANT_RC: &str = "an enum with more than one variant cannot carry an Rc yet";
+
+#[test]
+fn rc2_86_a_linked_list_enum_carrying_an_rc_is_refused_at_its_declaration() {
+    refusal_row_full(
+        "rc2-86",
+        "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
+         fn sum(l: Link) -> i64 {\n    match l {\n\
+         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
+         \x20       Link::Nil => { return 0 }\n    }\n}\nfn main() -> i64 {\n\
+         \x20   let c = Rc::new(Node { val: 3, next: Link::Nil })\n\
+         \x20   let b = Rc::new(Node { val: 2, next: Link::Cons(c) })\n\
+         \x20   println(\"sum={sum(Link::Cons(b))}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        &[
+            "variant `Link::Cons` has a payload of type `Rc<Node>`, which holds an `Rc`",
+            MULTI_VARIANT_RC,
+            "enum Link { Nil, Cons(Rc<Node>) }",
+        ],
+        &["is given a value of type"],
+    );
+}
+
+#[test]
+fn rc2_87_a_linked_list_built_through_a_generic_identity_is_refused_at_its_declaration() {
+    refusal_row_full(
+        "rc2-87",
+        "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
+         fn id<T>(x: T) -> T { return x }\nfn sum(l: Link) -> i64 {\n    match l {\n\
+         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
+         \x20       Link::Nil => { return 0 }\n    }\n}\nfn once() -> i64 {\n\
+         \x20   let c = id(Rc::new(Node { val: 3, next: Link::Nil }))\n\
+         \x20   let b = id(Rc::new(Node { val: 2, next: Link::Cons(c) }))\n\
+         \x20   return sum(Link::Cons(b))\n}\nfn main() -> i64 {\n    let mut t: i64 = 0\n\
+         \x20   let mut i: i64 = 0\n    while i < 1000 { t = t + once()\n        i = i + 1 }\n\
+         \x20   println(\"{t}\")\n    return 0\n}\n",
+        &[],
+        "E0410",
+        &[
+            "variant `Link::Cons` has a payload of type `Rc<Node>`",
+            MULTI_VARIANT_RC,
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_88_an_rc_handed_to_a_multi_variant_enum_through_a_generic_binding_is_refused() {
+    refusal_row_full(
+        "rc2-88",
+        "struct N { v: i64 }\nenum L { Num(i64), R(Rc<N>) }\nfn id<T>(x: T) -> T { return x }\n\
+         fn val(l: L) -> i64 { match l { L::Num(x) => { return x } L::R(n) => { return Rc::get(n).v } } }\n\
+         fn main() -> i64 {\n    let mut t: i64 = 0\n    let mut i: i64 = 0\n\
+         \x20   while i < 1000 { let r = Rc::new(N { v: 1 })\n        let r2 = id(r)\n\
+         \x20       t = t + val(L::R(r2))\n        i = i + 1 }\n    println(\"{t}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0410",
+        &[
+            "variant `L::R` has a payload of type `Rc<N>`",
+            MULTI_VARIANT_RC,
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_89_an_rc_carrier_handed_to_a_multi_variant_enum_through_a_generic_binding_is_refused() {
+    refusal_row_full(
+        "rc2-89",
+        "struct N { v: i64 }\nstruct W { r: Rc<N> }\nenum L { Num(i64), R(W) }\n\
+         fn id<T>(x: T) -> T { return x }\n\
+         fn val(l: L) -> i64 { match l { L::Num(x) => { return x } L::R(w) => { return Rc::get(w.r).v } } }\n\
+         fn main() -> i64 {\n    let mut t: i64 = 0\n    let mut i: i64 = 0\n\
+         \x20   while i < 1000 { let w = W { r: Rc::new(N { v: 1 }) }\n        let w2 = id(w)\n\
+         \x20       t = t + val(L::R(w2))\n        i = i + 1 }\n    println(\"{t}\")\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0410",
+        &["variant `L::R` has a payload of type `W`", MULTI_VARIANT_RC],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_90_a_multi_variant_enum_carrying_an_imported_rc_carrier_is_refused() {
+    refusal_row_full(
+        "rc2-90",
+        "needs m\nenum L { Nil, V(m.W) }\nfn main() -> i64 { println(\"ok\"); return 0 }\n",
+        &[("m.aelys", "pub struct W { pub r: Rc<i64> }\n")],
+        "E0410",
+        &[
+            "variant `L::V` has a payload of type `m.W`",
+            MULTI_VARIANT_RC,
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_91_a_generic_multi_variant_enum_with_a_concrete_rc_payload_is_refused() {
+    refusal_row_full(
+        "rc2-91",
+        "struct N { v: i64 }\nenum L<T> { Nil, V(T), R(Rc<N>) }\n\
+         fn main() -> i64 { println(\"ok\"); return 0 }\n",
+        &[],
+        "E0410",
+        &[
+            "variant `L::R` has a payload of type `Rc<N>`",
+            MULTI_VARIANT_RC,
+        ],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_92_an_rc_through_a_single_variant_enum_of_a_carrier_is_refused_at_the_outer_enum() {
+    refusal_row_full(
+        "rc2-92",
+        "struct W { k: i64, r: Rc<i64> }\nenum One { It(W) }\nenum L { Nil, V(One) }\n\
+         fn main() -> i64 { println(\"ok\"); return 0 }\n",
+        &[],
+        "E0410",
+        &[
+            "variant `L::V` has a payload of type `One`",
+            MULTI_VARIANT_RC,
+        ],
+        &[],
+    );
+}
+
+const GENERIC_STRUCT: &str = "generic structs are not supported yet";
+
+#[test]
+fn rc2_93_a_generic_struct_declared_and_unused_is_refused() {
+    refusal_row_full(
+        "rc2-93",
+        "struct Box<T> { v: T }\nfn main() -> i64 { println(\"ok\"); return 0 }\n",
+        &[],
+        "E0902",
+        &["struct `Box<T>` is generic", GENERIC_STRUCT],
+        &[],
+    );
+}
+
+#[test]
+fn rc2_94_a_generic_struct_literal_is_refused_instead_of_an_internal_error() {
+    refusal_row_full(
+        "rc2-94",
+        "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
+         \x20println(\"ok\"); return 0 }\n",
+        &[],
+        "E0902",
+        &[GENERIC_STRUCT],
+        &["E0901"],
+    );
+}
+
+#[test]
+fn rc2_95_a_generic_struct_field_read_is_refused_at_the_declaration() {
+    refusal_row_full(
+        "rc2-95",
+        "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
+         \x20println(\"{b.v}\"); return 0 }\n",
+        &[],
+        "E0902",
+        &[GENERIC_STRUCT, "struct Box<T> { v: T }"],
+        &["E0304"],
+    );
+}
+
+#[test]
+fn rc2_96_a_generic_struct_with_an_inferred_literal_is_refused_at_the_declaration() {
+    refusal_row_full(
+        "rc2-96",
+        "struct Pair<A, B> { a: A, b: B }\nfn main() -> i64 { let p = Pair { a: 5, b: 6 }\n\
+         \x20println(\"{p.a + 1}\"); return 0 }\n",
+        &[],
+        "E0902",
+        &["struct `Pair<A, B>` is generic", GENERIC_STRUCT],
+        &["E0301"],
+    );
+}
+
+#[test]
+fn rc2_97_a_global_initialized_by_a_call_is_unsupported_at_its_let() {
+    refusal_row_full(
+        "rc2-97",
+        "fn mk() -> i64 { return 7 }\n\nlet G = mk()\nfn main() -> i64 { println(\"{G}\"); return 0 }\n",
+        &[],
+        "E0902",
+        &[
+            "[E0902]: file-scope let 'G' requires a compile-time constant initializer",
+            "let G = mk()",
+        ],
+        &["E0904", "[air-lowering]"],
+    );
+}
+
+#[test]
+fn rc2_98_a_lowering_refusal_names_its_site_without_a_numbered_prefix() {
+    refusal_row_full(
+        "rc2-98",
+        "fn size() -> i64 { return 3 }\nfn main() -> i64 {\n    let n: i64 = size()\n\
+         \x20   let a = [0; n]\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        &[],
+        "E0902",
+        &[
+            "[E0902]: unsupported non-constant array size",
+            "let a = [0; n]",
+        ],
+        &["[air-lowering]", "fn size() -> i64 { return 3 }"],
+    );
+}
+
+#[test]
+fn rc2_99_a_slice_of_a_string_names_substring() {
+    refusal_row_full(
+        "rc2-99",
+        "struct Name { first: string, last: string }\nfn parse(full: string) -> Name {\n\
+         \x20   let mut i: i64 = 0\n    while i < full.len && full.bytes[i] != 32 as u8 { i = i + 1 }\n\
+         \x20   return Name { first: full[0..i], last: full[i + 1..full.len] }\n}\n\
+         fn main() -> i64 {\n    let n = parse(\"ada lovelace\")\n\
+         \x20   println(\"{n.last}, {n.first}\")\n    return 0\n}\n",
+        &[],
+        "E0425",
+        &["a `string` has no slices", "str.substring"],
+        &["&[dynamic]"],
+    );
+}
+
+#[test]
+fn rc2_100_a_vec_field_refusal_does_not_mention_rc() {
+    refusal_row_full(
+        "rc2-100",
+        "struct Bag { items: Vec<i64> }\nfn main() -> i64 {\n    let b = Bag { items: Vec::new() }\n\
+         \x20   return 0\n}\n",
+        &[],
+        "E0902",
+        &[
+            "field `items` of struct `Bag` has type `vec[i64]`: a Vec inside a struct or enum is \
+             not supported yet",
+        ],
+        &["Rc used outside", "[rc-stage1]", "Rc"],
+    );
+}
+
+#[test]
+fn rc2_101_a_tuple_type_says_tuples_are_unsupported() {
+    refusal_row_full(
+        "rc2-101",
+        "fn divmod(a: i64, b: i64) -> (i64, i64) { return (a / b, a % b) }\n\
+         fn main() -> i64 { return 0 }\n",
+        &[],
+        "E0902",
+        &["tuples are not supported yet"],
+        &["expected type name"],
+    );
+}
+
+#[test]
+fn rc2_102_a_tuple_expression_says_tuples_are_unsupported() {
+    refusal_row_full(
+        "rc2-102",
+        "fn main() -> i64 {\n    let t = (1, 2)\n    return 0\n}\n",
+        &[],
+        "E0902",
+        &["tuples are not supported yet"],
+        &["expected ), found ,"],
     );
 }

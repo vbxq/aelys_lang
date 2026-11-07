@@ -408,28 +408,18 @@ fn caller() -> i32 {
 }
 
 #[test]
-fn generic_struct_decl_only_does_not_introduce_unresolved_air_params() {
-    let mut air = lower_source(
-        r#"
-struct Box<T> { value: T }
-fn main() {
-}
-"#,
-    );
-    compute_layouts(&mut air);
-    let mut air = monomorphize(air).unwrap();
-    passes::copy_elim::eliminate_copies(&mut air);
-    passes::dead_locals::eliminate_dead_locals(&mut air);
-
-    let result = validate_air(&air);
+fn generic_struct_decl_only_is_refused_before_air() {
+    let src = Source::new("<test>", "struct Box<T> { value: T }\nfn main() {\n}\n");
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let errors = TypeInference::infer_program(stmts, src).expect_err("sema accepted Box<T>");
     assert!(
-        result.is_ok(),
-        "generic struct declaration without instantiation should not produce unresolved AIR params, errors: {:?}",
-        result.err()
-    );
-    assert!(
-        !air.structs.iter().any(|s| s.name == "Box"),
-        "uninstantiated generic struct declarations should not be lowered to AIR structs"
+        errors.iter().any(|e| e
+            .to_string()
+            .contains("generic structs are not supported yet")),
+        "a generic struct declaration must be refused in sema: {errors:?}"
     );
 }
 

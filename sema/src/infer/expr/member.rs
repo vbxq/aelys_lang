@@ -18,7 +18,7 @@ impl TypeInference {
                 self.errors.push(TypeError::rc_out_of_surface(
                     format!(
                         "{what} stores a value of type `{ty}` carrying an `Rc<T>` straight \
-                     into a generic enum or struct, which is not supported yet"
+                     into a generic enum, which is not supported yet"
                     ),
                     span,
                 ));

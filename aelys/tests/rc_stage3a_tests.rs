@@ -358,7 +358,7 @@ fn main() -> i64 {
 }
 
 #[test]
-fn trej_a_generic_struct_of_rc_in_field_is_rejected() {
+fn trej_a_generic_struct_of_rc_in_field_is_refused_as_a_generic_struct() {
     let err = rc_reject(
         r#"
 struct Wrap<T> { v: T }
@@ -371,8 +371,8 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
-        "T-Rej(a): a generic struct of Rc in a field must be rejected; got:\n{err}"
+        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
+        "T-Rej(a): a generic struct of Rc in a field must be refused at the struct; got:\n{err}"
     );
 }
 
@@ -462,7 +462,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[air-lowering]"),
+        err.contains("[E0902]: [rc] an Rc<T> live in a loop body is abandoned by `break`"),
         "T-Rej(e): a carrier abandoned by break must be rejected; got:\n{err}"
     );
 }
@@ -618,8 +618,10 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
-        "F1-rej: a multi-variant Rc-bearing enum must be rejected (no SEGV); got:\n{err}"
+        err.contains("[E0410]: variant `E::A` has a payload of type `Rc<i64>`")
+            && err.contains("an enum with more than one variant cannot carry an Rc yet")
+            && err.contains("enum E { A(Rc<i64>), B(i64) }"),
+        "F1-rej: a multi-variant Rc-bearing enum must be rejected at its declaration; got:\n{err}"
     );
 }
 
@@ -636,7 +638,8 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[E0410]: variant `E::A` has a payload of type `Rc<i64>`")
+            && err.contains("an enum with more than one variant cannot carry an Rc yet"),
         "F1-rej(transitive): a struct carrier of a multi-variant Rc enum must be rejected; got:\n{err}"
     );
 }

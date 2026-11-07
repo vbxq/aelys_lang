@@ -105,6 +105,10 @@ pub enum TypeErrorKind {
         name: String,
     },
     RcFieldAssignIndirect,
+    NotSupportedYet {
+        detail: String,
+    },
+    StringSlice,
     ComputedLen {
         ty: InferType,
         assignment: bool,
@@ -377,6 +381,12 @@ impl fmt::Display for TypeError {
                 "[reserved-type] `Vec` and `Rc` are reserved builtin type names; a user type named \
                  `{name}` would compete with intrinsic path resolution. rename the type"
             ),
+            TypeErrorKind::NotSupportedYet { detail } => write!(f, "{detail}"),
+            TypeErrorKind::StringSlice => write!(
+                f,
+                "a `string` has no slices, so `s[a..b]` does not exist on one. take a substring \
+                 with `str.substring(s, a, b)` from `needs std.str`"
+            ),
             TypeErrorKind::RcFieldAssignIndirect => write!(
                 f,
                 "[rc-field-assign] the right-hand side of an `Rc` field assignment must be a direct \
@@ -506,6 +516,30 @@ impl TypeError {
     pub fn rc_carrier_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::RcCarrierOutOfSurface {
+                detail: detail.into(),
+            },
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn string_slice(span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::StringSlice,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn not_supported_yet(detail: impl Into<String>, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::NotSupportedYet {
                 detail: detail.into(),
             },
             span,

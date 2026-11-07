@@ -22,6 +22,7 @@ pub fn lower(program: &TypedProgram) -> AirProgram {
 pub struct LowerError {
     pub fault: Fault,
     pub message: String,
+    pub span: Option<aelys_syntax::Span>,
 }
 
 // a borrow rejection renders richly (spans/carets/codes); an air-lowering failure keeps its flat
@@ -176,6 +177,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) closure_env_param: Option<LocalId>,
     pub(super) capture_slots: std::collections::HashMap<LocalId, String>,
     pub(super) lowering_errors: Vec<LowerError>,
+    pub(super) site: Option<aelys_syntax::Span>,
     pub(super) fresh_returns: std::collections::HashSet<String>,
     pub(super) retaining_fns: std::collections::HashSet<String>,
 }
@@ -252,6 +254,7 @@ impl<'a> LoweringContext<'a> {
             closure_env_param: None,
             capture_slots: std::collections::HashMap::new(),
             lowering_errors: Vec::new(),
+            site: None,
             fresh_returns: std::collections::HashSet::new(),
             retaining_fns: std::collections::HashSet::new(),
         }
@@ -261,6 +264,7 @@ impl<'a> LoweringContext<'a> {
         if !self.lowering_errors.is_empty() {
             return Err(self.lowering_errors);
         }
+        self.site = None;
         let structs = self.structs.clone();
         let imported_structs = self.imported.structs.clone();
         let enums = self.enums.clone();
@@ -469,7 +473,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn report(&mut self, fault: Fault, message: String) {
-        self.lowering_errors.push(LowerError { fault, message });
+        self.lowering_errors.push(LowerError {
+            fault,
+            message,
+            span: self.site,
+        });
     }
 
     pub(super) fn report_ice(&mut self, message: String) {

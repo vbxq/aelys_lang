@@ -23,10 +23,10 @@ use std::sync::Arc;
 
 use diagnostics::{
     FaultMessage, all_compiler, backend_diagnostic_error, bir_diagnostics_to_error,
-    duplicate_symbol_errors_to_error, fallback_source_span, faulted_messages,
-    foreign_clash_errors_to_error, foreign_signature_errors_to_error,
-    instance_surface_errors_to_error, join_by_fault, mono_errors_to_error, multiple_diagnostics,
-    numbered, optimization_verdict_split, program_anchor_span, reserved_name_errors_to_error,
+    duplicate_symbol_errors_to_error, fallback_source_span, foreign_clash_errors_to_error,
+    foreign_signature_errors_to_error, instance_surface_errors_to_error, join_by_fault,
+    lowering_errors_to_error, mono_errors_to_error, multiple_diagnostics,
+    optimization_verdict_split, program_anchor_span, reserved_name_errors_to_error,
     runtime_symbol_errors_to_error, sema_errors_to_diagnostics, vec_surface_errors_to_error,
 };
 use lower::{compile_air_with_llvm, compile_air_with_llvm_linked};
@@ -455,13 +455,7 @@ fn air_stage(
                             Fault::Compiler,
                         )
                     } else {
-                        join_by_fault(
-                            faulted_messages(errors),
-                            fallback_source_span(src.as_ref()),
-                            src.clone(),
-                            "air-lowering",
-                            numbered,
-                        )
+                        lowering_errors_to_error(errors, src.clone())
                     }
                 }
             },

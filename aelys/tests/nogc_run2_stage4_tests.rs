@@ -285,10 +285,8 @@ fn main() -> i64 { let m = Msg { text: \"hi\" }; return keep(m) }
     assert_code(&err, "E0730");
 }
 
-// a generic struct argument cannot be pinned and cannot be walked, so the message must name that
-// rather than ask for a concrete type the user has no way to supply.
 #[test]
-fn reject_generic_struct_argument_names_the_real_reason() {
+fn reject_generic_struct_argument_is_refused_at_the_struct_declaration() {
     let err = reject(
         "\
 struct Box2<T> { v: T }
@@ -296,10 +294,9 @@ nogc fn keep<U>(x: Box2<U>) -> i64 { return 0 }
 fn main() -> i64 { let b = Box2 { v: 1 }; return keep(b) }
 ",
     );
-    assert_code(&err, "E0730");
     assert!(
-        err.contains("generic struct `Box2`") && !err.contains("does not pin it"),
-        "must blame the generic struct, not the call's argument list: {err}"
+        err.contains("[E0902]: struct `Box2<T>` is generic: generic structs are not supported yet"),
+        "must refuse the generic struct itself: {err}"
     );
 }
 

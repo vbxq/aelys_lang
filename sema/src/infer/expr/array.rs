@@ -407,16 +407,21 @@ impl TypeInference {
             let env = &self.env;
             crate::place_spine::place_is_writable(&typed_object, &|n: &str| env.is_mutable(n))
         };
+        let ty = if matches!(typed_object.ty, InferType::String) {
+            InferType::String
+        } else {
+            InferType::Slice {
+                elem: Box::new(elem_ty),
+                mutable,
+            }
+        };
 
         (
             TypedExprKind::Slice {
                 object: Box::new(typed_object),
                 range: Box::new(typed_range),
             },
-            InferType::Slice {
-                elem: Box::new(elem_ty),
-                mutable,
-            },
+            ty,
         )
     }
 

@@ -66,14 +66,13 @@ fn test() {}
 }
 
 #[test]
-fn generic_struct_field_type_param_accepted() {
-    // T is a type parameter; should not be rejected
-    should_pass(
+fn generic_struct_field_type_param_is_refused_as_unsupported() {
+    assert!(should_fail(
         r#"
 struct Wrapper<T> { value: T }
 fn test() {}
 "#,
-    );
+    ));
 }
 
 #[test]

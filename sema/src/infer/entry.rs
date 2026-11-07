@@ -363,6 +363,10 @@ impl TypeInference {
         inf.resolve_struct_fields(&stmts);
         // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
+        inf.reject_multi_variant_rc_enums(&stmts);
+        if inf.reject_generic_structs(&stmts) {
+            return Err(inf.errors);
+        }
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);

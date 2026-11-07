@@ -179,7 +179,6 @@ impl TypeInference {
             return (TypedExprKind::Null, InferType::Dynamic);
         }
 
-        let written = enum_name;
         let resolved = self.air_type_name(enum_name, span);
         let enum_name = resolved.as_str();
         let enum_def = self.type_table.get_enum(enum_name).cloned();
@@ -234,22 +233,6 @@ impl TypeInference {
                             arg_expr.span,
                             &format!("payload {i} of enum variant `{enum_name}::{variant}`"),
                         );
-                        if !is_generic
-                            && def.variants.len() > 1
-                            && (typed_arg.ty.is_rc()
-                                || typed_arg.ty.contains_rc()
-                                || self.type_table.contains_rc_nominal(&typed_arg.ty))
-                        {
-                            self.errors.push(TypeError::rc_carrier_out_of_surface(
-                                format!(
-                                    "`{written}::{variant}` is given a value of type `{}`, which \
-                                     holds an `Rc`: an enum with more than one variant cannot \
-                                     carry an Rc yet",
-                                    typed_arg.ty
-                                ),
-                                span,
-                            ));
-                        }
 
                         let expected_ty = if is_generic {
                             self.instantiate_enum_type_param(

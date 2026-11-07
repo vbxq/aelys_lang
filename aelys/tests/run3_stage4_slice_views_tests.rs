@@ -1079,7 +1079,7 @@ fn the_projected_global_and_its_local_twin_point_the_same_way() {
 fn s4_n11_n12_the_two_pending_rows_name_what_will_move_them() {
     let h = Harness::new();
     h.fenced_row("S4-N11", S4_N11, "E0301");
-    h.fenced_row("S4-N12", S4_N12, "E0410");
+    h.fenced_row("S4-N12", S4_N12, "E0902");
     h.assert_legs(8);
 }
 

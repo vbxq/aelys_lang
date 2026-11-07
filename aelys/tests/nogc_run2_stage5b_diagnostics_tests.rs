@@ -326,7 +326,7 @@ fn main() -> i64 {
 }
 
 #[test]
-fn e0730_generic_struct_argument_anchors_on_the_argument() {
+fn generic_struct_argument_to_a_nogc_bound_is_refused_at_the_struct_declaration() {
     let err = reject(
         r#"
 struct Holder<T> { v: T }
@@ -337,26 +337,21 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert_nogc_code(&err, "E0730");
     assert!(
-        err.contains("passes the generic struct `Holder`"),
-        "must name the generic struct as the real reason: {err}"
+        err.contains(
+            "[E0902]: struct `Holder<T>` is generic: generic structs are not supported yet"
+        ),
+        "must refuse the generic struct itself: {err}"
     );
-    assert_anchor(&err, "6:17");
+    assert_anchor(&err, "2:1");
     assert!(
-        err.contains("`U` of `keep` carries a `nogc` bound"),
-        "must show the callee secondary caret: {err}"
-    );
-    // fix 3: the generic-struct reject no longer borrows the violation kind's caret hint
-    assert!(
-        err.contains("a generic struct cannot satisfy the `nogc` bound"),
-        "the caret hint must describe the generic-struct reject: {err}"
+        !err.contains("[E0730]"),
+        "no nogc verdict on a refused struct: {err}"
     );
 }
 
-// argument, so `b`'s diagnostic named `bag` and pointed at `x`, an argument that never touches `b`.
 #[test]
-fn e0730_generic_struct_culprit_is_per_type_param() {
+fn generic_structs_bound_per_type_param_are_each_refused_at_their_declaration() {
     let err = reject(
         r#"
 struct Bag<T> { v: T }
@@ -369,28 +364,21 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert_nogc_code(&err, "E0730");
     assert!(
-        err.contains(
-            "`B` of `f` is bound `nogc`, but this call passes the generic struct `Holder`"
-        ),
-        "`B` is instantiated by the Holder argument, never by the Bag one: {err}"
+        err.contains("struct `Bag<T>` is generic") && err.contains("struct `Holder<T>` is generic"),
+        "each generic struct must be refused: {err}"
     );
-    assert!(
-        !err.contains("`B` of `f` is bound `nogc`, but this call passes the generic struct `Bag`"),
-        "`B` must not be blamed on an argument it does not bind: {err}"
-    );
-    assert_anchor(&err, "8:14");
-    assert_anchor(&err, "8:17");
+    assert_anchor(&err, "2:1");
+    assert_anchor(&err, "3:1");
 }
 
 #[test]
 fn e0730_unbound_type_param_falls_back_to_the_callee() {
     let err = reject(
         r#"
-struct Bag<T> { v: T }
-struct Holder<T> { v: T }
-nogc fn f<A: nogc, B: nogc>(a: Bag<i64>, b: Holder<i64>) -> i64 { return 0 }
+struct Bag { v: i64 }
+struct Holder { v: i64 }
+nogc fn f<A: nogc, B: nogc>(a: Bag, b: Holder) -> i64 { return 0 }
 fn main() -> i64 {
     let x = Bag { v: 1 }
     let y = Holder { v: 2 }

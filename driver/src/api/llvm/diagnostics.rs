@@ -68,16 +68,32 @@ pub(super) struct FaultMessage {
     pub(super) message: String,
 }
 
-pub(super) fn faulted_messages(
-    errors: impl IntoIterator<Item = aelys_air::lower::LowerError>,
-) -> Vec<FaultMessage> {
-    errors
-        .into_iter()
-        .map(|error| FaultMessage {
-            fault: error.fault,
-            message: error.message,
-        })
-        .collect()
+pub(super) fn lowering_errors_to_error(
+    errors: Vec<aelys_air::lower::LowerError>,
+    source: Arc<Source>,
+) -> AelysError {
+    let mut out: Vec<AelysError> = Vec::new();
+    for fault in Fault::JOIN_ORDER {
+        for error in errors.iter().filter(|error| error.fault == fault) {
+            let span = error
+                .span
+                .map(|span| first_line_only(source.as_ref(), span))
+                .unwrap_or_else(|| fallback_source_span(source.as_ref()));
+            out.push(backend_diagnostic_error(
+                source.clone(),
+                span,
+                "",
+                error.message.clone(),
+                None,
+                None,
+                fault,
+            ));
+        }
+    }
+    match out.len() {
+        1 => out.pop().expect("length checked"),
+        _ => multiple_diagnostics(out),
+    }
 }
 
 pub(super) fn all_compiler(messages: impl IntoIterator<Item = String>) -> Vec<FaultMessage> {
@@ -732,6 +748,14 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             "E0419",
             error.to_string(),
             "reserved builtin type name".to_string(),
+        ),
+        TypeErrorKind::NotSupportedYet { detail } => {
+            ("E0902", detail.clone(), "not supported yet".to_string())
+        }
+        TypeErrorKind::StringSlice => (
+            "E0425",
+            error.to_string(),
+            "a `string` has no slices".to_string(),
         ),
         TypeErrorKind::RcFieldAssignIndirect => (
             "E0420",

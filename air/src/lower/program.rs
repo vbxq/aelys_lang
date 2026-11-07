@@ -44,6 +44,7 @@ impl<'a> LoweringContext<'a> {
             } = &stmt.kind
             {
                 if type_params.is_empty() && lowered_structs.insert(name.clone()) {
+                    self.site = Some(stmt.span);
                     self.lower_struct_decl(name, type_params, fields, &stmt.span);
                 }
             }
@@ -60,6 +61,7 @@ impl<'a> LoweringContext<'a> {
             } = &stmt.kind
                 && lowered_enums.insert(name.clone())
             {
+                self.site = Some(stmt.span);
                 self.lower_enum_decl(name, type_params, variants, &stmt.span);
             }
         }
@@ -136,6 +138,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn lower_function(&mut self, func: &TypedFunction) {
+        let outer = self.site.replace(func.span);
         let saved_locals = std::mem::take(&mut self.current_locals);
         let saved_params = std::mem::take(&mut self.current_params);
         let saved_blocks = std::mem::take(&mut self.current_blocks);
@@ -201,6 +204,7 @@ impl<'a> LoweringContext<'a> {
         self.pending_block_id = saved_pending;
         self.next_local_id = saved_next_local;
         self.next_block_id = saved_next_block;
+        self.site = outer;
     }
 
     fn lowered_return_type(&mut self, func: &TypedFunction, noun: &str) -> AirType {
@@ -542,6 +546,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     fn lower_toplevel_stmt(&mut self, stmt: &aelys_sema::TypedStmt) {
+        self.site = Some(stmt.span);
         if let TypedStmtKind::Let {
             name,
             initializer,
@@ -890,7 +895,8 @@ impl<'a> LoweringContext<'a> {
             | K::EnumVariant { .. }
             | K::ArrayLiteral { .. }
             | K::ArraySized { .. }
-            | K::StructLiteral { .. } => FoldNotImplemented,
+            | K::StructLiteral { .. }
+            | K::Call { .. } => FoldNotImplemented,
             K::Lambda(_) | K::LambdaInner { .. } => FoldNotImplemented,
             K::Grouping(inner) => self.fold_failure(inner),
             K::Cast { expr, .. } => self.fold_failure(expr),
@@ -911,7 +917,6 @@ impl<'a> LoweringContext<'a> {
                 .map(|e| self.fold_failure(e))
                 .fold(FoldNotImplemented, ConstFoldFailure::worse),
             K::FmtString(_)
-            | K::Call { .. }
             | K::Assign { .. }
             | K::Member { .. }
             | K::Index { .. }

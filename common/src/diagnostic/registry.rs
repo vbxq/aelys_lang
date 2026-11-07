@@ -366,10 +366,12 @@ and can't be overwritten inside the body.
         explanation: "\
 `Rc<T>` is reference counted, and every retain has to be matched by a
 release the compiler can point at. Forms where that accounting cannot be
-proven are refused rather than silently miscompiled. A binding carries
-`[rc-stage1]`; a struct field or an enum payload carries `[rc-stage3a]`.
+proven are refused rather than silently miscompiled. A binding, and an
+`Rc` put straight into a generic enum, carry `[rc-stage1]`; a struct field
+or an enum payload initialized from a call carries `[rc-stage3a]`; the
+refusal of an enum with more than one variant carries no marker.
 
-Four shapes are refused today.
+Five shapes are refused today.
 
 An `Rc` binding declared `mut`, because an Rc is single-assignment for
 now and the overwrite would drop a retain:
@@ -385,10 +387,19 @@ An indirect initializer. The right-hand side has to be `Rc::new(..)`,
 
 An `Rc` embedded in a value that is copied as bytes, which loses the
 inner count: an array, a `Vec`, a tuple, a struct field of one of those,
-or a generic payload erased at the AIR boundary.
+or the payload of a generic enum the `Rc` is put into straight.
 
     let xs = [r, r]             // E0410
     Rc::get(Rc::get(rr))        // E0410, a nested Rc payload
+    One::It(Rc::new(1))         // E0410 for `enum One<T> { It(T) }`
+
+An enum with more than one variant whose payload holds an `Rc`, directly
+or through a struct or another enum. It is refused where it is declared,
+and a generic enum with more than one variant is refused where it is
+instantiated with an `Rc`:
+
+    enum Link { Nil, Cons(Rc<Node>) }   // E0410
+    enum One { It(Rc<Node>) }           // ok, a single variant
 
 A struct field or an enum payload initialized from a value whose count the
 compiler cannot account for. It has to be a fresh literal, a read of an
@@ -719,10 +730,10 @@ Copy the global into a local, work on that, and store it back:
     },
     DiagnosticInfo {
         code: "E0425",
-        title: "this slice form is not supported yet",
+        title: "this slice form is not supported yet, and a `string` has no slices",
         explanation: "\
 A slice is built from the address of element zero of its base, plus a
-length. Two forms have neither yet.
+length. Two forms have neither yet, and a string has no slices at all.
 
 A NON-ZERO START BOUND would have to move the base pointer as well as
 the length, and the slice lowering addresses element zero:
@@ -731,11 +742,15 @@ the length, and the slice lowering addresses element zero:
     let s = a[1..3]        // E0425
     let s = a[0..3]        // ok
 
-A BASE THAT CARRIES NO LENGTH -- a string, or a type the checker left
-open -- has no header to read the length from:
+A BASE THAT CARRIES NO LENGTH, a type the checker left open, has no
+header to read the length from.
+
+A STRING has no slices: `t[a..b]` does not exist on one. Take a substring
+with `str.substring` from `needs std.str`:
 
     let t = \"abcdef\"
-    let s = t[0..2]        // E0425
+    let s = t[0..2]                    // E0425
+    let s = str.substring(t, 0, 2)     // ok
 
 Arrays, `Vec<T>` and slices all carry a length and can be sliced from
 zero.",
@@ -809,17 +824,12 @@ Rename the function. Locals, parameters and struct fields are unaffected:
 The lowered program names a struct or an enum and no definition in the
 program carries that name.
 
-    struct G<T> { n: Vec<T> }
-    nogc fn f(g: G<i64>) -> i64 { return 0 }   // E0430
-
-A generic struct declaration is not lowered at all yet, so every mention
-of one names a definition that is not there. Write the struct out at the
-type you need it at, without the parameter, and the mention resolves.
-
-The other way in is a generic enum instance whose name the compiler
-derived and then emitted no definition for. Nothing in the source spells
-that name, and nothing in the source avoids it: that one is a defect in
-the compiler.
+This is a defect in the compiler, and no source program is known to reach
+it. The one way in left is a generic enum instance whose name the compiler
+derived and then emitted no definition for: nothing in the source spells
+that name, and nothing in the source avoids it. A generic struct, the
+other way in, is refused where it is declared with E0902 before it can
+get here.
 
 This is separate from E0412, which is about `Vec<T>` held outside the
 surface where its value semantics are guaranteed. The two shared a code,

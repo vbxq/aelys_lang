@@ -1592,8 +1592,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C23",
-        position: "Tuple, no surface spelling",
-        class: Class::MustNotMoveRejected("E0101"),
+        position: "Tuple, refused as unsupported",
+        class: Class::MustNotMoveRejected("E0902"),
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
               \x20   let t: (i64, i64) = ((*r)[0], 1)\n\
               \x20   return 0\n\
@@ -1637,7 +1637,7 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C27",
         position: "a struct field of Vec type",
-        class: Class::MustNotMoveRejected("E0410"),
+        class: Class::MustNotMoveRejected("E0902"),
         src: "struct S { v: Vec<i64> }\n\
               nogc fn f(s: &S) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1654,27 +1654,26 @@ const GROUP_C: &[Row] = &[
               fn main() -> i64 { return 0 }\n",
         twin: None,
     },
-    // because the typetable cannot resolve one, so a nogc signature mentioning it is accepted.
     Row {
         id: "C29",
-        position: "F3 inert, a generic struct by value",
-        class: Class::MustNotMoveAccepted,
+        position: "F3, a generic struct by value, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: F3_GENERIC_STRUCT_BY_VALUE,
-        twin: Some(INERT_TWIN(F3_GENERIC_STRUCT_BY_VALUE)),
+        twin: None,
     },
     Row {
         id: "C30",
-        position: "F3 inert, a generic struct by reference",
-        class: Class::MustNotMoveAccepted,
+        position: "F3, a generic struct by reference, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: F3_GENERIC_STRUCT_BY_REF,
-        twin: Some(INERT_TWIN(F3_GENERIC_STRUCT_BY_REF)),
+        twin: None,
     },
     Row {
         id: "C31",
-        position: "F3 inert, a generic struct as the return type",
-        class: Class::MustNotMoveAccepted,
+        position: "F3, a generic struct as the return type, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: F3_GENERIC_STRUCT_AS_RETURN,
-        twin: Some(INERT_TWIN(F3_GENERIC_STRUCT_AS_RETURN)),
+        twin: None,
     },
     Row {
         id: "C32",
@@ -1685,16 +1684,15 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C33",
-        position: "F3 inert, an explicit nogc bound, uncalled",
-        class: Class::MustNotMoveAccepted,
+        position: "F3, an explicit nogc bound over a generic struct, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: F3_EXPLICIT_NOGC_BOUND,
-        twin: Some(INERT_TWIN(F3_EXPLICIT_NOGC_BOUND)),
+        twin: None,
     },
-    // c34 to c37 are the callable side, and they are the three fences the a6 booking names.
     Row {
         id: "C34",
-        position: "F3 callable, the call site of a nogc generic",
-        class: Class::MustNotMoveRejected("E0730"),
+        position: "F3 callable, a nogc generic over a generic struct, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: "struct G<T> { n: T }\n\
               nogc fn f<T>(g: G<T>) -> i64 { return 0 }\n\
               fn main() -> i64 {\n\
@@ -1705,9 +1703,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C35",
-        position: "F3 callable, a concrete signature over a managed carrier",
-        // the `no definition` family left E0412 for its own code, the refusal itself is unmoved
-        class: Class::MustNotMoveRejected("E0430"),
+        position: "F3 callable, a generic struct over a managed carrier, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1716,7 +1713,7 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C36",
         position: "F3 callable, the declaration of a carrier holding a Vec",
-        class: Class::MustNotMoveRejected("E0410"),
+        class: Class::MustNotMoveRejected("E0902"),
         src: "struct G { n: Vec<i64> }\n\
               nogc fn f(g: G) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1724,8 +1721,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C37",
-        position: "F3 callable, the literal of a carrier holding an Rc",
-        class: Class::MustNotMoveRejected("E0410"),
+        position: "F3 callable, a generic struct holding an Rc, refused at its declaration",
+        class: Class::MustNotMoveRejected("E0902"),
         src: "struct G<T> { n: T }\n\
               fn main() -> i64 {\n\
               \x20   let g: G<Rc<i64>> = G{n: Rc::new(1)}\n\
@@ -2226,7 +2223,7 @@ fn group_b_must_stay_rejected() {
 
 #[test]
 fn group_c_must_not_move() {
-    run_rows(GROUP_C, 24);
+    run_rows(GROUP_C, 12);
 }
 
 // the a6 hook, re-aimed rather than retired. the fence is gone because its obligation was
@@ -3080,7 +3077,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 19, 39, 4, 1, 0, 121),
+        (31, 27, 0, 0, 15, 43, 4, 1, 0, 121),
         "the class split changed"
     );
 }
@@ -3657,8 +3654,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
             "{scan} is what `category` consults; if it is gone, say what decides the category now"
         );
     }
-    // the three fences the a6 booking names, and the rows that hold them
-    for (code, row) in [("E0730", "C34"), ("E0430", "C35"), ("E0410", "C36")] {
+    for (code, row) in [("E0902", "C36")] {
         let held = GROUP_C
             .iter()
             .find(|r| r.id == row)
@@ -3668,7 +3664,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
             "{row} must still be the {code} route into the fail-open category"
         );
     }
-    for code in ["E0730", "E0430", "E0410"] {
+    for code in ["E0902"] {
         assert!(
             aelys_common::diagnostic::registry::lookup(code).is_some(),
             "{code} fences something this stage books under A6 and must keep its --explain entry"

@@ -64,6 +64,13 @@ impl Parser {
             );
         }
 
+        if self.match_token(&TokenKind::LParen) {
+            if self.match_token(&TokenKind::RParen) {
+                return Err(self.unit_type_refusal(start_span));
+            }
+            return Err(self.tuple_refusal(start_span));
+        }
+
         let mut name = self.consume_identifier("type name")?;
 
         // a module-qualified type is one name, and `.` is not an identifier character
@@ -99,7 +106,8 @@ impl Parser {
                 ))
             }
         } else {
-            Ok(TypeAnnotation::new(name, start_span))
+            let end_span = self.previous().span;
+            Ok(TypeAnnotation::new(name, start_span.merge(end_span)))
         }
     }
 

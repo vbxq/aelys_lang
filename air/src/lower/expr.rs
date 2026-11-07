@@ -44,7 +44,9 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
+        let outer = self.site.replace(expr.span);
         let op = self.lower_expr_kind(expr);
+        self.site = outer;
         if !self.views.captures.is_empty() {
             self.view_capture(expr, Some(&op));
         }

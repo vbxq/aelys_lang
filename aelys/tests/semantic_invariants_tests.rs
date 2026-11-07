@@ -6934,7 +6934,7 @@ fn readme_boundary_example_compiles_and_runs_as_claimed() {
 const STAGE3_GAP_FORMS: &[(&str, &str, &str)] = &[
     (
         "S3-UMS-gap-struct",
-        "E0410",
+        "E0902",
         r#"
 struct Box { v: Vec<i64> }
 fn main() -> i64 {

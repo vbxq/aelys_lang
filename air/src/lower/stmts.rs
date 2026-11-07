@@ -844,7 +844,9 @@ impl<'a> LoweringContext<'a> {
     pub(super) fn lower_stmt(&mut self, stmt: &TypedStmt) {
         let mark = self.stmt_str_temps.len();
         let held_mark = self.views.held.len();
+        let outer = self.site.replace(stmt.span);
         self.lower_stmt_kind(stmt);
+        self.site = outer;
         self.view_release_held(held_mark);
         let pending: Vec<(LocalId, usize)> = self.stmt_str_temps.drain(mark..).collect();
         if self.last_block_is_terminated() {

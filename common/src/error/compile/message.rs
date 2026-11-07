@@ -197,6 +197,9 @@ impl CompileErrorKind {
             ),
             Self::BackendDiagnostic {
                 backend, message, ..
+            } if backend.is_empty() => message.clone(),
+            Self::BackendDiagnostic {
+                backend, message, ..
             } => format!("[{}] {}", backend, message),
         }
     }
