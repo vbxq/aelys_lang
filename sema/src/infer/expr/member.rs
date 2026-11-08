@@ -54,7 +54,7 @@ impl TypeInference {
         }
 
         let typed_object = self.infer_expr(object);
-        let ty = if matches!(typed_object.ty, InferType::Var(_)) {
+        let ty = if Self::projection_waits(&typed_object.ty) {
             let kind = crate::infer::projection::ProjKind::Field(member.to_string());
             self.defer_read(&typed_object.ty, kind, _span)
         } else {
@@ -173,12 +173,17 @@ impl TypeInference {
                         new_text: "mut ".to_string(),
                     }
                 });
-                self.errors.push(TypeError::assign_to_immutable(
+                let err = TypeError::assign_to_immutable(
                     name.to_string(),
                     span,
                     binding_span,
                     suggestion,
-                ));
+                );
+                if matches!(typed_object.ty, InferType::Var(_)) {
+                    self.defer_mutability(&typed_object.ty, err);
+                } else {
+                    self.errors.push(err);
+                }
             }
         }
 
@@ -234,7 +239,7 @@ impl TypeInference {
                     ));
                 }
             }
-        } else if matches!(typed_object.ty, InferType::Var(_)) {
+        } else if Self::projection_waits(&typed_object.ty) {
             self.defer_write(
                 &typed_object.ty,
                 crate::infer::projection::ProjKind::FieldWrite(field.to_string()),

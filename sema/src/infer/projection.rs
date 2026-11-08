@@ -196,6 +196,26 @@ impl TypeInference {
         }
     }
 
+    pub(crate) fn defer_mutability(&mut self, object: &InferType, err: TypeError) {
+        self.deferred_mutability.push((object.clone(), err));
+    }
+
+    pub(crate) fn replay_mutability_checks(&mut self, subst: &Substitution) {
+        for (object, err) in std::mem::take(&mut self.deferred_mutability) {
+            if !matches!(subst.apply(&object), InferType::Rc(_)) {
+                self.errors.push(err);
+            }
+        }
+    }
+
+    pub(crate) fn projection_waits(ty: &InferType) -> bool {
+        match ty {
+            InferType::Var(_) => true,
+            InferType::Rc(inner) => matches!(inner.as_ref(), InferType::Var(_)),
+            _ => false,
+        }
+    }
+
     pub(crate) fn names_a_deferred_result(&self, ty: &InferType) -> bool {
         matches!(ty, InferType::Var(id) if self.deferred_results.contains(id))
     }
@@ -275,7 +295,7 @@ impl TypeInference {
             let mut still = Vec::with_capacity(pending.len());
             for &i in pending.iter() {
                 let object = subst.apply(&self.deferred[i].object);
-                if matches!(object, InferType::Var(_)) {
+                if Self::projection_waits(&object) {
                     still.push(i);
                     continue;
                 }

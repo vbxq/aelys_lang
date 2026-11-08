@@ -5389,3 +5389,428 @@ fn rc2_208_an_ordinary_program_over_the_whole_library_and_the_rc_list_surface_is
     h.lsan_row("rc2-208", RC2_208, &[], "96823 11\n");
     h.assert_legs(24);
 }
+
+const RC2_209: &str = r#"
+struct W { k: i64, s: string }
+fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 {
+        let rw = mk(W { k: i, s: "w{i}" })
+        t = t + rw.k + rw.s.len
+    }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_209_a_field_read_through_an_rc_made_by_a_generic_call_resolves_through_the_handle() {
+    let h = Harness::new();
+    h.differential_row("rc2-209", RC2_209, &[], "5240\n", (300, 300));
+    h.lsan_row("rc2-209", RC2_209, &[], "5240\n");
+    h.assert_legs(24);
+}
+
+const RC2_210: &str = r#"
+struct N { k: i64 }
+struct W { k: i64, s: string, r: Rc<N> }
+fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 {
+        let rw = mk(W { k: i, s: "w{i}", r: Rc::new(N { k: 1 }) })
+        rw.k = rw.k + 1
+        rw.s = rw.s + "!"
+        rw.r = Rc::new(N { k: i })
+        rw.r.k = rw.r.k * 2
+        t = t + rw.k + rw.s.len + rw.r.k
+    }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_210_field_writes_through_an_rc_made_by_a_generic_call_need_no_let_mut() {
+    let h = Harness::new();
+    h.differential_row("rc2-210", RC2_210, &[], "15340\n", (600, 600));
+    h.lsan_row("rc2-210", RC2_210, &[], "15340\n");
+    h.assert_legs(24);
+}
+
+const RC2_211_LIB: &str = r#"
+pub struct P { pub x: i64, pub name: string }
+pub fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
+"#;
+
+const RC2_211: &str = r#"
+needs m
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 {
+        let w = m.wrap(m.P { x: i, name: "p{i}" })
+        w.x = w.x + 1
+        w.name = w.name + "?"
+        t = t + w.x + w.name.len
+    }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_211_an_rc_made_by_an_imported_generic_reads_and_writes_its_fields() {
+    let h = Harness::new();
+    h.differential_row(
+        "rc2-211",
+        RC2_211,
+        &[("m.aelys", RC2_211_LIB)],
+        "5440\n",
+        (400, 400),
+    );
+    h.lsan_row("rc2-211", RC2_211, &[("m.aelys", RC2_211_LIB)], "5440\n");
+    h.assert_legs(24);
+}
+
+const RC2_212: &str = r#"
+struct N { k: i64, s: string }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 {
+        let r = id(Rc::new(N { k: i, s: "a{i}" }))
+        r.k = r.k + 41
+        r.s = r.s + "b"
+        t = t + r.k + r.s.len
+    }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_212_a_variable_typed_rc_late_writes_its_fields_without_let_mut() {
+    let h = Harness::new();
+    h.differential_row("rc2-212", RC2_212, &[], "9440\n", (400, 400));
+    h.lsan_row("rc2-212", RC2_212, &[], "9440\n");
+    h.assert_legs(24);
+}
+
+const RC2_213: &str = r#"
+struct W { k: i64 }
+fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let rw = mk(W { k: 1 })
+    rw.k = "s"
+    println(rw.k)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_213_a_mistyped_write_through_a_late_rc_is_refused() {
+    refusal_row(
+        "rc2-213",
+        RC2_213,
+        &[],
+        "E0301",
+        "expected `i64`, found `string`",
+    );
+}
+
+const RC2_214_LIB: &str = r#"
+pub struct P { pub x: i64, y: i64 }
+pub fn mkp() -> P { return P { x: 1, y: 2 } }
+pub fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
+"#;
+
+const RC2_214: &str = r#"
+needs pm
+fn main() -> i64 {
+    let rw = pm.wrap(pm.mkp())
+    rw.y = 3
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_214_a_private_field_write_through_a_late_rc_is_refused() {
+    refusal_row(
+        "rc2-214",
+        RC2_214,
+        &[("pm.aelys", RC2_214_LIB)],
+        "E0610",
+        "field `y` of `pm.P` is not public",
+    );
+}
+
+const RC2_215: &str = r#"
+struct N { k: i64 }
+struct W { k: i64, r: Rc<N> }
+fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let c = 1
+    let rw = mk(W { k: 1, r: Rc::new(N { k: 2 }) })
+    let a = Rc::new(N { k: 5 })
+    rw.r = if c == 1 { a } else { rw.r }
+    println(rw.r.k)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_215_an_indirect_rc_field_write_through_a_late_rc_is_refused() {
+    refusal_row(
+        "rc2-215",
+        RC2_215,
+        &[],
+        "E0420",
+        "must be a direct producer",
+    );
+}
+
+const RC2_216: &str = r#"
+struct N { k: i64 }
+struct In { r: Rc<N> }
+struct W { k: i64, i: In }
+fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
+fn main() -> i64 {
+    let rw = mk(W { k: 1, i: In { r: Rc::null() } })
+    rw.i = In { r: Rc::new(N { k: 3 }) }
+    println(rw.i.r.k)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_216_a_carrier_field_write_through_a_late_rc_is_refused() {
+    refusal_row(
+        "rc2-216",
+        RC2_216,
+        &[],
+        "E0410",
+        "in-place reassignment of field `i`",
+    );
+}
+
+const RC2_217: &str = r#"
+fn f(n: i64, acc: string) -> string {
+    if n > 0 { return f(n - 1, acc) }
+    return acc
+}
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 { t = t + f(3, "x{i}").len }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_217_a_self_recursive_string_return_is_fresh() {
+    let h = Harness::new();
+    h.differential_row("rc2-217", RC2_217, &[], "290\n", (200, 200));
+    h.lsan_row("rc2-217", RC2_217, &[], "290\n");
+    h.assert_legs(24);
+}
+
+const RC2_218: &str = r#"
+fn f(n: i64, acc: string) -> string {
+    if n > 0 { return f(n - 1, acc + "a") }
+    return acc
+}
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 { t = t + f(3, "x{i}").len }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_218_a_self_recursive_return_of_a_concatenation_is_fresh() {
+    let h = Harness::new();
+    h.differential_row("rc2-218", RC2_218, &[], "590\n", (500, 500));
+    h.lsan_row("rc2-218", RC2_218, &[], "590\n");
+    h.assert_legs(24);
+}
+
+const RC2_219: &str = r#"
+fn f(n: i64, acc: string) -> string {
+    if n > 0 { return g(n - 1, acc) }
+    return acc
+}
+fn g(n: i64, acc: string) -> string {
+    if n > 0 { return f(n - 1, acc) }
+    return acc
+}
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 { t = t + f(3, "x{i}").len }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_219_a_mutually_recursive_string_return_is_fresh() {
+    let h = Harness::new();
+    h.differential_row("rc2-219", RC2_219, &[], "290\n", (200, 200));
+    h.lsan_row("rc2-219", RC2_219, &[], "290\n");
+    h.assert_legs(24);
+}
+
+const RC2_220: &str = r#"
+struct W { s: string, k: i64 }
+fn f(n: i64, w: W) -> W {
+    if n > 0 { return f(n - 1, w) }
+    return w
+}
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 { t = t + f(3, W { s: "x{i}", k: i }).s.len }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_220_a_self_recursive_carrier_return_is_fresh() {
+    let h = Harness::new();
+    h.differential_row("rc2-220", RC2_220, &[], "290\n", (200, 200));
+    h.lsan_row("rc2-220", RC2_220, &[], "290\n");
+    h.assert_legs(24);
+}
+
+const RC2_221: &str = r#"
+struct Node { val: i64, s: string, next: Rc<Node> }
+
+fn build(n: i64) -> Rc<Node> {
+    let mut h: Rc<Node> = Rc::null()
+    for i in 0..n { h = Rc::new(Node { val: i, s: "s{i}", next: h }) }
+    return h
+}
+
+fn fold<T>(h: Rc<Node>, acc: T, f: fn(T, i64) -> T) -> T {
+    if Rc::is_null(h) { return acc }
+    return fold(h.next, f(acc, h.val), f)
+}
+fn main() -> i64 {
+    let h = build(8)
+    let s = fold(h, 0, fn (a: i64, v: i64) -> i64 { return a + v })
+    let t = fold(h, "", fn (a: string, v: i64) -> string { return a + "{v}" })
+    println("{s} {t}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_221_a_generic_recursive_return_is_fresh() {
+    let h = Harness::new();
+    h.differential_row("rc2-221", RC2_221, &[], "28 76543210\n", (43, 43));
+    h.lsan_row("rc2-221", RC2_221, &[], "28 76543210\n");
+    h.assert_legs(24);
+}
+
+const RC2_222: &str = r#"
+struct N { k: i64 }
+struct W { k: i64, s: string, r: Rc<N> }
+fn main() -> i64 {
+    let mut t = 0
+    for i in 0..100 {
+        let rw = Rc::new(W { k: i, s: "w{i}", r: Rc::new(N { k: 1 }) })
+        rw.k = rw.k + 1
+        rw.s = rw.s + "!"
+        rw.r = Rc::new(N { k: i })
+        rw.r.k = rw.r.k * 2
+        t = t + rw.k + rw.s.len + rw.r.k
+    }
+    println(t)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_222_field_writes_through_a_concrete_rc_match_the_late_rc_counts() {
+    let h = Harness::new();
+    h.differential_row("rc2-222", RC2_222, &[], "15340\n", (600, 600));
+    h.lsan_row("rc2-222", RC2_222, &[], "15340\n");
+    h.assert_legs(24);
+}
+
+const RC2_223: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn g(n: i64, s: string) -> string {
+    if n > 0 { return g(n - 1, s) }
+    return s
+}
+fn main() -> i64 {
+    let s = mk(7)
+    let mut t = 0
+    for i in 0..100 {
+        let r = g(3, s)
+        t = t + r.len
+    }
+    println("{t} {s}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_223_a_recursive_function_returning_a_borrowed_parameter_retains_it() {
+    let h = Harness::new();
+    h.differential_row("rc2-223", RC2_223, &[], "300 ab7\n", (5, 5));
+    h.lsan_row("rc2-223", RC2_223, &[], "300 ab7\n");
+    h.assert_legs(24);
+}
+
+const RC2_224: &str = r#"
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn pick(n: i64, a: string, b: string) -> string {
+    if n == 0 { return a }
+    if n % 2 == 0 { return pick(n - 1, b, a) }
+    return pick(n - 1, a + "", b)
+}
+fn main() -> i64 {
+    let a = mk(1)
+    let b = mk(22)
+    let mut t = 0
+    for i in 0..100 {
+        let r = pick(i % 5, a, b)
+        t = t + r.len
+    }
+    println("{t} {a} {b}")
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_224_a_recursive_function_swapping_borrowed_parameters_retains_its_return() {
+    let h = Harness::new();
+    h.differential_row("rc2-224", RC2_224, &[], "340 ab1 ab22\n", (129, 129));
+    h.lsan_row("rc2-224", RC2_224, &[], "340 ab1 ab22\n");
+    h.assert_legs(24);
+}
+
+const RC2_225: &str = r#"
+struct W { k: i64 }
+fn id<T>(x: T) -> T { return x }
+fn main() -> i64 {
+    let w = id(W { k: 1 })
+    w.k = 5
+    println(w.k)
+    return 0
+}
+"#;
+
+#[test]
+fn rc2_225_a_field_write_on_an_immutable_struct_typed_late_is_refused() {
+    refusal_row(
+        "rc2-225",
+        RC2_225,
+        &[],
+        "E0401",
+        "cannot assign to immutable variable `w`",
+    );
+}

@@ -68,6 +68,7 @@ sema/src/infer/projection.rs	project	1	InferType	_	None	correct-as-is	aggregate-
 sema/src/infer/projection.rs	project	2	InferType	_	self.struct_field_type(object	correct-as-is	aggregate-only
 sema/src/infer/projection.rs	project	3	InferType	_	None	correct-as-is	aggregate-only
 sema/src/infer/projection.rs	project	5	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/projection.rs	projection_waits	1	InferType	_	false	correct-as-is	aggregate-only
 sema/src/infer/projection.rs	struct_field_type	1	InferType	_	return None	correct-as-is	aggregate-only
 sema/src/infer/projection.rs	struct_field_type	2	InferType	_	return None	correct-as-is	aggregate-only
 sema/src/infer/stmt/let_stmt.rs	aggregate_embeds_rc_nominal	1	InferType	_	false	correct-as-is	carrier-walk

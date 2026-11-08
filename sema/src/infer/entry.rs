@@ -52,6 +52,7 @@ impl Default for TypeInference {
             reported_sites: HashSet::new(),
             deferred_results: HashSet::new(),
             deferred_carriers: Vec::new(),
+            deferred_mutability: Vec::new(),
         }
     }
 }
@@ -379,6 +380,7 @@ impl TypeInference {
 
         let subst = inf.solve_constraints();
         inf.replay_carrier_checks(&subst);
+        inf.replay_mutability_checks(&subst);
 
         let resolved_stmts = inf.apply_substitution_stmts(&typed_stmts, &subst);
 

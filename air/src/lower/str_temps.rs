@@ -442,24 +442,26 @@ pub fn fresh_returning_functions(
     carriers: &crate::counts::Carriers<'_>,
     imported: &HashSet<String>,
 ) -> HashSet<String> {
-    let mut proven: HashSet<String> = HashSet::new();
+    let mut assumed: HashSet<String> = functions
+        .iter()
+        .filter(|function| !function.is_extern && carriers.counted(&function.ret_ty))
+        .map(|function| function.name.clone())
+        .collect();
     loop {
-        let mut grew = false;
-        for function in functions {
-            if function.is_extern
-                || !carriers.counted(&function.ret_ty)
-                || proven.contains(&function.name)
-            {
-                continue;
-            }
-            let fresh_fn = |name: &str| imported.contains(name) || proven.contains(name);
-            if returns_only_fresh(function, carriers, &fresh_fn) {
-                proven.insert(function.name.clone());
-                grew = true;
-            }
+        let dropped: Vec<String> = functions
+            .iter()
+            .filter(|function| assumed.contains(&function.name))
+            .filter(|function| {
+                let fresh_fn = |name: &str| imported.contains(name) || assumed.contains(name);
+                !returns_only_fresh(function, carriers, &fresh_fn)
+            })
+            .map(|function| function.name.clone())
+            .collect();
+        if dropped.is_empty() {
+            return assumed;
         }
-        if !grew {
-            return proven;
+        for name in dropped {
+            assumed.remove(&name);
         }
     }
 }
