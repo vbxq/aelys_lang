@@ -6,6 +6,7 @@ pub(crate) mod globals;
 pub(crate) mod memory;
 pub(crate) mod operands;
 pub(crate) mod ops;
+pub(crate) mod rc_pointer_map;
 pub(crate) mod runtime;
 pub(crate) mod rvalues;
 pub(crate) mod stmts;

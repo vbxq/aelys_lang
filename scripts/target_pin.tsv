@@ -152,3 +152,4 @@ aelys	v01_stage2_generics_tests	test
 aelys	v01b_stage1_string_header_tests	test
 aelys	vec_surface_tests	test
 aelys	vec_value_semantics_tests	test
+aelys	group_release01_tests	test

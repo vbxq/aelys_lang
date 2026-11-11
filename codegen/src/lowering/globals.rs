@@ -9,7 +9,10 @@ use crate::lowering::strings::{
 use crate::types::{aelys_string_type, air_basic_type_to_llvm, closure_fat_ptr_type};
 use aelys_air::{
     AirConst, AirEnumDef, AirGlobal, AirProgram, AirType, EnumRef, Operand,
-    layout::{enum_has_data, enum_max_payload_align, enum_max_payload_size, resolved_layout},
+    layout::{
+        enum_has_data, enum_max_payload_size, enum_payload_offset, payload_field_offsets,
+        resolved_layout,
+    },
 };
 use inkwell::AddressSpace;
 use inkwell::module::Linkage;
@@ -50,6 +53,7 @@ impl CodegenContext {
         if self.module.get_global(SYMBOL).is_some() {
             return Ok(());
         }
+        self.verify_rc_pointer_map(program)?;
 
         let table = &program.rc_type_table;
         let n_entries = table.entries.len() + 1;
@@ -674,13 +678,13 @@ impl CodegenContext {
     ) -> Result<Vec<IntValue<'static>>, CodegenError> {
         let payload_len = enum_max_payload_size(enum_def, &program.struct_sizes);
         let mut bytes = vec![self.context.i8_type().const_zero(); payload_len as usize];
-        let mut byte_offset = 0u32;
+        let field_offsets = payload_field_offsets(&variant.payload, &program.struct_sizes);
 
         for (index, (field_ty, field_const)) in
             variant.payload.iter().zip(payload.iter()).enumerate()
         {
             let field_layout = resolved_layout(field_ty, &program.struct_sizes);
-            byte_offset = align_to(byte_offset, field_layout.align);
+            let byte_offset = field_offsets[index];
 
             let field_bytes = self.const_bytes(
                 &format!("{global_name}_{}_{}", variant.name, index),
@@ -701,7 +705,6 @@ impl CodegenContext {
             let start = byte_offset as usize;
             let end = start + field_bytes.len();
             bytes[start..end].clone_from_slice(&field_bytes);
-            byte_offset += field_layout.size;
         }
 
         Ok(bytes)
@@ -800,7 +803,7 @@ impl CodegenContext {
             &AirType::Enum(EnumRef::plain(enum_name)),
             &program.struct_sizes,
         );
-        let payload_offset = align_to(4, enum_max_payload_align(enum_def, &program.struct_sizes));
+        let payload_offset = enum_payload_offset(enum_def, &program.struct_sizes);
         let variant = enum_def
             .variants
             .iter()
@@ -857,10 +860,6 @@ impl CodegenContext {
             .map(|byte| self.context.i8_type().const_int(byte as u64, false))
             .collect())
     }
-}
-
-fn align_to(offset: u32, align: u32) -> u32 {
-    (offset + align - 1) & !(align - 1)
 }
 
 impl<'a> FunctionCodegen<'a> {

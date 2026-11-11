@@ -132,7 +132,7 @@ pub fn compute_layouts(program: &mut AirProgram) -> Vec<LayoutError> {
             } else {
                 let payload_align = enum_max_payload_align(def, &resolved);
                 let total_align = 4u32.max(payload_align);
-                let payload_offset = align_to(4, payload_align);
+                let payload_offset = enum_payload_offset(def, &resolved);
                 let total_size = align_to(payload_offset + payload_size, total_align);
                 TypeLayout {
                     size: total_size,
@@ -263,23 +263,38 @@ fn struct_layout(
     def: &AirStructDef,
     resolved: &HashMap<String, TypeLayout>,
 ) -> (TypeLayout, Vec<u32>) {
+    let (offsets, end, max_align) = sequential_layout(def.fields.iter().map(|f| &f.ty), resolved);
+    let total = TypeLayout {
+        size: align_to(end, max_align),
+        align: max_align,
+    };
+    (total, offsets)
+}
+
+fn sequential_layout<'a, I>(types: I, sizes: &HashMap<String, TypeLayout>) -> (Vec<u32>, u32, u32)
+where
+    I: IntoIterator<Item = &'a AirType>,
+{
     let mut offset: u32 = 0;
     let mut max_align: u32 = 1;
-    let mut offsets = Vec::with_capacity(def.fields.len());
-
-    for field in &def.fields {
-        let fl = resolved_layout(&field.ty, resolved);
+    let mut offsets = Vec::new();
+    for ty in types {
+        let fl = resolved_layout(ty, sizes);
         offset = align_to(offset, fl.align);
         offsets.push(offset);
         offset += fl.size;
         max_align = max_align.max(fl.align);
     }
+    (offsets, offset, max_align)
+}
 
-    let total = TypeLayout {
-        size: align_to(offset, max_align),
-        align: max_align,
-    };
-    (total, offsets)
+pub fn payload_field_offsets(payload: &[AirType], sizes: &HashMap<String, TypeLayout>) -> Vec<u32> {
+    sequential_layout(payload, sizes).0
+}
+
+// must equal the offset of field 1 of the llvm type { i32, [n x iN] } codegen emits
+pub fn enum_payload_offset(def: &AirEnumDef, sizes: &HashMap<String, TypeLayout>) -> u32 {
+    align_to(4, enum_max_payload_align(def, sizes))
 }
 
 pub fn align_to(offset: u32, align: u32) -> u32 {
@@ -424,15 +439,7 @@ pub fn enum_max_payload_align(def: &AirEnumDef, sizes: &HashMap<String, TypeLayo
 pub fn enum_max_payload_size(def: &AirEnumDef, struct_sizes: &HashMap<String, TypeLayout>) -> u32 {
     def.variants
         .iter()
-        .map(|v| {
-            let mut offset = 0u32;
-            for ty in &v.payload {
-                let layout = resolved_layout(ty, struct_sizes);
-                offset = (offset + layout.align - 1) & !(layout.align - 1);
-                offset += layout.size;
-            }
-            offset
-        })
+        .map(|v| sequential_layout(&v.payload, struct_sizes).1)
         .max()
         .unwrap_or(0)
 }

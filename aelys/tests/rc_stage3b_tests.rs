@@ -126,7 +126,7 @@ fn unit_struct_offsets_match_field_offsets() {
 }
 
 #[test]
-fn unit_enum_payload_head_is_four_not_eight() {
+fn unit_enum_payload_head_follows_the_payload_alignment() {
     let holder = AirEnumDef {
         name: "Holder".into(),
         type_params: vec![],
@@ -150,10 +150,7 @@ fn unit_enum_payload_head_is_four_not_eight() {
         &p,
     )
     .expect("enum offset");
-    assert_eq!(
-        off, 4,
-        "enum payload Rc leaf MUST be at offset 4, not 8 (R-K4)"
-    );
+    assert_eq!(off, 8, "an Rc first payload field sits at offset 8");
 }
 
 #[test]
@@ -188,7 +185,7 @@ fn unit_mixed_carrier_composes_struct_then_enum() {
         &p,
     )
     .expect("mixed offset");
-    assert_eq!(off, 12, "composed offset must be off(.h)=8 + enum_head=4");
+    assert_eq!(off, 16, "composed offset is off(.h)=8 plus payload head 8");
 }
 
 #[test]
@@ -345,6 +342,7 @@ fn main() -> i64 { return mk() }
 "#;
 
 const RUNTIME_PROBE_C: &str = r#"
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -352,7 +350,7 @@ const RUNTIME_PROBE_C: &str = r#"
 
 extern const uint32_t __aelys_rc_type_table[];
 
-typedef struct { int32_t tag; uint8_t payload[8]; } HolderData;
+typedef struct { int32_t tag; int64_t payload[1]; } HolderData;
 
 int main(void) {
     const uint32_t *t = __aelys_rc_type_table;
@@ -363,13 +361,13 @@ int main(void) {
     uint32_t offset_idx = t[1 + 2 * type_id + 1];
     if (count != 1) { fprintf(stderr, "FAIL count=%u\n", count); return 1; }
     uint32_t offset = t[offset_idx];
-    if (offset != 4) { fprintf(stderr, "FAIL offset=%u (must be 4)\n", offset); return 1; }
+    if (offset != offsetof(HolderData, payload)) { fprintf(stderr, "FAIL offset=%u\n", offset); return 1; }
 
     int64_t child_value = 0x1234567890ABCDEFLL;
     void *child_ptr = &child_value;
     HolderData *data = calloc(1, sizeof(HolderData));
     data->tag = 0;
-    memcpy((uint8_t *)data + 4, &child_ptr, sizeof(void *));
+    memcpy(data->payload, &child_ptr, sizeof(void *));
 
     void *recovered = *(void **)((uint8_t *)data + offset);
     if (recovered != child_ptr) { fprintf(stderr, "FAIL deref mismatch\n"); free(data); return 1; }
@@ -381,12 +379,12 @@ int main(void) {
 "#;
 
 #[test]
-fn b3_enum_offset_four_dereferences_to_the_real_field() {
+fn b3_enum_offset_dereferences_to_the_real_field() {
     let enum_ir = rc_ir(ENUM_CARRIER);
     let enum_entries = decode_table(&table_words(&enum_ir));
     assert!(
-        enum_entries.contains(&(1, vec![4])),
-        "enum carrier must record a single leaf at offset 4 (R-K4); got {enum_entries:?}"
+        enum_entries.contains(&(1, vec![8])),
+        "enum carrier records a single leaf at offset 8; got {enum_entries:?}"
     );
     let mixed_ir = rc_ir(
         r#"
@@ -403,8 +401,8 @@ fn main() -> i64 { return mk() }
     );
     let mixed_entries = decode_table(&table_words(&mixed_ir));
     assert!(
-        mixed_entries.contains(&(1, vec![12])),
-        "mixed carrier must record off(.h)=8 + enum_head=4 = 12; got {mixed_entries:?}"
+        mixed_entries.contains(&(1, vec![16])),
+        "mixed carrier records off(.h)=8 plus payload head 8; got {mixed_entries:?}"
     );
 
     let dir = tempdir().expect("tempdir");
@@ -430,7 +428,7 @@ fn main() -> i64 { return mk() }
         Ok(out) if out.status.success() => {}
         Ok(_) | Err(_) => {
             eprintln!(
-                "clang unavailable / table compile failed; skipping C exec proof (IR offset=4 already asserted)"
+                "clang unavailable / table compile failed; skipping C exec proof (IR offset=8 already asserted)"
             );
             return;
         }
@@ -464,11 +462,11 @@ fn main() -> i64 { return mk() }
     let stderr = String::from_utf8_lossy(&run.stderr);
     assert!(
         run.status.success(),
-        "B3 mini-runtime must prove offset=4 dereferences the real field;\nstdout:\n{stdout}\nstderr:\n{stderr}"
+        "B3 mini-runtime must prove offset=8 dereferences the real field;\nstdout:\n{stdout}\nstderr:\n{stderr}"
     );
     assert!(
-        stdout.contains("PASS offset=4"),
-        "expected the C probe to confirm offset=4; stdout:\n{stdout}"
+        stdout.contains("PASS offset=8"),
+        "expected the C probe to confirm offset=8; stdout:\n{stdout}"
     );
 }
 

@@ -1,4 +1,4 @@
-use crate::layout::{align_to, resolved_layout};
+use crate::layout::{enum_payload_offset, payload_field_offsets};
 use crate::rc_paths::{RcLeafPath, RcPathStep, RcScan, rc_field_paths};
 use crate::{AirProgram, AirStmtKind, AirType};
 
@@ -96,18 +96,9 @@ pub fn compute_offset_for_path(
                     )));
                 }
 
-                let mut intra: u32 = 0;
-                for pty in &variant.payload[..idx] {
-                    let fl = resolved_layout(pty, &program.struct_sizes);
-                    intra = align_to(intra, fl.align);
-                    intra += fl.size;
-                }
-                let target = &variant.payload[idx];
-                let fl = resolved_layout(target, &program.struct_sizes);
-                intra = align_to(intra, fl.align);
-
-                acc += 4 + intra;
-                cur = target.clone();
+                let intra = payload_field_offsets(&variant.payload, &program.struct_sizes)[idx];
+                acc += enum_payload_offset(def, &program.struct_sizes) + intra;
+                cur = variant.payload[idx].clone();
             }
         }
     }

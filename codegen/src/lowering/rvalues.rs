@@ -2,7 +2,7 @@ use crate::CodegenError;
 use crate::lowering::body::FunctionCodegen;
 use crate::lowering::functions::function_symbol_name;
 use crate::types::{air_basic_type_to_llvm, alignment_of, closure_fat_ptr_type};
-use aelys_air::layout::{enum_has_data, enum_max_payload_size};
+use aelys_air::layout::{enum_has_data, enum_max_payload_size, payload_field_offsets};
 use aelys_air::{AirType, Operand, Rvalue};
 use inkwell::values::{BasicValue, BasicValueEnum};
 
@@ -314,15 +314,13 @@ impl<'a> FunctionCodegen<'a> {
                 ))
             })?;
 
-            let mut byte_offset: u32 = 0;
+            let field_offsets =
+                payload_field_offsets(&variant_def.payload, &self.program.struct_sizes);
             for (i, (operand, field_air_ty)) in
                 payload.iter().zip(variant_def.payload.iter()).enumerate()
             {
                 let field_llvm_ty = air_basic_type_to_llvm(field_air_ty, self.context)?;
-                let field_layout =
-                    aelys_air::layout::resolved_layout(field_air_ty, &self.program.struct_sizes);
-
-                byte_offset = (byte_offset + field_layout.align - 1) & !(field_layout.align - 1);
+                let byte_offset = field_offsets[i];
 
                 let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
                 let field_ptr = unsafe {
@@ -346,8 +344,6 @@ impl<'a> FunctionCodegen<'a> {
                 store
                     .set_alignment(field_align)
                     .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
-
-                byte_offset += field_layout.size;
             }
 
             self.load_value(enum_ty.into(), tmp, "enum_value")
@@ -441,15 +437,8 @@ impl<'a> FunctionCodegen<'a> {
             .build_struct_gep(enum_ty, tmp, 1, "match_payload_base")
             .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
 
-        let mut byte_offset: u32 = 0;
-        for i in 0..=field_index {
-            let ty = &variant_def.payload[i as usize];
-            let layout = aelys_air::layout::resolved_layout(ty, &self.program.struct_sizes);
-            byte_offset = (byte_offset + layout.align - 1) & !(layout.align - 1);
-            if i < field_index {
-                byte_offset += layout.size;
-            }
-        }
+        let byte_offset = payload_field_offsets(&variant_def.payload, &self.program.struct_sizes)
+            [field_index as usize];
 
         let offset_val = self.context.i32_type().const_int(byte_offset as u64, false);
         let field_ptr = unsafe {
