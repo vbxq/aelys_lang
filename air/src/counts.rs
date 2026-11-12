@@ -1114,7 +1114,7 @@ impl GlueBody {
                 } else {
                     InlineHint::Default
                 },
-                no_gc: false,
+                no_gc: true,
                 no_unwind: true,
                 cold: false,
             },

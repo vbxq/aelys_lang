@@ -1788,7 +1788,7 @@ const COMPARED_STAGE: &str = "fn air_stage(";
 const COMPARED_STAGE_CALLER: &str = "fn lower_file_to_air_with_source(";
 
 const COMPARED_REJECTION_SITES: usize = 13;
-const UNCOMPARED_REJECTION_SITES: usize = 22;
+const UNCOMPARED_REJECTION_SITES: usize = 23;
 
 // the functions whose refusals the residue excuses for raising before any pass has run
 const PRE_OPTIMIZER_HELPERS: &[&str] = &["front_stage", "build_imports"];
@@ -1808,7 +1808,8 @@ const UNCOMPARED_REJECTION_RESIDUE: &[(&str, &str)] = &[
     (
         "driver/src/api/llvm/lower.rs:compile_air_with_llvm_linked:backend_diagnostic_error",
         "resolving the aelys-core archive and running the linker; the link's undefined symbol set \
-         is pinned to the unoptimised air by require_air_externs, and what is left faults Compiler",
+         is pinned to the unoptimised air by require_air_externs, and what is left faults Compiler; \
+         the release to store window check reads the air after safepoints are inserted and faults Compiler",
     ),
     (
         "driver/src/api/llvm/lower.rs:compile_air_with_llvm_linked:claimed_runtime_symbol_error",

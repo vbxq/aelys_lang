@@ -489,8 +489,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
 
     assert_eq!(
         measured_defined.len(),
-        6,
-        "the runtime defines six symbols of its own, got: {measured_defined:?}"
+        7,
+        "the runtime defines seven symbols of its own, got: {measured_defined:?}"
     );
     assert_eq!(
         measured_defined,
@@ -501,8 +501,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
 
     assert_eq!(
         measured_undefined.len(),
-        20,
-        "nm reports twenty undefined symbols, got: {measured_undefined:?}"
+        22,
+        "nm reports twenty two undefined symbols, got: {measured_undefined:?}"
     );
     let imported_only: BTreeSet<String> = measured_undefined
         .difference(&measured_defined)
@@ -510,8 +510,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
         .collect();
     assert_eq!(
         imported_only.len(),
-        16,
-        "sixteen of the twenty are imported and never defined, got: {imported_only:?}"
+        17,
+        "seventeen of the twenty two are imported and never defined, got: {imported_only:?}"
     );
     assert_eq!(
         imported_only,
@@ -527,8 +527,8 @@ fn each_half_of_the_reserved_set_is_what_nm_says_about_it() {
     );
     assert_eq!(
         RUNTIME_RESERVED_SYMBOLS.len(),
-        22,
-        "the union counts twenty two entries"
+        24,
+        "the union counts twenty four entries"
     );
 }
 

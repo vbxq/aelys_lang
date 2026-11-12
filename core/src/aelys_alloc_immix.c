@@ -12,6 +12,14 @@
 
 #include "aelys_alloc_immix.h"
 
+#if defined(_MSC_VER)
+#include <malloc.h>
+#elif defined(__APPLE__)
+#include <malloc/malloc.h>
+#elif defined(__linux__)
+#include <malloc.h>
+#endif
+
 extern void __aelys_panic(const char *ptr, long long len);
 
 /* the poison net is inactive unless the runtime is built with -fsanitize=address */
@@ -265,6 +273,26 @@ void *aelys_immix_realloc(void *base, long long size) {
     memcpy(nbase, base, copy); /* carries the rc header over with the payload */
     aelys_immix_free(base);
     return nbase;
+}
+
+long long aelys_immix_usable_size(const void *base) {
+    if (!base) {
+        return 0;
+    }
+    if (!immix_enabled()) {
+#if defined(_MSC_VER)
+        return (long long)_msize((void *)base);
+#elif defined(__APPLE__)
+        return (long long)malloc_size(base);
+#elif defined(__linux__)
+        return (long long)malloc_usable_size((void *)base);
+#else
+        return 0;
+#endif
+    }
+    char *prefix = (char *)base - AELYS_PREFIX_SIZE;
+    uint32_t cls = read_prefix_class(prefix);
+    return (long long)((cls == CLASS_LARGE) ? oversized_payload(prefix) : (size_t)cls * 16u);
 }
 
 long long aelys_immix_block_count(void) {

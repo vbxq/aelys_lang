@@ -444,6 +444,7 @@ fn build_lambdas<'t>(
             return_type.clone(),
         );
         b.is_lambda = true;
+        (b.intrinsic_effects, b.managed_witness) = effects::intrinsic_effects(body, params, tt);
         b.open_scope(lambda.span);
         for p in params {
             b.new_named(&p.name, p.ty.clone(), p.span, p.mutable);

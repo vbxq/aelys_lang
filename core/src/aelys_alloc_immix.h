@@ -15,6 +15,9 @@ void *aelys_immix_realloc(void *base, long long size);
 /* one address deep and lost on reuse: a stale release onto a slot already handed back out lands on a live object and nothing fires */
 int aelys_immix_is_dead(const void *base);
 
+/* bytes the live block at base can hold, 0 when the malloc backing cannot tell */
+long long aelys_immix_usable_size(const void *base);
+
 /* counts 32 KiB region blocks only, oversized blocks are excluded */
 long long aelys_immix_block_count(void);
 

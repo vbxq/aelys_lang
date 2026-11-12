@@ -3,6 +3,7 @@
 
 #include <stddef.h> /* NULL, size_t */
 #include <stdint.h>
+#include <errno.h>
 #include <stdlib.h> /* malloc/realloc/free */
 
 #include "aelys_alloc_immix.h" /* aelys_immix_is_dead */
@@ -14,6 +15,9 @@ extern long long __aelys_free_count;
 extern long long __aelys_cycle_collections;
 extern long long __aelys_cycle_clamped;
 extern void (*__aelys_collect_hook)(void);
+extern int __aelys_cycle_due;
+extern long long __aelys_alloc_bytes;
+extern long long __aelys_cycle_byte_limit;
 
 static inline uint32_t *aelys_rc_refcount(void *ptr) {
     return (uint32_t *)((char *)ptr - AELYS_RC_HEADER_SIZE);
@@ -37,12 +41,28 @@ typedef struct {
     uint8_t rereg;
 } AelysCandidate;
 
+#define AELYS_CYCLE_KNOB_MSG "AELYS_CYCLE_THRESHOLD must be a positive integer"
+
 static AelysCandidate *g_candidates = NULL;
 static size_t g_count = 0;
 static size_t g_capacity = 0;
 static size_t g_live = 0;
 /* a collect holds candidate indices across releases that push, so never compact during one */
 static int g_collecting = 0;
+
+#define AELYS_CYCLE_MIN_ROOTS 8192
+#define AELYS_CYCLE_MIN_BYTES (8LL * 1024 * 1024)
+static size_t g_root_trigger = AELYS_CYCLE_MIN_ROOTS;
+static long long g_byte_trigger = AELYS_CYCLE_MIN_BYTES;
+static int g_fixed_trigger = 0;
+
+static int cycle_due(void) {
+    if (g_live == 0) {
+        return 0;
+    }
+    return g_live >= g_root_trigger ||
+           (!g_fixed_trigger && __aelys_alloc_bytes >= g_byte_trigger);
+}
 
 /* the pointer map emitted by the compiler, indexed by type_id */
 extern const uint32_t __aelys_rc_type_table[];
@@ -123,6 +143,10 @@ static void candidates_push(void *ptr) {
     *aelys_rc_candidate_slot(ptr) = (uint32_t)g_count;
     g_count++;
     g_live++;
+    /* a byte trigger that fired with no root left the limit disarmed, so a root rechecks it */
+    if (cycle_due()) {
+        __aelys_cycle_due = 1;
+    }
 }
 
 static AelysCandidate *candidate_find(void *ptr) {
@@ -278,13 +302,10 @@ static void candidates_shrink(void) {
     }
 }
 
-void __aelys_cycle_collect(void) {
-    if (g_collecting) {
-        return;
-    }
-    __aelys_cycle_collections++;
+/* returns 0 when the collection was abandoned before releasing anything */
+static int cycle_collect_pass(size_t *live_out, long long *live_bytes_out) {
     if (g_count == 0) {
-        return;
+        return 1;
     }
     g_collecting = 1;
 
@@ -317,7 +338,7 @@ void __aelys_cycle_collect(void) {
             if (cn == NULL) {
                 if (!transient_push(child)) {
                     collect_abort();
-                    return;
+                    return 0;
                 }
                 cn = &g_candidates[g_count - 1];
             }
@@ -334,7 +355,7 @@ void __aelys_cycle_collect(void) {
     uint32_t *stack = (uint32_t *)malloc(reached * sizeof(uint32_t));
     if (!stack) {
         collect_abort();
-        return;
+        return 0;
     }
     size_t sp = 0;
     for (size_t i = 0; i < reached; i++) {
@@ -359,6 +380,16 @@ void __aelys_cycle_collect(void) {
         }
     }
     free(stack);
+
+    if (!g_fixed_trigger) {
+        for (size_t i = 0; i < reached; i++) {
+            if (g_candidates[i].ptr != NULL && g_candidates[i].live) {
+                *live_out += 1;
+                *live_bytes_out +=
+                    aelys_immix_usable_size((char *)g_candidates[i].ptr - AELYS_RC_HEADER_SIZE);
+            }
+        }
+    }
 
     /* everything not live is a pure cycle; clear all their fields before freeing any
        of them, otherwise a child dangles when its parent goes first */
@@ -411,18 +442,66 @@ void __aelys_cycle_collect(void) {
     g_live = g_count;
     candidates_shrink();
     g_collecting = 0;
+    return 1;
+}
+
+void __aelys_cycle_collect(void) {
+    if (g_collecting) {
+        return;
+    }
+    __aelys_cycle_collections++;
+    size_t live = 0;
+    long long live_bytes = 0;
+    int done = cycle_collect_pass(&live, &live_bytes);
+    __aelys_alloc_bytes = 0;
+    if (!g_fixed_trigger) {
+        if (done) {
+            g_root_trigger = 2 * live > AELYS_CYCLE_MIN_ROOTS ? 2 * live : AELYS_CYCLE_MIN_ROOTS;
+            g_byte_trigger =
+                2 * live_bytes > AELYS_CYCLE_MIN_BYTES ? 2 * live_bytes : AELYS_CYCLE_MIN_BYTES;
+        }
+        __aelys_cycle_byte_limit = g_byte_trigger;
+    }
+    __aelys_cycle_due = cycle_due();
+}
+
+void __aelys_cycle_poll(void) {
+    if (g_collecting || g_draining) {
+        return;
+    }
+    __aelys_cycle_due = 0;
+    if (cycle_due()) {
+        __aelys_cycle_collect();
+    }
+}
+
+static void aelys_cycle_setup(void) {
+    __aelys_collect_hook = __aelys_cycle_collect;
+    const char *knob = getenv("AELYS_CYCLE_THRESHOLD");
+    if (knob != NULL) {
+        char *end = NULL;
+        errno = 0;
+        long long n = strtoll(knob, &end, 10);
+        if (knob[0] < '0' || knob[0] > '9' || errno == ERANGE || n < 1 || *end != '\0') {
+            __aelys_panic(AELYS_CYCLE_KNOB_MSG, (long long)(sizeof(AELYS_CYCLE_KNOB_MSG) - 1));
+        }
+        g_fixed_trigger = 1;
+        g_root_trigger = (size_t)n;
+        return;
+    }
+    __aelys_cycle_byte_limit = g_byte_trigger;
 }
 
 /* under rc/leak this file is absent, so the hook stays NULL and collecting is a no-op */
 #if defined(_MSC_VER)
 static void aelys_install_cycle_hook(void) {
-    __aelys_collect_hook = __aelys_cycle_collect;
+    aelys_cycle_setup();
 }
 #pragma section(".CRT$XCU", read)
 __declspec(allocate(".CRT$XCU")) void (*aelys_cycle_ctor_)(void) =
     aelys_install_cycle_hook;
 #else
 __attribute__((constructor)) static void aelys_install_cycle_hook(void) {
-    __aelys_collect_hook = __aelys_cycle_collect;
+    aelys_cycle_setup();
 }
 #endif

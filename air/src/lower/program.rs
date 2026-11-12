@@ -529,6 +529,14 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    // a lambda always polls: nogc code can never call one, so no nogc frame is below it
+    fn reaches_managed(&self, func: &TypedFunction) -> bool {
+        if func.name.starts_with("__lambda_") {
+            return true;
+        }
+        self.effects.get(&func.name).is_some_and(|e| !e.is_nogc())
+    }
+
     pub(super) fn func_attribs(&self, func: &TypedFunction) -> FunctionAttribs {
         let inline = if func.decorators.iter().any(|d| d.name == "inline_always") {
             InlineHint::Always
@@ -539,7 +547,7 @@ impl<'a> LoweringContext<'a> {
         };
         FunctionAttribs {
             inline,
-            no_gc: func.decorators.iter().any(|d| d.name == "no_gc"),
+            no_gc: func.decorators.iter().any(|d| d.name == "no_gc") || !self.reaches_managed(func),
             no_unwind: false,
             cold: func.decorators.iter().any(|d| d.name == "cold"),
         }

@@ -315,6 +315,7 @@ pub const RUNTIME_DEFINED_SYMBOLS: &[&str] = &[
     "aelys_immix_free",
     "aelys_immix_is_dead",
     "aelys_immix_realloc",
+    "aelys_immix_usable_size",
     "main",
 ];
 
@@ -328,6 +329,7 @@ pub const RUNTIME_IMPORTED_SYMBOLS: &[&str] = &[
     "fwrite",
     "getenv",
     "malloc",
+    "malloc_usable_size",
     "memcmp",
     "memcpy",
     "realloc",

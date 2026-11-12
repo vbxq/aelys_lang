@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <limits.h>
 
 #include "aelys_rc.h"
 #include "aelys_alloc_immix.h"
@@ -30,6 +31,10 @@ long long __aelys_free_count = 0;
 long long __aelys_cycle_collections = 0;
 long long __aelys_cycle_clamped = 0;
 static long long aelys_collections_before_exit = 0;
+
+int __aelys_cycle_due = 0;
+long long __aelys_alloc_bytes = 0;
+long long __aelys_cycle_byte_limit = LLONG_MAX;
 
 /* raw libc malloc done by this unit, invisible to the managed counters above */
 long long __aelys_raw_alloc_count = 0;
@@ -273,12 +278,21 @@ static long long aelys_encode_utf8(unsigned int cp, char *out) {
 
 /* this wrapper is the only place the alloc counter is bumped; free_count is bumped at
    the rc_* call sites, so the internal immix entry points must never touch either */
+static void aelys_count_bytes(long long size) {
+    __aelys_alloc_bytes += size;
+    if (__aelys_alloc_bytes >= __aelys_cycle_byte_limit) {
+        __aelys_cycle_due = 1;
+        __aelys_cycle_byte_limit = LLONG_MAX;
+    }
+}
+
 void *__aelys_alloc(long long size) {
     void *p = aelys_immix_alloc(size);
     if (!p && size > 0) {
         __aelys_panic("out of memory", 13);
     }
     __aelys_alloc_count++;
+    aelys_count_bytes(size);
     return p;
 }
 
@@ -291,6 +305,7 @@ void *__aelys_realloc(void *ptr, long long size) {
     if (!p && size > 0) {
         __aelys_panic("out of memory", 13);
     }
+    aelys_count_bytes(size);
     return p;
 }
 

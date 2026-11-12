@@ -121,6 +121,8 @@ const SEAM1_PROBE_TEMPLATE: &str = r#"
 #include "aelys_rc.h"
 long long __aelys_alloc_count = 0, __aelys_free_count = 0;
 long long __aelys_cycle_collections = 0, __aelys_cycle_clamped = 0;
+int __aelys_cycle_due = 0;
+long long __aelys_alloc_bytes = 0, __aelys_cycle_byte_limit = 0;
 void (*__aelys_collect_hook)(void) = 0;
 void *__aelys_alloc(long long s){ void*p=aelys_immix_alloc(s); if(!p)abort(); __aelys_alloc_count++; return p; }
 void __aelys_free(void *p){ aelys_immix_free(p); }

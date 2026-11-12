@@ -87,6 +87,13 @@ fn slug(id: &str, tag: &str) -> String {
     s
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Collections {
+    Unchecked,
+    Exactly(i64),
+    AtLeastOne,
+}
+
 struct Harness {
     dir: TempDir,
     legs: Cell<usize>,
@@ -112,7 +119,15 @@ impl Harness {
     }
 
     fn cycles_row(&self, id: &str, src: &str, stdout: &str, counted: (i64, i64)) {
-        self.run_row(id, src, stdout, counted, None);
+        self.run_row(id, src, stdout, counted, Collections::Unchecked, None);
+    }
+
+    fn running_row(&self, id: &str, src: &str, stdout: &str, counted: (i64, i64)) {
+        self.run_row(id, src, stdout, counted, Collections::AtLeastOne, None);
+    }
+
+    fn stressed_row(&self, id: &str, src: &str, stdout: &str, counted: (i64, i64)) {
+        self.run_row(id, src, stdout, counted, Collections::AtLeastOne, Some("1"));
     }
 
     fn collected_row(
@@ -123,7 +138,14 @@ impl Harness {
         counted: (i64, i64),
         collections: i64,
     ) {
-        self.run_row(id, src, stdout, counted, Some(collections));
+        self.run_row(
+            id,
+            src,
+            stdout,
+            counted,
+            Collections::Exactly(collections),
+            None,
+        );
     }
 
     fn exit_and_mid_rows(
@@ -146,7 +168,8 @@ impl Harness {
         src: &str,
         stdout: &str,
         counted: (i64, i64),
-        collections: Option<i64>,
+        collections: Collections,
+        threshold: Option<&str>,
     ) {
         for (tag, opt) in LEVELS {
             for (alloc_name, alloc) in ALLOCATORS {
@@ -167,6 +190,10 @@ impl Harness {
                 }
                 let mut cmd = Command::new(exe_path_for(&root));
                 cmd.env("AELYS_RC_STATS", "1");
+                cmd.env_remove("AELYS_CYCLE_THRESHOLD");
+                if let Some(t) = threshold {
+                    cmd.env("AELYS_CYCLE_THRESHOLD", t);
+                }
                 if let Some(a) = alloc {
                     cmd.env("AELYS_ALLOC", a);
                 }
@@ -182,14 +209,20 @@ impl Harness {
                 let got = parse_stats(&seen_err)
                     .unwrap_or_else(|| panic!("{id} at {leg}: no [rc] stats line\n{seen_err}"));
                 assert_eq!(got, counted, "{id} at {leg}: allocs and frees");
-                if let Some(collections) = collections {
-                    let seen = parse_cycles(&seen_err)
-                        .unwrap_or_else(|| panic!("{id} at {leg}: no [cycles] line\n{seen_err}"));
-                    assert_eq!(
-                        seen,
-                        (collections, 0),
-                        "{id} at {leg}: collections and clamps"
-                    );
+                if collections == Collections::Unchecked {
+                    continue;
+                }
+                let seen = parse_cycles(&seen_err)
+                    .unwrap_or_else(|| panic!("{id} at {leg}: no [cycles] line\n{seen_err}"));
+                assert_eq!(seen.1, 0, "{id} at {leg}: clamps");
+                match collections {
+                    Collections::Exactly(n) => {
+                        assert_eq!(seen.0, n, "{id} at {leg}: collections");
+                    }
+                    Collections::AtLeastOne => {
+                        assert!(seen.0 >= 1, "{id} at {leg}: no collection ran");
+                    }
+                    Collections::Unchecked => {}
                 }
             }
         }
@@ -665,12 +698,11 @@ fn main() -> i64 {
 #[test]
 fn release01_15_a_dead_doubly_linked_list_of_a_million_nodes_is_collected_at_exit() {
     let h = Harness::new();
-    h.collected_row(
+    h.running_row(
         "release01-15",
         RELEASE01_15,
         "1000000\n",
         (1_000_000, 1_000_000),
-        0,
     );
     h.assert_legs(4);
 }
@@ -734,4 +766,975 @@ fn release01_17_an_object_live_only_by_propagation_is_kept() {
     let h = Harness::new();
     h.exit_and_mid_rows("release01-17", RELEASE01_17, "7\n7\n", (8, 8), 2);
     h.assert_legs(8);
+}
+
+const RELEASE01_18: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+fn churn(i: i64) -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
+    a.next = b
+    return Rc::get(Rc::get(a).next).val
+}
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < 20000 {
+        n = n + churn(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_18_a_two_node_cycle_churned_in_a_loop_is_collected_during_execution() {
+    let h = Harness::new();
+    h.running_row("release01-18", RELEASE01_18, "40000\n", (40_000, 40_000));
+    h.assert_legs(4);
+}
+
+const RELEASE01_19: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn poke(h: &H) -> i64 { return Rc::get((*h).r).val }
+fn work(i: i64) -> i64 {
+    let mut h = H { r: Rc::null() }
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    a.next = a
+    h.r = a
+    let t = poke(&h)
+    h.r = Rc::new(Node { val: 7, next: Rc::null() })
+    return t + poke(&h)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_19_a_stack_holder_field_overwritten_then_a_safepoint_stays_balanced() {
+    let h = Harness::new();
+    h.stressed_row("release01-19", RELEASE01_19, "24\n", (6, 6));
+    h.assert_legs(4);
+}
+
+const RELEASE01_20: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn peek(h: Rc<H>) -> i64 {
+    let c = h
+    return 1
+}
+fn work(i: i64) -> i64 {
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
+    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() })
+    let t = poke(hold) + peek(hold)
+    Rc::get(hold).r = Rc::new(Node { val: 7, next: Rc::null() })
+    return t + poke(hold)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_20_an_rc_get_field_overwrite_of_a_candidate_holder_then_a_safepoint_stays_sound() {
+    let h = Harness::new();
+    h.stressed_row("release01-20", RELEASE01_20, "27\n", (9, 9));
+    h.assert_legs(4);
+}
+
+const RELEASE01_21: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+struct W { k: i64, h: H }
+fn poke(w: &W) -> i64 { return Rc::get((*w).h.r).val }
+fn work(i: i64) -> i64 {
+    let mut w = W { k: 1, h: H { r: Rc::null() } }
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    a.next = a
+    w.h.r = a
+    let t = poke(&w)
+    w.h.r = Rc::new(Node { val: 7, next: Rc::null() })
+    return t + poke(&w)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_21_a_nested_stack_holder_field_overwrite_then_a_safepoint_stays_balanced() {
+    let h = Harness::new();
+    h.stressed_row("release01-21", RELEASE01_21, "24\n", (6, 6));
+    h.assert_legs(4);
+}
+
+const RELEASE01_22: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn poke(h: &H) -> i64 { return Rc::get((*h).r).val }
+fn set(h: &mut H, v: i64) {
+    (*h).r = Rc::new(Node { val: v, next: Rc::null() })
+    let k = poke(&(*h))
+}
+fn work(i: i64) -> i64 {
+    let mut h = H { r: Rc::null() }
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    a.next = a
+    h.r = a
+    let t = poke(&h)
+    set(&mut h, 7)
+    return t + poke(&h)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_22_a_field_overwrite_through_a_mutable_reference_then_a_safepoint_stays_balanced() {
+    let h = Harness::new();
+    h.stressed_row("release01-22", RELEASE01_22, "24\n", (6, 6));
+    h.assert_legs(4);
+}
+
+const RELEASE01_23: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { k: i64, r: Rc<Node> }
+fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn peek(h: Rc<H>) -> i64 {
+    let c = h
+    return 1
+}
+fn work(i: i64) -> i64 {
+    let hold: Rc<H> = Rc::new(H { k: 0, r: Rc::null() })
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    Rc::get(hold).r = a
+    let t = poke(hold) + peek(hold)
+    let p = &mut Rc::get(hold)
+    *p = H { k: 1, r: Rc::new(Node { val: 7, next: Rc::null() }) }
+    return t + poke(hold)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_23_a_whole_payload_overwrite_of_a_candidate_holder_then_a_safepoint_stays_balanced() {
+    let h = Harness::new();
+    h.stressed_row("release01-23", RELEASE01_23, "27\n", (9, 9));
+    h.assert_legs(4);
+}
+
+const RELEASE01_24: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn peek(h: Rc<H>) -> i64 {
+    let c = h
+    return 1
+}
+fn work(i: i64) -> i64 {
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+    a.next = Rc::new(Node { val: 1, next: Rc::null() })
+    hold.r = a
+    let t = poke(hold) + peek(hold)
+    Rc::get(Rc::get(hold).r).next = Rc::new(Node { val: 7, next: Rc::null() })
+    return t + Rc::get(Rc::get(Rc::get(hold).r).next).val + poke(hold)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_24_a_nested_field_overwrite_under_a_candidate_holder_then_a_safepoint_stays_sound() {
+    let h = Harness::new();
+    h.stressed_row("release01-24", RELEASE01_24, "30\n", (12, 12));
+    h.assert_legs(4);
+}
+
+const RELEASE01_25: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node>, me: Rc<H> }
+fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn peek(h: Rc<H>) -> i64 {
+    let c = h
+    return 1
+}
+fn work(i: i64) -> i64 {
+    let hold: Rc<H> = Rc::new(H { r: Rc::null(), me: Rc::null() })
+    hold.me = hold
+    hold.r = Rc::new(Node { val: i, next: Rc::null() })
+    let t = poke(hold) + peek(hold)
+    hold.r = Rc::new(Node { val: 7, next: Rc::null() })
+    return t + poke(hold)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_25_a_field_overwrite_of_a_self_cyclic_candidate_holder_then_a_safepoint_stays_sound() {
+    let h = Harness::new();
+    h.stressed_row("release01-25", RELEASE01_25, "27\n", (9, 9));
+    h.assert_legs(4);
+}
+
+const RELEASE01_26: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn peek(h: Rc<H>) -> i64 {
+    let c = h
+    return 1
+}
+fn set(h: &mut H, v: i64) {
+    (*h).r = Rc::new(Node { val: v, next: Rc::null() })
+}
+fn work(i: i64) -> i64 {
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
+    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() })
+    let t = poke(hold) + peek(hold)
+    set(&mut Rc::get(hold), 7)
+    return t + poke(hold)
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut n = 0
+    while i < 3 {
+        n = n + work(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_26_a_mutable_reference_into_an_rc_payload_overwrite_then_a_safepoint_stays_balanced() {
+    let h = Harness::new();
+    h.stressed_row("release01-26", RELEASE01_26, "27\n", (9, 9));
+    h.assert_legs(4);
+}
+
+const RELEASE01_27: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+
+fn use_view(bs: &[u8]) -> i64 {
+    let p = poke(1)
+    return bs[0] + bs.len
+}
+fn main() -> i64 {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
+    a.me = a
+    let bs = Rc::get(a).s.bytes
+    a = poke(2)
+    let n = use_view(bs)
+    let t: string = other(88888)
+    println("{n + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn release01_27_a_bytes_view_held_across_a_call_survives_the_collection_of_its_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-27", RELEASE01_27, "111\n", (11, 11));
+    h.assert_legs(4);
+}
+
+const RELEASE01_28: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+
+fn main() -> i64 {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
+    a.me = a
+    let mut n: i64 = 0
+    for b in Rc::get(a).s.bytes {
+        a = poke(b)
+        let t: string = other(88888)
+        n = n + b + t.len
+    }
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn release01_28_a_for_over_the_bytes_of_a_cycle_member_survives_the_body_dropping_the_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-28", RELEASE01_28, "499\n", (38, 38));
+    h.assert_legs(4);
+}
+
+const RELEASE01_29: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct W { s: string, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn main() -> i64 {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
+    a.me = a
+    println(take(Rc::get(a).s, { a = poke(5); let p = poke(6); 1 }))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_29_a_string_argument_of_a_cycle_member_survives_a_block_argument_dropping_the_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-29", RELEASE01_29, "105\n", (9, 9));
+    h.assert_legs(4);
+}
+
+const RELEASE01_30: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn main() -> i64 {
+    let mut a = mk(12345)
+    println(take("{Rc::get(a).s}", { a = poke(5); let p = poke(6); 1 }))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_30_an_interpolation_of_a_cycle_member_survives_a_block_argument_dropping_the_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-30", RELEASE01_30, "105\n", (23, 23));
+    h.assert_legs(4);
+}
+
+const RELEASE01_31: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn take_e(e: E, k: i64) -> i64 {
+    let p = poke(7)
+    return match e { E::A(x) => x.bytes[0] + x.len + k, E::B => 0 }
+}
+fn main() -> i64 {
+    let mut a = mk(12345)
+    println(take_e(Rc::get(a).e, { a = poke(5); 1 }))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_31_an_enum_field_argument_survives_a_block_argument_dropping_its_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-31", RELEASE01_31, "105\n", (23, 23));
+    h.assert_legs(4);
+}
+
+const RELEASE01_32: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn use_s(s: string) -> i64 {
+    let p = poke(8)
+    return s.bytes[0] + s.len
+}
+fn main() -> i64 {
+    let mut a = mk(12345)
+    let v = Rc::get(a).a[0..2]
+    a = poke(5)
+    let n = use_s(v[1])
+    let t: string = other(88888)
+    println("{n + t.len}")
+    return 0
+}
+"#;
+
+#[test]
+fn release01_32_a_slice_element_of_a_cycle_member_survives_the_cycle_dropped_before_a_call() {
+    let h = Harness::new();
+    h.stressed_row("release01-32", RELEASE01_32, "111\n", (25, 25));
+    h.assert_legs(4);
+}
+
+const RELEASE01_33: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn main() -> i64 {
+    let mut a = mk(12345)
+    let mut n: i64 = 0
+    for b in bytes_of(&Rc::get(a)) {
+        a = poke(b)
+        let t: string = other(88888)
+        n = n + b + t.len
+    }
+    println("{n}")
+    return 0
+}
+"#;
+
+#[test]
+fn release01_33_a_for_over_a_view_returned_by_a_call_survives_the_body_dropping_the_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-33", RELEASE01_33, "499\n", (72, 72));
+    h.assert_legs(4);
+}
+
+const RELEASE01_34: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn clob(bs: &[u8], k: i64) -> i64 {
+    let p = poke(9)
+    let t: string = other(88888)
+    return bs[0] + bs.len + t.len + k
+}
+fn main() -> i64 {
+    let mut a = mk(12345)
+    println(clob(bytes_of(&Rc::get(a)), { a = poke(5); 1 }))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_34_a_view_argument_returned_by_a_call_survives_a_block_argument_dropping_the_cycle() {
+    let h = Harness::new();
+    h.stressed_row("release01-34", RELEASE01_34, "112\n", (25, 25));
+    h.assert_legs(4);
+}
+
+const RELEASE01_35: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn other(n: i64) -> string { return "ZZ" + "{n}" }
+enum E { A(string), B }
+struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn mk(n: i64) -> Rc<W> {
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
+    w.me = w
+    return w
+}
+fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+
+fn main() -> i64 {
+    let mut a = mk(12345)
+    let mut i = 0
+    let mut n = 0
+    let bs = Rc::get(a).s.bytes
+    while i < 3 {
+        a = poke(i)
+        let t: string = other(88888)
+        n = n + bs[i] + t.len
+        i = i + 1
+    }
+    println(n)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_35_a_bytes_view_held_across_iterations_survives_the_cycle_dropped_in_the_loop() {
+    let h = Harness::new();
+    h.stressed_row("release01-35", RELEASE01_35, "265\n", (36, 36));
+    h.assert_legs(4);
+}
+
+const RELEASE01_36: &str = r#"
+nogc fn take(h: fn() -> i64, s: string) -> i64 { return s.len }
+nogc fn spin(f: fn() -> i64, s: string, n: i64) -> i64 {
+    let mut i = 0
+    let mut t = 0
+    let mut acc: string = "x"
+    let mut g = f
+    while i < n {
+        g = f
+        acc = s
+        t = t + take(g, acc)
+        i = i + 1
+    }
+    return t
+}
+fn main() -> i64 {
+    let k = 5
+    let f = fn() -> i64 { return k }
+    let mut s: string = "a"
+    let mut j = 0
+    while j < 3 {
+        s = s + "b"
+        j = j + 1
+    }
+    println(spin(f, s, 10))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_36_a_nogc_loop_releasing_closure_envs_and_strings_never_collects() {
+    let h = Harness::new();
+    h.run_row(
+        "release01-36",
+        RELEASE01_36,
+        "40\n",
+        (4, 4),
+        Collections::Exactly(0),
+        Some("1"),
+    );
+    h.assert_legs(4);
+}
+
+const RELEASE01_37: &str = r#"
+struct S { s: string, k: i64 }
+struct Node { val: i64, next: Rc<Node> }
+nogc fn fill(p: &mut S, src: string, n: i64) {
+    let mut i = 0
+    while i < n {
+        (*p).s = src
+        (*p).k = (*p).k + 1
+        i = i + 1
+    }
+}
+struct Tags { names: [string; 4], n: i64 }
+nogc fn rot(a: &mut Tags, n: i64) {
+    let mut i = 0
+    while i < n {
+        (*a).names[i % 4] = (*a).names[(i + 1) % 4]
+        i = i + 1
+    }
+}
+nogc fn relabel(s: string, n: i64) -> i64 {
+    let mut acc: string = "x"
+    let mut i = 0
+    while i < n {
+        acc = s
+        i = i + 1
+    }
+    return acc.len
+}
+nogc fn take(h: fn() -> i64, s: string) -> i64 { return s.len }
+nogc fn spin(f: fn() -> i64, s: string, n: i64) -> i64 {
+    let mut i = 0
+    let mut t = 0
+    let mut g = f
+    while i < n {
+        g = f
+        t = t + take(g, s)
+        i = i + 1
+    }
+    return t
+}
+fn churn(n: i64) -> i64 {
+    let mut i = 0
+    let mut t = 0
+    while i < n {
+        let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+        a.next = a
+        t = t + Rc::get(a).val
+        i = i + 1
+    }
+    return t
+}
+fn main() -> i64 {
+    let mut p = S { s: "a", k: 0 }
+    fill(&mut p, "b" + "c", 5)
+    let mut a = Tags { names: ["a", "bb", "ccc", "dddd"], n: 4 }
+    rot(&mut a, 7)
+    let k = 3
+    let f = fn() -> i64 { return k }
+    let t = spin(f, "xy" + "z", 4) + relabel("pq" + "r", 3) + churn(5)
+    println("{p.s} {p.k} {a.names[0]}{a.names[1]}{a.names[2]}{a.names[3]} {t}")
+    return 0
+}
+"#;
+
+const RELEASE01_37_GLOBAL: &str = r#"
+fn victim(n: i64) -> string { return "ab" + "{n}" }
+let mut G: string = "seed"
+nogc fn w(n: i64) {
+    let mut i = 0
+    while i < n {
+        G = "q"
+        i = i + 1
+    }
+}
+nogc fn k(s: string) -> i64 {
+    w(3)
+    return s.bytes[0] + s.len
+}
+fn main() -> i64 {
+    G = victim(12345)
+    println(k(G))
+    return 0
+}
+"#;
+
+const SAFEPOINT_MARKS: &[&str] = &["__aelys_cycle_poll", "__aelys_cycle_due", "__aelys_collect"];
+
+fn ir_bodies(ir: &str) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let mut current: Option<(String, String)> = None;
+    for line in ir.lines() {
+        if let Some((name, body)) = current.as_mut() {
+            body.push_str(line);
+            body.push('\n');
+            if line == "}" {
+                out.push((std::mem::take(name), std::mem::take(body)));
+                current = None;
+            }
+            continue;
+        }
+        if line.starts_with("define ")
+            && let Some(at) = line.find('@')
+        {
+            let rest = line[at + 1..].trim_start_matches('"');
+            let end = rest.find(['"', '(']).unwrap_or(rest.len());
+            current = Some((rest[..end].to_string(), String::new()));
+        }
+    }
+    out
+}
+
+fn nogc_names(src: &str) -> Vec<String> {
+    src.split("nogc fn ")
+        .skip(1)
+        .filter_map(|rest| rest.split('(').next())
+        .map(|name| name.trim().to_string())
+        .collect()
+}
+
+fn polled_nogc_functions(ir: &str, nogc: &[String]) -> (usize, Vec<String>, usize) {
+    let bodies = ir_bodies(ir);
+    let mut seen = 0;
+    let mut polled = Vec::new();
+    for (name, body) in &bodies {
+        if nogc.contains(name) {
+            seen += 1;
+            if SAFEPOINT_MARKS.iter().any(|m| body.contains(m)) {
+                polled.push(name.clone());
+            }
+        }
+    }
+    let managed_polled = bodies
+        .iter()
+        .filter(|(name, body)| !nogc.contains(name) && body.contains("__aelys_cycle_poll"))
+        .count();
+    (seen, polled, managed_polled)
+}
+
+#[test]
+fn release01_37_no_nogc_function_holds_a_safepoint_in_the_llvm_ir() {
+    let h = Harness::new();
+    let mut checked = 0;
+    for (id, src) in [
+        ("release01-37", RELEASE01_37),
+        ("release01-37-global", RELEASE01_37_GLOBAL),
+    ] {
+        let nogc = nogc_names(src);
+        for (tag, opt) in LEVELS {
+            let root = h.stage(id, tag, src);
+            compile_file_with_llvm_variant(&root, *opt, true, RuntimeVariant::RcCycles)
+                .unwrap_or_else(|e| panic!("{id} at {tag}: emit ir\n{e}"));
+            let ir = fs::read_to_string(root.with_extension("ll")).expect("read emitted ir");
+            let (seen, polled, managed_polled) = polled_nogc_functions(&ir, &nogc);
+            assert!(
+                polled.is_empty(),
+                "{id} at {tag}: safepoint in nogc {polled:?}"
+            );
+            assert!(managed_polled >= 1, "{id} at {tag}: no safepoint anywhere");
+            if *tag == "-O0" {
+                assert_eq!(seen, nogc.len(), "{id} at {tag}: nogc functions in the ir");
+            }
+            checked += seen;
+        }
+    }
+    assert!(checked >= 10, "nogc function bodies checked: {checked}");
+}
+
+#[test]
+fn release01_38_a_safepoint_planted_in_nogc_functions_is_caught_by_the_ir_check() {
+    let h = Harness::new();
+    let root = h.stage("release01-38", "-O0", RELEASE01_37);
+    let nogc = nogc_names(RELEASE01_37);
+    let mut air = aelys_driver::lower_file_to_air(&root, OptimizationLevel::None)
+        .unwrap_or_else(|e| panic!("lower\n{e}"));
+    for f in &mut air.functions {
+        if nogc.contains(&f.name) {
+            assert!(
+                f.attributes.no_gc,
+                "{} is not marked nogc in the air",
+                f.name
+            );
+            f.attributes.no_gc = false;
+        }
+    }
+    aelys_air::passes::safepoints::insert_cycle_polls(&mut air);
+    let mut codegen = aelys_codegen::CodegenContext::new("release01_38");
+    codegen.compile(&air).expect("codegen of the planted air");
+    let ll = root.with_extension("ll");
+    codegen
+        .emit_ir(&ll.to_string_lossy())
+        .expect("emit planted ir");
+    let ir = fs::read_to_string(&ll).expect("read planted ir");
+    let (seen, polled, _) = polled_nogc_functions(&ir, &nogc);
+    assert_eq!(seen, nogc.len(), "nogc functions in the planted ir");
+    assert_eq!(
+        polled.len(),
+        nogc.len(),
+        "planted nogc functions caught: {polled:?}"
+    );
+}
+
+fn windowed_air(
+    h: &Harness,
+    id: &str,
+    tag: &str,
+    opt: OptimizationLevel,
+    src: &str,
+) -> aelys_air::AirProgram {
+    let root = h.stage(id, tag, src);
+    let mut air = aelys_driver::lower_file_to_air(&root, opt)
+        .unwrap_or_else(|e| panic!("{id} at {tag}: lower\n{e}"));
+    aelys_air::passes::safepoints::insert_cycle_polls(&mut air);
+    air
+}
+
+#[test]
+fn release01_39_no_user_call_or_safepoint_sits_between_a_field_release_and_its_store() {
+    let h = Harness::new();
+    let mut checked = 0;
+    for (id, src) in [
+        ("release01-19", RELEASE01_19),
+        ("release01-20", RELEASE01_20),
+        ("release01-21", RELEASE01_21),
+        ("release01-22", RELEASE01_22),
+        ("release01-24", RELEASE01_24),
+        ("release01-25", RELEASE01_25),
+        ("release01-26", RELEASE01_26),
+        ("release01-13", &RELEASE01_13.replace("    MID\n", "")),
+    ] {
+        for (tag, opt) in LEVELS {
+            let air = windowed_air(&h, id, tag, *opt, src);
+            let windows = aelys_air::passes::safepoints::release_store_windows(&air);
+            assert!(
+                windows.violations.is_empty(),
+                "{id} at {tag}: {:?}",
+                windows.violations
+            );
+            assert!(
+                windows.checked >= 1,
+                "{id} at {tag}: no release before a store"
+            );
+            checked += windows.checked;
+        }
+    }
+    assert!(checked >= 16, "windows checked: {checked}");
+}
+
+#[test]
+fn release01_40_a_safepoint_planted_between_a_field_release_and_its_store_is_caught() {
+    use aelys_air::{AirStmt, AirStmtKind, Callee, Place};
+    let h = Harness::new();
+    let mut air = windowed_air(
+        &h,
+        "release01-40",
+        "-O0",
+        OptimizationLevel::None,
+        RELEASE01_20,
+    );
+    let mut planted = 0;
+    for f in &mut air.functions {
+        for b in &mut f.blocks {
+            let mut i = 0;
+            while i + 1 < b.stmts.len() {
+                let releases = matches!(
+                    &b.stmts[i].kind,
+                    AirStmtKind::CallVoid { func: Callee::Named(n), .. } if n == "__aelys_rc_release"
+                );
+                let stores = matches!(
+                    &b.stmts[i + 1].kind,
+                    AirStmtKind::Assign {
+                        place: Place::Field(..),
+                        ..
+                    }
+                );
+                if releases && stores {
+                    b.stmts.insert(
+                        i + 1,
+                        AirStmt {
+                            kind: AirStmtKind::CallVoid {
+                                func: Callee::Named(
+                                    aelys_air::passes::safepoints::CYCLE_POLL.to_string(),
+                                ),
+                                args: Vec::new(),
+                            },
+                            span: None,
+                        },
+                    );
+                    planted += 1;
+                    i += 1;
+                }
+                i += 1;
+            }
+        }
+    }
+    assert!(planted >= 2, "planted safepoints: {planted}");
+    let windows = aelys_air::passes::safepoints::release_store_windows(&air);
+    assert_eq!(
+        windows.violations.len(),
+        planted,
+        "{:?}",
+        windows.violations
+    );
+    assert!(
+        windows
+            .violations
+            .iter()
+            .all(|v| v.contains("__aelys_cycle_poll")),
+        "{:?}",
+        windows.violations
+    );
+}
+
+const RELEASE01_41: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+fn main() -> i64 {
+    let base = 0
+    let f = fn(n: i64) -> i64 {
+        let mut i = base
+
+        let mut s = 0
+        while i < n {
+            let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
+            let b: Rc<Node> = Rc::new(Node { val: 1, next: a })
+            a.next = b
+            s = s + Rc::get(b).val
+            i = i + 1
+        }
+        return s
+    }
+    println(f(30000))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_41_a_cycle_churned_in_a_loop_inside_a_lambda_is_collected_during_execution() {
+    let h = Harness::new();
+    h.running_row("release01-41", RELEASE01_41, "30000\n", (60_001, 60_001));
+    h.assert_legs(4);
 }

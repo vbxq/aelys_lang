@@ -71,6 +71,10 @@ impl<'a> FunctionCodegen<'a> {
             if name == "__aelys_vec_detach" {
                 return self.generate_vec_detach_call(args);
             }
+            if name == "__aelys_cycle_poll" && args.is_empty() {
+                self.emit_cycle_poll()?;
+                return Ok(None);
+            }
         }
 
         if let Callee::Named(name) = callee

@@ -1,0 +1,16 @@
+struct T { val: i64, parent: Rc<T>, child: Rc<T> }
+fn churn(i: i64) -> i64 {
+    let root: Rc<T> = Rc::new(T { val: i, parent: Rc::null(), child: Rc::null() })
+    root.child = Rc::new(T { val: 2, parent: root, child: Rc::null() })
+    return Rc::get(Rc::get(root).child).val
+}
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < NN {
+        n = n + churn(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

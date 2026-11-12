@@ -31,17 +31,17 @@ pub enum LowerFailure {
     Lowering(Vec<LowerError>),
 }
 
+type DropMap = std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>;
+type EffectMap = std::collections::HashMap<String, crate::bir::EffectSet>;
+
 fn build_and_check_bir(
     program: &TypedProgram,
     imports: &crate::bir::Imports,
-) -> Result<
-    std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
-    Vec<crate::bir::BirDiagnostic>,
-> {
+) -> Result<(DropMap, EffectMap), Vec<crate::bir::BirDiagnostic>> {
     let bir = crate::bir::build::build_program_with_imports(program, &imports.names());
     let check = crate::bir::check_program_with_imports(&bir, &imports.effects);
     if check.errors.is_empty() {
-        Ok(check.drops)
+        Ok((check.drops, check.effects))
     } else {
         Err(check.errors)
     }
@@ -79,14 +79,16 @@ pub fn try_lower_with_imports(
     program: &TypedProgram,
     imported: Imported,
 ) -> Result<AirProgram, LowerFailure> {
-    let drops = build_and_check_bir(program, &imported.bir).map_err(LowerFailure::Borrow)?;
-    lower_against_proven_returns(program, &imported, &drops, None)
+    let (drops, effects) =
+        build_and_check_bir(program, &imported.bir).map_err(LowerFailure::Borrow)?;
+    lower_against_proven_returns(program, &imported, &drops, &effects, None)
 }
 
 fn lower_against_proven_returns(
     program: &TypedProgram,
     imported: &Imported,
-    drops: &std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
+    drops: &DropMap,
+    effects: &EffectMap,
     file_gc_mode: Option<GcMode>,
 ) -> Result<AirProgram, LowerFailure> {
     let mut assumed: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -98,6 +100,7 @@ fn lower_against_proven_returns(
             cx.file_gc_mode = mode;
         }
         cx.affine_drops = drops.clone();
+        cx.effects = effects.clone();
         cx.fresh_returns = imported.fresh_returns.union(&assumed).cloned().collect();
         cx.retaining_fns = str_temps::retaining_declarations(program)
             .union(&imported.retaining_fns)
@@ -133,9 +136,15 @@ pub fn try_lower_with_gc_mode(
     program: &TypedProgram,
     file_gc_mode: GcMode,
 ) -> Result<AirProgram, LowerFailure> {
-    let drops = build_and_check_bir(program, &crate::bir::Imports::default())
+    let (drops, effects) = build_and_check_bir(program, &crate::bir::Imports::default())
         .map_err(LowerFailure::Borrow)?;
-    lower_against_proven_returns(program, &Imported::default(), &drops, Some(file_gc_mode))
+    lower_against_proven_returns(
+        program,
+        &Imported::default(),
+        &drops,
+        &effects,
+        Some(file_gc_mode),
+    )
 }
 
 pub(crate) struct LoweringContext<'a> {
@@ -170,6 +179,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) affine_locals: Vec<AffineLocal>,
     pub(super) affine_drops:
         std::collections::HashMap<crate::bir::DropKey, Vec<crate::bir::DropKey>>,
+    pub(super) effects: EffectMap,
     pub(super) loop_stack: Vec<LoopBlocks>,
     pub(super) type_params_map: Vec<(String, TypeParamId)>,
     pub(super) pending_block_id: Option<BlockId>,
@@ -247,6 +257,7 @@ impl<'a> LoweringContext<'a> {
             fresh_str_results: std::collections::HashSet::new(),
             affine_locals: Vec::new(),
             affine_drops: std::collections::HashMap::new(),
+            effects: std::collections::HashMap::new(),
             loop_stack: Vec::new(),
             type_params_map: Vec::new(),
             pending_block_id: None,

@@ -64,9 +64,10 @@ for t in templates:
                     continue
                 ratio = b / a
                 line = f"{t} -O{level} {rt}/{alloc}: {a/1024:.1f} MB -> {b/1024:.1f} MB (x{ratio:.2f})"
-                if rt != "leak" and ratio > 1.2:
+                must_grow = rt == "leak" or (rt == "rc" and t.startswith("cycle_"))
+                if not must_grow and ratio > 1.2:
                     print("FAIL grows " + line); failures += 1
-                elif rt == "leak" and ratio < 2.0:
+                elif must_grow and ratio < 2.0:
                     print("FAIL blind " + line); failures += 1
                 else:
                     print("ok " + line)

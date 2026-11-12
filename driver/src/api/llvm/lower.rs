@@ -48,6 +48,27 @@ pub(super) fn compile_air_with_llvm_linked(
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("aelys_module");
+    let polled;
+    let air = if runtime == RuntimeVariant::RcCycles {
+        let mut with_polls = air.clone();
+        aelys_air::passes::safepoints::insert_cycle_polls(&mut with_polls);
+        polled = with_polls;
+        &polled
+    } else {
+        air
+    };
+    let windows = aelys_air::passes::safepoints::release_store_windows(air).violations;
+    if !windows.is_empty() {
+        return Err(backend_diagnostic_error(
+            source.clone(),
+            program_anchor_span(air, source.as_ref()),
+            "air-validation",
+            windows.join("\n"),
+            None,
+            None,
+            Fault::Compiler,
+        ));
+    }
     let mut codegen = aelys_codegen::CodegenContext::new(module_name);
 
     codegen

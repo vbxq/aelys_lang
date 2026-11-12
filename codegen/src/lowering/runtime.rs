@@ -57,6 +57,54 @@ impl<'a> FunctionCodegen<'a> {
         self.module.add_function("__aelys_rc_release", fn_ty, None)
     }
 
+    pub(crate) fn emit_cycle_poll(&mut self) -> Result<(), CodegenError> {
+        let err = |e: inkwell::builder::BuilderError| CodegenError::LlvmError(e.to_string());
+        let i32_ty = self.context.i32_type();
+        let due = match self.module.get_global("__aelys_cycle_due") {
+            Some(global) => global.as_pointer_value(),
+            None => self
+                .module
+                .add_global(i32_ty, None, "__aelys_cycle_due")
+                .as_pointer_value(),
+        };
+        let slow_fn = match self
+            .module
+            .get_function(aelys_air::passes::safepoints::CYCLE_POLL)
+        {
+            Some(function) => function,
+            None => self.module.add_function(
+                aelys_air::passes::safepoints::CYCLE_POLL,
+                self.context.void_type().fn_type(&[], false),
+                None,
+            ),
+        };
+        let word = self
+            .builder
+            .build_load(i32_ty, due, "cycle_due")
+            .map_err(err)?
+            .into_int_value();
+        let is_due = self
+            .builder
+            .build_int_compare(IntPredicate::NE, word, i32_ty.const_zero(), "cycle_is_due")
+            .map_err(err)?;
+        let slow_block = self
+            .context
+            .append_basic_block(self.function, "cycle_poll_slow");
+        let cont_block = self
+            .context
+            .append_basic_block(self.function, "cycle_poll_cont");
+        self.builder
+            .build_conditional_branch(is_due, slow_block, cont_block)
+            .map_err(err)?;
+        self.builder.position_at_end(slow_block);
+        self.builder.build_call(slow_fn, &[], "").map_err(err)?;
+        self.builder
+            .build_unconditional_branch(cont_block)
+            .map_err(err)?;
+        self.builder.position_at_end(cont_block);
+        Ok(())
+    }
+
     fn last_freed_global(&self) -> PointerValue<'static> {
         match self.module.get_global("__aelys_last_freed") {
             Some(global) => global.as_pointer_value(),
