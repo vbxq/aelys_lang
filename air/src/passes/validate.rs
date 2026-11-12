@@ -1,8 +1,8 @@
 //! - eo `airtype::opaque` anywhere, because this means an unresolved dynamic type survived past monomorphization
 
 use crate::{
-    AirBlock, AirConst, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BlockId,
-    Callee, EnumRef, LocalId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BinOp,
+    BlockId, Callee, EnumRef, LocalId, Operand, Place, Rvalue,
 };
 use std::collections::HashSet;
 use std::fmt;
@@ -59,6 +59,10 @@ pub enum AirValidationDetail {
         place_ty: String,
     },
     RcHandle {
+        context: String,
+        detail: String,
+    },
+    TypeAgreement {
         context: String,
         detail: String,
     },
@@ -192,6 +196,9 @@ impl fmt::Display for AirValidationError {
             AirValidationDetail::RcHandle { context, detail } => {
                 write!(f, "{detail} ({context})")
             }
+            AirValidationDetail::TypeAgreement { context, detail } => {
+                write!(f, "type disagreement at {context}: {detail}")
+            }
         }
     }
 }
@@ -261,6 +268,181 @@ fn check_function_ptrness(
                 });
             }
         }
+    }
+}
+
+// the backend's view of a scalar: signedness is an instruction choice, not a type
+fn scalar_class(ty: &AirType) -> Option<&'static str> {
+    Some(match ty {
+        AirType::I8 | AirType::U8 => "i8",
+        AirType::I16 | AirType::U16 => "i16",
+        AirType::I32 | AirType::U32 => "i32",
+        AirType::I64 | AirType::U64 => "i64",
+        AirType::F32 => "f32",
+        AirType::F64 => "f64",
+        AirType::Bool => "bool",
+        AirType::Char
+        | AirType::Str
+        | AirType::Ptr(_)
+        | AirType::Rc(_)
+        | AirType::Struct(_)
+        | AirType::Enum(_)
+        | AirType::Array(..)
+        | AirType::Slice(_)
+        | AirType::Vec(_)
+        | AirType::FnPtr { .. }
+        | AirType::Param(_)
+        | AirType::Opaque
+        | AirType::Void => return None,
+    })
+}
+
+fn check_type_agreement(
+    function: &AirFunction,
+    program: &AirProgram,
+    errors: &mut Vec<AirValidationError>,
+) {
+    if function.is_extern {
+        return;
+    }
+    let local_ty = |id: LocalId| {
+        function
+            .params
+            .iter()
+            .find(|p| p.id == id)
+            .map(|p| p.ty.clone())
+            .or_else(|| {
+                function
+                    .locals
+                    .iter()
+                    .find(|l| l.id == id)
+                    .map(|l| l.ty.clone())
+            })
+    };
+    let operand_ty = |op: &Operand| match op {
+        Operand::Copy(id) | Operand::Move(id) => local_ty(*id),
+        Operand::Const(AirConst::IntLiteral(_)) => None,
+        Operand::Const(c) => Some(crate::mono::substitute::const_type(c)),
+    };
+    let field_ty = |struct_name: &str, field: &str| {
+        program
+            .structs
+            .iter()
+            .find(|d| d.name == struct_name && d.type_params.is_empty())
+            .and_then(|d| d.fields.iter().find(|f| f.name == field))
+            .map(|f| f.ty.clone())
+    };
+    let stored_ty = |place: &Place| match place {
+        Place::Local(_) | Place::Global(_) => place_type(function, program, place),
+        Place::Deref(id) => match local_ty(*id) {
+            Some(AirType::Ptr(inner)) => Some(*inner),
+            _ => None,
+        },
+        Place::Field(id, field) => match local_ty(*id) {
+            Some(AirType::Struct(name)) => field_ty(&name, field),
+            Some(AirType::Ptr(inner)) => match *inner {
+                AirType::Struct(name) => field_ty(&name, field),
+                _ => None,
+            },
+            _ => None,
+        },
+        Place::Index(..) => None,
+    };
+    let callee_params = |callee: &Callee| -> Option<Vec<AirType>> {
+        match callee {
+            Callee::Direct(fid) => program
+                .functions
+                .iter()
+                .find(|f| f.id == *fid)
+                .map(|f| f.params.iter().map(|p| p.ty.clone()).collect()),
+            Callee::Named(name) | Callee::Extern(name, _) => program
+                .functions
+                .iter()
+                .find(|f| f.name == *name && f.type_params.is_empty())
+                .map(|f| f.params.iter().map(|p| p.ty.clone()).collect()),
+            Callee::FnPtr(id) => match local_ty(*id) {
+                Some(AirType::FnPtr { params, .. }) => Some(params),
+                _ => None,
+            },
+        }
+    };
+    let disagree = |what: &str, a: &Option<AirType>, b: &Option<AirType>| -> Option<String> {
+        let (Some(a), Some(b)) = (a, b) else {
+            return None;
+        };
+        match (scalar_class(a), scalar_class(b)) {
+            (Some(ca), Some(cb)) if ca != cb => Some(format!("{what}: {a:?} vs {b:?}")),
+            _ => None,
+        }
+    };
+    let check_args = |callee: &Callee, args: &[Operand]| -> Vec<String> {
+        let Some(params) = callee_params(callee) else {
+            return Vec::new();
+        };
+        args.iter()
+            .zip(params.iter())
+            .enumerate()
+            .filter_map(|(k, (arg, param))| {
+                disagree(
+                    &format!("call argument #{k}"),
+                    &operand_ty(arg),
+                    &Some(param.clone()),
+                )
+            })
+            .collect()
+    };
+    let mut found: Vec<(String, String)> = Vec::new();
+    for block in &function.blocks {
+        for (i, stmt) in block.stmts.iter().enumerate() {
+            let context = format!("bb{}, stmt #{}", block.id.0, i);
+            let details: Vec<String> = match &stmt.kind {
+                AirStmtKind::Assign { place, rvalue } => match rvalue {
+                    Rvalue::BinaryOp(op, a, b) => {
+                        let ta = operand_ty(a);
+                        let tb = operand_ty(b);
+                        let result = match op {
+                            BinOp::Eq
+                            | BinOp::Ne
+                            | BinOp::Lt
+                            | BinOp::Le
+                            | BinOp::Gt
+                            | BinOp::Ge => Some(AirType::Bool),
+                            BinOp::CheckedAdd | BinOp::CheckedSub | BinOp::CheckedMul => None,
+                            _ => ta.clone().or_else(|| tb.clone()),
+                        };
+                        disagree("binary operands", &ta, &tb)
+                            .into_iter()
+                            .chain(disagree("binary result", &result, &stored_ty(place)))
+                            .collect()
+                    }
+                    Rvalue::Use(op) => disagree("store", &operand_ty(op), &stored_ty(place))
+                        .into_iter()
+                        .collect(),
+                    Rvalue::Call { func, args } => check_args(func, args),
+                    _ => Vec::new(),
+                },
+                AirStmtKind::CallVoid { func, args } => check_args(func, args),
+                _ => Vec::new(),
+            };
+            found.extend(details.into_iter().map(|d| (context.clone(), d)));
+        }
+        let context = format!("bb{}, terminator", block.id.0);
+        let details: Vec<String> = match &block.terminator {
+            AirTerminator::Return(Some(op)) => {
+                disagree("return", &operand_ty(op), &Some(function.ret_ty.clone()))
+                    .into_iter()
+                    .collect()
+            }
+            AirTerminator::Invoke { func, args, .. } => check_args(func, args),
+            _ => Vec::new(),
+        };
+        found.extend(details.into_iter().map(|d| (context.clone(), d)));
+    }
+    for (context, detail) in found {
+        errors.push(AirValidationError {
+            function_name: function.name.clone(),
+            detail: AirValidationDetail::TypeAgreement { context, detail },
+        });
     }
 }
 
@@ -553,6 +735,7 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
         validate_function(function, &known_enums, &known_globals, &mut errors);
         check_function_ptrness(function, program, &mut errors);
         check_rc_handles(function, program, &mut errors);
+        check_type_agreement(function, program, &mut errors);
         if function.type_params.is_empty() {
             for detail in crate::counts::unresolved_counts(function) {
                 errors.push(AirValidationError {

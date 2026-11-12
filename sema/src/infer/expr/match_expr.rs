@@ -311,26 +311,26 @@ impl TypeInference {
 
         // have i64 literals, narrow the literals to match. this avoids stale
         if typed_arms.len() > 1 {
-            let concrete_int = typed_arms
+            let fixed: Vec<InferType> = typed_arms
                 .iter()
-                .map(|a| &a.body.ty)
-                .find(|t| t.is_integer() && **t != InferType::I64)
-                .cloned();
-            let concrete_float = typed_arms
+                .filter(|a| !self.is_literal_like(&a.body))
+                .map(|a| a.body.ty.clone())
+                .filter(|t| t.is_integer() || t.is_float())
+                .collect();
+            let join = fixed
                 .iter()
-                .map(|a| &a.body.ty)
-                .find(|t| t.is_float() && **t != InferType::F64)
+                .find(|t| {
+                    fixed
+                        .iter()
+                        .all(|other| other == *t || other.can_implicit_widen_to(t))
+                })
                 .cloned();
-            if let Some(ref target) = concrete_int {
+            if let Some(ref target) = join {
                 for arm in &mut typed_arms {
-                    if arm.body.ty == InferType::I64 {
-                        self.try_narrow_literal(&mut arm.body, target);
-                    }
-                }
-            }
-            if let Some(ref target) = concrete_float {
-                for arm in &mut typed_arms {
-                    if arm.body.ty == InferType::F64 {
+                    let literal_arm = self.is_literal_like(&arm.body);
+                    if literal_arm
+                        && (arm.body.ty == InferType::I64 || arm.body.ty == InferType::F64)
+                    {
                         self.try_narrow_literal(&mut arm.body, target);
                     }
                 }

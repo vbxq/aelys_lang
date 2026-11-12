@@ -10,6 +10,12 @@ impl TypeEnv {
         let mut all_visible = HashMap::new();
         let mut mutable_by_name = HashMap::new();
         let mut all_functions = HashMap::new();
+        let mut all_ids = self.capture_ids.clone();
+        for scope in &self.binding_ids {
+            for (name, id) in scope {
+                all_ids.insert(name.clone(), *id);
+            }
+        }
 
         // Insert captures first, then locals overwrite in case of collision
         // This ensures locals have priority over captures
@@ -44,6 +50,8 @@ impl TypeEnv {
             mutable_locals: vec![HashSet::new()],
             mutable_captures: all_mutable,
             binding_spans: vec![HashMap::new()],
+            binding_ids: vec![HashMap::new()],
+            capture_ids: all_ids,
         }
     }
 }

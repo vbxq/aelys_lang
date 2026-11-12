@@ -153,8 +153,7 @@ fn caller() {
 fn nested_closure_no_globals_in_env() {
     let air = lower_with_globals(
         r#"
-fn outer() {
-    let x = 10
+fn outer(x: i64) {
     let inner = fn() {
         print(x)
     }

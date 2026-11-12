@@ -1371,7 +1371,7 @@ nogc fn spin(f: fn() -> i64, s: string, n: i64) -> i64 {
     return t
 }
 fn main() -> i64 {
-    let k = 5
+    let k: i64 = 5
     let f = fn() -> i64 { return k }
     let mut s: string = "a"
     let mut j = 0
@@ -1713,7 +1713,7 @@ fn release01_40_a_safepoint_planted_between_a_field_release_and_its_store_is_cau
 const RELEASE01_41: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn main() -> i64 {
-    let base = 0
+    let base: i64 = 0
     let f = fn(n: i64) -> i64 {
         let mut i = base
 

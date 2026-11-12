@@ -38,12 +38,14 @@ impl LocalConstantPropagator {
                 name,
                 mutable,
                 initializer,
+                var_type,
                 ..
             } => {
                 self.propagate_expr(initializer);
                 self.folder.optimize_expr(initializer);
 
-                if !*mutable && Self::is_simple_constant(initializer) {
+                if !*mutable && Self::is_simple_constant(initializer) && initializer.ty == *var_type
+                {
                     self.scopes.insert(name.clone(), initializer.clone());
                 } else {
                     // same name (i.e. shadowed by this `let`) is not visible to
@@ -331,12 +333,7 @@ impl LocalConstantPropagator {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(const_val) = self.scopes.get(name) {
-                    let ty = if expr.ty.is_integer() && const_val.ty.is_integer() {
-                        expr.ty.clone()
-                    } else {
-                        const_val.ty.clone()
-                    };
-                    *expr = TypedExpr::new(const_val.kind.clone(), ty, expr.span);
+                    *expr = TypedExpr::new(const_val.kind.clone(), const_val.ty.clone(), expr.span);
                     self.stats.locals_propagated += 1;
                 }
             }

@@ -80,7 +80,7 @@ fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
 fn llvm_lowers_const_global_reads_to_real_global_storage() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-let g = 7
+let g: i64 = 7
 
 fn main() -> i64 {
     return g

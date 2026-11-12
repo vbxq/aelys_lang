@@ -36,6 +36,19 @@ pub struct TypeEnv {
 
     /// Binding spans per lexical scope (parallels `locals`): where each variable was first defined
     binding_spans: Vec<HashMap<String, Span>>,
+
+    binding_ids: Vec<HashMap<String, BindingId>>,
+    capture_ids: HashMap<String, BindingId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BindingId(u64);
+
+impl BindingId {
+    pub(crate) fn fresh() -> Self {
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+        BindingId(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    }
 }
 
 impl TypeEnv {
@@ -48,6 +61,8 @@ impl TypeEnv {
             mutable_locals: vec![HashSet::new()],
             mutable_captures: HashSet::new(),
             binding_spans: vec![HashMap::new()],
+            binding_ids: vec![HashMap::new()],
+            capture_ids: HashMap::new(),
         }
     }
 }

@@ -13,6 +13,13 @@ pub struct TypedProgram {
     pub stmts: Vec<TypedStmt>,
     pub source: Arc<Source>,
     pub type_table: TypeTable,
+    pub literal_globals: std::collections::HashMap<String, LiteralInit>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiteralInit {
+    Int(i64),
+    Float(f64),
 }
 
 #[derive(Debug, Clone)]

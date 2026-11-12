@@ -24,7 +24,7 @@ use crate::types::{InferType, TypeTable, TypeVarGen};
 use aelys_common::Warning;
 use std::collections::{HashMap, HashSet};
 
-pub(crate) use stmt::let_stmt::LiteralInit;
+pub(crate) use crate::typed_ast::LiteralInit;
 
 const MAX_INFERENCE_DEPTH: usize = 200;
 
@@ -46,7 +46,9 @@ pub struct TypeInference {
     type_params_in_scope: Vec<String>,
     type_param_bounds: HashMap<String, aelys_syntax::TypeBounds>,
     instantiated_param_names: HashMap<crate::types::TypeVarId, String>,
-    literal_init_vars: HashMap<String, LiteralInit>,
+    literal_init_vars: HashMap<crate::env::BindingId, LiteralInit>,
+    pub(crate) literal_globals: HashMap<String, LiteralInit>,
+    keep_binding_use: bool,
     try_counter: usize,
     unsafe_depth: usize,
     catch_match_pending: bool,

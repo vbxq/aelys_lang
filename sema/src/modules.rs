@@ -18,6 +18,7 @@ pub struct ModuleValue {
     pub type_params: Vec<String>,
     // the importer has to re-check the bounds, the exporting module never sees this call site
     pub bounds: Vec<TypeBounds>,
+    pub literal: Option<crate::typed_ast::LiteralInit>,
 }
 
 #[derive(Debug, Clone)]
@@ -261,6 +262,7 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         is_pub: func.is_pub,
                         type_params: func.type_params.clone(),
                         bounds,
+                        literal: None,
                     },
                 );
             }
@@ -279,6 +281,7 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         is_pub: *is_pub,
                         type_params: Vec::new(),
                         bounds: Vec::new(),
+                        literal: program.literal_globals.get(name).cloned(),
                     },
                 );
             }

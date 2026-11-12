@@ -55,34 +55,25 @@ impl TypeInference {
             ExprKind::Binary { left, op, right } => {
                 let mut typed_left = self.infer_expr(left);
                 let mut typed_right = self.infer_expr(right);
-                Self::narrow_binop_int_literals(&mut typed_left, &mut typed_right);
-                Self::narrow_binop_float_literals(&mut typed_left, &mut typed_right);
-                if typed_left.ty.is_integer()
-                    && typed_left.ty != InferType::I64
-                    && (typed_right.ty == InferType::I64
-                        || matches!(typed_right.ty, InferType::Var(_)))
-                {
-                    self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
-                } else if typed_right.ty.is_integer()
-                    && typed_right.ty != InferType::I64
-                    && (typed_left.ty == InferType::I64
-                        || matches!(typed_left.ty, InferType::Var(_)))
-                {
-                    self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
-                } else if typed_left.ty.is_float()
-                    && typed_left.ty != InferType::F64
-                    && (typed_right.ty == InferType::F64
-                        || matches!(typed_right.ty, InferType::Var(_)))
-                {
-                    self.try_narrow_literal(&mut typed_right, &typed_left.ty.clone());
-                } else if typed_right.ty.is_float()
-                    && typed_right.ty != InferType::F64
-                    && (typed_left.ty == InferType::F64
-                        || matches!(typed_left.ty, InferType::Var(_)))
-                {
-                    self.try_narrow_literal(&mut typed_left, &typed_right.ty.clone());
+                let is_shift = matches!(op, BinaryOp::Shl | BinaryOp::Shr);
+                let left_lit = self.is_literal_like(&typed_left);
+                let right_lit = self.is_literal_like(&typed_right);
+                if is_shift {
+                    let width = typed_left.ty.clone();
+                    self.fit_shift_amount(&mut typed_right, &width);
+                } else if !left_lit && right_lit {
+                    let width = typed_left.ty.clone();
+                    if width.is_integer() || width.is_float() {
+                        self.try_narrow_literal(&mut typed_right, &width);
+                    }
+                } else if left_lit && !right_lit {
+                    let width = typed_right.ty.clone();
+                    if width.is_integer() || width.is_float() {
+                        self.try_narrow_literal(&mut typed_left, &width);
+                    }
                 }
-                if typed_left.ty != typed_right.ty
+                if !is_shift
+                    && typed_left.ty != typed_right.ty
                     && typed_left.ty.can_implicit_widen_to(&typed_right.ty)
                 {
                     let span = typed_left.span;
@@ -102,7 +93,8 @@ impl TypeInference {
                         ty: typed_right.ty.clone(),
                         span,
                     };
-                } else if typed_left.ty != typed_right.ty
+                } else if !is_shift
+                    && typed_left.ty != typed_right.ty
                     && typed_right.ty.can_implicit_widen_to(&typed_left.ty)
                 {
                     let span = typed_right.span;
@@ -195,7 +187,15 @@ impl TypeInference {
             } => self.infer_range_expr(start, end, *inclusive, expr.span),
             ExprKind::Slice { object, range } => self.infer_slice_expr(object, range, expr.span),
             ExprKind::Reference { mutable, operand } => {
+                let mut bare = &**operand;
+                while let ExprKind::Grouping(inner) = &bare.kind {
+                    bare = inner;
+                }
+                let names_binding = matches!(bare.kind, ExprKind::Identifier(_));
+                let saved = self.keep_binding_use;
+                self.keep_binding_use = saved || names_binding;
                 let typed_operand = self.infer_expr(operand);
+                self.keep_binding_use = saved;
                 if *mutable {
                     if let ExprKind::Identifier(name) = &operand.kind {
                         if self.env.lookup_local(name).is_some() && !self.env.is_mutable(name) {
@@ -293,8 +293,10 @@ impl TypeInference {
                 self.infer_match_expr(scrutinee, arms, expr.span)
             }
             ExprKind::Block { stmts, tail } => {
+                self.env.push_scope();
                 let typed_stmts = self.infer_stmts(stmts);
                 let typed_tail = self.infer_expr(tail);
+                self.env.pop_scope();
                 let ty = if typed_stmts
                     .iter()
                     .any(|s| matches!(s.kind, TypedStmtKind::Return(_)))
@@ -324,6 +326,18 @@ impl TypeInference {
         };
 
         self.depth -= 1;
+        let (kind, ty) = match &kind {
+            TypedExprKind::Identifier(name) if !self.keep_binding_use => match self
+                .env
+                .lookup_binding_id(name)
+                .and_then(|id| self.literal_init_vars.get(&id))
+            {
+                Some(LiteralInit::Int(v)) => (TypedExprKind::Int(*v), InferType::I64),
+                Some(LiteralInit::Float(v)) => (TypedExprKind::Float(*v), InferType::F64),
+                None => (kind, ty),
+            },
+            _ => (kind, ty),
+        };
         TypedExpr {
             kind,
             ty,
@@ -331,37 +345,67 @@ impl TypeInference {
         }
     }
 
-    fn narrow_binop_int_literals(left: &mut TypedExpr, right: &mut TypedExpr) {
-        let narrow = |lit: &mut TypedExpr, target: &InferType| {
-            if let TypedExprKind::Int(v) = &lit.kind
-                && target.is_integer()
-                && *target != InferType::I64
-                && InferType::int_fits(*v, target)
-            {
-                lit.ty = target.clone();
+    pub(super) fn is_literal_like(&self, expr: &TypedExpr) -> bool {
+        match &expr.kind {
+            TypedExprKind::Int(_) | TypedExprKind::Float(_) => true,
+            TypedExprKind::Grouping(inner) => self.is_literal_like(inner),
+            TypedExprKind::Unary {
+                op: aelys_syntax::UnaryOp::Neg | aelys_syntax::UnaryOp::BitNot,
+                operand,
+            } => self.is_literal_like(operand),
+            TypedExprKind::Binary { left, op, right } => match op {
+                BinaryOp::Shl | BinaryOp::Shr => self.is_literal_like(left),
+                BinaryOp::Add
+                | BinaryOp::Sub
+                | BinaryOp::Mul
+                | BinaryOp::Div
+                | BinaryOp::Mod
+                | BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor => self.is_literal_like(left) && self.is_literal_like(right),
+                _ => false,
+            },
+            TypedExprKind::If {
+                then_branch,
+                else_branch,
+                ..
+            } => self.is_literal_like(then_branch) && self.is_literal_like(else_branch),
+            TypedExprKind::Match { arms, .. } => {
+                !arms.is_empty() && arms.iter().all(|arm| self.is_literal_like(&arm.body))
             }
-        };
-        if matches!(&left.kind, TypedExprKind::Int(_)) && right.ty.is_integer() {
-            narrow(left, &right.ty.clone());
-        } else if matches!(&right.kind, TypedExprKind::Int(_)) && left.ty.is_integer() {
-            narrow(right, &left.ty.clone());
+            TypedExprKind::Block { tail, .. } => {
+                !matches!(expr.ty, InferType::Never) && self.is_literal_like(tail)
+            }
+            _ => false,
         }
     }
 
-    fn narrow_binop_float_literals(left: &mut TypedExpr, right: &mut TypedExpr) {
-        let narrow = |lit: &mut TypedExpr, target: &InferType| {
-            if let TypedExprKind::Float(v) = &lit.kind
-                && target.is_float()
-                && *target != InferType::F64
-                && InferType::float_fits(*v, target)
-            {
-                lit.ty = target.clone();
-            }
-        };
-        if matches!(&left.kind, TypedExprKind::Float(_)) && right.ty.is_float() {
-            narrow(left, &right.ty.clone());
-        } else if matches!(&right.kind, TypedExprKind::Float(_)) && left.ty.is_float() {
-            narrow(right, &left.ty.clone());
+    fn fit_shift_amount(&mut self, amount: &mut TypedExpr, width: &InferType) {
+        if !width.is_integer() {
+            return;
+        }
+        if self.is_literal_like(amount) {
+            self.try_narrow_literal(amount, width);
+            return;
+        }
+        if amount.ty != *width && amount.ty.is_integer() {
+            let span = amount.span;
+            let original = std::mem::replace(
+                amount,
+                TypedExpr {
+                    kind: TypedExprKind::Null,
+                    ty: InferType::Null,
+                    span,
+                },
+            );
+            *amount = TypedExpr {
+                kind: TypedExprKind::Cast {
+                    expr: Box::new(original),
+                    target: width.clone(),
+                },
+                ty: width.clone(),
+                span,
+            };
         }
     }
 
@@ -425,16 +469,34 @@ impl TypeInference {
         }
     }
 
-    fn try_extract_int_value_tracked(&self, expr: &TypedExpr) -> Option<i64> {
-        if let Some(v) = Self::try_extract_int_value(expr) {
-            return Some(v);
+    fn const_int_value(expr: &TypedExpr) -> Option<i64> {
+        match &expr.kind {
+            TypedExprKind::Int(v) => Some(*v),
+            TypedExprKind::Grouping(inner) => Self::const_int_value(inner),
+            TypedExprKind::Unary {
+                op: aelys_syntax::UnaryOp::Neg,
+                operand,
+            } => Self::const_int_value(operand)?.checked_neg(),
+            TypedExprKind::Binary { left, op, right } => Self::compute_binop_int_result(
+                *op,
+                Self::const_int_value(left)?,
+                Self::const_int_value(right)?,
+            ),
+            _ => None,
         }
-        if let TypedExprKind::Identifier(name) = &expr.kind {
-            if let Some(LiteralInit::Int(v)) = self.literal_init_vars.get(name) {
-                return Some(*v);
+    }
+
+    fn retype_literal(expr: &mut TypedExpr, target_ty: &InferType) {
+        expr.ty = target_ty.clone();
+        match &mut expr.kind {
+            TypedExprKind::Grouping(inner) => Self::retype_literal(inner, target_ty),
+            TypedExprKind::Unary { operand, .. } => Self::retype_literal(operand, target_ty),
+            TypedExprKind::Binary { left, right, .. } => {
+                Self::retype_literal(left, target_ty);
+                Self::retype_literal(right, target_ty);
             }
+            _ => {}
         }
-        None
     }
 
     fn compute_binop_int_result(op: BinaryOp, left: i64, right: i64) -> Option<i64> {
@@ -455,6 +517,33 @@ impl TypeInference {
             Self::demote_slice_view(expr);
         }
 
+        let lit_like = self.is_literal_like(expr);
+        if lit_like
+            && target_ty.is_integer()
+            && *target_ty != InferType::I64
+            && !matches!(expr.kind, TypedExprKind::Int(_))
+            && let Some(value) = Self::const_int_value(expr)
+        {
+            if InferType::int_fits(value, target_ty) {
+                Self::retype_literal(expr, target_ty);
+                return true;
+            }
+            self.errors.push(TypeError {
+                kind: TypeErrorKind::Mismatch {
+                    expected: target_ty.clone(),
+                    found: InferType::I64,
+                },
+                span: expr.span,
+                reason: ConstraintReason::IntLiteralOverflow {
+                    value,
+                    target: target_ty.clone(),
+                },
+                secondary_spans: Vec::new(),
+                help: None,
+                suggestion: None,
+            });
+            return false;
+        }
         // extract values needed for matching before taking mutable borrows.
         let int_val = if let TypedExprKind::Int(v) = &expr.kind {
             Some(*v)
@@ -575,7 +664,19 @@ impl TypeInference {
             }
         }
 
-        if let TypedExprKind::Unary { operand, .. } = &mut expr.kind {
+        if let TypedExprKind::Grouping(inner) = &mut expr.kind
+            && lit_like
+        {
+            let ok = self.try_narrow_literal(inner, target_ty);
+            if ok && inner.ty == *target_ty {
+                expr.ty = target_ty.clone();
+            }
+            return ok;
+        }
+
+        if let TypedExprKind::Unary { operand, .. } = &mut expr.kind
+            && lit_like
+        {
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
                 let ok = self.try_narrow_literal(operand, target_ty);
                 if ok && operand.ty == *target_ty {
@@ -597,7 +698,20 @@ impl TypeInference {
         if let TypedExprKind::Binary {
             left, right, op, ..
         } = &mut expr.kind
+            && lit_like
         {
+            if matches!(op, BinaryOp::Shl | BinaryOp::Shr)
+                && expr.ty == InferType::I64
+                && target_ty.is_integer()
+                && *target_ty != InferType::I64
+            {
+                let ok = self.try_narrow_literal(left, target_ty);
+                if ok && left.ty == *target_ty {
+                    self.fit_shift_amount(right, target_ty);
+                    expr.ty = target_ty.clone();
+                }
+                return ok;
+            }
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
                 let binop = *op;
                 let left_ok = self.try_narrow_literal(left, target_ty);
@@ -606,8 +720,8 @@ impl TypeInference {
                 let right_narrowed = right.ty == *target_ty;
                 if left_ok && right_ok && left_narrowed && right_narrowed {
                     if let (Some(lv), Some(rv)) = (
-                        self.try_extract_int_value_tracked(left),
-                        self.try_extract_int_value_tracked(right),
+                        Self::try_extract_int_value(left),
+                        Self::try_extract_int_value(right),
                     ) {
                         if let Some(result) = Self::compute_binop_int_result(binop, lv, rv) {
                             if !InferType::int_fits(result, target_ty) {
@@ -674,7 +788,11 @@ impl TypeInference {
                     return then_ok && else_ok;
                 }
             }
-            if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
+            if lit_like
+                && expr.ty == InferType::I64
+                && target_ty.is_integer()
+                && *target_ty != InferType::I64
+            {
                 let then_ok = self.try_narrow_literal(then_branch, target_ty);
                 let else_ok = self.try_narrow_literal(else_branch, target_ty);
                 let then_narrowed = then_branch.ty == *target_ty;
@@ -688,7 +806,11 @@ impl TypeInference {
                 }
                 return true;
             }
-            if expr.ty == InferType::F64 && target_ty.is_float() && *target_ty != InferType::F64 {
+            if lit_like
+                && expr.ty == InferType::F64
+                && target_ty.is_float()
+                && *target_ty != InferType::F64
+            {
                 let then_ok = self.try_narrow_literal(then_branch, target_ty);
                 let else_ok = self.try_narrow_literal(else_branch, target_ty);
                 let then_narrowed = then_branch.ty == *target_ty;
@@ -704,7 +826,9 @@ impl TypeInference {
             }
         }
 
-        if let TypedExprKind::Match { arms, .. } = &mut expr.kind {
+        if let TypedExprKind::Match { arms, .. } = &mut expr.kind
+            && lit_like
+        {
             let is_narrowable = (expr.ty == InferType::I64
                 && target_ty.is_integer()
                 && *target_ty != InferType::I64)
@@ -736,7 +860,9 @@ impl TypeInference {
             }
         }
 
-        if let TypedExprKind::Block { tail, .. } = &mut expr.kind {
+        if let TypedExprKind::Block { tail, .. } = &mut expr.kind
+            && lit_like
+        {
             if (expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64)
                 || (expr.ty == InferType::F64
                     && target_ty.is_float()
@@ -777,61 +903,6 @@ impl TypeInference {
                             }
                             expr.ty = target_ty.clone();
                             return true;
-                        }
-                    }
-                }
-            }
-        }
-
-        if let TypedExprKind::Identifier(name) = &expr.kind {
-            if let Some(lit) = self.literal_init_vars.get(name).cloned() {
-                match lit {
-                    LiteralInit::Int(value) => {
-                        if target_ty.is_integer() && *target_ty != InferType::I64 {
-                            if InferType::int_fits(value, target_ty) {
-                                expr.ty = target_ty.clone();
-                                return true;
-                            } else {
-                                self.errors.push(TypeError {
-                                    kind: TypeErrorKind::Mismatch {
-                                        expected: target_ty.clone(),
-                                        found: InferType::I64,
-                                    },
-                                    span: expr.span,
-                                    reason: ConstraintReason::IntLiteralOverflow {
-                                        value,
-                                        target: target_ty.clone(),
-                                    },
-                                    secondary_spans: Vec::new(),
-                                    help: None,
-                                    suggestion: None,
-                                });
-                                return false;
-                            }
-                        }
-                    }
-                    LiteralInit::Float(value) => {
-                        if target_ty.is_float() && *target_ty != InferType::F64 {
-                            return if InferType::float_fits(value, target_ty) {
-                                expr.ty = target_ty.clone();
-                                true
-                            } else {
-                                self.errors.push(TypeError {
-                                    kind: TypeErrorKind::Mismatch {
-                                        expected: target_ty.clone(),
-                                        found: InferType::F64,
-                                    },
-                                    span: expr.span,
-                                    reason: ConstraintReason::FloatLiteralOverflow {
-                                        value,
-                                        target: target_ty.clone(),
-                                    },
-                                    secondary_spans: Vec::new(),
-                                    help: None,
-                                    suggestion: None,
-                                });
-                                false
-                            };
                         }
                     }
                 }

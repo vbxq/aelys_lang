@@ -126,7 +126,9 @@ impl TypeInference {
         fill_value: Option<&Expr>,
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        let saved = std::mem::replace(&mut self.keep_binding_use, true);
         let typed_size = self.infer_expr(size);
+        self.keep_binding_use = saved;
 
         self.constraints.push(Constraint::equal(
             typed_size.ty.clone(),

@@ -188,7 +188,7 @@ fn float_literal_defaults_to_f64() {
 fn top_level_global_read_uses_global_get_instead_of_closure_env() {
     let air = lower_source(
         r#"
-let g = 7
+let g: i64 = 7
 
 fn main() -> i64 {
     return g

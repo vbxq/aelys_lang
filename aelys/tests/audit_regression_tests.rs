@@ -195,9 +195,9 @@ fn f() -> i8 {
 }
 
 #[test]
-fn if_else_narrowing_i32() {
+fn if_else_literal_init_is_not_narrowed_i32() {
     assert!(
-        sema_ok(
+        !sema_ok(
             r#"
 fn f() -> i32 {
     let x = if true { 42 } else { 100 }
@@ -205,14 +205,14 @@ fn f() -> i32 {
 }
 "#
         ),
-        "if-else with i32-fitting literals assigned to var should pass"
+        "a binding initialized by an if of literals is i64 and refused into i32"
     );
 }
 
 #[test]
-fn if_else_both_literals_i8() {
+fn if_else_literal_init_is_not_narrowed_i8() {
     assert!(
-        sema_ok(
+        !sema_ok(
             r#"
 fn f() -> i8 {
     let x = if true { 10 } else { 20 }
@@ -220,7 +220,7 @@ fn f() -> i8 {
 }
 "#
         ),
-        "if-else with i8-fitting literals should pass"
+        "a binding initialized by an if of literals is i64 and refused into i8"
     );
 }
 
@@ -239,9 +239,9 @@ fn f() -> i32 {
 }
 
 #[test]
-fn if_else_narrowing_through_variable() {
+fn if_else_literal_init_is_not_narrowed_i16() {
     assert!(
-        sema_ok(
+        !sema_ok(
             r#"
 fn f() -> i16 {
     let x = if true { 300 } else { 500 }
@@ -249,7 +249,7 @@ fn f() -> i16 {
 }
 "#
         ),
-        "if-else literals tracked and narrowed through variable for i16"
+        "a binding initialized by an if of literals is i64 and refused into i16"
     );
 }
 

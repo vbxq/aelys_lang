@@ -9,6 +9,7 @@ impl TypeEnv {
         self.mutable_locals.push(std::collections::HashSet::new());
         self.function_scopes.push(std::collections::HashMap::new());
         self.binding_spans.push(std::collections::HashMap::new());
+        self.binding_ids.push(std::collections::HashMap::new());
     }
 
     /// Exit the current scope
@@ -18,11 +19,15 @@ impl TypeEnv {
             self.mutable_locals.pop();
             self.function_scopes.pop();
             self.binding_spans.pop();
+            self.binding_ids.pop();
         }
     }
 
     /// Define a local variable in the current scope
     pub fn define_local(&mut self, name: String, ty: InferType) {
+        if let Some(ids) = self.binding_ids.last_mut() {
+            ids.insert(name.clone(), super::BindingId::fresh());
+        }
         if let Some(scope) = self.locals.last_mut() {
             scope.insert(name, ty);
         }
@@ -30,6 +35,9 @@ impl TypeEnv {
 
     /// Define a local variable and record the span where it was first bound
     pub fn define_local_with_span(&mut self, name: String, ty: InferType, span: Span) {
+        if let Some(ids) = self.binding_ids.last_mut() {
+            ids.insert(name.clone(), super::BindingId::fresh());
+        }
         if let Some(scope) = self.locals.last_mut() {
             scope.insert(name.clone(), ty);
         }
@@ -44,6 +52,18 @@ impl TypeEnv {
             if let Some(span) = scope.get(name) {
                 return Some(*span);
             }
+        }
+        None
+    }
+
+    pub fn lookup_binding_id(&self, name: &str) -> Option<super::BindingId> {
+        for (scope, ids) in self.locals.iter().zip(self.binding_ids.iter()).rev() {
+            if scope.contains_key(name) {
+                return ids.get(name).copied();
+            }
+        }
+        if self.captures.contains_key(name) {
+            return self.capture_ids.get(name).copied();
         }
         None
     }

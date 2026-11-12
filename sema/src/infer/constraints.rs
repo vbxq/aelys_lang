@@ -86,6 +86,14 @@ impl TypeInference {
                         {
                             err.help = Some(TypeError::late_projection_help());
                         }
+                        if err.help.is_none()
+                            && let crate::constraint::TypeErrorKind::Mismatch { expected, found } =
+                                &err.kind
+                            && (expected.is_integer() || expected.is_float())
+                            && (found.is_integer() || found.is_float())
+                        {
+                            err.help = Some(format!("convert explicitly: `as {expected}`"));
+                        }
                         self.errors.push(err);
 
                         self.force_dynamic(&left_resolved, &mut subst);

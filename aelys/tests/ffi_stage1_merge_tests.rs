@@ -400,6 +400,7 @@ fn program_of(stmts: Vec<TypedStmt>) -> TypedProgram {
         stmts,
         source: Source::new("<unit>", ""),
         type_table: TypeTable::new(),
+        literal_globals: Default::default(),
     }
 }
 

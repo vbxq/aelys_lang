@@ -42,10 +42,12 @@ impl GlobalConstantPropagator {
                     name,
                     mutable,
                     initializer,
+                    var_type,
                     ..
                 } = &stmt.kind
                 {
-                    if *mutable || self.constants.contains_key(name) {
+                    if *mutable || self.constants.contains_key(name) || initializer.ty != *var_type
+                    {
                         continue;
                     }
                     if self.is_constant_expr(initializer) {

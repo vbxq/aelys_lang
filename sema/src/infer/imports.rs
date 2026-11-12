@@ -89,6 +89,11 @@ impl TypeInference {
             ItemKind::Global => {
                 self.env
                     .define_local(item.qualified.clone(), item.ty.clone());
+                if let Some(lit) = &item.literal
+                    && let Some(id) = self.env.lookup_binding_id(&item.qualified)
+                {
+                    self.literal_init_vars.insert(id, lit.clone());
+                }
                 self.imported_globals.insert(item.qualified.clone());
             }
         }

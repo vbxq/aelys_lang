@@ -23,6 +23,17 @@ impl TypeInference {
             ConstraintReason::IfCondition,
         ));
 
+        let then_lit = self.is_literal_like(&typed_then);
+        let else_lit = self.is_literal_like(&typed_else);
+        if then_lit && !else_lit && (typed_else.ty.is_integer() || typed_else.ty.is_float()) {
+            let width = typed_else.ty.clone();
+            self.try_narrow_literal(&mut typed_then, &width);
+        } else if else_lit && !then_lit && (typed_then.ty.is_integer() || typed_then.ty.is_float())
+        {
+            let width = typed_then.ty.clone();
+            self.try_narrow_literal(&mut typed_else, &width);
+        }
+
         // Implicit numeric widening between branches: if one branch is
         // a wider numeric type, widen the other (e.g. i32 vs i64 → both i64).
         if typed_then.ty != typed_else.ty && typed_then.ty.can_implicit_widen_to(&typed_else.ty) {

@@ -104,3 +104,8 @@ sema/src/constraint/error.rs	bound_not_satisfied	1	InferType	_		correct-as-is	ag
 sema/src/infer/expr/primary.rs	infer_rc_is_null	1	InferType	other	{ self.errors.push(TypeError { kind: TypeError }	correct-as-is	aggregate-only
 sema/src/place_spine.rs	owns_field_place	1	InferType	_	is_rc_get(e)	correct-as-is	aggregate-only
 air/src/passes/instance_surface.rs	nested_rc_read	2	AirType	_	None	correct-as-is	aggregate-only
+air/src/passes/validate.rs	check_type_agreement	1	AirType	_	None	correct-as-is	aggregate-only
+air/src/passes/validate.rs	check_type_agreement	2	AirType	_	None	correct-as-is	aggregate-only
+air/src/passes/validate.rs	check_type_agreement	3	AirType	_	None	correct-as-is	aggregate-only
+air/src/passes/validate.rs	check_type_agreement	4	AirType	_	None	correct-as-is	aggregate-only
+air/src/passes/validate.rs	check_type_agreement	5	AirType	_	ta.clone().or_else(|| tb.clone())	correct-as-is	delegates-to-a-decided-arm

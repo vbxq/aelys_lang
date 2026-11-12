@@ -1,5 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
+use crate::typed_ast::LiteralInit;
 use crate::typed_ast::{TypedExprKind, TypedStmtKind};
 use aelys_syntax::{Expr, Span, TypeAnnotation, UnaryOp};
 
@@ -22,6 +23,7 @@ impl TypeInference {
 
         let mut typed_init = self.infer_expr(initializer);
 
+        let mut literal = None;
         let declared_type = type_annotation
             .as_ref()
             .map(|ann| self.type_from_annotation(ann));
@@ -61,7 +63,7 @@ impl TypeInference {
             decl.clone()
         } else {
             if !mutable {
-                Self::track_literal_init(&mut self.literal_init_vars, name, &typed_init);
+                literal = self.literal_of_init(&typed_init);
             }
             typed_init.ty.clone()
         };
@@ -71,6 +73,17 @@ impl TypeInference {
 
         self.env
             .define_local_with_span(name.to_string(), var_type.clone(), span);
+        if let Some(lit) = &literal
+            && let Some(id) = self.env.lookup_binding_id(name)
+        {
+            self.literal_init_vars.insert(id, lit.clone());
+        }
+        if self.return_type_stack.is_empty() && self.env.depth() == 1 {
+            match literal {
+                Some(lit) => self.literal_globals.insert(name.to_string(), lit),
+                None => self.literal_globals.remove(name),
+            };
+        }
         if mutable {
             self.env.mark_mutable(name.to_string());
         }
@@ -164,63 +177,18 @@ impl TypeInference {
         }
     }
 
-    fn track_literal_init(
-        literal_init_vars: &mut std::collections::HashMap<String, LiteralInit>,
-        name: &str,
-        init: &crate::typed_ast::TypedExpr,
-    ) {
+    fn literal_of_init(&self, init: &crate::typed_ast::TypedExpr) -> Option<LiteralInit> {
         match &init.kind {
-            TypedExprKind::Int(v) => {
-                literal_init_vars.insert(name.to_string(), LiteralInit::Int(*v));
-            }
-            TypedExprKind::Float(v) => {
-                literal_init_vars.insert(name.to_string(), LiteralInit::Float(*v));
-            }
+            TypedExprKind::Int(v) => Some(LiteralInit::Int(*v)),
+            TypedExprKind::Float(v) => Some(LiteralInit::Float(*v)),
             TypedExprKind::Unary {
                 op: UnaryOp::Neg,
                 operand,
             } => match &operand.kind {
-                TypedExprKind::Int(v) => {
-                    if let Some(neg) = v.checked_neg() {
-                        literal_init_vars.insert(name.to_string(), LiteralInit::Int(neg));
-                    }
-                }
-                TypedExprKind::Float(v) => {
-                    literal_init_vars.insert(name.to_string(), LiteralInit::Float(-v));
-                }
-                _ => {}
+                TypedExprKind::Int(v) => v.checked_neg().map(LiteralInit::Int),
+                TypedExprKind::Float(v) => Some(LiteralInit::Float(-v)),
+                _ => None,
             },
-            TypedExprKind::Identifier(source_name) => {
-                if let Some(lit) = literal_init_vars.get(source_name).cloned() {
-                    literal_init_vars.insert(name.to_string(), lit);
-                }
-            }
-            TypedExprKind::If {
-                then_branch,
-                else_branch,
-                ..
-            } => {
-                if let Some(lit) = Self::extract_if_else_literal(then_branch, else_branch) {
-                    literal_init_vars.insert(name.to_string(), lit);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn extract_if_else_literal(
-        then_branch: &crate::typed_ast::TypedExpr,
-        else_branch: &crate::typed_ast::TypedExpr,
-    ) -> Option<LiteralInit> {
-        match (&then_branch.kind, &else_branch.kind) {
-            (TypedExprKind::Int(a), TypedExprKind::Int(b)) => {
-                let worst = if a.abs() >= b.abs() { *a } else { *b };
-                Some(LiteralInit::Int(worst))
-            }
-            (TypedExprKind::Float(a), TypedExprKind::Float(b)) => {
-                let worst = if a.abs() >= b.abs() { *a } else { *b };
-                Some(LiteralInit::Float(worst))
-            }
             _ => None,
         }
     }
@@ -236,10 +204,4 @@ impl TypeInference {
             _ => false,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub enum LiteralInit {
-    Int(i64),
-    Float(f64),
 }
