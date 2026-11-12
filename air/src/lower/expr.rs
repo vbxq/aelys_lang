@@ -895,6 +895,13 @@ impl<'a> LoweringContext<'a> {
             val = self.retained_str_copy(val, sp);
         }
         if let Some(id) = self.lookup_local(name) {
+            // a stored self copy reads as an alias to the escape guard, which then drops every release
+            if matches!(val, Operand::Copy(v) | Operand::Move(v) if v == id)
+                && self.counted(&value.ty)
+                && !self.capture_slots.contains_key(&id)
+            {
+                return Operand::Copy(id);
+            }
             if let Some(key) = Self::air_drop_key(sp) {
                 let old_drops = self.collect_affine_drops(key, |_| true);
                 for (local, id_field) in old_drops {
@@ -915,10 +922,8 @@ impl<'a> LoweringContext<'a> {
                     self.emit_cow_release(id, sp);
                 }
             }
-            // `s = s` must emit neither half: the release would free the buffer the retain then re-takes
-            let str_self_assign = matches!(val, Operand::Copy(v) | Operand::Move(v) if v == id);
             let mut str_share_taken = false;
-            if !is_capture && !str_self_assign && self.str_local_is_owned(id) {
+            if !is_capture && self.str_local_is_owned(id) {
                 str_share_taken = !matches!(str_val, crate::lower::StrInit::Own);
                 self.emit_str_release(id, sp);
             }

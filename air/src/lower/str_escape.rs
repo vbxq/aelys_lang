@@ -394,6 +394,10 @@ fn lent_addresses(function: &AirFunction, scan: &Scan<'_>) -> HashSet<LocalId> {
             };
             let src = match rvalue {
                 Rvalue::Use(Operand::Copy(p) | Operand::Move(p))
+                | Rvalue::SliceFromParts {
+                    ptr: Operand::Copy(p) | Operand::Move(p),
+                    ..
+                }
                 | Rvalue::AddressOf(Place::Field(p, _) | Place::Index(p, _) | Place::Deref(p)) => {
                     Some(*p)
                 }
@@ -455,7 +459,9 @@ fn lent_addresses(function: &AirFunction, scan: &Scan<'_>) -> HashSet<LocalId> {
                         }
                         Rvalue::EnumInit { payload, .. } => payload.iter().for_each(&mut mark),
                         Rvalue::SliceFromParts { ptr, len } => {
-                            mark(ptr);
+                            if !matches!(place, Place::Local(d) if root.contains_key(d)) {
+                                mark(ptr);
+                            }
                             mark(len);
                         }
                     }

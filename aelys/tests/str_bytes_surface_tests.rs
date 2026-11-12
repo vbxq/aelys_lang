@@ -772,7 +772,7 @@ fn sb12_a_reassigned_string_answers_what_the_leak_runtime_answers() {
         "SB-17",
         SB17_A_SLOT_REASSIGNED_TO_ITSELF,
         "ZZZ\nabc\n",
-        (2, 1),
+        (2, 2),
     );
     h.assert_legs(36);
 }
@@ -2451,7 +2451,7 @@ fn sb48_a_parameter_stored_through_a_reference_or_into_a_global_takes_a_share_of
         "SB-54",
         SB54_A_PARAMETER_STORED_THROUGH_A_REFERENCE_OR_INTO_A_GLOBAL,
         "ab1\nab2\nab3\nab4\nab5\nQQ8\nQQ9\n",
-        (15, 13),
+        (15, 14),
     );
     h.assert_legs(18);
 }
