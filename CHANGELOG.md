@@ -2,6 +2,31 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## Unreleased: the 0.1 milestone (workspace 0.21.8-a)
+
+- an assignment whose source is its destination (`s = s`, `s = id(s)` once inlined) and a local array of managed values lent as a slice free what they held; both leaked what they held each time they ran
+- `--runtime rc+cycles` collects cycles during execution, at safepoints the compiler inserts at function entry and on loop back edges, never in `nogc` code; `AELYS_CYCLE_THRESHOLD=n` sets the collection threshold
+- the cycle collector frees every dead cycle, members that were never decremented included (a parent pointer, a ring or a doubly linked list built by recursion, an `Rc` of an `Rc`)
+- an `Rc` in an enum payload is traced at the offset the layout gives it; a collection no longer crashes an acyclic program holding one
+- value change: the width of a binary is the smallest type its non-literal operands widen to, a literal takes that width and must fit, a parenthesized or negated literal and every intermediate of a constant expression must fit too
+- value change: a shift has the type of its left operand, its amount never widens it
+- a binding that shadows a literal-initialized name no longer inherits its narrowing (it could store an `i64` in a `u8`)
+- behaviour no longer depends on `-O`: a trap in an unused binding, an inlined argument or an expression statement is kept, and the constant folder answers what the runtime answers
+- the reference pipeline's refusal is the verdict at every level; `E0432` is raised only when the optimized pipeline alone refuses
+- value change: float `!=` is unordered, `NaN != NaN` is `true`
+- value change: a NaN prints as `nan`, whatever its sign bit
+- programs are linked with `-lm`, so `%` on floats links
+- an unused binding that allocates (a formatted string, a lambda, a concatenation) is kept at `-O2`
+- refused with a named diagnostic where an internal error came out before: a type that is never inferred (`E0304`); a generic function or `println` used as a value (`E0902`); printing a type with no printed form, through a type parameter too (`E0902`); the wrong number of type arguments on `Vec`, `Rc`, a struct or an enum (`E0304`); a field read through `Rc<T>` with `T` a type parameter (`E0304`); `Rc` of the unit type (`E0902`); a member read through a borrowed `Rc` in a `nogc fn` (`E0410`)
+- newly refused: `S<i64>` on a struct that is not generic (`E0304`), and `Err(..)` built for a `Result<_, Never>` (`E0301`), which was accepted
+- `?` and an `Err` arm on a `Result<_, Never>` compile
+- an enum prints under its source name
+- `Some`, `None`, `Ok` and `Err` name the prelude's variants without the enum in front; `Option::Some` still works
+- `Some`, `None`, `Ok` and `Err` are reserved at every value binding site (`E0205`)
+- in a pattern, an identifier starting with an uppercase letter is a variant or an error (`E0101`), never a binding; a nested pattern is `E0101`
+- the standard library is built into the compiler and answers `std.` when no search root holds `std/prelude.aelys`; `aelys-cli --version` prints its hash
+- every README example is compiled, run at `-O0` and `-O2`, and compared with the output the README states
+
 ## 0.22.x - memory model, safety checking, error handling
 
 - Managed memory is non-atomic reference counting, not a tracing GC, with a trial-deletion cycle collector behind `--runtime rc+cycles` and an Immix-style allocator (`AELYS_ALLOC=malloc` to switch)

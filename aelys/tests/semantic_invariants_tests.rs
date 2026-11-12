@@ -6911,10 +6911,9 @@ fn readme_claimed_runnable_example() -> String {
     let claim = readme
         .find("This compiles and runs:")
         .expect("README must still carry the runnable boundary claim");
-    // the fence marker also appears inside the html highlighting comment above it
     let open = readme[claim..]
-        .find("\n```rust\n")
-        .map(|at| claim + at + "\n```rust\n".len())
+        .find("\n```rust run\n")
+        .map(|at| claim + at + "\n```rust run\n".len())
         .expect("the claim must be followed by a fenced example");
     let close = readme[open..]
         .find("\n```")
