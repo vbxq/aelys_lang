@@ -39,6 +39,8 @@ impl Default for TypeInference {
             bound_generic_sigs: HashMap::new(),
             foreign_sigs: HashSet::new(),
             foreign_shadowed_spans: HashSet::new(),
+            generic_fn_sigs: HashSet::new(),
+            generic_value_spans: HashSet::new(),
             module_globals: HashSet::new(),
             shadowed_globals: HashSet::new(),
             lambda_depth: 0,
@@ -130,6 +132,7 @@ impl TypeInference {
             return InferType::Array(Box::new(inner), ann.array_size);
         }
         if name_lower == "vec" {
+            self.check_type_arg_count("type", &ann.name, 1, ann);
             let inner = ann
                 .type_param
                 .as_ref()
@@ -138,6 +141,7 @@ impl TypeInference {
             return InferType::Vec(Box::new(inner));
         }
         if ann.name == "Rc" {
+            self.check_type_arg_count("type", &ann.name, 1, ann);
             let inner = ann
                 .type_param
                 .as_ref()
@@ -185,7 +189,11 @@ impl TypeInference {
         if let Some(qualified) = qualified {
             if self.type_table.has_enum(&qualified) {
                 let type_args = self.collect_enum_type_args(ann);
+                self.check_enum_type_arg_count(&qualified, type_args.len(), ann);
                 return InferType::Enum(qualified, type_args);
+            }
+            if self.type_table.has_struct(&qualified) {
+                self.check_struct_type_arg_count(&qualified, ann);
             }
             return InferType::Struct(qualified);
         }
@@ -194,10 +202,64 @@ impl TypeInference {
         if let InferType::Struct(ref name) = ty {
             if self.type_table.has_enum(name) {
                 let type_args = self.collect_enum_type_args(ann);
+                self.check_enum_type_arg_count(name, type_args.len(), ann);
                 return InferType::Enum(name.clone(), type_args);
+            }
+            if self.type_table.has_struct(name) {
+                self.check_struct_type_arg_count(name, ann);
             }
         }
         ty
+    }
+
+    fn annotated_type_arg_count(ann: &TypeAnnotation) -> usize {
+        if !ann.type_params.is_empty() {
+            ann.type_params.len()
+        } else {
+            usize::from(ann.type_param.is_some())
+        }
+    }
+
+    fn check_type_arg_count(
+        &mut self,
+        what: &str,
+        name: &str,
+        expected: usize,
+        ann: &TypeAnnotation,
+    ) {
+        let found = Self::annotated_type_arg_count(ann);
+        if expected != found {
+            self.errors.push(TypeError::type_arg_count(
+                what,
+                crate::modules::source_type_name(name),
+                expected,
+                found,
+                ann.span,
+            ));
+        }
+    }
+
+    fn check_struct_type_arg_count(&mut self, name: &str, ann: &TypeAnnotation) {
+        let expected = self
+            .type_table
+            .get_struct(name)
+            .map_or(0, |d| d.type_params.len());
+        self.check_type_arg_count("struct", name, expected, ann);
+    }
+
+    fn check_enum_type_arg_count(&mut self, name: &str, found: usize, ann: &TypeAnnotation) {
+        let Some(expected) = self.type_table.get_enum(name).map(|d| d.type_params.len()) else {
+            return;
+        };
+        if expected != found {
+            self.errors.push(TypeError::type_arg_count(
+                "enum",
+                crate::modules::source_type_name(name),
+                expected,
+                found,
+                ann.span,
+            ));
+        }
     }
 
     fn collect_enum_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
@@ -391,10 +453,9 @@ impl TypeInference {
         inf.validate_resolved_stmts(&resolved_stmts, &declared_type_params);
         inf.check_vec_producing_forms(&resolved_stmts);
         inf.reject_private_types_in_public_api(&resolved_stmts);
+        inf.drop_generic_value_cascades();
 
-        let final_stmts = inf.finalize_stmts(resolved_stmts);
-
-        let is_type_param = |ty: &InferType| -> bool {
+        let is_type_param = |inf: &TypeInference, ty: &InferType| -> bool {
             matches!(ty, InferType::Struct(name) if declared_type_params.contains(name.as_str()) && !inf.type_table.has_struct(name))
         };
         let defers = |kind: &TypeErrorKind| {
@@ -404,24 +465,25 @@ impl TypeInference {
                     | TypeErrorKind::ConstIndexOutOfBounds { .. }
             )
         };
+        let reported = |inf: &TypeInference, err: &TypeError| match &err.kind {
+            TypeErrorKind::Mismatch { expected, found } => {
+                !(matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
+                    && (is_type_param(inf, expected) || is_type_param(inf, found)))
+            }
+            _ => true,
+        };
+
+        if !inf.errors.iter().any(|err| reported(&inf, err)) {
+            inf.reject_unresolved_types(&resolved_stmts);
+        }
+
+        let final_stmts = inf.finalize_stmts(resolved_stmts);
+
         let all_errors: Vec<_> = inf
             .errors
             .iter()
-            .filter_map(|err| {
-                if defers(&err.kind) {
-                    return Some(err.clone());
-                }
-                let fatal = match &err.kind {
-                    TypeErrorKind::Mismatch { expected, found } => {
-                        let generic_annotation_mismatch =
-                            matches!(&err.reason, ConstraintReason::TypeAnnotation { .. })
-                                && (is_type_param(expected) || is_type_param(found));
-                        !generic_annotation_mismatch
-                    }
-                    _ => true,
-                };
-                fatal.then(|| err.clone())
-            })
+            .filter(|err| defers(&err.kind) || reported(&inf, err))
+            .cloned()
             .collect();
 
         if all_errors.iter().any(|err| !defers(&err.kind)) {

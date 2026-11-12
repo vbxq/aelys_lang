@@ -89,6 +89,18 @@ impl TypeInference {
                         if err.help.is_none()
                             && let crate::constraint::TypeErrorKind::Mismatch { expected, found } =
                                 &err.kind
+                            && (matches!(expected, InferType::Never)
+                                || matches!(found, InferType::Never))
+                        {
+                            err.help = Some(
+                                "`Never` has no values: a `Result<T, Never>` can only be built \
+                                 with `Result::Ok`"
+                                    .to_string(),
+                            );
+                        }
+                        if err.help.is_none()
+                            && let crate::constraint::TypeErrorKind::Mismatch { expected, found } =
+                                &err.kind
                             && (expected.is_integer() || expected.is_float())
                             && (found.is_integer() || found.is_float())
                         {

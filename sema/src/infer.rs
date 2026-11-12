@@ -14,6 +14,7 @@ mod signatures;
 mod stmt;
 mod structs;
 mod substitute;
+pub(crate) mod unresolved;
 mod validate;
 mod vec_form;
 mod visibility;
@@ -56,6 +57,8 @@ pub struct TypeInference {
     bound_generic_sigs: HashMap<String, Vec<bounds::BoundGenericSig>>,
     foreign_sigs: HashSet<String>,
     foreign_shadowed_spans: HashSet<(usize, usize)>,
+    generic_fn_sigs: HashSet<String>,
+    generic_value_spans: HashSet<(usize, usize, String)>,
     pub(crate) module_globals: HashSet<String>,
     pub(crate) shadowed_globals: HashSet<String>,
     pub(crate) lambda_depth: usize,

@@ -1134,7 +1134,7 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-let r = Result::Ok(42)
+let r: Result<i64, string> = Result::Ok(42)
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1151,7 +1151,7 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-let r = Result::Err("something failed")
+let r: Result<i64, string> = Result::Err("something failed")
 "#;
     let result = compile_to_typed_ast(src);
     assert!(

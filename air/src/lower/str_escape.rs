@@ -158,6 +158,7 @@ fn successors(terminator: &AirTerminator) -> Vec<BlockId> {
 // matching on the bare name is safe only because sema rejects a user redefinition of print/println with E0301
 fn callee_stores_nothing(func: &Callee) -> bool {
     matches!(func, Callee::Named(name) if name == "print" || name == "println" || name == VEC_POP
+        || name == "__aelys_to_string"
         || crate::symbols::STRING_READER_SYMBOLS.contains(&name.as_str()))
 }
 

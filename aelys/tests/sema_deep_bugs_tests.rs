@@ -166,21 +166,31 @@ fn f() {
     );
 }
 
-// Var -> Dynamic conversion
-// unresolved type variables should be converted to Dynamic (or at least not left as Var in the final typed AST)
-
 #[test]
 fn empty_array_type_is_resolved() {
-    // empty array has type Array(Var(N), 0). After finalization the inner type should be Dynamic, not an unresolved vAR
     assert!(
         sema_ok(
             r#"
 fn f() {
-    let arr = []
+    let arr: [i64; 0] = []
 }
 "#
         ),
         "empty array literal should compile"
+    );
+    let src = Source::new("<test>", "fn f() {\n    let arr = []\n}\n");
+    let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
+    let stmts = Parser::new(tokens, src.clone())
+        .parse()
+        .expect("parse failed");
+    let errors = TypeInference::infer_program(stmts, src).expect_err("unannotated empty array");
+    assert!(
+        errors.iter().any(|e| matches!(
+            &e.kind,
+            aelys_sema::TypeErrorKind::MemberAccess { message }
+                if message == "type annotations needed: the type of `arr` is never inferred"
+        )),
+        "an unannotated empty array asks for an annotation: {errors:?}"
     );
 }
 

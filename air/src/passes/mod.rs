@@ -1,6 +1,8 @@
 pub mod copy_elim;
 pub mod dead_locals;
+pub mod generic_print;
 pub mod instance_surface;
+pub mod never_arms;
 pub mod rc_elision;
 pub mod safepoints;
 pub mod temp_elision;

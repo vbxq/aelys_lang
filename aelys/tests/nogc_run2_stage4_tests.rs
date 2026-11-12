@@ -357,12 +357,21 @@ fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return 
 }
 
 #[test]
-fn compile_twin_plain_generic_bound_to_an_annotated_let() {
-    accepts(
+fn twin_plain_generic_bound_to_an_annotated_let_is_refused_without_the_nogc_code() {
+    let err = lower(
         "\
 fn sink<U>(u: U) -> i64 { return 0 }
 fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return f(v) }
 ",
+    )
+    .expect_err("a generic function used as a value is refused");
+    assert!(
+        err.contains("[E0902]") && err.contains("a generic function cannot be used as a value yet"),
+        "must carry the generic-value E0902: {err}"
+    );
+    assert!(
+        !err.contains("E0731"),
+        "the nogc bound code must not fire: {err}"
     );
 }
 

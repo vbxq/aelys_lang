@@ -323,6 +323,7 @@ const PINNED: &[(&str, Expect)] = &[
     ("m_f_oob_const", Expect::Code("E0433")),
     ("m_h_shift_u8_var", Expect::Out("2\n2\n")),
     ("m_i_dead_if_trap", Expect::Panic("division by zero\n")),
+    ("m_nogc_member_through_borrowed_rc", Expect::Code("E0410")),
     ("m_o_if_lit_init", Expect::Code("E0301")),
     ("p_f1_i16_rem", Expect::Panic("division overflow\n")),
     (
@@ -354,12 +355,12 @@ const PINNED: &[(&str, Expect)] = &[
     ("p_s4_neg_cast_stmt", Expect::Panic("index out of bounds\n")),
     ("p_s5_block_stmt", Expect::Panic("division by zero\n")),
     ("v1_big_stack_array", Expect::Code("E0904")),
-    ("v1_lambda_unused", Expect::Code("E0412")),
+    ("v1_lambda_unused", Expect::Code("E0304")),
     ("v1_rc_field_break", Expect::Code("E0902")),
     ("v1_vec_in_generic_payload", Expect::Code("E0412")),
 ];
 
-const SAMPLED_CODES: usize = 69;
+const SAMPLED_CODES: usize = 68;
 
 fn expectation_failure(name: &str, leg: &LevelLeg, expect: &Expect) -> Option<String> {
     let met = match (expect, leg) {

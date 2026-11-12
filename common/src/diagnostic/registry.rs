@@ -290,7 +290,14 @@ The `()` call syntax was used on something that isn't a function.
         explanation: "\
 Field access (`.field`) was used on a type that either doesn't support
 it or doesn't have a field with that name. Struct fields, string `.len`,
-and vec `.len` are the valid member accesses.",
+and vec `.len` are the valid member accesses.
+
+The same code reports \"type annotations needed\": a binding, parameter or
+expression whose type nothing in the program ever fixes, or a generic
+type written with the wrong number of type arguments.
+
+    let x = Rc::null()          // E0304, Rc of what?
+    let x: Rc<Node> = Rc::null() // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {

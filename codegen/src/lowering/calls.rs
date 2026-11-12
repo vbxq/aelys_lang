@@ -841,7 +841,8 @@ impl<'a> FunctionCodegen<'a> {
             })?
             .clone();
 
-        let display_name = enum_ref.name.as_str();
+        let bare = enum_ref.name.strip_prefix("__q.").unwrap_or(&enum_ref.name);
+        let display_name = bare.rsplit('.').next().unwrap_or(bare);
 
         let is_data = enum_has_data(&enum_def);
 

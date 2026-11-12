@@ -113,7 +113,7 @@ fn naming_trap_names_the_operation_not_the_local_type() {
     let err = reject(
         "\
 nogc fn f() -> i64 {
-    let mut v = Vec::new()
+    let mut v: Vec<i64> = Vec::new()
     return 0
 }
 fn main() -> i64 { return f() }

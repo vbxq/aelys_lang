@@ -397,7 +397,7 @@ impl fmt::Display for InferType {
             InferType::Char => write!(f, "char"),
             InferType::String => write!(f, "string"),
             InferType::Null => write!(f, "null"),
-            InferType::Never => write!(f, "!"),
+            InferType::Never => write!(f, "Never"),
             InferType::Function { params, ret, .. } => {
                 write!(f, "(")?;
                 for (i, p) in params.iter().enumerate() {

@@ -672,7 +672,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         TypeErrorKind::MemberAccess { message } => (
             "E0304",
             message.clone(),
-            "invalid member access".to_string(),
+            if message.starts_with("type annotations needed") {
+                "type annotations needed".to_string()
+            } else {
+                "invalid member access".to_string()
+            },
         ),
         TypeErrorKind::ErrorHandling {
             message,

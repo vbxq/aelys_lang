@@ -21,13 +21,21 @@ impl TypeInference {
                 initializer,
                 var_type,
                 is_pub,
-            } => TypedStmtKind::Let {
-                name,
-                mutable,
-                initializer: self.finalize_expr(initializer),
-                var_type: Self::finalize_type(var_type),
-                is_pub,
-            },
+            } => {
+                let var_type = match var_type {
+                    InferType::Var(_) if super::unresolved::diverges(&initializer) => {
+                        InferType::Null
+                    }
+                    other => Self::finalize_type(other),
+                };
+                TypedStmtKind::Let {
+                    name,
+                    mutable,
+                    initializer: self.finalize_expr(initializer),
+                    var_type,
+                    is_pub,
+                }
+            }
 
             TypedStmtKind::Block(stmts) => TypedStmtKind::Block(self.finalize_stmts(stmts)),
 

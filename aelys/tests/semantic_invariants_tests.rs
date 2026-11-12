@@ -5278,8 +5278,8 @@ fn main() -> i64 {
     for (name, opt) in LEVELS {
         let rendered = h.reject("S2-F13", name, src, *opt);
         assert!(
-            rendered.contains("[E0901]"),
-            "S2-F13 at {name} MUST be rejected, got:\n{rendered}"
+            rendered.contains("[E0304]") && rendered.contains("cannot be sliced"),
+            "S2-F13 at {name} MUST be rejected with E0304, got:\n{rendered}"
         );
     }
 }

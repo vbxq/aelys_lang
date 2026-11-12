@@ -155,3 +155,4 @@ aelys	vec_value_semantics_tests	test
 aelys	group_release01_tests	test
 aelys	group_release01_s2_tests	test
 aelys	group_release01_s2b_tests	test
+aelys	group_release01_s2c_tests	test

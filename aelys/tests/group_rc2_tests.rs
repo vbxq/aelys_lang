@@ -3224,13 +3224,13 @@ fn rc2_125_a_field_of_a_value_whose_type_is_never_inferred_asks_for_an_annotatio
         "fn main() -> i64 {\n    let f = fn(p) -> i64 { return p.a }\n    println(\"ok\")\n\
          \x20   return 0\n}\n",
         &[],
-        "E0301",
+        "E0304",
         &[
-            "the type of this value is never inferred, so its field `a` cannot be resolved; \
-             annotate the binding it comes from",
+            "type annotations needed: the type of this value is never inferred, so its field \
+             `a` cannot be resolved; annotate the binding it comes from",
             "return p.a",
         ],
-        &["E0412", "survived lowering", "E0304"],
+        &["E0412", "survived lowering", "E0301"],
     );
 }
 
@@ -3573,8 +3573,10 @@ fn rc2_145_a_slice_of_a_value_whose_type_is_never_inferred_asks_for_an_annotatio
         "fn main() -> i64 {\n    let s = fn(t) -> i64 { let x = t[0..1]\n return 0 }\n\
          \x20   return 0\n}\n",
         &[],
-        "E0301",
-        &["the type of this value is never inferred, so it cannot be sliced"],
+        "E0304",
+        &[
+            "type annotations needed: the type of this value is never inferred, so it cannot be sliced",
+        ],
         &["E0425", "τ", "E0901"],
     );
 }

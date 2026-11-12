@@ -110,11 +110,11 @@ impl TypeInference {
                 | InferType::Char
                 | InferType::String
                 | InferType::Rc(_)
-                | InferType::Null
                 | InferType::Never
                 | InferType::Var(_)
                 | InferType::Dynamic => true,
-                InferType::Array(..)
+                InferType::Null
+                | InferType::Array(..)
                 | InferType::Vec(_)
                 | InferType::Ref { .. }
                 | InferType::Slice { .. }
@@ -127,6 +127,58 @@ impl TypeInference {
                     .push(TypeError::equality_unsupported(&op.to_string(), ty, span));
                 return;
             }
+        }
+    }
+
+    fn check_printable(
+        &mut self,
+        value: &TypedExpr,
+        in_format: bool,
+        generic_scope: &HashSet<String>,
+        declared_type_params: &HashSet<String>,
+    ) {
+        if value.ty.has_vars() {
+            return;
+        }
+        let printable = match &value.ty {
+            InferType::Struct(name) => {
+                !self.type_table.has_struct(name)
+                    || self.is_active_generic_placeholder_type(
+                        &value.ty,
+                        generic_scope,
+                        declared_type_params,
+                    )
+            }
+            InferType::Enum(..) => !in_format,
+            InferType::Null
+            | InferType::Array(..)
+            | InferType::Vec(_)
+            | InferType::Function { .. }
+            | InferType::Rc(_)
+            | InferType::Ref { .. }
+            | InferType::Slice { .. }
+            | InferType::Tuple(_)
+            | InferType::Range => false,
+            InferType::I8
+            | InferType::I16
+            | InferType::I32
+            | InferType::I64
+            | InferType::U8
+            | InferType::U16
+            | InferType::U32
+            | InferType::U64
+            | InferType::F32
+            | InferType::F64
+            | InferType::Bool
+            | InferType::Char
+            | InferType::String
+            | InferType::Never
+            | InferType::Var(_)
+            | InferType::Dynamic => true,
+        };
+        if !printable {
+            self.errors
+                .push(TypeError::not_printable(&value.ty, in_format, value.span));
         }
     }
 
@@ -371,6 +423,15 @@ impl TypeInference {
                     self.validate_expr(arg, generic_scope, declared_type_params);
                 }
                 self.check_bound_call(callee, args);
+                if let (TypedExprKind::Identifier(name), InferType::Function { params, .. }) =
+                    (&callee.kind, &callee.ty)
+                    && (name == "print" || name == "println")
+                    && matches!(params.as_slice(), [InferType::Dynamic])
+                {
+                    for arg in args {
+                        self.check_printable(arg, false, generic_scope, declared_type_params);
+                    }
+                }
                 match &callee.ty {
                     InferType::Function { params, .. } => {
                         if params.len() != args.len() {
@@ -477,6 +538,16 @@ impl TypeInference {
             TypedExprKind::Member { object, member } => {
                 self.validate_expr(object, generic_scope, declared_type_params);
                 self.validate_type(&expr.ty, expr.span, generic_scope, declared_type_params);
+                if self.in_nogc_fn {
+                    let mut base = object.as_ref();
+                    while let TypedExprKind::Grouping(inner) = &base.kind {
+                        base = inner;
+                    }
+                    if matches!(base.kind, TypedExprKind::Deref(_)) && base.ty.is_rc() {
+                        self.errors
+                            .push(TypeError::rc_read_through_ref(&base.ty, base.span));
+                    }
+                }
                 let deferred = ProjKind::Field(member.clone());
                 self.check_deferred_read(deferred.clone(), object, None, &expr.ty, expr.span);
                 match &object.ty {
@@ -552,6 +623,18 @@ impl TypeInference {
                                     let (name, member) = (name.clone(), member.clone());
                                     self.reject_private_field(&name, &member, expr.span);
                                 }
+                            } else if self.is_active_generic_placeholder_type(
+                                inner,
+                                generic_scope,
+                                declared_type_params,
+                            ) {
+                                self.errors.push(TypeError::member_access(
+                                    format!(
+                                        "field access on unconstrained generic type parameter \
+                                         '{name}'"
+                                    ),
+                                    expr.span,
+                                ));
                             }
                         } else {
                             self.errors.push(TypeError::member_access(
@@ -642,6 +725,24 @@ impl TypeInference {
                 self.validate_expr(value, generic_scope, declared_type_params);
                 let deferred = ProjKind::FieldWrite(field.clone());
                 self.check_deferred_write(deferred, object, None, value, expr.span);
+                let owner = match &object.ty {
+                    InferType::Rc(inner) => inner.as_ref(),
+                    other => other,
+                };
+                if let InferType::Struct(name) = owner
+                    && self.is_active_generic_placeholder_type(
+                        owner,
+                        generic_scope,
+                        declared_type_params,
+                    )
+                {
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "field assignment on unconstrained generic type parameter '{name}'"
+                        ),
+                        expr.span,
+                    ));
+                }
                 if is_computed_len(&object.ty, field) {
                     self.errors
                         .push(TypeError::computed_len(object.ty.clone(), true, expr.span));
@@ -748,14 +849,8 @@ impl TypeInference {
                 self.check_deferred_read(ProjKind::Deref, operand, None, &expr.ty, expr.span);
                 // a nogc function leaves this read to the effect rule
                 if expr.ty.is_rc() && !self.in_nogc_fn {
-                    self.errors.push(TypeError::rc_out_of_surface(
-                        format!(
-                            "`*` here reads an `{}` out of a reference: reading an `Rc` through \
-                             a reference is not supported yet, pass the `Rc` itself",
-                            expr.ty
-                        ),
-                        expr.span,
-                    ));
+                    self.errors
+                        .push(TypeError::rc_read_through_ref(&expr.ty, expr.span));
                 }
             }
             TypedExprKind::DerefAssign { target, value } => {
@@ -783,6 +878,7 @@ impl TypeInference {
                 for part in parts {
                     if let crate::typed_ast::TypedFmtStringPart::Expr(inner) = part {
                         self.validate_expr(inner, generic_scope, declared_type_params);
+                        self.check_printable(inner, true, generic_scope, declared_type_params);
                     }
                 }
             }
@@ -885,8 +981,13 @@ impl TypeInference {
                 self.validate_expr(scrutinee, generic_scope, declared_type_params);
             }
             TypedExprKind::Identifier(name) => {
+                let before = self.errors.len();
                 self.check_nogc_generic_value(name, expr);
                 self.check_foreign_as_value(name, expr);
+                if self.errors.len() == before {
+                    self.check_generic_fn_value(name, expr);
+                }
+                self.check_print_value(name, expr);
             }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
@@ -1005,6 +1106,12 @@ impl TypeInference {
         if matches!(object.ty, InferType::Var(_))
             && self.is_deferred_site(expr.span, &ProjKind::Slice)
         {
+            return;
+        }
+        if self.is_active_generic_placeholder_type(&object.ty, generic_scope, declared_type_params)
+        {
+            self.errors
+                .push(TypeError::generic_slice(&object.ty, expr.span));
             return;
         }
         if let TypedExprKind::Range { start: Some(s), .. } = &range.kind {

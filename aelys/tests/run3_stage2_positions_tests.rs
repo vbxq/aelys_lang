@@ -43,7 +43,6 @@ enum Class {
         fence: &'static str,
         callers: &'static [&'static str],
     },
-    MovesToTheValidator,
     /// a genuinely managed store that no rule and no fence refuses. the row pins the acceptance
     AcceptedAndOwed(&'static str),
 }
@@ -263,8 +262,6 @@ fn required_verdict(class: Class, phase: Phase) -> Option<&'static str> {
         (Class::OnlyTheFenceHolds(fence), _) => Some(fence),
         (Class::AcceptedButInert { .. }, Phase::PreNarrowing) => Some("E0727"),
         (Class::AcceptedButInert { .. }, Phase::PostNarrowing) => None,
-        (Class::MovesToTheValidator, Phase::PreNarrowing) => Some("E0727"),
-        (Class::MovesToTheValidator, Phase::PostNarrowing) => Some("E0901"),
         (Class::AcceptedAndOwed(_), Phase::PreNarrowing) => Some("E0727"),
         (Class::AcceptedAndOwed(_), Phase::PostNarrowing) => None,
     }
@@ -1207,7 +1204,7 @@ const GROUP_B: &[Row] = &[
     Row {
         id: "B28",
         position: "Member.object over a borrowed Rc of a non-scalar",
-        class: Class::MovesToTheValidator,
+        class: Class::MustNotMoveRejected("E0410"),
         src: "struct S { n: i64 }\n\
               nogc fn f(x: &Rc<S>) -> i64 { return (*x).n }\n\
               fn main() -> i64 { return 0 }\n",
@@ -3034,7 +3031,6 @@ fn the_corpus_census_is_exact() {
     let mut behind = 0;
     let mut only_fence = 0;
     let mut inert = 0;
-    let mut validator = 0;
     let mut owed_rows = 0;
     let mut ids: Vec<&str> = Vec::new();
     for row in GROUP_A.iter().chain(GROUP_B).chain(GROUP_C) {
@@ -3052,7 +3048,6 @@ fn the_corpus_census_is_exact() {
             Class::MustStayRejectedBehind(_) => behind += 1,
             Class::OnlyTheFenceHolds(_) => only_fence += 1,
             Class::AcceptedButInert { .. } => inert += 1,
-            Class::MovesToTheValidator => validator += 1,
             Class::AcceptedAndOwed(owed) => {
                 assert!(!owed.is_empty(), "{} must say what it owes", row.id);
                 owed_rows += 1;
@@ -3073,11 +3068,10 @@ fn the_corpus_census_is_exact() {
             still_accepted,
             still_rejected,
             inert,
-            validator,
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 15, 43, 4, 1, 0, 121),
+        (31, 27, 0, 0, 15, 44, 4, 0, 121),
         "the class split changed"
     );
 }
@@ -3408,7 +3402,6 @@ fn every_must_stay_rejected_row_names_e0727() {
     let h = Harness::new();
     let mut behind = 0;
     let mut only_fence = 0;
-    let mut validator = 0;
     let mut owed_rows = 0;
     for row in GROUP_B {
         if let Class::AcceptedAndOwed(owed) = row.class {
@@ -3460,15 +3453,6 @@ fn every_must_stay_rejected_row_names_e0727() {
                     );
                 }
             }
-            Class::MovesToTheValidator => {
-                validator += 1;
-                let want = required_verdict(row.class, PHASE).expect("still rejected");
-                assert!(
-                    rendered.contains(&format!("[{want}]")),
-                    "{} MUST be refused by {want}:\n{rendered}",
-                    row.id
-                );
-            }
             Class::AcceptedAndOwed(owed) => {
                 owed_rows += 1;
                 assert!(
@@ -3492,8 +3476,8 @@ fn every_must_stay_rejected_row_names_e0727() {
         }
     }
     assert_eq!(
-        (behind, only_fence, validator, owed_rows),
-        (0, 0, 1, 0),
+        (behind, only_fence, owed_rows),
+        (0, 0, 0),
         "the split of group b rows not held by the effect system alone changed"
     );
 }

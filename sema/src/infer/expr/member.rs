@@ -49,6 +49,7 @@ impl TypeInference {
         if let ExprKind::Identifier(namespace) = &object.kind {
             if self.is_module_namespace(namespace) {
                 let (qualified, ty) = self.resolve_module_member(namespace, member, _span);
+                self.note_generic_value(&qualified, _span);
                 return (TypedExprKind::Identifier(qualified), ty);
             }
         }
@@ -246,6 +247,11 @@ impl TypeInference {
                 &typed_value.ty,
                 span,
             );
+        } else if let InferType::Rc(inner) = &typed_object.ty {
+            self.errors.push(TypeError::member_access(
+                format!("field assignment through `Rc<{inner}>` requires a struct payload"),
+                span,
+            ));
         }
 
         (

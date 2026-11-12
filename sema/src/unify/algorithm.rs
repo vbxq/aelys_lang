@@ -42,6 +42,12 @@ fn unify_type_arg(t1: &InferType, t2: &InferType, subst: &mut Substitution) -> U
             subst.bind(v, InferType::Never);
             Ok(())
         }
+        (InferType::Never, InferType::Never)
+        | (InferType::Never, InferType::Dynamic)
+        | (InferType::Dynamic, InferType::Never) => Ok(()),
+        (InferType::Never, other) | (other, InferType::Never) => {
+            Err(UnifyError::Mismatch(InferType::Never, other))
+        }
         _ => unify(t1, t2, subst),
     }
 }

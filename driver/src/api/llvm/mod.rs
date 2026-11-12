@@ -521,6 +521,8 @@ fn air_stage(
     let mut air = aelys_air::mono::monomorphize(air).map_err(|errors| {
         mono_errors_to_error(errors, fallback_source_span(src.as_ref()), src.clone())
     })?;
+    aelys_air::passes::never_arms::cut_never_arms(&mut air);
+    aelys_air::passes::generic_print::format_strings_by_copy(&mut air);
     // mono joins the name and its type arguments with `_`, so `f<a_b>` and `f_a<b>` land on one
     let duplicates = aelys_air::symbols::duplicate_symbols(&air);
     if !duplicates.is_empty() {
@@ -529,7 +531,11 @@ fn air_stage(
         );
     }
     let instance_errors = if judge_instances {
-        aelys_air::passes::instance_surface::check_instance_surface(&air)
+        let mut errors = aelys_air::passes::generic_print::check_generic_print(&air);
+        errors.extend(aelys_air::passes::instance_surface::check_instance_surface(
+            &air,
+        ));
+        errors
     } else {
         Vec::new()
     };

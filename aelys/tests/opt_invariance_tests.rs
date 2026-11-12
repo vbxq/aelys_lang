@@ -335,7 +335,7 @@ fn main() -> i64 { return f() }
         "reject_e0727_nogc_allocates_vec",
         "E0727",
         "nogc fn f() -> i64 {
-    let mut v = Vec::new()
+    let mut v: Vec<i64> = Vec::new()
     return 0
 }
 fn main() -> i64 { return f() }

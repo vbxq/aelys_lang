@@ -4093,13 +4093,13 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn sb90_a_vec_parameter_without_an_element_type_is_refused_by_the_surface_check() {
+fn sb90_a_vec_parameter_without_an_element_type_asks_for_its_type_argument() {
     let h = Harness::new();
     h.rejects(
         "SB-96",
         SB96_A_VEC_PARAMETER_WITHOUT_AN_ELEMENT_TYPE,
-        "E0412",
-        "parameter `v` of `setret` has type `vec_opaque`",
+        "E0304",
+        "the type `Vec` takes 1 type argument but 0 were given",
     );
     h.assert_legs(1);
 }

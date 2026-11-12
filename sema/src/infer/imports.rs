@@ -85,6 +85,9 @@ impl TypeInference {
                 self.env
                     .define_function_owned(item.qualified.clone(), item.ty.clone());
                 self.record_imported_bound_sig(item);
+                if !item.type_params.is_empty() {
+                    self.generic_fn_sigs.insert(item.qualified.clone());
+                }
             }
             ItemKind::Global => {
                 self.env

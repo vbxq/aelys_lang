@@ -432,6 +432,9 @@ impl fmt::Display for TypeError {
 
 impl std::error::Error for TypeError {}
 
+const GENERIC_FN_AS_VALUE: &str = "a generic function cannot be used as a value yet; wrap it in a \
+     closure or a non-generic function";
+
 impl TypeError {
     pub fn with_secondary(mut self, span: Span, label: impl Into<String>) -> Self {
         self.secondary_spans.push((span, label.into()));
@@ -513,6 +516,16 @@ impl TypeError {
             help: None,
             suggestion: None,
         }
+    }
+
+    pub fn rc_read_through_ref(ty: &InferType, span: Span) -> Self {
+        Self::rc_out_of_surface(
+            format!(
+                "`*` here reads an `{ty}` out of a reference: reading an `Rc` through a \
+                 reference is not supported yet, pass the `Rc` itself"
+            ),
+            span,
+        )
     }
 
     pub fn rc_carrier_out_of_surface(detail: impl Into<String>, span: Span) -> Self {
@@ -745,15 +758,14 @@ impl TypeError {
 
     pub fn unresolved_projection(what: &str, span: Span) -> Self {
         TypeError {
-            kind: TypeErrorKind::Mismatch {
-                expected: InferType::Dynamic,
-                found: InferType::Dynamic,
+            kind: TypeErrorKind::MemberAccess {
+                message: format!(
+                    "type annotations needed: the type of this value is never inferred, so \
+                     {what}; annotate the binding it comes from"
+                ),
             },
             span,
-            reason: ConstraintReason::Other(format!(
-                "the type of this value is never inferred, so {what}; annotate the binding it \
-                 comes from"
-            )),
+            reason: ConstraintReason::Other("type annotations needed".to_string()),
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,
@@ -1209,10 +1221,128 @@ impl TypeError {
         }
     }
 
+    pub fn generic_slice(ty: &InferType, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::MemberAccess {
+                message: format!(
+                    "a value of the generic type parameter `{ty}` cannot be sliced; the element \
+                     type is not known until `{ty}` is bound, and a type parameter carries no \
+                     bound that would supply one"
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other("generic slice".to_string()),
+            secondary_spans: Vec::new(),
+            help: Some(
+                "take a container instead of a bare type parameter: `Vec<T>`, `[T; N]` and \
+                 `&[T]` all slice to a `&[T]`"
+                    .to_string(),
+            ),
+            suggestion: None,
+        }
+    }
+
+    pub fn generic_fn_as_value(span: Span) -> Self {
+        Self::not_supported_yet(GENERIC_FN_AS_VALUE, span)
+    }
+
+    pub fn is_generic_fn_as_value(&self) -> bool {
+        matches!(&self.kind, TypeErrorKind::NotSupportedYet { detail } if detail == GENERIC_FN_AS_VALUE)
+    }
+
+    pub fn type_arg_count(
+        what: &str,
+        name: &str,
+        expected: usize,
+        found: usize,
+        span: Span,
+    ) -> Self {
+        let plural = |n: usize| if n == 1 { "" } else { "s" };
+        let help = if expected == 0 {
+            format!("write `{name}` without type arguments")
+        } else {
+            let params: Vec<&str> = ["T", "U", "V", "W"]
+                .iter()
+                .copied()
+                .cycle()
+                .take(expected)
+                .collect();
+            format!("write `{name}<{}>` with concrete types", params.join(", "))
+        };
+        TypeError {
+            kind: TypeErrorKind::MemberAccess {
+                message: format!(
+                    "type annotations needed: the {what} `{name}` takes {expected} type \
+                     argument{} but {found} {} given",
+                    plural(expected),
+                    if found == 1 { "was" } else { "were" }
+                ),
+            },
+            span,
+            reason: ConstraintReason::Other("type annotations needed".to_string()),
+            secondary_spans: Vec::new(),
+            help: Some(help),
+            suggestion: None,
+        }
+    }
+
+    pub fn not_printable(found: &InferType, in_format: bool, span: Span) -> Self {
+        let what = match found {
+            InferType::Struct(_) => "a struct",
+            InferType::Enum(..) => "an enum",
+            InferType::Array(..) => "an array",
+            InferType::Vec(_) => "a `Vec`",
+            InferType::Function { .. } => "a function or closure",
+            InferType::Rc(_) => "an `Rc`",
+            InferType::Ref { .. } => "a reference",
+            InferType::Slice { .. } => "a slice",
+            InferType::Null => "the unit value",
+            _ => "this value",
+        };
+        let detail = match found {
+            InferType::Struct(_) => {
+                format!("printing {what} is not supported yet; print its fields")
+            }
+            InferType::Enum(..) if in_format => format!(
+                "formatting {what} inside a string is not supported yet; print it on its own with \
+                 `println(e)` or match on it"
+            ),
+            InferType::Array(..) | InferType::Vec(_) | InferType::Slice { .. } => {
+                format!("printing {what} is not supported yet; print its elements")
+            }
+            InferType::Ref { .. } | InferType::Rc(_) => {
+                format!("printing {what} is not supported yet; print the value it points to")
+            }
+            _ => format!("printing {what} is not supported yet"),
+        };
+        match found {
+            InferType::Null => Self::not_supported_yet(detail, span),
+            _ => Self::not_supported_yet(
+                format!(
+                    "{detail} (found `{}`)",
+                    crate::infer::unresolved::spelled(found)
+                ),
+                span,
+            ),
+        }
+    }
+
+    pub fn rc_of_unit(span: Span) -> Self {
+        Self::not_supported_yet(
+            "an `Rc` of the unit type is not supported yet; an `Rc` must hold a value",
+            span,
+        )
+    }
+
     pub fn equality_unsupported(op: &str, found: &InferType, span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::MemberAccess {
-                message: format!("comparison (`{op}`) is not supported for `{found}`"),
+                message: match found {
+                    InferType::Null => {
+                        format!("comparison (`{op}`) is not supported for the unit value")
+                    }
+                    _ => format!("comparison (`{op}`) is not supported for `{found}`"),
+                },
             },
             span,
             reason: ConstraintReason::Comparison,

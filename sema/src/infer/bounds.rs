@@ -384,6 +384,62 @@ impl TypeInference {
         if func.foreign.is_some() {
             self.foreign_sigs.insert(key.to_string());
         }
+        if !func.type_params.is_empty() {
+            self.generic_fn_sigs.insert(key.to_string());
+        }
+    }
+
+    pub(super) fn note_generic_value(&mut self, name: &str, span: aelys_syntax::Span) {
+        if self.generic_fn_sigs.contains(name) {
+            self.generic_value_spans
+                .insert((span.start, span.end, name.to_string()));
+        }
+    }
+
+    pub(super) fn check_print_value(&mut self, name: &str, expr: &TypedExpr) {
+        if (name == "print" || name == "println")
+            && matches!(&expr.ty, InferType::Function { params, .. } if matches!(params.as_slice(), [InferType::Dynamic]))
+        {
+            self.errors.push(TypeError::not_supported_yet(
+                format!("`{name}` cannot be used as a value yet; call it directly"),
+                expr.span,
+            ));
+        }
+    }
+
+    pub(super) fn drop_generic_value_cascades(&mut self) {
+        use crate::constraint::TypeErrorKind;
+        let fired: Vec<Span> = self
+            .errors
+            .iter()
+            .filter(|e| TypeError::is_generic_fn_as_value(e))
+            .map(|e| e.span)
+            .collect();
+        if fired.is_empty() {
+            return;
+        }
+        self.errors.retain(|e| {
+            let cascade = match &e.kind {
+                TypeErrorKind::Mismatch { .. } => true,
+                TypeErrorKind::MemberAccess { message } => {
+                    message.contains("escaped generic context")
+                }
+                _ => false,
+            };
+            !(cascade
+                && fired
+                    .iter()
+                    .any(|f| e.span.start <= f.start && f.end <= e.span.end))
+        });
+    }
+
+    pub(super) fn check_generic_fn_value(&mut self, name: &str, expr: &TypedExpr) {
+        if self
+            .generic_value_spans
+            .contains(&(expr.span.start, expr.span.end, name.to_string()))
+        {
+            self.errors.push(TypeError::generic_fn_as_value(expr.span));
+        }
     }
 
     pub(super) fn check_nogc_generic_value(&mut self, name: &str, expr: &TypedExpr) {
