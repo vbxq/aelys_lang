@@ -143,10 +143,9 @@ impl CompileError {
                         .to_string(),
                 );
                 diag.add_help(format!(
-                    "read the refusal above first: if it names something to change, changing it \
-                     settles both levels; compile at `{}` for its full form, and if the program \
-                     is well formed report it with `{}` and `{}` named",
-                    refused_at, refused_at, accepted_at
+                    "the reference pipeline at `{}` accepts this program, so the refusal above is \
+                     a compiler defect: report the program with `{}` named",
+                    accepted_at, refused_at
                 ));
             }
             CompileErrorKind::DuplicateDefinition {

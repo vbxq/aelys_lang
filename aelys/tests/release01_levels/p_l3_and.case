@@ -1,0 +1,4 @@
+fn f(d: i64, c: bool) -> i64 { let x = c && 10 / d == 0
+    println("survived")
+    return 0 }
+fn main() -> i64 { return f(0, true) }

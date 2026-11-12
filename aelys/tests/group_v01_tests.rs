@@ -455,31 +455,20 @@ const NET_FIXTURE: &str = "enum Opt<T> { Some(T), Nil }\n\
 fn group_v01_r08_net_names_both_verdicts() {
     let h = Harness::new();
     let _pin = pin_legs("r08", LEVELS.len());
-    // this is a tracked cross-o fixture and it was accepted in silence above -o1, so the codes differ by level on purpose
     let root = h.stage("r08", "refused", NET_FIXTURE);
     for (tag, opt) in LEVELS {
-        let code = if *opt <= OptimizationLevel::Basic {
-            "E0412"
-        } else {
-            "E0432"
-        };
         let rendered = h.refusal(
             "r08",
             tag,
             *opt,
             &root,
-            code,
+            "E0412",
             "which holds a `Vec<T>` by value inside another container",
         );
-        if code == "E0432" {
-            assert!(
-                rendered.contains("the -O levels do not agree about it")
-                    && rendered.contains(&format!(
-                        "that refusal is raised at -O0 and not at {tag}"
-                    )),
-                "r08 at {tag}: the net MUST name both verdicts\nrendered:\n{rendered}"
-            );
-        }
+        assert!(
+            !rendered.contains("E0432"),
+            "r08 at {tag}: the reference refusal is the verdict\nrendered:\n{rendered}"
+        );
     }
 }
 

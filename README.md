@@ -259,7 +259,7 @@ That prints `apple`, `fig`, `pear`.
 
 Whether a program is accepted is a property of the program, not of how hard the compiler was asked to optimize. A refusal raised at `-O0` is raised identically at `-O3`, and nothing the optimizer does may buy a program past a check.
 
-The compiler verifies that rather than assuming it. Every compile above `-O0` runs the front half twice, once with the optimizer off as a reference and once at the level asked for, and compares the two verdicts. If they disagree it refuses with `E0432`, printing the refusing level's diagnostic in full first, because that is the actionable half, and naming the split after it. The comparison runs from type inference to the end of AIR validation; the LLVM pass pipeline, the object writer and the linker run once, below it. Switching to the accepting level is never the answer, since the binary it produces is not covered by the refusal the other level raised.
+The compiler verifies that rather than assuming it. Every compile above `-O0` runs the front half twice, once with the optimizer off as a reference and once at the level asked for, and compares the two verdicts. When the reference refuses, its refusal is the verdict at every level. When the reference accepts and the optimized pipeline refuses, it refuses with `E0432`, a compiler defect, printing the optimized pipeline's diagnostic in full first and naming the split after it. The comparison runs from type inference to the end of AIR validation; the LLVM pass pipeline, the object writer and the linker run once, below it. Switching to `-O0` is never the answer, since the binary it produces is not covered by the refusal the optimized pipeline raised.
 
 ## Status
 

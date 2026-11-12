@@ -318,7 +318,7 @@ fn group_mod_n3_empty_link_channel_adds_no_argument() {
     let args = linkings.pop().expect("one linking invocation");
     assert_eq!(
         args.len(),
-        5,
+        6,
         "N-3: an empty link channel MUST add no argument, cc got {args:?}"
     );
     assert_eq!(args[0], "-o", "N-3: cc argv[0] MUST be -o, got {args:?}");
@@ -335,6 +335,7 @@ fn group_mod_n3_empty_link_channel_adds_no_argument() {
         args[4], "-laelys-core-rc",
         "N-3: cc argv[4] MUST be the core library, got {args:?}"
     );
+    assert_eq!(args[5], "-lm", "N-3: cc argv[5] MUST be libm, got {args:?}");
 }
 
 #[test]

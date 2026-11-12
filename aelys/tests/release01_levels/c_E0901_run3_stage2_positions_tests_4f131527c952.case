@@ -1,0 +1,3 @@
+struct S { n: i64 }
+nogc fn f(x: &Rc<S>) -> i64 { return (*x).n }
+fn main() -> i64 { return 0 }

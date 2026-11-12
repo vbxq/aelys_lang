@@ -1,0 +1,6 @@
+fn h(a: i64, b: i64) -> i64 { return b + a }
+fn f(i: i64, d: i64) -> i64 { let arr = [1, 2, 3]
+    let r = h(10 / d, arr[i])
+    println("survived {r}")
+    return 0 }
+fn main() -> i64 { return f(10, 0) }

@@ -1,14 +1,15 @@
-use aelys_sema::{TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
+use crate::passes::may_trap_or_allocate;
+use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use aelys_syntax::Span;
 use std::collections::HashMap;
 
 pub struct InlineExpander {
-    _reserved: (),
+    held_args: usize,
 }
 
 impl InlineExpander {
     pub fn new() -> Self {
-        Self { _reserved: () }
+        Self { held_args: 0 }
     }
 
     pub fn expand_call(
@@ -25,14 +26,51 @@ impl InlineExpander {
             return None;
         }
 
-        let param_map: HashMap<String, TypedExpr> = func
-            .params
+        if args
             .iter()
-            .zip(args.iter())
-            .map(|(p, a)| (p.name.clone(), a.clone()))
-            .collect();
+            .any(|a| may_trap_or_allocate(a) && !is_scalar(&a.ty))
+        {
+            return None;
+        }
 
-        self.try_simple_inline(&func.body, &param_map, call_span)
+        let mut held: Vec<TypedStmt> = Vec::new();
+        let mut param_map: HashMap<String, TypedExpr> = HashMap::new();
+        for (param, arg) in func.params.iter().zip(args.iter()) {
+            if may_trap_or_allocate(arg) {
+                self.held_args += 1;
+                let name = format!("__inline_arg_{}_{}", self.held_args, param.name);
+                held.push(TypedStmt::new(
+                    TypedStmtKind::Let {
+                        name: name.clone(),
+                        mutable: false,
+                        initializer: arg.clone(),
+                        var_type: arg.ty.clone(),
+                        is_pub: false,
+                    },
+                    arg.span,
+                ));
+                param_map.insert(
+                    param.name.clone(),
+                    TypedExpr::new(TypedExprKind::Identifier(name), arg.ty.clone(), arg.span),
+                );
+            } else {
+                param_map.insert(param.name.clone(), arg.clone());
+            }
+        }
+
+        let inlined = self.try_simple_inline(&func.body, &param_map, call_span)?;
+        if held.is_empty() {
+            return Some(inlined);
+        }
+        let ty = inlined.ty.clone();
+        Some(TypedExpr::new(
+            TypedExprKind::Block {
+                stmts: held,
+                tail: Box::new(inlined),
+            },
+            ty,
+            call_span,
+        ))
     }
 
     fn arg_is_pure(&self, e: &TypedExpr) -> bool {
@@ -477,4 +515,8 @@ impl Default for InlineExpander {
     fn default() -> Self {
         Self::new()
     }
+}
+
+fn is_scalar(ty: &InferType) -> bool {
+    ty.is_numeric() || matches!(ty, InferType::Bool | InferType::Char)
 }

@@ -1,7 +1,8 @@
 use crate::{
-    AirFunction, AirProgram, AirStmtKind, AirTerminator, Callee, LocalId, Operand, Place, Rvalue,
+    AirConst, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BinOp, Callee, LocalId,
+    Operand, Place, Rvalue,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub fn eliminate_dead_locals(program: &mut AirProgram) {
     for function in &mut program.functions {
@@ -16,6 +17,25 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
             collect_stmt_locals(&stmt.kind, &mut referenced);
         }
         collect_terminator_locals(&block.terminator, &mut referenced);
+    }
+
+    let types: HashMap<LocalId, &AirType> = function
+        .params
+        .iter()
+        .map(|p| (p.id, &p.ty))
+        .chain(function.locals.iter().map(|l| (l.id, &l.ty)))
+        .collect();
+    for block in &function.blocks {
+        for stmt in &block.stmts {
+            if let AirStmtKind::Assign {
+                place: Place::Local(local),
+                rvalue,
+            } = &stmt.kind
+                && rvalue_may_trap(rvalue, &types)
+            {
+                referenced.insert(*local);
+            }
+        }
     }
 
     // remove dead locals from the locals list
@@ -55,6 +75,27 @@ fn eliminate_function_dead_locals(function: &mut AirFunction) {
                 true
             }
         });
+    }
+}
+
+fn rvalue_may_trap(rvalue: &Rvalue, types: &HashMap<LocalId, &AirType>) -> bool {
+    let type_of = |operand: &Operand| match operand {
+        Operand::Copy(local) | Operand::Move(local) => types.get(local).copied(),
+        Operand::Const(_) => None,
+    };
+    match rvalue {
+        Rvalue::Index { .. } | Rvalue::Deref(_) => true,
+        Rvalue::FieldAccess { base, .. } => {
+            matches!(type_of(base), Some(AirType::Ptr(_) | AirType::Rc(_)))
+        }
+        Rvalue::BinaryOp(BinOp::Div | BinOp::Rem, _, divisor) => match divisor {
+            Operand::Const(AirConst::IntLiteral(d) | AirConst::Int(d, _)) => *d == 0 || *d == -1,
+            Operand::Const(_) => false,
+            Operand::Copy(_) | Operand::Move(_) => {
+                !matches!(type_of(divisor), Some(AirType::F32 | AirType::F64))
+            }
+        },
+        _ => false,
     }
 }
 

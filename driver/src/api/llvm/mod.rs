@@ -400,15 +400,11 @@ fn front_stage(
 
 struct StageFailure {
     error: AelysError,
-    instance: bool,
 }
 
 impl From<AelysError> for StageFailure {
     fn from(error: AelysError) -> Self {
-        StageFailure {
-            error,
-            instance: false,
-        }
+        StageFailure { error }
     }
 }
 
@@ -421,6 +417,18 @@ fn air_stage(
     opt_level: OptimizationLevel,
     judge_instances: bool,
 ) -> Result<aelys_air::AirProgram, StageFailure> {
+    if opt_level != OptimizationLevel::None && aelys_air::ablation::optimized_stage_refuses() {
+        return Err(backend_diagnostic_error(
+            root.clone(),
+            fallback_source_span(root.as_ref()),
+            "ablation",
+            "the optimized stage is refused by the ablation switch",
+            None,
+            None,
+            Fault::Compiler,
+        )
+        .into());
+    }
     let mut programs: Vec<aelys_air::AirProgram> = Vec::with_capacity(fronts.len());
     let mut bir_imports = aelys_air::bir::Imports::default();
     let mut fresh_returns: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -527,10 +535,9 @@ fn air_stage(
     };
     if !instance_errors.is_empty() {
         let files: Vec<Arc<Source>> = fronts.iter().map(|f| f.source.clone()).collect();
-        return Err(StageFailure {
-            error: instance_surface_errors_to_error(instance_errors, &air, &files, src.clone()),
-            instance: true,
-        });
+        return Err(
+            instance_surface_errors_to_error(instance_errors, &air, &files, src.clone()).into(),
+        );
     }
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
         return Err(vec_surface_errors_to_error(errors, &air, src.clone()).into());
@@ -675,6 +682,7 @@ fn lower_file_to_air_with_source(
             true,
         )
     });
+    let reference = reference.transpose().map_err(|failure| failure.error)?;
 
     let mut warnings: Vec<Warning> = Vec::new();
     let mut optimized: Vec<aelys_sema::TypedProgram> = Vec::with_capacity(checked.len());
@@ -701,21 +709,11 @@ fn lower_file_to_air_with_source(
     let mut required_externs: Option<Vec<String>> = None;
     let air = match (reference, actual) {
         (None, actual) => actual.map_err(|failure| failure.error)?,
-        (Some(Ok(unoptimized)), Ok(air)) => {
+        (Some(unoptimized), Ok(air)) => {
             required_externs = Some(aelys_air::symbols::referenced_extern_symbols(&unoptimized));
             air
         }
-        (Some(Err(unoptimized)), Err(_)) => return Err(unoptimized.error),
-        (Some(Err(unoptimized)), Ok(_)) if unoptimized.instance => return Err(unoptimized.error),
-        (Some(Err(unoptimized)), Ok(_)) => {
-            return Err(optimization_verdict_split(
-                src.clone(),
-                UNOPTIMIZED_LEVEL.to_string(),
-                &unoptimized.error,
-                level,
-            ));
-        }
-        (Some(Ok(_)), Err(optimized_error)) => {
+        (Some(_), Err(optimized_error)) => {
             return Err(optimization_verdict_split(
                 src.clone(),
                 level,

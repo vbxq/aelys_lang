@@ -1,0 +1,7 @@
+
+enum Result<T, E> { Ok(T), Err(E) }
+enum E { X }
+
+fn mk_ok() -> Result<i64, E> { return Result::Ok(5) }
+
+fn main() -> i64 { return mk_ok().unwrap_unchecked() }

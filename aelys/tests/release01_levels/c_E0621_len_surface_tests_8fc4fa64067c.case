@@ -1,0 +1,6 @@
+
+fn main() -> i64 {
+    let mut s: string = "hello"
+    s.len = 9
+    return 0
+}

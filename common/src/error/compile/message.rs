@@ -191,8 +191,9 @@ impl CompileErrorKind {
                 accepted_at,
                 refusal,
             } => format!(
-                "{}\nthat refusal is raised at {} and not at {}, so the compiler reached two \
-                 verdicts on this program",
+                "{}\nthat refusal is raised by the optimized pipeline at {} while the reference \
+                 pipeline at {} accepts the program: the two pipelines disagree, which is a \
+                 compiler defect",
                 refusal, refused_at, accepted_at
             ),
             Self::BackendDiagnostic {

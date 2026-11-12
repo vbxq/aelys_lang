@@ -22,7 +22,9 @@ impl ConstantFolder {
 
         match (&left_unwrapped.kind, &right_unwrapped.kind) {
             (TypedExprKind::Int(a), TypedExprKind::Int(b)) => {
-                self.fold_int_binary(*a, op, *b, original)
+                let operand_ty =
+                    int_operand_type(op, &left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
+                self.fold_int_binary(*a, op, *b, &operand_ty, original)
             }
             (TypedExprKind::Float(a), TypedExprKind::Float(b)) => {
                 let float_ty = float_format(&left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
@@ -110,4 +112,26 @@ fn float_format(left: &InferType, right: &InferType, original: &InferType) -> In
     } else {
         InferType::F64
     }
+}
+
+fn int_operand_type(
+    op: BinaryOp,
+    left: &InferType,
+    right: &InferType,
+    original: &InferType,
+) -> InferType {
+    let shift = matches!(op, BinaryOp::Shl | BinaryOp::Shr);
+    if shift && original.is_integer() {
+        return original.clone();
+    }
+    if left.is_integer() {
+        return left.clone();
+    }
+    if !shift && right.is_integer() {
+        return right.clone();
+    }
+    if original.is_integer() {
+        return original.clone();
+    }
+    InferType::I64
 }

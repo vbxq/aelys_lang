@@ -1,0 +1,4 @@
+fn f(a: i64, d: i64) -> i64 { let x = a / d
+    println("survived")
+    return 0 }
+fn main() -> i64 { return f(-9223372036854775807 - 1, -1) }

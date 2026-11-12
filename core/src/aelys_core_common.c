@@ -640,9 +640,16 @@ AelysString __aelys_to_string_i64_into(char *buffer, long long value) {
     return result;
 }
 
+/* the sign of a nan is whatever produced it, and llvm's constant folder and the hardware disagree */
+static double aelys_unsigned_nan(double value) {
+    return value != value ? __builtin_nan("") : value;
+}
+
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
 AelysString __aelys_to_string_f64(double value) {
     char *buffer = aelys_str_alloc(AELYS_F64_STR_BUF);
+
+    value = aelys_unsigned_nan(value);
 
     int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
     if (len < 0) {
@@ -657,6 +664,7 @@ AelysString __aelys_to_string_f64(double value) {
 
 /* buffer is the caller's frame and must hold AELYS_F64_STR_BUF bytes; nothing here allocates */
 AelysString __aelys_to_string_f64_into(char *buffer, double value) {
+    value = aelys_unsigned_nan(value);
     int len = snprintf(buffer, AELYS_F64_STR_BUF, "%.17g", value);
     if (len < 0) {
         __aelys_panic("snprintf failed in to_string_f64", 33);

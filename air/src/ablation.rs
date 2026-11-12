@@ -2,6 +2,7 @@ use std::cell::Cell;
 
 thread_local! {
     static ARRAY_LENGTH_FROM_SIZE_EXPR: Cell<bool> = const { Cell::new(false) };
+    static OPTIMIZED_STAGE_REFUSES: Cell<bool> = const { Cell::new(false) };
 }
 
 // no cli flag and no env var reaches this: the ablation row drives it to watch the net fire
@@ -11,4 +12,12 @@ pub fn set_array_length_from_size_expr(on: bool) {
 
 pub fn array_length_from_size_expr() -> bool {
     ARRAY_LENGTH_FROM_SIZE_EXPR.with(Cell::get)
+}
+
+pub fn set_optimized_stage_refuses(on: bool) {
+    OPTIMIZED_STAGE_REFUSES.with(|cell| cell.set(on));
+}
+
+pub fn optimized_stage_refuses() -> bool {
+    OPTIMIZED_STAGE_REFUSES.with(Cell::get)
 }

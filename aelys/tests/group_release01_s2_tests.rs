@@ -1,6 +1,8 @@
+#[path = "level_legs/mod.rs"]
+mod level_legs;
+
 use aelys_air::passes::validate::{AirValidationDetail, validate_air};
 use aelys_air::*;
-use aelys_driver::{RuntimeVariant, compile_file_with_llvm_variant};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
 use aelys_opt::OptimizationLevel;
@@ -9,10 +11,6 @@ use aelys_opt::passes::{GlobalConstantPropagator, LocalConstantPropagator};
 use aelys_sema::TypedStmtKind;
 use aelys_sema::{InferType, TypeInference, TypedExpr, TypedExprKind, TypedProgram, TypedStmt};
 use aelys_syntax::Source;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
 use tempfile::tempdir;
 
 const LEVELS: &[(&str, OptimizationLevel)] = &[
@@ -21,8 +19,6 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O2", OptimizationLevel::Standard),
     ("-O3", OptimizationLevel::Aggressive),
 ];
-
-const RUN_LIMIT: Duration = Duration::from_secs(10);
 
 enum Expect {
     Runs { stdout: &'static str, exit: i32 },
@@ -36,101 +32,60 @@ struct Member {
     expect: Expect,
 }
 
-fn exe_path_for(p: &Path) -> PathBuf {
-    let mut o = p.with_extension("");
-    if cfg!(windows) {
-        o.set_extension("exe");
-    }
-    o
-}
-
-fn exit_code(status: &std::process::ExitStatus) -> i32 {
-    if let Some(code) = status.code() {
-        return code;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::ExitStatusExt;
-        if let Some(signal) = status.signal() {
-            return 128 + signal;
-        }
-    }
-    -1
-}
-
-fn run_bounded(exe: &Path) -> Option<(String, i32)> {
-    let mut child = Command::new(exe)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("spawn compiled exe");
-    let stdout = child.stdout.take().expect("child stdout");
-    let reader = std::thread::spawn(move || {
-        let mut text = String::new();
-        let mut stdout = stdout;
-        let _ = std::io::Read::read_to_string(&mut stdout, &mut text);
-        text
-    });
-    let start = Instant::now();
-    loop {
-        if let Some(status) = child.try_wait().expect("poll compiled exe") {
-            let text = reader.join().expect("stdout reader");
-            return Some((text, exit_code(&status)));
-        }
-        if start.elapsed() > RUN_LIMIT {
-            let _ = child.kill();
-            let _ = child.wait();
-            return None;
-        }
-        std::thread::sleep(Duration::from_millis(20));
-    }
-}
-
 fn run_row(row: &str, members: &[Member]) {
     let dir = tempdir().expect("tempdir");
-    let mut legs = 0;
+    let mut legs_run = 0;
+    let mut disagreements = Vec::new();
     for member in members {
-        for (tag, opt) in LEVELS {
-            let stage = dir.path().join(format!("{}_{}", member.name, &tag[1..]));
-            fs::create_dir_all(&stage).expect("stage dir");
-            let root = stage.join("root.aelys");
-            fs::write(&root, member.src).expect("write root");
-            if let Some((file, text)) = member.module {
-                fs::write(stage.join(file), text).expect("write module");
-            }
-            let verdict = compile_file_with_llvm_variant(&root, *opt, false, RuntimeVariant::Rc);
-            match (&member.expect, verdict) {
-                (Expect::Refused(code), Err(err)) => {
-                    let rendered = err.to_string();
+        let legs = level_legs::legs_of(dir.path(), member.name, member.src, member.module, &[]);
+        for (tag, leg) in &legs {
+            match (&member.expect, leg) {
+                (Expect::Refused(code), level_legs::LevelLeg::Refused(rendered)) => {
                     assert!(
                         rendered.contains(code),
                         "{row} {} at {tag}: refusal must be {code}\n{rendered}",
                         member.name
                     );
                 }
-                (Expect::Refused(code), Ok(())) => {
-                    panic!("{row} {} at {tag}: accepted, expected {code}", member.name)
+                (Expect::Refused(code), other) => {
+                    panic!(
+                        "{row} {} at {tag}: expected {code}, got {}",
+                        member.name,
+                        other.render()
+                    )
                 }
-                (Expect::Runs { .. }, Err(err)) => {
-                    panic!("{row} {} at {tag}: refused\n{err}", member.name)
+                (Expect::Runs { .. }, level_legs::LevelLeg::Refused(rendered)) => {
+                    panic!("{row} {} at {tag}: refused\n{rendered}", member.name)
                 }
-                (Expect::Runs { stdout, exit }, Ok(())) => {
-                    let Some((out, code)) = run_bounded(&exe_path_for(&root)) else {
-                        panic!("{row} {} at {tag}: did not terminate", member.name);
-                    };
+                (Expect::Runs { .. }, level_legs::LevelLeg::DidNotTerminate) => {
+                    panic!("{row} {} at {tag}: did not terminate", member.name);
+                }
+                (
+                    Expect::Runs { stdout, exit },
+                    level_legs::LevelLeg::Ran {
+                        stdout: out,
+                        exit: code,
+                        ..
+                    },
+                ) => {
                     assert_eq!(
-                        (out.as_str(), code),
+                        (out.as_str(), *code),
                         (*stdout, *exit),
                         "{row} {} at {tag}: stdout and exit code",
                         member.name
                     );
                 }
             }
-            legs += 1;
+            legs_run += 1;
         }
+        disagreements.extend(level_legs::level_disagreements(member.name, &legs));
     }
-    assert_eq!(legs, members.len() * LEVELS.len(), "{row}: legs run");
+    assert!(
+        disagreements.is_empty(),
+        "{row}: levels disagree\n{}",
+        disagreements.join("\n")
+    );
+    assert_eq!(legs_run, members.len() * LEVELS.len(), "{row}: legs run");
 }
 
 const ROW_42: &[Member] = &[

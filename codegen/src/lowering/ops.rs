@@ -275,7 +275,7 @@ impl<'a> FunctionCodegen<'a> {
                 .map(Into::into),
             BinOp::Ne => self
                 .builder
-                .build_float_compare(FloatPredicate::ONE, left, right, "fcmp_ne")
+                .build_float_compare(FloatPredicate::UNE, left, right, "fcmp_ne")
                 .map(Into::into),
             BinOp::Lt => self
                 .builder

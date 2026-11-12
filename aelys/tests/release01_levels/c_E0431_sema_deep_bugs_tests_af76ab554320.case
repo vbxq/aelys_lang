@@ -1,0 +1,8 @@
+
+fn bad(iter) {
+    for x in iter {
+    }
+}
+fn main() {
+    bad(1)
+}

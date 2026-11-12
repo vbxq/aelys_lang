@@ -1,0 +1,9 @@
+fn id(r: &i64) -> &i64 {
+    return r
+}
+fn via(r: &i64) -> &i64 {
+    return id(r)
+}
+fn main() -> i64 {
+    return 0
+}

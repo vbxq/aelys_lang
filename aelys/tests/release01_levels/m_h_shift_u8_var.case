@@ -1,0 +1,5 @@
+fn f(a: u8, s: u8) -> u8 { return a << s }
+fn main() -> i64 { let x: u8 = 1
+    println("{x << 9}")
+    println("{f(1, 9)}")
+    return 0 }

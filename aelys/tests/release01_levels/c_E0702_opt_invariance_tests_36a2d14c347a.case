@@ -1,0 +1,7 @@
+struct Resource { id: i64 }
+fn main() -> i64 {
+    let a = Resource{id: 1}
+    let b = a
+    let c = a
+    return 0
+}

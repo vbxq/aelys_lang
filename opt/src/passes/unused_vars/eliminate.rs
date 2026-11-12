@@ -1,5 +1,6 @@
 
 use super::super::OptimizationStats;
+use super::super::may_trap_or_allocate;
 use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedFunction, TypedStmt, TypedStmtKind};
 use std::collections::HashSet;
 
@@ -25,6 +26,7 @@ pub fn eliminate_unused_in_block(
             } // keep pub exports
             if !used_vars.contains(name)
                 && !has_side_effects(initializer)
+                && !may_trap_or_allocate(initializer)
                 && !has_observable_drop(&initializer.ty)
             {
                 stats.dead_code_eliminated += 1;

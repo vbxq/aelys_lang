@@ -1787,8 +1787,8 @@ const AIR_SRC_REL: &str = "air/src";
 const COMPARED_STAGE: &str = "fn air_stage(";
 const COMPARED_STAGE_CALLER: &str = "fn lower_file_to_air_with_source(";
 
-const COMPARED_REJECTION_SITES: usize = 13;
-const UNCOMPARED_REJECTION_SITES: usize = 23;
+const COMPARED_REJECTION_SITES: usize = 14;
+const UNCOMPARED_REJECTION_SITES: usize = 22;
 
 // the functions whose refusals the residue excuses for raising before any pass has run
 const PRE_OPTIMIZER_HELPERS: &[&str] = &["front_stage", "build_imports"];

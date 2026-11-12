@@ -1,0 +1,10 @@
+
+struct Resource { id: i64 }
+fn main() -> i64 {
+    let cond = true
+    let a = Resource{id: 1}
+    if cond {
+        let b = a
+    }
+    return a.id
+}

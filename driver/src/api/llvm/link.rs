@@ -103,6 +103,8 @@ fn link_unix(
     for name in &link.libraries {
         args.push(format!("-l{}", name));
     }
+    // a float remainder lowers to fmod or fmodf, which only libm defines
+    args.push("-lm".to_string());
     // the symbol set is the unoptimised air's, so a pass that deletes the only call cannot delete the link
     for symbol in require {
         args.push(format!("-Wl,--require-defined={}", symbol));

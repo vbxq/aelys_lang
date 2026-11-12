@@ -1524,23 +1524,21 @@ whichever one it is written on.",
     },
     DiagnosticInfo {
         code: "E0432",
-        title: "the compiler reached two verdicts on one program",
+        title: "the optimized pipeline refuses a program the reference accepts",
         explanation: "\
-The same source was accepted at one optimization level and refused at
-another. A program is accepted or refused by the language, so the two
-levels cannot both be right about it.
+Above -O0 every program goes through two pipelines: the reference one,
+which is -O0, and the optimized one. When the reference refuses, its
+refusal is the verdict at every level, with the same code, span and
+message. This error is raised only in the other case: the reference
+accepts the program and the optimized pipeline refuses it.
 
-The refusal the strict level raised is printed first, in full, and it is
-the part to read first: it is an ordinary diagnostic and most of the time
-it names something in the program to change. Changing that settles both
-levels at once. Compile at the level named as refusing to see the same
-refusal with its spans.
+That disagreement is a compiler defect, not something in the program.
+The optimized pipeline's refusal is printed first, in full, so the
+report can name what it tripped on. Report the program with the level
+named as refusing.
 
-Only when that refusal describes nothing you can act on is the split
-itself the finding. Then report the program with both levels named.
-
-Switching to the accepting level is never the answer: the binary it
-produces is not covered by the refusal the other level raised.
+Switching to -O0 is never the answer: the binary it produces is not
+covered by the refusal the optimized pipeline raised.
 
 The comparison that raises this runs from type inference to the end of
 AIR validation. The LLVM pass pipeline, the object writer and the linker

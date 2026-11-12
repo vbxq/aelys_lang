@@ -1,0 +1,5 @@
+fn f(c: bool) -> i64 { let k = if c { 1 } else { 2 }
+    let y: u8 = k
+    println("{y}")
+    return 0 }
+fn main() -> i64 { return f(true) }

@@ -109,3 +109,4 @@ air/src/passes/validate.rs	check_type_agreement	2	AirType	_	None	correct-as-is	a
 air/src/passes/validate.rs	check_type_agreement	3	AirType	_	None	correct-as-is	aggregate-only
 air/src/passes/validate.rs	check_type_agreement	4	AirType	_	None	correct-as-is	aggregate-only
 air/src/passes/validate.rs	check_type_agreement	5	AirType	_	ta.clone().or_else(|| tb.clone())	correct-as-is	delegates-to-a-decided-arm
+opt/src/passes/constant_fold/expr/binary/binary_int.rs	bit_width	1	InferType	_	None	correct-as-is	refuses-adaptation

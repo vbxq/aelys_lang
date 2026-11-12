@@ -1784,8 +1784,6 @@ enum S03cExpect {
     Runs(i32, &'static str, &'static str),
     // the -o0 rendering, byte for byte, at all four levels: a re-faulted twin would not match
     Unchanged(&'static str, &'static [&'static str]),
-    // the two sides part company from some level up: the code per level, then what E0432 must say
-    Split([&'static str; 4], &'static [&'static str]),
 }
 
 const S03C_ARRAY_SIZE_IS_A_BINDING: &str = r#"
@@ -1843,15 +1841,11 @@ fn main() -> i64 {
     ),
     (
         "S0.3c-C1 dce removes the instantiation the vec surface check would reject",
-        S03cExpect::Split(
-            ["E0412", "E0412", "E0432", "E0432"],
+        S03cExpect::Unchanged(
+            "E0412",
             &[
-                // the actionable refusal leads, in full, and the level split follows it
-                "error[E0432]: [E0412] [vec-surface] a temporary of `main`",
+                "[vec-surface] a temporary of `main`",
                 "which holds a `Vec<T>` by value inside another container",
-                "that refusal is raised at -O0 and not at -O",
-                "a verdict belongs to the language and not to the optimization level",
-                "read the refusal above first",
             ],
         ),
         r#"
@@ -1999,41 +1993,6 @@ fn s03c_the_net_answers_the_same_way_at_every_level() {
                     )),
                 }
             }
-            S03cExpect::Split(codes, fragments) => {
-                let got: Vec<String> = levels
-                    .iter()
-                    .map(|(name, verdict)| {
-                        format!("{name}={}", s03c_code(verdict).unwrap_or("accept".into()))
-                    })
-                    .collect();
-                let want: Vec<String> = LEVELS
-                    .iter()
-                    .zip(codes.iter())
-                    .map(|((name, _), code)| format!("{name}={code}"))
-                    .collect();
-                if got != want {
-                    failures.push(format!(
-                        "  {id}: expected {want:?}, got {got:?}. an accept on either side of a \
-                         split is the net not running"
-                    ));
-                    continue;
-                }
-                for (name, verdict) in &levels {
-                    let S03aVerdict::Refused(rendered) = verdict else {
-                        continue;
-                    };
-                    if !rendered.contains("[E0432]") {
-                        continue;
-                    }
-                    for fragment in *fragments {
-                        if !rendered.contains(fragment) {
-                            failures.push(format!(
-                                "  {id} at {name}: E0432 never says {fragment:?}:\n{rendered}"
-                            ));
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -2171,25 +2130,14 @@ fn s03c_the_ablation_puts_the_array_length_back_on_the_optimizer_and_the_net_fir
         .collect();
     assert_eq!(
         got,
-        vec!["-O0=E0902", "-O1=E0432", "-O2=E0432", "-O3=E0432"],
-        "with the array length read back off the size expression the optimizer rewrites, -O0 \
-         refuses `[0; n]` and every level above it folds `n` and accepts. the net has to refuse \
-         that split rather than pick a side."
+        vec!["-O0=E0902", "-O1=E0902", "-O2=E0902", "-O3=E0902"],
+        "the ablated program is refused with the reference verdict at every level"
     );
-
-    let (_, split) = &levels[2];
-    let S03aVerdict::Refused(rendered) = split else {
-        panic!("-O2 must refuse the ablated program");
-    };
-    for fragment in [
-        // the refusal leads and the split follows, or the user is told to file a bug for a fixable program
-        "error[E0432]: [E0902]",
-        "unsupported non-constant array size",
-        "that refusal is raised at -O0 and not at -O2",
-    ] {
+    let first = &levels[0].1;
+    for (name, verdict) in &levels[1..] {
         assert!(
-            rendered.contains(fragment),
-            "E0432 must say {fragment:?}, got:\n{rendered}"
+            verdict == first,
+            "the ablated program renders the -O0 refusal byte for byte at {name}"
         );
     }
 
