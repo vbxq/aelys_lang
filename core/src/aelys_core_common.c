@@ -27,6 +27,9 @@ extern long long __aelys_user_main(void);
 /* non-static so the variant unit can bump the free counter through extern */
 long long __aelys_alloc_count = 0;
 long long __aelys_free_count = 0;
+long long __aelys_cycle_collections = 0;
+long long __aelys_cycle_clamped = 0;
+static long long aelys_collections_before_exit = 0;
 
 /* raw libc malloc done by this unit, invisible to the managed counters above */
 long long __aelys_raw_alloc_count = 0;
@@ -777,6 +780,7 @@ int main(int argc, char **argv) {
 
     long long ret = __aelys_user_main();
     int code = (int)(ret & 0xFF);
+    aelys_collections_before_exit = __aelys_cycle_collections;
     /* collect before printing the stats so the collector's frees are counted */
     __aelys_collect();
     if (getenv("AELYS_RC_STATS")) {
@@ -784,6 +788,10 @@ int main(int argc, char **argv) {
                 __aelys_free_count);
         fprintf(stderr, "[raw] allocs=%lld frees=%lld\n", __aelys_raw_alloc_count,
                 __aelys_raw_free_count);
+        if (__aelys_collect_hook) {
+            fprintf(stderr, "[cycles] collections=%lld clamped=%lld\n",
+                    aelys_collections_before_exit, __aelys_cycle_clamped);
+        }
     }
     return code;
 }

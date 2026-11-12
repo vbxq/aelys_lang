@@ -62,6 +62,15 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
     Some((a.trim().parse().ok()?, m.trim().parse().ok()?))
 }
 
+fn parse_cycles(stderr: &str) -> Option<(i64, i64)> {
+    let line = stderr
+        .lines()
+        .find(|l| l.contains("[cycles] collections="))?;
+    let rest = line.trim().strip_prefix("[cycles] collections=")?;
+    let (c, k) = rest.split_once(" clamped=")?;
+    Some((c.trim().parse().ok()?, k.trim().parse().ok()?))
+}
+
 fn linker_unavailable(error: &str) -> bool {
     error.contains("program not found") || error.contains("failed to run")
 }
@@ -103,6 +112,42 @@ impl Harness {
     }
 
     fn cycles_row(&self, id: &str, src: &str, stdout: &str, counted: (i64, i64)) {
+        self.run_row(id, src, stdout, counted, None);
+    }
+
+    fn collected_row(
+        &self,
+        id: &str,
+        src: &str,
+        stdout: &str,
+        counted: (i64, i64),
+        collections: i64,
+    ) {
+        self.run_row(id, src, stdout, counted, Some(collections));
+    }
+
+    fn exit_and_mid_rows(
+        &self,
+        id: &str,
+        src: &str,
+        stdout: &str,
+        counted: (i64, i64),
+        collections: i64,
+    ) {
+        let exit = src.replace("    MID\n", "");
+        let mid = src.replace("MID", "__aelys_collect()");
+        self.collected_row(&format!("{id}-exit"), &exit, stdout, counted, collections);
+        self.collected_row(&format!("{id}-mid"), &mid, stdout, counted, collections + 1);
+    }
+
+    fn run_row(
+        &self,
+        id: &str,
+        src: &str,
+        stdout: &str,
+        counted: (i64, i64),
+        collections: Option<i64>,
+    ) {
         for (tag, opt) in LEVELS {
             for (alloc_name, alloc) in ALLOCATORS {
                 let leg = format!("{tag}_{alloc_name}");
@@ -137,6 +182,15 @@ impl Harness {
                 let got = parse_stats(&seen_err)
                     .unwrap_or_else(|| panic!("{id} at {leg}: no [rc] stats line\n{seen_err}"));
                 assert_eq!(got, counted, "{id} at {leg}: allocs and frees");
+                if let Some(collections) = collections {
+                    let seen = parse_cycles(&seen_err)
+                        .unwrap_or_else(|| panic!("{id} at {leg}: no [cycles] line\n{seen_err}"));
+                    assert_eq!(
+                        seen,
+                        (collections, 0),
+                        "{id} at {leg}: collections and clamps"
+                    );
+                }
             }
         }
     }
@@ -387,4 +441,297 @@ fn release01_7_an_enum_held_directly_in_an_rc_node_is_traced_at_its_real_offset(
     let h = Harness::new();
     h.cycles_row("release01-7", RELEASE01_7, "321\n", (2, 2));
     h.assert_legs(4);
+}
+
+const RELEASE01_8: &str = r#"
+struct T { val: i64, parent: Rc<T>, child: Rc<T> }
+fn work() -> i64 {
+    let root: Rc<T> = Rc::new(T { val: 1, parent: Rc::null(), child: Rc::null() })
+    root.child = Rc::new(T { val: 2, parent: root, child: Rc::null() })
+    return Rc::get(Rc::get(root).child).val
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_8_a_parent_pointer_pair_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-8", RELEASE01_8, "2\n2\n", (4, 4), 0);
+    h.assert_legs(8);
+}
+
+const RELEASE01_9: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+fn work() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::new(Node { val: 2, next: Rc::new(Node { val: 3, next: Rc::null() }) }) })
+    Rc::get(Rc::get(a).next).next.next = a
+    return Rc::get(Rc::get(a).next).val
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_9_an_inline_three_cycle_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-9", RELEASE01_9, "2\n2\n", (6, 6), 0);
+    h.assert_legs(8);
+}
+
+const RELEASE01_10: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+fn build(n: i64, first: Rc<Node>) -> Rc<Node> {
+    if n == 0 { return first }
+    return Rc::new(Node { val: n, next: build(n - 1, first) })
+}
+fn work() -> i64 {
+    let a: Rc<Node> = Rc::new(Node { val: 0, next: Rc::null() })
+    a.next = build(5, a)
+    return Rc::get(Rc::get(a).next).val
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_10_a_ring_built_by_recursion_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-10", RELEASE01_10, "5\n5\n", (12, 12), 0);
+    h.assert_legs(8);
+}
+
+const RELEASE01_11: &str = r#"
+struct DNode { val: i64, next: Rc<DNode>, prev: Rc<DNode> }
+fn build(n: i64, prev: Rc<DNode>) -> Rc<DNode> {
+    if n == 0 { return Rc::null() }
+    let me: Rc<DNode> = Rc::new(DNode { val: n, next: Rc::null(), prev: prev })
+    me.next = build(n - 1, me)
+    return me
+}
+fn work() -> i64 {
+    let h = build(10, Rc::null())
+    return Rc::get(Rc::get(h).next).val
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_11_a_doubly_linked_list_built_by_recursion_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-11", RELEASE01_11, "9\n9\n", (20, 20), 0);
+    h.assert_legs(8);
+}
+
+const RELEASE01_12: &str = r#"
+struct N { v: i64, next: Rc<Rc<N>> }
+fn work() -> i64 {
+    let a: Rc<N> = Rc::new(N { v: 1, next: Rc::null() })
+    let b: Rc<N> = Rc::new(N { v: 2, next: Rc::new(a) })
+    a.next = Rc::new(b)
+    return Rc::get(b).v
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_12_a_cycle_through_an_rc_of_an_rc_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-12", RELEASE01_12, "2\n2\n", (8, 8), 0);
+    h.assert_legs(8);
+}
+
+const RELEASE01_13: &str = r#"
+struct Node { val: i64, next: Rc<Node> }
+struct H { r: Rc<Node> }
+fn mk(h: &mut H, v: i64) {
+    let a: Rc<Node> = Rc::new(Node { val: v, next: Rc::null() })
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
+    a.next = b
+    (*h).r = a
+}
+fn work() -> i64 {
+    let mut h = H { r: Rc::null() }
+    mk(&mut h, 7)
+    __aelys_collect()
+    let v = Rc::get(h.r).val
+    h.r = Rc::null()
+    return v
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_13_a_survivor_dying_through_one_member_is_collected() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-13", RELEASE01_13, "7\n7\n", (4, 4), 2);
+    h.assert_legs(8);
+}
+
+const RELEASE01_14: &str = r#"
+struct N { k: i64, a: Rc<N>, b: Rc<N> }
+fn work() -> i64 {
+    let c: Rc<N> = Rc::new(N { k: 5, a: Rc::null(), b: Rc::null() })
+    let mut x: Rc<N> = Rc::new(N { k: 1, a: c, b: Rc::null() })
+    let mut y: Rc<N> = Rc::new(N { k: 2, a: c, b: x })
+    x.b = y
+    x = Rc::null()
+    y = Rc::null()
+    __aelys_collect()
+    return Rc::get(c).k
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_14_a_live_child_of_two_garbage_parents_survives_their_collection() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-14", RELEASE01_14, "5\n5\n", (6, 6), 2);
+    h.assert_legs(8);
+}
+
+const RELEASE01_15: &str = r#"
+struct DNode { val: i64, next: Rc<DNode>, prev: Rc<DNode> }
+struct DList { head: Rc<DNode>, len: i64 }
+fn push_front(l: &mut DList, v: i64) {
+    (*l).head = Rc::new(DNode { val: v, next: (*l).head, prev: Rc::null() })
+    if !Rc::is_null(Rc::get((*l).head).next) {
+        Rc::get(Rc::get((*l).head).next).prev = (*l).head
+    }
+    (*l).len = (*l).len + 1
+}
+fn work() -> i64 {
+    let mut l = DList { head: Rc::null(), len: 0 }
+    let mut i = 0
+    while i < 1000000 {
+        push_front(&mut l, i)
+        i = i + 1
+    }
+    return l.len
+}
+fn main() -> i64 {
+    let t = work()
+    println("{t}")
+    return 0
+}
+"#;
+
+#[test]
+fn release01_15_a_dead_doubly_linked_list_of_a_million_nodes_is_collected_at_exit() {
+    let h = Harness::new();
+    h.collected_row(
+        "release01-15",
+        RELEASE01_15,
+        "1000000\n",
+        (1_000_000, 1_000_000),
+        0,
+    );
+    h.assert_legs(4);
+}
+
+const RELEASE01_16: &str = r#"
+struct N { s: string, next: Rc<N> }
+struct H { r: Rc<N> }
+fn mk(h: &mut H, p: string) {
+    let a: Rc<N> = Rc::new(N { s: p + "cdefgh", next: Rc::null() })
+    a.next = a
+    (*h).r = a
+}
+fn take(s: string, k: i64) -> i64 {
+    return s.len + s.bytes[0] + k
+}
+fn main() -> i64 {
+    let mut h = H { r: Rc::null() }
+    mk(&mut h, "ab")
+    println(take(Rc::get(h.r).s, { h.r = Rc::null(); __aelys_collect(); 1 }))
+    return 0
+}
+"#;
+
+#[test]
+fn release01_16_an_explicit_collect_in_a_block_argument_after_a_borrowed_read_of_a_cycle_member_stays_balanced() {
+    let h = Harness::new();
+    h.collected_row("release01-16", RELEASE01_16, "106\n", (2, 2), 1);
+    h.assert_legs(4);
+}
+
+const RELEASE01_17: &str = r#"
+struct N { k: i64, a: Rc<N>, b: Rc<N> }
+struct H { r: Rc<N> }
+fn work() -> i64 {
+    let mut h = H { r: Rc::null() }
+    let mut y: Rc<N> = Rc::new(N { k: 7, a: Rc::null(), b: Rc::null() })
+    let mut x: Rc<N> = Rc::new(N { k: 1, a: y, b: Rc::null() })
+    h.r = x
+    let mut p: Rc<N> = Rc::new(N { k: 2, a: y, b: Rc::null() })
+    let mut q: Rc<N> = Rc::new(N { k: 3, a: p, b: Rc::null() })
+    p.b = q
+    x = Rc::null()
+    y = Rc::null()
+    p = Rc::null()
+    q = Rc::null()
+    __aelys_collect()
+    return Rc::get(Rc::get(h.r).a).k
+}
+fn main() -> i64 {
+    let t = work()
+    MID
+    let u = work()
+    println(t)
+    println(u)
+    return 0
+}
+"#;
+
+#[test]
+fn release01_17_an_object_live_only_by_propagation_is_kept() {
+    let h = Harness::new();
+    h.exit_and_mid_rows("release01-17", RELEASE01_17, "7\n7\n", (8, 8), 2);
+    h.assert_legs(8);
 }

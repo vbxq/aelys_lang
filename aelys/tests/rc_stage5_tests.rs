@@ -151,6 +151,7 @@ extern void __aelys_rc_release(void *ptr);
 
 long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
+long long __aelys_cycle_collections = 0, __aelys_cycle_clamped = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
 void (*const __aelys_rc_drop_table[8])(void *) = {0};
@@ -264,6 +265,7 @@ extern void __aelys_rc_release(void *ptr);
 
 long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
+long long __aelys_cycle_collections = 0, __aelys_cycle_clamped = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
 void (*const __aelys_rc_drop_table[8])(void *) = {0};
@@ -387,6 +389,7 @@ extern void __aelys_rc_release(void *ptr);
 
 long long __aelys_free_count = 0;
 long long __aelys_alloc_count = 0;
+long long __aelys_cycle_collections = 0, __aelys_cycle_clamped = 0;
 void (*__aelys_collect_hook)(void) = 0;
 const unsigned __aelys_rc_type_table[8] = {0};
 void (*const __aelys_rc_drop_table[8])(void *) = {0};

@@ -11,6 +11,8 @@
 extern void __aelys_free(void *ptr);
 extern void __aelys_panic(const char *ptr, long long len);
 extern long long __aelys_free_count;
+extern long long __aelys_cycle_collections;
+extern long long __aelys_cycle_clamped;
 extern void (*__aelys_collect_hook)(void);
 
 static inline uint32_t *aelys_rc_refcount(void *ptr) {
@@ -31,11 +33,14 @@ typedef struct {
     void *ptr;
     uint32_t gc_refcount; /* a side copy, the header refcount is never scribbled on */
     uint8_t live;
+    uint8_t transient;
+    uint8_t rereg;
 } AelysCandidate;
 
 static AelysCandidate *g_candidates = NULL;
 static size_t g_count = 0;
 static size_t g_capacity = 0;
+static size_t g_live = 0;
 /* a collect holds candidate indices across releases that push, so never compact during one */
 static int g_collecting = 0;
 
@@ -97,6 +102,7 @@ static void candidates_push(void *ptr) {
     if (g_count == g_capacity) {
         if (!g_collecting) {
             candidates_compact_from(0);
+            g_live = g_count;
         }
         if (g_capacity == 0 || g_count > g_capacity / 2) {
             size_t new_cap = g_capacity ? g_capacity * 2 : 16;
@@ -112,8 +118,11 @@ static void candidates_push(void *ptr) {
     g_candidates[g_count].ptr = ptr;
     g_candidates[g_count].gc_refcount = 0;
     g_candidates[g_count].live = 0;
+    g_candidates[g_count].transient = 0;
+    g_candidates[g_count].rereg = 0;
     *aelys_rc_candidate_slot(ptr) = (uint32_t)g_count;
     g_count++;
+    g_live++;
 }
 
 static AelysCandidate *candidate_find(void *ptr) {
@@ -132,6 +141,9 @@ static void candidate_remove(void *ptr) {
     AelysCandidate *c = candidate_find(ptr);
     if (c != NULL) {
         c->ptr = NULL;
+        if (!g_collecting) {
+            g_live--;
+        }
     }
 }
 
@@ -209,10 +221,68 @@ void __aelys_rc_release(void *ptr) {
     if ((*flags & AELYS_FLAG_CANDIDATE) == 0) {
         *flags |= AELYS_FLAG_CANDIDATE;
         candidates_push(ptr);
+    } else if (g_collecting) {
+        AelysCandidate *c = candidate_find(ptr);
+        if (c != NULL) {
+            c->rereg = 1;
+        }
+    }
+}
+
+static int transient_push(void *ptr) {
+    if (g_count == g_capacity) {
+        size_t new_cap = g_capacity ? g_capacity * 2 : 16;
+        AelysCandidate *grown =
+            (AelysCandidate *)realloc(g_candidates, new_cap * sizeof(AelysCandidate));
+        if (!grown) {
+            return 0;
+        }
+        g_candidates = grown;
+        g_capacity = new_cap;
+    }
+    *aelys_rc_flags(ptr) |= AELYS_FLAG_CANDIDATE;
+    g_candidates[g_count].ptr = ptr;
+    g_candidates[g_count].gc_refcount = aelys_rc_refcount(ptr)[0];
+    g_candidates[g_count].live = 0;
+    g_candidates[g_count].transient = 1;
+    g_candidates[g_count].rereg = 0;
+    *aelys_rc_candidate_slot(ptr) = (uint32_t)g_count;
+    g_count++;
+    return 1;
+}
+
+/* only valid before the first release of the collect phase */
+static void collect_abort(void) {
+    for (size_t i = 0; i < g_count; i++) {
+        if (g_candidates[i].ptr != NULL && g_candidates[i].transient) {
+            *aelys_rc_flags(g_candidates[i].ptr) &= (uint8_t)~AELYS_FLAG_CANDIDATE;
+            g_candidates[i].ptr = NULL;
+        }
+    }
+    candidates_compact_from(0);
+    g_live = g_count;
+    g_collecting = 0;
+}
+
+static void candidates_shrink(void) {
+    size_t floor = g_live > 16384 ? g_live : 16384;
+    if (g_capacity <= 4 * floor) {
+        return;
+    }
+    size_t new_cap = 2 * floor;
+    AelysCandidate *shrunk =
+        (AelysCandidate *)realloc(g_candidates, new_cap * sizeof(AelysCandidate));
+    if (shrunk) {
+        g_candidates = shrunk;
+        g_capacity = new_cap;
     }
 }
 
 void __aelys_cycle_collect(void) {
+    if (g_collecting) {
+        return;
+    }
+    __aelys_cycle_collections++;
     if (g_count == 0) {
         return;
     }
@@ -226,9 +296,12 @@ void __aelys_cycle_collect(void) {
         }
         g_candidates[i].gc_refcount = aelys_rc_refcount(c)[0];
         g_candidates[i].live = 0;
+        g_candidates[i].transient = 0;
+        g_candidates[i].rereg = 0;
     }
 
     /* subtract internal refs, so what remains is the external ref count */
+    /* the bound is reread each pass: a child appended here must be expanded too */
     for (size_t i = 0; i < g_count; i++) {
         void *c = g_candidates[i].ptr;
         if (c == NULL) {
@@ -237,47 +310,55 @@ void __aelys_cycle_collect(void) {
         uint32_t n = rc_child_count(c);
         for (uint32_t k = 0; k < n; k++) {
             void *child = rc_child_at(c, k);
-            if (child == NULL) {
+            if (child == NULL || (*aelys_rc_flags(child) & AELYS_FLAG_NO_TRACE) != 0) {
                 continue;
             }
             AelysCandidate *cn = candidate_find(child);
-            if (cn != NULL && cn->gc_refcount > 0) {
+            if (cn == NULL) {
+                if (!transient_push(child)) {
+                    collect_abort();
+                    return;
+                }
+                cn = &g_candidates[g_count - 1];
+            }
+            if (cn->gc_refcount > 0) {
                 cn->gc_refcount -= 1;
+            } else {
+                __aelys_cycle_clamped++;
             }
         }
     }
 
     /* anything with an external ref left is reachable from outside, so it is live */
-    for (size_t i = 0; i < g_count; i++) {
+    size_t reached = g_count;
+    uint32_t *stack = (uint32_t *)malloc(reached * sizeof(uint32_t));
+    if (!stack) {
+        collect_abort();
+        return;
+    }
+    size_t sp = 0;
+    for (size_t i = 0; i < reached; i++) {
         if (g_candidates[i].ptr != NULL && g_candidates[i].gc_refcount > 0) {
             g_candidates[i].live = 1;
+            stack[sp++] = (uint32_t)i;
         }
     }
-
-    /* propagate liveness to a fixpoint, so a cycle hanging off a live root survives
-       whole; this is what stops the collector from freeing reachable objects */
-    int changed = 1;
-    while (changed) {
-        changed = 0;
-        for (size_t i = 0; i < g_count; i++) {
-            if (!g_candidates[i].live || g_candidates[i].ptr == NULL) {
+    while (sp > 0) {
+        void *c = g_candidates[stack[--sp]].ptr;
+        uint32_t n = rc_child_count(c);
+        for (uint32_t k = 0; k < n; k++) {
+            void *child = rc_child_at(c, k);
+            if (child == NULL) {
                 continue;
             }
-            void *c = g_candidates[i].ptr;
-            uint32_t n = rc_child_count(c);
-            for (uint32_t k = 0; k < n; k++) {
-                void *child = rc_child_at(c, k);
-                if (child == NULL) {
-                    continue;
-                }
-                AelysCandidate *cn = candidate_find(child);
-                if (cn != NULL && !cn->live) {
-                    cn->live = 1;
-                    changed = 1;
-                }
+            AelysCandidate *cn = candidate_find(child);
+            if (cn != NULL && !cn->live) {
+                cn->live = 1;
+                stack[sp++] = (uint32_t)(cn - g_candidates);
             }
         }
     }
+    free(stack);
 
     /* everything not live is a pure cycle; clear all their fields before freeing any
        of them, otherwise a child dangles when its parent goes first */
@@ -320,13 +401,15 @@ void __aelys_cycle_collect(void) {
 
     /* survivors lose the candidate bit so a later release can register them again */
     for (size_t i = 0; i < gc_garbage_bound; i++) {
-        if (g_candidates[i].live && g_candidates[i].ptr != NULL) {
+        if (g_candidates[i].ptr != NULL && !g_candidates[i].rereg) {
             *aelys_rc_flags(g_candidates[i].ptr) &= (uint8_t)~AELYS_FLAG_CANDIDATE;
+            g_candidates[i].ptr = NULL;
         }
     }
-    /* keep the candidates registered during P4: dropping them while their dedup bit is
-       still set would make them unpushable forever */
-    candidates_compact_from(gc_garbage_bound);
+    /* a candidate registered while garbage was released keeps its dedup bit, so dropping it would make it unpushable forever */
+    candidates_compact_from(0);
+    g_live = g_count;
+    candidates_shrink();
     g_collecting = 0;
 }
 
