@@ -207,6 +207,41 @@ impl Parser {
         }
     }
 
+    // the parse goes on after a misnamed binding, so one wrong name gives one diagnostic
+    fn refuse_in_place(&mut self, kind: CompileErrorKind, span: aelys_syntax::Span) {
+        let diag = CompileError::new(kind, span, Arc::clone(&self.source)).to_diagnostic();
+        self.errors.push(diag);
+    }
+
+    fn consume_value_name(&mut self, expected: &str) -> Result<String> {
+        let span = self.peek().span;
+        let name = self.consume_identifier(expected)?;
+        self.refuse_reserved_value_name(&name, span);
+        Ok(name)
+    }
+
+    fn refuse_reserved_value_name(&mut self, name: &str, span: aelys_syntax::Span) -> bool {
+        let Some(enum_name) = aelys_syntax::prelude_variant_enum(name) else {
+            return false;
+        };
+        let kind = CompileErrorKind::ReservedVariantName {
+            name: name.to_string(),
+            enum_name: enum_name.to_string(),
+        };
+        self.refuse_in_place(kind, span);
+        true
+    }
+
+    fn consume_binding_name(&mut self, expected: &str) -> Result<String> {
+        let span = self.peek().span;
+        let name = self.consume_identifier(expected)?;
+        if !self.refuse_reserved_value_name(&name, span) && name.starts_with(char::is_uppercase) {
+            let kind = CompileErrorKind::UppercaseBinding { name: name.clone() };
+            self.refuse_in_place(kind, span);
+        }
+        Ok(name)
+    }
+
     // while null stays a reserved keyword everywhere else
     fn consume_path_segment(&mut self, expected: &str) -> Result<String> {
         if matches!(self.peek().kind, TokenKind::Null) {

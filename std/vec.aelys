@@ -7,9 +7,9 @@ pub fn len(v: &Vec<i64>) -> i64 { return Vec::len(*v) }
 pub fn is_empty(v: &Vec<i64>) -> bool { return Vec::len(*v) == 0 }
 
 pub fn get(v: &Vec<i64>, i: i64) -> Option<i64> {
-    if i < 0 { return Option::None }
-    if i >= Vec::len(*v) { return Option::None }
-    return Option::Some((*v)[i])
+    if i < 0 { return None }
+    if i >= Vec::len(*v) { return None }
+    return Some((*v)[i])
 }
 
 pub fn first(v: &Vec<i64>) -> Option<i64> { return get(v, 0) }
@@ -18,8 +18,8 @@ pub fn last(v: &Vec<i64>) -> Option<i64> { return get(v, Vec::len(*v) - 1) }
 
 // the intrinsic aborts on an empty vec, so the length decides before it is called
 pub fn pop(v: &mut Vec<i64>) -> Option<i64> {
-    if Vec::len(*v) == 0 { return Option::None }
-    return Option::Some(Vec::pop(*v))
+    if Vec::len(*v) == 0 { return None }
+    return Some(Vec::pop(*v))
 }
 
 pub fn index_of(v: &Vec<i64>, x: i64) -> i64 {
@@ -31,8 +31,8 @@ pub fn index_of(v: &Vec<i64>, x: i64) -> i64 {
 
 pub fn find(v: &Vec<i64>, x: i64) -> Option<i64> {
     let i: i64 = index_of(v, x)
-    if i < 0 { return Option::None }
-    return Option::Some(i)
+    if i < 0 { return None }
+    return Some(i)
 }
 
 pub fn contains(v: &Vec<i64>, x: i64) -> bool { return index_of(v, x) >= 0 }

@@ -158,6 +158,32 @@ impl Parser {
         }
 
         let mut enum_name = self.consume_identifier("enum name or _")?;
+        let unqualified = !self.check(&TokenKind::ColonColon) && !self.check(&TokenKind::Dot);
+        if unqualified {
+            let prelude_enum = match aelys_syntax::prelude_variant_enum(&enum_name) {
+                Some(prelude_enum) => prelude_enum,
+                None if enum_name.starts_with(char::is_uppercase) => "",
+                None => {
+                    self.refuse_in_place(
+                        CompileErrorKind::NotAVariantInScope { name: enum_name },
+                        span,
+                    );
+                    self.pattern_bindings()?;
+                    return Ok(Pattern::Wildcard(span));
+                }
+            };
+            let variant = std::mem::replace(&mut enum_name, prelude_enum.to_string());
+            let variant_end_span = self.previous().span;
+            let bindings = self.pattern_bindings()?;
+            let end_span = self.previous().span;
+            return Ok(Pattern::Variant {
+                enum_name,
+                variant,
+                bindings,
+                span: span.merge(end_span.merge(variant_end_span)),
+                unqualified: true,
+            });
+        }
         while self.check(&TokenKind::Dot)
             && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
         {
@@ -169,21 +195,7 @@ impl Parser {
         self.consume(&TokenKind::ColonColon, "::")?;
         let variant = self.consume_identifier("variant name")?;
         let variant_end_span = self.previous().span;
-
-        let mut bindings = Vec::new();
-        if self.match_token(&TokenKind::LParen) {
-            if !self.check(&TokenKind::RParen) {
-                loop {
-                    let binding = self.consume_identifier("binding name")?;
-                    bindings.push(binding);
-                    if !self.match_token(&TokenKind::Comma) {
-                        break;
-                    }
-                }
-            }
-            self.consume(&TokenKind::RParen, ")")?;
-        }
-
+        let bindings = self.pattern_bindings()?;
         let end_span = self.previous().span;
 
         Ok(Pattern::Variant {
@@ -191,7 +203,57 @@ impl Parser {
             variant,
             bindings,
             span: span.merge(end_span.merge(variant_end_span)),
+            unqualified: false,
         })
+    }
+
+    fn pattern_bindings(&mut self) -> Result<Vec<String>> {
+        let mut bindings = Vec::new();
+        if self.match_token(&TokenKind::LParen) {
+            if !self.check(&TokenKind::RParen) {
+                loop {
+                    if self.starts_a_nested_pattern() {
+                        let span = self.peek().span;
+                        self.refuse_in_place(CompileErrorKind::NestedPattern, span);
+                        self.skip_to_pattern_close();
+                        return Ok(bindings);
+                    }
+                    bindings.push(self.consume_binding_name("binding name")?);
+                    if !self.match_token(&TokenKind::Comma) {
+                        break;
+                    }
+                }
+            }
+            self.consume(&TokenKind::RParen, ")")?;
+        }
+        Ok(bindings)
+    }
+
+    fn starts_a_nested_pattern(&self) -> bool {
+        let TokenKind::Identifier(name) = &self.peek().kind else {
+            return false;
+        };
+        aelys_syntax::prelude_variant_enum(name).is_some()
+            || matches!(
+                self.peek_at(1).kind,
+                TokenKind::ColonColon | TokenKind::Dot | TokenKind::LParen
+            )
+    }
+
+    fn skip_to_pattern_close(&mut self) {
+        let mut depth = 1usize;
+        while !self.is_at_end() {
+            match self.advance().kind {
+                TokenKind::LParen => depth += 1,
+                TokenKind::RParen => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return;
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     pub(super) fn block_expression(&mut self) -> Result<Expr> {
@@ -341,7 +403,15 @@ impl Parser {
                 let name = name.clone();
                 return self.struct_literal(name, span);
             }
-            TokenKind::Identifier(name) => ExprKind::Identifier(name),
+            TokenKind::Identifier(name) => match aelys_syntax::prelude_variant_enum(&name) {
+                Some(enum_name) => ExprKind::EnumVariant {
+                    enum_name: enum_name.to_string(),
+                    variant: name,
+                    args: Vec::new(),
+                    unqualified: true,
+                },
+                None => ExprKind::Identifier(name),
+            },
 
             TokenKind::LBracket => {
                 return self.array_literal(span);
@@ -593,6 +663,17 @@ impl Parser {
                 Arc::clone(&self.source),
             ))
         })?;
+        if let Some(refusal) = parser.errors.first() {
+            return Err(CompileError::new(
+                CompileErrorKind::UnexpectedToken {
+                    expected: "expression".to_string(),
+                    found: format!("invalid expression in format string: {}", refusal.message),
+                },
+                span,
+                Arc::clone(&self.source),
+            )
+            .into());
+        }
 
         remap_expr_spans(&mut expr, span);
         Ok(expr)

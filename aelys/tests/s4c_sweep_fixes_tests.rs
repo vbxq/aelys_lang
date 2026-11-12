@@ -263,10 +263,10 @@ fn main() -> i64 {
     let anchor: i64 = 0
     let mut r: &i64 = &anchor
     {
-        let o: Option<i64> = Option::Some(7)
+        let o: Option<i64> = Some(7)
         match o {
-            Option::Some(t) => r = &t,
-            Option::None => r = &anchor,
+            Some(t) => r = &t,
+            None => r = &anchor,
         }
     }
     println(*r)
@@ -281,10 +281,10 @@ fn main() -> i64 {
     let anchor: string = "zz"
     let mut b: &[u8] = anchor.bytes
     {
-        let o: Option<string> = Option::Some("hi" + "!")
+        let o: Option<string> = Some("hi" + "!")
         match o {
-            Option::Some(t) => b = t.bytes,
-            Option::None => b = anchor.bytes,
+            Some(t) => b = t.bytes,
+            None => b = anchor.bytes,
         }
     }
     println(b[0] as i64)
@@ -318,10 +318,10 @@ fn main() -> i64 {
     let anchor: i64 = 0
     let mut r: &i64 = &anchor
     for i in 0..2 {
-        let o: Option<i64> = Option::Some(i * 10 + 1)
+        let o: Option<i64> = Some(i * 10 + 1)
         match o {
-            Option::Some(t) => { if i == 0 { r = &t } }
-            Option::None => r = &anchor
+            Some(t) => { if i == 0 { r = &t } }
+            None => r = &anchor
         }
     }
     println(*r)
@@ -394,10 +394,10 @@ const S4C_BINDER_READ: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     return 0
 }
@@ -407,13 +407,13 @@ const S4C_BINDER_BORROWED_INSIDE: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(t) => {
+        Some(t) => {
             let p: &i64 = &t
             println(*p)
         }
-        Option::None => println(0)
+        None => println(0)
     }
     return 0
 }
@@ -423,14 +423,14 @@ const S4C_BINDER_BYTES_INSIDE: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<string> = Option::Some("hi")
+    let o: Option<string> = Some("hi")
     match o {
-        Option::Some(s) => {
+        Some(s) => {
             let b: &[u8] = s.bytes
             println(b[0] as i64)
             println(s)
         }
-        Option::None => println(0)
+        None => println(0)
     }
     return 0
 }
@@ -442,10 +442,10 @@ needs Option from std.result
 fn take(p: &i64) -> i64 { return *p }
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(t) => println(take(&t)),
-        Option::None => println(0)
+        Some(t) => println(take(&t)),
+        None => println(0)
     }
     return 0
 }
@@ -455,16 +455,16 @@ const S4C_BINDER_NESTED: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(t) => {
-            let i: Option<i64> = Option::Some(t + 1)
+        Some(t) => {
+            let i: Option<i64> = Some(t + 1)
             match i {
-                Option::Some(t) => println(t),
-                Option::None => println(0)
+                Some(t) => println(t),
+                None => println(0)
             }
         }
-        Option::None => println(0)
+        None => println(0)
     }
     return 0
 }
@@ -476,10 +476,10 @@ needs Option from std.result
 fn main() -> i64 {
     let mut n: i64 = 0
     for i in 0..3 {
-        let o: Option<i64> = Option::Some(i)
+        let o: Option<i64> = Some(i)
         match o {
-            Option::Some(t) => n = n + t,
-            Option::None => n = n + 0
+            Some(t) => n = n + t,
+            None => n = n + 0
         }
     }
     println(n)

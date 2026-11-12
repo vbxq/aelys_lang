@@ -139,7 +139,7 @@ fn s31_a_program_that_imports_a_library_prints_a_multibyte_string() {
 }
 
 const ABS_7: &str = r#"
-needs std.math
+needs lib.math
 
 fn main() -> i64 {
     return math.abs(0 - 7)
@@ -151,7 +151,7 @@ const ROOT_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    return 7\n}\n";
 
 #[test]
 fn s32_a_module_resolves_from_an_include_root() {
-    let lib = stage(&[("std/math.aelys", ROOT_MATH)]);
+    let lib = stage(&[("lib/math.aelys", ROOT_MATH)]);
     run_row(
         "S3.2-1",
         &[("root.aelys", ABS_7)],
@@ -163,11 +163,11 @@ fn s32_a_module_resolves_from_an_include_root() {
 
 #[test]
 fn s32_the_root_files_own_directory_outranks_every_include_root() {
-    let a = stage(&[("std/math.aelys", ROOT_MATH)]);
-    let b = stage(&[("std/math.aelys", ROOT_MATH)]);
+    let a = stage(&[("lib/math.aelys", ROOT_MATH)]);
+    let b = stage(&[("lib/math.aelys", ROOT_MATH)]);
     run_row(
         "S3.2-2",
-        &[("root.aelys", ABS_7), ("std/math.aelys", LOCAL_MATH)],
+        &[("root.aelys", ABS_7), ("lib/math.aelys", LOCAL_MATH)],
         &SourceOptions::with_include(vec![a.path().to_path_buf(), b.path().to_path_buf()]),
         99,
         "",
@@ -176,9 +176,9 @@ fn s32_the_root_files_own_directory_outranks_every_include_root() {
 
 #[test]
 fn s32_a_module_under_two_include_roots_is_refused_and_names_every_root() {
-    let a = stage(&[("std/math.aelys", ROOT_MATH)]);
-    let b = stage(&[("std/math.aelys", ROOT_MATH)]);
-    let c = stage(&[("std/math.aelys", ROOT_MATH)]);
+    let a = stage(&[("lib/math.aelys", ROOT_MATH)]);
+    let b = stage(&[("lib/math.aelys", ROOT_MATH)]);
+    let c = stage(&[("lib/math.aelys", ROOT_MATH)]);
     let roots = vec![
         a.path().to_path_buf(),
         b.path().to_path_buf(),
@@ -199,7 +199,7 @@ fn s32_a_module_under_two_include_roots_is_refused_and_names_every_root() {
 
 #[test]
 fn s32_one_root_written_twice_is_not_ambiguous() {
-    let a = stage(&[("std/math.aelys", ROOT_MATH)]);
+    let a = stage(&[("lib/math.aelys", ROOT_MATH)]);
     run_row(
         "S3.2-4",
         &[("root.aelys", ABS_7)],
@@ -214,7 +214,7 @@ fn s32_one_root_written_twice_is_not_ambiguous() {
 }
 
 const NEEDS_NOPE: &str = r#"
-needs std.nope
+needs lib.nope
 
 fn main() -> i64 {
     return 0
@@ -223,17 +223,17 @@ fn main() -> i64 {
 
 #[test]
 fn s32_a_missing_module_names_every_candidate_it_tried() {
-    let a = stage(&[("std/math.aelys", ROOT_MATH)]);
-    let b = stage(&[("std/math.aelys", ROOT_MATH)]);
+    let a = stage(&[("lib/math.aelys", ROOT_MATH)]);
+    let b = stage(&[("lib/math.aelys", ROOT_MATH)]);
     let first = a
         .path()
-        .join("std")
+        .join("lib")
         .join("nope.aelys")
         .display()
         .to_string();
     let second = b
         .path()
-        .join("std")
+        .join("lib")
         .join("nope.aelys")
         .display()
         .to_string();
@@ -249,18 +249,13 @@ fn s32_a_missing_module_names_every_candidate_it_tried() {
 #[test]
 fn s32_a_library_module_that_imports_a_sibling_compiles_on_its_own() {
     let slice = repo_root().join("std").join("slice.aelys");
-    let bare =
-        lower_file_to_air_with_sources(&slice, OptimizationLevel::None, &SourceOptions::default());
-    let Err(rendered) = bare else {
+    if let Err(err) =
+        lower_file_to_air_with_sources(&slice, OptimizationLevel::None, &SourceOptions::default())
+    {
         panic!(
-            "S3.2-6: with no search root `std/slice.aelys` MUST still look for \
-             `std/std/result.aelys`"
+            "S3.2-6: with no search root `std/slice.aelys` MUST compile against the embedded std\n{err}"
         );
-    };
-    assert!(
-        rendered.contains("[E0601]") && rendered.contains("std.result"),
-        "S3.2-6: the bare rejection MUST be the module-not-found it always was\n{rendered}"
-    );
+    }
 
     if let Err(err) = lower_file_to_air_with_sources(
         &slice,
@@ -273,10 +268,10 @@ fn s32_a_library_module_that_imports_a_sibling_compiles_on_its_own() {
 
 const PRELUDE_OPTION: &str = r#"
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(41)
+    let o: Option<i64> = Some(41)
     return match o {
-        Option::Some(v) => v + 1,
-        Option::None => 0,
+        Some(v) => v + 1,
+        None => 0,
     }
 }
 "#;
@@ -415,7 +410,7 @@ needs std.result
 
 fn main() -> i64 {
     let s: Option<i64> = result.Option::Some(40)
-    let t: result.Option<i64> = Option::Some(2)
+    let t: result.Option<i64> = Some(2)
     return result.some_or(s, 0) + result.some_or(t, 0)
 }
 "#;

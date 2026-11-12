@@ -1656,15 +1656,15 @@ fn ident(r: &i64) -> &i64 {
 
 fn read(o: Option<&i64>) -> i64 {
     return match o {
-        Option::Some(r) => *r,
-        Option::None => 0
+        Some(r) => *r,
+        None => 0
     }
 }
 
 fn through<T>(k: i64, f: fn(&i64) -> T, g: fn(Option<T>) -> i64) -> i64 {
     let r: Option<T> = {
         let a: Rc<i64> = Rc::new(k)
-        Option::Some(f(&Rc::get(a)))
+        Some(f(&Rc::get(a)))
     }
     let p: Rc<i64> = Rc::new(9)
     return g(r) * 1000 + Rc::get(p)
@@ -2377,7 +2377,7 @@ fn sb46_a_slot_that_escapes_by_reference_after_a_loop_keeps_the_releases_inside_
 const SB53_A_PARAMETER_STORED_IN_A_STRUCT_AN_ENUM_OR_AN_ARRAY: &str = r#"
 struct P { name: string }
 fn mk(s: string) -> P { return P { name: s } }
-fn wrap(s: string) -> Option<string> { return Option::Some(s) }
+fn wrap(s: string) -> Option<string> { return Some(s) }
 fn arr(s: string) -> [string; 2] { return [s, "c"] }
 fn fill(s: string) -> [string; 3] { return [s; 3] }
 fn main() -> i64 {
@@ -2389,8 +2389,8 @@ fn main() -> i64 {
     let r: string = "QQ" + "{9}"
     println(p.name)
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     println(a[0])
     println(b[0])
@@ -2498,7 +2498,7 @@ fn sb49_a_string_kept_by_an_rc_or_a_closure_takes_a_share_of_its_own() {
 }
 
 const SB56_A_PARAMETER_HANDED_TO_A_GENERIC_CALLEE: &str = r#"
-fn keep<T>(x: T) -> Option<T> { return Option::Some(x) }
+fn keep<T>(x: T) -> Option<T> { return Some(x) }
 fn through(s: string) -> Option<string> { return keep(s) }
 fn main() -> i64 {
     let a: Option<string> = through("ab" + "{1}")
@@ -2507,12 +2507,12 @@ fn main() -> i64 {
     let q: string = "QQ" + "{8}"
     let r: string = "QQ" + "{9}"
     match a {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     match b {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     println(s)
     println(q)
@@ -2615,12 +2615,12 @@ fn main() -> i64 {
     let q: string = "QQ" + "{8}"
     let r: string = "QQ" + "{9}"
     match a {
-        Result::Ok(x) => println(x),
-        Result::Err(_) => println("e"),
+        Ok(x) => println(x),
+        Err(_) => println("e"),
     }
     match b {
-        Result::Ok(x) => println(x),
-        Result::Err(_) => println("e"),
+        Ok(x) => println(x),
+        Err(_) => println("e"),
     }
     println(q)
     println(r)
@@ -2922,13 +2922,13 @@ fn churn() -> Vec<string> {
 }
 
 fn get<T>(v: &Vec<T>, i: i64) -> Option<T> {
-    if i < 0 || i >= Vec::len(*v) { return Option::None }
-    return Option::Some((*v)[i])
+    if i < 0 || i >= Vec::len(*v) { return None }
+    return Some((*v)[i])
 }
 fn lookup(names: &Vec<string>, i: i64) -> string {
     match get(names, i) {
-        Option::Some(x) => x,
-        Option::None => "?",
+        Some(x) => x,
+        None => "?",
     }
 }
 fn load() -> Option<string> {
@@ -2941,8 +2941,8 @@ fn main() -> i64 {
     let o: Option<string> = load()
     let k = churn()
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     return 0
 }
@@ -3144,14 +3144,14 @@ fn churn() -> Vec<string> {
     return keep
 }
 
-fn keep2<T>(a: T, n: i64) -> Option<T> { return Option::Some(a) }
+fn keep2<T>(a: T, n: i64) -> Option<T> { return Some(a) }
 fn main() -> i64 {
     let mut s: string = victim(1)
     let o: Option<string> = keep2(s, { s = victim(2); 1 })
     let k = churn()
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     println(s)
     println(k[0])
@@ -3360,12 +3360,12 @@ fn main() -> i64 {
     let mut v: Vec<P> = Vec::new()
     put(&mut v, P { name: victim(1) })
     let mut w: Vec<Option<string>> = Vec::new()
-    put(&mut w, Option::Some(victim(2)))
+    put(&mut w, Some(victim(2)))
     let k = churn()
     println(v[0].name)
     match w[0] {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     return 0
 }
@@ -3397,10 +3397,10 @@ fn churn() -> Vec<string> {
 
 fn wrap_local<T>(x: T) -> Option<T> {
     let y: T = x
-    return Option::Some(y)
+    return Some(y)
 }
 fn wrap_pick<T>(c: bool, a: T, b: T) -> Option<T> {
-    return Option::Some(pick(c, a, b))
+    return Some(pick(c, a, b))
 }
 fn pick<T>(c: bool, a: T, b: T) -> T { if c { return a } return b }
 fn main() -> i64 {
@@ -3408,12 +3408,12 @@ fn main() -> i64 {
     let p: Option<string> = wrap_pick(true, victim(2), victim(3))
     let k = churn()
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     match p {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     return 0
 }
@@ -3473,8 +3473,8 @@ fn churn() -> Vec<string> {
 }
 
 fn first2<T>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return Option::None }
-    return Option::Some(s[0])
+    if s.len == 0 { return None }
+    return Some(s[0])
 }
 fn main() -> i64 {
     let mut v: Vec<string> = Vec::new()
@@ -3483,8 +3483,8 @@ fn main() -> i64 {
     v[0] = victim(2)
     let k = churn()
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     return 0
 }
@@ -3716,7 +3716,7 @@ fn churn() -> Vec<string> {
 
 fn grab<T>(mut x: T, v: &Vec<T>) -> Option<T> {
     x = (*v)[0]
-    return Option::Some(x)
+    return Some(x)
 }
 fn main() -> i64 {
     let mut v: Vec<string> = Vec::new()
@@ -3725,8 +3725,8 @@ fn main() -> i64 {
     v[0] = victim(2)
     let k = churn()
     match o {
-        Option::Some(x) => println(x),
-        Option::None => println("none"),
+        Some(x) => println(x),
+        None => println("none"),
     }
     return 0
 }
@@ -3833,7 +3833,7 @@ fn cnt<T>(x: T) -> i64 { return 1 }
 fn eqk<T: eq>(a: T, b: T) -> bool { return keep(a) == keep(b) }
 fn pass<T>(a: T) -> i64 { return cnt(keep(a)) + cnt(keep(keep(a))) }
 fn disc<T>(a: T) -> i64 { keep(a); keep(keep(a)); let n: i64 = cnt(keep(a)); return n }
-fn wrap<T>(a: T) -> Option<T> { return Option::Some(keep(a)) }
+fn wrap<T>(a: T) -> Option<T> { return Some(keep(a)) }
 fn arr<T>(a: T) -> [T; 2] { return [keep(a), keep(a)] }
 fn pv<T>(v: &mut Vec<T>, a: T) { Vec::push(*v, keep(a)); (*v)[0] = keep(a) }
 fn main() -> i64 {
@@ -3847,8 +3847,8 @@ fn main() -> i64 {
     let b: [i64; 2] = arr(4)
     let k = churn()
     println("{eqk(1, 1)} {eqk(s, victim(1))} {pass(1)} {pass(s)} {disc(2.5)} {disc(s)} {w[0]} {b[1]} " + v[0] + a[1])
-    match o { Option::Some(x) => println(x), Option::None => println("none") }
-    match wrap(7) { Option::Some(x) => println("{x}"), Option::None => println("none") }
+    match o { Some(x) => println(x), None => println("none") }
+    match wrap(7) { Some(x) => println("{x}"), None => println("none") }
     return 0
 }
 "#;
@@ -4150,7 +4150,7 @@ fn sb91_a_string_whose_address_is_lent_to_an_aelys_callee_is_still_released() {
 
 const SB98_STRUCT_AND_ENUM_TEMPORARIES_IN_A_LONG_LOOP: &str = r#"
 struct P { name: string, age: i64 }
-fn half(n: i64) -> Option<i64> { if n % 2 == 0 { return Option::Some(n / 2) } return Option::None }
+fn half(n: i64) -> Option<i64> { if n % 2 == 0 { return Some(n / 2) } return None }
 fn main() -> i64 {
     let mut n: i64 = 0
     let mut i: i64 = 0
@@ -4159,8 +4159,8 @@ fn main() -> i64 {
         let q: P = p
         n = n + q.age % 7
         match half(i) {
-            Option::Some(h) => { n = n + h % 3 }
-            Option::None => { n = n + 1 }
+            Some(h) => { n = n + h % 3 }
+            None => { n = n + 1 }
         }
         i = i + 1
     }
@@ -4778,15 +4778,15 @@ enum Shape { Named(string, i64), Sized(i64), Blank }
 fn victim(n: i64) -> string { return "ab" + "{n}" }
 fn main() -> i64 {
     let mut v: Vec<Option<i64>> = Vec::new()
-    Vec::push(v, Option::Some(11))
-    Vec::push(v, Option::Some(22))
-    Vec::push(v, Option::Some(33))
+    Vec::push(v, Some(11))
+    Vec::push(v, Some(22))
+    Vec::push(v, Some(33))
     let mut n: i64 = 0
     let mut i: i64 = 0
     while i < 3 {
         match v[i] {
-            Option::Some(x) => { n = n * 100 + x }
-            Option::None => { n = n * 100 }
+            Some(x) => { n = n * 100 + x }
+            None => { n = n * 100 }
         }
         i = i + 1
     }
@@ -4825,20 +4825,20 @@ const SB115_AN_OPTION_OF_STRING_OWNS_ITS_CHARGE: &str = r#"
 fn victim(n: i64) -> string { return "ab" + "{n}" }
 fn hold(o: Option<string>) -> i64 {
     match o {
-        Option::Some(x) => { return x.len }
-        Option::None => { return 0 }
+        Some(x) => { return x.len }
+        None => { return 0 }
     }
 }
 fn main() -> i64 {
     let mut n: i64 = 0
     let mut i: i64 = 0
     while i < 20 {
-        let o: Option<string> = Option::Some(victim(i))
+        let o: Option<string> = Some(victim(i))
         n = n + hold(o)
-        let p: Option<string> = if i % 2 == 0 { Option::Some(victim(i + 1)) } else { Option::None }
+        let p: Option<string> = if i % 2 == 0 { Some(victim(i + 1)) } else { None }
         match p {
-            Option::Some(y) => { n = n + y.len }
-            Option::None => { n = n + 1 }
+            Some(y) => { n = n + y.len }
+            None => { n = n + 1 }
         }
         i = i + 1
     }
@@ -4901,21 +4901,21 @@ fn victim(n: i64) -> string { return "ab" + "{n}" }
 fn main() -> i64 {
     let mut n: i64 = 0
     let mut v: Vec<Option<string>> = Vec::new()
-    Vec::push(v, Option::Some(victim(1)))
-    Vec::push(v, Option::None)
-    Vec::push(v, Option::Some(victim(2)))
+    Vec::push(v, Some(victim(1)))
+    Vec::push(v, None)
+    Vec::push(v, Some(victim(2)))
     let w: Vec<Option<string>> = v
-    Vec::push(v, Option::Some(victim(3)))
+    Vec::push(v, Some(victim(3)))
     let t: Option<string> = Vec::pop(v)
     match t {
-        Option::Some(x) => { n = n + x.len }
-        Option::None => { n = n + 1 }
+        Some(x) => { n = n + x.len }
+        None => { n = n + 1 }
     }
     let mut i: i64 = 0
     while i < 3 {
         match w[i] {
-            Option::Some(x) => { n = n + x.len }
-            Option::None => { n = n + 7 }
+            Some(x) => { n = n + x.len }
+            None => { n = n + 7 }
         }
         i = i + 1
     }
@@ -4977,11 +4977,11 @@ const SB119_AN_OPTION_IN_A_GENERIC_AND_AN_ENUM_IN_A_STRUCT: &str = r#"
 enum Tag2 { Some3(string), None3 }
 struct Holder { t: Tag2, name: string }
 fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn wrap<T>(x: T) -> Option<T> { return Option::Some(x) }
+fn wrap<T>(x: T) -> Option<T> { return Some(x) }
 fn unwrap_or<T>(o: Option<T>, d: T) -> T {
     match o {
-        Option::Some(x) => { return x }
-        Option::None => { return d }
+        Some(x) => { return x }
+        None => { return d }
     }
 }
 fn main() -> i64 {
@@ -5019,7 +5019,7 @@ fn sb112_an_option_crossing_a_generic_and_an_enum_held_by_a_struct_own_their_cha
 
 const SB120_AN_UNBOUND_SCRUTINEE_AND_AN_UNBOUND_FIELD_BASE: &str = r#"
 fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn get(i: i64) -> Option<string> { if i % 3 == 0 { return Option::None }  return Option::Some(victim(i)) }
+fn get(i: i64) -> Option<string> { if i % 3 == 0 { return None }  return Some(victim(i)) }
 struct P { a: string, b: i64 }
 fn mk(i: i64) -> P { return P { a: victim(i), b: i } }
 fn main() -> i64 {
@@ -5027,13 +5027,13 @@ fn main() -> i64 {
     let mut i: i64 = 0
     while i < 9 {
         match get(i) {
-            Option::Some(v) => { n = n + v.len }
-            Option::None => { n = n + 1 }
+            Some(v) => { n = n + v.len }
+            None => { n = n + 1 }
         }
         n = n + mk(i).a.len
-        match Option::Some(victim(i + 1)) {
-            Option::Some(w) => { n = n + w.len }
-            Option::None => { n = n + 1 }
+        match Some(victim(i + 1)) {
+            Some(w) => { n = n + w.len }
+            None => { n = n + 1 }
         }
         i = i + 1
     }
@@ -5057,20 +5057,20 @@ fn sb113_a_fresh_aggregate_no_binding_holds_is_released_when_the_statement_ends(
 const SB121_A_QUESTION_MARK_ON_A_RESULT_THAT_CARRIES_A_STRING: &str = r#"
 fn victim(n: i64) -> string { return "ab" + "{n}" }
 fn get(i: i64) -> Result<string, i64> {
-    if i % 4 == 3 { return Result::Err(i) }
-    return Result::Ok(victim(i))
+    if i % 4 == 3 { return Err(i) }
+    return Ok(victim(i))
 }
 fn chain(i: i64) -> Result<string, i64> {
     let s: string = get(i)?
-    return Result::Ok(s + "!")
+    return Ok(s + "!")
 }
 fn main() -> i64 {
     let mut n: i64 = 0
     let mut i: i64 = 0
     while i < 8 {
         match chain(i) {
-            Result::Ok(s) => { n = n + s.len }
-            Result::Err(e) => { n = n + e % 5 }
+            Ok(s) => { n = n + s.len }
+            Err(e) => { n = n + e % 5 }
         }
         i = i + 1
     }

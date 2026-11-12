@@ -20,10 +20,14 @@ impl CompileErrorKind {
             Self::InvalidAssignmentTarget => 104,
             Self::RecursionDepthExceeded { .. } => 105,
             Self::UnknownTypeBound { .. } => 106,
+            Self::NotAVariantInScope { .. } => 101,
+            Self::NestedPattern => 101,
+            Self::UppercaseBinding { .. } => 101,
 
             Self::UndefinedVariable(_) => 201,
             Self::VariableAlreadyDefined(_) => 202,
             Self::DuplicateDefinition { .. } => 204,
+            Self::ReservedVariantName { .. } => 205,
 
             Self::TypeMismatch { .. } => 301,
             Self::ArityMismatch { .. } => 302,

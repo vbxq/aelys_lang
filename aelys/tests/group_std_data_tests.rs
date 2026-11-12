@@ -670,10 +670,10 @@ const STR_CARRIER_FROM_THE_PRELUDE: &str = r#"
 needs std.str
 
 fn main() -> i64 {
-    println(match str.char_at("éab", 0) { Option::Some(c) => c, Option::None => '?' })
-    println(match str.char_at("éab", 9) { Option::Some(c) => c, Option::None => '?' })
-    println(match str.parse_int("-42") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
-    println(match str.parse_int("4é") { Result::Ok(v) => v, Result::Err(e) => 0 - e })
+    println(match str.char_at("éab", 0) { Some(c) => c, None => '?' })
+    println(match str.char_at("éab", 9) { Some(c) => c, None => '?' })
+    println(match str.parse_int("-42") { Ok(v) => v, Err(e) => 0 - e })
+    println(match str.parse_int("4é") { Ok(v) => v, Err(e) => 0 - e })
     return 0
 }
 "#;

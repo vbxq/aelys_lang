@@ -18,7 +18,9 @@ pub(crate) struct ModuleUnit {
     pub(crate) source: Arc<Source>,
     pub(crate) stmts: Vec<Stmt>,
     pub(crate) imports: Vec<ResolvedImport>,
-    pub(crate) bound: std::collections::HashSet<String>,
+    pub(crate) bound_types: std::collections::HashSet<String>,
+    pub(crate) bound_values: std::collections::HashSet<String>,
+    pub(crate) prelude_only: bool,
 }
 
 pub(crate) struct ModuleGraph {

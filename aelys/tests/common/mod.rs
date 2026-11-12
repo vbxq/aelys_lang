@@ -414,7 +414,7 @@ impl Cli {
         fs::write(&source, src).expect("write the program under measurement");
 
         let errors = fs::File::create(&diagnostics).expect("create the diagnostic capture file");
-        // without this root neither std nor the prelude resolves
+        // the tree's std, not the copy embedded when the cli was built
         let mut compiler = Command::new(&self.bin)
             .arg("compile")
             .arg(&source)

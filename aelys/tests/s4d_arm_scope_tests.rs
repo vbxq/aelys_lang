@@ -193,11 +193,11 @@ const S4D_ARM_SHADOWS_OUTER: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     let t: i64 = 5
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     println(t)
     return 0
@@ -208,11 +208,11 @@ const S4D_SIBLING_ARM: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::None
+    let o: Option<i64> = None
     let t: i64 = 5
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(t),
+        Some(t) => println(t),
+        None => println(t),
     }
     return 0
 }
@@ -223,14 +223,14 @@ needs Option from std.result
 
 fn f(t: i64, o: Option<i64>) -> i64 {
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     return t
 }
 
 fn main() -> i64 {
-    println(f(5, Option::Some(7)))
+    println(f(5, Some(7)))
     return 0
 }
 "#;
@@ -239,17 +239,17 @@ const S4D_NESTED_MATCH: &str = r#"
 needs Option from std.result
 
 fn main() -> i64 {
-    let a: Option<i64> = Option::Some(1)
-    let b: Option<i64> = Option::Some(2)
+    let a: Option<i64> = Some(1)
+    let b: Option<i64> = Some(2)
     match a {
-        Option::Some(t) => {
+        Some(t) => {
             match b {
-                Option::Some(t) => println(t),
-                Option::None => println(0),
+                Some(t) => println(t),
+                None => println(0),
             }
             println(t)
         }
-        Option::None => println(9),
+        None => println(9),
     }
     return 0
 }
@@ -276,10 +276,10 @@ needs Option from std.result
 fn main() -> i64 {
     let t: i64 = 5
     for i in 0..2 {
-        let o: Option<i64> = Option::Some(i + 1)
+        let o: Option<i64> = Some(i + 1)
         match o {
-            Option::Some(t) => println(t),
-            Option::None => println(0),
+            Some(t) => println(t),
+            None => println(0),
         }
         println(t)
     }
@@ -294,11 +294,11 @@ needs Option from std.result
 fn five() -> i64 { return 5 }
 
 fn main() -> i64 {
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     let t: i64 = five()
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     println(t)
     return 0
@@ -310,10 +310,10 @@ needs Option from std.result
 
 fn main() -> i64 {
     let t: i64 = 5
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     let f = fn() -> i64 { return t }
     println(f())
@@ -327,12 +327,12 @@ needs Option from std.result
 fn main() -> i64 {
     let f = fn(t: i64, o: Option<i64>) -> i64 {
         match o {
-            Option::Some(t) => println(t),
-            Option::None => println(0),
+            Some(t) => println(t),
+            None => println(0),
         }
         return t
     }
-    println(f(5, Option::Some(7)))
+    println(f(5, Some(7)))
     return 0
 }
 "#;
@@ -342,15 +342,15 @@ needs Option from std.result
 
 fn main() -> i64 {
     let t: i64 = 5
-    let a: Option<i64> = Option::Some(7)
-    let b: Option<i64> = Option::None
+    let a: Option<i64> = Some(7)
+    let b: Option<i64> = None
     match a {
-        Option::Some(t) => println(t),
-        Option::None => println(0),
+        Some(t) => println(t),
+        None => println(0),
     }
     match b {
-        Option::Some(u) => println(u),
-        Option::None => println(t),
+        Some(u) => println(u),
+        None => println(t),
     }
     return 0
 }
@@ -362,11 +362,11 @@ needs Option from std.result
 
 fn main() -> i64 {
     let t: i64 = 5
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     if t > 0 {
         match o {
-            Option::Some(t) => println(t),
-            Option::None => println(0),
+            Some(t) => println(t),
+            None => println(0),
         }
     }
     println(t)
@@ -379,13 +379,13 @@ needs Option from std.result
 
 fn main() -> i64 {
     let t: i64 = 5
-    let o: Option<i64> = Option::Some(7)
+    let o: Option<i64> = Some(7)
     match o {
-        Option::Some(u) => {
+        Some(u) => {
             let t: i64 = u + 1
             println(t)
         }
-        Option::None => println(0),
+        None => println(0),
     }
     println(t)
     return 0

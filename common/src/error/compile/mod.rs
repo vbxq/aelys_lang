@@ -58,9 +58,16 @@ impl CompileError {
             CompileErrorKind::AssignToImmutable(_) => {
                 diag.add_help("make the binding mutable: `let mut`".to_string());
             }
-            CompileErrorKind::ModuleNotFound { searched_paths, .. } => {
+            CompileErrorKind::ModuleNotFound {
+                searched_paths,
+                ignored,
+                ..
+            } => {
                 if !searched_paths.is_empty() {
                     diag.add_note(format!("searched in: {}", searched_paths.join(", ")));
+                }
+                for note in ignored {
+                    diag.add_note(note.clone());
                 }
             }
             CompileErrorKind::AmbiguousModule { roots, .. } => {

@@ -477,6 +477,7 @@ fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: 
         variant: variant.to_string(),
         bindings,
         span,
+        unqualified: false,
     }
 }
 
@@ -490,6 +491,7 @@ fn variant_construct(enum_name: &str, variant: &str, args: Vec<Expr>, span: Span
             enum_name: enum_name.to_string(),
             variant: variant.to_string(),
             args,
+            unqualified: false,
         },
         span,
     )

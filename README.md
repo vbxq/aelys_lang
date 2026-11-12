@@ -134,9 +134,9 @@ fn kernel_entry() -> ! {
 
 A `needs` names a module path. `needs std.io` binds the name `io`, and the module's public functions are reached through it as `io.print_out(...)`; `needs Option, Result from std.result` binds the items themselves.
 
-`a.b.c` is the file `a/b/c.aelys` under a search root. The roots are the directory of the file named on the command line, first, then every `-I <dir>` given, in the order they were written. There is no default root and no environment variable: a module outside the program's own directory is reachable only through `-I`. If one module path resolves under two `-I` roots the compiler stops with `E0622` instead of picking one, because the roots are peers and taking the first would compile a different library than the same invocation with the roots written the other way round. The root file's own directory is not a peer, it outranks every `-I` root, so a copy sitting next to the program shadows the library on the search path and is never ambiguous.
+`a.b.c` is the file `a/b/c.aelys` under a search root. The roots are the directory of the file named on the command line, first, then every `-I <dir>` given, in the order they were written. There is no default root and no environment variable: outside `std.`, a module outside the program's own directory is reachable only through `-I`. If one module path resolves under two `-I` roots the compiler stops with `E0622` instead of picking one, because the roots are peers and taking the first would compile a different library than the same invocation with the roots written the other way round. The root file's own directory is not a peer, it outranks every `-I` root, so a copy sitting next to the program shadows the library on the search path and is never ambiguous.
 
-The prelude is one module, `std.prelude`, looked up on that same search path. It re-exports `Option` and `Result`, which is why `?` and `catch` work in a program that imports nothing. A prelude name loses to anything the file binds itself, **silently and with no diagnostic**: define your own `Option` and it is yours, everywhere in that file. `--no-prelude` turns the lookup off, and a prelude that does not resolve is not an error either, so a program compiled without `std/` on a search root simply has no `Result` in scope and says so as an unknown type.
+`std.` has one source: the first search root that holds `std/prelude.aelys`, and otherwise the standard library built into the compiler, whose hash `aelys --version` prints. The prelude is the module `std.prelude`. It re-exports `Option` and `Result`, which is why `?` and `catch` work in a program that imports nothing, and why `Some`, `None`, `Ok` and `Err` name their variants without the enum in front. A prelude type loses to a type the file declares or imports itself, **silently and with no diagnostic**: define your own `Option` and it is yours, everywhere in that file, and `Some` names its variant. The four variant names are reserved: no function, global, variable, parameter or import may take one. `--no-prelude` turns the prelude off.
 
 <!-- ```rust is used for syntax highlighting only, this is Aelys -->
 ```rust
@@ -150,8 +150,8 @@ fn main() -> i64 {
         io.print_out("\n")
     }
     match str.parse_int("41") {
-        Result::Ok(v) => println(v + 1),
-        Result::Err(_) => println(-1)
+        Ok(v) => println(v + 1),
+        Err(_) => println(-1)
     }
     return 0
 }

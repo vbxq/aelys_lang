@@ -288,7 +288,25 @@ impl TypeInference {
                 enum_name,
                 variant,
                 args,
-            } => self.infer_enum_variant(enum_name, variant, args, expr.span),
+                unqualified,
+            } => {
+                if *unqualified
+                    && let Some(refusal) =
+                        self.unqualified_variant_refusal(enum_name, variant, expr.span)
+                {
+                    self.errors.push(refusal);
+                    for arg in args {
+                        self.infer_expr(arg);
+                    }
+                    (TypedExprKind::Null, InferType::Dynamic)
+                } else {
+                    if *unqualified {
+                        self.unqualified_variant_spans
+                            .insert((expr.span.start, expr.span.end));
+                    }
+                    self.infer_enum_variant(enum_name, variant, args, expr.span)
+                }
+            }
             ExprKind::Match { scrutinee, arms } => {
                 self.infer_match_expr(scrutinee, arms, expr.span)
             }

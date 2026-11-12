@@ -23,7 +23,7 @@ pub fn run() -> i32 {
         return 0;
     }
     if matches!(parsed.command, args::Command::Version) {
-        eprintln!("Aelys v{}", env!("CARGO_PKG_VERSION"));
+        eprintln!("{}", version_line());
         return 0;
     }
 
@@ -31,6 +31,14 @@ pub fn run() -> i32 {
         eprintln!("{}", err);
         1
     })
+}
+
+pub fn version_line() -> String {
+    format!(
+        "Aelys v{} (embedded std {})",
+        env!("CARGO_PKG_VERSION"),
+        aelys_driver::embedded_std_hash()
+    )
 }
 
 #[allow(dead_code)]

@@ -116,6 +116,64 @@ impl TypeInference {
         }
     }
 
+    pub(super) fn unqualified_variant_refusal(
+        &mut self,
+        enum_name: &str,
+        variant: &str,
+        span: Span,
+    ) -> Option<TypeError> {
+        let imported = self.imported_type_name(enum_name);
+        let resolved = imported.clone().unwrap_or_else(|| enum_name.to_string());
+        let origin = match &imported {
+            Some(qualified) => match qualified.rsplit_once('.') {
+                Some((module, _)) => format!("imported from `{module}`"),
+                None => "imported".to_string(),
+            },
+            None => "declared in this module".to_string(),
+        };
+        let (reason, help) = if let Some(def) = self.type_table.get_enum(&resolved) {
+            if def.variants.iter().any(|v| v.name == variant) {
+                return None;
+            }
+            (
+                format!(
+                    "`{variant}` names a variant of the `{enum_name}` in scope, which is the enum \
+                     `{enum_name}` {origin}; it has no variant `{variant}`"
+                ),
+                None,
+            )
+        } else if self.type_table.has_struct(&resolved) {
+            (
+                format!(
+                    "`{variant}` names a variant of the `{enum_name}` in scope, which is the \
+                     struct `{enum_name}` {origin}, not an enum"
+                ),
+                None,
+            )
+        } else {
+            (
+                format!(
+                    "`{variant}` names a variant of `{enum_name}`, and no `{enum_name}` is in scope"
+                ),
+                Some(format!(
+                    "the prelude brings `{enum_name}` into scope unless `--no-prelude` is given; \
+                     otherwise declare or import an enum `{enum_name}`"
+                )),
+            )
+        };
+        Some(TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(reason),
+            secondary_spans: Vec::new(),
+            help,
+            suggestion: None,
+        })
+    }
+
     pub(super) fn infer_enum_variant(
         &mut self,
         enum_name: &str,
@@ -204,7 +262,7 @@ impl TypeInference {
                             span,
                             reason: ConstraintReason::Other(format!(
                                 "enum variant '{}::{}' expects {} argument{}, got {}",
-                                enum_name,
+                                crate::modules::source_type_name(enum_name),
                                 variant,
                                 expected_arity,
                                 if expected_arity == 1 { "" } else { "s" },
@@ -318,14 +376,14 @@ impl TypeInference {
                         def.variants.iter().map(|v| v.name.as_str()).collect();
                     self.errors.push(TypeError {
                         kind: TypeErrorKind::Mismatch {
-                            expected: InferType::Enum(enum_name.to_string(), Vec::new()),
+                            expected: InferType::Dynamic,
                             found: InferType::Dynamic,
                         },
                         span,
                         reason: ConstraintReason::Other(format!(
                             "unknown variant '{}' on enum '{}'; known variants: {}",
                             variant,
-                            enum_name,
+                            crate::modules::source_type_name(enum_name),
                             variant_names.join(", ")
                         )),
                         secondary_spans: Vec::new(),

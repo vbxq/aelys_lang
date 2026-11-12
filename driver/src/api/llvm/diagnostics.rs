@@ -748,6 +748,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
             error.to_string(),
             "nested function shadows an outer function".to_string(),
         ),
+        TypeErrorKind::NotAVariantInScope { .. } => (
+            "E0101",
+            error.to_string(),
+            "not a variant in scope".to_string(),
+        ),
         TypeErrorKind::ReservedTypeName { .. } => (
             "E0419",
             error.to_string(),

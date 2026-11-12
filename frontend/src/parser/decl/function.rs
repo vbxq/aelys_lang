@@ -33,7 +33,7 @@ impl Parser {
         let start_span = self.peek().span;
         self.advance();
 
-        let name = self.consume_identifier("function name")?;
+        let name = self.consume_value_name("function name")?;
 
         let (type_params, bounds) = if self.match_token(&TokenKind::Lt) {
             let mut params = Vec::new();
@@ -130,7 +130,7 @@ impl Parser {
         let is_nogc = self.match_token(&TokenKind::Nogc);
         self.consume(&TokenKind::Fn, "`nogc` or `fn` after `extern`")?;
 
-        let name = self.consume_identifier("function name")?;
+        let name = self.consume_value_name("function name")?;
 
         if self.check(&TokenKind::Lt) {
             return Err(self.malformed_foreign("an external declaration takes no type parameter"));

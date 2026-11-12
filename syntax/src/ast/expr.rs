@@ -292,6 +292,7 @@ pub enum ExprKind {
         enum_name: String,
         variant: String,
         args: Vec<Expr>, // empty for unit variants
+        unqualified: bool,
     },
 
     Cast {
@@ -341,8 +342,17 @@ pub enum Pattern {
         variant: String,
         bindings: Vec<String>,
         span: Span,
+        unqualified: bool,
     },
     Wildcard(Span),
+}
+
+pub fn prelude_variant_enum(name: &str) -> Option<&'static str> {
+    match name {
+        "Some" | "None" => Some("Option"),
+        "Ok" | "Err" => Some("Result"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -57,6 +57,7 @@ pub struct TypeInference {
     bound_generic_sigs: HashMap<String, Vec<bounds::BoundGenericSig>>,
     foreign_sigs: HashSet<String>,
     foreign_shadowed_spans: HashSet<(usize, usize)>,
+    unqualified_variant_spans: HashSet<(usize, usize)>,
     generic_fn_sigs: HashSet<String>,
     generic_value_spans: HashSet<(usize, usize, String)>,
     pub(crate) module_globals: HashSet<String>,

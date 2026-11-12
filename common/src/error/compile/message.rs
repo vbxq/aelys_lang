@@ -24,6 +24,15 @@ impl CompileErrorKind {
             Self::UnknownTypeBound { name } => format!(
                 "`{name}` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`"
             ),
+            Self::NotAVariantInScope { name } => format!(
+                "`{name}` is not a variant in scope; write `Enum::Variant`; binding patterns are \
+                 not supported in 0.1"
+            ),
+            Self::NestedPattern => "nested patterns are not supported in 0.1".to_string(),
+            Self::UppercaseBinding { name } => format!(
+                "the binding `{name}` starts with an uppercase letter; a capitalized name in a \
+                 pattern names a variant, never a binding"
+            ),
             Self::ExpectedExpression => "expected expression".to_string(),
             Self::ExpectedIdentifier => "expected identifier".to_string(),
             Self::InvalidAssignmentTarget => "invalid assignment target".to_string(),
@@ -34,6 +43,9 @@ impl CompileErrorKind {
                 format!("block comment nesting too deep (max {} levels)", max)
             }
             Self::UndefinedVariable(name) => format!("undefined variable `{}`", name),
+            Self::ReservedVariantName { name, enum_name } => format!(
+                "`{name}` is reserved for the prelude variant `{enum_name}::{name}`; choose another name"
+            ),
             Self::VariableAlreadyDefined(name) => {
                 format!("variable `{}` already defined in this scope", name)
             }

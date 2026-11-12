@@ -94,7 +94,7 @@ impl Parser {
 
     fn for_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
-        let iterator = self.consume_identifier("loop variable")?;
+        let iterator = self.consume_value_name("loop variable")?;
         self.consume(&TokenKind::In, "in")?;
 
         let first_expr = self.expression()?;

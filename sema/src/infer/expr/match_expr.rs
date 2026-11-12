@@ -1,5 +1,6 @@
 use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
+use crate::modules::source_type_name;
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedMatchArm, TypedPattern};
 use crate::types::InferType;
 use aelys_syntax::{Expr, MatchArm, Pattern, Span};
@@ -35,6 +36,7 @@ impl TypeInference {
                         span: pat_span,
                         ..
                     } = &arm.pattern
+                        && !enum_name.is_empty()
                     {
                         first_enum = Some(self.air_type_name(enum_name, *pat_span));
                         break;
@@ -128,6 +130,7 @@ impl TypeInference {
         let mut typed_arms = Vec::new();
         let mut covered_variants: HashSet<String> = HashSet::new();
         let mut has_wildcard = false;
+        let mut arm_refused = false;
 
         let mut result_type = self.type_gen.fresh();
 
@@ -148,19 +151,70 @@ impl TypeInference {
                     variant,
                     bindings,
                     span: pat_span,
+                    unqualified,
                 } => {
+                    if *unqualified && pat_enum.is_empty() {
+                        let written = enum_def
+                            .variants
+                            .iter()
+                            .any(|v| v.name == *variant)
+                            .then(|| self.spelled_enum(&enum_name).ok())
+                            .flatten();
+                        self.errors.push(TypeError {
+                            kind: TypeErrorKind::NotAVariantInScope {
+                                name: variant.clone(),
+                                written,
+                            },
+                            span: *pat_span,
+                            reason: ConstraintReason::Other(String::new()),
+                            secondary_spans: Vec::new(),
+                            help: None,
+                            suggestion: None,
+                        });
+                        arm_refused = true;
+                        continue;
+                    }
+                    if *unqualified
+                        && let Some(refusal) =
+                            self.unqualified_variant_refusal(pat_enum, variant, *pat_span)
+                    {
+                        self.errors.push(refusal);
+                        arm_refused = true;
+                        continue;
+                    }
+                    let written_enum = pat_enum;
                     let pat_enum = &self.air_type_name(pat_enum, *pat_span);
+                    if *unqualified && *pat_enum != enum_name {
+                        let scrutinee = self.spelled_enum(&enum_name);
+                        self.errors.push(TypeError::unqualified_pattern_mismatch(
+                            pat_enum, scrutinee, variant, *pat_span,
+                        ));
+                        arm_refused = true;
+                        continue;
+                    }
                     if *pat_enum != enum_name {
+                        arm_refused = true;
+                        let reason = match self.spelled_enum(&enum_name) {
+                            Ok(path) => format!(
+                                "pattern enum '{written_enum}' does not match scrutinee enum '{path}'"
+                            ),
+                            Err((module, name)) => {
+                                let alias = module.rsplit('.').next().unwrap_or(&module);
+                                format!(
+                                    "pattern enum '{written_enum}' does not match the scrutinee's \
+                                     enum, the `{name}` of `{module}`, which no name in scope \
+                                     reaches; add `needs {module}` and write \
+                                     `{alias}.{name}::{variant}`"
+                                )
+                            }
+                        };
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Enum(enum_name.clone(), Vec::new()),
+                                expected: InferType::Dynamic,
                                 found: InferType::Enum(pat_enum.clone(), Vec::new()),
                             },
                             span: *pat_span,
-                            reason: ConstraintReason::Other(format!(
-                                "pattern enum '{}' does not match scrutinee enum '{}'",
-                                pat_enum, enum_name
-                            )),
+                            reason: ConstraintReason::Other(reason),
                             secondary_spans: Vec::new(),
                             help: None,
                             suggestion: None,
@@ -172,18 +226,19 @@ impl TypeInference {
                     let variant_def = match variant_def {
                         Some(v) => v,
                         None => {
+                            arm_refused = true;
                             let variant_names: Vec<_> =
                                 enum_def.variants.iter().map(|v| v.name.as_str()).collect();
                             self.errors.push(TypeError {
                                 kind: TypeErrorKind::Mismatch {
-                                    expected: InferType::Enum(enum_name.clone(), Vec::new()),
+                                    expected: InferType::Dynamic,
                                     found: InferType::Dynamic,
                                 },
                                 span: *pat_span,
                                 reason: ConstraintReason::Other(format!(
                                     "unknown variant '{}' on enum '{}'; known variants: {}",
                                     variant,
-                                    enum_name,
+                                    source_type_name(&enum_name),
                                     variant_names.join(", ")
                                 )),
                                 secondary_spans: Vec::new(),
@@ -197,13 +252,14 @@ impl TypeInference {
                     if covered_variants.contains(variant) {
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::Mismatch {
-                                expected: InferType::Enum(enum_name.clone(), Vec::new()),
+                                expected: InferType::Dynamic,
                                 found: InferType::Dynamic,
                             },
                             span: *pat_span,
                             reason: ConstraintReason::Other(format!(
                                 "duplicate pattern for variant '{}::{}'",
-                                enum_name, variant
+                                source_type_name(&enum_name),
+                                variant
                             )),
                             secondary_spans: Vec::new(),
                             help: None,
@@ -223,7 +279,7 @@ impl TypeInference {
                             span: *pat_span,
                             reason: ConstraintReason::Other(format!(
                                 "variant '{}::{}' has {} data field{}, but pattern has {} binding{}",
-                                enum_name,
+                                source_type_name(&enum_name),
                                 variant,
                                 expected_bindings,
                                 if expected_bindings == 1 { "" } else { "s" },
@@ -411,17 +467,17 @@ impl TypeInference {
             ));
         }
 
-        if !has_wildcard {
-            let all_variants: HashSet<String> =
-                enum_def.variants.iter().map(|v| v.name.clone()).collect();
-            let missing: Vec<_> = all_variants
-                .difference(&covered_variants)
-                .cloned()
+        if !has_wildcard && !arm_refused {
+            let missing: Vec<String> = enum_def
+                .variants
+                .iter()
+                .filter(|v| !covered_variants.contains(&v.name))
+                .map(|v| v.name.clone())
                 .collect();
             if !missing.is_empty() {
                 self.errors.push(TypeError {
                     kind: TypeErrorKind::Mismatch {
-                        expected: InferType::Enum(enum_name.clone(), Vec::new()),
+                        expected: InferType::Dynamic,
                         found: InferType::Dynamic,
                     },
                     span,
@@ -431,7 +487,7 @@ impl TypeInference {
                         if missing.len() == 1 { "" } else { "s" },
                         missing
                             .iter()
-                            .map(|v| format!("'{}::{}'", enum_name, v))
+                            .map(|v| format!("'{}::{}'", source_type_name(&enum_name), v))
                             .collect::<Vec<_>>()
                             .join(", ")
                     )),
@@ -454,13 +510,13 @@ impl TypeInference {
     fn infer_match_arms_dynamic(&mut self, arms: &[MatchArm]) -> Vec<TypedMatchArm> {
         arms.iter()
             .map(|arm| {
-                let typed_body = self.infer_expr(&arm.body);
                 let pattern = match &arm.pattern {
                     Pattern::Variant {
                         enum_name,
                         variant,
                         bindings,
                         span,
+                        ..
                     } => TypedPattern::Variant {
                         enum_name: enum_name.clone(),
                         variant: variant.clone(),
@@ -473,6 +529,14 @@ impl TypeInference {
                     },
                     Pattern::Wildcard(_) => TypedPattern::Wildcard,
                 };
+                self.env.push_scope();
+                if let TypedPattern::Variant { bindings, .. } = &pattern {
+                    for (name, ty) in bindings {
+                        self.env.define_local(name.clone(), ty.clone());
+                    }
+                }
+                let typed_body = self.infer_expr(&arm.body);
+                self.env.pop_scope();
                 TypedMatchArm {
                     pattern,
                     body: Box::new(typed_body),

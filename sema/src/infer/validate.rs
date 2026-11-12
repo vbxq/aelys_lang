@@ -649,7 +649,10 @@ impl TypeInference {
                     InferType::Var(_) if self.is_deferred_site(expr.span, &deferred) => {}
                     other => {
                         self.errors.push(TypeError::member_access(
-                            format!("field access on non-struct type {}", other),
+                            format!(
+                                "field access on non-struct type {}",
+                                crate::modules::source_shown(other)
+                            ),
                             expr.span,
                         ));
                     }
@@ -936,6 +939,15 @@ impl TypeInference {
                                     .any(|a| matches!(a, InferType::Dynamic | InferType::Var(_)));
                                 if has_unresolved {
                                     let params_str = def.type_params.join(", ");
+                                    let named = crate::modules::source_type_name(enum_name);
+                                    let spelled = if self
+                                        .unqualified_variant_spans
+                                        .contains(&(expr.span.start, expr.span.end))
+                                    {
+                                        variant.clone()
+                                    } else {
+                                        format!("{named}::{variant}")
+                                    };
                                     self.errors.push(TypeError {
                                     kind: TypeErrorKind::MemberAccess {
                                         message: format!(
@@ -943,7 +955,7 @@ impl TypeInference {
                                              <{}> for `{}::{}`",
                                             if def.type_params.len() > 1 { "s" } else { "" },
                                             params_str,
-                                            enum_name,
+                                            named,
                                             variant,
                                         ),
                                     },
@@ -953,8 +965,7 @@ impl TypeInference {
                                     ),
                                     secondary_spans: Vec::new(),
                                     help: Some(format!(
-                                        "add a type annotation: `let x: {}<...> = {}::{}`",
-                                        name, enum_name, variant,
+                                        "add a type annotation: `let x: {named}<...> = {spelled}`"
                                     )),
                                     suggestion: None,
                                 });

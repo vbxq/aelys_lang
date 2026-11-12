@@ -142,6 +142,8 @@ struct ModuleFront {
     chains: std::collections::HashMap<String, Vec<aelys_air::bir::Step>>,
     externs: std::collections::HashMap<String, aelys_air::bir::ForeignSig>,
     warnings: Vec<Warning>,
+    // reached only through a prelude that exports no value, so nothing can call its functions
+    functions_unreachable: bool,
 }
 
 fn build_imports(
@@ -217,14 +219,15 @@ fn build_imports(
     Ok(imports)
 }
 
-// a prelude name loses to anything the unit binds itself, silently: that is the whole contract
+// a prelude name loses, silently, to anything the unit binds itself in the same namespace
 fn fall_back_to_prelude(
     imports: &mut aelys_sema::ModuleImports,
     scope: &aelys_sema::ModuleImports,
-    bound: &HashSet<String>,
+    bound_types: &HashSet<String>,
+    bound_values: &HashSet<String>,
 ) {
     for (name, exports) in &scope.namespaces {
-        if !bound.contains(name) {
+        if !bound_values.contains(name) {
             imports
                 .namespaces
                 .entry(name.clone())
@@ -232,7 +235,7 @@ fn fall_back_to_prelude(
         }
     }
     for (name, item) in &scope.values {
-        if !bound.contains(name) {
+        if !bound_values.contains(name) {
             imports
                 .values
                 .entry(name.clone())
@@ -240,7 +243,7 @@ fn fall_back_to_prelude(
         }
     }
     for (name, ty) in &scope.types {
-        if !bound.contains(name) {
+        if !bound_types.contains(name) {
             imports
                 .types
                 .entry(name.clone())
@@ -393,6 +396,7 @@ fn front_stage(
             chains,
             externs,
             warnings: sourced(warnings, &src),
+            functions_unreachable: false,
         },
         checked,
     ))
@@ -482,6 +486,9 @@ fn air_stage(
         }
 
         aelys_air::modules::qualify(&mut air, &front.dotted);
+        if front.functions_unreachable {
+            air.functions.clear();
+        }
         let carriers = aelys_air::counts::Carriers::merged(&air.structs, &air.enums);
         let proven =
             aelys_air::lower::fresh_returning_functions(&air.functions, &carriers, &fresh_returns);
@@ -655,7 +662,7 @@ fn lower_file_to_air_with_source(
         let mut imports = build_imports(unit, &exports)?;
         let prelude_own_scope = (Some(index) == graph.prelude).then(|| imports.clone());
         if let Some(scope) = &prelude_scope {
-            fall_back_to_prelude(&mut imports, scope, &unit.bound);
+            fall_back_to_prelude(&mut imports, scope, &unit.bound_types, &unit.bound_values);
         }
         let (front, unit_checked) = front_stage(unit, imports, &bir_imports)?;
         if let Some(mut scope) = prelude_own_scope {
@@ -674,6 +681,14 @@ fn lower_file_to_air_with_source(
         exports.push(front.exports.clone());
         fronts.push(front);
         checked.push(unit_checked);
+    }
+    if prelude_scope
+        .as_ref()
+        .is_some_and(|scope| scope.values.is_empty() && scope.namespaces.is_empty())
+    {
+        for (front, unit) in fronts.iter_mut().zip(&graph.units) {
+            front.functions_unreachable = unit.prelude_only;
+        }
     }
 
     let reference = (opt_level != OptimizationLevel::None).then(|| {

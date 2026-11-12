@@ -713,8 +713,8 @@ fn group_surface_option_reaches_a_program_that_imports_nothing() {
     h.value_row(
         "prelude_option",
         "fn main() -> i64 {\n\
-         \x20   let o: Option<i64> = Option::Some(9)\n\
-         \x20   match o { Option::Some(v) => println(v), Option::None => println(0) }\n\
+         \x20   let o: Option<i64> = Some(9)\n\
+         \x20   match o { Some(v) => println(v), None => println(0) }\n\
          \x20   return 0\n\
          }\n",
         "9\n",

@@ -395,8 +395,8 @@ fn main() -> i64 {
     println(str.join(&parts, "-"))
     println(str.repeat("ab", 3))
     match str.parse_int("-4321") {
-        Result::Ok(v) => println(v)
-        Result::Err(e) => println(e)
+        Ok(v) => println(v)
+        Err(e) => println(e)
     }
     let b = Box{s: "field"}
     let fv: &[u8] = b.s.bytes

@@ -8,7 +8,7 @@ impl Parser {
         self.advance();
 
         let mutable = self.match_token(&TokenKind::Mut);
-        let name = self.consume_identifier("variable name")?;
+        let name = self.consume_value_name("variable name")?;
 
         let type_annotation = if self.match_token(&TokenKind::Colon) {
             Some(self.parse_type_annotation()?)

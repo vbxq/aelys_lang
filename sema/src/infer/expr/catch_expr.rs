@@ -86,6 +86,7 @@ fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: 
         variant: variant.to_string(),
         bindings,
         span,
+        unqualified: false,
     }
 }
 

@@ -1,5 +1,6 @@
 use super::graph::{ModuleGraph, ModuleUnit, ResolvedImport};
 use crate::SourceOptions;
+use crate::embedded_std::{EMBEDDED_STD, embedded_std_path};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_frontend::lexer::Lexer;
 use aelys_frontend::parser::Parser;
@@ -16,13 +17,27 @@ pub(crate) const MODULE_EXTENSION: &str = "aelys";
 
 struct Discovery {
     roots: Vec<PathBuf>,
+    std_source: StdSource,
     units: Vec<ModuleUnit>,
     by_path: HashMap<String, usize>,
     by_file: HashMap<PathBuf, usize>,
 }
 
+enum StdSource {
+    Root(PathBuf),
+    Embedded,
+}
+
+enum ModuleFile {
+    Disk(PathBuf),
+    Embedded {
+        name: &'static str,
+        content: &'static str,
+    },
+}
+
 enum Located {
-    Found(PathBuf),
+    Found(ModuleFile),
     Missing(Vec<String>),
     Ambiguous(Vec<String>),
 }
@@ -36,8 +51,11 @@ pub(crate) fn discover(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
 
+    let roots = ordered_roots(root_dir, &options.include);
+    let std_source = std_source(&roots);
     let mut discovery = Discovery {
-        roots: ordered_roots(root_dir, &options.include),
+        roots,
+        std_source,
         units: Vec::new(),
         by_path: HashMap::new(),
         by_file: HashMap::new(),
@@ -68,12 +86,40 @@ pub(crate) fn discover(
     }
 
     let mut stack = Vec::new();
-    discovery.visit(root_file, String::new(), &mut stack)?;
+    let root = discovery.visit(
+        &ModuleFile::Disk(root_file.to_path_buf()),
+        String::new(),
+        &mut stack,
+    )?;
+    let mut reached = vec![false; discovery.units.len()];
+    let mut pending = vec![root];
+    while let Some(index) = pending.pop() {
+        if std::mem::replace(&mut reached[index], true) {
+            continue;
+        }
+        for import in &discovery.units[index].imports {
+            pending.push(match import {
+                ResolvedImport::Namespace { target, .. }
+                | ResolvedImport::Symbols { target, .. } => *target,
+            });
+        }
+    }
+    for (unit, reached) in discovery.units.iter_mut().zip(reached) {
+        unit.prelude_only = !reached;
+    }
 
     Ok(ModuleGraph {
         units: discovery.units,
         prelude,
     })
+}
+
+fn std_source(roots: &[PathBuf]) -> StdSource {
+    roots
+        .iter()
+        .find(|root| root.join("std").join("prelude.aelys").is_file())
+        .map(|root| StdSource::Root(root.clone()))
+        .unwrap_or(StdSource::Embedded)
 }
 
 fn ordered_roots(root_dir: PathBuf, include: &[PathBuf]) -> Vec<PathBuf> {
@@ -92,23 +138,35 @@ fn ordered_roots(root_dir: PathBuf, include: &[PathBuf]) -> Vec<PathBuf> {
 impl Discovery {
     fn visit(
         &mut self,
-        file: &Path,
+        file: &ModuleFile,
         dotted: String,
         stack: &mut Vec<String>,
     ) -> Result<usize, ModuleError> {
         if let Some(index) = self.by_path.get(&dotted) {
             return Ok(*index);
         }
-        let identity = std::fs::canonicalize(file).unwrap_or_else(|_| file.to_path_buf());
+        let identity = match file {
+            ModuleFile::Disk(path) => {
+                std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+            }
+            ModuleFile::Embedded { name, .. } => PathBuf::from(embedded_std_path(name)),
+        };
         if let Some(index) = self.by_file.get(&identity).copied() {
             self.by_path.insert(dotted, index);
             return Ok(index);
         }
 
-        let content = std::fs::read_to_string(file).map_err(|err| ModuleError {
-            error: read_failure(file, &err),
-        })?;
-        let source = Source::new(file.display().to_string(), content);
+        let source = match file {
+            ModuleFile::Disk(path) => {
+                let content = std::fs::read_to_string(path).map_err(|err| ModuleError {
+                    error: read_failure(path, &err),
+                })?;
+                Source::new(path.display().to_string(), content)
+            }
+            ModuleFile::Embedded { name, content } => {
+                Source::new(embedded_std_path(name), *content)
+            }
+        };
         let tokens = Lexer::with_source(source.clone())
             .scan()
             .map_err(|error| ModuleError { error })?;
@@ -191,6 +249,7 @@ impl Discovery {
                         &source,
                         needs.span,
                         CompileErrorKind::ModuleNotFound {
+                            ignored: self.ignored_std_copies(path, &dotted_target),
                             module_path: dotted_target,
                             searched_paths,
                         },
@@ -247,7 +306,17 @@ impl Discovery {
             source,
             stmts,
             imports,
-            bound: bound.into_keys().collect(),
+            bound_types: bound
+                .values()
+                .filter(|binding| binding.is_type())
+                .map(|binding| binding.name.clone())
+                .collect(),
+            bound_values: bound
+                .values()
+                .filter(|binding| !binding.is_type())
+                .map(|binding| binding.name.clone())
+                .collect(),
+            prelude_only: false,
         });
         self.by_path.insert(dotted, index);
         self.by_file.insert(identity, index);
@@ -261,9 +330,13 @@ impl Discovery {
         }
         relative.set_extension(MODULE_EXTENSION);
 
+        if path.len() >= 2 && path[0] == "std" {
+            return self.locate_std(path, &relative);
+        }
+
         let local = self.roots[0].join(&relative);
         if local.is_file() {
-            return Located::Found(local);
+            return Located::Found(ModuleFile::Disk(local));
         }
 
         let mut hits: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -280,12 +353,57 @@ impl Discovery {
                     .map(|root| root.join(&relative).display().to_string())
                     .collect(),
             ),
-            1 => Located::Found(hits.remove(0).1),
+            1 => Located::Found(ModuleFile::Disk(hits.remove(0).1)),
             _ => Located::Ambiguous(
                 hits.into_iter()
                     .map(|(root, _)| root.display().to_string())
                     .collect(),
             ),
+        }
+    }
+
+    fn ignored_std_copies(&self, path: &[String], dotted: &str) -> Vec<String> {
+        if path.len() < 2 || path[0] != "std" {
+            return Vec::new();
+        }
+        let mut relative: PathBuf = path.iter().collect();
+        relative.set_extension(MODULE_EXTENSION);
+        let source = match &self.std_source {
+            StdSource::Root(root) => format!("{} holds std/prelude.aelys", root.display()),
+            StdSource::Embedded => "no search root holds std/prelude.aelys".to_string(),
+        };
+        self.roots
+            .iter()
+            .map(|root| root.join(&relative))
+            .filter(|candidate| candidate.is_file())
+            .map(|candidate| {
+                format!(
+                    "{dotted} comes from one source: {source}, so {} is ignored",
+                    candidate.display()
+                )
+            })
+            .collect()
+    }
+
+    fn locate_std(&self, path: &[String], relative: &Path) -> Located {
+        match &self.std_source {
+            StdSource::Root(root) => {
+                let candidate = root.join(relative);
+                if candidate.is_file() {
+                    Located::Found(ModuleFile::Disk(candidate))
+                } else {
+                    Located::Missing(vec![candidate.display().to_string()])
+                }
+            }
+            StdSource::Embedded => {
+                let hit = (path.len() == 2)
+                    .then(|| EMBEDDED_STD.iter().find(|(name, _)| *name == path[1]))
+                    .flatten();
+                match hit {
+                    Some((name, content)) => Located::Found(ModuleFile::Embedded { name, content }),
+                    None => Located::Missing(vec![embedded_std_path(&path[1..].join("/"))]),
+                }
+            }
         }
     }
 
@@ -337,6 +455,12 @@ struct TopLevelBinding {
     name: String,
     form: &'static str,
     span: Span,
+}
+
+impl TopLevelBinding {
+    fn is_type(&self) -> bool {
+        matches!(self.form, "a struct" | "an enum")
+    }
 }
 
 fn top_level_bindings(stmts: &[Stmt]) -> Vec<TopLevelBinding> {

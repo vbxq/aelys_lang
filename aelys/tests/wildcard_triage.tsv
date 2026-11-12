@@ -122,3 +122,4 @@ sema/src/infer/unresolved.rs	spelled	2	InferType	ret	format!(	correct-as-is	aggr
 air/src/passes/generic_print.rs	shown	1	AirType	other	format!( ).to_lowercase()	correct-as-is	aggregate-only
 sema/src/infer/finalize.rs	finalize_stmt	1	InferType	other	Self::finalize_type(other)	correct-as-is	delegates-to-a-decided-arm
 sema/src/infer/validate.rs	validate_expr	3	InferType	other	other	correct-as-is	aggregate-only
+sema/src/modules.rs	source_shown	1	InferType	other	other.to_string()	correct-as-is	aggregate-only

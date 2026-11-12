@@ -439,7 +439,10 @@ impl TypeInference {
                     Some(_) => {}
                     None if !crate::place_spine::is_computed_len(&object.ty, field) => {
                         self.errors.push(TypeError::member_access(
-                            format!("field assignment on non-struct type {}", object.ty),
+                            format!(
+                                "field assignment on non-struct type {}",
+                                crate::modules::source_shown(&object.ty)
+                            ),
                             span,
                         ));
                     }

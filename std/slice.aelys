@@ -8,31 +8,31 @@ pub nogc fn sum(s: &[i64]) -> i64 {
 }
 
 pub nogc fn first<T>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return Option::None }
-    return Option::Some(s[0])
+    if s.len == 0 { return None }
+    return Some(s[0])
 }
 
 pub nogc fn last<T>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return Option::None }
-    return Option::Some(s[s.len - 1])
+    if s.len == 0 { return None }
+    return Some(s[s.len - 1])
 }
 
 pub nogc fn max<T: ord>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return Option::None }
+    if s.len == 0 { return None }
     let mut m: T = s[0]
     for x in s {
         if x > m { m = x }
     }
-    return Option::Some(m)
+    return Some(m)
 }
 
 pub nogc fn min<T: ord>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return Option::None }
+    if s.len == 0 { return None }
     let mut m: T = s[0]
     for x in s {
         if x < m { m = x }
     }
-    return Option::Some(m)
+    return Some(m)
 }
 
 pub nogc fn index_of<T: eq>(s: &[T], x: T) -> i64 {
@@ -44,8 +44,8 @@ pub nogc fn index_of<T: eq>(s: &[T], x: T) -> i64 {
 
 pub nogc fn find<T: eq>(s: &[T], x: T) -> Option<i64> {
     let i: i64 = index_of(s, x)
-    if i < 0 { return Option::None }
-    return Option::Some(i)
+    if i < 0 { return None }
+    return Some(i)
 }
 
 pub nogc fn contains<T: eq>(s: &[T], x: T) -> bool {

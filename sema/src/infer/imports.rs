@@ -130,6 +130,35 @@ impl TypeInference {
         name.to_string()
     }
 
+    pub(crate) fn spelled_enum(&self, qualified: &str) -> Result<String, (String, String)> {
+        let Some((module, name)) = crate::modules::strip_type_head(qualified).rsplit_once('.')
+        else {
+            return Ok(qualified.to_string());
+        };
+        let mut imported: Vec<&String> = self
+            .import_aliases
+            .iter()
+            .filter(|(_, target)| target.as_str() == qualified)
+            .map(|(local, _)| local)
+            .collect();
+        imported.sort();
+        if let Some(local) = imported.first() {
+            return Ok((*local).clone());
+        }
+        let mut namespaces: Vec<&String> = self
+            .module_imports
+            .namespaces
+            .iter()
+            .filter(|(_, exports)| exports.path == module)
+            .map(|(binding, _)| binding)
+            .collect();
+        namespaces.sort();
+        match namespaces.first() {
+            Some(binding) => Ok(format!("{binding}.{name}")),
+            None => Err((module.to_string(), name.to_string())),
+        }
+    }
+
     pub(crate) fn module_bound_elsewhere(&self, name: &str) -> Option<(String, String)> {
         let mut hits: Vec<(String, String)> = self
             .module_imports

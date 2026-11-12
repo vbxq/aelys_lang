@@ -203,6 +203,7 @@ fn variant_pattern(enum_name: &str, variant: &str, bindings: Vec<String>, span: 
         variant: variant.to_string(),
         bindings,
         span,
+        unqualified: false,
     }
 }
 
@@ -216,6 +217,7 @@ fn return_variant_block(enum_name: &str, variant: &str, args: Vec<Expr>, span: S
             enum_name: enum_name.to_string(),
             variant: variant.to_string(),
             args,
+            unqualified: false,
         },
         span,
     );

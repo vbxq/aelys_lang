@@ -6,8 +6,16 @@ use aelys_syntax::{BinaryOp, CatchHandler, Expr, ExprKind, TokenKind};
 impl Parser {
     pub(super) fn call(&mut self) -> Result<Expr> {
         let mut expr = self.primary()?;
+        let mut bare_variant = matches!(
+            expr.kind,
+            ExprKind::EnumVariant {
+                unqualified: true,
+                ..
+            }
+        );
 
         loop {
+            let absorbs_args = std::mem::take(&mut bare_variant);
             if self.match_token(&TokenKind::LParen) {
                 let mut args = Vec::new();
 
@@ -26,6 +34,11 @@ impl Parser {
                 self.consume(&TokenKind::RParen, ")")?;
                 let span = expr.span.merge(self.previous().span);
 
+                if absorbs_args && let ExprKind::EnumVariant { args: slot, .. } = &mut expr.kind {
+                    *slot = args;
+                    expr.span = span;
+                    continue;
+                }
                 expr = Expr::new(
                     ExprKind::Call {
                         callee: Box::new(expr),
@@ -94,6 +107,7 @@ impl Parser {
                                     enum_name: enum_name.clone(),
                                     variant,
                                     args,
+                                    unqualified: false,
                                 },
                                 new_span,
                             );
@@ -106,6 +120,7 @@ impl Parser {
                                 enum_name: enum_name.clone(),
                                 variant,
                                 args,
+                                unqualified: false,
                             },
                             span,
                         );
@@ -248,7 +263,7 @@ impl Parser {
                 expr = Expr::new(ExprKind::Try(Box::new(expr)), span);
             } else if self.match_token(&TokenKind::Catch) {
                 let handler = if self.match_token(&TokenKind::Pipe) {
-                    let name = self.consume_identifier("catch error binder")?;
+                    let name = self.consume_binding_name("catch error binder")?;
                     self.consume(&TokenKind::Pipe, "|")?;
                     CatchHandler::Binding {
                         name,

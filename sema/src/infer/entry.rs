@@ -39,6 +39,7 @@ impl Default for TypeInference {
             bound_generic_sigs: HashMap::new(),
             foreign_sigs: HashSet::new(),
             foreign_shadowed_spans: HashSet::new(),
+            unqualified_variant_spans: HashSet::new(),
             generic_fn_sigs: HashSet::new(),
             generic_value_spans: HashSet::new(),
             module_globals: HashSet::new(),
@@ -159,9 +160,31 @@ impl TypeInference {
         let qualified = match self.imported_type_name(&ann.name) {
             Some(q) => Some(q),
             None if ann.name.contains('.') => {
+                let before = self.errors.len();
                 match self.resolve_module_type_name(&ann.name, ann.span) {
                     Some(q) => Some(q),
-                    None => return InferType::Dynamic,
+                    None => {
+                        if self.errors.len() == before {
+                            self.errors.push(TypeError {
+                                kind: TypeErrorKind::Mismatch {
+                                    expected: InferType::Dynamic,
+                                    found: InferType::Struct(ann.name.clone()),
+                                },
+                                span: ann.span,
+                                reason: ConstraintReason::UnknownType {
+                                    name: ann.name.clone(),
+                                },
+                                secondary_spans: Vec::new(),
+                                help: Some(format!(
+                                    "a type of another module is written `<namespace>.{}`, \
+                                     with the namespace bound by a `needs`",
+                                    crate::modules::source_type_name(&ann.name)
+                                )),
+                                suggestion: None,
+                            });
+                        }
+                        return InferType::Dynamic;
+                    }
                 }
             }
             None => None,

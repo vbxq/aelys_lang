@@ -679,15 +679,15 @@ fn group_v01_r19_generic_library_over_two_element_types() {
          \x20   Vec::push(vi, 9)\n\
          \x20   Vec::push(vi, 5)\n\
          \x20   let si: &[i64] = Vec::as_slice(vi)\n\
-         \x20   match slice.max(si) { Option::Some(m) => println(m), Option::None => println(-1) }\n\
-         \x20   match slice.min(si) { Option::Some(m) => println(m), Option::None => println(-1) }\n\
+         \x20   match slice.max(si) { Some(m) => println(m), None => println(-1) }\n\
+         \x20   match slice.min(si) { Some(m) => println(m), None => println(-1) }\n\
          \x20   let mut vc: Vec<char> = Vec::new()\n\
          \x20   Vec::push(vc, 'a')\n\
          \x20   Vec::push(vc, 'z')\n\
          \x20   Vec::push(vc, 'm')\n\
          \x20   let sc: &[char] = Vec::as_slice(vc)\n\
-         \x20   match slice.max(sc) { Option::Some(m) => println(m), Option::None => println('?') }\n\
-         \x20   match slice.min(sc) { Option::Some(m) => println(m), Option::None => println('?') }\n\
+         \x20   match slice.max(sc) { Some(m) => println(m), None => println('?') }\n\
+         \x20   match slice.min(sc) { Some(m) => println(m), None => println('?') }\n\
          \x20   return 0\n\
          }\n",
         0,

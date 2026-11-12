@@ -8,7 +8,7 @@ const SWEEPS_PIN_REL: &str = "scripts/sweeps_pin.tsv";
 const REGISTRY_REL: &str = "common/src/diagnostic/registry.rs";
 const COMPILE_CODE_REL: &str = "common/src/error/compile/code.rs";
 const FAULT_REL: &str = "common/src/error/fault.rs";
-const REGISTERED_CODES: usize = 101;
+const REGISTERED_CODES: usize = 102;
 
 const UNEMITTED_RESIDUE: &[(&str, &str)] = &[];
 const UNEMITTED_RESIDUE_ROWS: usize = 0;

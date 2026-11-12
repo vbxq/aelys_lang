@@ -157,7 +157,8 @@ impl TypeInference {
                                     format!(
                                         "comparison (`{}`) is not supported for enum `{}` \
                                          because it has data variants; use `match` instead",
-                                        op, name
+                                        op,
+                                        crate::modules::source_type_name(name)
                                     ),
                                     span,
                                 ));

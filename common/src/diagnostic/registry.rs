@@ -239,6 +239,23 @@ Rename one of the definitions.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
+        code: "E0205",
+        title: "a prelude variant name is reserved",
+        explanation: "\
+`Some`, `None`, `Ok` and `Err` are written without their enum: they name the
+variants of the `Option` and `Result` in scope. No value may take one of
+these four names, wherever it is bound: a function, an external
+declaration, a global, a `let`, a parameter, a `for` variable, a pattern or
+`catch` binding, an imported symbol or a namespace alias.
+
+    let None: i64 = 3          // E0205
+    fn Some(x: i64) -> i64     // E0205
+
+Pick another name. A struct field, a struct named `Some` and a qualified
+variant such as `MyOpt::None` are not values and stay allowed.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
         code: "E0203",
         title: "undefined function",
         explanation: "\

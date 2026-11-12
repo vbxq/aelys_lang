@@ -107,6 +107,10 @@ pub enum TypeErrorKind {
     ReservedTypeName {
         name: String,
     },
+    NotAVariantInScope {
+        name: String,
+        written: Option<String>,
+    },
     RcFieldAssignIndirect,
     NotSupportedYet {
         detail: String,
@@ -383,6 +387,17 @@ impl fmt::Display for TypeError {
                 "[reserved-type] `Vec` and `Rc` are reserved builtin type names; a user type named \
                  `{name}` would compete with intrinsic path resolution. rename the type"
             ),
+            TypeErrorKind::NotAVariantInScope { name, written } => match written {
+                Some(path) => write!(
+                    f,
+                    "`{name}` alone does not name a variant; write `{path}::{name}`"
+                ),
+                None => write!(
+                    f,
+                    "`{name}` is not a variant in scope; write `Enum::Variant`; binding patterns \
+                     are not supported in 0.1"
+                ),
+            },
             TypeErrorKind::NotSupportedYet { detail } => write!(f, "{detail}"),
             TypeErrorKind::StringSlice => write!(
                 f,
@@ -396,12 +411,19 @@ impl fmt::Display for TypeError {
                  call); an indirect form (`if`/`match`/a block/parentheses) leaves retain/release \
                  accounting unbalanced. bind the value to a name first"
             ),
-            TypeErrorKind::MustUse { error } => write!(
-                f,
-                "[must-use] this `Result` can fail with `{error}`; \
-                 use `?` to propagate, `match`/`catch` to handle, \
-                 `.expect(\"…\")` to assert, or `discard` to intentionally ignore it"
-            ),
+            TypeErrorKind::MustUse { error } => {
+                let error = if error.is_concrete() {
+                    format!(" with `{error}`")
+                } else {
+                    String::new()
+                };
+                write!(
+                    f,
+                    "[must-use] this `Result` can fail{error}; \
+                     use `?` to propagate, `match`/`catch` to handle, \
+                     `.expect(\"…\")` to assert, or `discard` to intentionally ignore it"
+                )
+            }
             TypeErrorKind::NogcOutOfPosition { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcMutParam { detail } => write!(f, "[nogc] {detail}"),
             TypeErrorKind::NogcParamShadowed { detail } => write!(f, "[nogc] {detail}"),
@@ -716,6 +738,40 @@ impl TypeError {
             kind: TypeErrorKind::NestedFnShadowsOuter { name },
             span,
             reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn unqualified_pattern_mismatch(
+        pattern_enum: &str,
+        scrutinee: Result<String, (String, String)>,
+        variant: &str,
+        span: Span,
+    ) -> Self {
+        let named = crate::modules::source_type_name(pattern_enum);
+        let reason = match scrutinee {
+            Ok(path) => format!(
+                "`{variant}` here is `{named}::{variant}`; the scrutinee is `{path}`; write \
+                 `{path}::{variant}`"
+            ),
+            Err((module, name)) => {
+                let alias = module.rsplit('.').next().unwrap_or(&module);
+                format!(
+                    "`{variant}` here is `{named}::{variant}`; the scrutinee is the `{name}` of \
+                     `{module}`, which no name in scope reaches; add `needs {module}` and write \
+                     `{alias}.{name}::{variant}`"
+                )
+            }
+        };
+        TypeError {
+            kind: TypeErrorKind::Mismatch {
+                expected: InferType::Dynamic,
+                found: InferType::Dynamic,
+            },
+            span,
+            reason: ConstraintReason::Other(reason),
             secondary_spans: Vec::new(),
             help: None,
             suggestion: None,

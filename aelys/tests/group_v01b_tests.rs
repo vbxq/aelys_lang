@@ -339,10 +339,10 @@ fn main() -> i64 {
     let mut n: i64 = 0
     let mut i: i64 = 0
     while i < 10 {
-        let o: Option<string> = Option::Some(victim(i))
+        let o: Option<string> = Some(victim(i))
         match o {
-            Option::Some(x) => { n = n + x.len }
-            Option::None => { n = n + 1 }
+            Some(x) => { n = n + x.len }
+            None => { n = n + 1 }
         }
         i = i + 1
     }
@@ -384,15 +384,15 @@ fn v01b_5_a_reassigned_global_gives_back_what_it_held() {
 const V6_A_VEC_OF_ENUMS_STRIDES: &str = r#"
 fn main() -> i64 {
     let mut v: Vec<Option<i64>> = Vec::new()
-    Vec::push(v, Option::Some(11))
-    Vec::push(v, Option::Some(22))
-    Vec::push(v, Option::Some(33))
+    Vec::push(v, Some(11))
+    Vec::push(v, Some(22))
+    Vec::push(v, Some(33))
     let mut n: i64 = 0
     let mut i: i64 = 0
     while i < 3 {
         match v[i] {
-            Option::Some(x) => { n = n * 100 + x }
-            Option::None => { n = n * 100 }
+            Some(x) => { n = n * 100 + x }
+            None => { n = n * 100 }
         }
         i = i + 1
     }

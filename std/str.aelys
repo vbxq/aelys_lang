@@ -45,13 +45,13 @@ nogc fn byte_offset(s: string, k: i64) -> i64 {
 }
 
 pub nogc fn char_at(s: string, i: i64) -> Option<char> {
-    if i < 0 { return Option::None }
+    if i < 0 { return None }
     let mut k: i64 = 0
     for c in s {
-        if k == i { return Option::Some(c) }
+        if k == i { return Some(c) }
         k = k + 1
     }
-    return Option::None
+    return None
 }
 
 pub fn substring(s: string, start: i64, end: i64) -> string {
@@ -204,14 +204,14 @@ nogc fn digit_of(b: u8) -> i64 {
 
 // err codes: 1 empty, 2 sign with no digits, 3 non-digit, 4 out of i64 range
 pub nogc fn parse_int(s: string) -> Result<i64, i64> {
-    if s.len == 0 { return Result::Err(1) }
+    if s.len == 0 { return Err(1) }
     let mut i: i64 = 0
     let mut neg: bool = false
     if s.bytes[0] == 45 {
         neg = true
         i = 1
     }
-    if i >= s.len { return Result::Err(2) }
+    if i >= s.len { return Err(2) }
     // the least i64 is unspellable as a literal
     let min: i64 = 0 - 9223372036854775807 - 1
     let limit: i64 = min / 10
@@ -219,17 +219,17 @@ pub nogc fn parse_int(s: string) -> Result<i64, i64> {
     // + and * wrap silently, so the magnitude accumulates negative and every step is checked before it runs
     while i < s.len {
         let d: i64 = digit_of(s.bytes[i])
-        if d < 0 { return Result::Err(3) }
-        if acc < limit { return Result::Err(4) }
+        if d < 0 { return Err(3) }
+        if acc < limit { return Err(4) }
         acc = acc * 10
-        if acc < min + d { return Result::Err(4) }
+        if acc < min + d { return Err(4) }
         acc = acc - d
         i = i + 1
     }
-    if neg { return Result::Ok(acc) }
-    if acc == min { return Result::Err(4) }
+    if neg { return Ok(acc) }
+    if acc == min { return Err(4) }
     let v: i64 = 0 - acc
-    return Result::Ok(v)
+    return Ok(v)
 }
 
 pub fn from_int(n: i64) -> string { return "{n}" }

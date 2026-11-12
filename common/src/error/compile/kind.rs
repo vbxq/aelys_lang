@@ -31,12 +31,23 @@ pub enum CompileErrorKind {
     UnknownTypeBound {
         name: String,
     },
+    NotAVariantInScope {
+        name: String,
+    },
+    NestedPattern,
+    UppercaseBinding {
+        name: String,
+    },
     CommentNestingTooDeep {
         max: usize,
     },
 
     UndefinedVariable(String),
     VariableAlreadyDefined(String),
+    ReservedVariantName {
+        name: String,
+        enum_name: String,
+    },
     DuplicateDefinition {
         name: String,
         form: &'static str,
@@ -84,6 +95,7 @@ pub enum CompileErrorKind {
     ModuleNotFound {
         module_path: String,
         searched_paths: Vec<String>,
+        ignored: Vec<String>,
     },
     AmbiguousModule {
         module_path: String,

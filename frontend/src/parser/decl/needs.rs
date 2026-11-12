@@ -24,14 +24,16 @@ impl Parser {
             ));
         }
 
+        let first_span = self.peek().span;
         let first_ident = self.consume_identifier("module name or symbol")?;
 
         if self.match_token(&TokenKind::Comma) {
+            self.refuse_reserved_value_name(&first_ident, first_span);
             let mut symbols = vec![first_ident];
-            symbols.push(self.consume_identifier("symbol name")?);
+            symbols.push(self.consume_value_name("symbol name")?);
 
             while self.match_token(&TokenKind::Comma) {
-                symbols.push(self.consume_identifier("symbol name")?);
+                symbols.push(self.consume_value_name("symbol name")?);
             }
 
             self.consume(&TokenKind::From, "from")?;
@@ -52,6 +54,7 @@ impl Parser {
         }
 
         if self.match_token(&TokenKind::From) {
+            self.refuse_reserved_value_name(&first_ident, first_span);
             let symbols = vec![first_ident];
             let mut path = vec![self.consume_identifier("module name")?];
 
@@ -70,6 +73,7 @@ impl Parser {
         }
 
         let mut path = vec![first_ident];
+        let mut last_span = first_span;
 
         while self.match_token(&TokenKind::Dot) {
             if self.match_token(&TokenKind::Star) {
@@ -82,13 +86,18 @@ impl Parser {
                 ));
             }
 
+            last_span = self.peek().span;
             path.push(self.consume_identifier("module path segment")?);
         }
 
         let kind = if self.match_token(&TokenKind::As) {
-            let alias = self.consume_identifier("alias name")?;
+            let alias = self.consume_value_name("alias name")?;
             ImportKind::Module { alias: Some(alias) }
         } else {
+            if let Some(last) = path.last() {
+                let last = last.clone();
+                self.refuse_reserved_value_name(&last, last_span);
+            }
             ImportKind::Module { alias: None }
         };
 

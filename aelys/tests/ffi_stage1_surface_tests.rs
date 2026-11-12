@@ -456,14 +456,14 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let (ok, rejected) = census(&aelys_driver::SourceOptions::default());
     assert_eq!(
         (ok.len(), rejected.len()),
-        (406, 52),
-        "with no search root the surface MUST answer 406 accepted and 52 rejected; stress57 \
+        (411, 47),
+        "with no search root the surface MUST answer 411 accepted and 47 rejected; stress57 \
          moved from rejected to accepted when a generic enum started carrying its type arguments \
          into AIR, evil85_oob_array_index moved from accepted to rejected when a constant index \
          outside a known array length became E0433 instead of a run-time abort, \
          09_string_index is rejected because a string is no longer indexed by integer, and the \
-         five library modules that carry a `needs` are rejected because a \
-         module path resolves under the root file's own directory and nowhere else\n\
+         five library modules that carry a `needs` compile because the std embedded in the \
+         compiler answers the `std.` namespace when no search root holds a std\n\
          rejected:\n{}",
         rejected_list(&rejected)
     );
@@ -473,9 +473,8 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let (ok_absent, rejected_absent) = census(&absent);
     assert_eq!(
         (ok_absent.len(), rejected_absent.len()),
-        (406, 52),
-        "a search root that holds nothing MUST move no file, and a prelude that does not \
-         resolve MUST be silent rather than an error\nrejected:\n{}",
+        (411, 47),
+        "a search root that holds nothing MUST move no file\nrejected:\n{}",
         rejected_list(&rejected_absent)
     );
 
@@ -485,7 +484,7 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
         (ok_root.len(), rejected_root.len()),
         (411, 47),
         "with the repository root on the search path the five library modules that carry a \
-         `needs` MUST compile on their own\nrejected:\n{}",
+         `needs` MUST still compile\nrejected:\n{}",
         rejected_list(&rejected_root)
     );
 
@@ -494,22 +493,9 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
         .filter(|path| !rejected_root.contains(path))
         .map(|path| path.display().to_string())
         .collect();
-    let mut moved_names: Vec<&str> = moved
-        .iter()
-        .map(|p| p.rsplit(std::path::MAIN_SEPARATOR).next().unwrap_or(p))
-        .collect();
-    moved_names.sort_unstable();
-    assert_eq!(
-        moved_names,
-        [
-            "prelude.aelys",
-            "slice.aelys",
-            "sort.aelys",
-            "str.aelys",
-            "vec.aelys"
-        ],
-        "the files the search path moves MUST be exactly the library modules that import a \
-         sibling\nmoved:\n{}",
+    assert!(
+        moved.is_empty(),
+        "the repository root MUST move no file, its std is the one the compiler embeds\nmoved:\n{}",
         moved.join("\n")
     );
 }
