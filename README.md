@@ -171,6 +171,7 @@ fn main() -> i64 {
 - A `u64` above `i64::MAX` prints as a negative number, through `println` and through interpolation. The stored value is right modulo 2^64.
 - A slice must start at 0: `v[1..3]` is refused with `E0425` (see [Lengths and indexing](#lengths-and-indexing)).
 - The object file is left beside the source, as shown above.
+- A closure works on its own copy of a variable it captures. An assignment inside the closure changes that copy, which persists from one call to the next; the variable outside keeps its value.
 
 ```rust run
 fn main() -> i64 {
@@ -200,6 +201,22 @@ fn main() -> i64 {
 -9223372036854775808
 -9223372036854775808
 -9223372036854775808
+```
+
+```rust run
+fn main() -> i64 {
+    let mut n: i64 = 0
+    let bump = fn() -> i64 {
+        n = n + 1
+        return n
+    }
+    println("{bump()} {bump()} {n}")
+    return 0
+}
+```
+
+```output
+1 2 0
 ```
 
 ```rust run

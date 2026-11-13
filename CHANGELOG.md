@@ -5,6 +5,8 @@ All notable changes to Aelys, roughly grouped by version. I don't always tag rel
 ## Unreleased: the 0.1 milestone (workspace 0.21.8-a)
 
 - an assignment whose source is its destination (`s = s`, `s = id(s)` once inlined) and a local array of managed values lent as a slice free what they held; both leaked what they held each time they ran
+- a `nogc` function that reached an allocating callee through a field, index or deref of the call's result (`mk(n).len`) is refused (`E0727`); no poll and no allocation is reachable from `nogc` code
+- a reference or a view (`&*f(..)`, a slice, `.bytes`, `Vec::as_slice`) of a deref of a call keeps its loan, and an index on a call result is checked after its base: three ways to read freed memory in code without `unsafe` are refused (`E0711`)
 - `--runtime rc+cycles` collects cycles during execution, at safepoints the compiler inserts at function entry and on loop back edges, never in `nogc` code; `AELYS_CYCLE_THRESHOLD=n` sets the collection threshold
 - the cycle collector frees every dead cycle, members that were never decremented included (a parent pointer, a ring or a doubly linked list built by recursion, an `Rc` of an `Rc`)
 - an `Rc` in an enum payload is traced at the offset the layout gives it; a collection no longer crashes an acyclic program holding one
