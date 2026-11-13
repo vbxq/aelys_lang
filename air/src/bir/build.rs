@@ -782,28 +782,63 @@ impl<'a> BodyBuilder<'a> {
     }
 
     fn place_of(&mut self, expr: &TypedExpr) -> Option<BirPlace> {
+        self.projected_place(expr, false).map(|(place, _)| place)
+    }
+
+    fn rooted_place(&mut self, expr: &TypedExpr) -> Option<BirPlace> {
+        self.projected_place(expr, true).map(|(place, _)| place)
+    }
+
+    fn view_place(&mut self, expr: &TypedExpr) -> Option<BirPlace> {
+        fn through_deref(e: &TypedExpr) -> bool {
+            match &e.kind {
+                TypedExprKind::Deref(_) => true,
+                TypedExprKind::Member { object, .. }
+                | TypedExprKind::Index { object, .. }
+                | TypedExprKind::Grouping(object) => through_deref(object),
+                _ => false,
+            }
+        }
+        if through_deref(expr) {
+            self.rooted_place(expr)
+        } else {
+            self.place_of(expr)
+        }
+    }
+
+    fn projected_place(&mut self, expr: &TypedExpr, materialize: bool) -> Option<(BirPlace, bool)> {
         match &expr.kind {
-            TypedExprKind::Identifier(name) => self.lookup(name).map(|local| BirPlace {
-                local,
-                proj: Vec::new(),
+            TypedExprKind::Identifier(name) => self.lookup(name).map(|local| {
+                (
+                    BirPlace {
+                        local,
+                        proj: Vec::new(),
+                    },
+                    false,
+                )
             }),
             TypedExprKind::Member { object, member } => {
-                let mut base = self.place_of(object)?;
+                let (mut base, temp) = self.projected_place(object, materialize)?;
                 base.proj.push(BirProjection::Field(member.clone()));
-                Some(base)
+                Some((base, temp))
             }
             TypedExprKind::Index { object, index } => {
+                let base = self.projected_place(object, materialize);
                 self.read_operand(index);
-                let mut base = self.place_of(object)?;
+                let (mut base, temp) = base?;
                 base.proj.push(BirProjection::Index);
-                Some(base)
+                Some((base, temp))
             }
             TypedExprKind::Deref(inner) => {
-                let mut base = self.place_of(inner)?;
+                let (mut base, temp) = self.projected_place(inner, materialize)?;
                 base.proj.push(BirProjection::Deref);
-                Some(base)
+                Some((base, temp))
             }
-            TypedExprKind::Grouping(inner) => self.place_of(inner),
+            TypedExprKind::Grouping(inner) => self.projected_place(inner, materialize),
+            _ if materialize => match self.build_operand(expr) {
+                BirOperand::Copy(place) | BirOperand::Move(place) => Some((place, true)),
+                _ => None,
+            },
             _ => None,
         }
     }
@@ -855,7 +890,7 @@ impl<'a> BodyBuilder<'a> {
                             .to_string(),
                     ));
                 }
-                match self.place_of(object) {
+                match self.view_place(object) {
                     Some(place) => self.emit_to_temp(
                         BirRvalue::Ref {
                             place,
@@ -873,8 +908,13 @@ impl<'a> BodyBuilder<'a> {
 
             TypedExprKind::Member { .. }
             | TypedExprKind::Index { .. }
-            | TypedExprKind::Deref(_) => match self.place_of(expr) {
-                Some(place) => BirOperand::Copy(place),
+            | TypedExprKind::Deref(_) => match self.projected_place(expr, true) {
+                Some((place, false)) => BirOperand::Copy(place),
+                Some((place, true)) => self.emit_to_temp(
+                    BirRvalue::Use(BirOperand::Copy(place)),
+                    expr.ty.clone(),
+                    span,
+                ),
                 None => BirOperand::Const,
             },
 
@@ -991,7 +1031,7 @@ impl<'a> BodyBuilder<'a> {
                 }
                 if enum_name.as_str() == "Vec" && variant.as_str() == "as_slice" {
                     if let Some(recv) = args.first() {
-                        if let Some(place) = self.place_of(recv) {
+                        if let Some(place) = self.view_place(recv) {
                             return self.emit_to_temp(
                                 BirRvalue::Ref {
                                     place,
@@ -1005,7 +1045,7 @@ impl<'a> BodyBuilder<'a> {
                 }
                 if enum_name.as_str() == "Vec" && variant.as_str() == "try_as_unique_mut_slice" {
                     if let Some(recv) = args.first() {
-                        if let Some(place) = self.place_of(recv) {
+                        if let Some(place) = self.view_place(recv) {
                             return self.emit_to_temp(
                                 BirRvalue::Ref {
                                     place,
@@ -1044,7 +1084,7 @@ impl<'a> BodyBuilder<'a> {
                         "[escape] references to references are not supported in Run 1".to_string(),
                     ));
                 }
-                match self.place_of(operand) {
+                match self.rooted_place(operand) {
                     Some(place) => self.emit_to_temp(
                         BirRvalue::Ref {
                             place,
@@ -1064,7 +1104,7 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::Slice { object, range } => {
                 self.read_operand(range);
                 let mutable = matches!(expr.ty, InferType::Slice { mutable: true, .. });
-                match self.place_of(object) {
+                match self.view_place(object) {
                     Some(place) => {
                         self.emit_to_temp(BirRvalue::Ref { place, mutable }, expr.ty.clone(), span)
                     }
@@ -1110,7 +1150,7 @@ impl<'a> BodyBuilder<'a> {
                 self.reject_projected_ref_store(value);
                 let v = self.build_operand(value);
                 self.read_operand(index);
-                if let Some(mut place) = self.place_of(object) {
+                if let Some(mut place) = self.rooted_place(object) {
                     place.proj.push(BirProjection::Index);
                     self.push(
                         BirStmtKind::Assign {
@@ -1125,7 +1165,7 @@ impl<'a> BodyBuilder<'a> {
             TypedExprKind::DerefAssign { target, value } => {
                 self.reject_projected_ref_store(value);
                 let v = self.build_operand(value);
-                if let Some(mut place) = self.place_of(target) {
+                if let Some(mut place) = self.rooted_place(target) {
                     place.proj.push(BirProjection::Deref);
                     self.push(
                         BirStmtKind::Assign {
@@ -1334,7 +1374,7 @@ impl<'a> BodyBuilder<'a> {
     ) {
         self.reject_projected_ref_store(value);
         let v = self.build_operand(value);
-        if let Some(mut place) = self.place_of(object) {
+        if let Some(mut place) = self.rooted_place(object) {
             place.proj.push(BirProjection::Field(field.to_string()));
             self.push(
                 BirStmtKind::Assign {
