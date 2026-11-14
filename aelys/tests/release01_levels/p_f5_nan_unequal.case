@@ -1,0 +1,10 @@
+fn is_nan(x: f64) -> bool { return x != x }
+fn main() -> i64 {
+    let z: f64 = 0.0
+    let n = z / z
+    let w: f32 = 0.0
+    let m = w / w
+    let inf = 1.0 / z
+    println("{n != n} {!(n == n)} {is_nan(n)} {n != 1.0} {n == n} {n < 1.0} {m != m} {m == m} {inf != inf} {inf != n}")
+    return 0
+}

@@ -1,17 +1,14 @@
 use crate::types::{InferType, TypeVarId};
 
-/// Result of unification
 pub type UnifyResult<T> = Result<T, UnifyError>;
 
-/// Error during unification
 #[derive(Debug, Clone)]
 pub enum UnifyError {
-    /// Types don't match
     Mismatch(InferType, InferType),
-    /// Infinite type detected
     InfiniteType(TypeVarId, InferType),
-    /// Function arity mismatch
     ArityMismatch(usize, usize),
+    /// a shared borrow reached a position requiring an exclusive one
+    RefMutability(InferType, InferType),
 }
 
 impl std::fmt::Display for UnifyError {
@@ -22,8 +19,12 @@ impl std::fmt::Display for UnifyError {
             UnifyError::ArityMismatch(expected, found) => {
                 write!(f, "arity mismatch: expected {}, found {}", expected, found)
             }
+            UnifyError::RefMutability(found, required) => {
+                write!(f, "cannot use {} where {} is required", found, required)
+            }
         }
     }
 }
 
 impl std::error::Error for UnifyError {}
+

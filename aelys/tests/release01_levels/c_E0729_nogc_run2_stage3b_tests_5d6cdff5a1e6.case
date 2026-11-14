@@ -1,0 +1,6 @@
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
+fn main() -> i64 {
+    let n: i32 = 5
+    apply(fn(p: &i32) { }, &n)
+    return 0
+}

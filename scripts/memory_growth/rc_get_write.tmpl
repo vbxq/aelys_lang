@@ -1,0 +1,24 @@
+struct In { s: string }
+struct W { s: string, i: In }
+
+fn victim(n: i64) -> string { return "v" + "{n}" }
+
+fn swap(h: Rc<W>, s: string, n: i64) -> i64 {
+    h.s = victim(n)
+    h.i.s = victim(n + 1)
+    return s.len + s.bytes[0]
+}
+
+fn main() -> i64 {
+    let a: Rc<W> = Rc::new(W { s: victim(0), i: In { s: victim(0) } })
+    let mut n: i64 = 0
+    let mut i: i64 = 0
+    while i < NN {
+        Rc::get(a).s = victim(i)
+        Rc::get(a).i.s = victim(i % 1000)
+        n = n + swap(a, a.i.s, i % 1000)
+        i = i + 1
+    }
+    println("{n} {a.s} {a.i.s}")
+    return 0
+}

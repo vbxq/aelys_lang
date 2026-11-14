@@ -3,7 +3,6 @@ use crate::typed_ast::{TypedFunction, TypedParam};
 use crate::unify::Substitution;
 
 impl TypeInference {
-    /// Apply substitution to function
     pub(super) fn apply_substitution_func(
         &self,
         func: &TypedFunction,
@@ -12,6 +11,7 @@ impl TypeInference {
         TypedFunction {
             name: func.name.clone(),
             type_params: func.type_params.clone(),
+            bounds: func.bounds.clone(),
             params: func
                 .params
                 .iter()
@@ -26,6 +26,8 @@ impl TypeInference {
             body: self.apply_substitution_stmts(&func.body, subst),
             decorators: func.decorators.clone(),
             is_pub: func.is_pub,
+            declared_nogc: func.declared_nogc,
+            foreign: func.foreign.clone(),
             span: func.span,
             captures: func
                 .captures

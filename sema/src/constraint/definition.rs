@@ -1,20 +1,18 @@
 use super::ConstraintReason;
 use crate::types::InferType;
+use crate::unify::Dir;
 use aelys_syntax::Span;
 
-/// A type constraint that must be satisfied
 #[derive(Debug, Clone)]
 pub enum Constraint {
-    /// Two types must be equal: τ₁ = τ₂
     Equal {
         left: InferType,
         right: InferType,
         span: Span,
-        /// Description for error messages
         reason: ConstraintReason,
+        dir: Dir,
     },
 
-    /// Type must be one of the given options (e.g., for + operator)
     OneOf {
         ty: InferType,
         options: Vec<InferType>,
@@ -24,17 +22,46 @@ pub enum Constraint {
 }
 
 impl Constraint {
-    /// Create an equality constraint
     pub fn equal(left: InferType, right: InferType, span: Span, reason: ConstraintReason) -> Self {
         Constraint::Equal {
             left,
             right,
             span,
             reason,
+            dir: Dir::Exact,
         }
     }
 
-    /// Create a OneOf constraint
+    pub fn flows(
+        found: InferType,
+        required: InferType,
+        span: Span,
+        reason: ConstraintReason,
+    ) -> Self {
+        Constraint::Equal {
+            left: found,
+            right: required,
+            span,
+            reason,
+            dir: Dir::Flow,
+        }
+    }
+
+    pub fn flows_into(
+        required: InferType,
+        found: InferType,
+        span: Span,
+        reason: ConstraintReason,
+    ) -> Self {
+        Constraint::Equal {
+            left: required,
+            right: found,
+            span,
+            reason,
+            dir: Dir::FlowRev,
+        }
+    }
+
     pub fn one_of(
         ty: InferType,
         options: Vec<InferType>,
@@ -49,7 +76,6 @@ impl Constraint {
         }
     }
 
-    /// Get the span of this constraint
     pub fn span(&self) -> Span {
         match self {
             Constraint::Equal { span, .. } => *span,
@@ -57,7 +83,6 @@ impl Constraint {
         }
     }
 
-    /// Get the reason for this constraint
     pub fn reason(&self) -> &ConstraintReason {
         match self {
             Constraint::Equal { reason, .. } => reason,
@@ -65,3 +90,4 @@ impl Constraint {
         }
     }
 }
+

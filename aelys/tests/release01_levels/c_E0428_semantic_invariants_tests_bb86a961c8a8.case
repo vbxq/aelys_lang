@@ -1,0 +1,6 @@
+
+fn __helper(x: i64) -> i64 { return x * 2 }
+fn main() -> i64 {
+    println(__helper(21))
+    return 0
+}

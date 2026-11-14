@@ -22,6 +22,7 @@ fn test_infer_type_has_vars() {
     let fn_with_var = InferType::Function {
         params: vec![InferType::I64],
         ret: Box::new(InferType::Var(TypeVarId(0))),
+        nogc: false,
     };
     assert!(fn_with_var.has_vars());
 }
@@ -49,9 +50,11 @@ fn test_from_annotation() {
 
 #[test]
 fn test_from_annotation_generic_types() {
+    // "array" (lowercase) is no longer a recognized builtin type annotation.
+    // The canonical syntax is [T; N] for fixed-size arrays.
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("array", "int")),
-        InferType::Array(Box::new(InferType::I64))
+        InferType::Dynamic
     );
 
     assert_eq!(
@@ -59,9 +62,34 @@ fn test_from_annotation_generic_types() {
         InferType::Vec(Box::new(InferType::String))
     );
 
-    // Array<Int> (PascalCase should also work)
+    // PascalCase names are always user-defined types, never builtins.
+    // "Array" with a capital A is treated as Struct("Array"), not the builtin array.
     assert_eq!(
         InferType::from_annotation(&make_generic_ann("Array", "Int")),
-        InferType::Array(Box::new(InferType::I64))
+        InferType::Struct("Array".to_string())
+    );
+}
+
+#[test]
+fn test_from_annotation_sized_array() {
+    let inner = TypeAnnotation::new("i64".to_string(), Span::new(0, 0, 1, 1));
+    let ann = TypeAnnotation::array_sized(inner, 3, Span::new(0, 0, 1, 1));
+    assert_eq!(
+        InferType::from_annotation(&ann),
+        InferType::Array(Box::new(InferType::I64), Some(3))
+    );
+}
+
+#[test]
+fn test_from_annotation_nested_sized_array() {
+    let inner = TypeAnnotation::new("i64".to_string(), Span::new(0, 0, 1, 1));
+    let inner_arr = TypeAnnotation::array_sized(inner, 2, Span::new(0, 0, 1, 1));
+    let outer = TypeAnnotation::array_sized(inner_arr, 3, Span::new(0, 0, 1, 1));
+    assert_eq!(
+        InferType::from_annotation(&outer),
+        InferType::Array(
+            Box::new(InferType::Array(Box::new(InferType::I64), Some(2))),
+            Some(3)
+        )
     );
 }

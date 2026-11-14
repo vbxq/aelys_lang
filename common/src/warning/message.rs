@@ -13,7 +13,7 @@ impl WarningKind {
                 format!(
                     "cannot inline '{}' due to mutual recursion: {}",
                     name,
-                    cycle.join(" → ")
+                    cycle.join(" -> ")
                 )
             }
 

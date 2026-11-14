@@ -1,4 +1,0 @@
-// private_access.aelys - Should error when accessing private symbol
-needs utils
-
-utils.private()  // Error: 'private' is not public in 'utils'

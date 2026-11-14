@@ -1,0 +1,21 @@
+struct DNode { val: i64, next: Rc<DNode>, prev: Rc<DNode> }
+fn build(n: i64, prev: Rc<DNode>) -> Rc<DNode> {
+    if n == 0 { return Rc::null() }
+    let me: Rc<DNode> = Rc::new(DNode { val: n, next: Rc::null(), prev: prev })
+    me.next = build(n - 1, me)
+    return me
+}
+fn churn(i: i64) -> i64 {
+    let h = build(6, Rc::null())
+    return Rc::get(Rc::get(h).next).val + i % 2
+}
+fn main() -> i64 {
+    let mut i: i64 = 0
+    let mut n: i64 = 0
+    while i < NN / 4 {
+        n = n + churn(i)
+        i = i + 1
+    }
+    println(n)
+    return 0
+}

@@ -3,12 +3,13 @@ use super::{
     LocalConstantPropagator, OptimizationLevel, OptimizationPass, OptimizationStats,
     UnusedVarEliminator,
 };
+use aelys_air::bir::Checked;
 use aelys_common::Warning;
-use aelys_sema::TypedProgram;
+use aelys_sema::{TypedProgram, TypedStmt, TypedStmtKind};
 
 pub struct Optimizer {
     level: OptimizationLevel,
-    inliner: Option<FunctionInliner>,
+    inliner: FunctionInliner,
     passes: Vec<Box<dyn OptimizationPass>>,
     total_stats: OptimizationStats,
     collected_warnings: Vec<Warning>,
@@ -17,11 +18,7 @@ pub struct Optimizer {
 impl Optimizer {
     pub fn new(level: OptimizationLevel) -> Self {
         let mut passes: Vec<Box<dyn OptimizationPass>> = Vec::new();
-        let inliner = if level != OptimizationLevel::None {
-            Some(FunctionInliner::new(level))
-        } else {
-            None
-        };
+        let inliner = FunctionInliner::new(level);
 
         match level {
             OptimizationLevel::None => {}
@@ -66,16 +63,32 @@ impl Optimizer {
         self.level
     }
 
-    pub fn optimize(&mut self, mut program: TypedProgram) -> TypedProgram {
+    /// optimizer without first running the borrow/move check is a compile error, not a convention.
+    pub fn optimize(&mut self, checked: Checked) -> TypedProgram {
+        let mut program = checked.into_inner();
         self.collected_warnings.clear();
 
-        if let Some(inliner) = &mut self.inliner {
-            self.total_stats.merge(&inliner.run(&mut program));
-            self.collected_warnings.extend(inliner.take_warnings());
-        }
+        let frozen: Vec<(usize, TypedStmt)> = program
+            .stmts
+            .iter()
+            .enumerate()
+            .filter(|(_, stmt)| matches!(stmt.kind, TypedStmtKind::Let { .. }))
+            .map(|(at, stmt)| (at, stmt.clone()))
+            .collect();
+
+        self.total_stats.merge(&self.inliner.run(&mut program));
+        self.collected_warnings.extend(self.inliner.take_warnings());
 
         for pass in &mut self.passes {
             self.total_stats.merge(&pass.run(&mut program));
+        }
+
+        program
+            .stmts
+            .retain(|stmt| !matches!(stmt.kind, TypedStmtKind::Let { .. }));
+        for (at, stmt) in frozen {
+            let at = at.min(program.stmts.len());
+            program.stmts.insert(at, stmt);
         }
 
         program

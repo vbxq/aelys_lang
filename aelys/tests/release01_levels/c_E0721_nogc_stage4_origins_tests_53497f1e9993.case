@@ -1,0 +1,8 @@
+
+fn bad() -> &i64 {
+    let x = 5
+    return &x
+}
+fn main() -> i64 {
+    return 0
+}

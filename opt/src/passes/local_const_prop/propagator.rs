@@ -1,8 +1,8 @@
 use super::scope::ScopeStack;
 use crate::passes::{ConstantFolder, OptimizationPass, OptimizationStats};
 use aelys_sema::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedProgram, TypedStmt,
-    TypedStmtKind,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedPattern, TypedProgram,
+    TypedStmt, TypedStmtKind,
 };
 
 pub struct LocalConstantPropagator {
@@ -26,6 +26,7 @@ impl LocalConstantPropagator {
             TypedExprKind::Int(_)
                 | TypedExprKind::Float(_)
                 | TypedExprKind::Bool(_)
+                | TypedExprKind::Char(_)
                 | TypedExprKind::String(_)
                 | TypedExprKind::Null
         )
@@ -37,13 +38,18 @@ impl LocalConstantPropagator {
                 name,
                 mutable,
                 initializer,
+                var_type,
                 ..
             } => {
                 self.propagate_expr(initializer);
                 self.folder.optimize_expr(initializer);
 
-                if !*mutable && Self::is_simple_constant(initializer) {
+                if !*mutable && Self::is_simple_constant(initializer) && initializer.ty == *var_type
+                {
                     self.scopes.insert(name.clone(), initializer.clone());
+                } else {
+                    // same name (i.e. shadowed by this `let`) is not visible to
+                    self.scopes.block(name);
                 }
             }
 
@@ -88,6 +94,7 @@ impl LocalConstantPropagator {
             }
 
             TypedStmtKind::For {
+                iterator,
                 start,
                 end,
                 step,
@@ -105,11 +112,17 @@ impl LocalConstantPropagator {
                     self.scopes.invalidate(name);
                 }
                 self.scopes.push();
+                self.scopes.block(iterator);
                 self.propagate_stmt(body);
                 self.scopes.pop();
             }
 
-            TypedStmtKind::ForEach { iterable, body, .. } => {
+            TypedStmtKind::ForEach {
+                iterator,
+                iterable,
+                body,
+                ..
+            } => {
                 self.propagate_expr(iterable);
                 let mut assigned = Vec::new();
                 Self::collect_assigned_vars(body, &mut assigned);
@@ -117,6 +130,7 @@ impl LocalConstantPropagator {
                     self.scopes.invalidate(name);
                 }
                 self.scopes.push();
+                self.scopes.block(iterator);
                 self.propagate_stmt(body);
                 self.scopes.pop();
             }
@@ -133,13 +147,18 @@ impl LocalConstantPropagator {
             | TypedStmtKind::Break
             | TypedStmtKind::Continue
             | TypedStmtKind::Needs(_)
-            | TypedStmtKind::StructDecl { .. } => {}
+            | TypedStmtKind::StructDecl { .. }
+            | TypedStmtKind::EnumDecl { .. } => {}
         }
     }
 
     fn collect_assigned_vars(stmt: &TypedStmt, out: &mut Vec<String>) {
         match &stmt.kind {
             TypedStmtKind::Expression(expr) => Self::collect_assigned_vars_expr(expr, out),
+            // a let initializer may borrow a loop-carried local (let r = &mut x)
+            TypedStmtKind::Let { initializer, .. } => {
+                Self::collect_assigned_vars_expr(initializer, out)
+            }
             TypedStmtKind::Block(stmts) => {
                 for s in stmts {
                     Self::collect_assigned_vars(s, out);
@@ -208,6 +227,18 @@ impl LocalConstantPropagator {
                 Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(index, out);
             }
+            // a borrow may mutate the referent, mark it assigned so loop heads invalidate it
+            TypedExprKind::Reference { operand, .. } => {
+                if let TypedExprKind::Identifier(name) = &operand.kind {
+                    out.push(name.clone());
+                }
+                Self::collect_assigned_vars_expr(operand, out);
+            }
+            TypedExprKind::Deref(operand) => Self::collect_assigned_vars_expr(operand, out),
+            TypedExprKind::DerefAssign { target, value } => {
+                Self::collect_assigned_vars_expr(target, out);
+                Self::collect_assigned_vars_expr(value, out);
+            }
             TypedExprKind::IndexAssign {
                 object,
                 index,
@@ -215,6 +246,10 @@ impl LocalConstantPropagator {
             } => {
                 Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(index, out);
+                Self::collect_assigned_vars_expr(value, out);
+            }
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                Self::collect_assigned_vars_expr(object, out);
                 Self::collect_assigned_vars_expr(value, out);
             }
             TypedExprKind::Member { object, .. } => {
@@ -226,8 +261,13 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars_expr(e, out);
                 }
             }
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 Self::collect_assigned_vars_expr(size, out);
+                if let Some(fv) = fill_value {
+                    Self::collect_assigned_vars_expr(fv, out);
+                }
             }
             TypedExprKind::StructLiteral { fields, .. } => {
                 for (_, val) in fields {
@@ -254,12 +294,35 @@ impl LocalConstantPropagator {
                     Self::collect_assigned_vars(s, out);
                 }
             }
+            TypedExprKind::Block { stmts, tail } => {
+                for s in stmts {
+                    Self::collect_assigned_vars(s, out);
+                }
+                Self::collect_assigned_vars_expr(tail, out);
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                Self::collect_assigned_vars_expr(scrutinee, out);
+                for arm in arms {
+                    Self::collect_assigned_vars_expr(&arm.body, out);
+                }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                Self::collect_assigned_vars_expr(scrutinee, out);
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    Self::collect_assigned_vars_expr(arg, out);
+                }
+            }
             _ => {}
         }
     }
 
     fn propagate_function(&mut self, func: &mut TypedFunction) {
         self.scopes.push();
+        for param in &func.params {
+            self.scopes.block(&param.name);
+        }
         for stmt in func.body.iter_mut() {
             self.propagate_stmt(stmt);
         }
@@ -270,12 +333,7 @@ impl LocalConstantPropagator {
         match &mut expr.kind {
             TypedExprKind::Identifier(name) => {
                 if let Some(const_val) = self.scopes.get(name) {
-                    let ty = if expr.ty.is_integer() && const_val.ty.is_integer() {
-                        expr.ty.clone()
-                    } else {
-                        const_val.ty.clone()
-                    };
-                    *expr = TypedExpr::new(const_val.kind.clone(), ty, expr.span);
+                    *expr = TypedExpr::new(const_val.kind.clone(), const_val.ty.clone(), expr.span);
                     self.stats.locals_propagated += 1;
                 }
             }
@@ -324,8 +382,15 @@ impl LocalConstantPropagator {
                 self.propagate_expr(inner);
             }
 
-            TypedExprKind::LambdaInner { body, .. } => {
+            TypedExprKind::LambdaInner {
+                params: lparams,
+                body,
+                ..
+            } => {
                 self.scopes.push();
+                for param in lparams {
+                    self.scopes.block(&param.name);
+                }
                 for stmt in body.iter_mut() {
                     self.propagate_stmt(stmt);
                 }
@@ -343,8 +408,13 @@ impl LocalConstantPropagator {
                 }
             }
 
-            TypedExprKind::ArraySized { size, .. } => {
+            TypedExprKind::ArraySized {
+                size, fill_value, ..
+            } => {
                 self.propagate_expr(size);
+                if let Some(fv) = fill_value {
+                    self.propagate_expr(fv);
+                }
             }
 
             TypedExprKind::Index { object, index } => {
@@ -362,6 +432,11 @@ impl LocalConstantPropagator {
                 self.propagate_expr(value);
             }
 
+            TypedExprKind::FieldAssign { object, value, .. } => {
+                self.propagate_expr(object);
+                self.propagate_expr(value);
+            }
+
             TypedExprKind::Range { start, end, .. } => {
                 if let Some(s) = start {
                     self.propagate_expr(s);
@@ -374,6 +449,22 @@ impl LocalConstantPropagator {
             TypedExprKind::Slice { object, range } => {
                 self.propagate_expr(object);
                 self.propagate_expr(range);
+            }
+
+            // taking a reference may mutate the operand through the borrow; invalidate it
+            TypedExprKind::Reference { operand, .. } => {
+                if let TypedExprKind::Identifier(name) = &operand.kind {
+                    self.scopes.invalidate(name);
+                } else {
+                    self.propagate_expr(operand);
+                }
+            }
+            TypedExprKind::Deref(operand) => {
+                self.propagate_expr(operand);
+            }
+            TypedExprKind::DerefAssign { target, value } => {
+                self.propagate_expr(target);
+                self.propagate_expr(value);
             }
 
             TypedExprKind::FmtString(parts) => {
@@ -392,9 +483,39 @@ impl LocalConstantPropagator {
             TypedExprKind::Cast { expr, .. } => {
                 self.propagate_expr(expr);
             }
+            TypedExprKind::Block { stmts, tail } => {
+                self.scopes.push();
+                for stmt in stmts.iter_mut() {
+                    self.propagate_stmt(stmt);
+                }
+                self.propagate_expr(tail);
+                self.scopes.pop();
+            }
+            TypedExprKind::Match { scrutinee, arms } => {
+                self.propagate_expr(scrutinee);
+                for arm in arms {
+                    self.scopes.push();
+                    if let TypedPattern::Variant { bindings, .. } = &arm.pattern {
+                        for (name, _) in bindings {
+                            self.scopes.block(name);
+                        }
+                    }
+                    self.propagate_expr(&mut arm.body);
+                    self.scopes.pop();
+                }
+            }
+            TypedExprKind::ResultAssert { scrutinee, .. } => {
+                self.propagate_expr(scrutinee);
+            }
+            TypedExprKind::EnumVariant { args, .. } => {
+                for arg in args {
+                    self.propagate_expr(arg);
+                }
+            }
             TypedExprKind::Int(_)
             | TypedExprKind::Float(_)
             | TypedExprKind::Bool(_)
+            | TypedExprKind::Char(_)
             | TypedExprKind::String(_)
             | TypedExprKind::Null => {}
         }

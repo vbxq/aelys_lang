@@ -12,7 +12,6 @@ impl Token {
     }
 }
 
-/// Part of a format string: either literal text, a placeholder {}, or an expression {expr}
 #[derive(Debug, Clone, PartialEq)]
 pub enum FmtPart {
     Literal(String),
@@ -22,10 +21,10 @@ pub enum FmtPart {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
-    // literals
     Int(i64),
     Float(f64),
     String(String),
+    Char(u32),
     FmtString(Vec<FmtPart>),
     True,
     False,
@@ -33,7 +32,6 @@ pub enum TokenKind {
 
     Identifier(String),
 
-    // keywords
     Let,
     Mut,
     Fn,
@@ -54,8 +52,14 @@ pub enum TokenKind {
     In,
     Step,
     Struct,
+    Enum,
+    Match,
+    Discard,
+    Catch,
+    Unsafe,
+    Nogc,
+    Extern,
 
-    // operators
     Plus,
     Minus,
     Star,
@@ -69,7 +73,9 @@ pub enum TokenKind {
     Gt,
     GtEq,
     Arrow,      // ->
+    FatArrow,   // =>
     Colon,      // :
+    ColonColon, // ::
     PlusEq,     // +=
     MinusEq,    // -=
     StarEq,     // *=
@@ -77,8 +83,8 @@ pub enum TokenKind {
     PercentEq,  // %=
     PlusPlus,   // ++
     MinusMinus, // --
+    Question,   // ?
 
-    // bitwise
     Shl,
     Shr,       // << >>
     Ampersand, // &
@@ -86,7 +92,6 @@ pub enum TokenKind {
     Caret, // | ^
     Tilde, // ~
 
-    // delimiters
     LParen,
     RParen,
     LBrace,
@@ -99,7 +104,6 @@ pub enum TokenKind {
     DotDot,   // ..
     DotDotEq, // ..=
 
-    // special
     At,      // @ for decorators
     Newline, // for auto-semicolon insertion
     Eof,
@@ -112,6 +116,7 @@ impl TokenKind {
             Self::Int(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -119,7 +124,6 @@ impl TokenKind {
         )
     }
 
-    // semicolon insertion (Go-style, roughly)
     pub fn can_end_statement(&self) -> bool {
         matches!(
             self,
@@ -127,6 +131,7 @@ impl TokenKind {
                 | Self::Int(_)
                 | Self::Float(_)
                 | Self::String(_)
+                | Self::Char(_)
                 | Self::FmtString(_)
                 | Self::True
                 | Self::False
@@ -140,6 +145,7 @@ impl TokenKind {
                 | Self::Star // for `needs module.*`
                 | Self::PlusPlus
                 | Self::MinusMinus
+                | Self::Question
         )
     }
 }
@@ -150,6 +156,10 @@ impl std::fmt::Display for TokenKind {
             Self::Int(n) => write!(f, "{}", n),
             Self::Float(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "\"{}\"", s),
+            Self::Char(cp) => match char::from_u32(*cp) {
+                Some(c) => write!(f, "'{}'", c),
+                None => write!(f, "'\\u{{{:x}}}'", cp),
+            },
             Self::FmtString(_) => write!(f, "<format string>"),
             Self::True => write!(f, "true"),
             Self::False => write!(f, "false"),
@@ -175,6 +185,13 @@ impl std::fmt::Display for TokenKind {
             Self::In => write!(f, "in"),
             Self::Step => write!(f, "step"),
             Self::Struct => write!(f, "struct"),
+            Self::Enum => write!(f, "enum"),
+            Self::Match => write!(f, "match"),
+            Self::Discard => write!(f, "discard"),
+            Self::Catch => write!(f, "catch"),
+            Self::Unsafe => write!(f, "unsafe"),
+            Self::Nogc => write!(f, "nogc"),
+            Self::Extern => write!(f, "extern"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),
@@ -188,7 +205,9 @@ impl std::fmt::Display for TokenKind {
             Self::Gt => write!(f, ">"),
             Self::GtEq => write!(f, ">="),
             Self::Arrow => write!(f, "->"),
+            Self::FatArrow => write!(f, "=>"),
             Self::Colon => write!(f, ":"),
+            Self::ColonColon => write!(f, "::"),
             Self::PlusEq => write!(f, "+="),
             Self::MinusEq => write!(f, "-="),
             Self::StarEq => write!(f, "*="),
@@ -196,6 +215,7 @@ impl std::fmt::Display for TokenKind {
             Self::PercentEq => write!(f, "%="),
             Self::PlusPlus => write!(f, "++"),
             Self::MinusMinus => write!(f, "--"),
+            Self::Question => write!(f, "?"),
             Self::Shl => write!(f, "<<"),
             Self::Shr => write!(f, ">>"),
             Self::Ampersand => write!(f, "&"),

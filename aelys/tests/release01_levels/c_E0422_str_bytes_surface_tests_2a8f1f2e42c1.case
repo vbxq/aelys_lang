@@ -1,0 +1,7 @@
+
+fn main() -> i64 {
+    let s: string = "éab"
+    let b = s.bytes
+    b[0] = 65
+    return 0
+}

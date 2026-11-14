@@ -22,17 +22,21 @@ impl ConstantFolder {
 
         match (&left_unwrapped.kind, &right_unwrapped.kind) {
             (TypedExprKind::Int(a), TypedExprKind::Int(b)) => {
-                self.fold_int_binary(*a, op, *b, original)
+                let operand_ty =
+                    int_operand_type(op, &left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
+                self.fold_int_binary(*a, op, *b, &operand_ty, original)
             }
             (TypedExprKind::Float(a), TypedExprKind::Float(b)) => {
-                self.fold_float_binary(*a, op, *b, original)
+                let float_ty = float_format(&left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
+                self.fold_float_binary(*a, op, *b, &float_ty, original)
             }
-            // int+float or float+int -> promote to float
             (TypedExprKind::Int(a), TypedExprKind::Float(b)) => {
-                self.fold_float_binary(*a as f64, op, *b, original)
+                let float_ty = float_format(&left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
+                self.fold_float_binary(*a as f64, op, *b, &float_ty, original)
             }
             (TypedExprKind::Float(a), TypedExprKind::Int(b)) => {
-                self.fold_float_binary(*a, op, *b as f64, original)
+                let float_ty = float_format(&left_unwrapped.ty, &right_unwrapped.ty, &original.ty);
+                self.fold_float_binary(*a, op, *b as f64, &float_ty, original)
             }
             (TypedExprKind::String(a), TypedExprKind::String(b)) if op == BinaryOp::Add => {
                 self.fold_string_concat(a, b, original)
@@ -95,4 +99,39 @@ impl ConstantFolder {
             original.span,
         ))
     }
+}
+
+fn float_format(left: &InferType, right: &InferType, original: &InferType) -> InferType {
+    if original.is_float() {
+        return original.clone();
+    }
+    let widened = *left == InferType::F64 || *right == InferType::F64;
+    let narrow = *left == InferType::F32 || *right == InferType::F32;
+    if narrow && !widened {
+        InferType::F32
+    } else {
+        InferType::F64
+    }
+}
+
+fn int_operand_type(
+    op: BinaryOp,
+    left: &InferType,
+    right: &InferType,
+    original: &InferType,
+) -> InferType {
+    let shift = matches!(op, BinaryOp::Shl | BinaryOp::Shr);
+    if shift && original.is_integer() {
+        return original.clone();
+    }
+    if left.is_integer() {
+        return left.clone();
+    }
+    if !shift && right.is_integer() {
+        return right.clone();
+    }
+    if original.is_integer() {
+        return original.clone();
+    }
+    InferType::I64
 }

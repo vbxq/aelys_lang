@@ -1,0 +1,11 @@
+fn f(n: i64, acc: string) -> string {
+    if n > 0 { return f(n - 1, acc) }
+    return acc
+}
+fn main() -> i64 {
+    let mut i = 0
+    let mut t = 0
+    while i < NN { t = t + f(3, "x{i % 1000}").len; i = i + 1 }
+    println(t)
+    return 0
+}

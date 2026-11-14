@@ -1,5 +1,4 @@
-needs std.sys
-
-println("Hello, World!")
-println("Welcome to Aelys v0.20.3-a!")
-println("Platform: {sys.platform()} {sys.arch()}")
+fn main() {
+    println("Hello, World!")
+    println("Welcome to Aelys v0.21.8-a!")
+}

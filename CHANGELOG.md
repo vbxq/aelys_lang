@@ -2,9 +2,78 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## Unreleased: the 0.1 milestone (workspace 0.21.8-a)
+
+- an assignment whose source is its destination (`s = s`, `s = id(s)` once inlined) and a local array of managed values lent as a slice free what they held; both leaked what they held each time they ran
+- a `nogc` function that reached an allocating callee through a field, index or deref of the call's result (`mk(n).len`) is refused (`E0727`); no poll and no allocation is reachable from `nogc` code
+- a reference or a view (`&*f(..)`, a slice, `.bytes`, `Vec::as_slice`) of a deref of a call keeps its loan, and an index on a call result is checked after its base: three ways to read freed memory in code without `unsafe` are refused (`E0711`)
+- `--runtime rc+cycles` collects cycles during execution, at safepoints the compiler inserts at function entry and on loop back edges, never in `nogc` code; `AELYS_CYCLE_THRESHOLD=n` sets the collection threshold
+- the cycle collector frees every dead cycle, members that were never decremented included (a parent pointer, a ring or a doubly linked list built by recursion, an `Rc` of an `Rc`)
+- an `Rc` in an enum payload is traced at the offset the layout gives it; a collection no longer crashes an acyclic program holding one
+- value change: the width of a binary is the smallest type its non-literal operands widen to, a literal takes that width and must fit, a parenthesized or negated literal and every intermediate of a constant expression must fit too
+- value change: a shift has the type of its left operand, its amount never widens it
+- a binding that shadows a literal-initialized name no longer inherits its narrowing (it could store an `i64` in a `u8`)
+- behaviour no longer depends on `-O`: a trap in an unused binding, an inlined argument or an expression statement is kept, and the constant folder answers what the runtime answers
+- the reference pipeline's refusal is the verdict at every level; `E0432` is raised only when the optimized pipeline alone refuses
+- value change: float `!=` is unordered, `NaN != NaN` is `true`
+- value change: a NaN prints as `nan`, whatever its sign bit
+- programs are linked with `-lm`, so `%` on floats links
+- an unused binding that allocates (a formatted string, a lambda, a concatenation) is kept at `-O2`
+- refused with a named diagnostic where an internal error came out before: a type that is never inferred (`E0304`); a generic function or `println` used as a value (`E0902`); printing a type with no printed form, through a type parameter too (`E0902`); the wrong number of type arguments on `Vec`, `Rc`, a struct or an enum (`E0304`); a field read through `Rc<T>` with `T` a type parameter (`E0304`); `Rc` of the unit type (`E0902`); a member read through a borrowed `Rc` in a `nogc fn` (`E0410`)
+- newly refused: `S<i64>` on a struct that is not generic (`E0304`), and `Err(..)` built for a `Result<_, Never>` (`E0301`), which was accepted
+- `?` and an `Err` arm on a `Result<_, Never>` compile
+- an enum prints under its source name
+- `Some`, `None`, `Ok` and `Err` name the prelude's variants without the enum in front; `Option::Some` still works
+- `Some`, `None`, `Ok` and `Err` are reserved at every value binding site (`E0205`)
+- in a pattern, an identifier starting with an uppercase letter is a variant or an error (`E0101`), never a binding; a nested pattern is `E0101`
+- the standard library is built into the compiler and answers `std.` when no search root holds `std/prelude.aelys`; `aelys-cli --version` prints its hash
+- every README example is compiled, run at `-O0` and `-O2`, and compared with the output the README states
+
+## 0.22.x - memory model, safety checking, error handling
+
+- Managed memory is non-atomic reference counting, not a tracing GC, with a trial-deletion cycle collector behind `--runtime rc+cycles` and an Immix-style allocator (`AELYS_ALLOC=malloc` to switch)
+- `Vec<T>` has copy-on-write value semantics; the surface where they are guaranteed is fail-closed behind `E0412`-`E0414`
+- a borrow checker on a dedicated IR (BIR), non-lexical, with inferred origins and no user-written lifetime annotations (`E0701`-`E0704`, `E0711`-`E0714`, `E0723`-`E0726`)
+- `nogc` as a checked effect declaration, inferred across the call graph, part of the function type, with a `T: nogc` structural bound (`E0727`-`E0730`)
+- error handling: `?`, `catch`, `discard`, `.unwrap()`/`.expect()`, `.map_error()`, must-use on dropped `Result`
+
+## 0.21.x - LLVM backend implementation
+
+**0.21.5-a**
+- LLVM codegen: Windows x64 MSVC sret ABI fix for struct returns (fixes bootstrap println segfault)
+- string comparison (==, !=), logical not (!), println` accepts i64/f64/bool (bootstrap to_string)
+- Delete the legacy VM backend
+
+#### Note about that : 
+
+The previous VM served its purpose for prototyping, but Aelys is a systems programming language, not a scripting engine.  
+
+A compact alternative VM will return later once LLVM is mature enough (meta-programming?)
+
+**0.21.4-a**
+- LLVM codegen: SSA-aware local lowering, no more round-tripping with alloca/store/load
+- LLVM backend hardening, no panic/todo path now, unsupported AIR node will give a compile time error
+- Stable native entrypoint for LLVM: `__aelys_user_main` + C runtime main
+
+**0.21.3-a**
+- Hardened Aelys string ABI: `str` is now consistently lowered as `{ ptr, len }`
+- Temporary `print/println` bootstrap, they're reserved during LLVM bootstrap and lowered to `__aelys_write(ptr, len)`; added regression tests for IR ABI and internal `\0` handling.
+- Added `s.len` field access on `Str` (untiil proper bootstrapping)
+
+**0.21.2-a**
+- Added `core/` crate (`aelys-core`) as a C runtime static library built via `cc` (`build.rs` + `src/aelys_core.c`).
+- LLVM native linking now auto-resolves and links `aelys-core` for `--backend llvm` executables.
+
+**0.21.1-a**
+- AIR pass `copy_elim`: élimination des copies paramètre -> local en single-assignment.
+- AIR pass `dead_locals`: suppression des `AirLocal` jamais référencés.
+
+**0.21.0-a**
+- LLVM backend bootstrap: inkwell integration, AIR->LLVM type lowering, function declaration/body codegen, `module.verify()`, and `--backend llvm --emit-llvm-ir`.
+
 ## 0.20.x - Preparing for LLVM
 
-Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that. 
+Groundwork for LLVM: sized types, structs, generics, monomorphization, and a new intermediate representation (AIR) with System V AMD64 layout. Nothing implemented in the VM though. I'd rather focus on the new backend than on that.  is mature enough.
 
 **0.20.4-a**
 - AIR pretty-printer, `--emit-air` CLI flag for `compile` command
@@ -60,7 +129,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 - String indexing with `s[i]` (unicode-aware, returns single-character string)
 - `for c in "hello" { }` iteration syntax
 
-**0.19.10-a** (i'll squash all of these updates)
+**0.19.10-a**
 - fn foo(mut param: type) now working
 
 **0.19.9-a** (not a "real" update again sorry, needed a new tag
@@ -109,7 +178,7 @@ Language maturity: arrays, vecs, compound operators, dot-syntax string methods, 
 
 ## 0.18.x - Native Binary Data Manipulation 
 
-This update adds real memory manipulation for @no_gc mode
+This update adds real memory manipulation for @no_gc mode & some bug fixes
 
 **0.18.6-a**
 - Fixed call site cache using stale entries after global mutation

@@ -1,0 +1,7 @@
+
+fn main() -> i64 {
+    let mut arr = []
+    let x = 5
+    arr[0] = &x
+    return 0
+}

@@ -1,0 +1,5 @@
+
+fn main() -> i64 {
+    let c: char = ''
+    return 0
+}

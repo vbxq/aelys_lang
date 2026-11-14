@@ -1,8 +1,6 @@
 use super::InferType;
 use std::fmt;
 
-// resolved type, after inference all veriable are resolved
-// this is what the compiler uses for opcode selection
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ResolvedType {
     I8,
@@ -16,6 +14,7 @@ pub enum ResolvedType {
     F32,
     F64,
     Bool,
+    Char,
     String,
     Null,
 
@@ -24,8 +23,11 @@ pub enum ResolvedType {
         ret: Box<ResolvedType>,
     },
 
-    Array(Box<ResolvedType>),
+    Array(Box<ResolvedType>, Option<u64>),
     Vec(Box<ResolvedType>),
+    Rc(Box<ResolvedType>),
+    Ref(Box<ResolvedType>, bool),
+    Slice(Box<ResolvedType>, bool),
     Tuple(Vec<ResolvedType>),
     Range,
 
@@ -103,23 +105,37 @@ impl ResolvedType {
             InferType::F32 => ResolvedType::F32,
             InferType::F64 => ResolvedType::F64,
             InferType::Bool => ResolvedType::Bool,
+            InferType::Char => ResolvedType::Char,
             InferType::String => ResolvedType::String,
             InferType::Null => ResolvedType::Null,
-            InferType::Function { params, ret } => ResolvedType::Function {
+            // never represents unreachable code; map to null (void) for codegen.
+            InferType::Never => ResolvedType::Null,
+            InferType::Function { params, ret, .. } => ResolvedType::Function {
                 params: params.iter().map(ResolvedType::from_infer_type).collect(),
                 ret: Box::new(ResolvedType::from_infer_type(ret)),
             },
-            InferType::Array(inner) => {
-                ResolvedType::Array(Box::new(ResolvedType::from_infer_type(inner)))
+            InferType::Array(inner, len) => {
+                ResolvedType::Array(Box::new(ResolvedType::from_infer_type(inner)), *len)
             }
             InferType::Vec(inner) => {
                 ResolvedType::Vec(Box::new(ResolvedType::from_infer_type(inner)))
+            }
+            InferType::Rc(inner) => {
+                ResolvedType::Rc(Box::new(ResolvedType::from_infer_type(inner)))
+            }
+            InferType::Ref { referent, mutable } => {
+                ResolvedType::Ref(Box::new(ResolvedType::from_infer_type(referent)), *mutable)
+            }
+            InferType::Slice { elem, mutable } => {
+                ResolvedType::Slice(Box::new(ResolvedType::from_infer_type(elem)), *mutable)
             }
             InferType::Tuple(elems) => {
                 ResolvedType::Tuple(elems.iter().map(ResolvedType::from_infer_type).collect())
             }
             InferType::Range => ResolvedType::Range,
-            InferType::Struct(name) => ResolvedType::Struct(name.clone()),
+            InferType::Struct(name) | InferType::Enum(name, _) => {
+                ResolvedType::Struct(name.clone())
+            }
             InferType::Var(_) => ResolvedType::Dynamic,
             InferType::Dynamic => ResolvedType::Dynamic,
         }
@@ -140,6 +156,7 @@ impl fmt::Display for ResolvedType {
             ResolvedType::F32 => write!(f, "f32"),
             ResolvedType::F64 => write!(f, "f64"),
             ResolvedType::Bool => write!(f, "bool"),
+            ResolvedType::Char => write!(f, "char"),
             ResolvedType::String => write!(f, "string"),
             ResolvedType::Null => write!(f, "null"),
             ResolvedType::Function { params, ret } => {
@@ -152,8 +169,16 @@ impl fmt::Display for ResolvedType {
                 }
                 write!(f, ") -> {}", ret)
             }
-            ResolvedType::Array(inner) => write!(f, "[{}]", inner),
+            ResolvedType::Array(inner, Some(n)) => write!(f, "[{}; {}]", inner, n),
+            ResolvedType::Array(inner, None) => write!(f, "[{}]", inner),
             ResolvedType::Vec(inner) => write!(f, "vec[{}]", inner),
+            ResolvedType::Rc(inner) => write!(f, "Rc<{}>", inner),
+            ResolvedType::Ref(inner, mutable) => {
+                write!(f, "&{}{}", if *mutable { "mut " } else { "" }, inner)
+            }
+            ResolvedType::Slice(inner, mutable) => {
+                write!(f, "&{}[{}]", if *mutable { "mut " } else { "" }, inner)
+            }
             ResolvedType::Tuple(elems) => {
                 write!(f, "(")?;
                 for (i, e) in elems.iter().enumerate() {

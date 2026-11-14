@@ -1,8 +1,8 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
+use crate::constraint::{Constraint, ConstraintReason};
+use crate::typed_ast::LiteralInit;
 use crate::typed_ast::{TypedExprKind, TypedStmtKind};
-use crate::types::InferType;
-use aelys_syntax::{Expr, Span, TypeAnnotation};
+use aelys_syntax::{Expr, Span, TypeAnnotation, UnaryOp};
 
 impl TypeInference {
     pub(super) fn infer_let_stmt(
@@ -14,48 +14,79 @@ impl TypeInference {
         initializer: &Expr,
         is_pub: bool,
     ) -> TypedStmtKind {
+        if self.nogc_fn_params.contains(name) {
+            self.errors
+                .push(crate::constraint::TypeError::nogc_param_shadowed(
+                    name, span,
+                ));
+        }
+
         let mut typed_init = self.infer_expr(initializer);
 
+        let mut literal = None;
         let declared_type = type_annotation
             .as_ref()
             .map(|ann| self.type_from_annotation(ann));
 
         let var_type = if let Some(decl) = &declared_type {
-            if let TypedExprKind::Int(value) = &typed_init.kind
-                && decl.is_integer()
-                && *decl != InferType::I64
-            {
-                if InferType::int_fits(*value, decl) {
-                    typed_init.ty = decl.clone();
-                } else {
-                    self.errors.push(TypeError {
-                        kind: TypeErrorKind::Mismatch {
-                            expected: decl.clone(),
-                            found: InferType::I64,
-                        },
-                        span: typed_init.span,
-                        reason: ConstraintReason::IntLiteralOverflow {
-                            value: *value,
-                            target: decl.clone(),
-                        },
-                    });
-                }
-            } else {
-                self.constraints.push(Constraint::equal(
-                    typed_init.ty.clone(),
-                    decl.clone(),
-                    span,
-                    ConstraintReason::TypeAnnotation {
-                        var_name: name.to_string(),
+            // narrowing alone must never be the sole source of truth for a type
+            self.try_narrow_literal(&mut typed_init, decl);
+
+            if typed_init.ty != *decl && typed_init.ty.can_implicit_widen_to(decl) {
+                let vspan = typed_init.span;
+                let original = std::mem::replace(
+                    &mut typed_init,
+                    crate::typed_ast::TypedExpr {
+                        kind: crate::typed_ast::TypedExprKind::Null,
+                        ty: crate::types::InferType::Null,
+                        span: vspan,
                     },
-                ));
+                );
+                typed_init = crate::typed_ast::TypedExpr {
+                    kind: crate::typed_ast::TypedExprKind::Cast {
+                        expr: Box::new(original),
+                        target: decl.clone(),
+                    },
+                    ty: decl.clone(),
+                    span: vspan,
+                };
             }
+
+            self.constraints.push(Constraint::flows(
+                typed_init.ty.clone(),
+                decl.clone(),
+                span,
+                ConstraintReason::TypeAnnotation {
+                    var_name: name.to_string(),
+                },
+            ));
             decl.clone()
         } else {
+            if !mutable {
+                literal = self.literal_of_init(&typed_init);
+            }
             typed_init.ty.clone()
         };
 
-        self.env.define_local(name.to_string(), var_type.clone());
+        self.check_rc_let_surface(name, &var_type, initializer, span);
+        self.check_vec_let_surface(name, &var_type, span);
+
+        self.env
+            .define_local_with_span(name.to_string(), var_type.clone(), span);
+        if let Some(lit) = &literal
+            && let Some(id) = self.env.lookup_binding_id(name)
+        {
+            self.literal_init_vars.insert(id, lit.clone());
+        }
+        if self.return_type_stack.is_empty() && self.env.depth() == 1 {
+            match literal {
+                Some(lit) => self.literal_globals.insert(name.to_string(), lit),
+                None => self.literal_globals.remove(name),
+            };
+        }
+        if mutable {
+            self.env.mark_mutable(name.to_string());
+        }
 
         TypedStmtKind::Let {
             name: name.to_string(),
@@ -63,6 +94,114 @@ impl TypeInference {
             initializer: typed_init,
             var_type,
             is_pub,
+        }
+    }
+
+    fn check_rc_let_surface(
+        &mut self,
+        name: &str,
+        var_type: &crate::types::InferType,
+        initializer: &Expr,
+        span: Span,
+    ) {
+        use aelys_syntax::ExprKind;
+
+        if var_type.is_rc() {
+            let mut init = initializer;
+            while let ExprKind::Grouping(inner) = &init.kind {
+                init = inner;
+            }
+            let direct_init = matches!(
+                &init.kind,
+                ExprKind::EnumVariant { enum_name, variant, .. }
+                    if enum_name == "Rc" && (variant == "new" || variant == "null")
+            ) || matches!(
+                init.kind,
+                ExprKind::Identifier(_)
+                    | ExprKind::Member { .. }
+                    | ExprKind::Call { .. }
+                    | ExprKind::Block { .. }
+                    | ExprKind::Match { .. }
+            );
+            if !direct_init {
+                self.errors
+                    .push(crate::constraint::TypeError::rc_out_of_surface(
+                        format!(
+                            "`Rc<T>` binding `{name}` must be initialized by `Rc::new(..)`, \
+                             `Rc::null()`, another Rc binding, an Rc field, a call, a block or a \
+                             match; conditional init is not supported yet"
+                        ),
+                        span,
+                    ));
+            }
+        } else if var_type.contains_rc() || self.aggregate_embeds_rc_nominal(var_type) {
+            self.errors
+                .push(crate::constraint::TypeError::rc_out_of_surface(
+                    format!(
+                        "binding `{name}` has type `{var_type}` which embeds an `Rc<T>` in an \
+                         aggregate value; Rc inside arrays/vecs/tuples/structs is not supported yet"
+                    ),
+                    span,
+                ));
+        }
+    }
+
+    // the construction sites already fail closed; this is the honest place to report, and it
+    fn check_vec_let_surface(
+        &mut self,
+        name: &str,
+        var_type: &crate::types::InferType,
+        span: Span,
+    ) {
+        use crate::types::InferType;
+        let holds = match var_type {
+            InferType::Array(inner, _) | InferType::Vec(inner) => {
+                self.type_table.contains_vec_by_value(inner)
+            }
+            InferType::Tuple(elems) => elems
+                .iter()
+                .any(|e| self.type_table.contains_vec_by_value(e)),
+            _ => false,
+        };
+        if holds {
+            self.errors
+                .push(crate::constraint::TypeError::vec_out_of_surface(
+                    format!(
+                        "binding `{name}` has type `{var_type}`, whose element holds a `Vec<T>` \
+                         by value; a Vec inside a Vec/array is not supported yet (the buffer \
+                         would be shared without a retain, the transitive Vec retain/release is \
+                         not implemented)"
+                    ),
+                    span,
+                ));
+        }
+    }
+
+    fn literal_of_init(&self, init: &crate::typed_ast::TypedExpr) -> Option<LiteralInit> {
+        match &init.kind {
+            TypedExprKind::Int(v) => Some(LiteralInit::Int(*v)),
+            TypedExprKind::Float(v) => Some(LiteralInit::Float(*v)),
+            TypedExprKind::Unary {
+                op: UnaryOp::Neg,
+                operand,
+            } => match &operand.kind {
+                TypedExprKind::Int(v) => v.checked_neg().map(LiteralInit::Int),
+                TypedExprKind::Float(v) => Some(LiteralInit::Float(-v)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    // which double-frees. a bare carrier binding is legal and tracked by carrier_locals
+    fn aggregate_embeds_rc_nominal(&self, ty: &crate::types::InferType) -> bool {
+        use crate::types::InferType;
+        match ty {
+            InferType::Array(inner, _) | InferType::Vec(inner) => {
+                self.type_table.contains_rc_nominal(inner)
+            }
+            InferType::Tuple(elems) => elems.iter().any(|e| self.type_table.contains_rc_nominal(e)),
+            _ => false,
         }
     }
 }
