@@ -115,25 +115,55 @@ impl TypeInference {
         }
     }
 
-    pub(super) fn reject_generic_structs(&mut self, stmts: &[Stmt]) -> bool {
-        let mut found = false;
+    pub(super) fn reject_polymorphic_recursion(&mut self, stmts: &[Stmt]) {
         for stmt in stmts {
-            if let StmtKind::StructDecl {
+            let StmtKind::StructDecl {
                 name, type_params, ..
             } = &stmt.kind
-                && !type_params.is_empty()
-            {
-                found = true;
+            else {
+                continue;
+            };
+            if type_params.is_empty() {
+                continue;
+            }
+            let Some(def) = self.type_table.get_struct(name) else {
+                continue;
+            };
+            let own: Vec<InferType> = type_params
+                .iter()
+                .map(|p| InferType::Struct(p.clone(), Vec::new()))
+                .collect();
+            let culprit = def
+                .fields
+                .iter()
+                .find(|f| Self::names_with_other_args(&f.ty, name, &own))
+                .map(|f| f.name.clone());
+            if let Some(field) = culprit {
                 self.errors.push(TypeError::not_supported_yet(
                     format!(
-                        "struct `{name}<{}>` is generic: generic structs are not supported yet",
+                        "struct `{name}<{}>` names itself with different type arguments in \
+                         field `{field}`; polymorphic recursion is not supported",
                         type_params.join(", ")
                     ),
                     stmt.span,
                 ));
             }
         }
-        found
+    }
+
+    fn names_with_other_args(ty: &InferType, name: &str, own: &[InferType]) -> bool {
+        let go = |t: &InferType| Self::names_with_other_args(t, name, own);
+        match ty {
+            InferType::Struct(n, args) if n == name => args != own || args.iter().any(go),
+            InferType::Struct(_, args) | InferType::Enum(_, args) | InferType::Tuple(args) => {
+                args.iter().any(go)
+            }
+            InferType::Array(inner, _) | InferType::Vec(inner) | InferType::Rc(inner) => go(inner),
+            InferType::Ref { referent, .. } => go(referent),
+            InferType::Slice { elem, .. } => go(elem),
+            InferType::Function { params, ret, .. } => params.iter().any(go) || go(ret),
+            _ => false,
+        }
     }
 
     pub(super) fn reject_multi_variant_rc_enums(&mut self, stmts: &[Stmt]) {

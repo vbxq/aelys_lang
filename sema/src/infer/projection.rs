@@ -83,7 +83,7 @@ fn site_key(span: Span, kind: &ProjKind) -> SiteKey {
 pub(crate) enum CarrierCheck {
     Surface {
         ty: InferType,
-        generic: bool,
+        generic: Option<&'static str>,
         span: Span,
         what: String,
     },

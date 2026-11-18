@@ -21,12 +21,22 @@ impl TypeInference {
                 ));
         }
 
-        let mut typed_init = self.infer_expr(initializer);
-
-        let mut literal = None;
         let declared_type = type_annotation
             .as_ref()
             .map(|ann| self.type_from_annotation(ann));
+        let mut init_core = initializer;
+        while let aelys_syntax::ExprKind::Grouping(inner) = &init_core.kind {
+            init_core = inner;
+        }
+        if let Some(decl @ crate::types::InferType::Struct(..)) = &declared_type
+            && matches!(init_core.kind, aelys_syntax::ExprKind::StructLiteral { .. })
+        {
+            self.struct_literal_hint = Some(decl.clone());
+        }
+        let mut typed_init = self.infer_expr(initializer);
+        self.struct_literal_hint = None;
+
+        let mut literal = None;
 
         let var_type = if let Some(decl) = &declared_type {
             // narrowing alone must never be the sole source of truth for a type

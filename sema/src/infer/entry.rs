@@ -30,6 +30,7 @@ impl Default for TypeInference {
             type_param_bounds: HashMap::new(),
             instantiated_param_names: HashMap::new(),
             literal_init_vars: HashMap::new(),
+            struct_literal_hint: None,
             literal_globals: HashMap::new(),
             keep_binding_use: false,
             try_counter: 0,
@@ -211,12 +212,12 @@ impl TypeInference {
 
         if let Some(qualified) = qualified {
             if self.type_table.has_enum(&qualified) {
-                let type_args = self.collect_enum_type_args(ann);
+                let type_args = self.collect_type_args(ann);
                 self.check_enum_type_arg_count(&qualified, type_args.len(), ann);
                 return InferType::Enum(qualified, type_args);
             }
             if self.type_table.has_struct(&qualified) {
-                self.check_struct_type_arg_count(&qualified, ann);
+                return self.struct_annotation(&qualified, ann);
             }
             return InferType::Struct(qualified, Vec::new());
         }
@@ -224,15 +225,35 @@ impl TypeInference {
         let ty = InferType::from_annotation(ann);
         if let InferType::Struct(ref name, _) = ty {
             if self.type_table.has_enum(name) {
-                let type_args = self.collect_enum_type_args(ann);
+                let type_args = self.collect_type_args(ann);
                 self.check_enum_type_arg_count(name, type_args.len(), ann);
                 return InferType::Enum(name.clone(), type_args);
             }
             if self.type_table.has_struct(name) {
-                self.check_struct_type_arg_count(name, ann);
+                return self.struct_annotation(&name.clone(), ann);
             }
         }
         ty
+    }
+
+    fn struct_annotation(&mut self, name: &str, ann: &TypeAnnotation) -> InferType {
+        let found = Self::annotated_type_arg_count(ann);
+        if found == 0 && self.type_params_in_scope.iter().any(|p| p == name) {
+            return InferType::Struct(name.to_string(), Vec::new());
+        }
+        let expected = self
+            .type_table
+            .get_struct(name)
+            .map_or(0, |d| d.type_params.len());
+        self.check_struct_type_arg_count(name, ann);
+        if expected == 0 {
+            return InferType::Struct(name.to_string(), Vec::new());
+        }
+        if expected != found {
+            return InferType::Dynamic;
+        }
+        let args = self.collect_type_args(ann);
+        InferType::Struct(name.to_string(), args)
     }
 
     fn annotated_type_arg_count(ann: &TypeAnnotation) -> usize {
@@ -285,7 +306,7 @@ impl TypeInference {
         }
     }
 
-    fn collect_enum_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
+    fn collect_type_args(&mut self, ann: &TypeAnnotation) -> Vec<InferType> {
         if !ann.type_params.is_empty() {
             return ann
                 .type_params
@@ -458,9 +479,7 @@ impl TypeInference {
         // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
         inf.reject_multi_variant_rc_enums(&stmts);
-        if inf.reject_generic_structs(&stmts) {
-            return Err(inf.errors);
-        }
+        inf.reject_polymorphic_recursion(&stmts);
         inf.collect_signatures(&stmts, "");
 
         let typed_stmts = inf.infer_stmts(&stmts);

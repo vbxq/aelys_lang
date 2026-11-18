@@ -449,6 +449,10 @@ impl TypeInference {
                 name,
                 type_args.into_iter().map(Self::finalize_type).collect(),
             ),
+            InferType::Struct(name, type_args) if !type_args.is_empty() => InferType::Struct(
+                name,
+                type_args.into_iter().map(Self::finalize_type).collect(),
+            ),
             other => other,
         }
     }

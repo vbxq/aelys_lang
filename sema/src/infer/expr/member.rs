@@ -9,16 +9,16 @@ impl TypeInference {
     pub(crate) fn reject_rc_out_of_carrier_surface(
         &mut self,
         ty: &InferType,
-        container_is_generic: bool,
+        generic_container: Option<&'static str>,
         span: Span,
         what: &str,
     ) {
-        if container_is_generic {
+        if let Some(container) = generic_container {
             if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
                 self.errors.push(TypeError::rc_out_of_surface(
                     format!(
                         "{what} stores a value of type `{ty}` carrying an `Rc<T>` straight \
-                     into a generic enum, which is not supported yet"
+                     into a generic {container}, which is not supported yet"
                     ),
                     span,
                 ));
@@ -300,44 +300,70 @@ impl TypeInference {
                 }
             }
 
-            if def.type_params.is_empty() {
-                let provided: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
-                for def_field in &def_field_names {
-                    if !provided.contains(&def_field.as_str()) {
-                        self.errors.push(TypeError::member_access(
-                            format!("missing field '{}' in struct literal '{}'", def_field, name),
-                            span,
-                        ));
-                    }
+            let provided: Vec<&str> = fields.iter().map(|f| f.name.as_str()).collect();
+            for def_field in &def_field_names {
+                if !provided.contains(&def_field.as_str()) {
+                    self.errors.push(TypeError::member_access(
+                        format!("missing field '{}' in struct literal '{}'", def_field, name),
+                        span,
+                    ));
                 }
             }
         }
 
+        let hint = self.struct_literal_hint.take();
+        let type_params: Vec<String> = self
+            .type_table
+            .get_struct(name)
+            .map(|d| d.type_params.clone())
+            .unwrap_or_default();
+        let inst_args: Vec<InferType> = match hint {
+            Some(InferType::Struct(hname, hargs))
+                if hname == name && hargs.len() == type_params.len() =>
+            {
+                hargs
+            }
+            _ => type_params.iter().map(|_| self.type_gen.fresh()).collect(),
+        };
+
         let typed_fields: Vec<(String, Box<TypedExpr>)> = fields
             .iter()
             .map(|f| {
-                let mut typed_value = self.infer_expr(&f.value);
-
-                let container_is_generic = self
+                let declared = self
                     .type_table
                     .get_struct(name)
-                    .is_some_and(|d| !d.type_params.is_empty());
+                    .and_then(|def| def.fields.iter().find(|df| df.name == f.name))
+                    .map(|fd| fd.ty.clone());
+                let field_ty = declared
+                    .as_ref()
+                    .map(|ty| ty.subst_params(&type_params, &inst_args));
+
+                if let Some(InferType::Struct(..)) = &field_ty
+                    && matches!(f.value.kind, ExprKind::StructLiteral { .. })
+                {
+                    self.struct_literal_hint = field_ty.clone();
+                }
+                let mut typed_value = self.infer_expr(&f.value);
+                self.struct_literal_hint = None;
+
+                let param_slot = declared
+                    .as_ref()
+                    .is_some_and(|ty| Self::slot_mentions_param(ty, &type_params));
                 self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
                     ty: typed_value.ty.clone(),
-                    generic: container_is_generic,
+                    generic: param_slot.then_some("struct"),
                     span: f.span,
                     what: format!("field `{}` of struct literal `{}`", f.name, name),
                 });
 
-                if let Some(field_ty) = self
-                    .type_table
-                    .get_struct(name)
-                    .and_then(|def| def.fields.iter().find(|df| df.name == f.name))
-                    .map(|fd| fd.ty.clone())
-                {
-                    self.try_narrow_literal(&mut typed_value, &field_ty);
+                if let Some(field_ty) = field_ty {
+                    if !field_ty.has_vars() {
+                        self.try_narrow_literal(&mut typed_value, &field_ty);
+                    }
 
-                    if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
+                    if typed_value.ty != field_ty
+                        && !field_ty.has_vars()
+                        && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
                         let vspan = typed_value.span;
                         let original = std::mem::replace(
@@ -378,10 +404,26 @@ impl TypeInference {
                 fields: typed_fields,
             },
             if struct_exists {
-                InferType::Struct(name.to_string(), Vec::new())
+                InferType::Struct(name.to_string(), inst_args)
             } else {
                 InferType::Dynamic
             },
         )
+    }
+
+    pub(crate) fn slot_mentions_param(ty: &InferType, params: &[String]) -> bool {
+        let go = |t: &InferType| Self::slot_mentions_param(t, params);
+        match ty {
+            InferType::Rc(_) => false,
+            InferType::Struct(n, args) if args.is_empty() => params.iter().any(|p| p == n),
+            InferType::Struct(_, args) | InferType::Enum(_, args) | InferType::Tuple(args) => {
+                args.iter().any(go)
+            }
+            InferType::Array(inner, _) | InferType::Vec(inner) => go(inner),
+            InferType::Ref { referent, .. } => go(referent),
+            InferType::Slice { elem, .. } => go(elem),
+            InferType::Function { params: ps, ret, .. } => ps.iter().any(go) || go(ret),
+            _ => false,
+        }
     }
 }

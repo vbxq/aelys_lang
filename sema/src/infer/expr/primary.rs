@@ -301,7 +301,7 @@ impl TypeInference {
 
                         self.check_carrier(crate::infer::projection::CarrierCheck::Surface {
                             ty: typed_arg.ty.clone(),
-                            generic: is_generic,
+                            generic: is_generic.then_some("enum"),
                             span: arg_expr.span,
                             what: format!("payload {i} of enum variant `{enum_name}::{variant}`"),
                         });

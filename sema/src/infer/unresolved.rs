@@ -42,7 +42,9 @@ fn collect_vars(ty: &InferType, out: &mut Vec<TypeVarId>) {
         InferType::Ref { referent, .. } => collect_vars(referent, out),
         InferType::Slice { elem, .. } => collect_vars(elem, out),
         InferType::Tuple(elems) => elems.iter().for_each(|e| collect_vars(e, out)),
-        InferType::Enum(_, args) => args.iter().for_each(|a| collect_vars(a, out)),
+        InferType::Enum(_, args) | InferType::Struct(_, args) => {
+            args.iter().for_each(|a| collect_vars(a, out))
+        }
         _ => {}
     }
 }
@@ -130,7 +132,7 @@ fn holds_rc_of_unit(ty: &InferType) -> bool {
         InferType::Ref { referent, .. } => holds_rc_of_unit(referent),
         InferType::Slice { elem, .. } => holds_rc_of_unit(elem),
         InferType::Tuple(elems) => elems.iter().any(holds_rc_of_unit),
-        InferType::Enum(_, args) => args.iter().any(holds_rc_of_unit),
+        InferType::Enum(_, args) | InferType::Struct(_, args) => args.iter().any(holds_rc_of_unit),
         _ => false,
     }
 }
