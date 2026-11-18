@@ -447,7 +447,7 @@ SWEEPS_PINNED="$RESULTS_DIR/sweeps_pinned.tsv"
 SWEEPS_PIN_ROWS="$RESULTS_DIR/sweeps_pin_rows.tsv"
 SWEEP_RUNS="$RESULTS_DIR/sweep_runs.tsv"
 
-find "$ROOT/scripts" -maxdepth 1 -type f -printf '%f\n' | sort -u >"$SWEEPS_MEASURED"
+git -C "$ROOT" ls-files --cached --others --exclude-standard -- scripts | sed -n 's#^scripts/\([^/]*\)$#\1#p' | sort -u >"$SWEEPS_MEASURED"
 
 sweep_bad=""
 : >"$SWEEP_RUNS"

@@ -20,5 +20,4 @@ s6_row_sweep.sh	excluded	a per row runner with no verdict of its own, s6_census.
 sweeps_pin.tsv	excluded	this pin, read by verify_suites.sh, not an executable check
 target_pin.tsv	excluded	pin data read by verify_suites.sh, not an executable check
 test_name_pin.tsv	excluded	pin data read by verify_suites.sh, not an executable check
-use-msvc.ps1	excluded	a windows powershell shim that imports the msvc toolchain into the environment, it asserts nothing and cannot run on this host
 verify_suites.sh	excluded	the harness itself, it is the caller of every run row
