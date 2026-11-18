@@ -123,3 +123,16 @@ fn a_flag_in_native_libs_is_refused() {
     assert_contains(&output.stderr, " --> Ae.toml:5:9\n");
     assert_contains(&output.stderr, "invalid native library name `-lm`");
 }
+
+#[test]
+fn an_empty_or_flag_pkg_config_entry_is_refused() {
+    for (name, entry) in [("n_pc_flag", "--static"), ("n_pc_empty", "")] {
+        let native = format!("[native]\npkg-config = [\"{entry}\"]\n");
+        let dir = project(name, &native, PRINTS_ONE);
+        let output = ae(&dir, &["build"]);
+        assert_eq!(output.code, Some(101), "stderr:\n{}", output.stderr);
+        assert_contains(&output.stderr, " --> Ae.toml:5:15\n");
+        let refusal = format!("invalid pkg-config package name `{entry}`");
+        assert_contains(&output.stderr, &refusal);
+    }
+}

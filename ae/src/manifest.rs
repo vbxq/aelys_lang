@@ -202,6 +202,18 @@ impl Manifest {
             }
         }
 
+        for entry in &raw.native.pkg_config {
+            let value = entry.get_ref();
+            if value.is_empty() || value.starts_with('-') {
+                let mut diagnostic = origin.at(
+                    entry.span(),
+                    format!("invalid pkg-config package name `{value}`"),
+                );
+                diagnostic.add_help("write the package name pkg-config knows, e.g. `sdl2`");
+                return Err(diagnostic.into());
+            }
+        }
+
         for bin in &raw.bin {
             if let Err(reason) = check_name(bin.name.get_ref()) {
                 let reason = reason.replace("package name", "target name");
