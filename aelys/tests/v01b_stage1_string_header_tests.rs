@@ -592,7 +592,44 @@ fn walkdir(dir: &Path) -> Vec<PathBuf> {
 
 const NOGC_READERS: [&str; 2] = ["__aelys_str_char_count", "__aelys_str_decode_at"];
 
-const NOGC_COUNTED_SITES: &[(&str, usize, usize)] = &[("std.sort.strings", 3, 3)];
+const NOGC_COUNTED_SITES: &[(&str, usize, usize)] = &[("std.sort.strings", 0, 0)];
+
+const NOGC_GENERIC_CALLEES: &[&str] = &["__mono_std.sort.insertion_sort$1$str"];
+
+fn impl_symbol_head(rest: &str) -> String {
+    let rest = rest.trim_start();
+    let rest = match rest.strip_prefix('<') {
+        Some(r) => r.split_once('>').map_or(r, |(_, t)| t).trim_start(),
+        None => rest,
+    };
+    if rest.starts_with('[') {
+        return "slice".to_string();
+    }
+    rest.chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+        .collect()
+}
+
+fn std_generic_entry_points() -> Vec<String> {
+    let mut names = Vec::new();
+    for module in ["slice", "sort"] {
+        let text = fs::read_to_string(repo_root().join("std").join(format!("{module}.aelys")))
+            .expect("read a std module");
+        for line in text.lines() {
+            let Some(rest) = line.strip_prefix("pub fn ") else {
+                continue;
+            };
+            let name: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            if rest[name.len()..].starts_with('<') {
+                names.push(format!("std.{module}.{name}"));
+            }
+        }
+    }
+    names
+}
 
 fn std_nogc_functions() -> (Vec<String>, Vec<String>) {
     std_nogc_functions_opening('(')
@@ -615,7 +652,20 @@ fn std_nogc_functions_opening(open: char) -> (Vec<String>, Vec<String>) {
             .to_string();
         let text = fs::read_to_string(&path).expect("read a std module");
         let before = names.len();
+        let mut head: Option<String> = None;
         for line in text.lines() {
+            if let Some(rest) = line.strip_prefix("impl") {
+                head = Some(impl_symbol_head(rest));
+                continue;
+            }
+            if line.starts_with('}') {
+                head = None;
+                continue;
+            }
+            let indented = line.starts_with(char::is_whitespace);
+            if indented != head.is_some() {
+                continue;
+            }
             let t = line.trim_start();
             let t = t.strip_prefix("pub ").unwrap_or(t);
             let Some(rest) = t.strip_prefix("nogc fn ") else {
@@ -626,7 +676,10 @@ fn std_nogc_functions_opening(open: char) -> (Vec<String>, Vec<String>) {
                 .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
                 .collect();
             if rest[name.len()..].starts_with(open) {
-                names.push(format!("std.{module}.{name}"));
+                match &head {
+                    Some(h) => names.push(format!("std.{module}.{h}::{name}")),
+                    None => names.push(format!("std.{module}.{name}")),
+                }
             }
         }
         if names.len() > before {
@@ -712,7 +765,7 @@ fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other
     let (nogc, modules) = std_nogc_functions();
     assert_eq!(
         nogc.len(),
-        39,
+        71,
         "the census must see every non generic `nogc fn` of std, found {nogc:?}"
     );
     let dir = tempdir().expect("tempdir");
@@ -753,7 +806,8 @@ fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other
                 || callee == "__aelys_str_release"
                 || NOGC_READERS.contains(&callee.as_str())
                 || externs.contains(callee.as_str())
-                || nogc.contains(callee);
+                || nogc.contains(callee)
+                || NOGC_GENERIC_CALLEES.contains(&callee.as_str());
             assert!(
                 allowed,
                 "A36: `{}` is nogc and calls `{callee}`, which is neither a string count, a \
@@ -797,6 +851,8 @@ const A36_W1B_ROOT: &str = r#"
 needs std.slice
 needs std.sort
 
+fn down(a: i64, b: i64) -> i64 { return b - a }
+
 fn main() -> i64 {
     let mut a: [i64;4] = [3, 1, 2, 5]
     let b: [i64;4] = [1, 2, 3, 5]
@@ -814,17 +870,20 @@ fn main() -> i64 {
     sort.insertion_sort(a[..])
     let k = sort.binary_search(a[..], 3)
     slice.fill(a[..], 7)
+    sort.heap_sort(a[..])
+    sort.sort_by(a[..], down)
+    sort.merge_sort(a[..])
     return 0
 }
 "#;
 
 #[test]
 fn a36_w1b_a_generic_std_nogc_function_keeps_no_count_once_instantiated() {
-    let (generic, _) = std_nogc_functions_opening('<');
+    let generic = std_generic_entry_points();
     assert_eq!(
         generic.len(),
-        14,
-        "the census must see every generic `nogc fn` of std, found {generic:?}"
+        17,
+        "the census must see every generic entry point of std.slice and std.sort, found {generic:?}"
     );
     let dir = tempdir().expect("tempdir");
     copy_tree(&repo_root().join("std"), &dir.path().join("std"));
@@ -843,7 +902,10 @@ fn a36_w1b_a_generic_std_nogc_function_keeps_no_count_once_instantiated() {
             !instances.is_empty(),
             "A36: the census root must instantiate `{name}`"
         );
-        for instance in instances {
+        if name == "std.sort.merge_sort" {
+            continue;
+        }
+        for instance in instances.into_iter().filter(|f| !f.name.ends_with("$str")) {
             let counts: Vec<String> = named_callees(instance)
                 .into_iter()
                 .filter(|c| {

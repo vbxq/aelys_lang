@@ -298,7 +298,7 @@ pub fn replace(s: string, old: string, new: string) -> string {
     return out
 }
 
-nogc fn shift_case(c: char, lo: char, hi: char, delta: i64) -> char {
+fn shift_case(c: char, lo: char, hi: char, delta: i64) -> char {
     if c >= lo and c <= hi { return char::from_i64((c as i64) + delta) }
     return c
 }

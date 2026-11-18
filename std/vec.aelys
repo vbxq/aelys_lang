@@ -74,7 +74,7 @@ pub fn reversed<T>(v: &Vec<T>) -> Vec<T> {
 pub fn sorted<T: ord>(v: &Vec<T>) -> Vec<T> {
     let out = copy(v)
     let m = Vec::try_as_unique_mut_slice(out)
-    sort.merge_sort(m)
+    sort.insertion_sort(m)
     return out
 }
 

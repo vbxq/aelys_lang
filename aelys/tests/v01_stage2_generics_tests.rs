@@ -390,7 +390,6 @@ fn s2_the_whole_generic_library_stays_callable_from_nogc() {
     h.assert_legs(8);
 }
 
-// `ord` excludes `string`, so ordering strings keeps its own monomorphic entry point
 const SORT_STRINGS_SURVIVES: &str = r#"
 needs std.sort
 
@@ -406,7 +405,7 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn s2_sort_strings_survives_because_ord_excludes_string() {
+fn s2_sort_strings_survives_as_the_generic_sort_on_strings() {
     let h = Harness::new();
     h.value_row(
         "S2-SORT-STRINGS",
@@ -420,24 +419,18 @@ const INSERTION_SORT_ON_STRINGS: &str = r#"
 needs std.sort
 
 fn main() -> i64 {
-    let mut s: [string;2] = ["b", "a"]
+    let mut s: [string;3] = ["b", "c", "a"]
     sort.insertion_sort(s[..])
+    println("{s[0]}{s[1]}{s[2]}")
     return 0
 }
 "#;
 
 #[test]
-fn s2_the_generic_sort_refuses_a_string_slice() {
+fn s2_the_generic_sort_takes_a_string_slice() {
     let h = Harness::new();
-    h.rejects_at_every_level(
-        "S2-SORT-STRING-REFUSED",
-        INSERTION_SORT_ON_STRINGS,
-        "E0730",
-        &[
-            "type parameter `T` of `std.sort.insertion_sort` is bound `nogc`, but this call \
-             instantiates it with `string`",
-        ],
-    );
+    h.value_row("S2-SORT-STRING", INSERTION_SORT_ON_STRINGS, "abc\n");
+    h.assert_legs(8);
 }
 
 const ORDER_ON_A_STRING: &str = r#"
@@ -916,25 +909,26 @@ fn s2_the_ord_bound_holds_of_exactly_what_the_order_operator_answers() {
     );
 }
 
-const A_MANAGED_ELEMENT_IN_A_NOGC_GENERIC: &str = r#"
+const A_MANAGED_ELEMENT_IN_THE_GENERIC_LIBRARY: &str = r#"
 needs std.slice
 
 fn main() -> i64 {
     let s: [string;2] = ["a", "b"]
-    if slice.contains(s[..], "a") { return 1 }
+    println(slice.contains(s[..], "b"))
+    println(slice.contains(s[..], "c"))
     return 0
 }
 "#;
 
 #[test]
-fn s2_a_string_element_is_refused_by_the_nogc_bound_the_library_carries() {
+fn s2_a_string_element_reaches_the_generic_library() {
     let h = Harness::new();
-    h.rejects_at_every_level(
-        "S2-NOGC-STRING-ELEM",
-        A_MANAGED_ELEMENT_IN_A_NOGC_GENERIC,
-        "E0730",
-        &["is bound `nogc`, but this call instantiates it with `string`"],
+    h.value_row(
+        "S2-STRING-ELEM-LIBRARY",
+        A_MANAGED_ELEMENT_IN_THE_GENERIC_LIBRARY,
+        "true\nfalse\n",
     );
+    h.assert_legs(8);
 }
 
 // a generic that is not `nogc` takes a managed element, so the bound is what excludes it
@@ -960,24 +954,27 @@ fn s2_a_string_element_is_fine_once_the_nogc_bound_is_not_there() {
     h.assert_legs(8);
 }
 
-// every `std.slice` and `std.sort` entry point must still be reachable from a `nogc fn`
 #[test]
-fn s2_every_library_entry_point_is_still_declared_nogc() {
+fn s2_every_library_entry_point_is_nogc_or_generic() {
     let root = repo_root().join("std");
     for module in ["slice.aelys", "sort.aelys"] {
         let text = fs::read_to_string(root.join(module))
             .unwrap_or_else(|e| panic!("std/{module} must be readable: {e}"));
         let mut entry_points = 0usize;
         for line in text.lines() {
-            let line = line.trim_start();
             if !line.starts_with("pub ") {
                 continue;
             }
             entry_points += 1;
+            let generic = line.strip_prefix("pub fn ").is_some_and(|rest| {
+                rest.split('(')
+                    .next()
+                    .is_some_and(|head| head.contains('<'))
+            });
             assert!(
-                line.starts_with("pub nogc fn "),
-                "std/{module}: `{line}` is public and not `nogc`, so the nogc-callable surface \
-                 shrank"
+                line.starts_with("pub nogc fn ") || generic,
+                "std/{module}: `{line}` is public, concrete and not `nogc`, so the nogc-callable \
+                 surface shrank"
             );
         }
         assert!(

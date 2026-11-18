@@ -186,3 +186,9 @@ sema/src/infer/traits.rs	define_trait_stub_values	1	InferType	other	other.clone(
 sema/src/infer/traits.rs	enum_fix	1	InferType	other	other	correct-as-is	aggregate-only
 sema/src/infer/traits.rs	subst_names	1	InferType	other	other.clone()	correct-as-is	aggregate-only
 sema/src/infer/expr/call.rs	infer_call_expr	1	InferType	_	0	correct-as-is	aggregate-only
+sema/src/infer/expr/fmt_spec.rs	infer_fmt_spec	1	InferType	other	other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	builtin_head_shown	1	InferType	other	other.to_string()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	builtin_method_call	1	InferType	other	other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	builtin_method_call	2	InferType	_	None	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	builtin_method_call	3	InferType	_	return self.no_method_on(base	correct-as-is	aggregate-only
+sema/src/infer/expr/method.rs	lookup_quiet_for	1	InferType	_	return MethodLookup::Missing	correct-as-is	aggregate-only
