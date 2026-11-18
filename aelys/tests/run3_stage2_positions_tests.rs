@@ -1700,8 +1700,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C35",
-        position: "F3 callable, a generic struct over a managed carrier, refused at its field",
-        class: Class::MustNotMoveRejected("E0412"),
+        position: "F3 callable, a generic struct holding a Vec taken by value, refused by the effects",
+        class: Class::MustNotMoveRejected("E0727"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
