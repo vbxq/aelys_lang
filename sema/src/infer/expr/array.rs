@@ -376,6 +376,7 @@ impl TypeInference {
             InferType::Array(elem_ty, _)
             | InferType::Vec(elem_ty)
             | InferType::Slice { elem: elem_ty, .. } => {
+                self.coerce_dyn(&mut typed_value, elem_ty);
                 self.try_narrow_literal(&mut typed_value, elem_ty);
                 if typed_value.ty != **elem_ty && typed_value.ty.can_implicit_widen_to(elem_ty) {
                     let vspan = typed_value.span;

@@ -1,0 +1,11 @@
+trait Eat {
+    fn bite(&self) -> i64
+    fn consume(self) -> i64
+}
+struct Apple { w: i64 }
+impl Eat for Apple {
+    fn bite(&self) -> i64 { return 1 }
+    fn consume(self) -> i64 { return self.w }
+}
+fn f(e: &dyn Eat) -> i64 { return e.consume() }
+fn main() -> i64 { return 0 }

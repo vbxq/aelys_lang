@@ -247,6 +247,18 @@ impl TypeInference {
             ExprKind::Deref(operand) => {
                 let typed_operand = self.infer_expr(operand);
                 let result_ty = match &typed_operand.ty {
+                    InferType::Ref { referent, .. } if matches!(**referent, InferType::Dyn(_)) => {
+                        self.errors.push(TypeError::coded(
+                            "E0760",
+                            format!(
+                                "`*` would read a `{referent}` by value, and it has no size known \
+                                 at compile time; call its methods through the reference"
+                            ),
+                            "unsized trait object",
+                            expr.span,
+                        ));
+                        InferType::Dynamic
+                    }
                     InferType::Ref { referent, .. } => (**referent).clone(),
                     InferType::Var(_) => self.defer_read(
                         &typed_operand.ty,

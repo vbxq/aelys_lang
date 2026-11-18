@@ -13,3 +13,4 @@ pub(crate) mod stmts;
 pub(crate) mod strings;
 pub(crate) mod structs;
 pub(crate) mod terminators;
+pub(crate) mod vtables;

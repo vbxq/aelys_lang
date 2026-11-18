@@ -566,7 +566,16 @@ impl<'a> LoweringContext<'a> {
                 let operand = self.lower_expr(inner);
                 let from = self.lower_type_from_infer(&inner.ty);
                 let to = self.lower_type_from_infer(target);
-                self.emit_rvalue_to_temp(to.clone(), Rvalue::Cast { operand, from, to }, sp)
+                let cast = Rvalue::Cast {
+                    operand: operand.clone(),
+                    from,
+                    to: to.clone(),
+                };
+                let out = self.emit_rvalue_to_temp(to, cast, sp);
+                if matches!(target, InferType::Rc(_)) {
+                    self.repose_owned_temp(&operand, &out);
+                }
+                out
             }
             TypedExprKind::EnumVariant {
                 enum_name,
@@ -1609,6 +1618,13 @@ impl<'a> LoweringContext<'a> {
         sp: Option<Span>,
     ) -> Vec<Operand> {
         let named = self.named_callee(callee);
+        // every impl a vtable can reach retains what it keeps and hands over a share of what it returns
+        if let Some(Callee::Named(name)) = &named
+            && name.starts_with(aelys_sema::DYN_CALL)
+        {
+            self.retaining_fns.insert(name.clone());
+            self.fresh_returns.insert(name.clone());
+        }
         let keeps_unretained = matches!(&named, Some(Callee::Named(name))
             if !self.retaining_fns.contains(name)
                 && !crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()));

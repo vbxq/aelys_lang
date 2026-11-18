@@ -13,7 +13,7 @@ pub use str_temps::{fresh_returning_functions, retaining_declarations, retaining
 use crate::*;
 use aelys_common::Fault;
 use aelys_sema::{InferType, TypedProgram};
-use aelys_syntax::BinaryOp;
+use aelys_syntax::{BinaryOp, Receiver};
 
 pub fn lower_type_decls(program: &TypedProgram) -> (Vec<AirStructDef>, Vec<AirEnumDef>) {
     let mut cx = LoweringContext::new(program);
@@ -341,6 +341,7 @@ impl<'a> LoweringContext<'a> {
             return Err(self.lowering_errors);
         }
         let impls = self.lower_impl_table();
+        let dyn_tables = self.dyn_slots();
         Ok(AirProgram {
             functions: self.functions,
             structs: self.structs,
@@ -351,6 +352,7 @@ impl<'a> LoweringContext<'a> {
             struct_sizes: std::collections::HashMap::new(),
             rc_type_table: crate::rc_types::RcTypeTable::default(),
             impls,
+            dyn_tables,
         })
     }
 
@@ -572,6 +574,27 @@ impl<'a> LoweringContext<'a> {
         self.carriers().carries_string(&air)
     }
 
+    fn dyn_slots(&self) -> crate::objects::DynTables {
+        let slots = self
+            .program
+            .traits
+            .iter()
+            .map(|def| {
+                let methods = def
+                    .methods
+                    .iter()
+                    .filter(|m| matches!(m.receiver, Receiver::Ref | Receiver::RefMut))
+                    .map(|m| m.name.clone())
+                    .collect();
+                (def.qualified.clone(), methods)
+            })
+            .collect();
+        crate::objects::DynTables {
+            slots,
+            vtables: Vec::new(),
+        }
+    }
+
     fn lower_impl_table(&mut self) -> Vec<crate::AirImpl> {
         let mut out = Vec::new();
         for imp in &self.program.impls {
@@ -690,6 +713,7 @@ impl<'a> LoweringContext<'a> {
                 AirType::Opaque
             }
             InferType::Never => AirType::Void,
+            InferType::Dyn(q) => crate::objects::dyn_type(q),
             // mono patches this for generic call results; anything else stays opaque and is
             InferType::Dynamic => AirType::Opaque,
         }
@@ -746,6 +770,7 @@ impl<'a> LoweringContext<'a> {
             struct_sizes: std::collections::HashMap::new(),
             rc_type_table: crate::rc_types::RcTypeTable::default(),
             impls: Vec::new(),
+            dyn_tables: Default::default(),
         };
 
         probe = crate::mono::monomorphize(probe)

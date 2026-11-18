@@ -191,6 +191,7 @@ impl TypeInference {
                 && params.len() == typed_args.len()
             {
                 for (arg, param_ty) in typed_args.iter_mut().zip(params.iter()) {
+                    self.coerce_dyn(arg, param_ty);
                     self.try_narrow_literal(arg, param_ty);
                 }
 

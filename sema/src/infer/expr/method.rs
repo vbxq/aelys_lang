@@ -75,6 +75,19 @@ impl TypeInference {
             InferType::Ref { referent, mutable } => ((**referent).clone(), Some(*mutable)),
             other => (other.clone(), None),
         };
+        let dyn_trait = match &base {
+            InferType::Dyn(q) => Some(q.clone()),
+            other => crate::infer::objects::dyn_target(other).map(str::to_string),
+        };
+        if let Some(q) = dyn_trait {
+            let mut recv = typed_object;
+            recv.ty = seen.clone();
+            if base.is_rc() && via_ref.is_some() {
+                let rspan = recv.span;
+                recv = TypedExpr::new(TypedExprKind::Deref(Box::new(recv)), base.clone(), rspan);
+            }
+            return Ok(self.dyn_method_call(recv, &q, member, args, span));
+        }
         if let Some((tp, bounds)) = self.bounds_on_type_param(&base) {
             let Some(entry) = self.bound_method(&tp, &bounds, member, span) else {
                 for a in args {

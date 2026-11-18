@@ -176,6 +176,16 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
+    // a coerced rc is the same handle, so the owned share moves to the coerced local
+    pub(super) fn repose_owned_temp(&mut self, from: &Operand, to: &Operand) {
+        if let (Operand::Copy(from) | Operand::Move(from), Operand::Copy(to) | Operand::Move(to)) =
+            (from, to)
+            && let Some(slot) = self.stmt_str_temps.iter_mut().find(|(l, _)| l == from)
+        {
+            slot.0 = *to;
+        }
+    }
+
     pub(super) fn pose_rc_value(&mut self, op: &Operand, ty: &InferType) {
         if self.rc_shape(ty).is_some() {
             self.pose_owned_temp(op);

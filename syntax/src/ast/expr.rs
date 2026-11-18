@@ -19,6 +19,7 @@ pub struct TypeAnnotation {
     pub tuple_elems: Option<Vec<TypeAnnotation>>,
     pub reference: Option<RefKind>,
     pub is_slice: bool,
+    pub is_dyn: bool,
     pub nogc: bool,
     pub span: Span,
 }
@@ -36,6 +37,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: false,
+            is_dyn: false,
             nogc: false,
             span,
         }
@@ -53,6 +55,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: false,
+            is_dyn: false,
             nogc: false,
             span,
         }
@@ -70,6 +73,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: true,
+            is_dyn: false,
             nogc: false,
             span,
         }
@@ -92,6 +96,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: false,
+            is_dyn: false,
             nogc: false,
             span,
         }
@@ -114,6 +119,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: false,
+            is_dyn: false,
             nogc,
             span,
         }
@@ -131,6 +137,7 @@ impl TypeAnnotation {
             tuple_elems: None,
             reference: None,
             is_slice: false,
+            is_dyn: false,
             nogc: false,
             span,
         }
@@ -181,6 +188,9 @@ impl std::fmt::Display for TypeAnnotation {
                 write!(f, "; {n}")?;
             }
             return write!(f, "]");
+        }
+        if self.is_dyn {
+            write!(f, "dyn ")?;
         }
         write!(f, "{}", self.name)?;
         if !self.type_params.is_empty() {

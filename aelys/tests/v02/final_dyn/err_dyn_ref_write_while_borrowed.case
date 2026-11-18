@@ -1,0 +1,15 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+fn main() -> i64 {
+    let mut s = Sq { s: 1 }
+    let r: &dyn Shape = &s
+    s = Sq { s: 9 }
+    println(r.area())
+    return 0
+}

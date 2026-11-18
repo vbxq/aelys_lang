@@ -1,0 +1,13 @@
+trait Area {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Area for Sq {
+    nogc fn area(&self) -> i64 { return self.s * self.s }
+}
+nogc fn f(a: &dyn Area) -> i64 { return a.area() }
+fn main() -> i64 {
+    let s = Sq { s: 2 }
+    println(f(&s))
+    return 0
+}

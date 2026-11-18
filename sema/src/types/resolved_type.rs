@@ -133,7 +133,7 @@ impl ResolvedType {
                 ResolvedType::Tuple(elems.iter().map(ResolvedType::from_infer_type).collect())
             }
             InferType::Range => ResolvedType::Range,
-            InferType::Struct(name, _) | InferType::Enum(name, _) => {
+            InferType::Struct(name, _) | InferType::Enum(name, _) | InferType::Dyn(name) => {
                 ResolvedType::Struct(name.clone())
             }
             InferType::Var(_) => ResolvedType::Dynamic,

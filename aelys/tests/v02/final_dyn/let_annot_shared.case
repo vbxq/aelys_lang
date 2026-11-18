@@ -1,0 +1,20 @@
+trait Counter {
+    fn bump(&mut self)
+    fn get(&self) -> i64
+}
+struct C { n: i64 }
+impl Counter for C {
+    fn bump(&mut self) { self.n = self.n + 1 }
+    fn get(&self) -> i64 { return self.n }
+}
+fn main() -> i64 {
+    let c = Rc::new(C { n: 10 })
+    let d: Rc<dyn Counter> = c
+    let e: Rc<dyn Counter> = d
+    d.bump()
+    e.bump()
+    println(c.n)
+    println(d.get())
+    println(e.get())
+    return 0
+}

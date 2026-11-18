@@ -58,6 +58,9 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
         AirType::I16 | AirType::U16 => TypeLayout { size: 2, align: 2 },
         AirType::I32 | AirType::U32 | AirType::F32 | AirType::Char => TypeLayout { size: 4, align: 4 },
         AirType::I64 | AirType::U64 | AirType::F64 => TypeLayout { size: 8, align: 8 },
+        AirType::Ptr(inner) if crate::objects::dyn_trait(inner).is_some() => {
+            TypeLayout { size: 16, align: 8 }
+        }
         AirType::Ptr(_) | AirType::Rc(_) => TypeLayout { size: 8, align: 8 },
         AirType::FnPtr { .. } => TypeLayout { size: 16, align: 8 },
         AirType::Str => TypeLayout { size: 16, align: 8 },

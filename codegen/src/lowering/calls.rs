@@ -95,6 +95,12 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         if let Callee::Named(name) = callee
+            && name.starts_with(aelys_air::objects::DYN_CALL)
+        {
+            return self.generate_dyn_call(name, &arg_values, expected_ret);
+        }
+
+        if let Callee::Named(name) = callee
             && name == "__aelys_vec_release"
             && let [vec] = args
             && let Some(elem) = self.vec_element_of(vec)?

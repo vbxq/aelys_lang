@@ -283,6 +283,7 @@ impl TypeInference {
                 if let Some(field_ty) = self.type_table.field_type(struct_name, struct_args, field)
                 {
                     self.reject_rc_field_write(field, &field_ty, &typed_object, &typed_value, span);
+                    self.coerce_dyn(&mut typed_value, &field_ty);
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
                     {
@@ -463,6 +464,7 @@ impl TypeInference {
                 });
 
                 if let Some(field_ty) = field_ty {
+                    self.coerce_dyn(&mut typed_value, &field_ty);
                     if !field_ty.has_vars() {
                         self.try_narrow_literal(&mut typed_value, &field_ty);
                     }

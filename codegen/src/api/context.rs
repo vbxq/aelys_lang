@@ -58,6 +58,7 @@ impl CodegenContext {
         self.declare_functions(program)?;
         self.declare_globals(program)?;
         self.emit_rc_type_table(program)?;
+        self.emit_vtables(program)?;
         self.define_function_bodies(program)?;
         self.emit_entry_wrapper(program)?;
         self.module

@@ -31,6 +31,12 @@ pub fn air_type_to_llvm<'ctx>(
         AirType::F64 => Ok(context.f64_type().into()),
         AirType::Bool => Ok(context.bool_type().into()),
         AirType::Str => Ok(aelys_string_type(context).into()),
+        AirType::Ptr(inner) if aelys_air::objects::dyn_trait(inner).is_some() => {
+            Ok(closure_fat_ptr_type(context).into())
+        }
+        AirType::Rc(inner) if aelys_air::objects::dyn_trait(inner).is_some() => {
+            Ok(context.ptr_type(AddressSpace::default()).into())
+        }
         AirType::Ptr(inner) | AirType::Rc(inner) => {
             Ok(pointer_to_air_type(inner, context)?.into())
         }

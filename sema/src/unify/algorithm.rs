@@ -77,6 +77,8 @@ pub fn unify_dir(
         | (InferType::String, InferType::String)
         | (InferType::Null, InferType::Null) => Ok(()),
 
+        (InferType::Dyn(a), InferType::Dyn(b)) if a == b => Ok(()),
+
         (InferType::Struct(a, args_a), InferType::Struct(b, args_b)) if a == b => {
             if args_a.len() == args_b.len() {
                 for (a_arg, b_arg) in args_a.iter().zip(args_b.iter()) {

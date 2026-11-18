@@ -373,6 +373,7 @@ impl TypeInference {
                             v.data[i].clone()
                         };
 
+                        self.coerce_dyn(&mut typed_arg, &expected_ty);
                         self.try_narrow_literal(&mut typed_arg, &expected_ty);
 
                         if typed_arg.ty != expected_ty
@@ -540,6 +541,18 @@ impl TypeInference {
 
         let typed_arg = self.infer_expr(&args[0]);
         let result_ty = match &typed_arg.ty {
+            InferType::Rc(inner) if matches!(inner.as_ref(), InferType::Dyn(_)) => {
+                self.errors.push(TypeError::coded(
+                    "E0760",
+                    format!(
+                        "`Rc::get` would read a `{inner}` by value, and it has no size known at \
+                         compile time; call its methods on the `Rc` itself"
+                    ),
+                    "unsized trait object",
+                    span,
+                ));
+                InferType::Dynamic
+            }
             InferType::Rc(inner) => inner.as_ref().clone(),
             InferType::Var(_) => {
                 self.errors.push(TypeError::rc_get_unresolved(span));
@@ -728,6 +741,7 @@ impl TypeInference {
 
         match &typed_vec.ty {
             InferType::Vec(inner) => {
+                self.coerce_dyn(&mut typed_elem, inner);
                 self.try_narrow_literal(&mut typed_elem, inner);
                 self.constraints.push(Constraint::flows(
                     typed_elem.ty.clone(),
@@ -965,6 +979,7 @@ impl TypeInference {
         let inner = self.vec_receiver_inner("insert", &typed_vec, args[0].span);
         let typed_index = self.vec_index_arg("insert", &args[1]);
         let mut typed_elem = self.infer_expr(&args[2]);
+        self.coerce_dyn(&mut typed_elem, &inner);
         self.try_narrow_literal(&mut typed_elem, &inner);
         self.constraints.push(Constraint::flows(
             typed_elem.ty.clone(),

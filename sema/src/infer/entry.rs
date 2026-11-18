@@ -80,6 +80,8 @@ impl Default for TypeInference {
             used_builtin_stubs: HashSet::new(),
             pending_trait_args: None,
             declarations_only: false,
+            early_trait_names: HashMap::new(),
+            unchecked_dyns: Vec::new(),
         }
     }
 }
@@ -125,11 +127,19 @@ impl TypeInference {
             }
             let mut base = ann.clone();
             base.reference = None;
-            let referent = self.lower_type(&base, false);
+            let referent = if base.is_dyn {
+                self.lower_dyn(&base)
+            } else {
+                self.lower_type(&base, false)
+            };
             return InferType::Ref {
                 referent: Box::new(referent),
                 mutable,
             };
+        }
+
+        if ann.is_dyn {
+            return self.unsized_dyn(ann);
         }
 
         if let Some(elems) = &ann.tuple_elems {
@@ -181,11 +191,11 @@ impl TypeInference {
         }
         if ann.name == "Rc" {
             self.check_type_arg_count("type", &ann.name, 1, ann);
-            let inner = ann
-                .type_param
-                .as_ref()
-                .map(|p| self.type_from_annotation(p))
-                .unwrap_or(InferType::Dynamic);
+            let inner = match ann.type_param.as_deref() {
+                Some(p) if p.is_dyn && p.reference.is_none() => self.lower_dyn(p),
+                Some(p) => self.type_from_annotation(p),
+                None => InferType::Dynamic,
+            };
             return InferType::Rc(Box::new(inner));
         }
 
@@ -372,6 +382,9 @@ impl TypeInference {
     }
 
     pub(crate) fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+        if ann.is_dyn {
+            return;
+        }
         if self.type_params_in_scope.iter().any(|tp| tp == &ann.name) {
             return;
         }
@@ -456,9 +469,9 @@ impl TypeInference {
             self.errors.push(TypeError::coded(
                 "E0750",
                 format!(
-                    "the trait `{}` is used as a type, and trait objects are not supported; take \
-                     a type parameter `<T: {}>` instead",
-                    ann.name, ann.name
+                    "the trait `{}` is used as a type; write `dyn {}` for a trait object, or \
+                     take a type parameter `<T: {}>`",
+                    ann.name, ann.name, ann.name
                 ),
                 "trait used as a type",
                 ann.span,
@@ -637,10 +650,12 @@ impl TypeInference {
         inf.prepare_decls(&mut stmts);
         inf.reject_reserved_type_names(&stmts);
         inf.register_struct_names(&stmts);
+        inf.note_trait_names(&stmts);
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
         inf.check_alias_bodies();
         let stmts = inf.collect_traits(stmts);
+        inf.check_unchecked_dyns();
         inf.register_impls_of_local_traits();
         let stmts = inf.collect_impls(stmts);
         inf.reject_multi_variant_rc_enums(&stmts);

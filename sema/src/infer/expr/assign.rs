@@ -35,6 +35,7 @@ impl TypeInference {
                 ));
             }
 
+            self.coerce_dyn(&mut typed_value, &var_type);
             self.try_narrow_literal(&mut typed_value, &var_type);
 
             if typed_value.ty != var_type && typed_value.ty.can_implicit_widen_to(&var_type) {

@@ -1,3 +1,4 @@
+use crate::infer::objects::dyn_target;
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -16,6 +17,9 @@ pub const RUNTIME_CARRIER_EXEMPT: &[&str] = &["Rc", "Vec", "string", "char"];
 pub fn rc_init_provenance(expr: &TypedExpr) -> RcInit {
     match &expr.kind {
         TypedExprKind::Grouping(inner) => rc_init_provenance(inner),
+        TypedExprKind::Cast { expr, target } if dyn_target(target).is_some() => {
+            rc_init_provenance(expr)
+        }
         TypedExprKind::EnumVariant {
             enum_name, variant, ..
         } => {
@@ -49,6 +53,9 @@ enum Surface {
 fn carrier_surface(expr: &TypedExpr) -> Surface {
     match &expr.kind {
         TypedExprKind::Grouping(inner) => carrier_surface(inner),
+        TypedExprKind::Cast { expr, target } if dyn_target(target).is_some() => {
+            carrier_surface(expr)
+        }
         TypedExprKind::StructLiteral { .. }
         | TypedExprKind::EnumVariant { .. }
         | TypedExprKind::Call { .. } => Surface::Literal,

@@ -1254,11 +1254,12 @@ A struct or an enum satisfies a trait through its impl (`impl eq for P`,
         code: "E0750",
         title: "trait used as a type",
         explanation: "\
-A trait names a set of methods, not a type. Traits dispatch statically:
-take a type parameter bounded by the trait instead of a reference to the
-trait, and `dyn` trait objects are not supported:
+A trait names a set of methods, not a type. Write `dyn Area` for a
+trait object, behind `Rc` or a reference, or take a type parameter
+bounded by the trait:
 
     fn f(x: &Area) -> i64 { ... }          // E0750
+    fn f(x: &dyn Area) -> i64 { ... }      // ok
     fn f<T: Area>(x: &T) -> i64 { ... }    // ok",
         severity: Severity::Error,
     },
@@ -1267,8 +1268,7 @@ trait, and `dyn` trait objects are not supported:
         title: "`nogc` cannot be implemented",
         explanation: "\
 `nogc` is a bound the compiler derives from a type's fields; no `impl`
-can grant it, and a trait method cannot declare it, since the effect of a
-trait method is inferred from each impl:
+can grant it:
 
     impl nogc for P {}                     // E0751",
         severity: Severity::Error,
@@ -1350,6 +1350,76 @@ A method call names a method that more than one table provides for the
 receiver's type, and nothing chooses between them. The compiler never
 picks one by order: the call is refused and the candidates are listed.
 Call the one you mean by its full path.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0760",
+        title: "unsized trait object",
+        explanation: "\
+A `dyn Trait` value has no size known at compile time, so it only exists
+behind a pointer: `Rc<dyn Trait>`, `&dyn Trait` or `&mut dyn Trait`.
+`Rc::get` and `*` would read it by value and are refused as well:
+
+    let s: dyn Shape = sq                  // E0760
+    let s: Rc<dyn Shape> = Rc::new(sq)     // ok",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0761",
+        title: "trait not dyn-compatible",
+        explanation: "\
+A trait object calls every method through a table built for the hidden
+type, so no method may mention `Self` outside its receiver: a `&Self`
+parameter or a `Self` return has no meaning once the type is erased.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0762",
+        title: "associated function in a trait object",
+        explanation: "\
+A trait with an associated function that takes no `self` cannot be made
+into an object: the function has no receiver to find the table through.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0763",
+        title: "type does not implement the trait",
+        explanation: "\
+An `Rc<T>` becomes an `Rc<dyn Trait>`, and a `&T` a `&dyn Trait`, only
+when `T` implements the trait.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0764",
+        title: "impl of a nogc trait method is not nogc",
+        explanation: "\
+A trait method declared `nogc fn` promises that every implementation is
+`nogc`, which lets a `nogc fn` call it through a trait object. Each impl
+of that method must be a `nogc fn` too.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0765",
+        title: "method not in the trait",
+        explanation: "\
+A trait object only has the methods of its trait; an inherent method of
+the hidden type is not reachable through it.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0766",
+        title: "by-value receiver through a trait object",
+        explanation: "\
+A method that takes `self` by value would move the hidden value out of
+its pointer, so it cannot be called through `dyn Trait`.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0767",
+        title: "trait object of a generic trait",
+        explanation: "\
+A trait with type parameters cannot be used as `dyn Trait` yet; take a
+type parameter bounded by the trait instead.",
         severity: Severity::Error,
     },
     DiagnosticInfo {

@@ -24,6 +24,7 @@ fn drop_orphan_instances(program: &mut AirProgram) {
         .globals
         .iter()
         .filter_map(|g| g.init.as_ref().map(crate::print::fmt_const))
+        .chain(program.dyn_tables.vtables.iter().flat_map(|v| v.fns.iter().cloned()))
         .collect();
     let mut live: HashSet<usize> = HashSet::new();
     for (i, f) in program.functions.iter().enumerate() {

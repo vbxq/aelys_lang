@@ -10,6 +10,7 @@ impl TypeInference {
 
         if let Some(expected_ret) = self.current_return_type().cloned() {
             if let Some(ref mut texpr) = typed_expr {
+                self.coerce_dyn(texpr, &expected_ret);
                 self.try_narrow_literal(texpr, &expected_ret);
 
                 if texpr.ty != expected_ret && texpr.ty.can_implicit_widen_to(&expected_ret) {

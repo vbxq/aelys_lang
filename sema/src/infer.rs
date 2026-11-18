@@ -10,6 +10,7 @@ mod functions;
 mod impls;
 mod imports;
 mod lambda;
+pub mod objects;
 pub(crate) mod projection;
 mod returns;
 mod signatures;
@@ -103,4 +104,6 @@ pub struct TypeInference {
     pub(crate) used_builtin_stubs: HashSet<String>,
     pub(crate) pending_trait_args: Option<Vec<InferType>>,
     declarations_only: bool,
+    pub(crate) early_trait_names: HashMap<String, String>,
+    pub(crate) unchecked_dyns: Vec<(String, aelys_syntax::Span)>,
 }

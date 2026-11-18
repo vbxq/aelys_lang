@@ -1,0 +1,13 @@
+trait Shape {
+    fn area(&self) -> i64
+}
+struct Sq { s: i64 }
+impl Shape for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+fn main() -> i64 {
+    let d: Rc<dyn Shape> = Rc::new(Sq { s: 1 })
+    let s: Rc<Sq> = d
+    return 0
+}

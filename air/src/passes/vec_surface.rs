@@ -380,6 +380,7 @@ mod tests {
     fn empty_program() -> AirProgram {
         AirProgram {
             impls: Vec::new(),
+            dyn_tables: Default::default(),
             functions: Vec::new(),
             structs: Vec::new(),
             enums: Vec::new(),

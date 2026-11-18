@@ -121,16 +121,10 @@ impl Parser {
             && matches!(self.peek_at(1).kind, TokenKind::Identifier(_))
         {
             self.advance();
-            let trait_name = self.consume_identifier("trait name")?;
-            let end = self.previous().span;
-            return Err(self.rule(
-                750,
-                &format!(
-                    "`dyn {trait_name}` is a trait used as a type, and trait objects are \
-                     not supported; take a type parameter `<T: {trait_name}>` instead"
-                ),
-                start_span.merge(end),
-            ));
+            let mut ann = self.parse_type_annotation()?;
+            ann.is_dyn = true;
+            ann.span = start_span.merge(ann.span);
+            return Ok(ann);
         }
 
         let mut name = self.consume_identifier("type name")?;

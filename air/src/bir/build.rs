@@ -589,6 +589,9 @@ impl<'a> BodyBuilder<'a> {
             return false;
         }
         if let TypedExprKind::Identifier(name) = &callee.kind {
+            if name.starts_with(aelys_sema::DYN_CALL) {
+                return matches!(callee.ty, InferType::Function { nogc: true, .. });
+            }
             if let Some(id) = self.lookup(name) {
                 let idx = id.0 as usize;
                 if idx < self.arg_count {
@@ -1053,9 +1056,17 @@ impl<'a> BodyBuilder<'a> {
             },
 
             TypedExprKind::Grouping(inner) => self.build_operand(inner),
-            TypedExprKind::Cast { expr: inner, .. } => {
+            TypedExprKind::Cast {
+                expr: inner,
+                target,
+            } => {
                 let op = self.build_operand(inner);
-                self.emit_to_temp(BirRvalue::UnOp(op), expr.ty.clone(), span)
+                let rvalue = if aelys_sema::dyn_target(target).is_some() {
+                    BirRvalue::Use(op)
+                } else {
+                    BirRvalue::UnOp(op)
+                };
+                self.emit_to_temp(rvalue, expr.ty.clone(), span)
             }
 
             TypedExprKind::Binary { left, right, .. } => {

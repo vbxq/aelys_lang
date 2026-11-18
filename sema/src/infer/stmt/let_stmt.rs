@@ -39,6 +39,7 @@ impl TypeInference {
         let mut literal = None;
 
         let var_type = if let Some(decl) = &declared_type {
+            self.coerce_dyn(&mut typed_init, decl);
             // narrowing alone must never be the sole source of truth for a type
             self.try_narrow_literal(&mut typed_init, decl);
 

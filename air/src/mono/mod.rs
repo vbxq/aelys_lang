@@ -62,6 +62,7 @@ pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<MonoError
         }
     }
     ctx.rewrite_call_sites(&mut program);
+    ctx.build_vtables(&mut program)?;
     program.functions.retain(|f| f.type_params.is_empty());
 
     let uninstantiated = ctx.uninstantiated_call_sites(&program);
@@ -613,6 +614,7 @@ pub(super) struct MonoContext {
     pub(super) next_function_id: u32,
     pub(super) errors: Vec<MonoError>,
     pub(super) impls: Vec<AirImpl>,
+    pub(super) dyn_pairs: Vec<(String, AirType)>,
 }
 
 pub(super) struct ParamConflict {
@@ -644,6 +646,7 @@ impl MonoContext {
             next_function_id: program.functions.len() as u32,
             errors: Vec::new(),
             impls: program.impls.clone(),
+            dyn_pairs: Vec::new(),
         }
     }
 
@@ -689,6 +692,10 @@ impl MonoContext {
             AirStmtKind::CallVoid { func: callee, args } => {
                 self.try_collect(callee, args, None, caller, program, generic_names);
             }
+            AirStmtKind::Assign {
+                rvalue: Rvalue::Cast { from, to, .. },
+                ..
+            } => self.collect_dyn_pair(from, to, program),
             _ => {}
         }
     }

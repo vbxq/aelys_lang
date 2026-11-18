@@ -59,6 +59,7 @@ pub struct TraitMethodSig {
     pub name: String,
     pub receiver: aelys_syntax::Receiver,
     pub has_default: bool,
+    pub nogc: bool,
     pub stub: String,
     pub ty: InferType,
 }

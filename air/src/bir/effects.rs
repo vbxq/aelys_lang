@@ -773,6 +773,7 @@ mod tests {
             | InferType::Enum(..)
             | InferType::Tuple(_)
             | InferType::Var(_)
+            | InferType::Dyn(_)
             | InferType::Dynamic => EdgeFive::NotIndexable("E0304"),
             // index base by a type error rather than by a fence on this run's relax list
             InferType::Rc(_) => EdgeFive::NotIndexable("E0304"),

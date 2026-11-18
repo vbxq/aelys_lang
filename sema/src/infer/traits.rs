@@ -106,6 +106,7 @@ pub(crate) fn builtin_traits() -> Vec<TraitDef> {
         name: name.to_string(),
         receiver: Receiver::Ref,
         has_default: false,
+        nogc: false,
         stub: stub_name(q, name),
         ty,
     };
@@ -718,18 +719,6 @@ impl TypeInference {
                 ));
                 continue;
             }
-            if func.is_nogc {
-                self.errors.push(TypeError::coded(
-                    "E0751",
-                    format!(
-                        "trait method `{mname}` is marked `nogc`; the effect of a trait method \
-                         is inferred from each impl and cannot be declared"
-                    ),
-                    "nogc on a trait method",
-                    func.span,
-                ));
-                func.is_nogc = false;
-            }
             let in_sig = func
                 .params
                 .iter()
@@ -807,7 +796,7 @@ impl TypeInference {
                 body,
                 decorators: Vec::new(),
                 is_pub: true,
-                is_nogc: false,
+                is_nogc: func.is_nogc,
                 foreign: None,
                 span: func.span,
             };
@@ -830,7 +819,7 @@ impl TypeInference {
                 ret: Box::new(ret_ty),
                 nogc: false,
             };
-            sigs.push((mname, method.receiver, method.has_default, stub, ty));
+            sigs.push((mname, method.receiver, method.has_default, func.is_nogc, stub, ty));
             out.push(stub_fn);
         }
         let def = TraitDef {
@@ -841,10 +830,11 @@ impl TypeInference {
             is_pub: decl.is_pub,
             methods: sigs
                 .into_iter()
-                .map(|(name, receiver, has_default, stub, ty)| TraitMethodSig {
+                .map(|(name, receiver, has_default, nogc, stub, ty)| TraitMethodSig {
                     name,
                     receiver,
                     has_default,
+                    nogc,
                     stub,
                     ty,
                 })
@@ -1268,6 +1258,19 @@ impl TypeInference {
             }
             if !func.type_params.is_empty() || method.receiver != sig.receiver {
                 self.signature_mismatch(&mname, &tshown, func.span);
+                errored = true;
+                continue;
+            }
+            if sig.nogc && !func.is_nogc {
+                self.errors.push(TypeError::coded(
+                    "E0764",
+                    format!(
+                        "`{tshown}::{mname}` is declared `nogc`, so its impl for `{shown_ty}` \
+                         must be a `nogc fn` too"
+                    ),
+                    "impl of a nogc trait method is not nogc",
+                    func.span,
+                ));
                 errored = true;
                 continue;
             }

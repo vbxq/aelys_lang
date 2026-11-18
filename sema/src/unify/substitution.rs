@@ -73,6 +73,7 @@ impl Substitution {
             | InferType::Null
             | InferType::Never
             | InferType::Range
+            | InferType::Dyn(_)
             | InferType::Dynamic => ty.clone(),
             InferType::Struct(name, type_args) => {
                 if type_args.is_empty() {

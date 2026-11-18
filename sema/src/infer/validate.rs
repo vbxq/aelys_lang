@@ -137,7 +137,8 @@ impl TypeInference {
                 | InferType::Slice { .. }
                 | InferType::Function { .. }
                 | InferType::Tuple(_)
-                | InferType::Range => false,
+                | InferType::Range
+                | InferType::Dyn(_) => false,
             };
             if !answers {
                 self.errors
@@ -196,7 +197,8 @@ impl TypeInference {
             | InferType::Ref { .. }
             | InferType::Slice { .. }
             | InferType::Tuple(_)
-            | InferType::Range => false,
+            | InferType::Range
+            | InferType::Dyn(_) => false,
             InferType::I8
             | InferType::I16
             | InferType::I32
@@ -1015,7 +1017,9 @@ impl TypeInference {
                 self.validate_expr(inner, generic_scope, declared_type_params);
                 self.validate_type(target, expr.span, generic_scope, declared_type_params);
 
-                if !self.is_cast_allowed_resolved(&inner.ty, target) {
+                if crate::infer::objects::dyn_target(target).is_none()
+                    && !self.is_cast_allowed_resolved(&inner.ty, target)
+                {
                     self.errors.push(TypeError::mismatch(
                         target.clone(),
                         inner.ty.clone(),

@@ -1,4 +1,4 @@
-use super::MonoContext;
+use super::{MonoContext, MonoError};
 use super::substitute::operand_type_from;
 use crate::*;
 use std::collections::HashMap;
@@ -415,5 +415,74 @@ impl MonoContext {
             return None;
         }
         self.call_for("Display", "to_string", ty)
+    }
+}
+
+impl MonoContext {
+    pub(super) fn collect_dyn_pair(&mut self, from: &AirType, to: &AirType, program: &AirProgram) {
+        let Some(q) = crate::objects::dyn_trait_behind(to) else {
+            return;
+        };
+        let (AirType::Ptr(self_ty) | AirType::Rc(self_ty)) = from else {
+            return;
+        };
+        if crate::objects::dyn_trait(self_ty).is_some()
+            || self.dyn_pairs.iter().any(|(t, s)| t == q && *s == **self_ty)
+        {
+            return;
+        }
+        self.dyn_pairs.push((q.to_string(), (**self_ty).clone()));
+        for m in program.dyn_tables.slots_of(q).unwrap_or_default() {
+            let stub = format!("{STUB}{q}${m}");
+            let type_args = vec![(**self_ty).clone()];
+            if !self.generic_functions.contains_key(&stub) {
+                self.errors.push(MonoError::mono(
+                    aelys_common::Fault::Compiler,
+                    format!("the vtable of `{}` for `{}` has no stub for `{m}`", shown_trait(q), shown_type(self_ty)),
+                ));
+                continue;
+            }
+            if !self.instantiated.contains_key(&(stub.clone(), self.type_args_key(&type_args))) {
+                self.requests.push(super::MonoRequest {
+                    function_name: stub,
+                    type_args,
+                });
+            }
+        }
+    }
+
+    pub(super) fn build_vtables(&self, program: &mut AirProgram) -> Result<(), Vec<MonoError>> {
+        let mut vtables = Vec::with_capacity(self.dyn_pairs.len());
+        for (q, self_ty) in &self.dyn_pairs {
+            let key = self.type_args_key(std::slice::from_ref(self_ty));
+            let fns = program
+                .dyn_tables
+                .slots_of(q)
+                .unwrap_or_default()
+                .iter()
+                .map(|m| {
+                    self.instantiated
+                        .get(&(format!("{STUB}{q}${m}"), key.clone()))
+                        .cloned()
+                })
+                .collect::<Option<Vec<String>>>();
+            let Some(fns) = fns else {
+                return Err(vec![MonoError::mono(
+                    aelys_common::Fault::Compiler,
+                    format!(
+                        "the vtable of `{}` for `{}` has a method no instance answers",
+                        shown_trait(q),
+                        shown_type(self_ty)
+                    ),
+                )]);
+            };
+            vtables.push(crate::objects::AirVtable {
+                trait_q: q.clone(),
+                self_ty: self_ty.clone(),
+                fns,
+            });
+        }
+        program.dyn_tables.vtables = vtables;
+        Ok(())
     }
 }

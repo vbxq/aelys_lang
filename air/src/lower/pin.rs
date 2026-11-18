@@ -185,6 +185,7 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Call { callee, .. } => {
                 matches!(self.named_callee(callee), Some(Callee::Named(name))
                     if !self.retaining_fns.contains(&name)
+                        && !name.starts_with(aelys_sema::DYN_CALL)
                         && !crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str()))
             }
             _ => false,
@@ -280,6 +281,7 @@ impl<'a> LoweringContext<'a> {
             | InferType::Never
             | InferType::Range
             | InferType::Var(_)
+            | InferType::Dyn(_)
             | InferType::Dynamic => false,
         };
         if plain {

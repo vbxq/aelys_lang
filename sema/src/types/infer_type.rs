@@ -45,6 +45,8 @@ pub enum InferType {
 
     Struct(std::string::String, Vec<InferType>),
     Enum(std::string::String, Vec<InferType>),
+    // the unsized trait object, only ever behind `Rc` or a reference
+    Dyn(std::string::String),
 
     Var(TypeVarId),
 
@@ -112,7 +114,8 @@ impl InferType {
             | InferType::Bool
             | InferType::Char
             | InferType::String
-            | InferType::Null => true,
+            | InferType::Null
+            | InferType::Dyn(_) => true,
             InferType::Enum(_, args) | InferType::Struct(_, args) => {
                 args.iter().all(|a| a.is_concrete())
             }
@@ -200,6 +203,9 @@ impl InferType {
                 referent: Box::new(Self::from_annotation(&base)),
                 mutable,
             };
+        }
+        if ann.is_dyn {
+            return InferType::Dyn(ann.name.clone());
         }
         if let Some(elems) = &ann.tuple_elems {
             return InferType::Tuple(elems.iter().map(Self::from_annotation).collect());
@@ -548,6 +554,7 @@ impl InferType {
                 }
                 Ok(())
             }
+            InferType::Dyn(q) => write!(f, "dyn {}", name(q)),
             InferType::Var(_) | InferType::Dynamic => write!(f, "_"),
         }
     }

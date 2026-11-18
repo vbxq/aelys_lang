@@ -446,6 +446,7 @@ pub fn merge(programs: Vec<AirProgram>) -> AirProgram {
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
         impls: Vec::new(),
+        dyn_tables: Default::default(),
     };
 
     let mut base = 0u32;
@@ -471,6 +472,7 @@ pub fn merge(programs: Vec<AirProgram>) -> AirProgram {
         merged.enums.extend(program.enums);
         merged.globals.extend(program.globals);
         merged.impls.extend(program.impls);
+        merged.dyn_tables.absorb(program.dyn_tables);
         for function in program.functions {
             if function.name.starts_with("__trait$")
                 && merged.functions.iter().any(|f| f.name == function.name)

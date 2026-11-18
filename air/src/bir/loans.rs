@@ -146,7 +146,7 @@ fn classify_loan_root(body: &BirBody, place: &BirPlace) -> RootClass {
                 RootClass::Unmanaged
             }
         }
-        InferType::Var(_) | InferType::Dynamic => RootClass::Unknown,
+        InferType::Var(_) | InferType::Dynamic | InferType::Dyn(_) => RootClass::Unknown,
         InferType::Char
         | InferType::I8
         | InferType::I16

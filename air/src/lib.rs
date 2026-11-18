@@ -6,6 +6,7 @@ pub mod layout;
 pub mod lower;
 pub mod modules;
 pub mod mono;
+pub mod objects;
 pub mod passes;
 pub mod print;
 pub mod rc_paths;
@@ -287,6 +288,7 @@ pub struct AirProgram {
     pub struct_sizes: std::collections::HashMap<String, layout::TypeLayout>,
     pub rc_type_table: rc_types::RcTypeTable,
     pub impls: Vec<AirImpl>,
+    pub dyn_tables: objects::DynTables,
 }
 
 #[derive(Clone)]

@@ -15,6 +15,12 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<BasicValueEnum<'static>, CodegenError> {
         let value = self.generate_operand(operand)?;
 
+        if from != to
+            && let Some(q) = aelys_air::objects::dyn_trait_behind(to)
+        {
+            return self.generate_dyn_cast(value, from, to, q);
+        }
+
         if from == to {
             return Ok(value);
         }
