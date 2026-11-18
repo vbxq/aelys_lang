@@ -558,18 +558,25 @@ impl TypeInference {
             match &cur.kind {
                 TypedExprKind::Grouping(inner) => cur = inner,
                 TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
-                    if matches!(object.ty, InferType::Ref { .. } | InferType::Rc(_)) {
+                    if matches!(
+                        object.ty,
+                        InferType::Ref { .. } | InferType::Rc(_) | InferType::Slice { .. }
+                    ) {
                         return;
                     }
                     cur = object;
                 }
                 TypedExprKind::Identifier(name) => {
                     if self.env.lookup_local(name).is_some() && !self.env.is_mutable(name) {
+                        let fix = if name == "self" {
+                            "rebind it with `let mut s = self`".to_string()
+                        } else {
+                            format!("declare it with `let mut {name}`")
+                        };
                         self.errors.push(TypeError::coded(
                             "E0417",
                             format!(
-                                "`{member}` takes `&mut self`, and `{name}` is not mutable; \
-                                 declare it with `let mut {name}`"
+                                "`{member}` takes `&mut self`, and `{name}` is not mutable; {fix}"
                             ),
                             "immutable receiver",
                             span,
