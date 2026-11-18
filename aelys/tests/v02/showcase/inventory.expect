@@ -1,0 +1,23 @@
+balanced
+== stock
+item       qty     unit     value
+bolt       120     0.15     18.00
+nut        300     0.05     15.00
+hammer       4    12.50     50.00
+drill        1    89.99     89.99
+tape        12     2.35     28.20
+glue         7     3.10     21.70
+total                      222.89
+hammer: 4 in stock at 12.50
+saw: not stocked
+removed nut, worth 15.00
+nut: nothing to remove
+restock bolt: true, restock saw: false
+== by value
+item       qty     unit     value
+drill        1    89.99     89.99
+hammer       4    12.50     50.00
+bolt       200     0.15     30.00
+tape        12     2.35     28.20
+glue         7     3.10     21.70
+total                      219.89

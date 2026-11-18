@@ -1,0 +1,142 @@
+const MIN: i64 = -9223372036854775807 - 1
+
+enum Tok { Num(i64), Op(char), Paren(char), End }
+
+impl Display for Tok {
+    fn to_string(&self) -> string {
+        return match self {
+            Tok::Num(n) => "{n}",
+            Tok::Op(c) | Tok::Paren(c) => "'{c}'",
+            Tok::End => "end of input"
+        }
+    }
+}
+
+enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+
+impl Display for Expr {
+    fn to_string(&self) -> string {
+        return match self {
+            Expr::Num(n) => "{n}",
+            Expr::Neg(x) => "(neg {Rc::get(x)})",
+            Expr::Bin(op, l, r) => "({op} {Rc::get(l)} {Rc::get(r)})"
+        }
+    }
+}
+
+fn tokenize(src: string) -> Result<Vec<Tok>, string> {
+    let mut toks: Vec<Tok> = Vec::new()
+    let mut num: Option<i64> = None
+    for c in src + " " {
+        if let '0'..='9' = c {
+            let d = c as i64 - '0' as i64
+            num = match num { Some(n) => Some(n * 10 + d), None => Some(d) }
+            continue
+        }
+        if let Some(n) = num {
+            toks.push(Tok::Num(n))
+            num = None
+        }
+        match c {
+            ' ' => {}
+            '+' | '-' | '*' | '/' => toks.push(Tok::Op(c)),
+            '(' | ')' => toks.push(Tok::Paren(c)),
+            other => { return Err("unexpected character '{other}'") }
+        }
+    }
+    toks.push(Tok::End)
+    return Ok(toks)
+}
+
+struct Parser { toks: Vec<Tok>, pos: i64 }
+
+impl Parser {
+    fn new(toks: Vec<Tok>) -> Self { return Parser { toks: toks, pos: 0 } }
+    fn peek(&self) -> Tok { return self.toks[self.pos] }
+    fn bump(&mut self) -> Tok {
+        self.pos = self.pos + 1
+        return self.toks[self.pos - 1]
+    }
+    fn eat_op(&mut self, ops: string) -> Option<char> {
+        if let Tok::Op(c) = self.peek() {
+            for o in ops {
+                if o == c {
+                    self.pos = self.pos + 1
+                    return Some(c)
+                }
+            }
+        }
+        return None
+    }
+    fn binary(&mut self, level: i64) -> Result<Rc<Expr>, string> {
+        if level == 2 { return self.unary() }
+        let ops = if level == 0 { "+-" } else { "*/" }
+        let mut lhs = self.binary(level + 1)?
+        while let Some(op) = self.eat_op(ops) {
+            lhs = Rc::new(Expr::Bin(op, lhs, self.binary(level + 1)?))
+        }
+        return Ok(lhs)
+    }
+    fn unary(&mut self) -> Result<Rc<Expr>, string> {
+        if let Some(_) = self.eat_op("-") { return Ok(Rc::new(Expr::Neg(self.unary()?))) }
+        let at = self.pos
+        return match self.bump() {
+            Tok::Num(n) => Ok(Rc::new(Expr::Num(n))),
+            Tok::Paren('(') => self.close(at, self.binary(0)?),
+            t => Err("unexpected {t} at token {at}")
+        }
+    }
+    fn close(&mut self, open: i64, inner: Rc<Expr>) -> Result<Rc<Expr>, string> {
+        return match self.bump() {
+            Tok::Paren(')') => Ok(inner),
+            t => Err("missing ')' for the '(' at token {open}, found {t}")
+        }
+    }
+}
+
+fn parse(src: string) -> Result<Rc<Expr>, string> {
+    let mut p = Parser::new(tokenize(src)?)
+    let tree = p.binary(0)?
+    return match p.peek() {
+        Tok::End => Ok(tree),
+        t => Err("unexpected {t} at token {p.pos}")
+    }
+}
+
+fn apply(op: char, a: i64, b: i64) -> Result<i64, string> {
+    return match (op, b) {
+        ('+', _) => Ok(a + b),
+        ('-', _) => Ok(a - b),
+        ('*', _) => Ok(a * b),
+        ('/', 0) => Err("division by zero"),
+        ('/', -1) if a == MIN => Err("overflow in {a} / -1"),
+        ('/', d) => Ok(a / d),
+        (other, _) => Err("unknown operator '{other}'")
+    }
+}
+
+fn eval(e: Rc<Expr>) -> Result<i64, string> {
+    return match Rc::get(e) {
+        Expr::Num(n) => Ok(n),
+        Expr::Neg(x) => Ok(-eval(x)?),
+        Expr::Bin(op, l, r) => apply(op, eval(l)?, eval(r)?)
+    }
+}
+
+fn run(src: string) {
+    match parse(src) {
+        Err(e) => println("{src}  =>  syntax error: {e}"),
+        Ok(tree) => match eval(tree) {
+            Ok(v) => println("{src}  =>  {Rc::get(tree)} = {v}"),
+            Err(e) => println("{src}  =>  {Rc::get(tree)}: {e}")
+        }
+    }
+}
+
+fn main() -> i64 {
+    for src in ["1 + 2 * 3", "(1 + 2) * 3", "10 / 3 - -4", "-(8 - 10) * 7", "100 / (7 - 2 * 3) / 4", "-7 / 2",
+                "4 / (2 - 2)", "(0 - 9223372036854775807 - 1) / -1", "(1 + 2", "3 + * 4", "1 2", "2 $ 3"] {
+        run(src)
+    }
+    return 0
+}
