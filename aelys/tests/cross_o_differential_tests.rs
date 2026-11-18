@@ -1482,18 +1482,37 @@ fn main() -> i64 {
         S03B_LENT_COUNT_THEN_REUSE,
     ),
     (
-        "S0.3b-N4 a conditional whose branches disagree on provenance",
-        S03bExpect::Refused(
-            "E0410",
-            &["[rc]", "field `W.r`", "both one or both the other"],
-        ),
+        "S0.3b-N4 an Rc conditional whose branches disagree on provenance, escaping its binding",
+        S03bExpect::Ran(15, "", "[rc] allocs=2 frees=2"),
         r#"
 struct W { r: Rc<i64> }
 fn pick() -> bool { return true }
-fn main() -> i64 { let a: Rc<i64> = Rc::new(1)
+fn mk() -> W {
+    let a: Rc<i64> = Rc::new(1)
     let c: bool = pick()
-    let w: W = W{ r: if c { a } else { Rc::new(2) } }
-    return Rc::get(w.r) }
+    return W{ r: if c { a } else { Rc::new(2) } }
+}
+fn main() -> i64 {
+    let w: W = mk()
+    let junk: Rc<i64> = Rc::new(5)
+    return Rc::get(w.r) * 10 + Rc::get(junk)
+}
+"#,
+    ),
+    (
+        "S0.3b-N4b a struct carrier conditional whose branches disagree on provenance",
+        S03bExpect::Refused(
+            "E0410",
+            &["[rc]", "field `O.w`", "both one or both the other"],
+        ),
+        r#"
+struct W { r: Rc<i64> }
+struct O { w: W }
+fn pick() -> bool { return true }
+fn main() -> i64 { let s: W = W{ r: Rc::new(1) }
+    let c: bool = pick()
+    let o: O = O{ w: if c { s } else { W{ r: Rc::new(2) } } }
+    return Rc::get(o.w.r) }
 "#,
     ),
     (
