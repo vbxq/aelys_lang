@@ -297,6 +297,43 @@ impl<'a> FunctionCodegen<'a> {
                 )?));
             }
 
+            if name == "__aelys_str_fmt_pad" {
+                if args.len() != 5 || !arg_values[0].is_struct_value() {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_fmt_pad expects a string and four integers".to_string(),
+                    ));
+                }
+                let (s_ptr, s_len) =
+                    self.string_parts_from_value(arg_values[0].into_struct_value())?;
+                let function = self.ensure_str_fmt_pad_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[
+                        s_ptr.into(),
+                        s_len.into(),
+                        arg_values[1].into(),
+                        arg_values[2].into(),
+                        arg_values[3].into(),
+                        arg_values[4].into(),
+                    ],
+                    "str_fmt_pad",
+                )?));
+            }
+
+            if name == "__aelys_str_fmt_precision" {
+                if args.len() != 2 {
+                    return Err(CodegenError::UnsupportedInstruction(
+                        "__aelys_str_fmt_precision expects a float and an integer".to_string(),
+                    ));
+                }
+                let function = self.ensure_str_fmt_precision_function();
+                return Ok(Some(self.call_sret_returning_fn(
+                    function,
+                    &[arg_values[0].into(), arg_values[1].into()],
+                    "str_fmt_precision",
+                )?));
+            }
+
             if name == "__aelys_str_substring_bytes" {
                 if args.len() != 3 {
                     return Err(CodegenError::UnsupportedInstruction(

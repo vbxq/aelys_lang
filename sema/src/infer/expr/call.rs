@@ -144,6 +144,12 @@ impl TypeInference {
             _ => args,
         };
         if let ExprKind::Identifier(name) = &callee.kind
+            && name == aelys_syntax::FMT_SPEC_MARKER
+            && args.len() == 2
+        {
+            return self.infer_fmt_spec(&args[0], &args[1], span);
+        }
+        if let ExprKind::Identifier(name) = &callee.kind
             && self.unsafe_depth == 0
             && self.foreign_sigs.contains(name)
             && !self.foreign_sigs_shadowed_by_local(name)

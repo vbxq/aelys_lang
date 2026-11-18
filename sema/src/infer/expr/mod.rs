@@ -3,6 +3,7 @@ mod assign;
 mod binary;
 mod call;
 mod catch_expr;
+mod fmt_spec;
 mod if_expr;
 mod lambda;
 mod match_expr;

@@ -686,6 +686,23 @@ impl<'a> LoweringContext<'a> {
                         sp,
                     );
                 }
+                if enum_name == "string" && (variant == "fmt_pad" || variant == "fmt_precision") {
+                    let refs: Vec<&TypedExpr> = args.iter().collect();
+                    let lowered = self.lower_pinned_operands(&refs, sp);
+                    let symbol = if variant == "fmt_pad" {
+                        "__aelys_str_fmt_pad"
+                    } else {
+                        "__aelys_str_fmt_precision"
+                    };
+                    return self.emit_rvalue_to_temp(
+                        AirType::Str,
+                        Rvalue::Call {
+                            func: Callee::Named(symbol.to_string()),
+                            args: lowered,
+                        },
+                        sp,
+                    );
+                }
                 if enum_name == "string" && variant == "substring_bytes" {
                     let refs: Vec<&TypedExpr> = args.iter().collect();
                     let lowered = self.lower_pinned_operands(&refs, sp);

@@ -148,6 +148,8 @@ fn is_managed_alloc_variant(enum_name: &str, variant: &str) -> bool {
             | ("Vec", "reserve")
             | ("string", "substring_bytes")
             | ("string", "from_char")
+            | ("string", "fmt_pad")
+            | ("string", "fmt_precision")
     )
 }
 

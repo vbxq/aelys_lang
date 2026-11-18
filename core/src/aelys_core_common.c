@@ -935,6 +935,61 @@ AelysString __aelys_str_substring_bytes(const char *s_ptr, long long s_len,
     return __aelys_str_concat(s_ptr + lo, hi - lo, "", 0);
 }
 
+AelysString __aelys_str_fmt_pad(const char *s_ptr, long long s_len, long long width,
+                                long long align, long long fill, long long zero) {
+    long long chars = 0;
+    for (long long i = 0; i < s_len; i++) {
+        if ((((const unsigned char *)s_ptr)[i] & 0xC0) != 0x80) {
+            chars++;
+        }
+    }
+    long long pad = width > chars ? width - chars : 0;
+    char fill_buf[AELYS_CHAR_STR_BUF];
+    long long fill_len = aelys_encode_utf8((unsigned int)fill, fill_buf);
+    long long total = s_len + pad * fill_len;
+    char *buffer = aelys_str_alloc(total > 0 ? total : 1);
+    long long left = 0;
+    if (align == 1) {
+        left = pad;
+    } else if (align == 2) {
+        left = pad / 2;
+    }
+    long long at = 0;
+    long long from = 0;
+    if (zero && s_len > 0 && (s_ptr[0] == '-' || s_ptr[0] == '+')) {
+        buffer[at++] = s_ptr[0];
+        from = 1;
+    }
+    for (long long i = 0; i < left; i++) {
+        memcpy(buffer + at, fill_buf, (size_t)fill_len);
+        at += fill_len;
+    }
+    memcpy(buffer + at, s_ptr + from, (size_t)(s_len - from));
+    at += s_len - from;
+    for (long long i = left; i < pad; i++) {
+        memcpy(buffer + at, fill_buf, (size_t)fill_len);
+        at += fill_len;
+    }
+    AelysString result;
+    result.ptr = buffer;
+    result.len = total;
+    return result;
+}
+
+AelysString __aelys_str_fmt_precision(double value, long long precision) {
+    value = aelys_unsigned_nan(value);
+    int need = snprintf(NULL, 0, "%.*f", (int)precision, value);
+    if (need < 0) {
+        __aelys_panic("snprintf failed in fmt_precision", 32);
+    }
+    char *buffer = aelys_str_alloc((long long)need + 1);
+    snprintf(buffer, (size_t)need + 1, "%.*f", (int)precision, value);
+    AelysString result;
+    result.ptr = buffer;
+    result.len = (long long)need;
+    return result;
+}
+
 /* TODO BOOTSTRAP ONLY ! move to std.string when ready */
 long long __aelys_str_eq(const char *a_ptr, long long a_len,
                          const char *b_ptr, long long b_len) {

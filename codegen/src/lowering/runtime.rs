@@ -683,6 +683,21 @@ impl<'a> FunctionCodegen<'a> {
         self.declare_string_returning_fn("__aelys_str_concat", &[ptr_ty, i64_ty, ptr_ty, i64_ty])
     }
 
+    pub(crate) fn ensure_str_fmt_pad_function(&self) -> FunctionValue<'static> {
+        let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn(
+            "__aelys_str_fmt_pad",
+            &[ptr_ty, i64_ty, i64_ty, i64_ty, i64_ty, i64_ty],
+        )
+    }
+
+    pub(crate) fn ensure_str_fmt_precision_function(&self) -> FunctionValue<'static> {
+        let f64_ty = self.context.f64_type().into();
+        let i64_ty = self.context.i64_type().into();
+        self.declare_string_returning_fn("__aelys_str_fmt_precision", &[f64_ty, i64_ty])
+    }
+
     pub(crate) fn ensure_str_substring_bytes_function(&self) -> FunctionValue<'static> {
         let ptr_ty = self.context.ptr_type(AddressSpace::default()).into();
         let i64_ty = self.context.i64_type().into();

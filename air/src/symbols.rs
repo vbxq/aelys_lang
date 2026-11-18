@@ -20,6 +20,8 @@ pub const STRING_PRODUCER_SYMBOLS: &[&str] = &[
     "__aelys_str_from_char",
     "__aelys_str_substring_bytes",
     "__aelys_to_string",
+    "__aelys_str_fmt_pad",
+    "__aelys_str_fmt_precision",
 ];
 
 // each of these copies out of its string arguments and keeps no pointer to them past the call
@@ -28,6 +30,7 @@ pub const STRING_READER_SYMBOLS: &[&str] = &[
     "__aelys_str_substring_bytes",
     "__aelys_str_char_count",
     "__aelys_str_decode_at",
+    "__aelys_str_fmt_pad",
 ];
 
 pub fn function_symbol_name(function: &AirFunction) -> String {

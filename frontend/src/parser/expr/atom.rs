@@ -653,7 +653,26 @@ impl Parser {
                 FmtPart::Literal(s) => result.push(FmtStringPart::Literal(s)),
                 FmtPart::Placeholder => result.push(FmtStringPart::Placeholder),
                 FmtPart::Expr(expr_str) => {
-                    let expr = self.parse_inline_expr(&expr_str, span)?;
+                    let expr = match split_fmt_spec(&expr_str) {
+                        Some((code, spec)) => {
+                            let inner = self.parse_inline_expr(code, span)?;
+                            let marker = Expr::new(
+                                ExprKind::Identifier(aelys_syntax::FMT_SPEC_MARKER.to_string()),
+                                span,
+                            );
+                            Expr::new(
+                                ExprKind::Call {
+                                    callee: Box::new(marker),
+                                    args: vec![
+                                        inner,
+                                        Expr::new(ExprKind::String(spec.to_string()), span),
+                                    ],
+                                },
+                                span,
+                            )
+                        }
+                        None => self.parse_inline_expr(&expr_str, span)?,
+                    };
                     result.push(FmtStringPart::Expr(Box::new(expr)));
                 }
             }
@@ -716,6 +735,32 @@ impl Parser {
         remap_expr_spans(&mut expr, span);
         Ok(expr)
     }
+}
+
+fn split_fmt_spec(code: &str) -> Option<(&str, &str)> {
+    let bytes = code.as_bytes();
+    let mut depth: i64 = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth -= 1,
+            quote @ (b'"' | b'\'') => {
+                i += 1;
+                while i < bytes.len() && bytes[i] != quote {
+                    if bytes[i] == b'\\' {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+            }
+            b':' if bytes.get(i + 1) == Some(&b':') => i += 1,
+            b':' if depth == 0 => return Some((&code[..i], &code[i + 1..])),
+            _ => {}
+        }
+        i += 1;
+    }
+    None
 }
 
 fn remap_expr_spans(expr: &mut Expr, span: aelys_syntax::Span) {
