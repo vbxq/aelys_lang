@@ -4,6 +4,7 @@ use crate::typed_ast::{
     TypedStmtKind,
 };
 use crate::types::{InferType, ResolvedType};
+use aelys_syntax::UnaryOp;
 
 impl TypeInference {
     /// finalize types: walk the entire typed ast and convert any remaining unresolved `var` to `dynamic`
@@ -171,10 +172,17 @@ impl TypeInference {
                 right: Box::new(self.finalize_expr(*right)),
             },
 
-            TypedExprKind::Unary { op, operand } => TypedExprKind::Unary {
-                op,
-                operand: Box::new(self.finalize_expr(*operand)),
-            },
+            TypedExprKind::Unary { op, operand } => {
+                let operand = self.finalize_expr(*operand);
+                let op = match op {
+                    UnaryOp::Not if operand.ty.is_integer() => UnaryOp::BitNot,
+                    other => other,
+                };
+                TypedExprKind::Unary {
+                    op,
+                    operand: Box::new(operand),
+                }
+            }
 
             TypedExprKind::And { left, right } => TypedExprKind::And {
                 left: Box::new(self.finalize_expr(*left)),

@@ -1,0 +1,6 @@
+mod geo;
+
+fn main() {
+    let s = geo.Shape::Square(2);
+    println!("{}", geo::area(2, 2));
+}

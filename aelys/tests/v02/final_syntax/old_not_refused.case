@@ -1,0 +1,6 @@
+fn main() {
+    let a = false;
+    if not a {
+        println!("no");
+    }
+}

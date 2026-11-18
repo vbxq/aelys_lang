@@ -1,0 +1,5 @@
+let mut g = 1;
+
+fn main() {
+    println!("{}", g);
+}

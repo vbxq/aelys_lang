@@ -1,0 +1,5 @@
+mod geo;
+
+fn main() {
+    println!("{}", geo::area(3, 4));
+}

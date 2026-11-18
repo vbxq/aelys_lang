@@ -1,0 +1,11 @@
+static mut COUNT: i64 = 0;
+
+fn bump() {
+    COUNT += 1;
+}
+
+fn main() {
+    bump();
+    bump();
+    println!("{}", COUNT);
+}

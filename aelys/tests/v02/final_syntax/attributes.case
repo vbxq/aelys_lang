@@ -1,0 +1,14 @@
+#[inline]
+fn sq(x: i64) -> i64 {
+    x * x
+}
+
+#[inline(never)]
+#[cold]
+fn quad(x: i64) -> i64 {
+    sq(x) * sq(x)
+}
+
+fn main() {
+    println!("{} {}", sq(3), quad(2));
+}

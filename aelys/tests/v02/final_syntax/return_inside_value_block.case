@@ -1,0 +1,13 @@
+fn f(x: i64) -> i64 {
+    let y = {
+        if x > 0 {
+            return 7;
+        }
+        x * 2
+    };
+    y + 1
+}
+
+fn main() {
+    println!("{} {}", f(1), f(-3));
+}

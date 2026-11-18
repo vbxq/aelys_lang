@@ -29,31 +29,31 @@ pub nogc fn pow(b: i64, e: i64) -> i64 {
         }
         return 0
     }
-    let mut acc: i64 = 1
-    let mut sq: i64 = b
-    let mut n: i64 = e
+    let mut acc: i64 = 1;
+    let mut sq: i64 = b;
+    let mut n: i64 = e;
     while n > 0 {
         if n % 2 == 1 { acc = acc * sq }
-        sq = sq * sq
-        n = n / 2
+        sq = sq * sq;
+        n = n / 2;
     }
     return acc
 }
 
 // abs wraps at the least i64, so a gcd of two such values is that value and not a magnitude
 pub nogc fn gcd(a: i64, b: i64) -> i64 {
-    let mut x: i64 = abs(a)
-    let mut y: i64 = abs(b)
+    let mut x: i64 = abs(a);
+    let mut y: i64 = abs(b);
     while y != 0 {
-        let t: i64 = x % y
-        x = y
-        y = t
+        let t: i64 = x % y;
+        x = y;
+        y = t;
     }
     return x
 }
 
 pub nogc fn lcm(a: i64, b: i64) -> i64 {
-    let g: i64 = gcd(a, b)
+    let g: i64 = gcd(a, b);
     if g == 0 { return 0 }
     return abs(a / g * b)
 }

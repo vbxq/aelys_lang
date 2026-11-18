@@ -1,0 +1,14 @@
+fn main() {
+    let name = "ada";
+    let n = 7;
+    let s = format!("{name}:{0}:{1}:{0}", n, n * 2);
+    println!("{}", s);
+    println!("[{:>5}][{:<4}][{:03}]", n, name, n);
+    println!("{x} {y}", x = 1, y = n + 1);
+    println!("{{literal}} {}", "}{");
+    print!("a");
+    print!("{}", 2);
+    println!();
+    let plain = "{n} stays";
+    println!("{}", plain);
+}

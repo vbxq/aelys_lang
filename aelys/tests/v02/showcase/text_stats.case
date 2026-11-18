@@ -1,20 +1,20 @@
-needs std.str
+use std::str;
 
-const TOP: i64 = 5
+const TOP: i64 = 5;
 
-type Entry = (string, i64)
+type Entry = (String, i64);
 
 struct Freq { entries: Vec<Entry>, words: i64 }
 
 impl Freq {
     fn new() -> Self { return Freq { entries: Vec::new(), words: 0 } }
 
-    fn bump(&mut self, w: string) {
-        self.words = self.words + 1
+    fn bump(&mut self, w: String) {
+        self.words = self.words + 1;
         for i in 0..self.entries.len() {
-            let (word, n) = self.entries[i]
+            let (word, n) = self.entries[i];
             if word == w {
-                self.entries[i] = (word, n + 1)
+                self.entries[i] = (word, n + 1);
                 return
             }
         }
@@ -22,14 +22,14 @@ impl Freq {
     }
 
     fn ranked(&self) -> Vec<Entry> {
-        let mut v = self.entries
+        let mut v = self.entries;
         for i in 1..v.len() {
-            let mut j = i
-            while j > 0 and before(v[j], v[j - 1]) {
-                let t = v[j]
-                v[j] = v[j - 1]
-                v[j - 1] = t
-                j = j - 1
+            let mut j = i;
+            while j > 0 && before(v[j], v[j - 1]) {
+                let t = v[j];
+                v[j] = v[j - 1];
+                v[j - 1] = t;
+                j = j - 1;
             }
         }
         return v
@@ -38,7 +38,7 @@ impl Freq {
 
 fn before(a: Entry, b: Entry) -> bool {
     return match (a, b) {
-        ((wa, na), (wb, nb)) if na == nb => str.compare(wa, wb) < 0,
+        ((wa, na), (wb, nb)) if na == nb => str::compare(wa, wb) < 0,
         ((_, na), (_, nb)) => na > nb
     }
 }
@@ -51,38 +51,37 @@ fn fold(c: char) -> Option<char> {
     }
 }
 
-fn pad(s: string, w: i64) -> string { return s + str.repeat(" ", w - str.char_count(s)) }
+fn pad(s: String, w: i64) -> String { return s + str::repeat(" ", w - str::char_count(s)) }
 
-fn main() -> i64 {
+fn main() {
     let text = "L'été arrive. Le café du matin, le café du soir : l'été, c'est la saison du café ! " +
-        "Où est passé l'été ? Là où le soleil brûle, le café désaltérant refroidit. ÉTÉ, Été, été... Ça suffit, Noël."
-    let mut freq = Freq::new()
-    let mut cur = ""
-    let mut longest = ""
-    let mut accented: i64 = 0
+        "Où est passé l'été ? Là où le soleil brûle, le café désaltérant refroidit. ÉTÉ, Été, été... Ça suffit, Noël.";
+    let mut freq = Freq::new();
+    let mut cur = "";
+    let mut longest = "";
+    let mut accented: i64 = 0;
     for c in text + " " {
         match fold(c) {
             Some(l @ 'ß'..='ÿ') => {
-                accented = accented + 1
-                cur = cur + string::from_char(l)
+                accented = accented + 1;
+                cur = cur + String::from_char(l);
             }
-            Some(l) => { cur = cur + string::from_char(l) }
+            Some(l) => { cur = cur + String::from_char(l) }
             None if cur.len() > 0 => {
-                if str.char_count(cur) > str.char_count(longest) { longest = cur }
-                freq.bump(cur)
-                cur = ""
+                if str::char_count(cur) > str::char_count(longest) { longest = cur }
+                freq.bump(cur);
+                cur = "";
             }
             None => {}
         }
     }
-    println("{text.len()} bytes, {str.char_count(text)} chars, {accented} accented letters")
-    println("{freq.words} words, {freq.entries.len()} distinct")
-    println("longest: {longest} ({str.char_count(longest)} chars, {longest.len()} bytes)")
-    let ranked = freq.ranked()
+    println!("{} bytes, {} chars, {accented} accented letters", text.len(), str::char_count(text));
+    println!("{} words, {} distinct", freq.words, freq.entries.len());
+    println!("longest: {longest} ({} chars, {} bytes)", str::char_count(longest), longest.len());
+    let ranked = freq.ranked();
     for i in 0..TOP {
         if let Some((w, n)) = ranked.get(i) {
-            println("{i + 1}. {pad(w, 9)}{n}")
+            println!("{}. {}{n}", i + 1, pad(w, 9))
         }
     }
-    return 0
 }

@@ -1,0 +1,7 @@
+fn f(c: bool) -> i64 {
+    if c { 1 } else { 2 } - 3
+}
+
+fn main() {
+    println!("{}", f(true));
+}

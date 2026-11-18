@@ -1,31 +1,41 @@
-mod decl;
+mod block;
 mod expr;
-mod stmt;
+mod items;
+mod macros;
+mod pattern;
+mod types;
 
 use aelys_common::Diagnostic;
 use aelys_common::Result;
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
-use aelys_syntax::Source;
-use aelys_syntax::{Stmt, Token, TokenKind};
+use aelys_syntax::{Source, Span, Stmt, Token, TokenKind};
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-const MAX_RECURSION_DEPTH: usize = 1000; // pathological nesting guard
+const MAX_RECURSION_DEPTH: usize = 1000;
 
 pub struct Parser {
     tokens: Vec<Token>,
     current: usize,
-    pub(crate) source: Arc<Source>,
+    source: Arc<Source>,
     recursion_depth: usize,
-    pub(crate) block_depth: usize,
+    block_depth: usize,
     errors: Vec<Diagnostic>,
     pattern_in_let: bool,
-    pub(crate) bodiless: bool,
-    pub(crate) mut_self: bool,
+    no_struct: bool,
+    mut_self: bool,
+    loops: Vec<block::LoopCtx>,
+    temps: usize,
+    panics: HashSet<(usize, usize)>,
+    fn_returns: Vec<bool>,
+    tuple_structs: HashMap<String, usize>,
+    unit_structs: HashSet<String>,
+    struct_fields: HashMap<String, Vec<String>>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, source: Arc<Source>) -> Self {
-        Self {
+        let mut parser = Self {
             tokens,
             current: 0,
             source,
@@ -33,52 +43,135 @@ impl Parser {
             block_depth: 0,
             errors: Vec::new(),
             pattern_in_let: false,
-            bodiless: false,
+            no_struct: false,
             mut_self: false,
-        }
+            loops: Vec::new(),
+            temps: 0,
+            panics: HashSet::new(),
+            fn_returns: Vec::new(),
+            tuple_structs: HashMap::new(),
+            unit_structs: HashSet::new(),
+            struct_fields: HashMap::new(),
+        };
+        parser.collect_struct_shapes();
+        parser
     }
 
     pub fn parse(mut self) -> Result<Vec<Stmt>> {
         let mut statements = Vec::new();
-
-        let mut prologue_open = true;
-
         while !self.is_at_end() {
-            if self.match_token(&TokenKind::Semicolon) {
+            let start = self.current;
+            if self.check(&TokenKind::Semicolon) {
+                let span = self.peek().span;
+                self.advance();
+                let diag = self.rule(111, "unexpected `;` after an item; remove it", span);
+                self.errors.push(diag.to_diagnostic());
                 continue;
             }
-
-            let start = self.current;
-            let parsed = if prologue_open && self.check(&TokenKind::Needs) {
-                self.needs_declaration()
-            } else {
-                prologue_open = false;
-                self.declaration()
-            };
-
-            match parsed {
-                Ok(stmt) => statements.push(stmt),
+            match self.item() {
+                Ok(stmts) => statements.extend(stmts),
                 Err(err) => {
-                    let diag = match &err {
-                        AelysError::Compile(e) => e.to_diagnostic(),
-                        AelysError::Multiple(diags) => {
-                            if let Some(d) = diags.first() {
-                                d.clone()
-                            } else {
-                                continue;
-                            }
-                        }
-                    };
-                    self.errors.push(diag);
+                    match err {
+                        AelysError::Compile(e) => self.errors.push(e.to_diagnostic()),
+                        AelysError::Multiple(diags) => self.errors.extend(diags.into_iter().take(1)),
+                    }
                     self.synchronize(start);
                 }
             }
         }
-
         if self.errors.is_empty() {
             Ok(statements)
         } else {
             Err(AelysError::Multiple(self.errors))
+        }
+    }
+
+    // struct shapes declared in this file let `P(1, 2)`, `Marker` and `..base` lower to plain struct literals
+    fn collect_struct_shapes(&mut self) {
+        let mut i = 0;
+        while i + 2 < self.tokens.len() {
+            if self.tokens[i].kind != TokenKind::Struct {
+                i += 1;
+                continue;
+            }
+            let TokenKind::Identifier(name) = self.tokens[i + 1].kind.clone() else {
+                i += 1;
+                continue;
+            };
+            let mut j = i + 2;
+            if self.tokens[j].kind == TokenKind::Lt {
+                let mut depth = 0i32;
+                while j < self.tokens.len() {
+                    match self.tokens[j].kind {
+                        TokenKind::Lt => depth += 1,
+                        TokenKind::Gt => depth -= 1,
+                        TokenKind::Shr => depth -= 2,
+                        _ => {}
+                    }
+                    j += 1;
+                    if depth <= 0 {
+                        break;
+                    }
+                }
+            }
+            match self.tokens.get(j).map(|t| &t.kind) {
+                Some(TokenKind::Semicolon) => {
+                    self.unit_structs.insert(name);
+                }
+                Some(TokenKind::LParen) => {
+                    let (mut depth, mut arity, mut empty) = (0i32, 0usize, true);
+                    let mut k = j;
+                    while k < self.tokens.len() {
+                        match self.tokens[k].kind {
+                            TokenKind::LParen | TokenKind::LBracket | TokenKind::Lt => depth += 1,
+                            TokenKind::RParen | TokenKind::RBracket | TokenKind::Gt => depth -= 1,
+                            TokenKind::Shr => depth -= 2,
+                            TokenKind::Comma if depth == 1 => {
+                                if !matches!(self.tokens[k + 1].kind, TokenKind::RParen) {
+                                    arity += 1;
+                                }
+                            }
+                            _ if depth == 1 => empty = false,
+                            _ => {}
+                        }
+                        k += 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    self.tuple_structs.insert(name, if empty { 0 } else { arity + 1 });
+                }
+                Some(TokenKind::LBrace) => {
+                    let mut fields = Vec::new();
+                    let mut depth = 0i32;
+                    let mut k = j;
+                    while k + 1 < self.tokens.len() {
+                        match &self.tokens[k].kind {
+                            TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket | TokenKind::Lt => depth += 1,
+                            TokenKind::RBrace | TokenKind::RParen | TokenKind::RBracket | TokenKind::Gt => depth -= 1,
+                            TokenKind::Shr => depth -= 2,
+                            TokenKind::Identifier(f)
+                                if depth == 1 && self.tokens[k + 1].kind == TokenKind::Colon =>
+                            {
+                                fields.push(f.clone());
+                            }
+                            other if depth == 1 && self.tokens[k + 1].kind == TokenKind::Colon => {
+                                if let Some(w) = other.keyword_spelling() {
+                                    fields.push(w.to_string());
+                                }
+                            }
+                            _ => {}
+                        }
+                        k += 1;
+                        if depth == 0 {
+                            break;
+                        }
+                    }
+                    self.struct_fields.insert(name, fields);
+                }
+                _ => {}
+            }
+            i = j;
         }
     }
 
@@ -105,31 +198,47 @@ impl Parser {
         }
     }
 
-    pub fn error(&self, kind: CompileErrorKind) -> aelys_common::error::AelysError {
+    fn error(&self, kind: CompileErrorKind) -> AelysError {
         CompileError::new(kind, self.peek().span, Arc::clone(&self.source)).into()
     }
 
-    pub(crate) fn unit_type_refusal(&self, open: aelys_syntax::Span) -> AelysError {
-        let kind = CompileErrorKind::UnexpectedToken {
-            expected: "a type, the unit type is written by leaving out the return type: \
-                       `fn f()` rather than `fn f() -> ()`"
-                .to_string(),
-            found: "()".to_string(),
-        };
-        let span = open.merge(self.previous().span);
-        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    fn rule(&self, code: u16, message: &str, span: Span) -> CompileError {
+        self.rule_help(code, message, None, span)
     }
 
-    pub(crate) fn rule(&self, code: u16, message: &str, span: aelys_syntax::Span) -> AelysError {
-        let kind = CompileErrorKind::ParseRule {
-            code,
-            message: message.to_string(),
-            help: None,
-        };
-        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    fn rule_help(&self, code: u16, message: &str, help: Option<&str>, span: Span) -> CompileError {
+        CompileError::new(
+            CompileErrorKind::ParseRule {
+                code,
+                message: message.to_string(),
+                help: help.map(str::to_string),
+            },
+            span,
+            Arc::clone(&self.source),
+        )
     }
 
-    pub(crate) fn enter_recursion(&mut self) -> Result<()> {
+    fn fail<T>(&self, code: u16, message: &str, span: Span) -> Result<T> {
+        Err(self.rule(code, message, span).into())
+    }
+
+    fn fail_help<T>(&self, code: u16, message: &str, help: &str, span: Span) -> Result<T> {
+        Err(self.rule_help(code, message, Some(help), span).into())
+    }
+
+    fn refuse_in_place(&mut self, kind: CompileErrorKind, span: Span) {
+        let diag = CompileError::new(kind, span, Arc::clone(&self.source)).to_diagnostic();
+        self.errors.push(diag);
+    }
+
+    fn unexpected<T>(&self, expected: &str) -> Result<T> {
+        Err(self.error(CompileErrorKind::UnexpectedToken {
+            expected: expected.to_string(),
+            found: self.peek().kind.to_string(),
+        }))
+    }
+
+    fn enter_recursion(&mut self) -> Result<()> {
         self.recursion_depth += 1;
         if self.recursion_depth > MAX_RECURSION_DEPTH {
             return Err(self.error(CompileErrorKind::RecursionDepthExceeded {
@@ -139,7 +248,7 @@ impl Parser {
         Ok(())
     }
 
-    pub(crate) fn exit_recursion(&mut self) {
+    fn exit_recursion(&mut self) {
         self.recursion_depth = self.recursion_depth.saturating_sub(1);
     }
 
@@ -148,41 +257,58 @@ impl Parser {
             self.advance();
             Ok(())
         } else {
-            Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: expected.to_string(),
-                found: self.peek().kind.to_string(),
-            }))
+            self.unexpected(expected)
         }
     }
 
+    fn after_previous(&self) -> Span {
+        let end = self.previous().span.end;
+        let (line, column) = self.source.line_col_at_offset(end);
+        Span::new(end, end, line, column)
+    }
+
+    fn expect_semi(&mut self, what: &str) -> Result<()> {
+        if self.match_token(&TokenKind::Semicolon) {
+            return Ok(());
+        }
+        let found = self.peek().kind.to_string();
+        Err(self
+            .rule_help(
+                110,
+                &format!("expected `;` after {what}, found {found}"),
+                Some("add `;` here"),
+                self.after_previous(),
+            )
+            .into())
+    }
+
     fn consume_gt(&mut self) -> Result<()> {
-        if self.check(&TokenKind::Gt) {
-            self.advance();
-            Ok(())
-        } else if self.check(&TokenKind::Shr) {
-            let span = self.tokens[self.current].span;
-            let first_gt_span = aelys_syntax::Span {
-                start: span.start,
-                end: span.start + 1,
-                line: span.line,
-                column: span.column,
-            };
-            let second_gt_span = aelys_syntax::Span {
-                start: span.start + 1,
-                end: span.end,
-                line: span.line,
-                column: span.column + 1,
-            };
-            self.tokens[self.current] = Token::new(TokenKind::Gt, second_gt_span);
-            self.tokens
-                .insert(self.current, Token::new(TokenKind::Gt, first_gt_span));
-            self.advance();
-            Ok(())
-        } else {
-            Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: ">".to_string(),
-                found: self.peek().kind.to_string(),
-            }))
+        let split = |this: &mut Self, first: TokenKind, rest: TokenKind| {
+            let span = this.tokens[this.current].span;
+            let head = Span::new(span.start, span.start + 1, span.line, span.column);
+            let tail = Span::new(span.start + 1, span.end, span.line, span.column + 1);
+            this.tokens[this.current] = Token::new(rest, tail);
+            this.tokens.insert(this.current, Token::new(first, head));
+            this.advance();
+        };
+        match self.peek().kind {
+            TokenKind::Gt => {
+                self.advance();
+                Ok(())
+            }
+            TokenKind::Shr => {
+                split(self, TokenKind::Gt, TokenKind::Gt);
+                Ok(())
+            }
+            TokenKind::GtEq => {
+                split(self, TokenKind::Gt, TokenKind::Eq);
+                Ok(())
+            }
+            TokenKind::ShrEq => {
+                split(self, TokenKind::Gt, TokenKind::GtEq);
+                Ok(())
+            }
+            _ => self.unexpected("`>`"),
         }
     }
 
@@ -193,20 +319,20 @@ impl Parser {
                 self.advance();
                 Ok(name)
             }
-            kind => {
-                let found = match kind.keyword_spelling() {
-                    Some(word) => {
-                        format!("reserved word `{word}`; write `r#{word}` to use it as a name")
-                    }
-                    None if kind.is_reserved_word() => format!("reserved word `{kind}`"),
-                    None => kind.to_string(),
-                };
-                Err(self.error(CompileErrorKind::UnexpectedToken {
-                    expected: expected.to_string(),
-                    found,
-                }))
-            }
+            _ => Err(self.name_error(expected)),
         }
+    }
+
+    fn name_error(&self, expected: &str) -> AelysError {
+        let kind = &self.peek().kind;
+        let found = match kind.keyword_spelling() {
+            Some(word) => format!("reserved word `{word}`; write `r#{word}` to use it as a name"),
+            None => kind.to_string(),
+        };
+        self.error(CompileErrorKind::UnexpectedToken {
+            expected: expected.to_string(),
+            found,
+        })
     }
 
     fn consume_member_name(&mut self, expected: &str) -> Result<String> {
@@ -220,12 +346,6 @@ impl Parser {
         self.consume_identifier(expected)
     }
 
-    // the parse goes on after a misnamed binding, so one wrong name gives one diagnostic
-    fn refuse_in_place(&mut self, kind: CompileErrorKind, span: aelys_syntax::Span) {
-        let diag = CompileError::new(kind, span, Arc::clone(&self.source)).to_diagnostic();
-        self.errors.push(diag);
-    }
-
     fn consume_value_name(&mut self, expected: &str) -> Result<String> {
         let span = self.peek().span;
         let name = self.consume_identifier(expected)?;
@@ -233,7 +353,7 @@ impl Parser {
         Ok(name)
     }
 
-    fn refuse_reserved_value_name(&mut self, name: &str, span: aelys_syntax::Span) -> bool {
+    fn refuse_reserved_value_name(&mut self, name: &str, span: Span) -> bool {
         let Some(enum_name) = aelys_syntax::prelude_variant_enum(name) else {
             return false;
         };
@@ -255,24 +375,12 @@ impl Parser {
         Ok(name)
     }
 
-    // while null stays a reserved keyword everywhere else
-    fn consume_path_segment(&mut self, expected: &str) -> Result<String> {
-        if matches!(self.peek().kind, TokenKind::Null) {
-            self.advance();
-            return Ok("null".to_string());
-        }
-        if matches!(self.peek().kind, TokenKind::From) {
-            self.advance();
-            return Ok("from".to_string());
-        }
-        self.consume_identifier(expected)
+    fn check(&self, kind: &TokenKind) -> bool {
+        !self.is_at_end() && self.peek().kind == *kind
     }
 
-    fn check(&self, kind: &TokenKind) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-        self.peek().kind == *kind
+    fn check_ident(&self, word: &str) -> bool {
+        matches!(&self.peek().kind, TokenKind::Identifier(w) if w == word)
     }
 
     fn match_token(&mut self, kind: &TokenKind) -> bool {
@@ -301,14 +409,19 @@ impl Parser {
 
     fn peek_at(&self, offset: usize) -> &Token {
         let idx = self.current + offset;
-        if idx < self.tokens.len() {
-            &self.tokens[idx]
-        } else {
-            self.tokens.last().unwrap()
-        }
+        self.tokens.get(idx).unwrap_or_else(|| self.tokens.last().unwrap())
     }
 
     fn previous(&self) -> &Token {
-        &self.tokens[self.current - 1]
+        &self.tokens[self.current.saturating_sub(1)]
+    }
+
+    fn temp(&mut self, what: &str) -> String {
+        self.temps += 1;
+        format!("{what}#{}", self.temps)
+    }
+
+    fn adjacent(&self, a: usize, b: usize) -> bool {
+        self.peek_at(a).span.end == self.peek_at(b).span.start
     }
 }

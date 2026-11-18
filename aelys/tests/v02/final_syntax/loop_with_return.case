@@ -1,0 +1,13 @@
+fn find(limit: i64) -> i64 {
+    let mut i = 1;
+    loop {
+        if i * i > limit {
+            return i;
+        }
+        i += 1;
+    }
+}
+
+fn main() {
+    println!("{}", find(50));
+}

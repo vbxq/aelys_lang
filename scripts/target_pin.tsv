@@ -64,7 +64,6 @@ aelys	group_rc2_tests	test
 aelys	ice_surface_tests	test
 aelys	implicit_widening_tests	test
 aelys	len_surface_tests	test
-aelys	lexer_test	test
 aelys	llvm_air_abi_tests	test
 aelys	llvm_air_index_tests	test
 aelys	llvm_air_phi_alloca_tests	test
@@ -96,7 +95,6 @@ aelys	nogc_stage5_diagnostics_tests	test
 aelys-opt	aelys_opt	doc
 aelys-opt	aelys_opt	lib
 aelys	opt_invariance_tests	test
-aelys	parser_test	test
 aelys	rc_elision_tests	test
 aelys	rc_seam_tests	test
 aelys	rc_stage1_tests	test

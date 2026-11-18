@@ -1,0 +1,8 @@
+fn half(n: i64) -> Result<i64, i64> {
+    if n % 2 == 0 { Ok(n / 2) } else { Err(n) }
+}
+
+fn main() {
+    let q = half(3) catch |e| -1;
+    println!("{}", q);
+}

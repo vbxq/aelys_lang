@@ -1,188 +1,127 @@
 use super::{Lexer, Result};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
-use aelys_syntax::{FmtPart, Span, TokenKind};
+use aelys_syntax::{Span, TokenKind};
 use std::sync::Arc;
 
 impl Lexer {
     pub(super) fn string(&mut self) -> Result<()> {
-        let mut parts: Vec<FmtPart> = Vec::new();
-        let mut current_literal = String::new();
-        let mut has_format = false;
-        let open_line = self.line;
-        let mut crossed_line = false;
-        let unterminated = |lexer: &Self| {
-            AelysError::Compile(CompileError::new(
-                CompileErrorKind::UnterminatedString,
-                Span::new(lexer.start, lexer.start + 1, open_line, lexer.start_column),
-                Arc::clone(&lexer.source),
-            ))
-        };
-
-        while self.peek() != '"' && !self.is_at_end() {
-            if self.peek() == '\n' {
-                self.line += 1;
-                self.column = 1;
-                crossed_line = true;
+        let mut text = String::new();
+        loop {
+            if self.is_at_end() {
+                return Err(self.unterminated_string());
             }
-
             match self.peek() {
-                '\\' => {
+                '"' => break,
+                '\\' if matches!(self.peek_next(), '\n' | '\r') => {
                     self.advance();
-                    let escaped = match self.peek() {
-                        'n' => '\n',
-                        't' => '\t',
-                        'r' => '\r',
-                        '\\' => '\\',
-                        '"' => '"',
-                        '0' => '\0',
-                        '\'' => '\'',
-                        c => {
-                            return Err(AelysError::Compile(
-                                self.error(CompileErrorKind::InvalidEscape(c)),
-                            ));
-                        }
-                    };
-                    self.advance();
-                    current_literal.push(escaped);
-                }
-                '{' => {
-                    self.advance();
-                    if self.peek() == '{' {
-                        // {{ -> literal {
+                    while matches!(self.peek(), ' ' | '\t' | '\n' | '\r') {
                         self.advance();
-                        current_literal.push('{');
-                    } else {
-                        has_format = true;
-                        if !current_literal.is_empty() {
-                            parts.push(FmtPart::Literal(std::mem::take(&mut current_literal)));
-                        }
-
-                        if self.peek() == '}' {
-                            self.advance();
-                            parts.push(FmtPart::Placeholder);
-                        } else {
-                            let expr = self.scan_format_expr()?;
-                            parts.push(FmtPart::Expr(expr));
-                        }
                     }
                 }
-                '}' => {
-                    self.advance();
-                    if self.peek() == '}' {
-                        // }} -> literal }
-                        self.advance();
-                        current_literal.push('}');
-                    } else if crossed_line {
-                        return Err(unterminated(self));
-                    } else {
-                        return Err(AelysError::Compile(
-                            self.error(CompileErrorKind::UnmatchedCloseBrace),
-                        ));
-                    }
-                }
-                _ => {
-                    current_literal.push(self.advance());
-                }
+                '\\' => text.push(self.escape(true)?),
+                _ => text.push(self.advance()),
             }
         }
-
-        if self.is_at_end() {
-            return Err(unterminated(self));
-        }
-
-        self.advance(); // closing "
-
-        if has_format {
-            if !current_literal.is_empty() {
-                parts.push(FmtPart::Literal(current_literal));
-            }
-            self.add_token(TokenKind::FmtString(parts));
-        } else {
-            self.add_token(TokenKind::String(current_literal));
-        }
-
+        self.advance();
+        self.add_token(TokenKind::String(text));
         Ok(())
     }
 
-    fn scan_format_expr(&mut self) -> Result<String> {
-        let open = Span::new(self.current - 1, self.current, self.line, self.column - 1);
-        let unterminated = |lexer: &Self| {
-            AelysError::Compile(CompileError::new(
-                CompileErrorKind::UnterminatedFmtExpr,
-                open,
-                Arc::clone(&lexer.source),
+    pub(super) fn raw_string(&mut self) -> Result<()> {
+        let mut hashes = 0;
+        while self.match_char('#') {
+            hashes += 1;
+        }
+        if !self.match_char('"') {
+            return Err(AelysError::Compile(self.rule(
+                101,
+                "expected `\"` to open the raw string".to_string(),
+                self.span(),
+            )));
+        }
+        let body = self.current;
+        loop {
+            if self.is_at_end() {
+                return Err(self.unterminated_string());
+            }
+            if self.peek() == '"' && (1..=hashes).all(|i| self.peek_at(i) == '#') {
+                let text = self.text(body).to_string();
+                self.advance();
+                for _ in 0..hashes {
+                    self.advance();
+                }
+                self.add_token(TokenKind::String(text));
+                return Ok(());
+            }
+            self.advance();
+        }
+    }
+
+    fn unterminated_string(&self) -> AelysError {
+        AelysError::Compile(CompileError::new(
+            CompileErrorKind::UnterminatedString,
+            Span::new(self.start, self.start + 1, self.start_line, self.start_column),
+            Arc::clone(&self.source),
+        ))
+    }
+
+    pub(super) fn escape(&mut self, unicode: bool) -> Result<char> {
+        let open = self.current;
+        let (line, column) = (self.line, self.column);
+        self.advance();
+        let c = self.advance();
+        let bad = |lexer: &Self, message: String| {
+            AelysError::Compile(lexer.rule(
+                5,
+                message,
+                Span::new(open, lexer.current, line, column),
             ))
         };
-        let mut expr = String::new();
-        let mut brace_depth = 1;
-
-        while !self.is_at_end() {
-            let c = self.peek();
-            match c {
-                '{' => {
-                    brace_depth += 1;
-                    expr.push(self.advance());
-                }
-                '}' => {
-                    brace_depth -= 1;
-                    if brace_depth == 0 {
-                        self.advance();
-                        return Ok(expr);
-                    }
-                    expr.push(self.advance());
-                }
-                '"' => {
-                    expr.push(self.advance());
-                    while !self.is_at_end() && self.peek() != '"' {
-                        if self.peek() == '\\' {
-                            expr.push(self.advance());
-                            if !self.is_at_end() {
-                                expr.push(self.advance());
-                            }
-                        } else {
-                            if self.peek() == '\n' {
-                                self.line += 1;
-                                self.column = 1;
-                            }
-                            expr.push(self.advance());
-                        }
-                    }
-                    if self.is_at_end() {
-                        return Err(unterminated(self));
-                    }
-                    expr.push(self.advance());
-                }
-                // a char literal can hold a brace or a quote, and the depth count must not see it
-                '\'' => {
-                    expr.push(self.advance());
-                    while !self.is_at_end() && self.peek() != '\'' && self.peek() != '\n' {
-                        if self.peek() == '\\' {
-                            expr.push(self.advance());
-                            if !self.is_at_end() {
-                                expr.push(self.advance());
-                            }
-                        } else {
-                            expr.push(self.advance());
-                        }
-                    }
-                    if self.is_at_end() || self.peek() == '\n' {
-                        return Err(AelysError::Compile(
-                            self.error(CompileErrorKind::UnterminatedCharLiteral),
+        Ok(match c {
+            'n' => '\n',
+            't' => '\t',
+            'r' => '\r',
+            '\\' => '\\',
+            '"' => '"',
+            '\'' => '\'',
+            '0' => '\0',
+            'x' => {
+                let hex: String = [self.advance(), self.advance()].iter().collect();
+                match u8::from_str_radix(&hex, 16) {
+                    Ok(v) if v <= 0x7f || !unicode => v as char,
+                    Ok(_) => {
+                        return Err(bad(
+                            self,
+                            format!("`\\x{hex}` is out of range; a `\\x` escape is at most `\\x7F`, write `\\u{{{hex}}}`"),
                         ));
                     }
-                    expr.push(self.advance());
-                }
-                '\n' => {
-                    self.line += 1;
-                    self.column = 1;
-                    expr.push(self.advance());
-                }
-                _ => {
-                    expr.push(self.advance());
+                    Err(_) => return Err(bad(self, format!("invalid escape `\\x{hex}`; write two hex digits"))),
                 }
             }
-        }
-
-        Err(unterminated(self))
+            'u' if unicode => {
+                if !self.match_char('{') {
+                    return Err(bad(self, "invalid unicode escape; write `\\u{e9}`".to_string()));
+                }
+                let from = self.current;
+                while self.peek().is_ascii_hexdigit() || self.peek() == '_' {
+                    self.advance();
+                }
+                let digits: String = self.text(from).chars().filter(|&c| c != '_').collect();
+                if !self.match_char('}') || digits.is_empty() || digits.len() > 6 {
+                    return Err(bad(self, "invalid unicode escape; write one to six hex digits: `\\u{e9}`".to_string()));
+                }
+                match u32::from_str_radix(&digits, 16).ok().and_then(char::from_u32) {
+                    Some(ch) => ch,
+                    None => return Err(bad(self, format!("`\\u{{{digits}}}` is not a unicode scalar value"))),
+                }
+            }
+            other => {
+                return Err(AelysError::Compile(CompileError::new(
+                    CompileErrorKind::InvalidEscape(other),
+                    Span::new(open, self.current, line, column),
+                    Arc::clone(&self.source),
+                )));
+            }
+        })
     }
 }

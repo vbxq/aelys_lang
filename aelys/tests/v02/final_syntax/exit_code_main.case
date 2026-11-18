@@ -1,0 +1,5 @@
+fn main() -> ExitCode {
+    println!("bye");
+    let code: i64 = 300;
+    ExitCode::from(code as u8)
+}

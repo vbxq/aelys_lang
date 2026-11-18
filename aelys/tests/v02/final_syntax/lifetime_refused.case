@@ -1,0 +1,7 @@
+fn first(s: &'static str) -> i64 {
+    s.len()
+}
+
+fn main() {
+    println!("{}", first("ab"));
+}

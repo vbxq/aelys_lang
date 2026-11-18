@@ -1,0 +1,22 @@
+fn half(n: i64) -> Result<i64, i64> {
+    if n % 2 != 0 {
+        return Err(n);
+    }
+    Ok(n / 2)
+}
+
+fn quarter(n: i64) -> Result<i64, i64> {
+    let h = half(n)?;
+    half(h)
+}
+
+fn main() {
+    match quarter(12) {
+        Ok(v) => println!("ok {}", v),
+        Err(e) => println!("err {}", e),
+    }
+    match quarter(6) {
+        Ok(v) => println!("ok {}", v),
+        Err(e) => println!("err {}", e),
+    }
+}

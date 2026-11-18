@@ -558,29 +558,6 @@ fn the_library_module_and_the_already_rejected_fixture_are_the_two_that_spell_ex
     );
 }
 
-#[test]
-fn the_unsafe_token_is_read_at_four_sites_in_the_parser() {
-    let root = repo_root().join("frontend/src/parser");
-    let mut sites = 0usize;
-    let mut stack = vec![root];
-    while let Some(dir) = stack.pop() {
-        for entry in fs::read_dir(&dir).expect("read parser directory").flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                stack.push(path);
-            } else if path.extension().is_some_and(|e| e == "rs") {
-                let text = fs::read_to_string(&path).expect("read parser source");
-                sites += text.matches("TokenKind::Unsafe").count();
-            }
-        }
-    }
-    assert_eq!(
-        sites, 4,
-        "`unsafe` is read by `starts_expression`, by `primary`, by the foreign lookahead and by \
-         the item resynchronisation"
-    );
-}
-
 fn typed(id: &str, source: &str) -> aelys_sema::TypedProgram {
     match aelys_driver::compile_to_typed_ast(source) {
         Ok(program) => program,

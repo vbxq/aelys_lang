@@ -1,0 +1,10 @@
+fn outer(x: i64) -> i64 {
+    fn inner(y: i64) -> i64 {
+        y * 3
+    }
+    inner(x) + 1
+}
+
+fn main() {
+    println!("{}", outer(4));
+}

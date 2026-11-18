@@ -1,0 +1,12 @@
+fn main() {
+    let a = 0xff;
+    let b = 1_000_000;
+    let c = 0b1010;
+    let d = 0o17;
+    let e = b'A';
+    let f = 200u8;
+    let g = 1.5f64;
+    let h = '\u{e9}';
+    let i = '\x41';
+    println!("{} {} {} {} {} {} {} {} {}", a, b, c, d, e, f, g, h, i);
+}

@@ -5,17 +5,24 @@ use crate::Span;
 pub struct Stmt {
     pub kind: StmtKind,
     pub span: Span,
+    pub attrs: Vec<Decorator>,
 }
 
 impl Stmt {
     pub fn new(kind: StmtKind, span: Span) -> Self {
-        Self { kind, span }
+        Self {
+            kind,
+            span,
+            attrs: Vec::new(),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum StmtKind {
     Expression(Expr),
+
+    Semi(Expr),
 
     Discard(Expr),
 
@@ -299,5 +306,16 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct Decorator {
     pub name: String,
+    pub args: Vec<AttrArg>,
     pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum AttrArg {
+    Word(String),
+    Str(String),
+    Int(i64),
+    Assign(String, Box<AttrArg>),
+    Call(String, Vec<AttrArg>),
+    List(Vec<AttrArg>),
 }

@@ -1,0 +1,18 @@
+#[derive(Clone, Copy)]
+struct P {
+    x: i64,
+}
+
+#[test]
+fn unused_test() {
+    assert!(true);
+}
+
+#[inline(always)]
+fn get(p: P) -> i64 {
+    p.x
+}
+
+fn main() {
+    println!("{}", get(P { x: 9 }));
+}

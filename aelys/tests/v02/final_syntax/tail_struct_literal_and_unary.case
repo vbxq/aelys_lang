@@ -1,0 +1,10 @@
+struct Point { x: i64, y: i64 }
+
+fn mirror(p: Point) -> Point {
+    Point { x: -p.x, y: p.y }
+}
+
+fn main() {
+    let q = mirror(Point { x: 3, y: 4 });
+    println!("{} {}", q.x, q.y);
+}

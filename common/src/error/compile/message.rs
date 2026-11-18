@@ -138,7 +138,7 @@ impl CompileErrorKind {
                 )
             }
             Self::NeedsOutsidePrologue => {
-                "a `needs` declaration may only appear before any other top-level declaration"
+                "a `use` declaration may only appear before any other top-level declaration"
                     .to_string()
             }
             Self::WildcardImport { module_path } => {

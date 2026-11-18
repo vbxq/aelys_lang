@@ -1,0 +1,7 @@
+fn main() {
+    let c = true;
+    let x = 2;
+    let z = if c { 1 } else { 2 } + 10;
+    let y = match x { 2 => 20, _ => 0 } + 1;
+    println!("{} {}", z, y);
+}

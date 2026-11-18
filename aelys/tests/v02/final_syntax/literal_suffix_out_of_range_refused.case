@@ -1,0 +1,4 @@
+fn main() {
+    let x = 256u8;
+    println!("{}", x);
+}

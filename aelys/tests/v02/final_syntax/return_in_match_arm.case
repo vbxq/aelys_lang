@@ -1,0 +1,11 @@
+fn half(n: i64) -> i64 {
+    let h = match n % 2 {
+        0 => n / 2,
+        _ => return -1,
+    };
+    h * 10
+}
+
+fn main() {
+    println!("{} {}", half(8), half(7));
+}

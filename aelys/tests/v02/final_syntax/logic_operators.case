@@ -1,0 +1,14 @@
+fn main() {
+    let a = true;
+    let b = false;
+    let n = 5;
+    if a && !b || b {
+        println!("first");
+    }
+    if !(n > 3 && n < 10) {
+        println!("out");
+    } else {
+        println!("in range");
+    }
+    println!("{}", !a || b);
+}

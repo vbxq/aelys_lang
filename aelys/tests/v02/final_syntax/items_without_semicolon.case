@@ -1,0 +1,34 @@
+struct Point { x: i64, y: i64 }
+
+enum Shape {
+    Dot,
+    Line(i64),
+}
+
+trait Area {
+    fn area(&self) -> i64;
+    fn doubled(&self) -> i64 {
+        self.area() * 2
+    }
+}
+
+impl Area for Point {
+    fn area(&self) -> i64 {
+        self.x * self.y
+    }
+}
+
+const SCALE: i64 = 3;
+static OFFSET: i64 = 2;
+type Pair = (i64, i64);
+
+fn main() {
+    let p = Point { x: 4, y: 5 };
+    let s = Shape::Line(7);
+    let pair: Pair = (p.doubled(), SCALE * OFFSET);
+    let n = match s {
+        Shape::Dot => 0,
+        Shape::Line(k) => k,
+    };
+    println!("{} {} {}", pair.0, pair.1, n);
+}

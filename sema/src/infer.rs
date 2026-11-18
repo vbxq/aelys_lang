@@ -83,6 +83,7 @@ pub struct TypeInference {
     reported_sites: HashSet<projection::SiteKey>,
     deferred_results: HashSet<crate::types::TypeVarId>,
     deferred_carriers: Vec<projection::CarrierCheck>,
+    discarded_values: Vec<(aelys_syntax::Span, crate::types::InferType)>,
     deferred_mutability: Vec<(InferType, TypeError)>,
     consts: HashMap<String, crate::typed_ast::ConstLit>,
     alias_names: HashSet<String>,

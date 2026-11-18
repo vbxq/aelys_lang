@@ -292,15 +292,17 @@ impl TypeInference {
                 operand.ty.clone()
             }
             UnaryOp::Not => {
-                self.constraints.push(Constraint::equal(
+                let mut allowed = InferType::all_integer_types();
+                allowed.push(InferType::Bool);
+                self.constraints.push(Constraint::one_of(
                     operand.ty.clone(),
-                    InferType::Bool,
+                    allowed,
                     span,
                     ConstraintReason::BinaryOp {
                         op: "!".to_string(),
                     },
                 ));
-                InferType::Bool
+                operand.ty.clone()
             }
             UnaryOp::BitNot => {
                 self.constraints.push(Constraint::one_of(

@@ -1,0 +1,3 @@
+refuse E0411
+let _ =
+!discard

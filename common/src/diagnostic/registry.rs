@@ -16,7 +16,7 @@ static REGISTRY: &[DiagnosticInfo] = &[
         explanation: "\
 A `\"` opens a string but it's never closed.
 
-    let s = \"hello\"     // ok
+    let s = \"hello\";    // ok
     let s = \"hello       // E0001, no closing quote",
         severity: Severity::Error,
     },
@@ -57,19 +57,21 @@ Unknown escape in a string literal. The recognized sequences are:
         code: "E0006",
         title: "unterminated format expression",
         explanation: "\
-A `{` inside a format string starts an interpolation, but the matching
-`}` is missing.
+A `{` inside the format string of `format!` or `println!` starts a
+placeholder, but the matching `}` is missing. An ordinary string literal
+is never interpolated.
 
-    let msg = f\"hello {name\"   // E0006, missing `}`
-    let msg = f\"hello {name}\"  // ok",
+    println!(\"hello {name\");    // E0006, missing `}`
+    println!(\"hello {name}\");   // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
         code: "E0007",
         title: "unmatched close brace in string",
         explanation: "\
-A lone `}` appeared in a string without an opening `{`.
-To write a literal `}`, double it: `}}`.",
+A lone `}` appeared in the format string of `format!` or `println!`
+without an opening `{`. To write a literal brace in a format string,
+double it: `{{` or `}}`.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -78,7 +80,7 @@ To write a literal `}`, double it: `}}`.",
         explanation: "\
 A `'` opens a character literal but no closing `'` follows on the same line.
 
-    let c = 'a'      // ok
+    let c = 'a';     // ok
     let c = 'a       // E0009",
         severity: Severity::Error,
     },
@@ -89,9 +91,9 @@ A `'` opens a character literal but no closing `'` follows on the same line.
 A character literal holds exactly one unicode scalar value. Zero is empty
 and two or more is a string:
 
-    let c = 'e'      // ok
-    let c = ''       // E0010, nothing between the quotes
-    let c = 'ab'     // E0010, use \"ab\" instead
+    let c = 'e';     // ok
+    let c = '';      // E0010, nothing between the quotes
+    let c = 'ab';    // E0010, use \"ab\" instead
 
 A user perceived character can be several scalar values, and those are a
 string, not a `char`.",
@@ -105,7 +107,7 @@ The compiler was handed a path it could not read: the file does not exist,
 it is a directory, or the permissions refuse it. The message carries the
 operating system's own words, and the help names the path as it was given.
 
-This is about reading a file, never about resolving a module. A `needs`
+This is about reading a file, never about resolving a module. A `use`
 that does not resolve is E0601, and it lists the paths that were searched:
 a module is looked up, while the file on the command line is given.",
         severity: Severity::Error,
@@ -115,7 +117,7 @@ a module is looked up, while the file on the command line is given.",
         title: "unexpected token",
         explanation: "\
 The parser found a token that doesn't belong here. Common causes:
-a missing comma, an extra parenthesis, or a forgotten newline between
+a missing comma, an extra parenthesis, or a forgotten `;` between
 two statements.",
         severity: Severity::Error,
     },
@@ -142,9 +144,9 @@ token appeared instead.",
 The left-hand side of `=` must be something assignable: a variable, a
 struct field (`p.x`), or an indexed element (`arr[i]`).
 
-    1 + 2 = 3          // E0104
-    x = 3              // ok
-    point.x = 3        // ok",
+    1 + 2 = 3;         // E0104
+    x = 3;             // ok
+    point.x = 3;       // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -163,20 +165,19 @@ into intermediate variables.",
 A type parameter was given a bound that names no trait in scope. A bound
 is `nogc`, a builtin trait or a trait declared or imported by the module:
 
-    nogc     a value the managed heap never owns, derived from the type
-    eq       `==`: the integers, the floats, `bool`, `char`, `string`,
-             or a type with `impl eq`
-    ord      `<`: the integers, the floats, `char`, `string` (by its
-             bytes), or a type with `impl ord`
-    Display  printing: the integers, the floats, `bool`, `char`,
-             `string`, or a type with `impl Display`
+    nogc       a value the managed heap never owns, derived from the type
+    PartialEq  `==`: the integers, the floats, `bool`, `char`, `String`,
+               or a type with `impl PartialEq`
+    Ord        `<`: the integers, the floats, `char`, `String` (by its
+               bytes), or a type with `impl Ord`
+    Display    printing: the integers, the floats, `bool`, `char`,
+               `String`, or a type with `impl Display`
 
 Combine them with `+` or in a `where` clause:
 
-    fn sort<T: nogc + ord>(s: &mut [T]) { ... }
+    fn sort<T: nogc + Ord>(s: &mut [T]) { ... }
 
-`eq` and `ord` are read as ordinary names here, not keywords, so a
-function or variable may still be called `eq` or `ord` anywhere else.",
+`PartialEq` and `Ord` are trait names, not keywords.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -185,9 +186,9 @@ function or variable may still be called `eq` or `ord` anywhere else.",
         explanation: "\
 This name hasn't been declared with `let` in any reachable scope.
 
-    println(x)    // E0201 if `x` was never defined
-    let x = 42
-    println(x)    // ok",
+    println!(\"{}\", x);    // E0201 if `x` was never defined
+    let x = 42;
+    println!(\"{}\", x);    // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -206,20 +207,20 @@ or assign to the existing variable if it's `mut`.",
 Functions, globals, structs and enums share a single top-level namespace
 within one file. A name may be bound in it once.
 
-    pub let g: i64 = 1
-    pub let g: i64 = 2      // E0204, `g` is already defined
+    pub static g: i64 = 1;
+    pub static g: i64 = 2;  // E0204, `g` is already defined
 
-    fn P() -> i64 { return 1 }
+    fn P() -> i64 { 1 }
     struct P { x: i64 }     // E0204, same name, different form
 
 All four binding forms are checked against each other, so a struct and a
 global, or a function and an enum, collide as readily as two functions.
-`unsafe extern fn` is a function and is checked with them. An `unsafe
-extern` declaration that names a symbol the program also defines is this
-error, not E0613.
+A function declared in an `extern \"C\"` block is a function and is checked
+with them. An `extern` declaration that names a symbol the program also
+defines is this error, not E0613.
 
 One pattern that binds the same name twice is the same error, in a `let`
-as in a match arm: `let (a, a) = t`, `Pair::Two(x, x)`, `Point { x, y: x }`.
+as in a match arm: `let (a, a) = t;`, `Pair::Two(x, x)`, `Point { x, y: x }`.
 
 The check runs before type inference, so the second definition is never
 checked against the first one's shape: E0204 is the whole answer and no
@@ -230,7 +231,7 @@ which one won was not stable: a duplicated global was read as the second
 initializer at -O0 and constant-folded to the first at -O2, so a write
 through the mutable definition could be executed and never observed.
 
-`needs` bindings share the namespace too, but an import that collides
+`use` bindings share the namespace too, but an import that collides
 with a definition is reported as E0603, which can suggest `as`.
 
 E0427 is the later, narrower check: it names two definitions that reach a
@@ -248,10 +249,10 @@ Rename one of the definitions.",
 `Some`, `None`, `Ok` and `Err` are written without their enum: they name the
 variants of the `Option` and `Result` in scope. No value may take one of
 these four names, wherever it is bound: a function, an external
-declaration, a global, a `let`, a parameter, a `for` variable, a pattern or
-`catch` binding, an imported symbol or a namespace alias.
+declaration, a global, a `let`, a parameter, a `for` variable, a pattern
+binding, an imported symbol or a namespace alias.
 
-    let None: i64 = 3          // E0205
+    let None: i64 = 3;         // E0205
     fn Some(x: i64) -> i64     // E0205
 
 Pick another name. A struct field, a struct named `Some` and a qualified
@@ -289,9 +290,9 @@ itself, and there is nothing to compare.",
 The function was called with more or fewer arguments than its signature
 declares.
 
-    fn add(a: i64, b: i64) -> i64 { return a + b }
-    add(1)          // E0302, expected 2 args, got 1
-    add(1, 2, 3)    // E0302, expected 2 args, got 3",
+    fn add(a: i64, b: i64) -> i64 { a + b }
+    add(1);         // E0302, expected 2 args, got 1
+    add(1, 2, 3);   // E0302, expected 2 args, got 3",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -300,8 +301,8 @@ declares.
         explanation: "\
 The `()` call syntax was used on something that isn't a function.
 
-    let x = 42
-    x()    // E0303, `i64` is not callable",
+    let x = 42;
+    x();   // E0303, `i64` is not callable",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -309,15 +310,15 @@ The `()` call syntax was used on something that isn't a function.
         title: "invalid member access",
         explanation: "\
 Field access (`.field`) was used on a type that either doesn't support
-it or doesn't have a field with that name. Struct fields, string `.len`,
-and vec `.len` are the valid member accesses.
+it or doesn't have a field with that name. Struct fields are the valid
+field accesses; the length of a string or a vec is the method `.len()`.
 
 The same code reports \"type annotations needed\": a binding, parameter or
 expression whose type nothing in the program ever fixes, or a generic
 type written with the wrong number of type arguments.
 
-    let x = Rc::null()          // E0304, Rc of what?
-    let x: Rc<Node> = Rc::null() // ok",
+    let x = Rc::null();          // E0304, Rc of what?
+    let x: Rc<Node> = Rc::null(); // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -391,14 +392,14 @@ grow a string through a reference:
         title: "a const initializer is not a constant expression",
         explanation: "\
 A `const` is computed by the compiler. Its initializer may use literals,
-other consts, arithmetic, comparisons, `and`, `or`, `not` and `as` between
+other consts, arithmetic, comparisons, `&&`, `||`, `!` and `as` between
 scalars. A call, a variable, a cycle between consts, an overflow at the
 declared width or a division by zero is refused.
 
-    const N: i64 = 4 * 8           // ok
-    const M: i64 = f()             // E0370, not a constant expression
-    const A: i64 = A + 1           // E0370, refers to itself
-    const B: u8 = 200 + 100        // E0370, overflows `u8`",
+    const N: i64 = 4 * 8;          // ok
+    const M: i64 = f();            // E0370, not a constant expression
+    const A: i64 = A + 1;          // E0370, refers to itself
+    const B: u8 = 200 + 100;       // E0370, overflows `u8`",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -464,10 +465,10 @@ at the top level of a module:
         title: "`impl` for a type this module does not declare",
         explanation: "\
 Methods live in the module that declares the type. A type imported from
-another module, a builtin (`Vec`, `Rc`, `string`, the numbers) or a prelude
+another module, a builtin (`Vec`, `Rc`, `String`, the numbers) or a prelude
 type (`Option`, `Result`) cannot receive an `impl` block here:
 
-    needs Pt from geom
+    use geom::Pt;
     impl Pt { ... }              // E0341, write it in `geom`",
         severity: Severity::Error,
     },
@@ -492,9 +493,9 @@ A placeholder `{x:spec}` pads or rounds the value it prints. The spec is
 counts characters, `0` pads a number with zeros after its sign, and the
 precision applies to `f32` and `f64` only:
 
-    println(\"{n:>8}\")      // ok, right aligned in 8 characters
-    println(\"{x:.2}\")      // ok when `x` is a float
-    println(\"{s:05}\")      // E0391 when `s` is a string",
+    println!(\"{n:>8}\");    // ok, right aligned in 8 characters
+    println!(\"{x:.2}\");    // ok when `x` is a float
+    println!(\"{s:05}\");    // E0391 when `s` is a string",
         severity: Severity::Error,
     },
     // mutability (e04xx)
@@ -505,13 +506,13 @@ precision applies to `f32` and `f64` only:
 Variables are immutable by default. Writing to one without `mut`
 is an error:
 
-    let x = 5
-    x = 10        // E0401
+    let x = 5;
+    x = 10;       // E0401
 
 Add `mut` to the binding to allow reassignment:
 
-    let mut x = 5
-    x = 10        // ok",
+    let mut x = 5;
+    x = 10;       // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -522,7 +523,7 @@ The iteration variable of a `for` loop is controlled by the loop itself
 and can't be overwritten inside the body.
 
     for i in 0..10 {
-        i = 99    // E0402
+        i = 99;   // E0402
     }",
         severity: Severity::Error,
     },
@@ -543,16 +544,16 @@ An indirect initializer. The right-hand side has to be `Rc::new(..)`,
 `Rc::null()`, another Rc binding, a read of an Rc field, a call, a block or
 a match:
 
-    let r = if c { a } else { b }   // E0410
-    let r = a                       // ok
+    let r = if c { a } else { b };  // E0410
+    let r = a;                      // ok
 
 An `Rc` embedded in a value that is copied as bytes, which loses the
 inner count: an array, a `Vec`, a tuple, a struct field of one of those,
 or the payload of a generic enum the `Rc` is put into straight.
 
-    let xs = [r, r]             // E0410
-    Rc::get(Rc::get(rr))        // E0410, a nested Rc payload
-    One::It(Rc::new(1))         // E0410 for `enum One<T> { It(T) }`
+    let xs = [r, r];            // E0410
+    Rc::get(Rc::get(rr));       // E0410, a nested Rc payload
+    One::It(Rc::new(1));        // E0410 for `enum One<T> { It(T) }`
 
 An enum with more than one variant whose payload holds an `Rc`, directly
 or through a struct or another enum. It is refused where it is declared,
@@ -568,15 +569,15 @@ fresh value: the read needs a retain and the fresh value does not. A fresh
 literal, a call, a read of an existing binding or field, or a conditional
 whose branches are both one or both the other is accepted:
 
-    let w = W{ r: if c { a } else { Rc::new(1) } }   // E0410
-    let w = W{ r: mkrc() }                  // ok, a call hands over its count
-    let w = W{ r: if c { a } else { b } }   // ok, both branches read
+    let w = W{ r: if c { a } else { Rc::new(1) } };  // E0410
+    let w = W{ r: mkrc() };                 // ok, a call hands over its count
+    let w = W{ r: if c { a } else { b } };  // ok, both branches read
 
 An `Rc` read out of a reference with `*`, which would copy the handle
 without its count:
 
-    fn rd(x: &Rc<N>) -> Rc<N> { return *x }   // E0410
-    fn rd(x: Rc<N>) -> Rc<N> { return x }     // ok
+    fn rd(x: &Rc<N>) -> Rc<N> { *x }   // E0410
+    fn rd(x: Rc<N>) -> Rc<N> { x }     // ok
 
 Keep the `Rc` in a direct local and read through it where you need it.",
         severity: Severity::Error,
@@ -589,19 +590,18 @@ A call whose type is `Result<T, E>` was used as a statement, so the error
 half would be dropped where it is produced and the program would carry on
 as if the call had succeeded.
 
-    fn main() -> i64 {
-        risky(5)                // E0411
-        return 0
+    fn main() {
+        risky(5);               // E0411
     }
 
 Four ways to consume it, and each says something different about intent:
 
-    let n = risky(5)?           // propagate to the caller
-    match risky(5) { .. }       // handle it here, `catch` also works
-    let n = risky(5).expect(\"…\")  // assert it cannot fail, abort if it does
-    discard risky(5)            // ignore it on purpose
+    let n = risky(5)?;          // propagate to the caller
+    match risky(5) { .. }       // handle it here
+    let n = risky(5).expect(\"…\"); // assert it cannot fail, abort if it does
+    let _ = risky(5);           // ignore it on purpose
 
-`discard` is the one that keeps the old behaviour, and it is spelled out
+`let _ =` is the one that keeps the old behaviour, and it is spelled out
 so the choice is visible in the source rather than implied by silence.",
         severity: Severity::Error,
     },
@@ -615,11 +615,11 @@ silently miscompiled.
 
 Form: in a Vec-producing position (a `let` initializer, an assignment
 right-hand side, a `*p = e` value, a `return` operand) the expression must
-be `Vec::new()`, a `vec[...]` literal, a bare identifier, or a call:
+be `Vec::new()`, a `vec![...]` literal, a bare identifier, or a call:
 
-    let w = (v)                 // E0412
-    let w = if c { v } else { v }   // E0412
-    let w = v                   // ok
+    let w = (v);                // E0412
+    let w = if c { v } else { v };  // E0412
+    let w = v;                  // ok
 
 Shape: a COW byte copy that carries a `Vec` inside another value has no
 transitive retain/release for the inner buffer. With the guard disabled,
@@ -627,9 +627,9 @@ the nested reallocation witness returned 7 under immix but 32 under malloc.
 The same surface also conservatively refuses a `Vec` held by an aggregate or
 generic value:
 
-    Vec::push(vv, inner)        // E0412, `inner` is a Vec
-    let a = [inner, inner]      // E0412
-    keep(v)                     // E0412 for `fn keep<T>(x: T)`
+    Vec::push(vv, inner);       // E0412, `inner` is a Vec
+    let a = [inner, inner];     // E0412
+    keep(v);                    // E0412 for `fn keep<T>(x: T)`
 
 An indirect producer such as parentheses, a conditional, or a block is
 also rejected when ownership transfer cannot be proven from its shape; the
@@ -645,16 +645,16 @@ pass it through a direct call whose ownership is known.",
 not for a `Vec<T>`, so iterating a `Vec` is rejected instead of failing
 later with a link error.
 
-    let v = vec[10, 20, 30]
+    let v = vec![10, 20, 30];
     for x in v { }         // E0414
 
 Iterate an array or a string, or index the `Vec` by hand with a counting
 loop over its length:
 
-    let a = [10, 20, 30]
+    let a = [10, 20, 30];
     for x in a { }         // ok, arrays are iterable
     for i in 0..3 {        // ok, index the Vec element by element
-        let x = v[i]
+        let x = v[i];
     }
 
 There is no Vec foreach lowering arm. Disabling this check reaches the
@@ -672,12 +672,12 @@ projection. The refusal matches the shape of the operand and reads no type
 at all, so it fires on every base alike -- on a plain array element and on a
 plain struct field exactly as it fires on a managed container:
 
-    let mut a: [i64; 3] = [1, 2, 3]
-    let r = &mut a[0]      // E0415, and no managed storage is involved
+    let mut a: [i64; 3] = [1, 2, 3];
+    let r = &mut a[0];     // E0415, and no managed storage is involved
 
     struct D { n: i64 }
-    let mut d: D = D{n: 1}
-    let r = &mut d.n       // E0415, likewise
+    let mut d: D = D{n: 1};
+    let r = &mut d.n;      // E0415, likewise
 
 What the fence stands in for is therefore not one obligation. Lifting it for
 a projection into a managed container owes a uniqueness proof for that
@@ -688,10 +688,10 @@ An immutable `&v[i]` stays valid (a read through it is sound), and so does
 `&mut` of a whole binding. Write the place directly, or reference the
 binding:
 
-    let x = v[0]           // ok, read the element
-    let r = &v[0]          // ok, immutable element reference
-    v[0] = 9               // ok, write the element directly
-    let r = &mut v         // ok, reference the whole binding
+    let x = v[0];          // ok, read the element
+    let r = &v[0];         // ok, immutable element reference
+    v[0] = 9;              // ok, write the element directly
+    let r = &mut v;        // ok, reference the whole binding
 
 The same fence also covers an indexed global projection, which the
 whole-global check cannot name.",
@@ -706,21 +706,21 @@ and may be copied; a `&mut` grants exclusive write access and may not.
 Binding a shared borrow to a `&mut` position would hand out write
 access nobody checked, breaking `mut XOR shared`.
 
-    let mut x: i64 = 7919
-    let p: &mut i64 = &x       // E0416
-    let q: &mut i64 = &mut x   // ok
+    let mut x: i64 = 7919;
+    let p: &mut i64 = &x;      // E0416
+    let q: &mut i64 = &mut x;  // ok
 
 The same refusal applies wherever a value flows into a required type:
 a call argument, a return, an assignment, a field, an array element.
 
-    fn poke(r: &mut i64) { *r = 101 }
-    poke(&x)                   // E0416
-    poke(&mut x)               // ok
+    fn poke(r: &mut i64) { *r = 101; }
+    poke(&x);                  // E0416
+    poke(&mut x);              // ok
 
 The other direction is a safe weakening and stays accepted, because
 dropping write access can never create aliasing:
 
-    let r: &i64 = &mut x       // ok",
+    let r: &i64 = &mut x;      // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -731,14 +731,14 @@ dropping write access can never create aliasing:
 reference to an immutable place. Writing through it mutates a binding the
 program declared it would not change, which is unsound, so it is rejected.
 
-    let x = 1
-    let a = &mut x         // E0417
-    *a = 2                 // would mutate an immutable binding
+    let x = 1;
+    let a = &mut x;        // E0417
+    *a = 2;                // would mutate an immutable binding
 
 Declare the binding mutable, or take an immutable reference:
 
-    let mut x = 1          // ok, then `&mut x` is valid
-    let a = &x             // ok, immutable reference of an immutable binding",
+    let mut x = 1;         // ok, then `&mut x` is valid
+    let a = &x;            // ok, immutable reference of an immutable binding",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -750,17 +750,17 @@ the shared function namespace with an ambiguous dispatch binding. The
 generic collision witness returned 10 while its unique-name twin returned 9
 when this fence was disabled, so the collision is rejected.
 
-    fn pick(a: i64, b: i64) -> i64 { return a }
+    fn pick(a: i64, b: i64) -> i64 { a }
     fn other() -> i64 {
-        fn pick(a: i64, b: i64) -> i64 { return b }   // E0418
-        return pick(1, 2)
+        fn pick(a: i64, b: i64) -> i64 { b }   // E0418
+        pick(1, 2)
     }
 
 Rename the nested function so its name is unique:
 
     fn other() -> i64 {
-        fn choose(a: i64, b: i64) -> i64 { return b } // ok
-        return choose(1, 2)
+        fn choose(a: i64, b: i64) -> i64 { b } // ok
+        choose(1, 2)
     }",
         severity: Severity::Error,
     },
@@ -794,16 +794,16 @@ the direct producer forms. With this fence disabled, the indirect witness
 returned the right value but reported `allocs=2 frees=1`, so the ownership
 accounting is unbalanced.
 
-    node.next = if c { a } else { b }   // E0420
-    node.next = (a)                     // E0420
+    node.next = if c { a } else { b };  // E0420
+    node.next = (a);                    // E0420
 
 Use a direct producer: `Rc::new(...)`, `Rc::null()`, a bare identifier,
 an `Rc`-field read, or a call. Bind an indirect value to a name first:
 
-    node.next = a                       // ok, bare identifier
-    node.next = Rc::new(x)              // ok, fresh producer
-    let picked = if c { a } else { b }  // bind first
-    node.next = picked                  // ok",
+    node.next = a;                      // ok, bare identifier
+    node.next = Rc::new(x);             // ok, fresh producer
+    let picked = if c { a } else { b }; // bind first
+    node.next = picked;                 // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -812,29 +812,29 @@ an `Rc`-field read, or a call. Bind an indirect value to a name first:
         explanation: "\
 `&`, `&mut`, `Vec::push`'s target, the receiver of a `Vec` view
 (`Vec::as_slice`, `Vec::try_as_unique_mut_slice`), the receiver of
-`.bytes` and the left-hand side of an assignment all need an ADDRESS.
+`.as_bytes()` and the left-hand side of an assignment all need an ADDRESS.
 A call result, an aggregate literal or an arithmetic expression is a
 value, not a place: it lives in a temporary the compiler is free to
 discard, so a write through it would land nowhere and a view into it
 would outlive what it views.
 
-    let r = &make_cell()          // E0421
-    make_cell().f = 101           // E0421
-    Vec::push(make_vec(), 1)      // E0421
-    Vec::as_slice(make_vec())     // E0421
-    make_string().bytes           // E0421
+    let r = &make_cell();         // E0421
+    make_cell().f = 101;          // E0421
+    Vec::push(make_vec(), 1);     // E0421
+    Vec::as_slice(make_vec());    // E0421
+    make_string().as_bytes();     // E0421
 
 A length is a value, not a view, so `Vec::len(make_vec())` is fine.
 
-A string literal is the one receiver `.bytes` accepts without a
+A string literal is the one receiver `.as_bytes()` accepts without a
 binding: its bytes live in static storage for the whole run, so
-`\"hi\".bytes` outlives every view of it.
+`\"hi\".as_bytes()` outlives every view of it.
 
 Bind the value to a name first, then use the binding:
 
-    let mut c = make_cell()
-    c.f = 101                   // ok
-    let r = &mut c              // ok",
+    let mut c = make_cell();
+    c.f = 101;                  // ok
+    let r = &mut c;             // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -845,13 +845,13 @@ A shared `&` grants read access only. Writing through one -- directly,
 or through any projection of it -- would break `mut XOR shared`, the
 rule the whole reference model rests on.
 
-    fn poke(r: &Cell)  { (*r).f = 101 }     // E0422
-    fn poke(r: &i64)   { *r = 101 }         // E0422
-    fn grow(r: &Vec<i64>) { Vec::push((*r), 1) }  // E0422
+    fn poke(r: &Cell)  { (*r).f = 101; }    // E0422
+    fn poke(r: &i64)   { *r = 101; }        // E0422
+    fn grow(r: &Vec<i64>) { Vec::push((*r), 1); } // E0422
 
 Take the reference mutably instead:
 
-    fn poke(r: &mut Cell) { (*r).f = 101 }  // ok",
+    fn poke(r: &mut Cell) { (*r).f = 101; } // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -863,35 +863,35 @@ reference FORMED or RETURNED inside one is never checked: it can outlive
 what it points at with no diagnostic. Until a closure body carries its
 own checked region, forming a reference in one is refused.
 
-    let f = fn () -> i64 { let r = &v[0]  return *r }   // E0423
+    let f = || -> i64 { let r = &v[0]; *r };   // E0423
 
 Form the reference outside the lambda and pass it in; a lambda that
 merely TAKES a reference parameter, or dereferences one formed outside,
 is unaffected:
 
-    let r = &n
-    let f = fn () -> i64 { return *r }          // ok
-    apply(fn (p: &i32) -> i64 { return *p }, &n)  // ok",
+    let r = &n;
+    let f = || -> i64 { *r };                  // ok
+    apply(|p: &i32| -> i64 { *p }, &n);        // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
         code: "E0424",
         title: "reference to module-level storage",
         explanation: "\
-The borrow checker works on function locals. A module-level `let` has no
-local to attach a loan to, so two live `&mut` of the same global would
+The borrow checker works on function locals. A module-level `static` has
+no local to attach a loan to, so two live `&mut` of the same global would
 alias with nothing to notice. Rather than accept a silent aliasing hole,
 a reference to a global is refused.
 
-    let mut g: i64 = 1
-    fn main() -> i64 { let r = &mut g  ... }    // E0424
+    static mut g: i64 = 1;
+    fn main() { let r = &mut g; ... }    // E0424
 
 Copy the global into a local, work on that, and store it back:
 
-    let mut local = g
-    let r = &mut local
-    *r = 101
-    g = local",
+    let mut local = g;
+    let r = &mut local;
+    *r = 101;
+    g = local;",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -904,9 +904,9 @@ length. Two forms have neither yet.
 A NON-ZERO START BOUND would have to move the base pointer as well as
 the length, and the slice lowering addresses element zero:
 
-    let a = [1, 2, 3, 4]
-    let s = a[1..3]        // E0425
-    let s = a[0..3]        // ok
+    let a = [1, 2, 3, 4];
+    let s = a[1..3];       // E0425
+    let s = a[0..3];       // ok
 
 A BASE THAT CARRIES NO LENGTH, a type the checker left open, has no
 header to read the length from.
@@ -924,12 +924,12 @@ declared in. Two declarations that land on one symbol share a single
 emitted body, and every call to either reaches whichever one was emitted.
 
     fn outer() -> i64 {
-        fn dup() -> i64 { return 1 }
-        return dup()
+        fn dup() -> i64 { 1 }
+        dup()
     }
     fn other() -> i64 {
-        fn dup() -> i64 { return 2 }   // E0427, same symbol as the one above
-        return dup()
+        fn dup() -> i64 { 2 }   // E0427, same symbol as the one above
+        dup()
     }
 
 `main` counts here too, because it is emitted as `__aelys_main`.
@@ -941,8 +941,8 @@ land on four distinct symbols:
 
     struct B { v: i64 }
     struct A_B { v: i64 }
-    fn f<T>(x: T) -> i64 { return 1 }     // at T = A_B, `__mono_f$1$A_B`
-    fn f_A<T>(x: T) -> i64 { return 2 }   // at T = B,   `__mono_f_A$1$B`
+    fn f<T>(x: T) -> i64 { 1 }     // at T = A_B, `__mono_f$1$A_B`
+    fn f_A<T>(x: T) -> i64 { 2 }   // at T = B,   `__mono_f_A$1$B`
 
 `enum Q<T>` and `enum Q_ptr<T>` in one file reach `__mono_Q$1$i64` and
 `__mono_Q_ptr$1$i64` the same way. Two generic instances landing on one
@@ -963,8 +963,8 @@ instance of a generic, `__lambda_*` for each lambda and `__closure_env_*`
 for a closure's captured state, and the C runtime exports a further set of
 `__aelys_*` symbols that are linked into every binary.
 
-    fn __aelys_main() -> i64 { return 1 }   // E0428
-    fn __helper(x: i64) -> i64 { return x } // E0428
+    fn __aelys_main() -> i64 { 1 }   // E0428
+    fn __helper(x: i64) -> i64 { x } // E0428
 
 A user function landing on one of those names produces two definitions of
 the same linker symbol, and a call to one reaches the other. The runtime's
@@ -973,7 +973,7 @@ cannot check the names one by one; the whole prefix is reserved instead.
 
 Rename the function. Locals, parameters and struct fields are unaffected:
 
-    let __x = 5                             // ok",
+    let __x = 5;                     // ok",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1004,22 +1004,22 @@ so `--explain` answered one of them with a page about the other.",
 
     fn f(n: i64) -> i64 {
         for x in n { }         // E0431, an `i64` has no elements
-        return 0
+        0
     }
 
     struct D { n: i64 }
     fn g(d: D) -> i64 {
         for x in d { }         // E0431, a struct has no elements
-        return 0
+        0
     }
 
 A slice iterates, so a `&[T]` parameter is walked directly and the loop
 holds a shared borrow of it for the whole loop:
 
     fn total(s: &[i64]) -> i64 {
-        let mut t: i64 = 0
-        for x in s { t = t + x }   // ok
-        return t
+        let mut t: i64 = 0;
+        for x in s { t = t + x; }  // ok
+        t
     }
 
 A `Vec<T>` is refused by E0414 instead, which names the counting-loop
@@ -1060,9 +1060,9 @@ nowhere to return to.",
 An affine value was used after it had been moved out. A move transfers
 ownership, leaving the source unusable.
 
-    let a = Resource{id: 1}
-    let b = a          // `a` is moved into `b`
-    use(a)             // E0701, `a` was moved
+    let a = Resource{id: 1};
+    let b = a;         // `a` is moved into `b`
+    consume(a);        // E0701, `a` was moved
 
 Copy the value instead, or restructure so the value is used before it is
 moved.",
@@ -1075,9 +1075,9 @@ moved.",
 An affine value was moved a second time after it had already been moved.
 Ownership can only be transferred once.
 
-    let a = Resource{id: 1}
-    let b = a          // first move
-    let c = a          // E0702, `a` was already moved",
+    let a = Resource{id: 1};
+    let b = a;         // first move
+    let c = a;         // E0702, `a` was already moved",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1107,10 +1107,10 @@ A value was written to while a borrow of it was still live. Aelys
 enforces mutable-xor-shared: no writes may occur through the owner while
 any borrow is outstanding.
 
-    let mut x = 3
-    let r = &x
-    x = 5              // E0711, `x` is borrowed by `r`
-    return *r          // the borrow is still used here",
+    let mut x = 3;
+    let r = &x;
+    x = 5;             // E0711, `x` is borrowed by `r`
+    return *r;         // the borrow is still used here",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1234,8 +1234,8 @@ callee is provably free of managed effects.",
 A generic function whose type parameter is bound `nogc` (written
 `<T: nogc>`, or implied for every type parameter of a `nogc`-declared
 function) was instantiated with a type that is not a nogc value, or with
-a type the call site cannot pin down. Managed types such as `vec`, `Rc`
-and `string` are rejected, and so is an abstract type parameter, because
+a type the call site cannot pin down. Managed types such as `Vec`, `Rc`
+and `String` are rejected, and so is an abstract type parameter, because
 the bound could not be proven there.",
         severity: Severity::Error,
     },
@@ -1256,19 +1256,20 @@ A type parameter was used in a way its bounds do not allow, or a call
 instantiated a bounded type parameter with a type that does not satisfy
 the bound, or a value is printed whose type does not implement `Display`.
 
-`==` and `!=` on a type parameter need `eq`. `<`, `<=`, `>` and `>=`
-need `ord`, which implies `eq`. Without the bound the function body would
-have no operation to compile.
+`==` and `!=` on a type parameter need `PartialEq`. `<`, `<=`, `>` and
+`>=` need `Ord`, which implies `PartialEq`. Without the bound the function
+body would have no operation to compile.
 
-    fn eq<T: eq>(a: T, b: T) -> bool { return a == b }
-    fn lt<T: ord>(a: T, b: T) -> bool { return a < b }
+    fn eq<T: PartialEq>(a: T, b: T) -> bool { a == b }
+    fn lt<T: Ord>(a: T, b: T) -> bool { a < b }
 
-`eq` holds of the integers, the floats, `bool`, `char`, `string` and a
-tuple whose elements are all `eq`; `ord` holds of the integers, the
-floats, `char` and `string`, which orders by its bytes like `str.compare`.
-`Display` holds of the integers, the floats, `bool`, `char` and `string`.
-A struct or an enum satisfies a trait through its impl (`impl eq for P`,
-`impl ord for P`, `impl Display for P`, or an impl of a user trait).",
+`PartialEq` holds of the integers, the floats, `bool`, `char`, `String`
+and a tuple whose elements are all `PartialEq`; `Ord` holds of the
+integers, the floats, `char` and `String`, which orders by its bytes like
+`str::compare`. `Display` holds of the integers, the floats, `bool`,
+`char` and `String`. A struct or an enum satisfies a trait through its
+impl (`impl PartialEq for P`, `impl Ord for P`, `impl Display for P`, or
+an impl of a user trait).",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1299,9 +1300,9 @@ can grant it:
         title: "incomplete trait impl",
         explanation: "\
 An `impl Trait for T` defines every method of the trait that has no
-default body. `impl ord for T` also needs `impl eq for T`:
+default body. `impl Ord for T` also needs `impl PartialEq for T`:
 
-    trait Shape { fn area(&self) -> i64  fn perimeter(&self) -> i64 }
+    trait Shape { fn area(&self) -> i64; fn perimeter(&self) -> i64; }
     impl Shape for Sq { fn area(&self) -> i64 { ... } }   // E0752",
         severity: Severity::Error,
     },
@@ -1311,7 +1312,7 @@ default body. `impl ord for T` also needs `impl eq for T`:
         explanation: "\
 A type implements a trait at most once, the impls of one trait never
 overlap (a generic impl and a concrete one for the same type do), and a
-builtin type that satisfies `eq`, `ord` or `Display` structurally cannot
+builtin type that satisfies `PartialEq`, `Ord` or `Display` structurally cannot
 implement it again:
 
     impl Display for i64 { ... }           // E0753",
@@ -1340,7 +1341,7 @@ other method in an inherent `impl T` block.",
 Inside a generic function, a value of a type parameter offers only the
 methods of the traits in its bounds:
 
-    fn f<T: Area>(x: &T) -> i64 { return x.name() }   // E0756",
+    fn f<T: Area>(x: &T) -> i64 { x.name() }   // E0756",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1447,8 +1448,8 @@ type parameter bounded by the trait instead.",
         code: "E0601",
         title: "module not found",
         explanation: "\
-A `needs` names a module whose file does not exist. A module path
-`a.b.c` names the file `a/b/c.aelys` under a search root. The roots are
+A `use` names a module whose file does not exist. A module path
+`a::b::c` names the file `a/b/c.aelys` under a search root. The roots are
 the directory of the file named on the command line, first, then every
 `-I <dir>` given on the command line, in the order they were written.
 There is no default root and no environment variable: a module outside
@@ -1478,18 +1479,18 @@ Drop one of the roots, or delete the copy that duplicates the module.",
         title: "module bound under another name",
         explanation: "\
 A name that resolves to nothing is a segment of a module path that this
-file imports under a different binding. `needs std.math as m` introduces
+file imports under a different binding. `use std::math as m;` introduces
 exactly one name, `m`; it does not introduce `std`, and it does not
 introduce `math`.
 
-    needs std.math as m
+    use std::math as m;
 
-    m.abs(-7)           // this is the one that resolves
-    math.abs(-7)        // E0623, the last segment is not a binding
-    std.math.abs(-7)    // E0623, the first segment is not one either
+    m::abs(-7);           // this is the one that resolves
+    math::abs(-7);        // E0623, the last segment is not a binding
+    std::math::abs(-7);   // E0623, the first segment is not one either
 
 The message names the binding that does exist. Write it, or change the
-`needs` to bind the module under the name the code already uses.
+`use` to bind the module under the name the code already uses.
 
 A name that matches no imported module path at all is not this code: it
 is reported as E0201, an undefined variable.",
@@ -1508,7 +1509,7 @@ other through a chain are fine.",
         code: "E0603",
         title: "conflicting import name",
         explanation: "\
-Two `needs` declarations introduce the same name into one module, or an
+Two `use` declarations introduce the same name into one module, or an
 import introduces a name the module already defines. Use `as` to bind
 one of them to another name.",
         severity: Severity::Error,
@@ -1542,21 +1543,21 @@ name. Note that a private item is reported as E0605, not as this code.",
         code: "E0607",
         title: "C header import is not implemented",
         explanation: "\
-`needs \"some/header.h\"` is the foreign form of the import keyword: the
+`use \"some/header.h\";` is the foreign form of the import keyword: the
 target is a string literal rather than a module path. The form is
 reserved and parsed, but nothing reads C headers yet.
 
 The route that does work is to declare by hand what you need:
-`unsafe extern fn NAME(...) -> T`. It carries no header, so the types are
+`extern \"C\" { fn NAME(...) -> T; }`. It carries no header, so the types are
 yours to get right, and the surface it accepts is narrow: integers,
 floats, `bool` and references, and nothing else, as E0615 spells out.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
         code: "E0608",
-        title: "`needs` outside the module prologue",
+        title: "`use` outside the module prologue",
         explanation: "\
-Every `needs` belongs at the top of the file, before any other
+Every `use` belongs at the top of the file, before any other
 top-level declaration, and never inside a function or a block. Imports
 bind for the whole module, so a position further down would suggest a
 scope the language does not have.",
@@ -1566,8 +1567,8 @@ scope the language does not have.",
         code: "E0609",
         title: "wildcard import is not implemented",
         explanation: "\
-`needs a.b.*` would bind every exported name of `a.b` at once. Name
-what you need instead: `needs alpha, beta from a.b`.",
+`use a::b::*;` would bind every exported name of `a::b` at once. Name
+what you need instead: `use a::b::{alpha, beta};`.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1618,16 +1619,16 @@ A body named `malloc`, `free` or `main` therefore captures the runtime's
 own calls, which is a crash or a wrong answer rather than a link error.
 Rename the function.
 
-An `unsafe extern` declaration is held to the narrower half: it claims no
+An `extern` declaration is held to the narrower half: it claims no
 symbol, so it may name `malloc` or any other name the runtime merely
 imports, and only the five the runtime defines itself stay closed to it,
 because calling one of those would reach the runtime's own code.
 
 Within one compilation unit the duplicate check runs first, so a
 declaration that names a symbol the program also defines under that name
-is reported as E0204 and never reaches this check. `unsafe extern fn
-main` in a program that also writes `fn main` is the reachable case: both
-are functions named `main`, and the verdict is E0204.
+is reported as E0204 and never reaches this check. A `fn main` declared in
+an `extern \"C\"` block, in a program that also writes `fn main`, is the
+reachable case: both are functions named `main`, and the verdict is E0204.
 
 A library named by `-l` is not source, so E0613 never sees it. The link
 line puts the user libraries after `-laelys-core-*`, which keeps an
@@ -1645,8 +1646,8 @@ entered the executable statically.",
 An external declaration names a function that lives outside this program,
 so it has a signature and no body, and calling it is unchecked.
 
-The only accepted form is `unsafe extern [nogc] fn NAME(PARAMS) [-> T]`,
-written at the top level, without `pub`, without a decorator and without
+The only accepted form is `extern \"C\" { [nogc] fn NAME(PARAMS) [-> T]; }`,
+written at the top level, without `pub`, without an attribute and without
 a type parameter.",
         severity: Severity::Error,
     },
@@ -1659,11 +1660,11 @@ the return type must have a meaning in C that the compiler can hold to.
 
 The surface is the eight integer widths, `f32`, `f64`, `bool` and `&T`;
 `void` is accepted as a return type and nowhere else. Everything else,
-a string, an `Rc<T>`, a struct, an enum, an array, a `vec`, a slice or a
+a string, an `Rc<T>`, a struct, an enum, an array, a `Vec`, a slice or a
 function type, is an Aelys value whose layout is not promised to C.
 
 The verdict is on the type itself, not on how it is spelled: `sTRING`
-names the same type as `string`.
+names the same type as `String`.
 
 `&T` is admitted as a parameter and refused as a return type. A returned
 `&T` would be a reference the compiler did not prove, safe to dereference
@@ -1698,8 +1699,8 @@ there is no type an external declaration could be held under.",
         title: "an external call requires an `unsafe` block",
         explanation: "\
 An external declaration is a promise about code the compiler cannot see.
-Its `unsafe` is the binding author's claim that the signature matches the
-symbol; it says nothing about any particular call site.
+Its `extern` block is the binding author's claim that the signature matches
+the symbol; it says nothing about any particular call site.
 
 Every call of an external function must therefore be written inside an
 `unsafe { }` block, which is the caller's own claim that the arguments,
@@ -1759,18 +1760,18 @@ type for the other, and the tags of the two enums need not even agree:
     pub enum Result<T, E> { Ok(T), Err(E) }
     pub fn half(n: i64) -> Result<i64, i64> { ... }
 
-    needs res
+    use res;
     enum Result<T, E> { Ok(T), Err(E) }   // a second, unrelated Result
 
     fn run(n: i64) -> Result<i64, i64> {
-        let v: i64 = res.half(n)?         // E0619
-        return Result::Ok(v)
+        let v: i64 = res::half(n)?;       // E0619
+        Result::Ok(v)
     }
 
 Bridging the two without saying so is the wrong-answer class, so it is
 refused rather than guessed. Import the library's carrier and use it on
-both sides (`needs Result from res`, or annotate the return type as
-`res.Result<...>`), or convert explicitly at the boundary.
+both sides (`use res::Result;`, or annotate the return type as
+`res::Result<...>`), or convert explicitly at the boundary.
 
 The same rule holds for `Option`.",
         severity: Severity::Error,
@@ -1779,7 +1780,7 @@ The same rule holds for `Option`.",
         code: "E0620",
         title: "error handling used outside the shape it requires",
         explanation: "\
-This code covers the error-handling surface: `?`, `catch`, and the
+This code covers the error-handling surface: `?` and the
 `Result` methods `.unwrap()`, `.expect()`, `.into_ok()`,
 `.unwrap_unchecked()` and `.map_error()`. Each one is defined on a
 particular shape, and a program that steps outside that shape is refused
@@ -1789,17 +1790,14 @@ here rather than compiled into a guess.
 or an `Option<T>`, and the enclosing function must return the same one:
 
     fn run() -> i64 {
-        let v: i64 = half(4)?     // E0620, the function returns `i64`
-        return v
+        let v: i64 = half(4)?;    // E0620, the function returns `i64`
+        v
     }
 
 `?` on a `Result` inside a function returning `Option<_>` is refused for
 the same reason, and so is the reverse. A `?` between two carriers that
 are both spelled `Result` but declared in two different modules is a
 different case, reported as E0619.
-
-`catch` is a `Result` form. Its scrutinee must be a `Result<T, E>`; any
-other type is refused here.
 
 `.unwrap()`, `.expect(\"...\")`, `.into_ok()` and `.unwrap_unchecked()`
 read the `Ok` payload out of a `Result`, so the enum behind the receiver
@@ -1820,35 +1818,35 @@ one-argument function.",
     },
     DiagnosticInfo {
         code: "E0621",
-        title: "`.len` is a computed value, not storage",
+        title: "`.len()` is a computed value, not storage",
         explanation: "\
-`.len` reads a length off four types: `string`, `&[T]` and `&mut [T]`,
+`.len()` reads a length off four types: `String`, `&[T]` and `&mut [T]`,
 `Vec<T>`, and a sized array `[T; N]`. On each of them the length is
 produced when it is asked for, not held in a field the program can point
 at: a string and a slice carry it in a `{ptr, len}` header the compiler
 unpacks, a `Vec` reads it out of its own header, and an array's length is
 a constant fixed by its type.
 
-So `.len` denotes a value and never a place. Two spellings assume the
+So `.len()` denotes a value and never a place. Two spellings assume the
 opposite and are refused here:
 
-    let n = &s.len      // E0621, there is no address to take
-    s.len = 9           // E0621, the write would change nothing
+    let n = &s.len();   // E0621, there is no address to take
+    s.len() = 9;        // E0621, the write would change nothing
 
-Neither has a meaning the compiler could give it. `&s.len` would need an
-address for a number that lives in no allocation, and `s.len = 9` would
-name a field that does not exist, leaving the value it claims to describe
-untouched.
+Neither has a meaning the compiler could give it. `&s.len()` would need an
+address for a number that lives in no allocation, and `s.len() = 9` would
+write to a length held in no field, leaving the value it claims to
+describe untouched.
 
 Read the length instead, and bind it if you need a place:
 
-    let mut n: i64 = s.len
-    let r = &n
+    let mut n: i64 = s.len();
+    let r = &n;
 
 To change a length, change the value: push or pop a `Vec`, or take a
 different view of the base.
 
-The rule is the same on all four types, so `.len` behaves identically
+The rule is the same on all four types, so `.len()` behaves identically
 whichever one it is written on.",
         severity: Severity::Error,
     },
@@ -1884,14 +1882,14 @@ closed constant expression and the array's length is known, the read or
 the write is decided here rather than at run time.
 
     fn f() -> i64 {
-        let a: [i64; 4] = [1, 2, 3, 4]
-        return a[7]            // E0433
+        let a: [i64; 4] = [1, 2, 3, 4];
+        a[7]                   // E0433
     }
 
     fn g() -> i64 {
-        let a: [i64; 4] = [1, 2, 3, 4]
-        let i: i64 = 2 + 5
-        return a[i]            // E0433, `2 + 5` is closed
+        let a: [i64; 4] = [1, 2, 3, 4];
+        let i: i64 = 2 + 5;
+        a[i]                   // E0433, `2 + 5` is closed
     }
 
 An index the front end cannot close, such as one read from a parameter or

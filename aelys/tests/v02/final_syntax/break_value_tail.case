@@ -1,0 +1,24 @@
+fn first_square_over(limit: i64) -> i64 {
+    let mut i = 0;
+    loop {
+        i += 1;
+        if i * i > limit {
+            break i;
+        }
+    }
+}
+
+fn pick(words: Vec<String>) -> String {
+    let mut n = 0;
+    let w = loop {
+        if words[n].len() > 3 {
+            break words[n];
+        }
+        n += 1;
+    };
+    w
+}
+
+fn main() {
+    println!("{} {}", first_square_over(50), pick(vec!["ab", "abc", "abcd", "x"]));
+}

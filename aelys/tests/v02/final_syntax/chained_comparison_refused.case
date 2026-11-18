@@ -1,0 +1,6 @@
+fn main() {
+    let a = 1;
+    if 0 < a < 3 {
+        println!("in");
+    }
+}

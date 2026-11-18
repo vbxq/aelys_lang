@@ -59,6 +59,7 @@ impl Default for TypeInference {
             reported_sites: HashSet::new(),
             deferred_results: HashSet::new(),
             deferred_carriers: Vec::new(),
+            discarded_values: Vec::new(),
             deferred_mutability: Vec::new(),
             consts: HashMap::new(),
             alias_names: HashSet::new(),
@@ -265,8 +266,8 @@ impl TypeInference {
                                 },
                                 secondary_spans: Vec::new(),
                                 help: Some(format!(
-                                    "a type of another module is written `<namespace>.{}`, \
-                                     with the namespace bound by a `needs`",
+                                    "a type of another module is written `<module>::{}`, \
+                                     with the module bound by a `use`",
                                     crate::modules::source_type_name(&ann.name)
                                 )),
                                 suggestion: None,
@@ -589,6 +590,7 @@ impl TypeInference {
         typed_stmts.extend(inf.infer_used_builtin_stubs());
 
         let subst = inf.solve_constraints();
+        inf.report_discarded_values(&subst);
         inf.replay_carrier_checks(&subst);
         inf.replay_mutability_checks(&subst);
 

@@ -1,0 +1,11 @@
+fn main() {
+    let mut n = 0;
+    if n == 0 { n += 1 } else { n += 100 }
+    match n { 1 => n += 10, _ => n += 1000 }
+    while n < 15 { n += 1 }
+    for i in 0..3 { n += i }
+    loop { n += 1; if n > 20 { break; } }
+    { n += 100 }
+    if n > 0 { n += 1000 };
+    println!("{}", n);
+}

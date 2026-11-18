@@ -1,0 +1,6 @@
+fn main() {
+    let r = 0..3;
+    for i in r {
+        println!("{}", i);
+    }
+}

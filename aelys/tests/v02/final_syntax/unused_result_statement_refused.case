@@ -1,0 +1,7 @@
+fn risky() -> Result<i64, i64> {
+    Err(3)
+}
+
+fn main() {
+    risky();
+}

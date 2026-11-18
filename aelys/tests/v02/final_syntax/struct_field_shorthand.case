@@ -1,0 +1,8 @@
+struct Point { x: i64, y: i64 }
+
+fn main() {
+    let x = 3;
+    let y = 4;
+    let p = Point { x, y };
+    println!("{} {}", p.x, p.y);
+}

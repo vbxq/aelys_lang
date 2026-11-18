@@ -1,0 +1,13 @@
+fn check(x: i64) -> i64 {
+    assert!(x > 0);
+    assert_eq!(x % 2, 0, "x must be even");
+    if x > 100 {
+        unreachable!();
+    }
+    x / 2
+}
+
+fn main() {
+    println!("{}", check(8));
+    println!("{}", check(3));
+}

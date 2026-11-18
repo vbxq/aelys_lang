@@ -8,7 +8,7 @@ pub(super) fn stmts(list: &mut [Stmt], f: &mut dyn FnMut(&mut TypeAnnotation)) {
 
 fn stmt(s: &mut Stmt, f: &mut dyn FnMut(&mut TypeAnnotation)) {
     match &mut s.kind {
-        StmtKind::Expression(e) | StmtKind::Discard(e) => expr(e, f),
+        StmtKind::Expression(e) | StmtKind::Semi(e) | StmtKind::Discard(e) => expr(e, f),
         StmtKind::Let {
             type_annotation,
             initializer,

@@ -1,0 +1,8 @@
+fn or_zero(o: Option<i64>) -> i64 {
+    let v = if let Some(x) = o { x * 2 } else { 0 };
+    v + 1
+}
+
+fn main() {
+    println!("{} {}", or_zero(Some(4)), or_zero(None));
+}

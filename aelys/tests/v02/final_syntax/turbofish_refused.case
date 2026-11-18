@@ -1,0 +1,4 @@
+fn main() {
+    let v = Vec::<i64>::new();
+    println!("{}", v.len());
+}

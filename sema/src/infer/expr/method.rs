@@ -260,7 +260,7 @@ impl TypeInference {
             self.errors.push(TypeError::coded(
                 "E0304",
                 format!(
-                    "no method `{member}` on `{}`; it is in `std.{module}` (needs std.{module})",
+                    "no method `{member}` on `{}`; it is in `std::{module}` (use std::{module};)",
                     method_shown(&base)
                 ),
                 "method of a module not imported",
@@ -373,6 +373,26 @@ impl TypeInference {
                 full.push(recv);
                 full.extend(args.iter().cloned());
                 Ok(self.infer_enum_variant("Vec", member, &full, span))
+            }
+            InferType::String if member == "as_bytes" && args.is_empty() => {
+                let recv = match via_ref {
+                    Some(_) => {
+                        let span = typed_object.span;
+                        TypedExpr::new(TypedExprKind::Deref(Box::new(typed_object)), base.clone(), span)
+                    }
+                    None => typed_object,
+                };
+                let object_span = recv.span;
+                Ok((
+                    TypedExprKind::Member {
+                        object: Box::new(TypedExpr::new(recv.kind, recv.ty, object_span)),
+                        member: "bytes".to_string(),
+                    },
+                    InferType::Slice {
+                        elem: Box::new(InferType::U8),
+                        mutable: false,
+                    },
+                ))
             }
             InferType::String
             | InferType::StrRef
@@ -709,8 +729,8 @@ impl TypeInference {
         };
         let std_hint = match std_function_for(base, member) {
             Some(module) => format!(
-                "; the std function is `{module}.{member}`, called as `{module}.{member}(x, ..)` \
-                 (needs std.{module})"
+                "; the std function is `{module}::{member}`, called as `{module}::{member}(x, ..)` \
+                 (use std::{module};)"
             ),
             None => String::new(),
         };

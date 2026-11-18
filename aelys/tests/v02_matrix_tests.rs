@@ -323,3 +323,8 @@ fn track_final_dyn() {
 fn track_final_str() {
     run_track("final_str");
 }
+
+#[test]
+fn track_final_syntax() {
+    run_track("final_syntax");
+}

@@ -596,7 +596,7 @@ pub(crate) fn subst_stmts(stmts: &mut [Stmt], head: &TypeAnnotation) {
 
 fn subst_stmt(stmt: &mut Stmt, head: &TypeAnnotation) {
     match &mut stmt.kind {
-        StmtKind::Expression(e) | StmtKind::Discard(e) => subst_expr(e, head),
+        StmtKind::Expression(e) | StmtKind::Semi(e) | StmtKind::Discard(e) => subst_expr(e, head),
         StmtKind::Let {
             type_annotation,
             initializer,

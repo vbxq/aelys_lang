@@ -58,6 +58,28 @@ impl TypeInference {
         }
 
         let typed_object = self.infer_expr(object);
+        let mut base = &typed_object.ty;
+        while let InferType::Ref { referent, .. } = base {
+            base = referent;
+        }
+        let builtin = matches!(
+            base,
+            InferType::String | InferType::Slice { .. } | InferType::Vec(_) | InferType::Array(..)
+        );
+        if builtin && (member == "len" || (member == "bytes" && matches!(base, InferType::String))) {
+            let receiver = match &object.kind {
+                ExprKind::Identifier(n) => n.as_str(),
+                _ => "v",
+            };
+            let (message, fix) = if member == "len" {
+                (format!("`{receiver}.len` is a method; write `{receiver}.len()`"), ".len()")
+            } else {
+                (format!("`{receiver}.bytes` is written `{receiver}.as_bytes()`"), ".as_bytes()")
+            };
+            let mut err = TypeError::coded("E0121", message, "add the parentheses", _span);
+            err.help = Some(format!("call it: `{receiver}{fix}`"));
+            self.errors.push(err);
+        }
         self.member_of_typed(typed_object, member, _span)
     }
 
@@ -80,7 +102,12 @@ impl TypeInference {
         member: &str,
         span: Span,
     ) -> (TypedExprKind, InferType) {
-        if member.starts_with(|c: char| c.is_ascii_digit()) {
+        let struct_like = match &typed_object.ty {
+            InferType::Struct(..) | InferType::Rc(_) => true,
+            InferType::Ref { referent, .. } => matches!(referent.as_ref(), InferType::Struct(..)),
+            _ => false,
+        };
+        if member.starts_with(|c: char| c.is_ascii_digit()) && !struct_like {
             let ty = self.tuple_element_type(&typed_object.ty, member, span);
             return (
                 TypedExprKind::Member {

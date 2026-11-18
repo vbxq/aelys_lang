@@ -328,7 +328,7 @@ impl fmt::Display for TypeError {
                 assignment: false,
             } => write!(
                 f,
-                "cannot take the address of `.len` on `{ty}`: `.len` is a length the compiler \
+                "cannot take the address of `.len()` on `{ty}`: `.len()` is a length the compiler \
                  computes on demand, not a field stored in the value, so there is no address to \
                  take. bind the length to a name first and borrow that binding"
             ),
@@ -337,7 +337,7 @@ impl fmt::Display for TypeError {
                 assignment: true,
             } => write!(
                 f,
-                "cannot assign to `.len` on `{ty}`: `.len` is a length the compiler computes on \
+                "cannot assign to `.len()` on `{ty}`: `.len()` is a length the compiler computes on \
                  demand, not a field stored in the value, so writing it would change nothing. \
                  change the value itself, or bind the length to a `mut` name and write that"
             ),
@@ -464,8 +464,8 @@ impl fmt::Display for TypeError {
                 write!(
                     f,
                     "[must-use] this `Result` can fail{error}; \
-                     use `?` to propagate, `match`/`catch` to handle, \
-                     `.expect(\"…\")` to assert, or `discard` to intentionally ignore it"
+                     use `?` to propagate, `match` to handle, \
+                     `.expect(\"…\")` to assert, or `let _ = ...;` to intentionally ignore it"
                 )
             }
             TypeErrorKind::NogcOutOfPosition { detail } => write!(f, "[nogc] {detail}"),
@@ -808,8 +808,9 @@ impl TypeError {
                 let alias = module.rsplit('.').next().unwrap_or(&module);
                 format!(
                     "`{variant}` here is `{named}::{variant}`; the scrutinee is the `{name}` of \
-                     `{module}`, which no name in scope reaches; add `needs {module}` and write \
-                     `{alias}.{name}::{variant}`"
+                     `{module}`, which no name in scope reaches; add `use {};` and write \
+                     `{alias}::{name}::{variant}`",
+                    module.replace('.', "::")
                 )
             }
         };
@@ -1098,13 +1099,13 @@ impl TypeError {
     ) -> Self {
         let carries = match bound {
             "ord" => {
-                "the integers, the floats, `char` and `string` are `ord`"
+                "the integers, the floats, `char` and `String` are `Ord`"
             }
             _ if matches!(found, InferType::Rc(_)) => {
                 "an `Rc` answers `==` by identity, but it is not `eq`: a bound `==` compares \
                  values, and two handles to equal values are different handles"
             }
-            _ => "the integers, the floats, `bool`, `char` and `string` are `eq`",
+            _ => "the integers, the floats, `bool`, `char` and `String` are `PartialEq`",
         };
         TypeError {
             kind: TypeErrorKind::BoundNotSatisfied {
@@ -1286,7 +1287,7 @@ impl TypeError {
              scalar values, not a buffer of characters at fixed offsets"
                 .to_string()
         } else {
-            "a `string` cannot be indexed by integer; `.len` counts bytes while `s[i]` counted \
+            "a `string` cannot be indexed by integer; `.len()` counts bytes while `s[i]` counted \
              characters, and the two could not both be right"
                 .to_string()
         };

@@ -1,0 +1,20 @@
+struct Stack { items: Vec<i64> }
+
+trait Sized2 {
+    fn size(&self) -> i64;
+    fn is_empty(&self) -> bool {
+        self.size() == 0
+    }
+}
+
+impl Sized2 for Stack {
+    fn size(&self) -> i64 {
+        self.items.len()
+    }
+}
+
+fn main() {
+    let s = Stack { items: vec![4] };
+    let e = Stack { items: vec![] };
+    println!("{} {}", s.is_empty(), e.is_empty());
+}

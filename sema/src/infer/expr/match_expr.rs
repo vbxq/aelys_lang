@@ -754,8 +754,9 @@ impl TypeInference {
                     format!(
                         "pattern enum '{written_enum}' does not match the scrutinee's \
                          enum, the `{name}` of `{module}`, which no name in scope \
-                         reaches; add `needs {module}` and write \
-                         `{alias}.{name}::{variant}`"
+                         reaches; add `use {};` and write \
+                         `{alias}::{name}::{variant}`",
+                        module.replace('.', "::")
                     )
                 }
             };

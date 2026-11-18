@@ -226,7 +226,7 @@ fn render_labels_block(
                 let col_end = if end_line == line_num {
                     end_col as usize
                 } else {
-                    line_content.len()
+                    line_content.chars().count()
                 };
 
                 let len = col_end.saturating_sub(col_start).max(1);
@@ -284,15 +284,22 @@ fn render_suggestion(out: &mut String, suggestion: &Suggestion, color: &ColorCon
 
         let original_line = replacement.source.get_line(line_num);
         let col_start = replacement.span.column.saturating_sub(1) as usize;
-        let span_len = replacement.span.end.saturating_sub(replacement.span.start);
-        let col_end = col_start + span_len;
+        let line_start = replacement.source.get_line_start_offset(line_num);
+        let byte_start = replacement
+            .span
+            .start
+            .saturating_sub(line_start)
+            .min(original_line.len());
+        let byte_end = replacement
+            .span
+            .end
+            .saturating_sub(line_start)
+            .clamp(byte_start, original_line.len());
 
         let mut modified_line = String::new();
-        modified_line.push_str(&original_line[..col_start.min(original_line.len())]);
+        modified_line.push_str(&original_line[..byte_start]);
         modified_line.push_str(&replacement.new_text);
-        if col_end < original_line.len() {
-            modified_line.push_str(&original_line[col_end..]);
-        }
+        modified_line.push_str(&original_line[byte_end..]);
 
         out.push_str(&format!(
             "{} {}\n",
@@ -308,7 +315,7 @@ fn render_suggestion(out: &mut String, suggestion: &Suggestion, color: &ColorCon
         ));
 
         // Show +++ markers under the inserted text
-        let new_text_len = replacement.new_text.len();
+        let new_text_len = replacement.new_text.chars().count();
         if new_text_len > 0 {
             let padding = " ".repeat(col_start);
             let markers = color.severity(Severity::Help, &"+".repeat(new_text_len));

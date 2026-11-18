@@ -1,59 +1,24 @@
 use super::Lexer;
+use super::scan::is_ident_continue;
 use aelys_syntax::TokenKind;
 
 impl Lexer {
     pub(super) fn identifier(&mut self) {
-        while self.peek().is_alphanumeric() || self.peek() == '_' {
+        while is_ident_continue(self.peek()) {
             self.advance();
         }
-
-        let text: String = self.chars[self.start..self.current].iter().collect();
-
-        let kind = match text.as_str() {
-            "let" => TokenKind::Let,
-            "mut" => TokenKind::Mut,
-            "fn" => TokenKind::Fn,
-            "if" => TokenKind::If,
-            "else" => TokenKind::Else,
-            "while" => TokenKind::While,
-            "return" => TokenKind::Return,
-            "break" => TokenKind::Break,
-            "continue" => TokenKind::Continue,
-            "and" => TokenKind::And,
-            "or" => TokenKind::Or,
-            "not" => TokenKind::Not,
-            "true" => TokenKind::True,
-            "false" => TokenKind::False,
-            "null" => TokenKind::Null,
-            "pub" => TokenKind::Pub,
-            "needs" => TokenKind::Needs,
-            "as" => TokenKind::As,
-            "from" => TokenKind::From,
-            "for" => TokenKind::For,
-            "in" => TokenKind::In,
-            "struct" => TokenKind::Struct,
-            "enum" => TokenKind::Enum,
-            "match" => TokenKind::Match,
-            "discard" => TokenKind::Discard,
-            "catch" => TokenKind::Catch,
-            "unsafe" => TokenKind::Unsafe,
-            "nogc" => TokenKind::Nogc,
-            "extern" => TokenKind::Extern,
-            "const" => TokenKind::Const,
-            "impl" => TokenKind::Impl,
-            _ => TokenKind::Identifier(text),
-        };
-
+        let text = self.text(self.start);
+        let kind = TokenKind::keyword(text).unwrap_or_else(|| TokenKind::Identifier(text.to_string()));
         self.add_token(kind);
     }
 
     pub(super) fn raw_identifier(&mut self) {
         self.advance();
         let begin = self.current;
-        while self.peek().is_alphanumeric() || self.peek() == '_' {
+        while is_ident_continue(self.peek()) {
             self.advance();
         }
-        let text: String = self.chars[begin..self.current].iter().collect();
+        let text = self.text(begin).to_string();
         self.add_token(TokenKind::Identifier(text));
     }
 }

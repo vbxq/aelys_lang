@@ -1,0 +1,5 @@
+fn main() {
+    let x = 5;
+    let m: u8 = 0;
+    println!("{} {}", !x & 15, !m);
+}

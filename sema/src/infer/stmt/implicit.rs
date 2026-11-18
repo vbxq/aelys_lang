@@ -135,6 +135,26 @@ impl TypeInference {
 
             _ => {
                 let typed_stmt = self.infer_stmt(stmt);
+                if let (StmtKind::Semi(value), TypedStmtKind::Expression(typed)) =
+                    (&stmt.kind, &typed_stmt.kind)
+                    && !matches!(return_type, InferType::Null)
+                    && !matches!(typed.ty, InferType::Null | InferType::Never)
+                {
+                    let func_name = self
+                        .env
+                        .current_function()
+                        .cloned()
+                        .unwrap_or_else(|| "<anonymous>".to_string());
+                    let mut err = TypeError::coded(
+                        "E0301",
+                        format!("`{func_name}` ends here without returning a value"),
+                        "this expression ends with `;`",
+                        value.span,
+                    );
+                    err.help = Some("remove the `;` to return this value".to_string());
+                    self.errors.push(err);
+                    return typed_stmt;
+                }
                 if !stmt_guarantees_return(stmt) {
                     self.constraints.push(Constraint::equal(
                         InferType::Null,

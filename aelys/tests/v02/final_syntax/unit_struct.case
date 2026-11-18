@@ -1,0 +1,13 @@
+struct Marker;
+
+impl Marker {
+    fn id(&self) -> i64 {
+        7
+    }
+}
+
+fn main() {
+    let a = Marker;
+    let b = Marker {};
+    println!("{}", a.id() + b.id());
+}

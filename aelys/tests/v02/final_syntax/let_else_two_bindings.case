@@ -1,0 +1,14 @@
+fn ordered(a: i64, b: i64) -> Option<(i64, i64)> {
+    if a < b { Some((a, b)) } else { None }
+}
+
+fn span(a: i64, b: i64) -> i64 {
+    let Some((lo, hi)) = ordered(a, b) else {
+        return -1;
+    };
+    hi - lo
+}
+
+fn main() {
+    println!("{} {}", span(2, 9), span(9, 2));
+}

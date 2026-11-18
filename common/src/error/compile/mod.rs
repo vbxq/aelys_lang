@@ -112,8 +112,8 @@ impl CompileError {
             }
             CompileErrorKind::MalformedForeignDecl { .. } => {
                 diag.add_help(
-                    "the only accepted form is `unsafe extern [nogc] fn NAME(PARAMS) [-> T]`, \
-                     with no `pub`, no decorator, no type parameter and no body, at the top level"
+                    "the only accepted form is `extern \"C\" { [nogc] fn NAME(PARAMS) [-> T]; }`, \
+                     with no `pub`, no attribute, no type parameter and no body, at the top level"
                         .to_string(),
                 );
             }
@@ -182,11 +182,11 @@ impl CompileError {
             }
             CompileErrorKind::ForeignHeaderImport { .. } => {
                 diag.add_note(
-                    "C headers are reached by the same `needs` keyword, but nothing reads them yet"
+                    "importing a C header is not implemented yet"
                         .to_string(),
                 );
                 diag.add_help(
-                    "declare the functions you need by hand with `unsafe extern fn NAME(...) -> T`; \
+                    "declare the functions you need by hand in `extern \"C\" { fn NAME(...) -> T; }`; \
                      the parameter and return types must be integers, floats, `bool` or references, \
                      see E0615"
                         .to_string(),
@@ -194,8 +194,8 @@ impl CompileError {
             }
             CompileErrorKind::WildcardImport { module_path } => {
                 diag.add_help(format!(
-                    "name what you need: `needs <symbol> from {}`",
-                    module_path
+                    "name what you need: `use {}::symbol;`",
+                    module_path.replace('.', "::")
                 ));
             }
             _ => {}

@@ -1,0 +1,7 @@
+fn add_one(x: i64) -> i64 {
+    x + 1;
+}
+
+fn main() {
+    println!("{}", add_one(41));
+}

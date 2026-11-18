@@ -1,0 +1,6 @@
+fn main() {
+    let t = (1, 2);
+    let r = &t;
+    let &(a, b) = r;
+    println!("{}", a + b);
+}

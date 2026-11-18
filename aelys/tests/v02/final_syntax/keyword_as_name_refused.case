@@ -1,0 +1,4 @@
+fn main() {
+    let loop = 3;
+    println!("{}", loop);
+}

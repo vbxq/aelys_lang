@@ -13,60 +13,78 @@ impl Token {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum FmtPart {
-    Literal(String),
-    Placeholder,
-    Expr(String),
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum TokenKind {
     Int(i64),
     UInt(u64),
     Float(f64),
+    SuffixedInt(u128, String),
+    SuffixedFloat(f64, String),
     String(String),
     Char(u32),
-    FmtString(Vec<FmtPart>),
+    Byte(u8),
+    Lifetime(String),
     True,
     False,
-    Null,
 
     Identifier(String),
 
-    Let,
-    Mut,
-    Fn,
-    If,
-    Else,
-    While,
-    Return,
-    Break,
-    Continue,
-    And,
-    Or,
-    Not,
-    Pub,
-    Needs,
     As,
-    From, // module system
-    For,
-    In,
-    Struct,
-    Enum,
-    Match,
-    Discard,
-    Catch,
-    Unsafe,
-    Nogc,
-    Extern,
+    Break,
     Const,
+    Continue,
+    Crate,
+    Dyn,
+    Else,
+    Enum,
+    Extern,
+    Fn,
+    For,
+    If,
     Impl,
+    In,
+    Let,
+    Loop,
+    Match,
+    Mod,
+    Move,
+    Mut,
+    Nogc,
+    Pub,
+    Ref,
+    Return,
+    Static,
+    Struct,
+    Super,
+    Trait,
+    Type,
+    Unsafe,
+    Use,
+    Where,
+    While,
 
     Plus,
     Minus,
     Star,
     Slash,
     Percent,
+    Caret,
+    Bang,
+    Ampersand,
+    Pipe,
+    AndAnd,
+    OrOr,
+    Shl,
+    Shr,
+    PlusEq,
+    MinusEq,
+    StarEq,
+    SlashEq,
+    PercentEq,
+    CaretEq,
+    AmpEq,
+    PipeEq,
+    ShlEq,
+    ShrEq,
     Eq,
     EqEq,
     BangEq,
@@ -74,25 +92,19 @@ pub enum TokenKind {
     LtEq,
     Gt,
     GtEq,
-    Arrow,      // ->
-    FatArrow,   // =>
-    Colon,      // :
-    ColonColon, // ::
-    PlusEq,     // +=
-    MinusEq,    // -=
-    StarEq,     // *=
-    SlashEq,    // /=
-    PercentEq,  // %=
-    PlusPlus,   // ++
-    MinusMinus, // --
-    Question,   // ?
-
-    Shl,
-    Shr,       // << >>
-    Ampersand, // &
-    Pipe,
-    Caret, // | ^
-    Tilde, // ~
+    At,
+    Dot,
+    DotDot,
+    DotDotEq,
+    Comma,
+    Semicolon,
+    Colon,
+    ColonColon,
+    Arrow,
+    FatArrow,
+    Pound,
+    Question,
+    Tilde,
 
     LParen,
     RParen,
@@ -100,50 +112,89 @@ pub enum TokenKind {
     RBrace,
     LBracket,
     RBracket,
-    Comma,
-    Semicolon,
-    Dot,      // .
-    DotDot,   // ..
-    DotDotEq, // ..=
 
-    At,      // @ for decorators
-    Newline, // for auto-semicolon insertion
     Eof,
 }
 
 impl TokenKind {
+    pub fn keyword(word: &str) -> Option<TokenKind> {
+        Some(match word {
+            "as" => Self::As,
+            "break" => Self::Break,
+            "const" => Self::Const,
+            "continue" => Self::Continue,
+            "crate" => Self::Crate,
+            "dyn" => Self::Dyn,
+            "else" => Self::Else,
+            "enum" => Self::Enum,
+            "extern" => Self::Extern,
+            "false" => Self::False,
+            "fn" => Self::Fn,
+            "for" => Self::For,
+            "if" => Self::If,
+            "impl" => Self::Impl,
+            "in" => Self::In,
+            "let" => Self::Let,
+            "loop" => Self::Loop,
+            "match" => Self::Match,
+            "mod" => Self::Mod,
+            "move" => Self::Move,
+            "mut" => Self::Mut,
+            "nogc" => Self::Nogc,
+            "pub" => Self::Pub,
+            "ref" => Self::Ref,
+            "return" => Self::Return,
+            "static" => Self::Static,
+            "struct" => Self::Struct,
+            "super" => Self::Super,
+            "trait" => Self::Trait,
+            "true" => Self::True,
+            "type" => Self::Type,
+            "unsafe" => Self::Unsafe,
+            "use" => Self::Use,
+            "where" => Self::Where,
+            "while" => Self::While,
+            _ => return None,
+        })
+    }
+
     pub fn keyword_spelling(&self) -> Option<&'static str> {
         Some(match self {
-            Self::True => "true",
-            Self::False => "false",
-            Self::Null => "null",
-            Self::Let => "let",
-            Self::Mut => "mut",
-            Self::Fn => "fn",
-            Self::If => "if",
-            Self::Else => "else",
-            Self::While => "while",
-            Self::Return => "return",
-            Self::Break => "break",
-            Self::Continue => "continue",
-            Self::And => "and",
-            Self::Or => "or",
-            Self::Not => "not",
-            Self::Pub => "pub",
-            Self::Needs => "needs",
             Self::As => "as",
-            Self::From => "from",
-            Self::For => "for",
-            Self::In => "in",
-            Self::Struct => "struct",
-            Self::Enum => "enum",
-            Self::Match => "match",
-            Self::Discard => "discard",
-            Self::Catch => "catch",
-            Self::Unsafe => "unsafe",
-            Self::Nogc => "nogc",
-            Self::Extern => "extern",
+            Self::Break => "break",
             Self::Const => "const",
+            Self::Continue => "continue",
+            Self::Crate => "crate",
+            Self::Dyn => "dyn",
+            Self::Else => "else",
+            Self::Enum => "enum",
+            Self::Extern => "extern",
+            Self::False => "false",
+            Self::Fn => "fn",
+            Self::For => "for",
+            Self::If => "if",
+            Self::Impl => "impl",
+            Self::In => "in",
+            Self::Let => "let",
+            Self::Loop => "loop",
+            Self::Match => "match",
+            Self::Mod => "mod",
+            Self::Move => "move",
+            Self::Mut => "mut",
+            Self::Nogc => "nogc",
+            Self::Pub => "pub",
+            Self::Ref => "ref",
+            Self::Return => "return",
+            Self::Static => "static",
+            Self::Struct => "struct",
+            Self::Super => "super",
+            Self::Trait => "trait",
+            Self::True => "true",
+            Self::Type => "type",
+            Self::Unsafe => "unsafe",
+            Self::Use => "use",
+            Self::Where => "where",
+            Self::While => "while",
             _ => return None,
         })
     }
@@ -154,165 +205,100 @@ impl TokenKind {
             Self::Int(_)
                 | Self::UInt(_)
                 | Self::Float(_)
+                | Self::SuffixedInt(..)
+                | Self::SuffixedFloat(..)
                 | Self::String(_)
                 | Self::Char(_)
-                | Self::FmtString(_)
+                | Self::Byte(_)
                 | Self::True
                 | Self::False
-                | Self::Null
         )
     }
 
     pub fn is_reserved_word(&self) -> bool {
-        matches!(
-            self,
-            Self::Let
-                | Self::Mut
-                | Self::Fn
-                | Self::If
-                | Self::Else
-                | Self::While
-                | Self::Return
-                | Self::Break
-                | Self::Continue
-                | Self::And
-                | Self::Or
-                | Self::Not
-                | Self::True
-                | Self::False
-                | Self::Null
-                | Self::Pub
-                | Self::Needs
-                | Self::As
-                | Self::From
-                | Self::For
-                | Self::In
-                | Self::Struct
-                | Self::Enum
-                | Self::Match
-                | Self::Discard
-                | Self::Catch
-                | Self::Unsafe
-                | Self::Nogc
-                | Self::Extern
-        )
+        self.keyword_spelling().is_some()
     }
 
-    pub fn can_end_statement(&self) -> bool {
-        matches!(
-            self,
-            Self::Identifier(_)
-                | Self::Int(_)
-                | Self::UInt(_)
-                | Self::Float(_)
-                | Self::String(_)
-                | Self::Char(_)
-                | Self::FmtString(_)
-                | Self::True
-                | Self::False
-                | Self::Null
-                | Self::Break
-                | Self::Continue
-                | Self::Return
-                | Self::RParen
-                | Self::RBracket
-                | Self::RBrace
-                | Self::Star // for `needs module.*`
-                | Self::PlusPlus
-                | Self::MinusMinus
-                | Self::Question
-        )
+    fn punct(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Star => "*",
+            Self::Slash => "/",
+            Self::Percent => "%",
+            Self::Caret => "^",
+            Self::Bang => "!",
+            Self::Ampersand => "&",
+            Self::Pipe => "|",
+            Self::AndAnd => "&&",
+            Self::OrOr => "||",
+            Self::Shl => "<<",
+            Self::Shr => ">>",
+            Self::PlusEq => "+=",
+            Self::MinusEq => "-=",
+            Self::StarEq => "*=",
+            Self::SlashEq => "/=",
+            Self::PercentEq => "%=",
+            Self::CaretEq => "^=",
+            Self::AmpEq => "&=",
+            Self::PipeEq => "|=",
+            Self::ShlEq => "<<=",
+            Self::ShrEq => ">>=",
+            Self::Eq => "=",
+            Self::EqEq => "==",
+            Self::BangEq => "!=",
+            Self::Lt => "<",
+            Self::LtEq => "<=",
+            Self::Gt => ">",
+            Self::GtEq => ">=",
+            Self::At => "@",
+            Self::Dot => ".",
+            Self::DotDot => "..",
+            Self::DotDotEq => "..=",
+            Self::Comma => ",",
+            Self::Semicolon => ";",
+            Self::Colon => ":",
+            Self::ColonColon => "::",
+            Self::Arrow => "->",
+            Self::FatArrow => "=>",
+            Self::Pound => "#",
+            Self::Question => "?",
+            Self::Tilde => "~",
+            Self::LParen => "(",
+            Self::RParen => ")",
+            Self::LBrace => "{",
+            Self::RBrace => "}",
+            Self::LBracket => "[",
+            Self::RBracket => "]",
+            _ => return None,
+        })
     }
 }
 
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(word) = self.keyword_spelling() {
+            return write!(f, "`{word}`");
+        }
+        if let Some(p) = self.punct() {
+            return write!(f, "`{p}`");
+        }
         match self {
-            Self::Int(n) => write!(f, "{}", n),
-            Self::UInt(n) => write!(f, "{}", n),
-            Self::Float(n) => write!(f, "{}", n),
-            Self::String(s) => write!(f, "\"{}\"", s),
+            Self::Int(n) => write!(f, "`{n}`"),
+            Self::UInt(n) => write!(f, "`{n}`"),
+            Self::Float(n) => write!(f, "`{n}`"),
+            Self::SuffixedInt(n, s) => write!(f, "`{n}{s}`"),
+            Self::SuffixedFloat(n, s) => write!(f, "`{n}{s}`"),
+            Self::String(s) => write!(f, "\"{s}\""),
             Self::Char(cp) => match char::from_u32(*cp) {
-                Some(c) => write!(f, "'{}'", c),
-                None => write!(f, "'\\u{{{:x}}}'", cp),
+                Some(c) => write!(f, "'{c}'"),
+                None => write!(f, "'\\u{{{cp:x}}}'"),
             },
-            Self::FmtString(_) => write!(f, "<format string>"),
-            Self::True => write!(f, "true"),
-            Self::False => write!(f, "false"),
-            Self::Null => write!(f, "null"),
-            Self::Identifier(s) => write!(f, "{}", s),
-            Self::Let => write!(f, "let"),
-            Self::Mut => write!(f, "mut"),
-            Self::Fn => write!(f, "fn"),
-            Self::If => write!(f, "if"),
-            Self::Else => write!(f, "else"),
-            Self::While => write!(f, "while"),
-            Self::Return => write!(f, "return"),
-            Self::Break => write!(f, "break"),
-            Self::Continue => write!(f, "continue"),
-            Self::And => write!(f, "and"),
-            Self::Or => write!(f, "or"),
-            Self::Not => write!(f, "not"),
-            Self::Pub => write!(f, "pub"),
-            Self::Needs => write!(f, "needs"),
-            Self::As => write!(f, "as"),
-            Self::From => write!(f, "from"),
-            Self::For => write!(f, "for"),
-            Self::In => write!(f, "in"),
-            Self::Struct => write!(f, "struct"),
-            Self::Enum => write!(f, "enum"),
-            Self::Match => write!(f, "match"),
-            Self::Discard => write!(f, "discard"),
-            Self::Catch => write!(f, "catch"),
-            Self::Unsafe => write!(f, "unsafe"),
-            Self::Nogc => write!(f, "nogc"),
-            Self::Extern => write!(f, "extern"),
-            Self::Const => write!(f, "const"),
-            Self::Impl => write!(f, "impl"),
-            Self::Plus => write!(f, "+"),
-            Self::Minus => write!(f, "-"),
-            Self::Star => write!(f, "*"),
-            Self::Slash => write!(f, "/"),
-            Self::Percent => write!(f, "%"),
-            Self::Eq => write!(f, "="),
-            Self::EqEq => write!(f, "=="),
-            Self::BangEq => write!(f, "!="),
-            Self::Lt => write!(f, "<"),
-            Self::LtEq => write!(f, "<="),
-            Self::Gt => write!(f, ">"),
-            Self::GtEq => write!(f, ">="),
-            Self::Arrow => write!(f, "->"),
-            Self::FatArrow => write!(f, "=>"),
-            Self::Colon => write!(f, ":"),
-            Self::ColonColon => write!(f, "::"),
-            Self::PlusEq => write!(f, "+="),
-            Self::MinusEq => write!(f, "-="),
-            Self::StarEq => write!(f, "*="),
-            Self::SlashEq => write!(f, "/="),
-            Self::PercentEq => write!(f, "%="),
-            Self::PlusPlus => write!(f, "++"),
-            Self::MinusMinus => write!(f, "--"),
-            Self::Question => write!(f, "?"),
-            Self::Shl => write!(f, "<<"),
-            Self::Shr => write!(f, ">>"),
-            Self::Ampersand => write!(f, "&"),
-            Self::Pipe => write!(f, "|"),
-            Self::Caret => write!(f, "^"),
-            Self::Tilde => write!(f, "~"),
-            Self::LParen => write!(f, "("),
-            Self::RParen => write!(f, ")"),
-            Self::LBrace => write!(f, "{{"),
-            Self::RBrace => write!(f, "}}"),
-            Self::LBracket => write!(f, "["),
-            Self::RBracket => write!(f, "]"),
-            Self::Comma => write!(f, ","),
-            Self::Semicolon => write!(f, ";"),
-            Self::Dot => write!(f, "."),
-            Self::DotDot => write!(f, ".."),
-            Self::DotDotEq => write!(f, "..="),
-            Self::At => write!(f, "@"),
-            Self::Newline => write!(f, "<newline>"),
-            Self::Eof => write!(f, "<eof>"),
+            Self::Byte(b) => write!(f, "b'{}'", *b as char),
+            Self::Lifetime(name) => write!(f, "`'{name}`"),
+            Self::Identifier(s) => write!(f, "`{s}`"),
+            Self::Eof => write!(f, "end of file"),
+            _ => unreachable!("keywords and punctuation are spelled above"),
         }
     }
 }

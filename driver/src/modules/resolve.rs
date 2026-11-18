@@ -305,9 +305,10 @@ impl Discovery {
         let tokens = Lexer::with_source(source.clone())
             .scan()
             .map_err(|error| ModuleError { error })?;
-        let stmts = Parser::new(tokens, source.clone())
+        let mut stmts = Parser::new(tokens, source.clone())
             .parse()
             .map_err(|error| ModuleError { error })?;
+        self.items_imported_by_path(&mut stmts);
 
         let mut bound: HashMap<String, TopLevelBinding> = HashMap::new();
         for binding in top_level_bindings(&stmts) {
@@ -460,6 +461,28 @@ impl Discovery {
             .map(|binding| binding.name.clone())
             .collect();
         Ok(index)
+    }
+
+    // `use a::b::f;` names the item `f` of module `a::b` when no module `a/b/f` exists
+    fn items_imported_by_path(&self, stmts: &mut [Stmt]) {
+        for stmt in stmts {
+            let StmtKind::Needs(NeedsStmt {
+                target: NeedsTarget::Module { path, kind },
+                ..
+            }) = &mut stmt.kind
+            else {
+                continue;
+            };
+            if path.len() < 2 || !matches!(kind, ImportKind::Module { alias: None }) {
+                continue;
+            }
+            if matches!(self.locate(path), Located::Missing(_))
+                && matches!(self.locate(&path[..path.len() - 1]), Located::Found(_))
+            {
+                let item = path.pop().expect("checked above");
+                *kind = ImportKind::Symbols(vec![item]);
+            }
+        }
     }
 
     fn locate(&self, path: &[String]) -> Located {

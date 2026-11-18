@@ -1,0 +1,10 @@
+fn main() {
+    for i in (0..10).step_by(3) {
+        print!("{} ", i);
+    }
+    println!();
+    for i in (1..=9).step_by(4) {
+        print!("{} ", i);
+    }
+    println!("|");
+}

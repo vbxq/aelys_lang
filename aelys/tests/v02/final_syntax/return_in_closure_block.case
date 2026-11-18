@@ -1,0 +1,9 @@
+fn main() {
+    let f = |x: i64| -> i64 {
+        if x > 0 {
+            return 1;
+        }
+        0
+    };
+    println!("{} {}", f(5), f(-1));
+}

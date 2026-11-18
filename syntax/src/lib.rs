@@ -8,6 +8,6 @@ pub mod token;
 pub use ast::*;
 pub use source::Source;
 pub use span::Span;
-pub use token::{FmtPart, Token, TokenKind};
+pub use token::{Token, TokenKind};
 
 pub const FMT_SPEC_MARKER: &str = "__aelys_fmt_spec";

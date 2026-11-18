@@ -1,0 +1,11 @@
+fn and(x: i64, y: i64) -> i64 {
+    x * y
+}
+
+fn main() {
+    let or = 3;
+    let not = 4;
+    let needs = 1;
+    let step = 2;
+    println!("{}", and(or, not) + needs + step);
+}

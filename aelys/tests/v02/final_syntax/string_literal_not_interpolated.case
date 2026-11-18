@@ -1,0 +1,11 @@
+fn main() {
+    let name = "x";
+    let plain = "{name} stays";
+    let raw = r"C:\dir\{n}";
+    let joined = "a\
+        b";
+    println!("{}", plain);
+    println!("{}", raw);
+    println!("{}", joined);
+    println!("{name}");
+}

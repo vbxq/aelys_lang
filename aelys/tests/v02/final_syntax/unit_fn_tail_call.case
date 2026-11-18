@@ -1,0 +1,8 @@
+fn shout(s: &str) {
+    println!("{}!", s)
+}
+
+fn main() {
+    shout("hey");
+    shout("you")
+}

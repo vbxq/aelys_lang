@@ -48,7 +48,7 @@ impl Source {
             }
         }
 
-        let column = clamped.saturating_sub(line_start).saturating_add(1) as u32;
+        let column = self.content[line_start..clamped].chars().count() as u32 + 1;
         (line, column)
     }
 

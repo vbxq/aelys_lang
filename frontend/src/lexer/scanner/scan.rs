@@ -5,192 +5,144 @@ use aelys_syntax::TokenKind;
 impl Lexer {
     pub(super) fn scan_token(&mut self) -> Result<()> {
         let c = self.advance();
-
-        match c {
-            ' ' | '\r' | '\t' => {}
-
-            '\n' => {
-                if self.pending_semicolon && self.nesting_depth == 0 && !self.next_token_is_else() {
-                    self.add_token(TokenKind::Semicolon);
-                    self.pending_semicolon = false;
-                }
-                self.line += 1;
-                self.column = 1;
-            }
-
-            '(' => {
-                self.nesting_depth += 1;
-                self.add_token(TokenKind::LParen);
-            }
-            ')' => {
-                self.nesting_depth = self.nesting_depth.saturating_sub(1);
-                self.add_token(TokenKind::RParen);
-            }
-            '{' => {
-                self.brace_saved_depths.push(self.nesting_depth);
-                self.nesting_depth = 0;
-                self.add_token(TokenKind::LBrace);
-            }
-            '}' => {
-                self.nesting_depth = self.brace_saved_depths.pop().unwrap_or(0);
-                self.add_token(TokenKind::RBrace);
-            }
-            '[' => {
-                self.nesting_depth += 1;
-                self.add_token(TokenKind::LBracket);
-            }
-            ']' => {
-                self.nesting_depth = self.nesting_depth.saturating_sub(1);
-                self.add_token(TokenKind::RBracket);
-            }
-            ',' => self.add_token(TokenKind::Comma),
-            ';' => self.add_token(TokenKind::Semicolon),
+        let kind = match c {
+            ' ' | '\r' | '\t' | '\n' => return Ok(()),
+            '(' => TokenKind::LParen,
+            ')' => TokenKind::RParen,
+            '{' => TokenKind::LBrace,
+            '}' => TokenKind::RBrace,
+            '[' => TokenKind::LBracket,
+            ']' => TokenKind::RBracket,
+            ',' => TokenKind::Comma,
+            ';' => TokenKind::Semicolon,
+            '@' => TokenKind::At,
+            '?' => TokenKind::Question,
+            '#' => TokenKind::Pound,
+            '~' => TokenKind::Tilde,
             '.' => {
                 if self.match_char('.') {
                     if self.match_char('=') {
-                        self.add_token(TokenKind::DotDotEq);
+                        TokenKind::DotDotEq
                     } else {
-                        self.add_token(TokenKind::DotDot);
+                        TokenKind::DotDot
                     }
                 } else {
-                    self.add_token(TokenKind::Dot);
+                    TokenKind::Dot
                 }
             }
-            '@' => self.add_token(TokenKind::At),
-            '?' => self.add_token(TokenKind::Question),
-
-            '+' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::PlusEq);
-                } else if self.pending_semicolon && self.match_char('+') {
-                    self.add_token(TokenKind::PlusPlus);
-                } else {
-                    self.add_token(TokenKind::Plus);
-                }
-            }
+            '+' => self.with_eq(TokenKind::PlusEq, TokenKind::Plus),
+            '*' => self.with_eq(TokenKind::StarEq, TokenKind::Star),
+            '%' => self.with_eq(TokenKind::PercentEq, TokenKind::Percent),
+            '^' => self.with_eq(TokenKind::CaretEq, TokenKind::Caret),
             '-' => {
                 if self.match_char('>') {
-                    self.add_token(TokenKind::Arrow);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::MinusEq);
-                } else if self.pending_semicolon && self.match_char('-') {
-                    self.add_token(TokenKind::MinusMinus);
+                    TokenKind::Arrow
                 } else {
-                    self.add_token(TokenKind::Minus);
-                }
-            }
-            '*' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::StarEq);
-                } else {
-                    self.add_token(TokenKind::Star);
-                }
-            }
-            '%' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::PercentEq);
-                } else {
-                    self.add_token(TokenKind::Percent);
+                    self.with_eq(TokenKind::MinusEq, TokenKind::Minus)
                 }
             }
             ':' => {
                 if self.match_char(':') {
-                    self.add_token(TokenKind::ColonColon);
+                    TokenKind::ColonColon
                 } else {
-                    self.add_token(TokenKind::Colon);
+                    TokenKind::Colon
                 }
             }
-
             '/' => {
                 if self.match_char('/') {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
-                } else if self.match_char('*') {
-                    self.block_comment()?;
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::SlashEq);
-                } else {
-                    self.add_token(TokenKind::Slash);
+                    return Ok(());
                 }
+                if self.match_char('*') {
+                    return self.block_comment();
+                }
+                self.with_eq(TokenKind::SlashEq, TokenKind::Slash)
             }
-
             '=' => {
                 if self.match_char('=') {
-                    self.add_token(TokenKind::EqEq);
+                    TokenKind::EqEq
                 } else if self.match_char('>') {
-                    self.add_token(TokenKind::FatArrow);
+                    TokenKind::FatArrow
                 } else {
-                    self.add_token(TokenKind::Eq);
+                    TokenKind::Eq
                 }
             }
-
-            '!' => {
-                if self.match_char('=') {
-                    self.add_token(TokenKind::BangEq);
-                } else {
-                    self.add_token(TokenKind::Not);
-                }
-            }
-
+            '!' => self.with_eq(TokenKind::BangEq, TokenKind::Bang),
             '<' => {
                 if self.match_char('<') {
-                    self.add_token(TokenKind::Shl);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::LtEq);
+                    self.with_eq(TokenKind::ShlEq, TokenKind::Shl)
                 } else {
-                    self.add_token(TokenKind::Lt);
+                    self.with_eq(TokenKind::LtEq, TokenKind::Lt)
                 }
             }
-
             '>' => {
                 if self.match_char('>') {
-                    self.add_token(TokenKind::Shr);
-                } else if self.match_char('=') {
-                    self.add_token(TokenKind::GtEq);
+                    self.with_eq(TokenKind::ShrEq, TokenKind::Shr)
                 } else {
-                    self.add_token(TokenKind::Gt);
+                    self.with_eq(TokenKind::GtEq, TokenKind::Gt)
                 }
             }
-
             '&' => {
                 if self.match_char('&') {
-                    self.add_token(TokenKind::And);
+                    TokenKind::AndAnd
                 } else {
-                    self.add_token(TokenKind::Ampersand);
+                    self.with_eq(TokenKind::AmpEq, TokenKind::Ampersand)
                 }
             }
             '|' => {
                 if self.match_char('|') {
-                    self.add_token(TokenKind::Or);
+                    TokenKind::OrOr
                 } else {
-                    self.add_token(TokenKind::Pipe);
+                    self.with_eq(TokenKind::PipeEq, TokenKind::Pipe)
                 }
             }
-            '^' => self.add_token(TokenKind::Caret),
-            '~' => self.add_token(TokenKind::Tilde),
-
-            '"' => self.string()?,
-
-            '\'' => self.character()?,
-
-            c if c.is_ascii_digit() => self.number()?,
-
-            'r' if self.peek() == '#'
-                && (self.peek_next().is_alphabetic() || self.peek_next() == '_') =>
-            {
-                self.raw_identifier()
+            '"' => return self.string(),
+            '\'' => return self.quote(),
+            c if c.is_ascii_digit() => return self.number(),
+            'r' if self.peek() == '"' || (self.peek() == '#' && matches!(self.peek_next(), '"' | '#')) => {
+                return self.raw_string();
             }
-
-            c if c.is_alphabetic() || c == '_' => self.identifier(),
-
+            'r' if self.peek() == '#' && is_ident_start(self.peek_next()) => {
+                self.raw_identifier();
+                return Ok(());
+            }
+            'b' if self.peek() == '\'' => {
+                self.advance();
+                return self.byte();
+            }
+            'b' if self.peek() == '"' || (self.peek() == 'r' && matches!(self.peek_next(), '"' | '#')) => {
+                return Err(AelysError::Compile(self.rule(
+                    128,
+                    "byte strings are not supported; write a string literal and call `.as_bytes()`"
+                        .to_string(),
+                    self.span(),
+                )));
+            }
+            c if is_ident_start(c) => {
+                self.identifier();
+                return Ok(());
+            }
             _ => {
                 return Err(AelysError::Compile(
                     self.error(CompileErrorKind::InvalidCharacter(c)),
                 ));
             }
-        }
-
+        };
+        self.add_token(kind);
         Ok(())
     }
+
+    fn with_eq(&mut self, with: TokenKind, without: TokenKind) -> TokenKind {
+        if self.match_char('=') { with } else { without }
+    }
+}
+
+pub(super) fn is_ident_start(c: char) -> bool {
+    c.is_alphabetic() || c == '_'
+}
+
+pub(super) fn is_ident_continue(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
 }

@@ -1,0 +1,7 @@
+use std::math::gcd;
+use std::str::{char_count, repeat};
+use std::math;
+
+fn main() {
+    println!("{} {} {} {}", gcd(12, 18), char_count("héllo"), repeat("ab", 2), math::max(3, 9));
+}

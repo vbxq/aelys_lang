@@ -1,0 +1,11 @@
+fn show(n: i64) {
+    if n < 0 {
+        return;
+    }
+    println!("{}", n);
+}
+
+fn main() {
+    show(-1);
+    show(3);
+}

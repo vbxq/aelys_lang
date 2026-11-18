@@ -1,0 +1,14 @@
+fn lookup(key: i64) -> Option<i64> {
+    if key > 0 { Some(key * 3) } else { None }
+}
+
+fn triple_plus_one(key: i64) -> i64 {
+    let Some(v) = lookup(key) else {
+        return 0;
+    };
+    v + 1
+}
+
+fn main() {
+    println!("{} {}", triple_plus_one(4), triple_plus_one(-2));
+}

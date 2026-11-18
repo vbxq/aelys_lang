@@ -1,0 +1,7 @@
+fn main() {
+    let x = {
+        let doubled = 4 * 2;
+        doubled + 1;
+    };
+    println!("{}", x);
+}

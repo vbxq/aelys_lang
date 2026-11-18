@@ -1,0 +1,23 @@
+fn main() {
+    let mut log = 0;
+    'a: for i in 0..4 {
+        let mut j = 0;
+        'b: while j < 4 {
+            j += 1;
+            for k in 0..4 {
+                if k == 2 {
+                    continue 'b;
+                }
+                if i == 2 && j == 3 {
+                    continue 'a;
+                }
+                if i == 3 {
+                    break 'a;
+                }
+                log = log * 3 + k;
+            }
+        }
+        log += 100;
+    }
+    println!("{}", log);
+}

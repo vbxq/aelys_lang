@@ -544,8 +544,10 @@ impl TypeInference {
                 ConstraintReason::RangeBound,
             ));
         }
-        self.errors.push(TypeError::member_access(
-            "range expressions are not supported yet".to_string(),
+        self.errors.push(TypeError::coded(
+            "E0135",
+            "a range value is not supported yet; a range is usable as a `for` head or inside `[]`",
+            "range value",
             _span,
         ));
 

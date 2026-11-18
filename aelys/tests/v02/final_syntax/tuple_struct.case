@@ -1,0 +1,14 @@
+struct P(i64, i64);
+
+fn swap(p: P) -> P {
+    P(p.1, p.0)
+}
+
+fn main() {
+    let q = swap(P(3, 4));
+    println!("{} {}", q.0, q.1);
+    match q {
+        P(x, 3) => println!("x={}", x),
+        _ => println!("other"),
+    }
+}

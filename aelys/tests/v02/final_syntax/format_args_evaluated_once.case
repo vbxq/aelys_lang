@@ -1,0 +1,10 @@
+fn tick(c: &mut i64, v: i64) -> i64 {
+    *c = *c * 10 + v;
+    v
+}
+
+fn main() {
+    let mut c = 0;
+    println!("{1} {0} {1}", tick(&mut c, 1), tick(&mut c, 2));
+    println!("{}", c);
+}

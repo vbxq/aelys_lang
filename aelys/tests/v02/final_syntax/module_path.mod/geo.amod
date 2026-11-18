@@ -1,0 +1,7 @@
+pub enum Shape {
+    Square(i64),
+}
+
+pub fn area(w: i64, h: i64) -> i64 {
+    w * h
+}

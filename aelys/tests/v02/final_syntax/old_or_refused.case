@@ -1,0 +1,7 @@
+fn main() {
+    let a = false;
+    let b = true;
+    if a or b {
+        println!("one");
+    }
+}

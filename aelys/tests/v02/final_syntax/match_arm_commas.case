@@ -1,0 +1,16 @@
+fn name(n: i64) -> i64 {
+    match n {
+        0 => {
+            100
+        }
+        1 => 101,
+        _ => {
+            let k = n * 2;
+            k
+        },
+    }
+}
+
+fn main() {
+    println!("{} {} {}", name(0), name(1), name(5));
+}

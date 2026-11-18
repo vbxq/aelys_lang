@@ -1,4 +1,3 @@
-
 use aelys_common::error::AelysError;
 use aelys_syntax::{Source, Token, TokenKind};
 use std::sync::Arc;
@@ -13,67 +12,47 @@ mod string;
 
 type Result<T> = std::result::Result<T, AelysError>;
 
-const MAX_COMMENT_DEPTH: usize = 256; // nested /* */ limit
+const MAX_COMMENT_DEPTH: usize = 256;
 
 pub struct Lexer {
     source: Arc<Source>,
-    chars: Vec<char>,
     tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: u32,
     column: u32,
+    start_line: u32,
     start_column: u32,
-    pending_semicolon: bool,
-    nesting_depth: u32,
-    brace_saved_depths: Vec<u32>,
 }
 
 impl Lexer {
     pub fn new(source: &str) -> Self {
-        Self {
-            source: Source::new("<input>", source),
-            chars: source.chars().collect(),
-            tokens: Vec::new(),
-            start: 0,
-            current: 0,
-            line: 1,
-            column: 1,
-            start_column: 1,
-            pending_semicolon: false,
-            nesting_depth: 0,
-            brace_saved_depths: Vec::new(),
-        }
+        Self::with_source(Source::new("<input>", source))
     }
 
     pub fn with_source(source: Arc<Source>) -> Self {
-        let chars = source.content.chars().collect();
         Self {
             source,
-            chars,
             tokens: Vec::new(),
             start: 0,
             current: 0,
             line: 1,
             column: 1,
+            start_line: 1,
             start_column: 1,
-            pending_semicolon: false,
-            nesting_depth: 0,
-            brace_saved_depths: Vec::new(),
         }
     }
 
     pub fn scan(mut self) -> Result<Vec<Token>> {
-        while !self.is_at_end() {
+        loop {
             self.start = self.current;
+            self.start_line = self.line;
             self.start_column = self.column;
+            if self.is_at_end() {
+                break;
+            }
             self.scan_token()?;
         }
-
-        if self.pending_semicolon {
-            self.add_token(TokenKind::Semicolon);
-        }
-
         self.add_token(TokenKind::Eof);
         Ok(self.tokens)
     }

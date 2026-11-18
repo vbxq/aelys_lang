@@ -6,7 +6,7 @@ pub use expr::{
     PatLit, Pattern, RefKind, StructFieldInit, TypeAnnotation, UnaryOp, prelude_variant_enum,
 };
 pub use stmt::{
-    Decorator, EnumVariantDecl, ForeignConv, ForeignDecl, Function, ImplDecl, ImportKind, Method,
+    AttrArg, Decorator, EnumVariantDecl, ForeignConv, ForeignDecl, Function, ImplDecl, ImportKind, Method,
     NeedsStmt, NeedsTarget, Receiver, Stmt, StmtKind, StructFieldDecl, TraitDecl, TraitMethod,
     TraitRef, TypeBounds,
 };

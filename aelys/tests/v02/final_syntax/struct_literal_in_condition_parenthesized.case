@@ -1,0 +1,12 @@
+struct Point { x: i64, y: i64 }
+
+fn main() {
+    let p = Point { x: 3, y: 4 };
+    match (Point { x: p.y, y: p.x }) {
+        Point { x: 4, .. } => println!("swapped"),
+        _ => println!("other"),
+    }
+    if p.x == 3 {
+        println!("three");
+    }
+}

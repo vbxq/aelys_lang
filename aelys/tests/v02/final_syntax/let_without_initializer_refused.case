@@ -1,0 +1,5 @@
+fn main() {
+    let x: i64;
+    x = 3;
+    println!("{}", x);
+}

@@ -1,0 +1,8 @@
+extern "C" {
+    fn labs(x: i64) -> i64;
+}
+
+fn main() {
+    let v = unsafe { labs(-5) };
+    println!("{}", v);
+}

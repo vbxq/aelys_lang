@@ -154,7 +154,7 @@ impl<'a> ConstEval<'a> {
         );
         err.help = Some(
             "a const initializer uses literals, other consts, arithmetic, comparisons, \
-             `and`, `or`, `not` and `as`"
+             `&&`, `||`, `!` and `as`"
                 .to_string(),
         );
         self.errors.push(err);
@@ -181,9 +181,6 @@ impl<'a> ConstEval<'a> {
             }
             ExprKind::Cast { target, .. } => scalar_type(target),
             ExprKind::Grouping(inner) => self.natural(owner, inner)?,
-            ExprKind::Unary {
-                op: UnaryOp::Not, ..
-            } => Some(InferType::Bool),
             ExprKind::Unary { operand, .. } => self.natural(owner, operand)?,
             ExprKind::Binary { left, op, right } => match op {
                 BinaryOp::Eq
@@ -283,7 +280,7 @@ impl<'a> ConstEval<'a> {
                 match (op, v) {
                     (UnaryOp::Neg, Val::Int(v)) => Ok((self.check_int(owner, -v, &t, e.span)?, t)),
                     (UnaryOp::Neg, Val::Float(v)) => Ok((Val::Float(-v), t)),
-                    (UnaryOp::BitNot, Val::Int(v)) => {
+                    (UnaryOp::BitNot | UnaryOp::Not, Val::Int(v)) => {
                         let r = if signed(&t) { Some(!v) } else { wrap(!v, &t) };
                         let Some(r) = r else {
                             return Err(self.not_const(owner, e.span));

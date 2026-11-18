@@ -1,0 +1,7 @@
+fn main() {
+    let o: Option<i64> = None;
+    let Some(v) = o else {
+        println!("none");
+    };
+    println!("{}", v);
+}

@@ -1,0 +1,5 @@
+fn main() {
+    let r#type = 3;
+    let r#match = 4;
+    println!("{}", r#type * r#match);
+}

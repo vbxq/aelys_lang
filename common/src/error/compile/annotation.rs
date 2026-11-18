@@ -41,7 +41,7 @@ impl CompileErrorKind {
             Self::SymbolNotFound { .. } => "no such item in that module",
             Self::SymbolConflict { .. } => "this import name is already taken",
             Self::ForeignHeaderImport { .. } => "C header import is not implemented yet",
-            Self::NeedsOutsidePrologue => "`needs` out of the module prologue",
+            Self::NeedsOutsidePrologue => "`use` out of the module prologue",
             Self::WildcardImport { .. } => "wildcard import is not implemented yet",
             Self::ConflictingExternalSymbol { .. } => "this symbol is claimed here",
             Self::ConflictingForeignDeclarations { .. } => "this declaration disagrees",

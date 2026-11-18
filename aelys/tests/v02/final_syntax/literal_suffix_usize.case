@@ -1,0 +1,6 @@
+fn main() {
+    let n = 3usize;
+    let m: isize = -2;
+    let k: usize = 7;
+    println!("{} {} {}", n, m, k);
+}

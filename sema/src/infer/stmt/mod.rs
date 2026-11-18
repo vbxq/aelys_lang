@@ -22,10 +22,44 @@ impl TypeInference {
                     type_annotation,
                     initializer,
                 } => self.infer_let_pattern(s.span, pattern, type_annotation, initializer, &mut out),
+                StmtKind::Expression(_) => {
+                    let typed = self.infer_stmt(s);
+                    if let TypedStmtKind::Expression(e) = &typed.kind {
+                        self.discarded_values.push((e.span, e.ty.clone()));
+                    }
+                    out.push(typed);
+                }
                 _ => out.push(self.infer_stmt(s)),
             }
         }
         out
+    }
+
+    // a block-like statement without `;` keeps its value, which must be `()` since nothing receives it
+    pub(crate) fn report_discarded_values(&mut self, subst: &crate::unify::Substitution) {
+        for (span, ty) in std::mem::take(&mut self.discarded_values) {
+            let ty = subst.apply(&ty);
+            if matches!(
+                ty,
+                InferType::Null | InferType::Never | InferType::Dynamic | InferType::Var(_)
+            ) {
+                continue;
+            }
+            let mut err = TypeError::coded(
+                "E0134",
+                format!(
+                    "this value of type `{ty}` is discarded: a statement gives its value to \
+                     nothing, and a statement that starts with a block ends at that block"
+                ),
+                "value discarded here",
+                span,
+            );
+            err.help = Some(
+                "wrap a block-like expression in parentheses to use it, or end it with `;`"
+                    .to_string(),
+            );
+            self.errors.push(err);
+        }
     }
 
     fn infer_stmts_into(&mut self, stmts: &[Stmt], out: &mut Vec<TypedStmt>) {
@@ -229,7 +263,7 @@ impl TypeInference {
 
     pub(super) fn infer_stmt(&mut self, stmt: &Stmt) -> TypedStmt {
         let kind = match &stmt.kind {
-            StmtKind::Expression(expr) => {
+            StmtKind::Expression(expr) | StmtKind::Semi(expr) => {
                 let typed_expr = self.infer_expr(expr);
                 if let InferType::Enum(name, args) = &typed_expr.ty {
                     if crate::modules::source_type_name(name) == "Result" && args.len() == 2 {
