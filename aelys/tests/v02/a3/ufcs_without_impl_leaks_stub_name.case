@@ -1,0 +1,4 @@
+trait A { fn f(&self) -> i64 }
+struct P { v: i64 }
+fn main() -> i64 { let p = P { v: 1 }
+ return A::f(&p) }

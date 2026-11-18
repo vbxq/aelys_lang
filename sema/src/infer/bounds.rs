@@ -288,6 +288,18 @@ impl TypeInference {
         };
         if let Bound::Trait(q) = &want {
             let t = crate::infer::traits::trait_shown(q);
+            if name.starts_with(crate::infer::traits::STUB) {
+                let (ty, span) = match binding {
+                    Some((ty, s)) => (crate::infer::unresolved::spelled(ty), *s),
+                    None => ("this receiver".to_string(), callee_span),
+                };
+                return TypeError::coded(
+                    "E0732",
+                    format!("`{ty}` does not implement `{t}`"),
+                    "bound not satisfied",
+                    span,
+                );
+            }
             return match binding {
                 Some((ty, arg_span)) => TypeError::coded(
                     "E0732",
