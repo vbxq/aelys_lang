@@ -4928,22 +4928,23 @@ fn rc2_197_a_fixed_size_array_field_replaces_a_vec_field() {
 
 const RC2_198: &str = r#"
 enum E { A(Vec<string>), B }
-fn main() -> i64 { return 0 }
+fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn main() -> i64 {
+    let mut v: Vec<string> = Vec::new()
+    Vec::push(v, mk(1))
+    let e = E::A(v)
+    Vec::push(v, mk(2))
+    match e { E::A(w) => { println("{w.len} {v.len} {w[0]}") } E::B => { println(0) } }
+    return 0
+}
 "#;
 
 #[test]
-fn rc2_198_a_vec_enum_payload_names_the_own_binding_workaround() {
-    refusal_row_full(
-        "rc2-198",
-        RC2_198,
-        &[],
-        "E0902",
-        &[
-            "variant `A` of enum `E` has a payload of type `Vec<string>`: a Vec inside an enum is \
-             not supported yet; keep the Vec in its own binding and pass it with `&mut`",
-        ],
-        &["struct or enum"],
-    );
+fn rc2_198_a_vec_enum_payload_keeps_its_share_while_the_source_grows() {
+    let h = Harness::new();
+    h.differential_row("rc2-198", RC2_198, &[], "1 2 ab1\n", (12, 12));
+    h.lsan_row("rc2-198", RC2_198, &[], "1 2 ab1\n");
+    h.assert_legs(24);
 }
 
 const RC2_199: &str = r#"

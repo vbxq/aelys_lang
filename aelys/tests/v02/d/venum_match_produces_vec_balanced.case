@@ -1,0 +1,26 @@
+fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
+    return match c { 1 => a, 2 => vec[9], _ => a }
+}
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new()
+    let mut i: i64 = 0
+    while i < n { Vec::push(d, i)
+        i = i + 1 }
+    return d
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 300 {
+        let mut v = mk(3)
+        let mut w = match i % 3 { 0 => v, 1 => mk(5), _ => pick(v, i % 4) }
+        Vec::push(w, 7)
+        w[0] = 100
+        let u = match i % 2 { 0 => w, _ => v }
+        Vec::push(v, 1)
+        t = t + v.len * 1000 + w.len * 100 + u.len * 10 + v[0] + w[0] / 100
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

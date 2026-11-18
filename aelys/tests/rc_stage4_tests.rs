@@ -621,17 +621,26 @@ fn main() -> i64 {
 }
 
 #[test]
-fn f2_enum_with_vec_payload_is_rejected() {
-    let err = rc_reject(
+fn f2_enum_with_vec_payload_is_accepted() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 enum E { Has(Vec<i64>), None }
-fn main() -> i64 { return 0 }
+fn main() -> i64 {
+    let mut v: Vec<i64> = Vec::new()
+    Vec::push(v, 4)
+    let e = E::Has(v)
+    Vec::push(v, 5)
+    match e { E::Has(w) => { return w.len * 10 + v.len } E::None => { return 0 } }
+    return 0
+}
 "#,
-    );
-    assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside an enum is not supported yet"),
-        "an enum variant with a Vec payload must be rejected: {err}"
-    );
+        RuntimeVariant::Rc,
+    ) else {
+        return;
+    };
+    assert_eq!(code, 12, "a Vec payload keeps its own share; stderr:\n{stderr}");
+    let (allocs, frees) = parse_stats(&stderr).expect("rc stats line");
+    assert_eq!(allocs, frees, "a Vec payload is released with its enum; stderr:\n{stderr}");
 }
 
 #[test]

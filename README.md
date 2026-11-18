@@ -717,23 +717,24 @@ The first line is the error code, the area of the compiler in brackets, and what
 
 ### What 0.1 refuses
 
-A form outside the 0.1 surface is refused where it is written, with a code, never compiled into something else. A `Vec` inside an enum:
+A form outside the 0.1 surface is refused where it is written, with a code, never compiled into something else. A closure that captures an `Rc`:
 
 ```rust refused E0902
-enum Shape { Points(Vec<i64>), Empty }
+struct Node { v: i64 }
 
 fn main() -> i64 {
-    let s = Shape::Empty
-    return 0
+    let n = Rc::new(Node { v: 1 })
+    let f = fn() -> i64 { return Rc::get(n).v }
+    return f()
 }
 ```
 
 ```diagnostic
-error[E0902]: variant `Points` of enum `Shape` has a payload of type `Vec<i64>`: a Vec inside an enum is not supported yet; keep the Vec in its own binding and pass it with `&mut`
- --> main.aelys:1:21
+error[E0902]: [rc] closure captures `n` of type `Rc<Node>` which is or contains an `Rc<T>`; capturing an Rc (or a carrier of one) in a closure is not supported
+ --> main.aelys:5:13
   |
-1 | enum Shape { Points(Vec<i64>), Empty }
-  |                     ^^^^^^^^ not supported yet
+5 |     let f = fn() -> i64 { return Rc::get(n).v }
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not supported yet
 
 For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error

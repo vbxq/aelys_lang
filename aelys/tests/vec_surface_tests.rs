@@ -263,8 +263,8 @@ fn accept_shape_generic_fn_with_primitive_arg() {
 }
 
 #[test]
-fn reject_shape_generic_enum_with_vec_payload() {
-    reject_e0412(
+fn accept_shape_generic_enum_with_vec_payload() {
+    accepts(
         "enum Opt<T> { Some(T), Nil }
 fn main() -> i64 {
     let mut i1 = Vec::new()

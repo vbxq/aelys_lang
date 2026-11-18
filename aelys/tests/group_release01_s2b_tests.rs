@@ -325,6 +325,7 @@ const PINNED: &[(&str, Expect)] = &[
     ("m_i_dead_if_trap", Expect::Panic("division by zero\n")),
     ("m_nogc_member_through_borrowed_rc", Expect::Code("E0410")),
     ("m_o_if_lit_init", Expect::Code("E0301")),
+    ("m_vec_in_generic_payload", Expect::Out("1 2\n")),
     ("p_f1_i16_rem", Expect::Panic("division overflow\n")),
     (
         "p_f2_u64_cmp",
@@ -357,7 +358,6 @@ const PINNED: &[(&str, Expect)] = &[
     ("v1_big_stack_array", Expect::Code("E0904")),
     ("v1_lambda_unused", Expect::Code("E0304")),
     ("v1_rc_field_break", Expect::Code("E0902")),
-    ("v1_vec_in_generic_payload", Expect::Code("E0412")),
 ];
 
 const SAMPLED_CODES: usize = 68;
@@ -534,7 +534,7 @@ fn release01_59_a_reference_refusal_is_the_verdict_at_every_level() {
         }
         failures.extend(level_disagreements(&name, &legs));
     }
-    assert_eq!(members, 4, "release01_59: members");
+    assert_eq!(members, 3, "release01_59: members");
     assert!(
         failures.is_empty(),
         "release01_59:\n{}",
