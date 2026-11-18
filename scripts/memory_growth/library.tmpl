@@ -1,28 +1,27 @@
-needs std.vec
-needs std.str
+use std::vec;
+use std::str;
 
-struct Rec { name: string, hits: Rc<i64> }
+struct Rec { name: String, hits: Rc<i64> }
 
-fn label(i: i64) -> string { return "k" + "{i}" }
+fn label(i: i64) -> String { "k" + format!("{i}") }
 
-fn main() -> i64 {
-    let mut base: Vec<i64> = Vec::new()
-    Vec::push(base, 1)
-    Vec::push(base, 2)
-    Vec::push(base, 3)
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut base: Vec<i64> = Vec::new();
+    Vec::push(base, 1);
+    Vec::push(base, 2);
+    Vec::push(base, 3);
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
     while i < NN {
-        let tag: string = label(i % 97)
-        let k: i64 = tag.len
-        let shifted: Vec<i64> = vec.map(&base, fn (x: i64) -> i64 { return x + k })
-        let kept: Vec<i64> = vec.filter(&shifted, fn (x: i64) -> bool { return x > k + 1 })
-        let s: i64 = vec.fold(&kept, 0, fn (a: i64, b: i64) -> i64 { return a + b })
-        let r: Rc<string> = Rc::new(str.repeat(tag, 2))
-        let rec: Rec = Rec { name: tag, hits: Rc::new(s) }
-        total = total + s + Rc::get(r).len + Rc::get(rec.hits) - rec.name.len
-        i = i + 1
+        let tag: String = label(i % 97);
+        let k: i64 = tag.len();
+        let shifted: Vec<i64> = vec::map(&base, move |x: i64| -> i64 { x + k });
+        let kept: Vec<i64> = vec::filter(&shifted, move |x: i64| -> bool { x > k + 1 });
+        let s: i64 = vec::fold(&kept, 0, move |a: i64, b: i64| -> i64 { a + b });
+        let r: Rc<String> = Rc::new(str::repeat(tag, 2));
+        let rec: Rec = Rec { name: tag, hits: Rc::new(s) };
+        total = total + s + Rc::get(r).len() + Rc::get(rec.hits) - rec.name.len();
+        i = i + 1;
     }
-    println(total)
-    return 0
+    println!("{}", total);
 }
