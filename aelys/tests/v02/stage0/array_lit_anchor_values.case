@@ -1,0 +1,19 @@
+fn main() {
+    let x: u64 = 18446744073709551615
+    let arr: [u64; 3] = [x, 1, x - 2]
+    println("{arr[0]} {arr[1]} {arr[2]}")
+    let b = [7, x]
+    println(b[0] + x)
+    let c: [u64; 2] = [18446744073709551615, 1]
+    println(c[1])
+    let y: u8 = 250
+    let s = [y, 5]
+    let t: u8 = s[0] + s[1] + 1
+    println(t)
+    let f: f32 = 1.5
+    let g = [2.25, f]
+    println(g[0] + g[1])
+    let v = vec[y, 3]
+    let u: u8 = v[0] + v[1] + 3
+    println(u)
+}

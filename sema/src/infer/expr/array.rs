@@ -86,12 +86,29 @@ impl TypeInference {
         }
     }
 
+    fn element_anchor_type(&mut self, elements: &mut [TypedExpr]) -> InferType {
+        let anchor = elements
+            .iter()
+            .find(|e| !self.is_literal_like(e) && (e.ty.is_integer() || e.ty.is_float()))
+            .map(|e| e.ty.clone());
+        let Some(anchor) = anchor else {
+            return elements[0].ty.clone();
+        };
+        for elem in elements.iter_mut() {
+            if self.is_literal_like(elem) {
+                self.try_narrow_literal(elem, &anchor);
+            }
+        }
+        anchor
+    }
+
     pub(super) fn infer_array_literal(
         &mut self,
         elements: &[Expr],
         _span: Span,
     ) -> (TypedExprKind, InferType) {
-        let typed_elements: Vec<TypedExpr> = elements.iter().map(|e| self.infer_expr(e)).collect();
+        let mut typed_elements: Vec<TypedExpr> =
+            elements.iter().map(|e| self.infer_expr(e)).collect();
 
         self.reject_rc_aggregate_elements(&typed_elements, "array literal");
         self.reject_vec_aggregate_elements(&typed_elements, "array literal");
@@ -99,8 +116,8 @@ impl TypeInference {
         let elem_ty = if typed_elements.is_empty() {
             self.type_gen.fresh()
         } else {
-            let first_ty = typed_elements[0].ty.clone();
-            for elem in typed_elements.iter().skip(1) {
+            let first_ty = self.element_anchor_type(&mut typed_elements);
+            for elem in typed_elements.iter() {
                 self.constraints.push(Constraint::equal(
                     elem.ty.clone(),
                     first_ty.clone(),
@@ -212,8 +229,8 @@ impl TypeInference {
         } else if typed_elements.is_empty() {
             (self.type_gen.fresh(), None)
         } else {
-            let first_ty = typed_elements[0].ty.clone();
-            for elem in typed_elements.iter().skip(1) {
+            let first_ty = self.element_anchor_type(&mut typed_elements);
+            for elem in typed_elements.iter() {
                 self.constraints.push(Constraint::equal(
                     elem.ty.clone(),
                     first_ty.clone(),

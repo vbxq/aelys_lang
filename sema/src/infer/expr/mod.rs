@@ -15,6 +15,7 @@ use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{BinaryOp, Expr, ExprKind};
+use std::collections::HashMap;
 
 impl TypeInference {
     pub(super) fn infer_expr(&mut self, expr: &Expr) -> TypedExpr {
@@ -899,7 +900,10 @@ impl TypeInference {
         }
 
         if let TypedExprKind::EnumVariant {
-            args, enum_name, ..
+            args,
+            enum_name,
+            variant,
+            ..
         } = &mut expr.kind
         {
             if let InferType::Enum(target_name, target_type_args) = target_ty {
@@ -913,14 +917,64 @@ impl TypeInference {
                             .all(|t| matches!(t, InferType::Var(_)));
                         let all_target_concrete = target_type_args.iter().all(|t| t.is_concrete());
 
-                        if all_expr_var && all_target_concrete {
-                            for target_ta in target_type_args.iter() {
-                                for arg in args.iter_mut() {
-                                    self.try_narrow_literal(arg, target_ta);
+                        let def = self.type_table.get_enum(enum_name).cloned();
+                        let payload = def.as_ref().and_then(|d| {
+                            d.variants
+                                .iter()
+                                .find(|v| v.name == *variant)
+                                .map(|v| (d.type_params.clone(), v.data.clone()))
+                        });
+                        if all_expr_var
+                            && all_target_concrete
+                            && let Some((params, data)) = payload
+                            && params.len() == target_type_args.len()
+                            && data.len() == args.len()
+                        {
+                            let mut mapping: HashMap<String, InferType> = params
+                                .iter()
+                                .cloned()
+                                .zip(target_type_args.iter().cloned())
+                                .collect();
+                            let mut ok = true;
+                            for (i, arg) in args.iter_mut().enumerate() {
+                                let expected =
+                                    self.instantiate_enum_type_param(&data[i], &params, &mut mapping);
+                                if !self.try_narrow_literal(arg, &expected) {
+                                    ok = false;
                                 }
+                                if arg.ty != expected && arg.ty.can_implicit_widen_to(&expected) {
+                                    let vspan = arg.span;
+                                    let original = std::mem::replace(
+                                        arg,
+                                        TypedExpr {
+                                            kind: TypedExprKind::Null,
+                                            ty: InferType::Null,
+                                            span: vspan,
+                                        },
+                                    );
+                                    *arg = TypedExpr {
+                                        kind: TypedExprKind::Cast {
+                                            expr: Box::new(original),
+                                            target: expected.clone(),
+                                        },
+                                        ty: expected.clone(),
+                                        span: vspan,
+                                    };
+                                }
+                                self.constraints.push(Constraint::flows(
+                                    arg.ty.clone(),
+                                    expected,
+                                    arg.span,
+                                    ConstraintReason::Other(format!(
+                                        "argument {} of enum variant '{}::{}'",
+                                        i,
+                                        crate::modules::source_type_name(enum_name),
+                                        variant,
+                                    )),
+                                ));
                             }
                             expr.ty = target_ty.clone();
-                            return true;
+                            return ok;
                         }
                     }
                 }

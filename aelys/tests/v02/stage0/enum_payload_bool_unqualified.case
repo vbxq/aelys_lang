@@ -1,0 +1,7 @@
+fn main() {
+    let o: Option<i64> = Some(true)
+    match o {
+        Some(x) => println(x + 1),
+        None => println(0)
+    }
+}

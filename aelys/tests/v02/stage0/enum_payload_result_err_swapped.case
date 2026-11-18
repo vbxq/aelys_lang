@@ -1,0 +1,4 @@
+fn main() {
+    let r: Result<i64, string> = Err(5)
+    println(0)
+}

@@ -1,0 +1,4 @@
+fn main() {
+    let v: Vec<Option<i64>> = vec[Some(1), Some("s")]
+    println(0)
+}
