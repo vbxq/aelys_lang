@@ -1,8 +1,7 @@
 
 fn bad() -> &i64 {
-    let x = 5
-    return &x
+    let x = 5;
+    &x
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }

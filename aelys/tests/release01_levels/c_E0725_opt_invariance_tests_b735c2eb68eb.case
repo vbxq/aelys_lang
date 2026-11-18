@@ -1,8 +1,7 @@
-fn main() -> i64 {
-    let a = 10
-    let r = &a
-    let f = fn() -> i64 {
-        return *r
-    }
-    return 0
+fn main() {
+    let a = 10;
+    let r = &a;
+    let f = move || -> i64 {
+        *r
+    };
 }

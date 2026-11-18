@@ -1,5 +1,4 @@
-needs m.*
+mod m; use m::*;
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }

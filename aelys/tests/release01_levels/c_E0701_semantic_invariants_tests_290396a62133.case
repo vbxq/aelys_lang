@@ -1,7 +1,7 @@
 
-struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    return a.id
+use std::process::ExitCode; struct Resource { id: i64 }
+fn main() -> ExitCode {
+    let a = Resource{id: 1};
+    let b = a;
+    return ExitCode::from(a.id as u8);
 }

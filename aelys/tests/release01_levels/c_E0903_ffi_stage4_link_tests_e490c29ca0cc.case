@@ -1,2 +1,2 @@
-unsafe extern fn aelys_stage4_triple(x: i64) -> i64
-fn main() -> i64 { unsafe { return aelys_stage4_triple(14) } }
+use std::process::ExitCode; extern "C" { fn aelys_stage4_triple(x: i64) -> i64; }
+fn main() -> ExitCode { unsafe { return ExitCode::from(aelys_stage4_triple(14) as u8); } }

@@ -1,6 +1,5 @@
-fn main() -> i64 {
-    let x = 5
-    let r = &x
-    let pp = &r
-    return 0
+fn main() {
+    let x = 5;
+    let r = &x;
+    let pp = &r;
 }

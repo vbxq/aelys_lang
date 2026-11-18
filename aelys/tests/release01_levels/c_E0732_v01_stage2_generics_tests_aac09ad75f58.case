@@ -1,7 +1,7 @@
 
-fn same<T>(a: T, b: T) -> bool { return a == b }
+use std::process::ExitCode; fn same<T>(a: T, b: T) -> bool { a == b }
 
-fn main() -> i64 {
-    if same(1, 1) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    if same(1, 1) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }

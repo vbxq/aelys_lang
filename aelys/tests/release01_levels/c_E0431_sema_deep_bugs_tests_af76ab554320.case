@@ -4,5 +4,5 @@ fn bad(iter) {
     }
 }
 fn main() {
-    bad(1)
+    bad(1);
 }

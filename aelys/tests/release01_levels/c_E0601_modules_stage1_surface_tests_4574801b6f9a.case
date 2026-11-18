@@ -1,5 +1,5 @@
-needs m
+use std::process::ExitCode; mod m;
 
-fn main() -> i64 {{
-    {body}
+fn main() -> ExitCode {{
+    {ExitCode::from(body as u8)}
 }}

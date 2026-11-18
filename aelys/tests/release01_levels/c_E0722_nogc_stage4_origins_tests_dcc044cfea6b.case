@@ -1,11 +1,11 @@
 
-fn main() -> i64 {
-    let a = 10
-    let mut r = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let mut r = &a;
     {
-        let x = 5
-        let tmp = &x
-        r = tmp
+        let x = 5;
+        let tmp = &x;
+        r = tmp;
     }
-    return *r
+    return ExitCode::from((*r) as u8);
 }

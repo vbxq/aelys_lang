@@ -1,7 +1,7 @@
 
-let mut g: i64 = 1901
-fn main() -> i64 {
-    let r = &mut g
-    *r = 101
-    return g
+use std::process::ExitCode; static mut g: i64 = 1901;
+fn main() -> ExitCode {
+    let r = &mut g;
+    *r = 101;
+    return ExitCode::from(g as u8);
 }

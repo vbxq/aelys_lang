@@ -1,4 +1,4 @@
-fn main() -> i64 {
-    unsafe extern fn f()
-    return 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    unsafe extern fn f();
+    return 0;
 }

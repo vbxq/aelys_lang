@@ -1,4 +1,4 @@
 
 fn main() {
-    let x = Ghost { a: 1 }
+    let x = Ghost { a: 1 };
 }

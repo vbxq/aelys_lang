@@ -1,12 +1,11 @@
 
-fn dup() -> i64 { return 0 }
+fn dup() -> i64 { 0 }
 fn outer() -> i64 {
     {
-        fn dup() -> i64 { return 5 }
-        return dup()
+        fn dup() -> i64 { 5 }
+        dup()
     }
 }
-fn main() -> i64 {
-    println(outer())
-    return 0
+fn main() {
+    println!("{}", outer());
 }

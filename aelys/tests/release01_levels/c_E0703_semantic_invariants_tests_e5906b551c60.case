@@ -1,10 +1,10 @@
 
-struct Resource { id: i64 }
-fn main() -> i64 {
-    let cond = true
-    let a = Resource{id: 1}
+use std::process::ExitCode; struct Resource { id: i64 }
+fn main() -> ExitCode {
+    let cond = true;
+    let a = Resource{id: 1};
     if cond {
-        let b = a
+        let b = a;
     }
-    return a.id
+    return ExitCode::from(a.id as u8);
 }

@@ -1,5 +1,5 @@
-fn main() -> i64 { let arr = [1, 2, 3]
-    let i = 5
-    if false { return arr[i] }
-    let y = arr[i]
-    return 0 }
+use std::process::ExitCode; fn main() -> ExitCode { let arr = [1, 2, 3];
+    let i = 5;
+    if false { return ExitCode::from(arr[i] as u8); }
+    let y = arr[i];
+    return ExitCode::SUCCESS; }

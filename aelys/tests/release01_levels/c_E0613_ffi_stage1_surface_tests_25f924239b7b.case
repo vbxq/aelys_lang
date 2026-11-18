@@ -1,1 +1,1 @@
-unsafe extern fn main()
+extern "C" { fn main(); }

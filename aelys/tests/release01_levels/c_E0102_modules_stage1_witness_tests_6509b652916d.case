@@ -1,5 +1,5 @@
-needs m
+use std::process::ExitCode; needs m;
 
-fn main() -> i64 {
+fn main() -> ExitCode {
     return 1 +
 }
