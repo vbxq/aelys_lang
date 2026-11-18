@@ -1,0 +1,28 @@
+struct P { name: string, age: i64, score: fn(i64) -> i64 }
+
+fn triple(x: i64) -> i64 { return x * 3 }
+
+impl P {
+    fn name(&self) -> string { return "<" + self.name + ">" }
+    fn age(&self) -> i64 { return self.age + 100 }
+    fn set_age(&mut self, a: i64) { self.age = a }
+}
+
+trait Named { fn label(&self) -> string }
+struct T { label: string }
+impl Named for T {
+    fn label(&self) -> string { return "T:" + self.label }
+}
+
+fn show(p: &P) -> string { return p.name() + " " + p.name }
+
+fn main() -> i64 {
+    let mut p = P { name: "ann", age: 7, score: triple }
+    println("{p.name} {p.name()} {p.age} {p.age()}")
+    p.set_age(9)
+    p.name = "bob"
+    println("{p.age} {p.age()} {show(&p)} {p.score(5)}")
+    let t = T { label: "x" }
+    println("{t.label} {t.label()}")
+    return 0
+}

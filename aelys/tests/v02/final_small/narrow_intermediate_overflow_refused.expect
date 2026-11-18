@@ -1,0 +1,3 @@
+refuse E0450
+this arithmetic operation will overflow
+attempt to compute `200_u8 + 100_u8`, which would overflow

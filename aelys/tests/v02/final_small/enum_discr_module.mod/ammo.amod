@@ -1,0 +1,6 @@
+@repr(i32)
+pub enum Ammo { Clip = 5, Shell, Cell = -2 }
+
+pub fn code(a: Ammo) -> i32 {
+    return a as i32
+}

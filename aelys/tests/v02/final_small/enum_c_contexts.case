@@ -1,0 +1,40 @@
+@repr(i32)
+enum Kind { Player = 0, Imp = 1, Demon = 2, Baron = 3 }
+
+struct Info { health: i32, speed: i32 }
+struct Mobj { kind: Kind, hp: i32 }
+
+let INFO: [Info; 4] = [Info { health: 100, speed: 0 }, Info { health: 60, speed: 8 }, Info { health: 150, speed: 10 }, Info { health: 1000, speed: 8 }]
+
+fn info(k: Kind) -> Info {
+    return INFO[k as i32]
+}
+
+fn label(k: Kind) -> i64 {
+    return match k { Kind::Player => 7, Kind::Imp => 11, Kind::Demon => 13, Kind::Baron => 17 }
+}
+
+fn main() -> i64 {
+    let kinds: [Kind; 3] = [Kind::Baron, Kind::Imp, Kind::Demon]
+    let mut mobjs: Vec<Mobj> = Vec::new()
+    for i in 0..3 {
+        let k = kinds[i]
+        mobjs.push(Mobj { kind: k, hp: info(k).health })
+    }
+    let mut sum: i64 = 0
+    let mut codes: i64 = 0
+    for i in 0..3 {
+        let m = mobjs[i]
+        sum = sum + m.hp as i64 + label(m.kind)
+        codes = codes * 10 + m.kind as i64
+    }
+    println("{sum} {codes}")
+    let sp = info(mobjs[2].kind).speed
+    let k8 = mobjs[0].kind as u8
+    println("{sp} {k8}")
+    let counts = [0, 0, 0, 0]
+    let mut tally = counts
+    for i in 0..3 { tally[mobjs[i].kind as u8] += 1 }
+    println("{tally[0]} {tally[1]} {tally[2]} {tally[3]}")
+    return 0
+}

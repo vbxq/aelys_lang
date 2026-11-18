@@ -1,0 +1,23 @@
+@repr(i32)
+enum Weapon { Fist = 0, Pistol, Shotgun, Chaingun, NoChange = 10 }
+
+@repr(u8)
+enum Byte { Zero, Top = 255 }
+
+@repr(i8)
+enum Signed { Low = -128, High = 127 }
+
+fn main() -> i64 {
+    let w = Weapon::Chaingun
+    let n = w as i32
+    let nc = Weapon::NoChange as i32
+    let t = Byte::Top as u8
+    let t64 = Byte::Top as i64
+    let lo = Signed::Low as i64
+    let hi = Signed::High as i8
+    println("{n} {nc} {t} {t64} {lo} {hi}")
+    let back = match Weapon::from_i64(10) { Some(x) => x as i64, None => 0 - 1 }
+    let none = match Byte::from_i64(256) { Some(x) => x as i64, None => 0 - 1 }
+    println("{back} {none}")
+    return 0
+}

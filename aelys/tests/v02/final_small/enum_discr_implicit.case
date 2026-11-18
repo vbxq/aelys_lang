@@ -1,0 +1,30 @@
+enum E { A, B = 10, C, D = -5, F, G, H = 1 << 20, I }
+
+let GD: u8 = E::D as u8
+let GI: i64 = E::I as i64 + 1
+
+fn main() -> i64 {
+    let a = E::A as i64
+    let b = E::B as i64
+    let c = E::C as i64
+    let d = E::D as i64
+    let f = E::F as i64
+    let g = E::G as i64
+    println("{a} {b} {c} {d} {f} {g}")
+    let h = E::H as i32
+    let i = E::I as i32
+    println("{h} {i}")
+    let du = E::D as u8
+    let fu = E::F as u16
+    let di = E::D as i8
+    let iu = E::I as u8
+    println("{du} {fu} {di} {iu}")
+    let d32 = E::D as u32
+    let d64 = E::D as u64
+    println("{d32} {d64}")
+    let x = E::F
+    let w: i16 = x as i16
+    println(w)
+    println("{GD} {GI}")
+    return 0
+}

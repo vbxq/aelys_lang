@@ -1,0 +1,8 @@
+fn f() -> i64 { return 3 }
+enum E { A = f(), B }
+
+fn main() -> i64 {
+    let x = E::A as i64
+    println(x)
+    return 0
+}

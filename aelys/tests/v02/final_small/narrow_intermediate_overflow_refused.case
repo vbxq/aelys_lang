@@ -1,0 +1,5 @@
+fn main() -> i64 {
+    let x: u8 = 200 + 100 - 100
+    println(x)
+    return 0
+}

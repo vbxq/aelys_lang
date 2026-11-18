@@ -1,0 +1,2 @@
+refuse E0450
+attempt to compute `200_i16 * 200_i16`, which would overflow

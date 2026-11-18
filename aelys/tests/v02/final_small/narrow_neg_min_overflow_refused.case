@@ -1,0 +1,5 @@
+fn main() -> i64 {
+    let x: i8 = -(-128)
+    println(x)
+    return 0
+}

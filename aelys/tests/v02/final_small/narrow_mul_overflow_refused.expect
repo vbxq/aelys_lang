@@ -1,0 +1,3 @@
+refuse E0450
+this arithmetic operation will overflow
+attempt to compute `65536_i32 * 65536_i32`, which would overflow

@@ -1,0 +1,26 @@
+enum Ammo { Clip = 0, Shell = 1, Cell = 2, Missile = 3 }
+enum Sparse { Lo = -7, Mid = 40, Hi }
+
+fn name(a: Ammo) -> string {
+    return match a { Ammo::Clip => "clip", Ammo::Shell => "shell", Ammo::Cell => "cell", Ammo::Missile => "missile" }
+}
+
+fn show(n: i64) -> string {
+    return match Ammo::from_i64(n) { Some(a) => name(a), None => "none" }
+}
+
+fn sparse(n: i64) -> i64 {
+    return match Sparse::from_i64(n) { Some(s) => s as i64 * 100, None => 0 - 1 }
+}
+
+fn main() -> i64 {
+    println("{show(0)} {show(2)} {show(3)} {show(4)} {show(-1)}")
+    println("{sparse(-7)} {sparse(40)} {sparse(41)} {sparse(0)} {sparse(42)}")
+    let mut ok: i64 = 0
+    for i in 0..4 {
+        let back = match Ammo::from_i64(i) { Some(a) => a as i64, None => 99 }
+        if back == i { ok = ok + 1 }
+    }
+    println(ok)
+    return 0
+}

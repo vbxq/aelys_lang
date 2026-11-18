@@ -1,0 +1,8 @@
+@repr(u8)
+enum E { A = 254, B, C }
+
+fn main() -> i64 {
+    let x = E::A as i64
+    println(x)
+    return 0
+}

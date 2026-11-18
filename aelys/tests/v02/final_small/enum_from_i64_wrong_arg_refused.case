@@ -1,0 +1,8 @@
+enum E { A, B }
+
+fn main() -> i64 {
+    let n: i32 = 1
+    let x = match E::from_i64(n) { Some(e) => e as i64, None => 0 }
+    println(x)
+    return 0
+}

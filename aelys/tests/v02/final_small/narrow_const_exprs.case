@@ -1,0 +1,37 @@
+struct P { x: i32, y: u8 }
+
+fn half(n: i32) -> i32 {
+    return n / 2
+}
+
+fn big() -> u32 {
+    return 4000000000 / 2 + 1
+}
+
+fn main() -> i64 {
+    let m: i32 = 65536 * 2
+    let a: u8 = 200 + 55
+    let d: i32 = 1 << 30
+    let q: u8 = (100 + 100) / 3
+    let r: u8 = 255 % 7
+    let s: i16 = -32768
+    let n: i32 = -2147483648
+    let t: i32 = 0 - 2147483647 - 1
+    let u: u32 = 4000000000 / 2 + 1
+    let sh: i32 = 1 << 31
+    let sr: i32 = -64 >> 3
+    let bx: u16 = (0xff00 | 0x00f0) ^ 0x0f0f
+    let neg: i32 = -(65536 * 3)
+    let dv: i32 = -7 / 2
+    let md: i32 = -7 % 2
+    println("{m} {a} {d} {q} {r} {s} {n} {t} {u}")
+    println("{sh} {sr} {bx} {neg} {dv} {md}")
+    let p = P { x: 70000 * 3, y: 16 * 15 + 15 }
+    let arr: [i32; 3] = [65536 * 4, 1 << 20, 3 * -5]
+    println("{p.x} {p.y} {arr[0]} {arr[1]} {arr[2]} {half(65536 * 3)} {big()}")
+    let mut acc: i32 = 1
+    acc = acc + 1000 * 1000
+    acc = 70000 * 30000
+    println(acc)
+    return 0
+}

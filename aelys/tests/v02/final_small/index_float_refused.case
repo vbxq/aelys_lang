@@ -1,0 +1,6 @@
+fn main() -> i64 {
+    let v: Vec<i64> = vec[1, 2]
+    let f = 1.0
+    println(v[f])
+    return 0
+}

@@ -1,0 +1,2 @@
+refuse E0450
+attempt to shift left by `8_u8`, which would overflow

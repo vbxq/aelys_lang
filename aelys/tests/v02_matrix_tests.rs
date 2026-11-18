@@ -333,3 +333,8 @@ fn track_final_syntax() {
 fn track_final_xmod() {
     run_track("final_xmod");
 }
+
+#[test]
+fn track_final_small() {
+    run_track("final_small");
+}
