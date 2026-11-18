@@ -1,5 +1,9 @@
-pub fn usage() -> &'static str {
-    "Usage:
+pub fn usage() -> String {
+    let name = aelys_common::diagnostic::render::program_name();
+    USAGE.replace("  aelys ", &format!("  {name} "))
+}
+
+const USAGE: &str = "Usage:
   aelys compile [flags] <file>
   aelys explain <error-code>
   aelys help
@@ -32,5 +36,4 @@ Examples:
   aelys compile main.aelys -o output.exe -Wall -Werror
   aelys compile main.aelys --emit-llvm-ir
   aelys compile main.aelys -I /path/to/lib
-  aelys --explain E0401"
-}
+  aelys --explain E0401";

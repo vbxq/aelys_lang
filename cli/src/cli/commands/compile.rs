@@ -1,11 +1,11 @@
 
 use aelys_common::{ColorConfig, WarningConfig, format_warnings, render_summary};
 use aelys_driver::{
-    LinkRequirement, RuntimeVariant, SourceOptions, compile_file_with_llvm_sources,
-    executable_path_for, ir_path_for, lower_file_to_air_with_sources, object_path_for,
+    CompiledArtifact, LinkRequirement, RuntimeVariant, SourceOptions,
+    compile_file_with_llvm_artifact, lower_file_to_air_with_sources,
 };
 use aelys_opt::OptimizationLevel;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub fn run_with_options(
     path: &str,
@@ -25,7 +25,7 @@ pub fn run_with_options(
 
     let requested = output.as_deref().map(Path::new);
 
-    match compile_file_with_llvm_sources(
+    match compile_file_with_llvm_artifact(
         Path::new(path),
         opt_level,
         emit_llvm_ir,
@@ -34,7 +34,7 @@ pub fn run_with_options(
         sources,
         requested,
     ) {
-        Ok(warnings) => {
+        Ok((warnings, artifact)) => {
             let filtered: Vec<_> = warnings
                 .into_iter()
                 .filter(|warning| _warn_config.is_enabled(&warning.kind))
@@ -50,17 +50,16 @@ pub fn run_with_options(
                 ));
             }
 
-            let source = Path::new(path);
-            let chosen = |default: PathBuf| requested.map(Path::to_path_buf).unwrap_or(default);
-            if emit_llvm_ir {
-                eprintln!("Wrote {}", chosen(ir_path_for(source)).display());
-            } else if let Some(target) = requested {
-                eprintln!("Wrote {}", target.display());
-            } else if !executable_path_for(source).is_file() {
-                eprintln!(
-                    "Wrote {} (no `main`, so nothing was linked)",
-                    object_path_for(source).display()
-                );
+            match artifact {
+                CompiledArtifact::LlvmIr(written) => eprintln!("Wrote {}", written.display()),
+                CompiledArtifact::Executable(written) if requested.is_some() => {
+                    eprintln!("Wrote {}", written.display())
+                }
+                CompiledArtifact::Executable(_) => {}
+                CompiledArtifact::Object(written) => eprintln!(
+                    "Wrote {} (an object file: no `main`, so nothing was linked)",
+                    written.display()
+                ),
             }
 
             Ok(0)

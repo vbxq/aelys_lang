@@ -277,8 +277,9 @@ impl<'a> Parser<'a> {
         match self.command {
             None => {
                 return Err(format!(
-                    "unexpected argument: {}. Use 'aelys compile <file>' to compile.",
-                    token
+                    "unexpected argument: {}. Use '{} compile <file>' to compile.",
+                    token,
+                    aelys_common::diagnostic::render::program_name()
                 ));
             }
             Some(CommandName::Compile) => {

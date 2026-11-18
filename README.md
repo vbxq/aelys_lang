@@ -76,7 +76,7 @@ The test counts the blocks of each kind, so a block cannot be added without bein
 
 ## Building and running
 
-`cargo build --release` builds the compiler as `target/release/aelys-cli`, and this file calls it `aelys-cli`. Its messages call it `aelys` ("try `aelys --explain E0433`"); the command to type is `aelys-cli --explain E0433`. It links programs with the system `cc`.
+`cargo build --release` builds the compiler as `target/release/aelys-cli`, and this file calls it `aelys-cli`. Its messages name the binary as it was invoked ("try `aelys-cli --explain E0433`"). It links programs with the system `cc`.
 
 ```rust run file=hello.aelys
 fn main() -> i64 {
@@ -103,10 +103,9 @@ hello, world
 greet
 hello
 hello.aelys
-hello.o
 ```
 
-Without `-o` the executable is written beside the source, named after it without the extension; `-o` names it. The object file `hello.o` is left beside the source either way; this is a known defect. The standard library is built into the compiler, so a program that uses `std` compiles from any directory with no flag, as long as no search root holds its own `std/prelude.aelys`.
+Without `-o` the executable is written beside the source, named after it without the extension; `-o` names it. No object file is left behind. The standard library is built into the compiler, so a program that uses `std` compiles from any directory with no flag, as long as no search root holds its own `std/prelude.aelys`.
 
 ## The 0.1 promise
 
@@ -374,7 +373,7 @@ error[E0433]: [const-index] index 3 is outside `[_; 3]`, whose elements are 0 to
 3 |     println(a[3])
   |               ^ this index is outside the array
 
-For more information about this error, try `aelys --explain E0433`
+For more information about this error, try `aelys-cli --explain E0433`
 error: aborting due to 1 previous error
 ```
 
@@ -521,7 +520,7 @@ error[E0304]: a `string` cannot be indexed by integer; `.len` counts bytes while
   |             ^ invalid member access
    = help: read the characters with `for c in s`, which yields a `char`, or ask for one with `str.char_at(s, i)`
 
-For more information about this error, try `aelys --explain E0304`
+For more information about this error, try `aelys-cli --explain E0304`
 error: aborting due to 1 previous error
 ```
 
@@ -648,7 +647,7 @@ error[E0711]: [borrow] cannot write to `v` while it is borrowed
 5 |     println(view[0])
   |     ---------------- borrow last used here
 
-For more information about this error, try `aelys --explain E0711`
+For more information about this error, try `aelys-cli --explain E0711`
 error: aborting due to 1 previous error
 ```
 
@@ -685,7 +684,7 @@ error[E0727]: [nogc] function `report` is declared nogc but its inferred effects
   |            -------- calls `total` here
    = help: keep the value on the stack (an array or a `&[T]` slice), make every function on this path nogc, or drop `nogc` from `report`
 
-For more information about this error, try `aelys --explain E0727`
+For more information about this error, try `aelys-cli --explain E0727`
 error: aborting due to 1 previous error
 ```
 
@@ -712,7 +711,7 @@ error[E0902]: field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a 
 1 | struct Bag { items: Vec<i64> }
   |              ^^^^^^^^^^^^^^^ not supported yet
 
-For more information about this error, try `aelys --explain E0902`
+For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error
 ```
 
@@ -746,7 +745,7 @@ error[E0301]: unknown method 'remove' on Vec; supported: 'new', 'push', 'pop', '
 3 |     Vec::remove(v, 0)
   |     ^^^^^^^^^^^^^^^^^ unknown method 'remove' on Vec; supported: 'new', 'push', 'pop', 'len', 'as_slice', 'try_as_unique_mut_slice'
 
-For more information about this error, try `aelys --explain E0301`
+For more information about this error, try `aelys-cli --explain E0301`
 error: aborting due to 1 previous error
 ```
 
@@ -834,7 +833,7 @@ error[E0622]: module 'util' resolves in 2 search roots
    = note: resolved in: a, b
    = help: drop one of the `-I` roots, or delete the copy that duplicates it
 
-For more information about this error, try `aelys --explain E0622`
+For more information about this error, try `aelys-cli --explain E0622`
 error: aborting due to 1 previous error
 ```
 
@@ -979,7 +978,7 @@ error[E0730]: [nogc] type parameter `T` of `largest` is bound `nogc`, but this c
    |                     ^^^^^^^^ `nogc` bound not satisfied here
    = help: a nogc value is a primitive, a fixed array, a reference, a `nogc fn`, or a non-generic struct/enum built only from those
 
-For more information about this error, try `aelys --explain E0730`
+For more information about this error, try `aelys-cli --explain E0730`
 error: aborting due to 1 previous error
 ```
 
@@ -1017,9 +1016,9 @@ fn main() -> i64 {
 122
 ```
 
-A name that is not a bound is refused. The second error, `E0102` on the closing brace, is a known defect of the parser's recovery after the first one:
+A name that is not a bound is refused:
 
-```rust refused E0106 E0102
+```rust refused E0106
 fn show<T: Display>(x: T) -> T {
     return x
 }
@@ -1036,15 +1035,8 @@ error[E0106]: `Display` is not a bound; the bounds are `nogc`, `eq` and `ord`, c
 1 | fn show<T: Display>(x: T) -> T {
   |            ^^^^^^^ not a bound
 
-For more information about this error, try `aelys --explain E0106`
-error[E0102]: expected expression
- --> main.aelys:3:1
-  |
-3 | }
-  | ^
-
-For more information about this error, try `aelys --explain E0102`
-error: aborting due to 2 previous errors
+For more information about this error, try `aelys-cli --explain E0106`
+error: aborting due to 1 previous error
 ```
 
 `ord` deliberately excludes `string`:
@@ -1070,7 +1062,7 @@ error[E0732]: [bound] type parameter `T` of `first` is bound `ord`, but this cal
   |                   ^^^^^^^^ bound not satisfied here
    = help: the integers, the floats and `char` are `ord`; `string` is not, use `str.compare`
 
-For more information about this error, try `aelys --explain E0732`
+For more information about this error, try `aelys-cli --explain E0732`
 error: aborting due to 1 previous error
 ```
 

@@ -6,7 +6,7 @@ mod runtime;
 
 pub use core_lib::resolve_aelys_core_lib;
 pub use link::LinkRequirement;
-pub use lower::{executable_path_for, ir_path_for, object_path_for};
+pub use lower::{CompiledArtifact, executable_path_for, ir_path_for, object_path_for};
 pub use runtime::RuntimeVariant;
 
 use crate::SourceOptions;
@@ -853,8 +853,29 @@ pub fn compile_file_with_llvm_sources(
     sources: &SourceOptions,
     output: Option<&Path>,
 ) -> Result<Vec<Warning>, AelysError> {
+    compile_file_with_llvm_artifact(
+        path,
+        opt_level,
+        emit_llvm_ir,
+        runtime,
+        link,
+        sources,
+        output,
+    )
+    .map(|(warnings, _)| warnings)
+}
+
+pub fn compile_file_with_llvm_artifact(
+    path: &Path,
+    opt_level: OptimizationLevel,
+    emit_llvm_ir: bool,
+    runtime: RuntimeVariant,
+    link: &LinkRequirement,
+    sources: &SourceOptions,
+    output: Option<&Path>,
+) -> Result<(Vec<Warning>, CompiledArtifact), AelysError> {
     let artifacts = lower_file_to_air_with_source(path, opt_level, sources)?;
-    compile_air_with_llvm_linked(
+    let artifact = compile_air_with_llvm_linked(
         path,
         &artifacts.air,
         opt_level,
@@ -864,8 +885,9 @@ pub fn compile_file_with_llvm_sources(
         link,
         output,
         &artifacts.required_externs,
+        false,
     )?;
-    Ok(artifacts.warnings)
+    Ok((artifacts.warnings, artifact))
 }
 
 fn run_process_c_locale(program: &str, args: &[String]) -> Result<(), String> {

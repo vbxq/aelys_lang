@@ -9,6 +9,12 @@ use aelys_common::WarningConfig;
 
 pub fn run() -> i32 {
     let args: Vec<String> = std::env::args().collect();
+    let invoked = std::env::args_os().next().and_then(|a| {
+        std::path::Path::new(&a)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+    });
+    aelys_common::diagnostic::render::set_program_name(invoked.as_deref().unwrap_or("aelys-cli"));
     let parsed = match args::parse_args(&args) {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -19,11 +25,11 @@ pub fn run() -> i32 {
     };
 
     if matches!(parsed.command, args::Command::Help) {
-        eprintln!("{}", args::usage());
+        println!("{}", args::usage());
         return 0;
     }
     if matches!(parsed.command, args::Command::Version) {
-        eprintln!("{}", version_line());
+        println!("{}", version_line());
         return 0;
     }
 

@@ -1,5 +1,16 @@
 use super::color::ColorConfig;
 use super::{Diagnostic, Label, Severity, Suggestion};
+use std::sync::OnceLock;
+
+static PROGRAM_NAME: OnceLock<String> = OnceLock::new();
+
+pub fn set_program_name(name: &str) {
+    let _ = PROGRAM_NAME.set(name.to_string());
+}
+
+pub fn program_name() -> &'static str {
+    PROGRAM_NAME.get().map_or("aelys-cli", String::as_str)
+}
 
 /// render  a diagnostic to a string in rustc-style format
 pub fn render_diagnostic(diag: &Diagnostic, color: &ColorConfig) -> String {
@@ -58,7 +69,8 @@ pub fn render_diagnostic(diag: &Diagnostic, color: &ColorConfig) -> String {
     if let Some(code) = &diag.code {
         if diag.severity == Severity::Error {
             out.push_str(&format!(
-                "\nFor more information about this error, try `aelys --explain {}`\n",
+                "\nFor more information about this error, try `{} --explain {}`\n",
+                program_name(),
                 code,
             ));
         }

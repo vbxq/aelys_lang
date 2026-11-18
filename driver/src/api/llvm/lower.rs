@@ -30,7 +30,16 @@ pub(super) fn compile_air_with_llvm(
         &LinkRequirement::default(),
         None,
         require,
+        true,
     )
+    .map(|_| ())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompiledArtifact {
+    Executable(PathBuf),
+    Object(PathBuf),
+    LlvmIr(PathBuf),
 }
 
 pub(super) fn compile_air_with_llvm_linked(
@@ -43,7 +52,8 @@ pub(super) fn compile_air_with_llvm_linked(
     link: &LinkRequirement,
     output: Option<&Path>,
     require: &[String],
-) -> Result<(), AelysError> {
+    keep_object: bool,
+) -> Result<CompiledArtifact, AelysError> {
     let module_name = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -89,11 +99,12 @@ pub(super) fn compile_air_with_llvm_linked(
         codegen
             .emit_ir(&ir_path_str)
             .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
-        return Ok(());
+        return Ok(CompiledArtifact::LlvmIr(ir_path));
     }
 
+    let exe_path = requested(output, || executable_path_for(path));
     let object_path = if has_main_entry {
-        object_path_for(path)
+        object_beside(&exe_path)
     } else {
         requested(output, || object_path_for(path))
     };
@@ -102,7 +113,10 @@ pub(super) fn compile_air_with_llvm_linked(
         .emit_object(&object_path_str, opt_level.numeric())
         .map_err(|err| llvm_backend_error_to_diagnostic(err, air, source.clone()))?;
 
-    if has_main_entry {
+    if !has_main_entry {
+        return Ok(CompiledArtifact::Object(object_path));
+    }
+    let linked = (|| {
         let anchor = program_anchor_span(air, source.as_ref());
         let core_lib = resolve_aelys_core_lib(runtime).map_err(|message| {
             backend_diagnostic_error(
@@ -115,7 +129,6 @@ pub(super) fn compile_air_with_llvm_linked(
                 Fault::Environment,
             )
         })?;
-        let exe_path = requested(output, || executable_path_for(path));
         link_native_executable(&object_path, &exe_path, &core_lib, runtime, link, require).map_err(
             |message| {
                 backend_diagnostic_error(
@@ -140,9 +153,18 @@ pub(super) fn compile_air_with_llvm_linked(
                 link,
             ));
         }
+        Ok(())
+    })();
+    if !keep_object {
+        let _ = std::fs::remove_file(&object_path);
     }
+    linked.map(|()| CompiledArtifact::Executable(exe_path))
+}
 
-    Ok(())
+fn object_beside(exe: &Path) -> PathBuf {
+    let mut object = exe.as_os_str().to_owned();
+    object.push(if cfg!(windows) { ".obj" } else { ".o" });
+    PathBuf::from(object)
 }
 
 fn claimed_runtime_symbol_error(
