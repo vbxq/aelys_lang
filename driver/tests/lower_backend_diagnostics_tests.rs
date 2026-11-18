@@ -74,7 +74,7 @@ fn returning_array_compiles_successfully() {
     let src = r#"
 fn f() -> [i64; 3] {
     let arr = [1, 2, 3];
-    return arr;
+    arr
 }
 "#;
     let path = write_temp_source("arr_ret", src);
@@ -102,13 +102,13 @@ fn big() -> i64 {
 fn oversized_stack_data_enum_array_is_reported_without_panic() {
     let src = r#"
 enum Big {
-    A(string),
+    A(String),
     B(i64),
 }
 
 fn main() {
     let arr = [Big::B(0); 50000];
-    println(0);
+    println!("{}", 0);
 }
 "#;
     assert_lowering_error(src, "stack array too large: [enum Big; 50000]");
@@ -137,10 +137,10 @@ fn main() {
 fn non_constant_file_scope_let_is_reported_without_panic() {
     let src = r#"
 fn make() -> i64 {
-    return 7
+    7
 }
 
-let g: i64 = make()
+static g: i64 = make();
 "#;
     assert_lowering_error(
         src,
@@ -156,7 +156,7 @@ enum Option<T> {
     None,
 }
 
-let gs: Option<string> = Option::Some("hi")
+static gs: Option<String> = Option::Some("hi");
 "#;
     assert_lowering_error(
         src,
@@ -172,10 +172,9 @@ enum Holder<T> {
     Empty,
 }
 
-let gf: Holder<fn() -> i64> = Holder::Value(main)
+static gf: Holder<fn() -> i64> = Holder::Value(main);
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
     assert_lowering_error(

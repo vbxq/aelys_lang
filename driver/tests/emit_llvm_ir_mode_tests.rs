@@ -20,8 +20,8 @@ fn emit_llvm_ir_mode_skips_object_and_link_steps() {
     let path = write_temp_source(
         "emit_ir_only",
         r#"
-fn main() -> i64 {
-    return 42
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from(42);
 }
 "#,
     );

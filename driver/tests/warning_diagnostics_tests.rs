@@ -21,16 +21,16 @@ fn compile_pipeline_returns_structured_warnings() {
     let path = write_temp_source(
         "warning_diag",
         r#"
-@inline
+use std::process::ExitCode; #[inline]
 fn probe(n: i64) -> i64 {
     if n <= 0 {
-        return 0
+        return 0;
     }
-    return probe(n - 1)
+    probe(n - 1)
 }
 
-fn main() -> i64 {
-    return probe(3)
+fn main() -> ExitCode {
+    return ExitCode::from(probe(3) as u8);
 }
 "#,
     );
