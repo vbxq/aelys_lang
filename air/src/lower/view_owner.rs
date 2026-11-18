@@ -218,6 +218,7 @@ fn collect_place<'e>(expr: &'e TypedExpr, f: &mut dyn FnMut(&'e TypedExpr, Sig))
         | TypedExprKind::Index { object, .. }
         | TypedExprKind::Member { object, .. } => collect(object, f),
         TypedExprKind::Reference { operand, .. } => collect_place(operand, f),
+        TypedExprKind::Cast { expr, target } if is_view(target) => collect(expr, f),
         TypedExprKind::EnumVariant {
             enum_name,
             variant,
