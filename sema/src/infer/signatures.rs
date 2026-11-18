@@ -77,9 +77,7 @@ impl TypeInference {
 
         let ret_type = match &func.return_type {
             Some(ann) => self.type_from_annotation(ann),
-            // an external declaration has no body, so nothing downstream would ever resolve a variable here
-            None if func.foreign.is_some() => InferType::Null,
-            None => self.type_gen.fresh(),
+            None => InferType::Null,
         };
 
         self.type_params_in_scope = saved_type_params;

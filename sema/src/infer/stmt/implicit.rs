@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, Stmt, StmtKind, UnaryOp};
@@ -11,6 +11,12 @@ impl TypeInference {
         return_type: &InferType,
     ) -> TypedStmt {
         match &stmt.kind {
+            aelys_syntax::StmtKind::Expression(expr)
+                if matches!(return_type, InferType::Null)
+                    && matches!(expr.kind, ExprKind::Call { .. }) =>
+            {
+                self.infer_stmt(stmt)
+            }
             aelys_syntax::StmtKind::Expression(expr) => {
                 let mut typed_expr = self.infer_expr(expr);
                 self.try_narrow_literal(&mut typed_expr, return_type);
@@ -41,16 +47,21 @@ impl TypeInference {
                     .current_function()
                     .cloned()
                     .unwrap_or_else(|| "<anonymous>".to_string());
-                let reason = if matches!(return_type, InferType::Null) {
-                    ConstraintReason::ReturnInUnit { func_name }
-                } else {
-                    ConstraintReason::Return { func_name }
-                };
+                if matches!(return_type, InferType::Null)
+                    && !matches!(typed_expr.ty, InferType::Null)
+                {
+                    self.errors
+                        .push(TypeError::value_in_unit_fn(&func_name, &typed_expr.ty, expr.span));
+                    return TypedStmt {
+                        kind: TypedStmtKind::Return(Some(typed_expr)),
+                        span: stmt.span,
+                    };
+                }
                 self.constraints.push(Constraint::flows_into(
                     return_type.clone(),
                     typed_expr.ty.clone(),
                     expr.span,
-                    reason,
+                    ConstraintReason::Return { func_name },
                 ));
 
                 TypedStmt {

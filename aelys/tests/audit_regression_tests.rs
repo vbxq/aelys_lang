@@ -500,7 +500,7 @@ fn unannotated_function_infers_single_type() {
     assert!(
         sema_ok(
             r#"
-fn double(x) { return x * 2 }
+fn double(x) -> i64 { return x * 2 }
 
 fn main() -> i64 {
     return double(21)
@@ -683,7 +683,7 @@ fn closure_capture_inferred_var_resolved_through_pipeline() {
     assert!(
         air_pipeline_ok(
             r#"
-fn outer() {
+fn outer() -> i64 {
     let x = 100
     let closure = fn() { return x }
     return x

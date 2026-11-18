@@ -1,5 +1,5 @@
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason};
+use crate::constraint::{Constraint, ConstraintReason, TypeError};
 use crate::typed_ast::{TypedExpr, TypedExprKind, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{Expr, Span};
@@ -47,7 +47,10 @@ impl TypeInference {
                     func_name,
                     fallthrough: false,
                 },
-                (Some(_), InferType::Null) => ConstraintReason::ReturnInUnit { func_name },
+                (Some(value), InferType::Null) if !matches!(value.ty, InferType::Null) => {
+                    self.errors.push(TypeError::value_in_unit_fn(&func_name, &value.ty, span));
+                    return TypedStmtKind::Return(typed_expr);
+                }
                 _ => ConstraintReason::Return { func_name },
             };
 

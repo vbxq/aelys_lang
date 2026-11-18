@@ -636,17 +636,6 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
                     )
                 }
             }
-            (None, ConstraintReason::ReturnInUnit { func_name }) => {
-                let value = if matches!(expected, InferType::Null) { found } else { expected };
-                (
-                    "E0301",
-                    format!(
-                        "`{func_name}` declares no return type, so it returns nothing, but this \
-                         gives it a value of type `{value}`"
-                    ),
-                    format!("a value of type `{value}` returned here"),
-                )
-            }
             (None, _) => {
                 let (expected, found) = InferType::shown_pair(expected, found);
                 (
@@ -998,14 +987,8 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
     }
 
     match &error.kind {
-        TypeErrorKind::Mismatch { expected, found } if promoted.is_none() => match &error.reason {
+        TypeErrorKind::Mismatch { .. } if promoted.is_none() => match &error.reason {
             ConstraintReason::ReturnNoValue { .. } => {}
-            ConstraintReason::ReturnInUnit { func_name } => {
-                let value = if matches!(expected, InferType::Null) { found } else { expected };
-                diag.add_help(format!(
-                    "declare the type it returns: `fn {func_name}(..) -> {value}`"
-                ));
-            }
             _ => {
                 let reason_str = error.reason.to_string();
                 if !reason_str.is_empty() {

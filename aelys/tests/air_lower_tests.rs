@@ -43,7 +43,7 @@ fn has_named_call(f: &AirFunction, target: &str) -> bool {
 
 #[test]
 fn closure_env_struct_has_captured_field() {
-    let air = lower_source("fn outer(x) {\n    return fn(y) { return x + y }\n}");
+    let air = lower_source("fn outer(x) {\n    let c = fn(y) { return x + y }\n}");
     let env = air
         .structs
         .iter()
@@ -54,7 +54,7 @@ fn closure_env_struct_has_captured_field() {
 
 #[test]
 fn closure_function_first_param_is_env_ptr() {
-    let air = lower_source("fn outer(x) {\n    return fn(y) { return x + y }\n}");
+    let air = lower_source("fn outer(x) {\n    let c = fn(y) { return x + y }\n}");
     let lambda = air
         .functions
         .iter()
@@ -136,7 +136,7 @@ fn fmt_string_calls_to_string_and_concat() {
 
 #[test]
 fn cast_produces_rvalue_with_target_type() {
-    let air = lower_source("fn f() {\n    42 as f64\n}");
+    let air = lower_source("fn f() {\n    let v = 42 as f64\n}");
     let f = func(&air, "f");
     let has_cast = f.blocks.iter().flat_map(|b| &b.stmts).any(|s| {
         matches!(

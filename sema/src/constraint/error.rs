@@ -1371,6 +1371,31 @@ impl TypeError {
         matches!(&self.kind, TypeErrorKind::NotSupportedYet { detail } if detail == GENERIC_FN_AS_VALUE)
     }
 
+    pub fn value_in_unit_fn(func_name: &str, value: &InferType, span: Span) -> Self {
+        let mut err = Self::coded(
+            "E0301",
+            match value {
+                InferType::Var(_) | InferType::Dynamic => format!(
+                    "`{func_name}` declares no return type, so it returns nothing, but this gives \
+                     it a value"
+                ),
+                _ => format!(
+                    "`{func_name}` declares no return type, so it returns nothing, but this gives \
+                     it a value of type `{value}`"
+                ),
+            },
+            "a value returned here",
+            span,
+        );
+        err.help = Some(match value {
+            InferType::Var(_) | InferType::Dynamic => {
+                format!("declare the type it returns: `fn {func_name}(..) -> T`")
+            }
+            _ => format!("declare the type it returns: `fn {func_name}(..) -> {value}`"),
+        });
+        err
+    }
+
     pub fn is_type_arg_count(&self) -> bool {
         matches!(&self.reason, ConstraintReason::Other(r) if r == TYPE_ARG_COUNT)
     }

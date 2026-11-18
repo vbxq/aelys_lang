@@ -92,7 +92,7 @@ impl TypeInference {
                     .as_ref()
                     .map(|ann| self.type_from_annotation(ann))
             })
-            .unwrap_or_else(|| self.type_gen.fresh());
+            .unwrap_or(InferType::Null);
 
         let mut func_env = self.env.for_closure();
         func_env.set_current_function(Some(func.name.clone()));

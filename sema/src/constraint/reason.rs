@@ -13,12 +13,11 @@ pub enum ConstraintReason {
     /// Function return type
     Return { func_name: String },
     ReturnNoValue { func_name: String, fallthrough: bool },
-    ReturnInUnit { func_name: String },
     /// Variable assignment (reassignment)
     Assignment { var_name: String },
     /// Explicit type annotation on variable declaration (FATAL error)
-    StructField { struct_name: String, field: String },
     TypeAnnotation { var_name: String },
+    StructField { struct_name: String, field: String },
     /// If condition must be bool
     IfCondition,
     /// If branches must have same type
@@ -68,14 +67,11 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::ReturnNoValue { func_name, .. } => {
                 write!(f, "`{func_name}` ends here without returning a value")
             }
-            ConstraintReason::ReturnInUnit { func_name } => {
-                write!(f, "`{func_name}` declares no return type")
-            ConstraintReason::StructField { struct_name, field } => {
-                write!(f, "field `{field}` of struct `{struct_name}`")
-            }
-            }
             ConstraintReason::Assignment { var_name } => {
                 write!(f, "assignment to variable '{}'", var_name)
+            }
+            ConstraintReason::StructField { struct_name, field } => {
+                write!(f, "field `{field}` of struct `{struct_name}`")
             }
             ConstraintReason::TypeAnnotation { var_name } => {
                 write!(f, "type annotation on variable '{}'", var_name)

@@ -41,7 +41,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_add() {
     let program = infer_ok(
         r#"
 fn double(x) {
-    return x + x
+    let y = x + x
 }
 "#,
     );
@@ -68,7 +68,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_mul() {
     let program = infer_ok(
         r#"
 fn square(n) {
-    return n * n
+    let y = n * n
 }
 "#,
     );
@@ -121,7 +121,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_bitwise() {
     let program = infer_ok(
         r#"
 fn mask(x) {
-    return x & x
+    let y = x & x
 }
 "#,
     );
