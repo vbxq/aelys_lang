@@ -1,0 +1,2 @@
+refuse E0412
+a Vec inside a Vec/array/struct/enum is not supported yet

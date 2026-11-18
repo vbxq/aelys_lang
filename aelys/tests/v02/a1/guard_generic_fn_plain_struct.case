@@ -1,0 +1,9 @@
+struct P { a: i64, b: string }
+fn id<T>(x: T) -> T {
+    return x
+}
+fn main() {
+    let p = id(P { a: 1, b: "b" + "c" })
+    println(p.a)
+    println(p.b)
+}

@@ -1,0 +1,7 @@
+struct W<T> { v: T }
+fn main() {
+    let r: Rc<W<string>> = Rc::new(W { v: "a" + "b" })
+    let r2 = r
+    r.v = "zz"
+    println(Rc::get(r2).v)
+}

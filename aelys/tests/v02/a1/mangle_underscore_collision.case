@@ -1,0 +1,9 @@
+struct C { n: i64 }
+struct B_C { n: i64, m: i64 }
+struct A<T> { v: T }
+struct A_B<T> { v: T }
+fn main() {
+    let a = A { v: B_C { n: 1, m: 2 } }
+    let b = A_B { v: C { n: 40 } }
+    println(a.v.m + b.v.n)
+}

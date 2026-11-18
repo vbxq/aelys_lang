@@ -1,0 +1,7 @@
+struct Pair<A, B> { a: A, b: B }
+fn right<T>(p: Pair<T, i64>) -> i64 {
+    return p.b
+}
+fn main() {
+    println(right(Pair { a: "s", b: 9 }) + right(Pair { a: true, b: 1 }))
+}

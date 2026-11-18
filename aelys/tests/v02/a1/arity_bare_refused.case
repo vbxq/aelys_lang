@@ -1,0 +1,7 @@
+struct W<T> { v: T }
+fn f(w: W) -> i64 {
+    return 1
+}
+fn main() {
+    println(f(W { v: 1 }))
+}

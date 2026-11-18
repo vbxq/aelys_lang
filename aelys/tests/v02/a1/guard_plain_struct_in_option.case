@@ -1,0 +1,8 @@
+struct P { a: i64, b: i64 }
+fn main() {
+    let o: Option<P> = Some(P { a: 3, b: 4 })
+    match o {
+        Some(p) => println(p.a * p.b),
+        None => println(0)
+    }
+}

@@ -1,0 +1,2 @@
+refuse E0304
+the struct `Pair` takes 2 type arguments but 1 was given

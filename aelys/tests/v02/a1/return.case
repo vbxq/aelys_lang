@@ -1,0 +1,12 @@
+struct Pair<A, B> { a: A, b: B }
+fn mk(x: i64) -> Pair<i64, bool> {
+    return Pair { a: x * 2, b: x > 3 }
+}
+fn main() {
+    let p = mk(5)
+    println(p.a)
+    if p.b { println("big") } else { println("small") }
+    let q = mk(2)
+    println(q.a)
+    if q.b { println("big") } else { println("small") }
+}

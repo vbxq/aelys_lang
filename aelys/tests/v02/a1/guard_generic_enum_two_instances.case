@@ -1,0 +1,13 @@
+enum B<T> { V(T), N }
+fn main() {
+    let a = B::V(3)
+    let b = B::V("s")
+    match a {
+        B::V(x) => println(x + 1),
+        B::N => println(0)
+    }
+    match b {
+        B::V(x) => println(x),
+        B::N => println("n")
+    }
+}
