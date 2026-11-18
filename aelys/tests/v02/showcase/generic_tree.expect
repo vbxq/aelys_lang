@@ -1,0 +1,12 @@
+balanced
+nums: 0 items, empty=true
+nums: 8 items, empty=false
+duplicates: 2
+in order: 20 30 40 50 60 65 70 80
+contains 65: true, contains 45: false
+min: 20, height: 4
+words: 6 items, empty=false
+duplicates: 1
+in order: apple banana cherry fig kiwi pear
+contains kiwi: true, contains grape: false
+min: apple, height: 5
