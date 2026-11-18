@@ -1,0 +1,13 @@
+trait Sc {
+    nogc fn sc(&self) -> i64
+}
+struct A { a: i64 }
+impl Sc for A {
+    fn sc(&self) -> i64 { return self.a * 2 }
+}
+fn tot<T: Sc>(x: &T) -> i64 { return x.sc() }
+fn main() -> i64 {
+    let a = A { a: 3 }
+    println(tot(&a))
+    return 0
+}

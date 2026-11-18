@@ -605,7 +605,7 @@ impl TypeInference {
                     "nogc on a trait method",
                     func.span,
                 ));
-                continue;
+                func.is_nogc = false;
             }
             let in_sig = func
                 .params
