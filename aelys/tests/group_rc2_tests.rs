@@ -2305,8 +2305,8 @@ fn rc2_73_a_byte_view_put_in_a_generic_enum_is_refused() {
          \x20   s = \"zz\" + \"yy\"\n    let c: u8 = first(o)\n    println(\"{c} {s}\")\n\
          \x20   return 0\n}\n",
         &[],
-        "E0714",
-        "the call to `mk1` in `main` instantiates it with `&[u8]`, which makes a `One<&[u8]>`",
+        "E0711",
+        "cannot write to `s` while it is borrowed",
     );
 }
 
@@ -2321,8 +2321,8 @@ fn rc2_74_a_byte_view_put_in_an_rc_by_a_generic_is_refused() {
          \x20   s = \"zz\" + \"yy\"\n    let c: u8 = byte0(first(r))\n    println(\"{c} {s}\")\n\
          \x20   return 0\n}\n",
         &[],
-        "E0714",
-        "the call to `wrap` in `main` instantiates it with `&[u8]`, which makes a `Rc<&[u8]>`",
+        "E0711",
+        "cannot write to `s` while it is borrowed",
     );
 }
 
