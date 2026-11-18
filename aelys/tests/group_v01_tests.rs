@@ -85,10 +85,10 @@ const CENSUS: &[(&str, Bucket, &str)] = &[
          slower per doubling pair",
     ),
     (
-        "w1_generic_struct_carrier_refused_at_its_declaration",
+        "w1_generic_struct_carrier_runs",
         Bucket::Neither,
-        "declared control: a type parameter in a struct field is refused at every measured \
-         point, so the row holds the boundary of what stage 2 made generic",
+        "declared control: generic structs postdate every measured point, so the row holds \
+         the value of a type parameter in a struct field rather than a discrimination",
     ),
     (
         "w2_generic_enum_payload_runs",
@@ -888,10 +888,10 @@ fn group_v01_r26_character_loop_is_linear() {
 }
 
 #[test]
-fn group_v01_w1_generic_struct_carrier_refused_at_its_declaration() {
+fn group_v01_w1_generic_struct_carrier_runs() {
     let h = Harness::new();
-    let _pin = pin_legs("w1", LEVELS.len());
-    h.refuses(
+    let _pin = pin_legs("w1", LEVELS.len() * ALLOCATORS.len());
+    h.runs(
         "w1",
         "struct Wrapper<T> { v: T }\n\
          \n\
@@ -900,8 +900,9 @@ fn group_v01_w1_generic_struct_carrier_refused_at_its_declaration() {
          \x20   println(w.v)\n\
          \x20   return 0\n\
          }\n",
-        "E0902",
-        "generic structs are not supported yet",
+        0,
+        "5\n",
+        None,
     );
 }
 

@@ -358,7 +358,7 @@ fn main() -> i64 {
 }
 
 #[test]
-fn trej_a_generic_struct_of_rc_in_field_is_refused_as_a_generic_struct() {
+fn trej_a_generic_struct_of_rc_in_field_is_refused_at_the_literal() {
     let err = rc_reject(
         r#"
 struct Wrap<T> { v: T }
@@ -371,8 +371,8 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
-        "T-Rej(a): a generic struct of Rc in a field must be refused at the struct; got:\n{err}"
+        err.contains("[E0410]") && err.contains("straight into a generic struct"),
+        "T-Rej(a): a generic struct of Rc in a field must be refused at the literal; got:\n{err}"
     );
 }
 

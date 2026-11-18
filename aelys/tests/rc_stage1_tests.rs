@@ -564,7 +564,7 @@ fn main() -> i64 { return make() }
 }
 
 #[test]
-fn n6_generic_struct_holding_rc_is_refused_as_a_generic_struct() {
+fn n6_generic_struct_holding_rc_is_refused_at_the_literal() {
     let err = rc_reject(
         r#"
 struct Box<T> { v: T }
@@ -577,13 +577,13 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
-        "N6 (generic struct holding Rc) must be refused at the struct: {err}"
+        err.contains("[E0410]") && err.contains("straight into a generic struct"),
+        "N6 (generic struct holding Rc) must be refused at the literal: {err}"
     );
 }
 
 #[test]
-fn n6_nested_generic_struct_holding_rc_is_refused_as_a_generic_struct() {
+fn n6_nested_generic_struct_holding_rc_is_refused_at_the_literal() {
     let err = rc_reject(
         r#"
 struct Box<T> { v: T }
@@ -594,8 +594,8 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("generic structs are not supported yet"),
-        "N6(nested) must be refused at the struct: {err}"
+        err.contains("[E0410]") && err.contains("straight into a generic struct"),
+        "N6(nested) must be refused at the literal: {err}"
     );
 }
 

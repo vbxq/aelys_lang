@@ -407,19 +407,13 @@ fn caller() -> i32 {
 }
 
 #[test]
-fn generic_struct_decl_only_is_refused_before_air() {
+fn generic_struct_decl_only_is_accepted_by_sema() {
     let src = Source::new("<test>", "struct Box<T> { value: T }\nfn main() {\n}\n");
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
     let stmts = Parser::new(tokens, src.clone())
         .parse()
         .expect("parse failed");
-    let errors = TypeInference::infer_program(stmts, src).expect_err("sema accepted Box<T>");
-    assert!(
-        errors.iter().any(|e| e
-            .to_string()
-            .contains("generic structs are not supported yet")),
-        "a generic struct declaration must be refused in sema: {errors:?}"
-    );
+    TypeInference::infer_program(stmts, src).expect("sema refused Box<T>");
 }
 
 #[test]

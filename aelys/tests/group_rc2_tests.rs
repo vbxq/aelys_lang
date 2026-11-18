@@ -2699,57 +2699,59 @@ fn rc2_92_an_rc_through_a_single_variant_enum_of_a_carrier_is_refused_at_the_out
     );
 }
 
-const GENERIC_STRUCT: &str = "generic structs are not supported yet";
-
 #[test]
-fn rc2_93_a_generic_struct_declared_and_unused_is_refused() {
-    refusal_row_full(
+fn rc2_93_a_generic_struct_declared_and_unused_compiles() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-93",
         "struct Box<T> { v: T }\nfn main() -> i64 { println(\"ok\"); return 0 }\n",
         &[],
-        "E0902",
-        &["struct `Box<T>` is generic", GENERIC_STRUCT],
-        &[],
+        "ok\n",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 #[test]
-fn rc2_94_a_generic_struct_literal_is_refused_instead_of_an_internal_error() {
-    refusal_row_full(
+fn rc2_94_a_generic_struct_literal_compiles() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-94",
         "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
          \x20println(\"ok\"); return 0 }\n",
         &[],
-        "E0902",
-        &[GENERIC_STRUCT],
-        &["E0901"],
+        "ok\n",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 #[test]
-fn rc2_95_a_generic_struct_field_read_is_refused_at_the_declaration() {
-    refusal_row_full(
+fn rc2_95_a_generic_struct_field_read_answers_its_value() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-95",
         "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
          \x20println(\"{b.v}\"); return 0 }\n",
         &[],
-        "E0902",
-        &[GENERIC_STRUCT, "struct Box<T> { v: T }"],
-        &["E0304"],
+        "5\n",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 #[test]
-fn rc2_96_a_generic_struct_with_an_inferred_literal_is_refused_at_the_declaration() {
-    refusal_row_full(
+fn rc2_96_a_generic_struct_with_an_inferred_literal_answers_its_value() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-96",
         "struct Pair<A, B> { a: A, b: B }\nfn main() -> i64 { let p = Pair { a: 5, b: 6 }\n\
          \x20println(\"{p.a + 1}\"); return 0 }\n",
         &[],
-        "E0902",
-        &["struct `Pair<A, B>` is generic", GENERIC_STRUCT],
-        &["E0301"],
+        "6\n",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 #[test]

@@ -223,8 +223,8 @@ fn no_definition_diagnostic(message: &str, span: SyntaxSpan, source: Arc<Source>
         .with_code("E0430")
         .with_primary_label(source, span, Some(NO_DEFINITION_ANNOTATION.to_string()));
     diag.add_help(
-        "a generic struct is not lowered yet, so a mention of one names no definition; if no \
-         generic struct is involved this is a defect in the compiler"
+        "every type the program names is lowered before this point, so this is a defect in the \
+         compiler"
             .to_string(),
     );
     diag

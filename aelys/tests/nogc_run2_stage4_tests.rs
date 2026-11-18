@@ -286,17 +286,25 @@ fn main() -> i64 { let m = Msg { text: \"hi\" }; return keep(m) }
 }
 
 #[test]
-fn reject_generic_struct_argument_is_refused_at_the_struct_declaration() {
-    let err = reject(
+fn generic_struct_argument_binds_the_nogc_type_param_to_its_type_argument() {
+    accepts(
         "\
 struct Box2<T> { v: T }
 nogc fn keep<U>(x: Box2<U>) -> i64 { return 0 }
 fn main() -> i64 { let b = Box2 { v: 1 }; return keep(b) }
 ",
     );
+    let err = reject(
+        "\
+struct Box2<T> { v: T }
+nogc fn keep<U>(x: Box2<U>) -> i64 { return 0 }
+fn main() -> i64 { let b = Box2 { v: \"s\" + \"t\" }; return keep(b) }
+",
+    );
+    assert_code(&err, "E0730");
     assert!(
-        err.contains("[E0902]: struct `Box2<T>` is generic: generic structs are not supported yet"),
-        "must refuse the generic struct itself: {err}"
+        err.contains("`U` of `keep`") && err.contains("string"),
+        "must name the type param and the offending type: {err}"
     );
 }
 

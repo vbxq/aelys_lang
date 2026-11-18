@@ -326,8 +326,8 @@ fn main() -> i64 {
 }
 
 #[test]
-fn generic_struct_argument_to_a_nogc_bound_is_refused_at_the_struct_declaration() {
-    let err = reject(
+fn generic_struct_argument_to_a_nogc_bound_anchors_at_the_offending_argument() {
+    accepts(
         r#"
 struct Holder<T> { v: T }
 nogc fn keep<U>(x: Holder<U>) -> i64 { return 0 }
@@ -337,22 +337,27 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(
-        err.contains(
-            "[E0902]: struct `Holder<T>` is generic: generic structs are not supported yet"
-        ),
-        "must refuse the generic struct itself: {err}"
+    let err = reject(
+        r#"
+struct Holder<T> { v: T }
+nogc fn keep<U>(x: Holder<U>) -> i64 { return 0 }
+fn main() -> i64 {
+    let b = Holder { v: "s" + "t" }
+    return keep(b)
+}
+"#,
     );
-    assert_anchor(&err, "2:1");
+    assert_nogc_code(&err, "E0730");
     assert!(
-        !err.contains("[E0730]"),
-        "no nogc verdict on a refused struct: {err}"
+        err.contains("`U` of `keep`") && err.contains("instantiates it with `string`"),
+        "must name the type param and the offending type: {err}"
     );
+    assert_anchor(&err, "6:17");
 }
 
 #[test]
-fn generic_structs_bound_per_type_param_are_each_refused_at_their_declaration() {
-    let err = reject(
+fn generic_structs_bound_per_type_param_bind_each_type_argument() {
+    accepts(
         r#"
 struct Bag<T> { v: T }
 struct Holder<T> { v: T }
@@ -364,12 +369,24 @@ fn main() -> i64 {
 }
 "#,
     );
-    assert!(
-        err.contains("struct `Bag<T>` is generic") && err.contains("struct `Holder<T>` is generic"),
-        "each generic struct must be refused: {err}"
+    let err = reject(
+        r#"
+struct Bag<T> { v: T }
+struct Holder<T> { v: T }
+nogc fn f<A: nogc, B: nogc>(a: Bag<A>, b: Holder<B>) -> i64 { return 0 }
+fn main() -> i64 {
+    let x = Bag { v: 1 }
+    let y = Holder { v: "s" + "t" }
+    return f(x, y)
+}
+"#,
     );
-    assert_anchor(&err, "2:1");
-    assert_anchor(&err, "3:1");
+    assert_nogc_code(&err, "E0730");
+    assert!(
+        err.contains("`B` of `f`") && !err.contains("`A` of `f` is bound"),
+        "only the string argument breaks its bound: {err}"
+    );
+    assert_anchor(&err, "8:17");
 }
 
 #[test]
