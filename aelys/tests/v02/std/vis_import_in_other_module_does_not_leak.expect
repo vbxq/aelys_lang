@@ -1,0 +1,3 @@
+refuse E0304
+no method `char_count` on `string`
+needs std.str

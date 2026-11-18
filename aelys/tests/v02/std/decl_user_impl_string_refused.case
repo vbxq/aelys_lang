@@ -1,0 +1,7 @@
+impl string {
+    fn twice(self) -> string { return self + self }
+}
+
+fn main() {
+    println("a".twice())
+}

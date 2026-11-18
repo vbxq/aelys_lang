@@ -1,0 +1,5 @@
+refuse E0304
+no method `char_count` on `string`
+it is in `std.str` (needs std.str)
+!__recv
+!__pre$

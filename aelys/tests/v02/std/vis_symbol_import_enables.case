@@ -1,0 +1,7 @@
+needs trim from std.str
+
+fn main() {
+    let s = trim("  héllo ")
+    println(s.char_count())
+    println("a,b".split(",").len())
+}

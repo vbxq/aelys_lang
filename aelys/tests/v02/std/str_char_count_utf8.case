@@ -1,0 +1,9 @@
+needs std.str
+
+fn main() {
+    let s = "héllo"
+    println(s.char_count())
+    println(s.len())
+    println("".is_empty())
+    println(s.is_empty())
+}

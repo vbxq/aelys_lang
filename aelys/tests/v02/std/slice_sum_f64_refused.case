@@ -1,0 +1,6 @@
+needs std.slice
+
+fn main() {
+    let a = [1.5, 2.0]
+    println(a.sum())
+}

@@ -1,5 +1,2 @@
-refuse E0304
-no method `map` on `Vec<i64>`
-`vec.map`
-!__recv
-!__pre$
+run
+2

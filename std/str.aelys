@@ -233,3 +233,154 @@ pub nogc fn parse_int(s: string) -> Result<i64, i64> {
 }
 
 pub fn from_int(n: i64) -> string { return "{n}" }
+
+pub nogc fn find(s: string, needle: string) -> Option<i64> {
+    let i: i64 = index_of(s, needle)
+    if i < 0 { return None }
+    return Some(i)
+}
+
+pub fn chars(s: string) -> Vec<char> {
+    let mut out = Vec::new()
+    for c in s { Vec::push(out, c) }
+    return out
+}
+
+nogc fn line_end(s: string, start: i64, end: i64) -> i64 {
+    if end > start and s.bytes[end - 1] == 13 { return end - 1 }
+    return end
+}
+
+pub fn lines(s: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut start: i64 = 0
+    let mut i: i64 = 0
+    while i < s.len {
+        if s.bytes[i] == 10 {
+            let part: string = string::substring_bytes(s, start, line_end(s, start, i))
+            Vec::push(out, part)
+            start = i + 1
+        }
+        i = i + 1
+    }
+    if start < s.len {
+        let tail: string = string::substring_bytes(s, start, line_end(s, start, s.len))
+        Vec::push(out, tail)
+    }
+    return out
+}
+
+pub fn replace(s: string, old: string, new: string) -> string {
+    if old.len == 0 { return s }
+    let mut out: string = ""
+    let mut start: i64 = 0
+    let mut i: i64 = 0
+    let last: i64 = s.len - old.len
+    while i <= last {
+        let mut j: i64 = 0
+        let mut hit: bool = true
+        while j < old.len {
+            if s.bytes[i + j] != old.bytes[j] {
+                hit = false
+                break
+            }
+            j = j + 1
+        }
+        if hit {
+            out = out + string::substring_bytes(s, start, i) + new
+            i = i + old.len
+            start = i
+        } else {
+            i = i + 1
+        }
+    }
+    out = out + string::substring_bytes(s, start, s.len)
+    return out
+}
+
+nogc fn shift_case(c: char, lo: char, hi: char, delta: i64) -> char {
+    if c >= lo and c <= hi { return char::from_i64((c as i64) + delta) }
+    return c
+}
+
+pub fn to_upper(s: string) -> string {
+    let mut out: string = ""
+    for c in s { out = out + string::from_char(shift_case(c, 'a', 'z', -32)) }
+    return out
+}
+
+pub fn to_lower(s: string) -> string {
+    let mut out: string = ""
+    for c in s { out = out + string::from_char(shift_case(c, 'A', 'Z', 32)) }
+    return out
+}
+
+pub fn pad_left(s: string, w: i64) -> string {
+    let n: i64 = char_count(s)
+    if n >= w { return s }
+    return repeat(" ", w - n) + s
+}
+
+pub fn pad_right(s: string, w: i64) -> string {
+    let n: i64 = char_count(s)
+    if n >= w { return s }
+    return s + repeat(" ", w - n)
+}
+
+pub fn split_whitespace(s: string) -> Vec<string> {
+    let mut out = Vec::new()
+    let mut i: i64 = 0
+    while i < s.len {
+        while i < s.len and space_byte(s.bytes[i]) { i = i + 1 }
+        let start: i64 = i
+        while i < s.len and !space_byte(s.bytes[i]) { i = i + 1 }
+        if i > start {
+            let part: string = string::substring_bytes(s, start, i)
+            Vec::push(out, part)
+        }
+    }
+    return out
+}
+
+pub nogc fn is_digit(c: char) -> bool { return c >= '0' and c <= '9' }
+
+pub nogc fn is_alpha(c: char) -> bool { return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') }
+
+pub nogc fn to_digit(c: char) -> Option<i64> {
+    if is_digit(c) { return Some((c as i64) - 48) }
+    return None
+}
+
+impl string {
+    pub nogc fn char_count(self) -> i64 { return char_count(self) }
+    pub nogc fn is_empty(self) -> bool { return is_empty(self) }
+    pub nogc fn is_char_boundary(self, i: i64) -> bool { return is_char_boundary(self, i) }
+    pub nogc fn char_len(self, i: i64) -> i64 { return char_len(self, i) }
+    pub nogc fn char_at(self, i: i64) -> Option<char> { return char_at(self, i) }
+    pub fn substring(self, start: i64, end: i64) -> string { return substring(self, start, end) }
+    pub nogc fn compare(self, other: string) -> i64 { return compare(self, other) }
+    pub nogc fn starts_with(self, p: string) -> bool { return starts_with(self, p) }
+    pub nogc fn ends_with(self, p: string) -> bool { return ends_with(self, p) }
+    pub nogc fn index_of(self, needle: string) -> i64 { return index_of(self, needle) }
+    pub nogc fn contains(self, needle: string) -> bool { return contains(self, needle) }
+    pub nogc fn find(self, needle: string) -> Option<i64> { return find(self, needle) }
+    pub fn repeat(self, n: i64) -> string { return repeat(self, n) }
+    pub fn trim(self) -> string { return trim(self) }
+    pub fn split(self, sep: string) -> Vec<string> { return split(self, sep) }
+    pub nogc fn parse_int(self) -> Result<i64, i64> { return parse_int(self) }
+    pub fn chars(self) -> Vec<char> { return chars(self) }
+    pub fn lines(self) -> Vec<string> { return lines(self) }
+    pub fn replace(self, old: string, new: string) -> string { return replace(self, old, new) }
+    pub fn to_upper(self) -> string { return to_upper(self) }
+    pub fn to_lower(self) -> string { return to_lower(self) }
+    pub fn pad_left(self, w: i64) -> string { return pad_left(self, w) }
+    pub fn pad_right(self, w: i64) -> string { return pad_right(self, w) }
+    pub fn split_whitespace(self) -> Vec<string> { return split_whitespace(self) }
+}
+
+impl char {
+    pub nogc fn is_space(self) -> bool { return is_space(self) }
+    pub nogc fn is_digit(self) -> bool { return is_digit(self) }
+    pub nogc fn is_alpha(self) -> bool { return is_alpha(self) }
+    pub nogc fn to_digit(self) -> Option<i64> { return to_digit(self) }
+}

@@ -1,0 +1,17 @@
+needs std.str
+
+fn main() {
+    let src = "a-b\nc-d\r\ne\n"
+    let mut total = 0
+    let mut i = 0
+    while i < 1000 {
+        let ls = src.replace("-", "+").lines()
+        total = total + ls.len()
+        i = i + 1
+    }
+    let ls = src.replace("-", "+").lines()
+    println(total)
+    println("{ls[0]}|{ls[1]}|{ls[2]}")
+    println("x".replace("", "y"))
+    println("aaa".replace("a", "bb"))
+}

@@ -1,0 +1,9 @@
+needs std.str
+
+fn main() {
+    println("Hé-llo 9".to_upper())
+    println("ABC def".to_lower())
+    println("[{"é".pad_left(3)}][{"ab".pad_right(4)}][{"abcde".pad_left(2)}]")
+    let ws = "  one \t two\nthree  ".split_whitespace()
+    println("{ws.len()} {ws[0]}{ws[1]}{ws[2]}")
+}

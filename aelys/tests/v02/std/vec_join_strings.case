@@ -1,0 +1,8 @@
+needs std.vec
+needs std.str
+
+fn main() {
+    let v: Vec<string> = vec["a", "bé", "c"]
+    println(v.join(", "))
+    println("x-y-z".split("-").join("+"))
+}

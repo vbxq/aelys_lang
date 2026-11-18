@@ -69,3 +69,25 @@ pub fn err_code<T>(r: Result<T, i64>) -> i64 {
         Err(e) => e,
     }
 }
+
+pub fn to_option<T, E>(r: Result<T, E>) -> Option<T> {
+    return match r {
+        Ok(v) => Some(v),
+        Err(_) => None,
+    }
+}
+
+impl<T, E> Result<T, E> {
+    pub fn is_ok(self) -> bool { return is_ok(self) }
+    pub fn is_err(self) -> bool { return is_err(self) }
+    pub fn unwrap_or(self, d: T) -> T { return unwrap_or(self, d) }
+    pub fn err_or(self, d: E) -> E { return err_or(self, d) }
+    pub fn ok(self) -> Option<T> { return to_option(self) }
+}
+
+impl<T> Option<T> {
+    pub fn is_some(self) -> bool { return is_some(self) }
+    pub fn is_none(self) -> bool { return is_none(self) }
+    pub fn unwrap_or(self, d: T) -> T { return some_or(self, d) }
+    pub fn ok_or(self, e: i64) -> Result<T, i64> { return ok_or(self, e) }
+}
