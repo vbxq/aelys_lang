@@ -2824,9 +2824,10 @@ fn rc2_101_a_tuple_type_compiles() {
     h.differential_row(
         "rc2-101",
         "fn divmod(a: i64, b: i64) -> (i64, i64) { return (a / b, a % b) }\n\
-         fn main() -> i64 { return 0 }\n",
+         fn main() -> i64 {\n    let t = divmod(17, 5)\n    println(t.0)\n    println(t.1)\n\
+         \x20   return 0\n}\n",
         &[],
-        "",
+        "3\n2\n",
         (0, 0),
     );
     h.assert_legs(18);
@@ -2837,9 +2838,9 @@ fn rc2_102_a_tuple_expression_compiles() {
     let h = Harness::new();
     h.differential_row(
         "rc2-102",
-        "fn main() -> i64 {\n    let t = (1, 2)\n    return 0\n}\n",
+        "fn main() -> i64 {\n    let t = (1, 2)\n    println(t.0 * 10 + t.1)\n    return 0\n}\n",
         &[],
-        "",
+        "12\n",
         (0, 0),
     );
     h.assert_legs(18);

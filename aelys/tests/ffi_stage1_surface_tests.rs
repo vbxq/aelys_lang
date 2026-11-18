@@ -456,10 +456,11 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let (ok, rejected) = census(&aelys_driver::SourceOptions::default());
     assert_eq!(
         (ok.len(), rejected.len()),
-        (411, 47),
-        "with no search root the surface MUST answer 411 accepted and 47 rejected; stress57 \
+        (413, 45),
+        "with no search root the surface MUST answer 413 accepted and 45 rejected; stress57 \
          moved from rejected to accepted when a generic enum started carrying its type arguments \
-         into AIR, evil85_oob_array_index moved from accepted to rejected when a constant index \
+         into AIR, stress58 and stress59 moved to accepted when a nested generic variant took its \
+         type argument from the expected type, evil85_oob_array_index moved from accepted to rejected when a constant index \
          outside a known array length became E0433 instead of a run-time abort, \
          09_string_index is rejected because a string is no longer indexed by integer, and the \
          five library modules that carry a `needs` compile because the std embedded in the \
@@ -473,7 +474,7 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let (ok_absent, rejected_absent) = census(&absent);
     assert_eq!(
         (ok_absent.len(), rejected_absent.len()),
-        (411, 47),
+        (413, 45),
         "a search root that holds nothing MUST move no file\nrejected:\n{}",
         rejected_list(&rejected_absent)
     );
@@ -482,7 +483,7 @@ fn the_fixture_corpus_is_unmoved_by_the_new_keyword() {
     let (ok_root, rejected_root) = census(&with_root);
     assert_eq!(
         (ok_root.len(), rejected_root.len()),
-        (411, 47),
+        (413, 45),
         "with the repository root on the search path the five library modules that carry a \
          `needs` MUST still compile\nrejected:\n{}",
         rejected_list(&rejected_root)
