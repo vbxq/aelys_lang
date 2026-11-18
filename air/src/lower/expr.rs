@@ -465,7 +465,15 @@ impl<'a> LoweringContext<'a> {
                 let t = self.operand_to_local(target_op, &target_ptr_ty);
                 let v = self.lower_expr(value);
                 let through_mut = matches!(target.ty, InferType::Ref { mutable: true, .. });
-                let rc_leaves = self.carrier_paths_for(&value.ty).filter(|_| through_mut);
+                let rc_leaves = if matches!(value.ty, InferType::Rc(_)) {
+                    Some((
+                        self.lower_type_from_infer(&value.ty),
+                        vec![crate::rc_paths::RcLeafPath { steps: Vec::new() }],
+                    ))
+                } else {
+                    self.carrier_paths_for(&value.ty)
+                }
+                .filter(|_| through_mut);
                 let v = match &rc_leaves {
                     Some((ty, paths)) if !self.counted(&value.ty) => {
                         let shape = super::RcShape {
@@ -496,7 +504,9 @@ impl<'a> LoweringContext<'a> {
                     sp,
                 );
                 if let Some(Operand::Copy(old) | Operand::Move(old)) = old_pointee {
-                    if let Some((ty, paths)) = &rc_leaves {
+                    if matches!(value.ty, InferType::Rc(_)) {
+                        self.emit_rc_release(old, sp);
+                    } else if let Some((ty, paths)) = &rc_leaves {
                         self.emit_carrier_field_releases(old, ty, paths, sp);
                     }
                     if self.counted(&value.ty) {

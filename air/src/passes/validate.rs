@@ -251,11 +251,16 @@ fn check_function_ptrness(
             let Some(ty) = place_type(function, program, place) else {
                 continue;
             };
+            let loads_rc_from_its_slot = matches!(ty, AirType::Rc(_))
+                && matches!(rvalue, Rvalue::Deref(Operand::Copy(src) | Operand::Move(src))
+                    if function.locals.iter().any(|l| l.id == *src
+                        && matches!(&l.ty, AirType::Ptr(inner) if **inner == ty)));
             let holds = if name == "addr" {
                 matches!(ty, AirType::Ptr(_))
             } else {
                 ty.pointee().is_none()
-                    || (name == "deref" && count_glue && matches!(ty, AirType::Rc(_)))
+                    || (name == "deref" && (count_glue || loads_rc_from_its_slot)
+                        && matches!(ty, AirType::Rc(_)))
             };
             if !holds {
                 errors.push(AirValidationError {

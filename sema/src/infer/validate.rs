@@ -853,26 +853,11 @@ impl TypeInference {
             TypedExprKind::Deref(operand) => {
                 self.validate_expr(operand, generic_scope, declared_type_params);
                 self.check_deferred_read(ProjKind::Deref, operand, None, &expr.ty, expr.span);
-                // a nogc function leaves this read to the effect rule
-                if expr.ty.is_rc() && !self.in_nogc_fn {
-                    self.errors
-                        .push(TypeError::rc_read_through_ref(&expr.ty, expr.span));
-                }
             }
             TypedExprKind::DerefAssign { target, value } => {
                 self.validate_expr(target, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
                 self.check_deferred_write(ProjKind::DerefWrite, target, None, value, expr.span);
-                if value.ty.is_rc() && !self.in_nogc_fn {
-                    self.errors.push(TypeError::rc_out_of_surface(
-                        format!(
-                            "`*r = ..` here writes an `{}` through a reference: writing an `Rc` \
-                             through a reference is not supported yet, return the new `Rc` instead",
-                            value.ty
-                        ),
-                        expr.span,
-                    ));
-                }
                 if target_ptr_is_shared(target) {
                     self.errors.push(TypeError::shared_mut(
                         "an assignment through `*p`",

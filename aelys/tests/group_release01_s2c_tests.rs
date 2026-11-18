@@ -543,14 +543,9 @@ fn release01_69_a_member_read_through_a_borrowed_rc_is_refused_in_a_nogc_fn_too(
             },
             Case {
                 name: "plain_member_through_deref",
-                src: "struct S { n: i64 }\nfn f(x: &Rc<S>) -> i64 { return (*x).n }\nfn main() -> i64 { return 0 }\n",
+                src: "struct S { n: i64 }\nfn f(x: &Rc<S>) -> i64 { return (*x).n }\nfn main() -> i64 {\n    let p: Rc<S> = Rc::new(S { n: 4 })\n    println(\"{f(&p)}\")\n    return 0\n}\n",
                 module: None,
-                expect: Expect::Refused {
-                    code: "E0410",
-                    at: (2, 34),
-                    says: "`*` here reads an `Rc<S>` out of a reference: reading an `Rc` through a reference is not supported yet, pass the `Rc` itself",
-                    alone: false,
-                },
+                expect: Expect::Balanced("4\n"),
             },
         ],
     );

@@ -4168,15 +4168,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc2_169_a_concrete_deref_that_yields_an_rc_is_refused_by_name() {
-    refusal_row_full(
-        "rc2-169",
-        RC2_169,
-        &[],
-        "E0410",
-        &["reads an `Rc<N>` out of a reference"],
-        &["E0901"],
-    );
+fn rc2_169_a_concrete_deref_that_yields_an_rc_takes_its_own_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-169", RC2_169, &[], "9  9\n", (5, 5));
+    h.lsan_row("rc2-169", RC2_169, &[], "9  9\n");
+    h.assert_legs(24);
 }
 
 const RC2_170: &str = r#"

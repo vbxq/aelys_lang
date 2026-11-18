@@ -128,6 +128,7 @@ impl TypeInference {
             ) || matches!(
                 init.kind,
                 ExprKind::Identifier(_)
+                    | ExprKind::Deref(_)
                     | ExprKind::Member { .. }
                     | ExprKind::Call { .. }
                     | ExprKind::Block { .. }

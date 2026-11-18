@@ -52,7 +52,9 @@ fn carrier_surface(expr: &TypedExpr) -> Surface {
         TypedExprKind::StructLiteral { .. }
         | TypedExprKind::EnumVariant { .. }
         | TypedExprKind::Call { .. } => Surface::Literal,
-        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } => Surface::Reference,
+        TypedExprKind::Identifier(_) | TypedExprKind::Member { .. } | TypedExprKind::Deref(_) => {
+            Surface::Reference
+        }
         TypedExprKind::If {
             then_branch,
             else_branch,
