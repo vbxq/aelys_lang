@@ -97,7 +97,8 @@ fn main() -> i64 {
             println("trace {trace(ab.data.as_slice(), 2)}, peak {peak(ab.data.as_slice())}")
             let (bt, at) = (b.transposed(), a.transposed())
             if let Ok(btat) = bt.mul(&at) {
-                println("transpose identity: {slice.eq(ab.transposed().data.as_slice(), btat.data.as_slice())}")
+                let abt = ab.transposed()
+                println("transpose identity: {slice.eq(abt.data.as_slice(), btat.data.as_slice())}")
             }
         }
         Err(e) => println("error: {e}")

@@ -82,7 +82,10 @@ impl Parser {
         let at = self.pos
         return match self.bump() {
             Tok::Num(n) => Ok(Rc::new(Expr::Num(n))),
-            Tok::Paren('(') => self.close(at, self.binary(0)?),
+            Tok::Paren('(') => {
+                let inner = self.binary(0)?
+                self.close(at, inner)
+            },
             t => Err("unexpected {t} at token {at}")
         }
     }
