@@ -181,6 +181,15 @@ impl TypeInference {
             self.infer_expr(callee)
         };
         let mut typed_args: Vec<TypedExpr> = args.iter().map(|a| self.infer_expr(a)).collect();
+        if let ExprKind::Identifier(name) = &callee.kind
+            && (name == "print" || name == "println")
+            && self.env.lookup_local(name).is_none()
+        {
+            typed_args = typed_args
+                .into_iter()
+                .map(|a| self.display_through_dyn(a))
+                .collect();
+        }
 
         let ret_type = if matches!(typed_callee.ty, InferType::Dynamic) {
             InferType::Dynamic

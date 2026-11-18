@@ -13,6 +13,7 @@ pub mod unify;
 pub use constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind, TypeErrorSuggestion};
 pub use env::TypeEnv;
 pub use infer::objects::{DYN_CALL, dyn_call_name, dyn_target};
+pub use infer::traits::builtin_traits;
 pub use infer::{TypeInference, entry::InferenceResult, is_builtin_key};
 pub use modules::{
     ItemKind, Lookup, ModuleExports, ModuleImports, ModuleType, ModuleTypeDef, ModuleValue,

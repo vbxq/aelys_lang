@@ -96,7 +96,7 @@ fn ret(e: Expr, span: Span) -> Stmt {
     Stmt::new(StmtKind::Return(Some(e)), span)
 }
 
-pub(crate) fn builtin_traits() -> Vec<TraitDef> {
+pub fn builtin_traits() -> Vec<TraitDef> {
     let f = |params: Vec<InferType>, ret: InferType| InferType::Function {
         params,
         ret: Box::new(ret),

@@ -75,9 +75,12 @@ impl TypeInference {
             self.errors.push(generic_trait_object(&q, ann.span));
             return InferType::Dynamic;
         }
-        if self.trait_defs.contains_key(&q) {
+        if let Some(def) = self.trait_defs.get(&q).cloned() {
             if !self.dyn_compatible(&q, ann.span) {
                 return InferType::Dynamic;
+            }
+            for m in &def.methods {
+                self.note_stub_use(&m.stub);
             }
         } else {
             self.unchecked_dyns.push((q.clone(), ann.span));
@@ -311,5 +314,16 @@ impl TypeInference {
             },
             *ret,
         )
+    }
+
+    pub(crate) fn display_through_dyn(&mut self, mut expr: TypedExpr) -> TypedExpr {
+        let seen = self.probe_type(&expr.ty);
+        if dyn_target(&seen) != Some("Display") {
+            return expr;
+        }
+        let span = expr.span;
+        expr.ty = seen;
+        let (kind, ty) = self.dyn_method_call(expr, "Display", "to_string", &[], span);
+        TypedExpr::new(kind, ty, span)
     }
 }

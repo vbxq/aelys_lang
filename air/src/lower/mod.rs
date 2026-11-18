@@ -579,6 +579,7 @@ impl<'a> LoweringContext<'a> {
             .program
             .traits
             .iter()
+            .chain(aelys_sema::builtin_traits().iter())
             .map(|def| {
                 let methods = def
                     .methods

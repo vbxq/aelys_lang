@@ -48,7 +48,8 @@ impl TypeInference {
                             TypedFmtStringPart::Literal(s.clone())
                         }
                         aelys_syntax::FmtStringPart::Expr(e) => {
-                            TypedFmtStringPart::Expr(Box::new(self.infer_expr(e)))
+                            let typed = self.infer_expr(e);
+                            TypedFmtStringPart::Expr(Box::new(self.display_through_dyn(typed)))
                         }
                         aelys_syntax::FmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
                     })
