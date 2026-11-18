@@ -2,21 +2,26 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::{Instant, UNIX_EPOCH};
 
-use aelys_common::{Diagnostic, Severity, WarningConfig, format_warnings};
-use aelys_driver::{
-    BuildRequest, CompiledArtifact, LinkRequirement, RuntimeVariant, SourceOptions,
-};
+use aelys_common::{Diagnostic, Severity, Warning, WarningConfig, format_warnings};
+use aelys_driver::{BuildRequest, CompiledArtifact, LinkRequirement, RuntimeVariant};
 
 use crate::error::{Error, FAILURE, Result, error, io_error, with_help};
 use crate::fingerprint::{self, Key};
-use crate::manifest::{Profile, runtime_name};
+use crate::manifest::Profile;
 use crate::native;
 use crate::shell::Shell;
 use crate::workspace::{Bin, Package};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Build,
+    Check,
+}
+
+enum Job {
+    Build {
+        core_lib: PathBuf,
+        link: LinkRequirement,
+    },
     Check,
 }
 
@@ -36,54 +41,47 @@ pub fn compile(
     let out_dir = Path::new("target").join(dir_name);
     let _lock = lock_build_dir(shell)?;
 
-    let (link, core_lib) = match mode {
-        Mode::Build => (
-            native::link_requirement(&package.manifest, &package.root)?,
-            Some(runtime_archive(profile.runtime)?),
-        ),
-        Mode::Check => (LinkRequirement::default(), None),
+    let job = match mode {
+        Mode::Build => Job::Build {
+            core_lib: runtime_archive(profile.runtime)?,
+            link: native::link_requirement(&package.manifest, &package.root)?,
+        },
+        Mode::Check => Job::Check,
     };
+    let (verb, suffix) = match job {
+        Job::Build { .. } => ("Compiling", ""),
+        Job::Check => ("Checking", "-check"),
+    };
+    let compiler = compiler_identity();
+    let std = format!("embedded:{}", aelys_driver::embedded_std_hash());
 
     let mut announced = false;
     let mut executables = Vec::new();
     for bin in bins {
-        let artifact = (mode == Mode::Build).then(|| out_dir.join(&bin.name));
+        let artifact = matches!(job, Job::Build { .. }).then(|| out_dir.join(&bin.name));
         let key = Key {
-            compiler: compiler_identity(),
-            std: format!("embedded:{}", aelys_driver::embedded_std_hash()),
-            core_lib: core_lib.as_deref().map(file_identity).unwrap_or_default(),
-            options: options(bin, mode, profile, &link),
+            compiler: compiler.clone(),
+            std: std.clone(),
+            core_lib: match &job {
+                Job::Build { core_lib, .. } => file_identity(core_lib),
+                Job::Check => String::new(),
+            },
+            options: options(bin, &job, profile),
             artifact: artifact
                 .as_ref()
                 .map(|path| path.to_string_lossy().into_owned()),
         };
-        let suffix = if mode == Mode::Check { "-check" } else { "" };
         let record = out_dir.join(".fingerprint").join(format!(
             "{}-bin-{}{suffix}.toml",
             package.manifest.name, bin.name
         ));
-        let dir = match bin.path.parent() {
-            Some(dir) if !dir.as_os_str().is_empty() => dir,
-            _ => Path::new("."),
-        };
-        let inputs = fingerprint::scan(dir, &[Path::new("Ae.toml"), &bin.path]).map_err(|err| {
-            io_error(
-                format_args!("cannot read the sources of `{}`", bin.name),
-                err,
-            )
-        })?;
-        if let Some(artifact) = &artifact {
-            executables.push(artifact.clone());
+        if let Some(artifact) = artifact {
+            executables.push(artifact);
         }
-        if fingerprint::is_fresh(&record, &key, &inputs) {
+        if fingerprint::is_fresh(&record, &key) {
             continue;
         }
         if !announced {
-            let verb = if mode == Mode::Check {
-                "Checking"
-            } else {
-                "Compiling"
-            };
             shell.status(
                 verb,
                 format!(
@@ -95,26 +93,21 @@ pub fn compile(
             );
             announced = true;
         }
-        let pending = fingerprint::snapshot(key, &inputs).map_err(|err| {
-            io_error(
-                format_args!("cannot read the sources of `{}`", bin.name),
-                err,
-            )
-        })?;
-        match (&artifact, &core_lib) {
-            (Some(artifact), Some(core_lib)) => build_one(
+        let lowered = match &job {
+            Job::Build { core_lib, link } => build_one(
                 &package.manifest.name,
                 bin,
                 &out_dir,
-                artifact,
                 core_lib,
                 profile,
-                &link,
+                link,
             )?,
-            _ => check_one(&package.manifest.name, bin)?,
-        }
-        pending
-            .commit(&record)
+            Job::Check => aelys_driver::check_file(&bin.path).map_err(|err| {
+                could_not_compile(&package.manifest.name, bin, err.to_diagnostics())
+            })?,
+        };
+        report_warnings(lowered.warnings);
+        fingerprint::record(&record, key, &lowered.files)
             .map_err(|err| io_error(format_args!("cannot write `{}`", record.display()), err))?;
     }
 
@@ -123,7 +116,7 @@ pub fn compile(
         format!(
             "`{profile_name}` profile [-O{}, {}] target(s) in {:.2}s",
             profile.opt_level.numeric(),
-            runtime_name(profile.runtime),
+            profile.runtime.name(),
             started.elapsed().as_secs_f64()
         ),
     );
@@ -134,30 +127,25 @@ fn build_one(
     package: &str,
     bin: &Bin,
     out_dir: &Path,
-    artifact: &Path,
     core_lib: &Path,
     profile: Profile,
     link: &LinkRequirement,
-) -> Result<()> {
+) -> Result<aelys_driver::Lowered> {
     let obj_dir = out_dir.join("obj");
     std::fs::create_dir_all(&obj_dir)
         .map_err(|err| io_error(format_args!("cannot create `{}`", obj_dir.display()), err))?;
     let object = obj_dir.join(format!("{}.o", bin.name));
     let request = BuildRequest {
         root: &bin.path,
-        sources: &SourceOptions::default(),
         opt_level: profile.opt_level,
         runtime: profile.runtime,
         link,
         core_lib,
-        output: artifact,
+        output: &out_dir.join(&bin.name),
         object: &object,
     };
     match aelys_driver::build(&request) {
-        Ok((warnings, CompiledArtifact::Executable(_))) => {
-            report_warnings(warnings);
-            Ok(())
-        }
+        Ok((lowered, CompiledArtifact::Executable(_))) => Ok(lowered),
         Ok((_, CompiledArtifact::Object(path) | CompiledArtifact::LlvmIr(path))) => {
             let _ = std::fs::remove_file(path);
             Err(with_help(
@@ -173,17 +161,7 @@ fn build_one(
     }
 }
 
-fn check_one(package: &str, bin: &Bin) -> Result<()> {
-    match aelys_driver::check_file(&bin.path, &SourceOptions::default()) {
-        Ok(warnings) => {
-            report_warnings(warnings);
-            Ok(())
-        }
-        Err(err) => Err(could_not_compile(package, bin, err.to_diagnostics())),
-    }
-}
-
-fn report_warnings(warnings: Vec<aelys_common::Warning>) {
+fn report_warnings(warnings: Vec<Warning>) {
     let config = WarningConfig::default();
     let shown: Vec<_> = warnings
         .into_iter()
@@ -213,14 +191,14 @@ fn could_not_compile(package: &str, bin: &Bin, mut diagnostics: Vec<Diagnostic>)
     }
 }
 
-fn options(bin: &Bin, mode: Mode, profile: Profile, link: &LinkRequirement) -> String {
+fn options(bin: &Bin, job: &Job, profile: Profile) -> String {
     let root = bin.path.display();
-    match mode {
-        Mode::Check => format!("kind=bin mode=check root={root}"),
-        Mode::Build => format!(
+    match job {
+        Job::Check => format!("kind=bin mode=check root={root}"),
+        Job::Build { link, .. } => format!(
             "kind=bin mode=build root={root} -O{} runtime={} link={}",
             profile.opt_level.numeric(),
-            runtime_name(profile.runtime),
+            profile.runtime.name(),
             native::describe(link)
         ),
     }

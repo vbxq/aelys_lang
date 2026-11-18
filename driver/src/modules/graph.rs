@@ -16,6 +16,7 @@ pub(crate) enum ResolvedImport {
 pub(crate) struct ModuleUnit {
     pub(crate) dotted: String,
     pub(crate) source: Arc<Source>,
+    pub(crate) file: Option<std::path::PathBuf>,
     pub(crate) stmts: Vec<Stmt>,
     pub(crate) imports: Vec<ResolvedImport>,
     pub(crate) bound_types: std::collections::HashSet<String>,

@@ -106,14 +106,6 @@ pub struct Profile {
     pub runtime: RuntimeVariant,
 }
 
-pub fn runtime_name(runtime: RuntimeVariant) -> &'static str {
-    match runtime {
-        RuntimeVariant::Leak => "leak",
-        RuntimeVariant::Rc => "rc",
-        RuntimeVariant::RcCycles => "rc+cycles",
-    }
-}
-
 const RESERVED: &[&str] = &[
     "std", "crate", "self", "super", "Self", "and", "as", "break", "catch", "const", "continue",
     "discard", "dyn", "else", "enum", "extern", "false", "fn", "for", "from", "if", "impl", "in",

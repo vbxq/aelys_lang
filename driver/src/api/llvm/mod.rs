@@ -17,7 +17,7 @@ use aelys_frontend::parser::Parser;
 use aelys_opt::{OptimizationLevel, Optimizer};
 use aelys_syntax::Source;
 use std::collections::HashSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
@@ -42,6 +42,7 @@ struct LoweringArtifacts {
     warnings: Vec<Warning>,
     // read off the unoptimised air: what the link must resolve is not the optimizer's to decide
     required_externs: Vec<String>,
+    files: Vec<(PathBuf, Arc<Source>)>,
 }
 
 pub fn compile_to_typed_ast(source_code: &str) -> Result<aelys_sema::TypedProgram, AelysError> {
@@ -899,11 +900,17 @@ fn lower_file_to_air_with_source(
 
     let required_externs = required_externs
         .unwrap_or_else(|| aelys_air::symbols::referenced_extern_symbols(&air));
+    let files = graph
+        .units
+        .iter()
+        .filter_map(|unit| Some((unit.file.clone()?, unit.source.clone())))
+        .collect();
     Ok(LoweringArtifacts {
         air,
         source: src,
         warnings,
         required_externs,
+        files,
     })
 }
 
@@ -1032,7 +1039,6 @@ pub fn compile_file_with_llvm_artifact(
 
 pub struct BuildRequest<'a> {
     pub root: &'a Path,
-    pub sources: &'a SourceOptions,
     pub opt_level: OptimizationLevel,
     pub runtime: RuntimeVariant,
     pub link: &'a LinkRequirement,
@@ -1041,9 +1047,14 @@ pub struct BuildRequest<'a> {
     pub object: &'a Path,
 }
 
-pub fn build(request: &BuildRequest<'_>) -> Result<(Vec<Warning>, CompiledArtifact), AelysError> {
+pub struct Lowered {
+    pub warnings: Vec<Warning>,
+    pub files: Vec<(PathBuf, Arc<Source>)>,
+}
+
+pub fn build(request: &BuildRequest<'_>) -> Result<(Lowered, CompiledArtifact), AelysError> {
     let artifacts =
-        lower_file_to_air_with_source(request.root, request.opt_level, request.sources)?;
+        lower_file_to_air_with_source(request.root, request.opt_level, &SourceOptions::default())?;
     let artifact = compile_air_with_llvm_linked(
         request.root,
         &artifacts.air,
@@ -1057,12 +1068,20 @@ pub fn build(request: &BuildRequest<'_>) -> Result<(Vec<Warning>, CompiledArtifa
         Some(request.core_lib),
         &artifacts.required_externs,
     )?;
-    Ok((artifacts.warnings, artifact))
+    let lowered = Lowered {
+        warnings: artifacts.warnings,
+        files: artifacts.files,
+    };
+    Ok((lowered, artifact))
 }
 
-pub fn check_file(path: &Path, sources: &SourceOptions) -> Result<Vec<Warning>, AelysError> {
-    lower_file_to_air_with_source(path, OptimizationLevel::None, sources)
-        .map(|artifacts| artifacts.warnings)
+pub fn check_file(path: &Path) -> Result<Lowered, AelysError> {
+    lower_file_to_air_with_source(path, OptimizationLevel::None, &SourceOptions::default()).map(
+        |artifacts| Lowered {
+            warnings: artifacts.warnings,
+            files: artifacts.files,
+        },
+    )
 }
 
 fn run_process_c_locale(program: &str, args: &[String]) -> Result<(), String> {

@@ -48,14 +48,39 @@ fn touching_a_source_does_not_recompile_but_editing_it_does() {
 }
 
 #[test]
-fn a_new_source_file_or_a_removed_one_recompiles() {
-    let dir = project("c_files", "", PRINTS_ONE);
-    assert!(compiles(&ae(&dir, &["build"])));
+fn an_unrelated_file_does_not_recompile_but_a_removed_module_does() {
+    let dir = project(
+        "c_files",
+        "",
+        "needs helper\n\nfn main() -> i64 {\n    println(helper.helper())\n    return 0\n}\n",
+    );
     write(&dir.join("src/helper.aelys"), HELPER_MODULE);
     assert!(compiles(&ae(&dir, &["build"])));
+    write(&dir.join("src/notes.aelys"), PRINTS_TWO);
     assert!(!compiles(&ae(&dir, &["build"])));
     std::fs::remove_file(dir.join("src/helper.aelys")).unwrap();
-    assert!(compiles(&ae(&dir, &["build"])));
+    let removed = ae(&dir, &["build"]);
+    assert_eq!(removed.code, Some(101), "{}", removed.stderr);
+    assert_contains(&removed.stderr, "   Compiling c_files");
+}
+
+#[test]
+fn a_module_behind_a_symlinked_directory_is_tracked() {
+    let dir = project(
+        "c_symlink",
+        "",
+        "needs shared.lib\n\nfn main() -> i64 {\n    println(lib.val())\n    return 0\n}\n",
+    );
+    let lib = dir.join("outside/lib.aelys");
+    write(&lib, "pub fn val() -> i64 {\n    return 1\n}\n");
+    std::os::unix::fs::symlink("../outside", dir.join("src/shared")).unwrap();
+    let first = ae(&dir, &["run"]);
+    assert!(compiles(&first));
+    assert_eq!(first.stdout, "1\n");
+    write(&lib, "pub fn val() -> i64 {\n    return 2\n}\n");
+    let edited = ae(&dir, &["run"]);
+    assert!(compiles(&edited));
+    assert_eq!(edited.stdout, "2\n");
 }
 
 #[test]

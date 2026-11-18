@@ -146,3 +146,21 @@ fn run_works_from_a_subdirectory() {
     assert_ok(&output);
     assert_eq!(output.stdout, "1\n");
 }
+
+#[test]
+fn a_bin_at_the_package_root_reads_only_its_modules() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = scratch("b_rootbin");
+    write(
+        &dir.join("Ae.toml"),
+        "[package]\nname = \"b_rootbin\"\nversion = \"0.1.0\"\n\n[[bin]]\nname = \"b_rootbin\"\npath = \"main.aelys\"\n",
+    );
+    write(&dir.join("main.aelys"), PRINTS_ONE);
+    let locked = dir.join("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let output = ae(&dir, &["run", "-q"]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_ok(&output);
+    assert_eq!(output.stdout, "1\n");
+}

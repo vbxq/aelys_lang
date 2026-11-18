@@ -304,6 +304,10 @@ impl Discovery {
         self.units.push(ModuleUnit {
             dotted: dotted.clone(),
             source,
+            file: match file {
+                ModuleFile::Disk(path) => Some(path.clone()),
+                ModuleFile::Embedded { .. } => None,
+            },
             stmts,
             imports,
             bound_types: bound

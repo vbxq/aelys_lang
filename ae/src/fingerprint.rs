@@ -1,11 +1,13 @@
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 
+use aelys_syntax::Source;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-const VERSION: u32 = 1;
+const VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -32,57 +34,32 @@ struct Input {
     sha256: String,
 }
 
-pub struct Snapshot {
-    path: PathBuf,
+struct Stat {
     size: u64,
     mtime: i64,
 }
 
-pub fn scan(dir: &Path, files: &[&Path]) -> io::Result<Vec<Snapshot>> {
-    let mut paths: Vec<PathBuf> = files.iter().map(|file| file.to_path_buf()).collect();
-    collect_sources(dir, &mut paths)?;
-    paths.sort();
-    paths.dedup();
-    paths
-        .into_iter()
-        .map(|path| {
-            let metadata = std::fs::metadata(&path)?;
-            let mtime = metadata
-                .modified()?
-                .duration_since(UNIX_EPOCH)
-                .map_or(0, |since| since.as_nanos() as i64);
-            Ok(Snapshot {
-                path,
-                size: metadata.len(),
-                mtime,
-            })
-        })
-        .collect()
+fn stat(path: &Path) -> io::Result<Stat> {
+    let metadata = std::fs::metadata(path)?;
+    let mtime = metadata
+        .modified()?
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_nanos() as i64);
+    Ok(Stat {
+        size: metadata.len(),
+        mtime,
+    })
 }
 
-fn collect_sources(dir: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in std::fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        let kind = entry.file_type()?;
-        if kind.is_dir() {
-            collect_sources(&path, out)?;
-        } else if path.extension().is_some_and(|ext| ext == "aelys") {
-            out.push(path);
-        }
-    }
-    Ok(())
+fn sha256(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
-fn sha256(path: &Path) -> io::Result<String> {
-    Ok(format!("{:x}", Sha256::digest(std::fs::read(path)?)))
+fn sha256_file(path: &Path) -> io::Result<String> {
+    Ok(sha256(&std::fs::read(path)?))
 }
 
-fn display(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
-
-pub fn is_fresh(record: &Path, key: &Key, inputs: &[Snapshot]) -> bool {
+pub fn is_fresh(record: &Path, key: &Key) -> bool {
     let Some(old) = std::fs::read_to_string(record)
         .ok()
         .and_then(|text| toml::from_str::<Record>(&text).ok())
@@ -99,43 +76,42 @@ pub fn is_fresh(record: &Path, key: &Key, inputs: &[Snapshot]) -> bool {
     {
         return false;
     }
-    old.input.len() == inputs.len()
-        && old.input.iter().zip(inputs).all(|(old, now)| {
-            old.path == display(&now.path)
-                && ((old.size == now.size && old.mtime == now.mtime)
-                    || sha256(&now.path).is_ok_and(|hash| hash == old.sha256))
-        })
+    old.input.iter().all(|input| {
+        let path = Path::new(&input.path);
+        stat(path).is_ok_and(|now| now.size == input.size && now.mtime == input.mtime)
+            || sha256_file(path).is_ok_and(|hash| hash == input.sha256)
+    })
 }
 
-pub struct Pending(Record);
-
-pub fn snapshot(key: Key, inputs: &[Snapshot]) -> io::Result<Pending> {
-    let input = inputs
-        .iter()
-        .map(|now| {
-            Ok(Input {
-                path: display(&now.path),
-                size: now.size,
-                mtime: now.mtime,
-                sha256: sha256(&now.path)?,
-            })
-        })
-        .collect::<io::Result<_>>()?;
-    Ok(Pending(Record {
+pub fn record(record: &Path, key: Key, files: &[(PathBuf, Arc<Source>)]) -> io::Result<()> {
+    let mut input = Vec::with_capacity(files.len());
+    for (path, source) in files {
+        let now = stat(path)?;
+        let sha256 = sha256_file(path)?;
+        // the file changed while it was being compiled, so no record may vouch for the artifact
+        if sha256 != self::sha256(source.content.as_bytes()) {
+            return match std::fs::remove_file(record) {
+                Err(err) if err.kind() != io::ErrorKind::NotFound => Err(err),
+                _ => Ok(()),
+            };
+        }
+        input.push(Input {
+            path: path.to_string_lossy().into_owned(),
+            size: now.size,
+            mtime: now.mtime,
+            sha256,
+        });
+    }
+    let text = toml::to_string(&Record {
         version: VERSION,
         key,
         input,
-    }))
-}
-
-impl Pending {
-    pub fn commit(&self, record: &Path) -> io::Result<()> {
-        let text = toml::to_string(&self.0).map_err(io::Error::other)?;
-        if let Some(dir) = record.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let temporary = record.with_extension("toml.tmp");
-        std::fs::write(&temporary, text)?;
-        std::fs::rename(&temporary, record)
+    })
+    .map_err(io::Error::other)?;
+    if let Some(dir) = record.parent() {
+        std::fs::create_dir_all(dir)?;
     }
+    let temporary = record.with_extension("toml.tmp");
+    std::fs::write(&temporary, text)?;
+    std::fs::rename(&temporary, record)
 }

@@ -16,6 +16,14 @@ impl RuntimeVariant {
         }
     }
 
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Leak => "leak",
+            Self::Rc => "rc",
+            Self::RcCycles => "rc+cycles",
+        }
+    }
+
     pub fn lib_suffix(&self) -> &'static str {
         match self {
             Self::Leak => "leak",
