@@ -2,8 +2,8 @@ use super::TypeInference;
 use crate::constraint::TypeError;
 use crate::modules::MethodEntry;
 use aelys_syntax::{
-    CatchHandler, Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter,
-    Pattern, Receiver, RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
+    CatchHandler, Expr, ExprKind, FmtStringPart, Function, ImplDecl, MatchArm, Parameter, Pattern,
+    Receiver, RefKind, Span, Stmt, StmtKind, TypeAnnotation, TypeBounds,
 };
 use std::collections::HashSet;
 
@@ -82,8 +82,12 @@ impl TypeInference {
                      methods go in the module that declares the type"
                 ),
             };
-            self.errors
-                .push(TypeError::coded("E0341", message, "foreign type", head.span));
+            self.errors.push(TypeError::coded(
+                "E0341",
+                message,
+                "foreign type",
+                head.span,
+            ));
             return true;
         }
         if !self.declares_local(name) {
@@ -103,11 +107,7 @@ impl TypeInference {
         };
         if declared != found {
             self.errors.push(TypeError::type_arg_count(
-                "struct",
-                name,
-                declared,
-                found,
-                head.span,
+                "struct", name, declared, found, head.span,
             ));
             return true;
         }
@@ -168,9 +168,7 @@ impl TypeInference {
             if fields.contains(&mname) {
                 self.errors.push(TypeError::coded(
                     "E0342",
-                    format!(
-                        "`{type_name}` has a field named `{mname}`; a method cannot share it"
-                    ),
+                    format!("`{type_name}` has a field named `{mname}`; a method cannot share it"),
                     "clashes with a field",
                     func.span,
                 ));
@@ -252,7 +250,11 @@ impl TypeInference {
             }
             subst_stmts(&mut func.body, &head);
 
-            let mut bounds: Vec<TypeBounds> = decl.type_params.iter().map(|_| TypeBounds::default()).collect();
+            let mut bounds: Vec<TypeBounds> = decl
+                .type_params
+                .iter()
+                .map(|_| TypeBounds::default())
+                .collect();
             for (i, b) in decl.bounds.iter().enumerate() {
                 if let Some(slot) = bounds.get_mut(i) {
                     *slot = *b;
@@ -641,7 +643,10 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
                 subst_expr(a, head);
             }
         }
-        ExprKind::Cast { expr: inner, target } => {
+        ExprKind::Cast {
+            expr: inner,
+            target,
+        } => {
             subst_expr(inner, head);
             subst_ann(target, head);
         }

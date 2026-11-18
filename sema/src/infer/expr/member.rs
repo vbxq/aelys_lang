@@ -63,7 +63,9 @@ impl TypeInference {
 
     pub(super) fn deref_struct_ref(typed_object: TypedExpr) -> TypedExpr {
         match &typed_object.ty {
-            InferType::Ref { referent, .. } if matches!(referent.as_ref(), InferType::Struct(..)) => {
+            InferType::Ref { referent, .. }
+                if matches!(referent.as_ref(), InferType::Struct(..)) =>
+            {
                 let ty = (**referent).clone();
                 let span = typed_object.span;
                 TypedExpr::new(TypedExprKind::Deref(Box::new(typed_object)), ty, span)

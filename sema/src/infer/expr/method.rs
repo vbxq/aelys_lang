@@ -88,12 +88,7 @@ impl TypeInference {
             }
             InferType::Struct(name, targs) | InferType::Enum(name, targs) => {
                 let is_struct = matches!(base, InferType::Struct(..));
-                if is_struct
-                    && self
-                        .type_table
-                        .field_type(name, targs, member)
-                        .is_some()
-                {
+                if is_struct && self.type_table.field_type(name, targs, member).is_some() {
                     return Err(typed_object);
                 }
                 if is_struct && !self.type_table.has_struct(name) {
@@ -143,7 +138,10 @@ impl TypeInference {
                 full.extend(args.iter().cloned());
                 Ok(self.infer_enum_variant("Vec", member, &full, span))
             }
-            InferType::String | InferType::Array(..) | InferType::Slice { .. } | InferType::Vec(_)
+            InferType::String
+            | InferType::Array(..)
+            | InferType::Slice { .. }
+            | InferType::Vec(_)
                 if member == "len" =>
             {
                 if !args.is_empty() {
@@ -197,7 +195,10 @@ impl TypeInference {
                 }
                 Ok((TypedExprKind::Null, InferType::Dynamic))
             }
-            InferType::String | InferType::Vec(_) | InferType::Slice { .. } | InferType::Array(..) => {
+            InferType::String
+            | InferType::Vec(_)
+            | InferType::Slice { .. }
+            | InferType::Array(..) => {
                 self.no_builtin_method(&base, member, span);
                 for a in args {
                     self.infer_expr(a);
@@ -219,9 +220,7 @@ impl TypeInference {
         {
             self.errors.push(TypeError::coded(
                 "E0304",
-                format!(
-                    "`{member}` has no `self` parameter; call it as `{shown}::{member}(..)`"
-                ),
+                format!("`{member}` has no `self` parameter; call it as `{shown}::{member}(..)`"),
                 "associated function called as a method",
                 span,
             ));
@@ -467,10 +466,8 @@ impl TypeInference {
             }
             (form, None) => {
                 let mutable = matches!(form, Form::Mutable);
-                if let Some(InferType::Function { ret, .. }) = self
-                    .env
-                    .lookup_function_ref(&entry.fn_name)
-                    .cloned()
+                if let Some(InferType::Function { ret, .. }) =
+                    self.env.lookup_function_ref(&entry.fn_name).cloned()
                     && contains_ref(&ret)
                 {
                     self.errors.push(TypeError::coded(

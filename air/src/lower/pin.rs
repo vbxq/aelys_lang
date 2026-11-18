@@ -62,9 +62,7 @@ pub(super) fn may_write_local(expr: &TypedExpr, name: &str) -> bool {
         TypedExprKind::Assign { name: n, value } => n == name || w(value),
         TypedExprKind::Reference {
             mutable, operand, ..
-        } => {
-            (*mutable && names(operand, name)) || w(operand)
-        }
+        } => (*mutable && names(operand, name)) || w(operand),
         TypedExprKind::IndexAssign {
             object,
             index,
