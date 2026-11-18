@@ -723,9 +723,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn emit_affine_drop(&mut self, local: LocalId, id_field: &str, sp: Option<Span>) {
-        let base_ty = self.local_air_type(local).unwrap_or(AirType::Struct(
-            crate::StructRef::plain(crate::bir::category::AFFINE_TEST_TYPE),
-        ));
+        let base_ty =
+            self.local_air_type(local)
+                .unwrap_or(AirType::Struct(crate::StructRef::plain(
+                    crate::bir::category::AFFINE_TEST_TYPE,
+                )));
         let field_ty = self.air_struct_field_type(&base_ty, id_field);
         let id = self.emit_rvalue_to_temp(
             field_ty,

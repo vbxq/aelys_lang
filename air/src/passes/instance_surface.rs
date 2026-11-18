@@ -598,9 +598,9 @@ impl Scan<'_> {
             return Some(Finding::UncountedRc(ty.clone()));
         }
         if let AirType::Struct(r) = ty
-            && r.args.iter().any(|arg| {
-                self.mentions(arg, |t| matches!(t, AirType::Rc(_)), &mut HashSet::new())
-            })
+            && r.args
+                .iter()
+                .any(|arg| self.mentions(arg, |t| matches!(t, AirType::Rc(_)), &mut HashSet::new()))
         {
             return Some(Finding::RcInGenericStruct(ty.clone()));
         }

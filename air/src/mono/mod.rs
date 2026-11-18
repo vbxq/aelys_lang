@@ -169,7 +169,10 @@ fn monomorphize_nominals(program: &mut AirProgram) -> Vec<MonoError> {
         let (kind, request) = uses.wanted[cursor].clone();
         cursor += 1;
         let (what, params) = match kind {
-            NominalKind::Enum => ("enum", &program.enums[generic_enums[&request.name]].type_params),
+            NominalKind::Enum => (
+                "enum",
+                &program.enums[generic_enums[&request.name]].type_params,
+            ),
             NominalKind::Struct => (
                 "struct",
                 &program.structs[generic_structs[&request.name]].type_params,

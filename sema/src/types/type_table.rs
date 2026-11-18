@@ -132,7 +132,9 @@ impl TypeTable {
                 if !visited.insert(key.clone()) {
                     return false;
                 }
-                let found = fields.iter().any(|f| self.scan_vec_by_value(&f.ty, visited));
+                let found = fields
+                    .iter()
+                    .any(|f| self.scan_vec_by_value(&f.ty, visited));
                 visited.remove(&key);
                 found
             }

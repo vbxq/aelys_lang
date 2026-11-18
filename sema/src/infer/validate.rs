@@ -1258,13 +1258,15 @@ impl TypeInference {
                     declared_type_params,
                 )
             }),
-            InferType::Enum(_, type_args) | InferType::Struct(_, type_args) => type_args.iter().any(|a| {
-                self.contains_active_generic_placeholder_type(
-                    a,
-                    generic_scope,
-                    declared_type_params,
-                )
-            }),
+            InferType::Enum(_, type_args) | InferType::Struct(_, type_args) => {
+                type_args.iter().any(|a| {
+                    self.contains_active_generic_placeholder_type(
+                        a,
+                        generic_scope,
+                        declared_type_params,
+                    )
+                })
+            }
             _ => false,
         }
     }

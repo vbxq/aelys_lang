@@ -188,7 +188,8 @@ impl TypeInference {
         }
         if let Some((ref struct_name, ref struct_args)) = object_struct {
             if self.type_table.has_struct(struct_name) {
-                if let Some(field_ty) = self.type_table.field_type(struct_name, struct_args, field) {
+                if let Some(field_ty) = self.type_table.field_type(struct_name, struct_args, field)
+                {
                     self.reject_rc_field_write(field, &field_ty, &typed_object, &typed_value, span);
                     self.try_narrow_literal(&mut typed_value, &field_ty);
                     if typed_value.ty != field_ty && typed_value.ty.can_implicit_widen_to(&field_ty)
@@ -431,7 +432,9 @@ impl TypeInference {
             InferType::Array(inner, _) | InferType::Vec(inner) => go(inner),
             InferType::Ref { referent, .. } => go(referent),
             InferType::Slice { elem, .. } => go(elem),
-            InferType::Function { params: ps, ret, .. } => ps.iter().any(go) || go(ret),
+            InferType::Function {
+                params: ps, ret, ..
+            } => ps.iter().any(go) || go(ret),
             _ => false,
         }
     }

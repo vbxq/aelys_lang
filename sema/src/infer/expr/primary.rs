@@ -61,10 +61,12 @@ impl TypeInference {
         mapping: &mut HashMap<String, InferType>,
     ) -> InferType {
         match ty {
-            InferType::Struct(name, args) if args.is_empty() && type_param_names.contains(name) => mapping
-                .entry(name.clone())
-                .or_insert_with(|| self.type_gen.fresh())
-                .clone(),
+            InferType::Struct(name, args) if args.is_empty() && type_param_names.contains(name) => {
+                mapping
+                    .entry(name.clone())
+                    .or_insert_with(|| self.type_gen.fresh())
+                    .clone()
+            }
             InferType::Function { params, ret, nogc } => {
                 let new_params = params
                     .iter()

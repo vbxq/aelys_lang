@@ -179,9 +179,16 @@ impl Scan<'_> {
     fn struct_fields(&self, r: &crate::StructRef) -> Result<(String, Vec<AirType>), Reject> {
         let symbol = r.symbol();
         crate::struct_fields_in(self.structs.values().copied(), r)
-            .map(|fields| (symbol.clone(), fields.into_iter().map(|(_, ty)| ty).collect()))
+            .map(|fields| {
+                (
+                    symbol.clone(),
+                    fields.into_iter().map(|(_, ty)| ty).collect(),
+                )
+            })
             .ok_or_else(|| {
-                Reject::NoDefinition(format!("struct `{symbol}` has no definition in the program"))
+                Reject::NoDefinition(format!(
+                    "struct `{symbol}` has no definition in the program"
+                ))
             })
     }
 }

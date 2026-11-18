@@ -151,9 +151,15 @@ impl InferType {
                 .position(|p| p == name)
                 .and_then(|i| args.get(i).cloned())
                 .unwrap_or_else(|| self.clone()),
-            InferType::Struct(name, a) => InferType::Struct(name.clone(), a.iter().map(go).collect()),
+            InferType::Struct(name, a) => {
+                InferType::Struct(name.clone(), a.iter().map(go).collect())
+            }
             InferType::Enum(name, a) => InferType::Enum(name.clone(), a.iter().map(go).collect()),
-            InferType::Function { params: ps, ret, nogc } => InferType::Function {
+            InferType::Function {
+                params: ps,
+                ret,
+                nogc,
+            } => InferType::Function {
                 params: ps.iter().map(go).collect(),
                 ret: Box::new(go(ret)),
                 nogc: *nogc,

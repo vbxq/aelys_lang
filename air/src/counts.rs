@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     AirBlock, AirConst, AirEnumDef, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram,
     AirStmt, AirStmtKind, AirStructDef, AirTerminator, AirType, BinOp, BlockId, Callee,
-    CallingConv, EnumRef, StructRef, FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId, Operand, Place,
-    Rvalue,
+    CallingConv, EnumRef, FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId, Operand, Place,
+    Rvalue, StructRef,
 };
 
 pub const STR_RETAIN: &str = "__aelys_str_retain";
