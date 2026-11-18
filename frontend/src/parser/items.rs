@@ -751,7 +751,17 @@ impl Parser {
                     message: format!("only `fn` items are allowed in an `impl` block, found {}", self.peek().kind),
                 }));
             }
-            let (func, receiver, _) = self.function_item(decorators, method_pub, is_nogc, true, false)?;
+            let display_fmt = trait_ref.as_ref().is_some_and(|t| t.name == "Display")
+                && matches!(&self.peek_at(1).kind, TokenKind::Identifier(n) if n == "fmt");
+            if display_fmt {
+                self.fmt_writes = Some(Vec::new());
+            }
+            let parsed = self.function_item(decorators, method_pub, is_nogc, true, false);
+            let writes = self.fmt_writes.take();
+            let (mut func, receiver, _) = parsed?;
+            if let Some(writes) = writes {
+                self.display_fmt_to_string(&mut func, writes)?;
+            }
             methods.push(Method {
                 func,
                 receiver,
@@ -771,6 +781,22 @@ impl Parser {
             }),
             span,
         ))
+    }
+
+    fn display_fmt_to_string(&self, func: &mut Function, writes: Vec<(String, Span)>) -> Result<()> {
+        let formatter = match func.params.as_slice() {
+            [p] if p.type_annotation.as_ref().is_some_and(|t| t.name == "fmt.Formatter") => p.name.clone(),
+            _ => return self.fail(396, "`Display::fmt` takes `&self` and `f: &mut fmt::Formatter`", func.span),
+        };
+        if func.return_type.as_ref().is_none_or(|t| t.name != "string") {
+            return self.fail(396, "`Display::fmt` returns `fmt::Result`", func.span);
+        }
+        if let Some((_, span)) = writes.iter().find(|(n, _)| *n != formatter) {
+            return self.fail(396, &format!("`write!` writes only to `{formatter}`, the formatter of `Display::fmt`"), *span);
+        }
+        func.name = "to_string".to_string();
+        func.params.clear();
+        Ok(())
     }
 
     fn impl_head(&mut self) -> Result<TypeAnnotation> {
@@ -912,6 +938,7 @@ impl Parser {
         let span = start.merge(self.previous().span);
         Ok(out
             .into_iter()
+            .filter_map(|(path, kind)| intrinsic_import(path, kind))
             .map(|(path, kind)| needs_stmt(path, kind, span))
             .collect())
     }
@@ -984,6 +1011,22 @@ impl Parser {
                 return self.unexpected("`::`");
             }
         }
+    }
+}
+
+fn intrinsic_import(path: Vec<String>, kind: ImportKind) -> Option<(Vec<String>, ImportKind)> {
+    let intrinsic: &[&str] = match path.as_slice() {
+        [a, b] if a == "std" && b == "fmt" => &["Display", "Formatter", "Result"],
+        [a, b] if a == "std" && b == "process" => &["ExitCode"],
+        _ => return Some((path, kind)),
+    };
+    match kind {
+        ImportKind::Module { alias: None } if path[1] == "fmt" => None,
+        ImportKind::Symbols(names) => {
+            let rest: Vec<String> = names.into_iter().filter(|n| !intrinsic.contains(&n.as_str())).collect();
+            (!rest.is_empty()).then(|| (path, ImportKind::Symbols(rest)))
+        }
+        kind => Some((path, kind)),
     }
 }
 

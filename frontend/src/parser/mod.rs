@@ -31,6 +31,7 @@ pub struct Parser {
     tuple_structs: HashMap<String, usize>,
     unit_structs: HashSet<String>,
     struct_fields: HashMap<String, Vec<String>>,
+    fmt_writes: Option<Vec<(String, Span)>>,
 }
 
 impl Parser {
@@ -52,6 +53,7 @@ impl Parser {
             tuple_structs: HashMap::new(),
             unit_structs: HashSet::new(),
             struct_fields: HashMap::new(),
+            fmt_writes: None,
         };
         parser.collect_struct_shapes();
         parser

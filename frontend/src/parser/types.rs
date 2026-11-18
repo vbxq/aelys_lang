@@ -250,7 +250,16 @@ impl Parser {
         if segments.len() == 1 {
             return Ok(canonical_type_name(&segments[0]).to_string());
         }
-        Ok(segments.join("."))
+        let fmt_item = match segments.as_slice() {
+            [m, item] | [_, m, item] if m == "fmt" && (segments.len() == 2 || segments[0] == "std") => Some(item.as_str()),
+            _ => None,
+        };
+        match fmt_item {
+            Some("Display") => Ok("Display".to_string()),
+            Some("Result") => Ok("string".to_string()),
+            Some("Formatter") => Ok("fmt.Formatter".to_string()),
+            _ => Ok(segments.join(".")),
+        }
     }
 
     fn path_type(&mut self) -> Result<TypeAnnotation> {

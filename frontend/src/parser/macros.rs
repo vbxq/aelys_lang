@@ -62,6 +62,17 @@ impl Parser {
                 let span = start.merge(self.previous().span);
                 self.format(args, span)
             }
+            "write" if self.fmt_writes.is_some() => {
+                let target_span = self.peek().span;
+                let target = self.consume_identifier("the formatter")?;
+                self.consume(&TokenKind::Comma, "`,`")?;
+                let args = self.fmt_args(close, false, start)?;
+                let span = start.merge(self.previous().span);
+                if let Some(writes) = &mut self.fmt_writes {
+                    writes.push((target, target_span));
+                }
+                self.format(args, span)
+            }
             "eprintln" | "eprint" | "write" | "writeln" => {
                 self.call_args(close)?;
                 self.fail(
