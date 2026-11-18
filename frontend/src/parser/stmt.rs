@@ -94,6 +94,13 @@ impl Parser {
 
     fn for_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
+        if self.check(&TokenKind::LParen) {
+            return Err(self.rule(
+                902,
+                "a tuple pattern in a for loop is not supported; bind the element and read its parts",
+                self.peek().span,
+            ));
+        }
         let iterator = self.consume_value_name("loop variable")?;
         self.consume(&TokenKind::In, "in")?;
 

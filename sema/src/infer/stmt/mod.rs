@@ -14,7 +14,110 @@ use aelys_syntax::{Stmt, StmtKind};
 
 impl TypeInference {
     pub(super) fn infer_stmts(&mut self, stmts: &[Stmt]) -> Vec<TypedStmt> {
-        stmts.iter().map(|s| self.infer_stmt(s)).collect()
+        let mut out = Vec::with_capacity(stmts.len());
+        for s in stmts {
+            match &s.kind {
+                StmtKind::LetPattern {
+                    pattern,
+                    type_annotation,
+                    initializer,
+                } => self.infer_let_pattern(s.span, pattern, type_annotation, initializer, &mut out),
+                _ => out.push(self.infer_stmt(s)),
+            }
+        }
+        out
+    }
+
+    fn infer_stmts_into(&mut self, stmts: &[Stmt], out: &mut Vec<TypedStmt>) {
+        out.extend(self.infer_stmts(stmts));
+    }
+
+    fn infer_let_pattern(
+        &mut self,
+        span: aelys_syntax::Span,
+        pattern: &aelys_syntax::Pattern,
+        type_annotation: &Option<aelys_syntax::TypeAnnotation>,
+        initializer: &aelys_syntax::Expr,
+        out: &mut Vec<TypedStmt>,
+    ) {
+        let n = self.try_counter;
+        self.try_counter += 1;
+        let tmp = format!("__p${n}");
+        let kind = self.infer_let_stmt(span, &tmp, false, type_annotation, initializer, false);
+        let ty = match &kind {
+            TypedStmtKind::Let { var_type, .. } => var_type.clone(),
+            _ => InferType::Dynamic,
+        };
+        out.push(TypedStmt { kind, span });
+        let root = aelys_syntax::Expr::new(aelys_syntax::ExprKind::Identifier(tmp), span);
+        self.bind_pattern_parts(pattern, &ty, root, out);
+    }
+
+    fn bind_pattern_parts(
+        &mut self,
+        pattern: &aelys_syntax::Pattern,
+        ty: &InferType,
+        source: aelys_syntax::Expr,
+        out: &mut Vec<TypedStmt>,
+    ) {
+        use aelys_syntax::{Expr, ExprKind, Pattern};
+        match pattern {
+            Pattern::Wildcard(_) => {}
+            Pattern::Binding {
+                name,
+                mutable,
+                span,
+            } => {
+                let kind = self.infer_let_stmt(*span, name, *mutable, &None, &source, false);
+                out.push(TypedStmt { kind, span: *span });
+            }
+            Pattern::Tuple { elems, span } => {
+                let parts = match ty {
+                    InferType::Tuple(parts) => parts.clone(),
+                    InferType::Dynamic => return,
+                    other => {
+                        self.errors.push(TypeError::coded(
+                            "E0301",
+                            format!("a tuple pattern needs a tuple, found `{other}`"),
+                            "not a tuple",
+                            *span,
+                        ));
+                        return;
+                    }
+                };
+                if parts.len() != elems.len() {
+                    self.errors.push(TypeError::coded(
+                        "E0301",
+                        format!(
+                            "the pattern binds {} elements but the tuple `{ty}` has {}",
+                            elems.len(),
+                            parts.len()
+                        ),
+                        "wrong number of elements",
+                        *span,
+                    ));
+                    return;
+                }
+                for (i, (elem, part)) in elems.iter().zip(parts.iter()).enumerate() {
+                    let access = Expr::new(
+                        ExprKind::Member {
+                            object: Box::new(source.clone()),
+                            member: i.to_string(),
+                        },
+                        *span,
+                    );
+                    self.bind_pattern_parts(elem, part, access, out);
+                }
+            }
+            Pattern::Variant { span, .. } => {
+                self.errors.push(TypeError::coded(
+                    "E0101",
+                    "a let pattern cannot fail; use match",
+                    "refutable pattern",
+                    *span,
+                ));
+            }
+        }
     }
 
     pub(super) fn infer_stmt(&mut self, stmt: &Stmt) -> TypedStmt {
@@ -131,6 +234,11 @@ impl TypeInference {
                         .collect(),
                     is_pub: *is_pub,
                 }
+            }
+            StmtKind::LetPattern { .. } => {
+                let mut parts = Vec::new();
+                self.infer_stmts_into(std::slice::from_ref(stmt), &mut parts);
+                TypedStmtKind::Block(parts)
             }
             StmtKind::Const { .. } | StmtKind::TypeAlias { .. } => {
                 let what = if matches!(stmt.kind, StmtKind::Const { .. }) {

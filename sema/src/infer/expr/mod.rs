@@ -291,6 +291,7 @@ impl TypeInference {
             ExprKind::StructLiteral { name, fields } => {
                 self.infer_struct_literal(name, fields, expr.span)
             }
+            ExprKind::Tuple(elems) => self.infer_tuple_literal(elems, expr.span),
             ExprKind::Cast {
                 expr: inner,
                 target,
@@ -1079,5 +1080,51 @@ impl TypeInference {
             _ => {}
         }
     }
-}
 
+    fn infer_tuple_literal(
+        &mut self,
+        elems: &[Expr],
+        span: aelys_syntax::Span,
+    ) -> (TypedExprKind, InferType) {
+        let typed: Vec<TypedExpr> = elems.iter().map(|e| self.infer_expr(e)).collect();
+        let ty = InferType::Tuple(typed.iter().map(|e| e.ty.clone()).collect());
+        self.reject_tuple_carriers(&ty, span);
+        let fields = typed
+            .into_iter()
+            .enumerate()
+            .map(|(i, e)| (i.to_string(), Box::new(e)))
+            .collect();
+        (
+            TypedExprKind::StructLiteral {
+                name: crate::types::TUPLE_LITERAL.to_string(),
+                fields,
+            },
+            ty,
+        )
+    }
+
+    pub(crate) fn reject_tuple_carriers(&mut self, ty: &InferType, span: aelys_syntax::Span) {
+        let InferType::Tuple(elems) = ty else {
+            return;
+        };
+        for elem in elems {
+            if elem.is_rc() || elem.contains_rc() || self.type_table.contains_rc_nominal(elem) {
+                self.errors.push(TypeError::rc_out_of_surface(
+                    "an `Rc<T>` inside a tuple is not supported; put it in a struct field",
+                    span,
+                ));
+                return;
+            }
+            if matches!(elem, InferType::Vec(_)) || self.type_table.contains_vec_by_value(elem) {
+                self.errors.push(TypeError::vec_out_of_surface(
+                    format!(
+                        "the tuple `{ty}` holds a `Vec<T>` by value, which is not supported; \
+                         keep the Vec in its own binding"
+                    ),
+                    span,
+                ));
+                return;
+            }
+        }
+    }
+}

@@ -423,9 +423,43 @@ impl Parser {
             }
 
             TokenKind::LParen => {
+                if self.match_token(&TokenKind::RParen) {
+                    let end_span = self.previous().span;
+                    return Err(CompileError::new(
+                        CompileErrorKind::ParseRule {
+                            code: 102,
+                            message: "expected expression, found `()`: there is no unit value"
+                                .to_string(),
+                            help: Some(
+                                "a function without a result leaves out its return type"
+                                    .to_string(),
+                            ),
+                        },
+                        span.merge(end_span),
+                        std::sync::Arc::clone(&self.source),
+                    )
+                    .into());
+                }
                 let inner = self.expression()?;
-                if self.check(&TokenKind::Comma) {
-                    return Err(self.tuple_refusal(span));
+                if self.match_token(&TokenKind::Comma) {
+                    if self.check(&TokenKind::RParen) {
+                        let end = self.peek().span;
+                        return Err(self.rule(
+                            902,
+                            "a one-element tuple is not supported; write the value itself",
+                            span.merge(end),
+                        ));
+                    }
+                    let mut elems = vec![inner];
+                    loop {
+                        elems.push(self.expression()?);
+                        if !self.match_token(&TokenKind::Comma) || self.check(&TokenKind::RParen) {
+                            break;
+                        }
+                    }
+                    self.consume(&TokenKind::RParen, ")")?;
+                    let end_span = self.previous().span;
+                    return Ok(Expr::new(ExprKind::Tuple(elems), span.merge(end_span)));
                 }
                 self.consume(&TokenKind::RParen, ")")?;
                 let end_span = self.previous().span;

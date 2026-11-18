@@ -47,7 +47,13 @@ impl Parser {
                     span,
                 );
             } else if self.match_token(&TokenKind::Dot) {
-                let member = self.consume_member_name("member name")?;
+                let member = match self.peek().kind {
+                    TokenKind::Int(n) => {
+                        self.advance();
+                        n.to_string()
+                    }
+                    _ => self.consume_member_name("member name")?,
+                };
                 let span = expr.span.merge(self.previous().span);
 
                 if let ExprKind::Identifier(namespace) = &expr.kind

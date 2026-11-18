@@ -14,8 +14,8 @@ impl TypeInference {
             TypedExprKind::Bool(b) => TypedExprKind::Bool(*b),
             TypedExprKind::Char(cp) => TypedExprKind::Char(*cp),
             TypedExprKind::String(s) => TypedExprKind::String(s.clone()),
-            TypedExprKind::FmtString(parts) => TypedExprKind::FmtString(
-                parts
+            TypedExprKind::FmtString(parts) => {
+                let parts = parts
                     .iter()
                     .map(|p| match p {
                         TypedFmtStringPart::Literal(s) => TypedFmtStringPart::Literal(s.clone()),
@@ -24,15 +24,30 @@ impl TypeInference {
                         )),
                         TypedFmtStringPart::Placeholder => TypedFmtStringPart::Placeholder,
                     })
-                    .collect(),
-            ),
+                    .collect();
+                match self.tuple_format(parts, expr.span) {
+                    Ok(desugared) => return desugared,
+                    Err(parts) => TypedExprKind::FmtString(parts),
+                }
+            }
             TypedExprKind::Null => TypedExprKind::Null,
             TypedExprKind::Identifier(name) => TypedExprKind::Identifier(name.clone()),
-            TypedExprKind::Binary { left, op, right } => TypedExprKind::Binary {
-                left: Box::new(self.apply_substitution_expr(left, subst)),
-                op: *op,
-                right: Box::new(self.apply_substitution_expr(right, subst)),
-            },
+            TypedExprKind::Binary { left, op, right } => {
+                let left = self.apply_substitution_expr(left, subst);
+                let right = self.apply_substitution_expr(right, subst);
+                if matches!(left.ty, crate::types::InferType::Tuple(_)) {
+                    if let Some(desugared) =
+                        self.tuple_equality(left.clone(), *op, right.clone(), expr.span)
+                    {
+                        return desugared;
+                    }
+                }
+                TypedExprKind::Binary {
+                    left: Box::new(left),
+                    op: *op,
+                    right: Box::new(right),
+                }
+            }
             TypedExprKind::Unary { op, operand } => TypedExprKind::Unary {
                 op: *op,
                 operand: Box::new(self.apply_substitution_expr(operand, subst)),
@@ -45,13 +60,20 @@ impl TypeInference {
                 left: Box::new(self.apply_substitution_expr(left, subst)),
                 right: Box::new(self.apply_substitution_expr(right, subst)),
             },
-            TypedExprKind::Call { callee, args } => TypedExprKind::Call {
-                callee: Box::new(self.apply_substitution_expr(callee, subst)),
-                args: args
-                    .iter()
-                    .map(|a| self.apply_substitution_expr(a, subst))
-                    .collect(),
-            },
+            TypedExprKind::Call { callee, args } => {
+                let prints = matches!(&callee.kind,
+                    TypedExprKind::Identifier(n) if n == "println" || n == "print");
+                TypedExprKind::Call {
+                    callee: Box::new(self.apply_substitution_expr(callee, subst)),
+                    args: args
+                        .iter()
+                        .map(|a| {
+                            let a = self.apply_substitution_expr(a, subst);
+                            if prints { self.tuple_print_arg(a) } else { a }
+                        })
+                        .collect(),
+                }
+            }
             TypedExprKind::Assign { name, value } => TypedExprKind::Assign {
                 name: name.clone(),
                 value: Box::new(self.apply_substitution_expr(value, subst)),

@@ -91,7 +91,29 @@ impl Parser {
             if self.match_token(&TokenKind::RParen) {
                 return Err(self.unit_type_refusal(start_span));
             }
-            return Err(self.tuple_refusal(start_span));
+            let first = self.parse_type_annotation()?;
+            if !self.match_token(&TokenKind::Comma) {
+                self.consume(&TokenKind::RParen, ")")?;
+                return Ok(first);
+            }
+            if self.check(&TokenKind::RParen) {
+                let end = self.peek().span;
+                return Err(self.rule(
+                    902,
+                    "a one-element tuple is not supported; write the type itself",
+                    start_span.merge(end),
+                ));
+            }
+            let mut elems = vec![first];
+            loop {
+                elems.push(self.parse_type_annotation()?);
+                if !self.match_token(&TokenKind::Comma) || self.check(&TokenKind::RParen) {
+                    break;
+                }
+            }
+            self.consume(&TokenKind::RParen, ")")?;
+            let end_span = self.previous().span;
+            return Ok(TypeAnnotation::tuple(elems, start_span.merge(end_span)));
         }
 
         let mut name = self.consume_identifier("type name")?;

@@ -19,6 +19,16 @@ fn stmt(s: &mut Stmt, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             }
             expr(initializer, f);
         }
+        StmtKind::LetPattern {
+            type_annotation,
+            initializer,
+            ..
+        } => {
+            if let Some(ann) = type_annotation {
+                f(ann);
+            }
+            expr(initializer, f);
+        }
         StmtKind::Block(list) => stmts(list, f),
         StmtKind::If {
             condition,
@@ -153,7 +163,7 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             stmts(body, f);
         }
         ExprKind::Member { object, .. } => expr(object, f),
-        ExprKind::ArrayLiteral { elements } => {
+        ExprKind::ArrayLiteral { elements } | ExprKind::Tuple(elements) => {
             for x in elements {
                 expr(x, f);
             }

@@ -117,26 +117,6 @@ impl Parser {
         CompileError::new(kind, span, Arc::clone(&self.source)).into()
     }
 
-    pub(crate) fn tuple_refusal(&mut self, open: aelys_syntax::Span) -> AelysError {
-        let mut depth = 1usize;
-        while depth > 0 && !self.is_at_end() {
-            match self.advance().kind {
-                TokenKind::LParen => depth += 1,
-                TokenKind::RParen => depth -= 1,
-                _ => {}
-            }
-        }
-        let kind = CompileErrorKind::BackendDiagnostic {
-            backend: String::new(),
-            message: "tuples are not supported yet".to_string(),
-            note: None,
-            help: None,
-            fault: aelys_common::error::Fault::Unsupported,
-        };
-        let span = open.merge(self.previous().span);
-        CompileError::new(kind, span, Arc::clone(&self.source)).into()
-    }
-
     pub(crate) fn rule(&self, code: u16, message: &str, span: aelys_syntax::Span) -> AelysError {
         let kind = CompileErrorKind::ParseRule {
             code,

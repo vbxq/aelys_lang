@@ -30,6 +30,7 @@ impl Qualifier {
                 .structs
                 .iter()
                 .map(|s| s.name.clone())
+                .filter(|n| !crate::tuples::is_tuple_name(n))
                 .chain(program.enums.iter().map(|e| e.name.clone()))
                 .collect(),
         }
@@ -63,6 +64,9 @@ impl Qualifier {
     }
 
     fn type_ref(&self, name: &str) -> Option<String> {
+        if crate::tuples::is_tuple_name(name) {
+            return None;
+        }
         if self.types.contains(name) {
             return Some(self.type_name(name));
         }
@@ -115,7 +119,9 @@ pub fn qualify(program: &mut AirProgram, path: &str) {
     let q = Qualifier::new(program, path);
 
     for def in &mut program.structs {
-        def.name = q.type_name(&def.name);
+        if !crate::tuples::is_tuple_name(&def.name) {
+            def.name = q.type_name(&def.name);
+        }
         for field in &mut def.fields {
             qualify_type(&mut field.ty, &q);
         }
@@ -403,7 +409,14 @@ pub fn merge(programs: Vec<AirProgram>) -> AirProgram {
         base += program.functions.len() as u32;
 
         merged.source_files.extend(program.source_files);
-        merged.structs.extend(program.structs);
+        for def in program.structs {
+            if crate::tuples::is_tuple_name(&def.name)
+                && merged.structs.iter().any(|d| d.name == def.name)
+            {
+                continue;
+            }
+            merged.structs.push(def);
+        }
         merged.enums.extend(program.enums);
         merged.globals.extend(program.globals);
         merged.functions.extend(program.functions);

@@ -331,6 +331,14 @@ impl TypeInference {
                         body: Box::new(typed_body),
                     });
                 }
+                Pattern::Tuple { span, .. } | Pattern::Binding { span, .. } => {
+                    self.errors.push(TypeError::not_supported_yet(
+                        "this pattern is not supported in a match arm yet",
+                        *span,
+                    ));
+                    arm_refused = true;
+                    continue;
+                }
                 Pattern::Wildcard(pat_span) => {
                     if has_wildcard {
                         self.errors.push(TypeError {
@@ -528,6 +536,13 @@ impl TypeInference {
                         span: *span,
                     },
                     Pattern::Wildcard(_) => TypedPattern::Wildcard,
+                    Pattern::Tuple { span, .. } | Pattern::Binding { span, .. } => {
+                        self.errors.push(TypeError::not_supported_yet(
+                            "this pattern is not supported in a match arm yet",
+                            *span,
+                        ));
+                        TypedPattern::Wildcard
+                    }
                 };
                 self.env.push_scope();
                 if let TypedPattern::Variant { bindings, .. } = &pattern {

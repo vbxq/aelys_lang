@@ -340,6 +340,8 @@ pub enum ExprKind {
     },
 
     Unsafe(Box<Expr>),
+
+    Tuple(Vec<Expr>),
 }
 
 #[derive(Debug, Clone)]
@@ -365,6 +367,15 @@ pub enum Pattern {
         unqualified: bool,
     },
     Wildcard(Span),
+    Tuple {
+        elems: Vec<Pattern>,
+        span: Span,
+    },
+    Binding {
+        name: String,
+        mutable: bool,
+        span: Span,
+    },
 }
 
 pub fn prelude_variant_enum(name: &str) -> Option<&'static str> {

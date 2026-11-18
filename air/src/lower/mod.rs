@@ -93,9 +93,14 @@ fn lower_against_proven_returns(
 ) -> Result<AirProgram, LowerFailure> {
     let mut assumed: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut widened = false;
+    let mut tuples: std::collections::BTreeSet<usize> = Default::default();
     loop {
         let mut cx = LoweringContext::new(program);
         cx.imported = imported.clone();
+        for arity in &tuples {
+            cx.structs.push(crate::tuples::tuple_def(*arity));
+        }
+        *cx.tuples.borrow_mut() = tuples.clone();
         if let Some(mode) = file_gc_mode {
             cx.file_gc_mode = mode;
         }
@@ -107,6 +112,11 @@ fn lower_against_proven_returns(
             .cloned()
             .collect();
         cx.lower_program();
+        let seen = cx.tuples.take();
+        if seen.len() > tuples.len() {
+            tuples = seen;
+            continue;
+        }
         let air = cx.finish().map_err(LowerFailure::Lowering)?;
         let carriers = crate::counts::Carriers {
             structs: &air.structs,
@@ -190,6 +200,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) site: Option<aelys_syntax::Span>,
     pub(super) fresh_returns: std::collections::HashSet<String>,
     pub(super) retaining_fns: std::collections::HashSet<String>,
+    pub(super) tuples: std::cell::RefCell<std::collections::BTreeSet<usize>>,
 }
 
 pub(super) enum StrInit {
@@ -268,6 +279,7 @@ impl<'a> LoweringContext<'a> {
             site: None,
             fresh_returns: std::collections::HashSet::new(),
             retaining_fns: std::collections::HashSet::new(),
+            tuples: std::cell::RefCell::new(std::collections::BTreeSet::new()),
         }
     }
 
@@ -536,6 +548,9 @@ impl<'a> LoweringContext<'a> {
             let air = self.lower_type_from_infer(ty);
             return self.carriers().carries_string(&air);
         }
+        if let InferType::Tuple(_) = ty {
+            return self.carriers().counted(&self.lower_type_from_infer(ty));
+        }
         let InferType::Struct(name, args) = ty else {
             return false;
         };
@@ -597,13 +612,11 @@ impl<'a> LoweringContext<'a> {
             InferType::Slice { elem, .. } => {
                 AirType::Slice(Box::new(self.lower_type_from_infer(elem)))
             }
-            InferType::Tuple(_) => {
-                #[cfg(debug_assertions)]
-                eprintln!(
-                    "[AIR] warning: InferType::Tuple reached lower_type_from_infer, \
-                     tuples are not yet supported in the LLVM backend"
-                );
-                AirType::Opaque
+            InferType::Tuple(elems) => {
+                let elems: Vec<AirType> =
+                    elems.iter().map(|e| self.lower_type_from_infer(e)).collect();
+                self.tuples.borrow_mut().insert(elems.len());
+                AirType::Struct(crate::tuples::tuple_ref(elems))
             }
             InferType::Range => {
                 #[cfg(debug_assertions)]

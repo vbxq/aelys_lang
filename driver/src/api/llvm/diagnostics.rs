@@ -158,7 +158,13 @@ pub(super) fn mono_errors_to_error(
 ) -> AelysError {
     let (surface, rest): (Vec<_>, Vec<_>) = errors
         .into_iter()
-        .partition(|e| e.kind == aelys_air::mono::MonoErrorKind::VecSurface);
+        .partition(|e| {
+            matches!(
+                e.kind,
+                aelys_air::mono::MonoErrorKind::VecSurface
+                    | aelys_air::mono::MonoErrorKind::RcSurface
+            )
+        });
     let (no_definition, other): (Vec<_>, Vec<_>) = rest
         .into_iter()
         .partition(|e| e.kind == aelys_air::mono::MonoErrorKind::NoDefinition);
@@ -197,13 +203,14 @@ pub(super) fn mono_errors_to_error(
     let mut diagnostics: Vec<Diagnostic> = surface
         .iter()
         .map(|error| {
+            let (code, annotation) = if error.kind == aelys_air::mono::MonoErrorKind::RcSurface {
+                ("E0410", "Rc inside a tuple")
+            } else {
+                ("E0412", VEC_SURFACE_ANNOTATION)
+            };
             Diagnostic::new(Severity::Error, &user_facing(error.message.as_str()))
-                .with_code("E0412")
-                .with_primary_label(
-                    source.clone(),
-                    span,
-                    Some(VEC_SURFACE_ANNOTATION.to_string()),
-                )
+                .with_code(code)
+                .with_primary_label(source.clone(), span, Some(annotation.to_string()))
         })
         .collect();
     diagnostics.extend(no_definition);

@@ -57,10 +57,7 @@ impl TypeInference {
             ));
             vec![]
         } else {
-            let mut stmts = Vec::new();
-            for stmt in &body[..body.len() - 1] {
-                stmts.push(self.infer_stmt(stmt));
-            }
+            let mut stmts = self.infer_stmts(&body[..body.len() - 1]);
 
             let last_stmt = &body[body.len() - 1];
             let typed_last = self.infer_stmt_with_implicit_return(last_stmt, &return_type);

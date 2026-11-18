@@ -1,4 +1,4 @@
-use super::expr::{Expr, Parameter, TypeAnnotation};
+use super::expr::{Expr, Parameter, Pattern, TypeAnnotation};
 use crate::Span;
 
 #[derive(Debug, Clone)]
@@ -25,6 +25,12 @@ pub enum StmtKind {
         type_annotation: Option<TypeAnnotation>,
         initializer: Expr,
         is_pub: bool,
+    },
+
+    LetPattern {
+        pattern: Pattern,
+        type_annotation: Option<TypeAnnotation>,
+        initializer: Expr,
     },
 
     Block(Vec<Stmt>),

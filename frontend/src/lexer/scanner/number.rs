@@ -6,6 +6,9 @@ use aelys_syntax::{Span, Token, TokenKind};
 
 impl Lexer {
     pub(super) fn number(&mut self) -> Result<()> {
+        if matches!(self.tokens.last().map(|t| &t.kind), Some(TokenKind::Dot)) {
+            return self.tuple_element();
+        }
         if self.chars.get(self.start) == Some(&'0') {
             if self.match_char('x') || self.match_char('X') {
                 return self.hex_number();
@@ -83,6 +86,27 @@ impl Lexer {
         }
 
         Ok(())
+    }
+
+    fn tuple_element(&mut self) -> Result<()> {
+        while self.peek().is_alphanumeric() || self.peek() == '_' {
+            self.advance();
+        }
+        let text: String = self.chars[self.start..self.current].iter().collect();
+        let plain = text.chars().all(|c| c.is_ascii_digit()) && (text == "0" || !text.starts_with('0'));
+        match text.parse::<i64>() {
+            Ok(n) if plain => {
+                self.add_token(TokenKind::Int(n));
+                Ok(())
+            }
+            _ => Err(AelysError::Compile(self.error(CompileErrorKind::ParseRule {
+                code: 101,
+                message: format!(
+                    "`{text}` is not a tuple element; a tuple element is written in decimal digits, like `t.0`"
+                ),
+                help: None,
+            }))),
+        }
     }
 
     // the magnitude of the least i64 has no positive value, so it is a literal only under a minus

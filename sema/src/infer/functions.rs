@@ -125,10 +125,7 @@ impl TypeInference {
         } else if func.body.is_empty() {
             vec![]
         } else {
-            let mut stmts: Vec<_> = func.body[..func.body.len() - 1]
-                .iter()
-                .map(|s| self.infer_stmt(s))
-                .collect();
+            let mut stmts: Vec<_> = self.infer_stmts(&func.body[..func.body.len() - 1]);
 
             let last_stmt = &func.body[func.body.len() - 1];
             let typed_last = self.infer_stmt_with_implicit_return(last_stmt, &return_type);

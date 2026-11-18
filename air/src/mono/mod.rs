@@ -13,6 +13,7 @@ const ENUM_MONO_LIMIT: usize = 4096;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MonoErrorKind {
     VecSurface,
+    RcSurface,
     NoDefinition,
     Mono,
 }
@@ -71,9 +72,77 @@ pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<MonoError
     if !errors.is_empty() {
         return Err(errors);
     }
+    let errors = tuple_carrier_errors(&program);
+    if !errors.is_empty() {
+        return Err(errors);
+    }
 
     crate::counts::resolve_counts(&mut program);
     Ok(program)
+}
+
+fn tuple_carrier_errors(program: &AirProgram) -> Vec<MonoError> {
+    for def in program
+        .structs
+        .iter()
+        .filter(|d| d.type_params.is_empty() && crate::tuples::is_tuple_name(&d.name))
+    {
+        for field in &def.fields {
+            if rc_reachable(&field.ty, program, &mut HashSet::new()) {
+                return vec![MonoError {
+                    kind: MonoErrorKind::RcSurface,
+                    fault: Fault::Unsupported,
+                    message: "an `Rc<T>` inside a tuple is not supported; put it in a struct \
+                              field (a generic call made a tuple of `Rc<T>`)"
+                        .to_string(),
+                }];
+            }
+            if matches!(field.ty, AirType::Vec(_)) {
+                return vec![MonoError::vec_surface(format!(
+                    "{} a tuple holds a `Vec<T>` by value, which is not supported; keep the Vec \
+                     in its own binding",
+                    crate::passes::vec_surface::MARKER
+                ))];
+            }
+        }
+    }
+    Vec::new()
+}
+
+fn rc_reachable(ty: &AirType, program: &AirProgram, seen: &mut HashSet<String>) -> bool {
+    match ty {
+        AirType::Rc(_) => true,
+        AirType::Array(inner, _) | AirType::Vec(inner) | AirType::Slice(inner) => {
+            rc_reachable(inner, program, seen)
+        }
+        AirType::Struct(r) => {
+            let symbol = r.symbol();
+            if !seen.insert(symbol.clone()) {
+                return false;
+            }
+            program
+                .structs
+                .iter()
+                .find(|d| d.name == symbol)
+                .is_some_and(|d| d.fields.iter().any(|f| rc_reachable(&f.ty, program, seen)))
+        }
+        AirType::Enum(r) => {
+            let symbol = r.symbol();
+            if !seen.insert(symbol.clone()) {
+                return false;
+            }
+            program
+                .enums
+                .iter()
+                .find(|d| d.name == symbol)
+                .is_some_and(|d| {
+                    d.variants
+                        .iter()
+                        .any(|v| v.payload.iter().any(|p| rc_reachable(p, program, seen)))
+                })
+        }
+        _ => false,
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

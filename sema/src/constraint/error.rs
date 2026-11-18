@@ -1374,6 +1374,7 @@ impl TypeError {
             InferType::Ref { .. } => "a reference",
             InferType::Slice { .. } => "a slice",
             InferType::Null => "the unit value",
+            InferType::Tuple(_) => "a tuple with a generic element",
             _ => "this value",
         };
         let detail = match found {

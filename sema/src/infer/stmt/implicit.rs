@@ -100,10 +100,7 @@ impl TypeInference {
                 self.collect_signatures(stmts, &prefix);
                 let saved_block_literals = self.literal_init_vars.clone();
 
-                let mut typed_stmts: Vec<TypedStmt> = stmts[..stmts.len() - 1]
-                    .iter()
-                    .map(|s| self.infer_stmt(s))
-                    .collect();
+                let mut typed_stmts: Vec<TypedStmt> = self.infer_stmts(&stmts[..stmts.len() - 1]);
 
                 let typed_last =
                     self.infer_stmt_with_implicit_return(&stmts[stmts.len() - 1], return_type);

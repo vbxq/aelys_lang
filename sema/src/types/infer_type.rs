@@ -201,6 +201,9 @@ impl InferType {
                 mutable,
             };
         }
+        if let Some(elems) = &ann.tuple_elems {
+            return InferType::Tuple(elems.iter().map(Self::from_annotation).collect());
+        }
         if ann.is_function_type() {
             let params = ann
                 .fn_params

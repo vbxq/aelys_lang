@@ -400,6 +400,9 @@ impl TypeInference {
         generic_scope: &HashSet<String>,
         declared_type_params: &HashSet<String>,
     ) {
+        if matches!(expr.ty, InferType::Tuple(_)) {
+            self.reject_tuple_carriers(&expr.ty, expr.span);
+        }
         match &expr.kind {
             TypedExprKind::Binary { left, op, right } => {
                 self.validate_expr(left, generic_scope, declared_type_params);
@@ -645,7 +648,7 @@ impl TypeInference {
                             ));
                         }
                     }
-                    InferType::Dynamic => {}
+                    InferType::Dynamic | InferType::Tuple(_) => {}
                     InferType::Var(_) if self.is_deferred_site(expr.span, &deferred) => {}
                     other => {
                         self.errors.push(TypeError::member_access(

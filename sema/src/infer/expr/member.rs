@@ -58,6 +58,16 @@ impl TypeInference {
         }
 
         let typed_object = self.infer_expr(object);
+        if member.starts_with(|c: char| c.is_ascii_digit()) {
+            let ty = self.tuple_element_type(&typed_object.ty, member, _span);
+            return (
+                TypedExprKind::Member {
+                    object: Box::new(typed_object),
+                    member: member.to_string(),
+                },
+                ty,
+            );
+        }
         let ty = if Self::projection_waits(&typed_object.ty) {
             let kind = crate::infer::projection::ProjKind::Field(member.to_string());
             self.defer_read(&typed_object.ty, kind, _span)
@@ -72,6 +82,42 @@ impl TypeInference {
             },
             ty,
         )
+    }
+
+    pub(crate) fn tuple_element_type(&mut self, ty: &InferType, member: &str, span: Span) -> InferType {
+        let index: usize = member.parse().unwrap_or(usize::MAX);
+        match ty {
+            InferType::Tuple(elems) => match elems.get(index) {
+                Some(t) => t.clone(),
+                None => {
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "the tuple `{ty}` has {} elements, so it has no element {member}",
+                            elems.len()
+                        ),
+                        span,
+                    ));
+                    InferType::Dynamic
+                }
+            },
+            InferType::Dynamic => InferType::Dynamic,
+            InferType::Var(_) => {
+                self.errors.push(TypeError::member_access(
+                    format!(
+                        "type annotations needed: the element `{member}` is read before the                          tuple type is known"
+                    ),
+                    span,
+                ));
+                InferType::Dynamic
+            }
+            other => {
+                self.errors.push(TypeError::member_access(
+                    format!("`{other}` has no element {member}; only a tuple has numbered elements"),
+                    span,
+                ));
+                InferType::Dynamic
+            }
+        }
     }
 
     pub(super) fn member_result_type(&mut self, object_ty: &InferType, member: &str) -> InferType {
@@ -189,7 +235,26 @@ impl TypeInference {
         if let Some((struct_name, _)) = object_struct.clone() {
             self.reject_private_field(&struct_name, field, span);
         }
-        if let Some((ref struct_name, ref struct_args)) = object_struct {
+        if field.starts_with(|c: char| c.is_ascii_digit()) {
+            let field_ty = self.tuple_element_type(&typed_object.ty, field, span);
+            if field_ty != InferType::Dynamic {
+                if field_ty.is_rc() || field_ty.contains_rc() {
+                    self.errors.push(TypeError::rc_out_of_surface(
+                        "an `Rc<T>` inside a tuple is not supported; put it in a struct field",
+                        span,
+                    ));
+                }
+                self.try_narrow_literal(&mut typed_value, &field_ty);
+                self.constraints.push(Constraint::flows(
+                    typed_value.ty.clone(),
+                    field_ty,
+                    span,
+                    ConstraintReason::Assignment {
+                        var_name: field.to_string(),
+                    },
+                ));
+            }
+        } else if let Some((ref struct_name, ref struct_args)) = object_struct {
             if self.type_table.has_struct(struct_name) {
                 if let Some(field_ty) = self.type_table.field_type(struct_name, struct_args, field)
                 {

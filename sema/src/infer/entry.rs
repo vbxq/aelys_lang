@@ -104,6 +104,12 @@ impl TypeInference {
             };
         }
 
+        if let Some(elems) = &ann.tuple_elems {
+            let ty = InferType::Tuple(elems.iter().map(|e| self.lower_type(e, false)).collect());
+            self.reject_tuple_carriers(&ty, ann.span);
+            return ty;
+        }
+
         self.check_type_annotation(ann);
 
         if ann.is_function_type() {
@@ -334,6 +340,13 @@ impl TypeInference {
         }
 
         if ann.name.contains('.') || self.import_aliases.contains_key(&ann.name) {
+            return;
+        }
+
+        if let Some(elems) = &ann.tuple_elems {
+            for e in elems {
+                self.check_type_annotation(e);
+            }
             return;
         }
 
