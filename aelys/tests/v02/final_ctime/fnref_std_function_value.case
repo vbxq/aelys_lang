@@ -1,0 +1,10 @@
+use std::str;
+use std::vec;
+
+fn main() {
+    let words: Vec<String> = "ab cd ef".split(" ");
+    let up = words.map(str::to_upper);
+    println!("{}", up.join("-"));
+    let f = str::char_count;
+    println!("{}", f("héllo"));
+}

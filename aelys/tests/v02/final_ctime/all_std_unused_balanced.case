@@ -1,0 +1,15 @@
+use std::io;
+use std::math;
+use std::result;
+use std::slice;
+use std::sort;
+use std::str;
+use std::vec;
+
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    v.push("b");
+    v.push("a");
+    v.sort();
+    println!("{} {}", v.join(","), math::gcd(12, 18));
+}

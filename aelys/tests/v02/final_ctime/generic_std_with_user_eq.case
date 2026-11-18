@@ -1,0 +1,12 @@
+use std::vec;
+
+struct P { x: i64, y: i64 }
+
+impl PartialEq for P {
+    fn eq(&self, other: &Self) -> bool { self.x == other.x }
+}
+
+fn main() {
+    let v: Vec<P> = vec![P { x: 1, y: 0 }, P { x: 2, y: 0 }, P { x: 3, y: 0 }];
+    println!("{} {} {}", v.contains(P { x: 2, y: 9 }), v.index_of(P { x: 3, y: 7 }), v.contains(P { x: 4, y: 0 }));
+}

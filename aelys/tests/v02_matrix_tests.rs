@@ -356,3 +356,8 @@ fn track_final_small() {
 fn track_final_nogcw() {
     run_track("final_nogcw");
 }
+
+#[test]
+fn track_final_ctime() {
+    run_track("final_ctime");
+}

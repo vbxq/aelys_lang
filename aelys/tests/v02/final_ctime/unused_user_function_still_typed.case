@@ -1,0 +1,7 @@
+use std::str;
+
+fn never_called() -> i64 { "text" }
+
+fn main() {
+    println!("hi");
+}

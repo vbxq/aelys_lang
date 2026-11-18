@@ -1,0 +1,3 @@
+pub fn used() -> i64 { 1 }
+
+fn never_called() -> i64 { "text" }

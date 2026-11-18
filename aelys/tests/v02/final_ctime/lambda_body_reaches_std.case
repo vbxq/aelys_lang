@@ -1,0 +1,8 @@
+use std::str;
+use std::vec;
+
+fn main() {
+    let v: Vec<String> = vec!["a", "bb", "ccc"];
+    let w = v.map(move |s: String| -> String { s.pad_left(4) });
+    println!("[{}]", w.join("|"));
+}

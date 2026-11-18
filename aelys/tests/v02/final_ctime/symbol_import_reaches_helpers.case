@@ -1,0 +1,5 @@
+use std::str::{pad_left, repeat};
+
+fn main() {
+    println!("[{}] [{}]", pad_left("ab", 5), repeat("xy", 3));
+}

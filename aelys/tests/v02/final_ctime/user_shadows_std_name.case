@@ -1,0 +1,7 @@
+use std::str;
+
+fn trim(s: String) -> String { "mine" }
+
+fn main() {
+    println!("{} [{}] [{}]", trim(" a "), " a ".trim(), str::trim(" b "));
+}

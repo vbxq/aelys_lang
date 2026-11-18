@@ -1,0 +1,6 @@
+use std::str;
+
+fn main() {
+    let s = "  x y  ";
+    println!("[{}] [{}]", s.trim(), s.to_upper().trim());
+}
