@@ -1,0 +1,13 @@
+fn f() -> (u8, i64) {
+    return (200, 2)
+}
+fn g(t: (i32, u16)) -> i64 {
+    return t.0 as i64 * 100000 + t.1 as i64
+}
+fn main() {
+    let u: (u8, i8) = (255, -1)
+    println(u)
+    let t = f()
+    println(t.0 as i64 + t.1)
+    println(g((3, 65535)))
+}

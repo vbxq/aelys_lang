@@ -921,10 +921,44 @@ impl TypeInference {
         }
 
         if let TypedExprKind::StructLiteral { name, fields } = &mut expr.kind
+            && name == crate::types::TUPLE_LITERAL
+            && let InferType::Tuple(target_elems) = target_ty
+            && target_elems.len() == fields.len()
+        {
+            let mut ok = true;
+            for ((_, value), expected) in fields.iter_mut().zip(target_elems.iter()) {
+                if !self.try_narrow_literal(value, expected) {
+                    ok = false;
+                }
+                if value.ty != *expected && value.ty.can_implicit_widen_to(expected) {
+                    let vspan = value.span;
+                    let original = std::mem::replace(
+                        &mut **value,
+                        TypedExpr {
+                            kind: TypedExprKind::Null,
+                            ty: InferType::Null,
+                            span: vspan,
+                        },
+                    );
+                    **value = TypedExpr {
+                        kind: TypedExprKind::Cast {
+                            expr: Box::new(original),
+                            target: expected.clone(),
+                        },
+                        ty: expected.clone(),
+                        span: vspan,
+                    };
+                }
+            }
+            expr.ty = InferType::Tuple(fields.iter().map(|(_, v)| v.ty.clone()).collect());
+            return ok;
+        }
+
+        if let TypedExprKind::StructLiteral { name, fields } = &mut expr.kind
             && let InferType::Struct(target_name, target_args) = target_ty
             && target_name == name
             && !target_args.is_empty()
-            && target_ty.is_concrete()
+            && !target_ty.has_vars()
             && matches!(&expr.ty, InferType::Struct(n, a) if n == name && a.len() == target_args.len())
             && let Some(def) = self.type_table.get_struct(name).cloned()
             && def.type_params.len() == target_args.len()
@@ -986,7 +1020,9 @@ impl TypeInference {
                         let all_expr_var = expr_type_args
                             .iter()
                             .all(|t| matches!(t, InferType::Var(_)));
-                        let all_target_concrete = target_type_args.iter().all(|t| t.is_concrete());
+                        let all_target_concrete = target_type_args
+                            .iter()
+                            .all(|t| !t.has_vars() && *t != InferType::Dynamic);
 
                         let def = self.type_table.get_enum(enum_name).cloned();
                         let payload = def.as_ref().and_then(|d| {

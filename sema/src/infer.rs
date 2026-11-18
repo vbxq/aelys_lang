@@ -80,5 +80,7 @@ pub struct TypeInference {
     deferred_mutability: Vec<(InferType, TypeError)>,
     consts: HashMap<String, crate::typed_ast::ConstLit>,
     alias_names: HashSet<String>,
+    failed_consts: HashSet<String>,
+    alias_checks: Vec<(Vec<String>, aelys_syntax::TypeAnnotation)>,
     module_decls: crate::typed_ast::ModuleDecls,
 }

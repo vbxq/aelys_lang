@@ -1,0 +1,7 @@
+struct P { x: i64 }
+fn same<T: eq>(a: T, b: T) -> bool {
+    return a == b
+}
+fn main() {
+    println(same((1, P { x: 1 }), (1, P { x: 1 })))
+}

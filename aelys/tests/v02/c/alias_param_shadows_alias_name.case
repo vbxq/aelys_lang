@@ -1,0 +1,5 @@
+type T<T> = (T, i64)
+fn main() {
+    let x: T<string> = ("a", 2)
+    println("{x.0} {x.1}")
+}

@@ -40,6 +40,7 @@ impl TypeInference {
         initializer: &aelys_syntax::Expr,
         out: &mut Vec<TypedStmt>,
     ) {
+        self.reject_repeated_bindings(pattern);
         let n = self.try_counter;
         self.try_counter += 1;
         let tmp = format!("__p${n}");
@@ -51,6 +52,54 @@ impl TypeInference {
         out.push(TypedStmt { kind, span });
         let root = aelys_syntax::Expr::new(aelys_syntax::ExprKind::Identifier(tmp), span);
         self.bind_pattern_parts(pattern, &ty, root, out);
+    }
+
+    pub(crate) fn reject_repeated_bindings(&mut self, pattern: &aelys_syntax::Pattern) {
+        fn walk<'p>(
+            pattern: &'p aelys_syntax::Pattern,
+            seen: &mut Vec<&'p str>,
+            out: &mut Vec<(String, aelys_syntax::Span)>,
+        ) {
+            use aelys_syntax::Pattern;
+            match pattern {
+                Pattern::Binding { name, span, .. } => {
+                    if seen.contains(&name.as_str()) {
+                        out.push((name.clone(), *span));
+                    } else {
+                        seen.push(name);
+                    }
+                }
+                Pattern::Tuple { elems, .. } => {
+                    for e in elems {
+                        walk(e, seen, out);
+                    }
+                }
+                Pattern::Variant { bindings, span, .. } => {
+                    for b in bindings {
+                        if b == "_" {
+                            continue;
+                        }
+                        if seen.contains(&b.as_str()) {
+                            out.push((b.clone(), *span));
+                        } else {
+                            seen.push(b);
+                        }
+                    }
+                }
+                Pattern::Wildcard(_) => {}
+            }
+        }
+        let mut seen = Vec::new();
+        let mut repeated = Vec::new();
+        walk(pattern, &mut seen, &mut repeated);
+        for (name, span) in repeated {
+            self.errors.push(TypeError::coded(
+                "E0204",
+                format!("`{name}` is bound more than once in the same pattern"),
+                "bound again here",
+                span,
+            ));
+        }
     }
 
     fn bind_pattern_parts(

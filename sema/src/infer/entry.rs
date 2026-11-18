@@ -61,6 +61,8 @@ impl Default for TypeInference {
             deferred_mutability: Vec::new(),
             consts: HashMap::new(),
             alias_names: HashSet::new(),
+            failed_consts: HashSet::new(),
+            alias_checks: Vec::new(),
             module_decls: Default::default(),
         }
     }
@@ -334,7 +336,7 @@ impl TypeInference {
         Vec::new()
     }
 
-    fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
+    pub(crate) fn check_type_annotation(&mut self, ann: &TypeAnnotation) {
         if self.type_params_in_scope.iter().any(|tp| tp == &ann.name) {
             return;
         }
@@ -505,6 +507,7 @@ impl TypeInference {
         inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
         inf.resolve_struct_fields(&stmts);
+        inf.check_alias_bodies();
         // a nominal holding a vec by value would leak its buffer, since carrier-vec
         inf.reject_nominal_vec_carriers(&stmts);
         inf.reject_multi_variant_rc_enums(&stmts);

@@ -366,7 +366,10 @@ impl InferType {
     }
 
     pub fn satisfies_eq(&self) -> bool {
-        Self::eq_types().contains(self)
+        match self {
+            InferType::Tuple(elems) => elems.iter().all(InferType::satisfies_eq),
+            _ => Self::eq_types().contains(self),
+        }
     }
 
     fn numeric_rank(&self) -> Option<(i16, bool)> {

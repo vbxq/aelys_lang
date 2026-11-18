@@ -111,6 +111,17 @@ impl Aliases<'_> {
             ConstScalar::Int(v) if lit.ty.is_integer() && v >= 0 => {
                 ann.array_size = Some(v as u64);
             }
+            ConstScalar::Int(v) if lit.ty.is_integer() => {
+                self.errors.push(TypeError::coded(
+                    "E0301",
+                    format!(
+                        "the array size `{name}` is {v}, and an array length cannot be negative"
+                    ),
+                    "negative length",
+                    ann.span,
+                ));
+                ann.array_size = Some(0);
+            }
             _ => {
                 self.errors.push(TypeError::coded(
                     "E0301",
@@ -226,6 +237,14 @@ impl Aliases<'_> {
         }
         self.array_size(ann);
         if ann.is_function_type() || ann.tuple_elems.is_some() || !self.is_alias(&ann.name) {
+            return ok;
+        }
+        if self
+            .stack
+            .last()
+            .and_then(|top| self.local.get(top))
+            .is_some_and(|alias| alias.params.contains(&ann.name))
+        {
             return ok;
         }
         let name = ann.name.clone();
@@ -364,6 +383,12 @@ impl TypeInference {
         self.errors.extend(aliases.errors);
 
         for name in &alias_order {
+            if let Some(Some(body)) = resolved.get(name) {
+                self.alias_checks
+                    .push((local[name].params.clone(), body.clone()));
+            }
+        }
+        for name in &alias_order {
             let Some(Some(body)) = resolved.get(name) else {
                 continue;
             };
@@ -380,11 +405,32 @@ impl TypeInference {
             ));
         }
         for (name, is_pub) in const_order {
+            if let Some(None) = evaluated.get(&name) {
+                self.failed_consts.insert(name.clone());
+            }
             if let Some(Some(lit)) = evaluated.get(&name) {
                 self.consts.insert(name.clone(), lit.clone());
                 self.module_decls.consts.push((name, is_pub, lit.clone()));
             }
         }
+    }
+
+    pub(super) fn check_alias_bodies(&mut self) {
+        for (params, body) in std::mem::take(&mut self.alias_checks) {
+            let mut body = body;
+            let stand_in: Vec<TypeAnnotation> = params
+                .iter()
+                .map(|_| TypeAnnotation::new("i64".to_string(), body.span))
+                .collect();
+            substitute(&mut body, &params, &stand_in);
+            self.check_type_annotation(&body);
+        }
+    }
+
+    pub(crate) fn failed_const(&self, name: &str) -> bool {
+        self.failed_consts.contains(name)
+            && self.env.lookup(name).is_none()
+            && self.env.lookup_function_ref(name).is_none()
     }
 
     pub(crate) fn const_literal(

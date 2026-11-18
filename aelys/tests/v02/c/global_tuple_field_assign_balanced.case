@@ -1,0 +1,10 @@
+pub let mut G: (string, i64) = ("init", 0)
+fn main() {
+    let mut n = 0
+    for i in 0..25 {
+        G.0 = "g{i}"
+        n = n + G.0.len
+    }
+    G = ("end", 0)
+    println(n)
+}

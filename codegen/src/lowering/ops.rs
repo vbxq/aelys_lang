@@ -70,6 +70,26 @@ impl<'a> FunctionCodegen<'a> {
                 .map(Into::into)
                 .map_err(|e| CodegenError::LlvmError(e.to_string()));
         }
+        if let AirType::Struct(r) = &left_ty
+            && aelys_air::tuples::is_tuple_name(&r.symbol())
+            && matches!(op, BinOp::Eq | BinOp::Ne)
+            && left_val.is_struct_value()
+            && right_val.is_struct_value()
+        {
+            let eq = self.tuple_value_eq(
+                &r.symbol(),
+                left_val.into_struct_value(),
+                right_val.into_struct_value(),
+            )?;
+            if matches!(op, BinOp::Eq) {
+                return Ok(eq.into());
+            }
+            return self
+                .builder
+                .build_not(eq, "tuple_ne")
+                .map(Into::into)
+                .map_err(|e| CodegenError::LlvmError(e.to_string()));
+        }
         if matches!(left_ty, AirType::Enum(_)) {
             return Err(CodegenError::UnsupportedInstruction(format!(
                 "comparison on data enum type `{:?}` is not supported; use `match` instead",
@@ -351,6 +371,80 @@ impl<'a> FunctionCodegen<'a> {
         Err(CodegenError::UnsupportedInstruction(
             "unsupported unary op".to_string(),
         ))
+    }
+
+    fn tuple_value_eq(
+        &mut self,
+        symbol: &str,
+        left: inkwell::values::StructValue<'static>,
+        right: inkwell::values::StructValue<'static>,
+    ) -> Result<IntValue<'static>, CodegenError> {
+        let field_tys: Vec<AirType> = self
+            .program
+            .structs
+            .iter()
+            .find(|s| s.name == symbol)
+            .map(|s| s.fields.iter().map(|f| f.ty.clone()).collect())
+            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown tuple `{symbol}`")))?;
+        let mut acc = self.context.bool_type().const_int(1, false);
+        for (i, ty) in field_tys.iter().enumerate() {
+            let index = u32::try_from(i).map_err(|_| {
+                CodegenError::UnsupportedType(format!("field index overflow on {symbol}"))
+            })?;
+            let l = self
+                .builder
+                .build_extract_value(left, index, "tuple_l")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            let r = self
+                .builder
+                .build_extract_value(right, index, "tuple_r")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+            let eq: IntValue<'static> = match ty {
+                AirType::Str => self
+                    .generate_string_binary_op(BinOp::Eq, l.into_struct_value(), r.into_struct_value())?
+                    .into_int_value(),
+                AirType::Struct(inner) if aelys_air::tuples::is_tuple_name(&inner.symbol()) => {
+                    self.tuple_value_eq(&inner.symbol(), l.into_struct_value(), r.into_struct_value())?
+                }
+                AirType::F32 | AirType::F64 => self
+                    .builder
+                    .build_float_compare(
+                        FloatPredicate::OEQ,
+                        l.into_float_value(),
+                        r.into_float_value(),
+                        "tuple_feq",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?,
+                AirType::I8
+                | AirType::I16
+                | AirType::I32
+                | AirType::I64
+                | AirType::U8
+                | AirType::U16
+                | AirType::U32
+                | AirType::U64
+                | AirType::Bool
+                | AirType::Char => self
+                    .builder
+                    .build_int_compare(
+                        IntPredicate::EQ,
+                        l.into_int_value(),
+                        r.into_int_value(),
+                        "tuple_ieq",
+                    )
+                    .map_err(|e| CodegenError::LlvmError(e.to_string()))?,
+                other => {
+                    return Err(CodegenError::UnsupportedInstruction(format!(
+                        "equality on a tuple element of type {other:?} is not supported"
+                    )));
+                }
+            };
+            acc = self
+                .builder
+                .build_and(acc, eq, "tuple_and")
+                .map_err(|e| CodegenError::LlvmError(e.to_string()))?;
+        }
+        Ok(acc)
     }
 
     fn generate_string_binary_op(

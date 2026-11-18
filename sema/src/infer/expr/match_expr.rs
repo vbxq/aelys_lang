@@ -145,6 +145,7 @@ impl TypeInference {
         }
 
         for (arm_index, arm) in arms.iter().enumerate() {
+            self.reject_repeated_bindings(&arm.pattern);
             match &arm.pattern {
                 Pattern::Variant {
                     enum_name: pat_enum,
