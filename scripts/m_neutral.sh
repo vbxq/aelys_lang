@@ -451,9 +451,9 @@ EOF
 declare -A EXPECT_COUNT=( [o1]=4 [o2]=4 [o3]=4 [o4]=4 [o5]=4 [o6]=4 [o7]=5 [o8]=2 [o9]=2 [o10]=2 [o11]=4 )
 EXPECT_PROGRAMS=39
 EXPECT_LEGS=156
-# 16 of the 39 programs compile, the other 23 are rejected at every level
-EXPECT_ACCEPT_LEGS=64
-EXPECT_REJECT_LEGS=92
+# 17 of the 39 programs compile, the other 22 are rejected at every level
+EXPECT_ACCEPT_LEGS=68
+EXPECT_REJECT_LEGS=88
 
 origin_fail=0
 for o in "${!EXPECT_COUNT[@]}"; do

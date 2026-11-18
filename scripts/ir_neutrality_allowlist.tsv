@@ -15,8 +15,8 @@
 # divergence between the two rejection messages. m_neutral.sh counts and asserts those two
 # separately, so one fixture at one level can carry at most one row of each class.
 #
-# Only 16 of the 39 programs are accepted by the compiler, which is 64 accept legs over the
-# 4 levels, and only an accept leg reaches the IR comparison. The other 23 are rejected at
+# Only 17 of the 39 programs are accepted by the compiler, which is 68 accept legs over the
+# 4 levels, and only an accept leg reaches the IR comparison. The other 22 are rejected at
 # every level and can contribute text rows only. The class axis is partitioned by
 # construction, not by convention.
 #
@@ -28,8 +28,8 @@
 # missing, unreadable or unparseable file is a hard failure of the sweep; an empty read is
 # not a pass.
 #
-# Measured at this revision with the compiler of this commit on both sides: 64 accept legs,
-# 92 reject legs, IR_DIFF 0, TEXT_DIFF 0. There are no rows.
+# Measured at this revision with the compiler of this commit on both sides: 68 accept legs,
+# 88 reject legs, IR_DIFF 0, TEXT_DIFF 0. There are no rows.
 #
 # Ten rows keyed to a different population were held here until this revision. They were
 # produced by an ad hoc 449 by 3 corpus sweep that exists as no tracked script, not by
