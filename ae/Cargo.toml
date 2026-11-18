@@ -1,0 +1,17 @@
+[package]
+name = "ae"
+version.workspace = true
+edition = "2024"
+
+[dependencies]
+aelys-common = { path = "../common" }
+# never linked into ae: the dependency builds the runtime archives and exports their directory to build.rs
+aelys-core = { path = "../core" }
+aelys-driver = { path = "../driver" }
+aelys-opt = { path = "../opt" }
+aelys-syntax = { path = "../syntax" }
+clap = { version = "4.5", features = ["derive"] }
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+toml = "0.8"

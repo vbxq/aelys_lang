@@ -12,6 +12,7 @@ members = [
     "codegen",
     "driver",
     "cli",
+    "ae",
 ]
 
 [workspace.package]
