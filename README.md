@@ -715,19 +715,6 @@ For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error
 ```
 
-A nested pattern:
-
-```rust refused E0101
-fn main() -> i64 {
-    let o: Option<Option<i64>> = Some(Some(3))
-    match o {
-        Some(Some(v)) => println(v),
-        _ => println(0)
-    }
-    return 0
-}
-```
-
 A `Vec` function other than the six builtins. The whole builtin `Vec` surface is `new`, `push`, `pop`, `len`, `as_slice` and `try_as_unique_mut_slice`, and the compiler says so:
 
 ```rust refused E0301

@@ -26,10 +26,15 @@ impl TypeInference {
         span: Span,
         origin: MatchOrigin,
     ) -> (TypedExprKind, InferType) {
-        let mut expected = match &typed_scrutinee.ty {
-            InferType::Ref { referent, .. } => (**referent).clone(),
-            other => other.clone(),
+        let typed_scrutinee = match &typed_scrutinee.ty {
+            InferType::Ref { referent, .. } => {
+                let ty = (**referent).clone();
+                let span = typed_scrutinee.span;
+                TypedExpr::new(TypedExprKind::Deref(Box::new(typed_scrutinee)), ty, span)
+            }
+            _ => typed_scrutinee,
         };
+        let mut expected = typed_scrutinee.ty.clone();
         if let InferType::Var(_) = expected
             && let Some(fixed) = self.scrutinee_type_from_patterns(arms)
         {

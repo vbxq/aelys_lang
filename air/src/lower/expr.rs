@@ -2107,15 +2107,7 @@ impl<'a> LoweringContext<'a> {
             return Operand::Const(AirConst::Null);
         }
         self.pose_fresh_temp(&scrutinee_op);
-        let (scrut_ty, scrutinee_op) = match &scrutinee.ty {
-            InferType::Ref { referent, .. } => {
-                let air = self.lower_type_from_infer(referent);
-                let op = self.emit_rvalue_to_temp(air, Rvalue::Deref(scrutinee_op), sp);
-                ((**referent).clone(), op)
-            }
-            other => (other.clone(), scrutinee_op),
-        };
-        let scrut_ty = &scrut_ty;
+        let scrut_ty = &scrutinee.ty;
 
         let flat = arms.iter().all(|arm| {
             arm.guard().is_none()
@@ -2322,8 +2314,7 @@ impl<'a> LoweringContext<'a> {
         let guarded = arms.iter().any(|a| a.guard().is_some());
         let scrut_air = self.lower_type_from_infer(scrut_ty);
         let exclusive_local = matches!(&scrutinee.kind, TypedExprKind::Identifier(name)
-            if self.lookup_local(name).is_some())
-            && !matches!(scrutinee.ty, InferType::Ref { .. });
+            if self.lookup_local(name).is_some());
         let posed = matches!(&scrutinee_op, Operand::Copy(id) | Operand::Move(id)
             if self.stmt_str_temps.iter().any(|(l, _)| l == id));
         // a guard runs user code between tests, so a place it can reach is tested through a held copy

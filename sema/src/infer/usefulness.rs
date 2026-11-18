@@ -488,10 +488,7 @@ impl TypeInference {
         origin: MatchOrigin,
         span: Span,
     ) {
-        let ty = match &scrutinee.ty {
-            InferType::Ref { referent, .. } => (**referent).clone(),
-            other => other.clone(),
-        };
+        let ty = scrutinee.ty.clone();
         let table = self.type_table.clone();
         let mut checker = Checker {
             table: &table,
