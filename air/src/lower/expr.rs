@@ -1614,7 +1614,7 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Member { object, member } => match &object.kind {
                 TypedExprKind::Identifier(mod_name) => {
                     let is_runtime_value = self.lookup_local(mod_name).is_some()
-                        || self.globals.iter().any(|global| global.name == *mod_name);
+                        || self.global_names.contains(mod_name);
                     (!is_runtime_value).then(|| Callee::Named(format!("{}.{}", mod_name, member)))
                 }
                 _ => None,

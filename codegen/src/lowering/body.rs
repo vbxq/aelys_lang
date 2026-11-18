@@ -6,8 +6,7 @@ use crate::lowering::strings::{
 use crate::types::air_basic_type_to_llvm;
 use crate::{AirNodeLocation, AirNodePosition, CodegenError};
 use aelys_air::{
-    AirFunction, AirProgram, AirStmtKind, AirType, BlockId, FunctionId, LocalId, Operand, Place,
-    Rvalue,
+    AirFunction, AirProgram, AirStmtKind, AirType, BlockId, LocalId, Operand, Place, Rvalue,
 };
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -23,7 +22,7 @@ pub(crate) struct FunctionCodegen<'a> {
     pub(crate) function: FunctionValue<'static>,
     pub(crate) air_function: &'a AirFunction,
     pub(crate) program: &'a AirProgram,
-    pub(crate) function_names: &'a HashMap<FunctionId, String>,
+    pub(crate) index: &'a crate::lowering::index::ProgramIndex<'a>,
     pub(crate) block_map: HashMap<BlockId, BasicBlock<'static>>,
     pub(crate) alloca_locals: HashSet<LocalId>,
     pub(crate) alloca_map: HashMap<LocalId, PointerValue<'static>>,
@@ -49,7 +48,7 @@ impl<'a> FunctionCodegen<'a> {
         function: FunctionValue<'static>,
         air_function: &'a AirFunction,
         program: &'a AirProgram,
-        function_names: &'a HashMap<FunctionId, String>,
+        index: &'a crate::lowering::index::ProgramIndex<'a>,
     ) -> Self {
         let mut local_types = HashMap::new();
         let mut alloca_locals = HashSet::new();
@@ -138,7 +137,7 @@ impl<'a> FunctionCodegen<'a> {
             function,
             air_function,
             program,
-            function_names,
+            index,
             block_map: HashMap::new(),
             alloca_locals,
             alloca_map: HashMap::new(),

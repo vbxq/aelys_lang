@@ -574,6 +574,7 @@ impl<'a> LoweringContext<'a> {
                 self.report(fault, message);
             }
             let init = folded.ok();
+            self.global_names.insert(name.clone());
             self.globals.push(AirGlobal {
                 name: name.clone(),
                 ty,
@@ -704,7 +705,7 @@ impl<'a> LoweringContext<'a> {
             match init {
                 // follow fnptr aliases through prior globals until we reach the real symbol.
                 AirConst::FnRef(target)
-                    if self.globals.iter().any(|global| global.name == target) =>
+                    if self.global_names.contains(&target) =>
                 {
                     current = target;
                 }

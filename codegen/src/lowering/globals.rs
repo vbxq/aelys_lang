@@ -919,13 +919,9 @@ impl<'a> FunctionCodegen<'a> {
     }
 
     pub(crate) fn lookup_program_global(&self, name: &str) -> Result<&AirGlobal, CodegenError> {
-        self.program
-            .globals
-            .iter()
-            .find(|global| global.name == name)
-            .ok_or_else(|| {
-                CodegenError::UnsupportedInstruction(format!("unknown global '{}'", name))
-            })
+        self.index.global(name).ok_or_else(|| {
+            CodegenError::UnsupportedInstruction(format!("unknown global '{}'", name))
+        })
     }
 
     pub(crate) fn lookup_global_ptr(

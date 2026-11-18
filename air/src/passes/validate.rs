@@ -4,7 +4,7 @@ use crate::{
     AirBlock, AirConst, AirFunction, AirProgram, AirStmtKind, AirTerminator, AirType, BinOp,
     BlockId, Callee, EnumRef, LocalId, Operand, Place, Rvalue,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -203,25 +203,57 @@ impl fmt::Display for AirValidationError {
     }
 }
 
-fn place_type(function: &AirFunction, program: &AirProgram, place: &Place) -> Option<AirType> {
+struct Index<'a> {
+    globals: HashMap<&'a str, &'a AirType>,
+    by_id: HashMap<u32, &'a AirFunction>,
+    by_name: HashMap<&'a str, &'a AirFunction>,
+}
+
+impl<'a> Index<'a> {
+    fn new(program: &'a AirProgram) -> Self {
+        let mut index = Index {
+            globals: HashMap::new(),
+            by_id: HashMap::new(),
+            by_name: HashMap::new(),
+        };
+        for global in &program.globals {
+            index
+                .globals
+                .entry(global.name.as_str())
+                .or_insert(&global.ty);
+        }
+        for function in &program.functions {
+            index.by_id.entry(function.id.0).or_insert(function);
+            if function.type_params.is_empty() {
+                index
+                    .by_name
+                    .entry(function.name.as_str())
+                    .or_insert(function);
+            }
+        }
+        index
+    }
+}
+
+fn local_types(function: &AirFunction) -> HashMap<LocalId, &AirType> {
+    let mut types = HashMap::new();
+    for param in &function.params {
+        types.entry(param.id).or_insert(&param.ty);
+    }
+    for local in &function.locals {
+        types.entry(local.id).or_insert(&local.ty);
+    }
+    types
+}
+
+fn place_type(
+    locals: &HashMap<LocalId, &AirType>,
+    index: &Index,
+    place: &Place,
+) -> Option<AirType> {
     match place {
-        Place::Local(id) => function
-            .params
-            .iter()
-            .find(|p| p.id == *id)
-            .map(|p| p.ty.clone())
-            .or_else(|| {
-                function
-                    .locals
-                    .iter()
-                    .find(|l| l.id == *id)
-                    .map(|l| l.ty.clone())
-            }),
-        Place::Global(name) => program
-            .globals
-            .iter()
-            .find(|g| g.name == *name)
-            .map(|g| g.ty.clone()),
+        Place::Local(id) => locals.get(id).map(|ty| (*ty).clone()),
+        Place::Global(name) => index.globals.get(name.as_str()).map(|ty| (*ty).clone()),
         Place::Field(_, _) | Place::Index(_, _) | Place::Deref(_) => None,
     }
 }
@@ -229,12 +261,13 @@ fn place_type(function: &AirFunction, program: &AirProgram, place: &Place) -> Op
 // only a local or a global names a type here, so a write through a field or an index escapes it
 fn check_function_ptrness(
     function: &AirFunction,
-    program: &AirProgram,
+    index: &Index,
     errors: &mut Vec<AirValidationError>,
 ) {
     if function.is_extern {
         return;
     }
+    let locals = local_types(function);
     // a count glue loads the rc handle out of the slot it is given, no source program does
     let count_glue = function.name.starts_with("__glue_p");
     for block in &function.blocks {
@@ -248,7 +281,7 @@ fn check_function_ptrness(
                 Rvalue::Len(_) => "len",
                 _ => continue,
             };
-            let Some(ty) = place_type(function, program, place) else {
+            let Some(ty) = place_type(&locals, index, place) else {
                 continue;
             };
             let loads_rc_from_its_slot = matches!(ty, AirType::Rc(_))
@@ -305,25 +338,14 @@ fn scalar_class(ty: &AirType) -> Option<&'static str> {
 fn check_type_agreement(
     function: &AirFunction,
     program: &AirProgram,
+    index: &Index,
     errors: &mut Vec<AirValidationError>,
 ) {
     if function.is_extern {
         return;
     }
-    let local_ty = |id: LocalId| {
-        function
-            .params
-            .iter()
-            .find(|p| p.id == id)
-            .map(|p| p.ty.clone())
-            .or_else(|| {
-                function
-                    .locals
-                    .iter()
-                    .find(|l| l.id == id)
-                    .map(|l| l.ty.clone())
-            })
-    };
+    let locals = local_types(function);
+    let local_ty = |id: LocalId| locals.get(&id).map(|ty| (*ty).clone());
     let operand_ty = |op: &Operand| match op {
         Operand::Copy(id) | Operand::Move(id) => local_ty(*id),
         Operand::Const(AirConst::IntLiteral(_)) => None,
@@ -339,7 +361,7 @@ fn check_type_agreement(
             .map(|f| f.ty.clone())
     };
     let stored_ty = |place: &Place| match place {
-        Place::Local(_) | Place::Global(_) => place_type(function, program, place),
+        Place::Local(_) | Place::Global(_) => place_type(&locals, index, place),
         Place::Deref(id) => match local_ty(*id) {
             Some(AirType::Ptr(inner)) => Some(*inner),
             _ => None,
@@ -356,15 +378,13 @@ fn check_type_agreement(
     };
     let callee_params = |callee: &Callee| -> Option<Vec<AirType>> {
         match callee {
-            Callee::Direct(fid) => program
-                .functions
-                .iter()
-                .find(|f| f.id == *fid)
+            Callee::Direct(fid) => index
+                .by_id
+                .get(&fid.0)
                 .map(|f| f.params.iter().map(|p| p.ty.clone()).collect()),
-            Callee::Named(name) | Callee::Extern(name, _) => program
-                .functions
-                .iter()
-                .find(|f| f.name == *name && f.type_params.is_empty())
+            Callee::Named(name) | Callee::Extern(name, _) => index
+                .by_name
+                .get(name.as_str())
                 .map(|f| f.params.iter().map(|p| p.ty.clone()).collect()),
             Callee::FnPtr(id) => match local_ty(*id) {
                 Some(AirType::FnPtr { params, .. }) => Some(params),
@@ -462,14 +482,8 @@ fn check_rc_handles(
     if function.is_extern {
         return;
     }
-    let local_ty = |id: LocalId| {
-        function
-            .params
-            .iter()
-            .find(|p| p.id == id)
-            .map(|p| &p.ty)
-            .or_else(|| function.locals.iter().find(|l| l.id == id).map(|l| &l.ty))
-    };
+    let locals = local_types(function);
+    let local_ty = |id: LocalId| locals.get(&id).copied();
     let operand_ty = |op: &Operand| match op {
         Operand::Copy(id) | Operand::Move(id) => local_ty(*id).cloned(),
         Operand::Const(c) => Some(crate::mono::substitute::const_type(c)),
@@ -738,11 +752,12 @@ pub fn validate_air(program: &AirProgram) -> Result<(), Vec<AirValidationError>>
         }
     }
 
+    let index = Index::new(program);
     for function in &program.functions {
         validate_function(function, &known_enums, &known_globals, &mut errors);
-        check_function_ptrness(function, program, &mut errors);
+        check_function_ptrness(function, &index, &mut errors);
         check_rc_handles(function, program, &mut errors);
-        check_type_agreement(function, program, &mut errors);
+        check_type_agreement(function, program, &index, &mut errors);
         if function.type_params.is_empty() {
             for detail in crate::counts::unresolved_counts(function) {
                 errors.push(AirValidationError {

@@ -13,7 +13,6 @@ use inkwell::llvm_sys::LLVMCallConv;
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, FunctionType};
 use inkwell::values::FunctionValue;
-use std::collections::HashMap;
 
 // pointers; the c abi has no notion of an env, and extern functions don't
 
@@ -128,10 +127,7 @@ impl CodegenContext {
     }
 
     pub(crate) fn define_function_bodies(&self, program: &AirProgram) -> Result<(), CodegenError> {
-        let mut function_names = HashMap::with_capacity(program.functions.len());
-        for function in &program.functions {
-            function_names.insert(function.id, function_symbol_name(function));
-        }
+        let index = crate::lowering::index::ProgramIndex::new(program);
 
         for function in &program.functions {
             if function.is_extern {
@@ -152,7 +148,7 @@ impl CodegenContext {
                 fn_value,
                 function,
                 program,
-                &function_names,
+                &index,
             );
             fcx.generate()?;
         }

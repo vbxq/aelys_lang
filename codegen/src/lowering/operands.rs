@@ -57,10 +57,8 @@ impl<'a> FunctionCodegen<'a> {
                 .into()),
             AirConst::FnRef(name) => {
                 let symbol_name = self
-                    .program
-                    .functions
-                    .iter()
-                    .find(|function| function.name == *name)
+                    .index
+                    .named(name)
                     .map(function_symbol_name)
                     .unwrap_or_else(|| name.clone());
                 let func = self.module.get_function(&symbol_name).ok_or_else(|| {

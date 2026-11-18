@@ -3,6 +3,7 @@ pub(crate) mod calls;
 pub(crate) mod casts;
 pub(crate) mod functions;
 pub(crate) mod globals;
+pub(crate) mod index;
 pub(crate) mod memory;
 pub(crate) mod operands;
 pub(crate) mod ops;

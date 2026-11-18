@@ -575,7 +575,7 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<FunctionValue<'static>, CodegenError> {
         match callee {
             Callee::Direct(id) => {
-                let name = self.function_names.get(id).ok_or_else(|| {
+                let name = self.index.symbols.get(id).ok_or_else(|| {
                     CodegenError::UnsupportedInstruction(format!("unknown function id {}", id.0))
                 })?;
                 self.module
@@ -838,22 +838,12 @@ impl<'a> FunctionCodegen<'a> {
     fn callee_needs_sret(&self, callee: &Callee) -> bool {
         let is_windows = self.target_is_windows();
         match callee {
-            Callee::Direct(id) => self
-                .program
-                .functions
-                .iter()
-                .find(|f| f.id == *id)
-                .map_or(false, |f| {
-                    needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
-                }),
-            Callee::Extern(name, _) => self
-                .program
-                .functions
-                .iter()
-                .find(|f| f.name == *name && f.is_extern)
-                .map_or(false, |f| {
-                    needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
-                }),
+            Callee::Direct(id) => self.index.function(*id).map_or(false, |f| {
+                needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
+            }),
+            Callee::Extern(name, _) => self.index.external(name).map_or(false, |f| {
+                needs_sret(&f.ret_ty, f.calling_conv, is_windows, self.program)
+            }),
             _ => false,
         }
     }
@@ -871,17 +861,13 @@ impl<'a> FunctionCodegen<'a> {
     fn callee_has_implicit_env(&self, callee: &Callee) -> bool {
         match callee {
             Callee::Direct(id) => self
-                .program
-                .functions
-                .iter()
-                .find(|f| f.id == *id)
-                .map_or(false, |f| function_has_implicit_env(f)),
+                .index
+                .function(*id)
+                .map_or(false, function_has_implicit_env),
             Callee::Named(name) => self
-                .program
-                .functions
-                .iter()
-                .find(|f| f.name == *name)
-                .map_or(false, |f| function_has_implicit_env(f)),
+                .index
+                .named(name)
+                .map_or(false, function_has_implicit_env),
             _ => false,
         }
     }

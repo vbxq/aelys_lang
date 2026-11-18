@@ -56,7 +56,7 @@ impl<'a> LoweringContext<'a> {
                         root: PlaceRoot::Local(id),
                         shared: false,
                     })
-                } else if self.globals.iter().any(|g| g.name == *name) {
+                } else if self.global_names.contains(name) {
                     let pointee = self.lower_type_from_infer(&e.ty);
                     let ptr = self.emit_addr_of(Place::Global(name.clone()), &pointee, sp);
                     Some(Addr {
@@ -242,7 +242,12 @@ impl<'a> LoweringContext<'a> {
         Operand::Copy(self.emit_addr_of(Place::Local(t), ty, sp))
     }
 
-    fn emit_addr_of(&mut self, place: Place, pointee: &AirType, sp: Option<Span>) -> LocalId {
+    pub(super) fn emit_addr_of(
+        &mut self,
+        place: Place,
+        pointee: &AirType,
+        sp: Option<Span>,
+    ) -> LocalId {
         let tmp = self.alloc_temp(AirType::Ptr(Box::new(pointee.clone())));
         self.emit(
             AirStmtKind::Assign {

@@ -172,6 +172,7 @@ pub(crate) struct LoweringContext<'a> {
     pub(super) structs: Vec<AirStructDef>,
     pub(super) enums: Vec<AirEnumDef>,
     pub(super) globals: Vec<AirGlobal>,
+    pub(super) global_names: std::collections::HashSet<String>,
     pub(super) imported: Imported,
     pub(super) source_files: Vec<String>,
     pub(super) next_function_id: u32,
@@ -264,6 +265,7 @@ impl<'a> LoweringContext<'a> {
             structs: Vec::new(),
             enums: Vec::new(),
             globals: Vec::new(),
+            global_names: std::collections::HashSet::new(),
             imported: Imported::default(),
             source_files: vec![program.source.name.clone()],
             next_function_id: 0,
@@ -369,8 +371,7 @@ impl<'a> LoweringContext<'a> {
 
     // module-level storage defined elsewhere is read through an accessor, never inlined
     pub(super) fn is_global_name(&self, name: &str) -> bool {
-        self.globals.iter().any(|global| global.name == name)
-            || self.imported.globals.contains(name)
+        self.global_names.contains(name) || self.imported.globals.contains(name)
     }
 
     pub(super) fn alloc_function_id(&mut self) -> FunctionId {
