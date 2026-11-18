@@ -72,6 +72,14 @@ enum Command {
         #[arg(last = true)]
         args: Vec<String>,
     },
+    /// Format Aelys sources in place
+    Fmt {
+        /// Report files that would change, with a diff, without writing them
+        #[arg(long)]
+        check: bool,
+        /// Files or directories to format, `-` for stdin; by default the current directory
+        paths: Vec<PathBuf>,
+    },
 }
 
 #[derive(Args)]
@@ -123,6 +131,7 @@ fn execute(shell: &Shell, command: Command, manifest_path: Option<PathBuf>) -> R
             let bin = target.bin.as_deref();
             commands::run::run(shell, &package, bin, target.release, &args, &cwd)
         }
+        Command::Fmt { check, paths } => commands::fmt::run(check, &paths),
     }
 }
 
