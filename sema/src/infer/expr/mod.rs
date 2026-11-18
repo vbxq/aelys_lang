@@ -14,7 +14,7 @@ pub(crate) use match_expr::int_bounds;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
-use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart, TypedStmtKind};
+use crate::typed_ast::{TypedExpr, TypedExprKind, TypedFmtStringPart};
 use crate::types::InferType;
 use aelys_syntax::{BinaryOp, Expr, ExprKind};
 use std::collections::HashMap;
@@ -341,12 +341,10 @@ impl TypeInference {
                 let typed_stmts = self.infer_stmts(stmts);
                 let typed_tail = self.infer_expr(tail);
                 self.env.pop_scope();
-                let ty = if typed_stmts.iter().any(|s| {
-                    matches!(
-                        s.kind,
-                        TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue
-                    )
-                }) {
+                let ty = if typed_stmts
+                    .iter()
+                    .any(crate::infer::unresolved::stmt_diverges)
+                {
                     InferType::Never
                 } else {
                     typed_tail.ty.clone()

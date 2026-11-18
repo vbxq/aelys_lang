@@ -269,11 +269,16 @@ pub(crate) fn diverges(expr: &TypedExpr) -> bool {
     }
 }
 
-fn stmt_diverges(stmt: &TypedStmt) -> bool {
+pub(crate) fn stmt_diverges(stmt: &TypedStmt) -> bool {
     match &stmt.kind {
         TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue => true,
         TypedStmtKind::Expression(expr) => diverges(expr),
         TypedStmtKind::Block(stmts) => stmts.iter().any(stmt_diverges),
+        TypedStmtKind::If {
+            then_branch,
+            else_branch: Some(else_branch),
+            ..
+        } => stmt_diverges(then_branch) && stmt_diverges(else_branch),
         _ => false,
     }
 }

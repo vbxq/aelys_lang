@@ -462,6 +462,66 @@ fn show_range(lo: i128, hi: i128, ty: &InferType) -> String {
     }
 }
 
+fn children(p: &TypedPattern) -> Vec<&TypedPattern> {
+    match &p.kind {
+        TypedPatternKind::Binding { sub: Some(sub), .. } => vec![&**sub],
+        TypedPatternKind::Variant { fields, .. }
+        | TypedPatternKind::Tuple(fields)
+        | TypedPatternKind::Or(fields) => fields.iter().collect(),
+        TypedPatternKind::Struct { fields, .. } => fields.iter().map(|(_, f)| f).collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn nested_or_paths(p: &TypedPattern) -> Vec<Vec<usize>> {
+    fn walk(p: &TypedPattern, path: &mut Vec<usize>, out: &mut Vec<Vec<usize>>) {
+        for (i, c) in children(p).into_iter().enumerate() {
+            path.push(i);
+            if matches!(c.kind, TypedPatternKind::Or(_)) {
+                out.push(path.clone());
+            }
+            walk(c, path, out);
+            path.pop();
+        }
+    }
+    let mut out = Vec::new();
+    walk(p, &mut Vec::new(), &mut out);
+    out
+}
+
+fn pattern_at<'p>(p: &'p TypedPattern, path: &[usize]) -> Option<&'p TypedPattern> {
+    match path.split_first() {
+        None => Some(p),
+        Some((i, rest)) => pattern_at(children(p).get(*i)?, rest),
+    }
+}
+
+fn replace_at(p: &TypedPattern, path: &[usize], with: TypedPattern) -> TypedPattern {
+    let Some((i, rest)) = path.split_first() else {
+        return with;
+    };
+    let mut out = p.clone();
+    match &mut out.kind {
+        TypedPatternKind::Binding { sub: Some(sub), .. } if *i == 0 => {
+            **sub = replace_at(sub, rest, with);
+        }
+        TypedPatternKind::Variant { fields, .. }
+        | TypedPatternKind::Tuple(fields)
+        | TypedPatternKind::Or(fields) => {
+            if let Some(f) = fields.get_mut(*i) {
+                *f = replace_at(f, rest, with);
+            }
+        }
+        TypedPatternKind::Struct { fields, .. } => {
+            if let Some((_, f)) = fields.get_mut(*i) {
+                *f = replace_at(f, rest, with);
+            }
+        }
+        _ => {}
+    }
+    out
+}
+
 fn top_alternatives(p: &TypedPattern) -> Vec<&TypedPattern> {
     match &p.kind {
         TypedPatternKind::Or(alts) => alts.iter().flat_map(top_alternatives).collect(),
@@ -520,6 +580,35 @@ impl TypeInference {
                     arm.pattern.span,
                 ));
             } else {
+                let mut earlier: Vec<Vec<Pat>> = rows.clone();
+                for alt in &alts {
+                    for path in nested_or_paths(alt) {
+                        let Some(inner) = pattern_at(alt, &path) else {
+                            continue;
+                        };
+                        let TypedPatternKind::Or(choices) = &inner.kind else {
+                            continue;
+                        };
+                        for j in 1..choices.len() {
+                            let before = TypedPattern::new(
+                                TypedPatternKind::Or(choices[..j].to_vec()),
+                                inner.ty.clone(),
+                                inner.span,
+                            );
+                            let mut seen = earlier.clone();
+                            seen.push(vec![lower(&replace_at(alt, &path, before))]);
+                            let q = vec![lower(&replace_at(alt, &path, choices[j].clone()))];
+                            let Ok(found) = checker.useful(&seen, &q) else {
+                                self.too_complex(span);
+                                return;
+                            };
+                            if found.is_empty() {
+                                useless_alts.push(choices[j].span);
+                            }
+                        }
+                    }
+                    earlier.push(vec![lower(alt)]);
+                }
                 for at in useless_alts {
                     errors.push(TypeError::pattern(
                         TypeErrorKind::PatternUnreachable {
