@@ -92,6 +92,9 @@ impl TypeInference {
                     return Err(typed_object);
                 }
                 if is_struct && !self.type_table.has_struct(name) {
+                    if self.any_table_has(member) {
+                        return Ok(self.no_method_on(&typed_object.ty, member, args, span));
+                    }
                     return Err(typed_object);
                 }
                 let name = name.clone();
@@ -205,8 +208,33 @@ impl TypeInference {
                 }
                 Ok((TypedExprKind::Null, InferType::Dynamic))
             }
+            InferType::Function { .. } | InferType::Tuple(_) | InferType::Dynamic => {
+                Err(typed_object)
+            }
+            _ if self.any_table_has(member) => {
+                Ok(self.no_method_on(&typed_object.ty, member, args, span))
+            }
             _ => Err(typed_object),
         }
+    }
+
+    fn no_method_on(
+        &mut self,
+        ty: &InferType,
+        member: &str,
+        args: &[Expr],
+        span: Span,
+    ) -> (TypedExprKind, InferType) {
+        self.errors.push(TypeError::coded(
+            "E0304",
+            format!("no method `{member}` on `{}`", method_shown(ty)),
+            "unknown method",
+            span,
+        ));
+        for a in args {
+            self.infer_expr(a);
+        }
+        (TypedExprKind::Null, InferType::Dynamic)
     }
 
     fn no_method(&mut self, base: &InferType, member: &str, span: Span) {
@@ -597,6 +625,21 @@ impl TypeInference {
         if let Some((params, _)) = self.method_sig(&entry)
             && params.len() != args.len()
         {
+            if args.is_empty() {
+                let path = format!("{}::{}", source_type_name(key), entry.name);
+                self.errors.push(TypeError::coded(
+                    "E0302",
+                    format!(
+                        "`{path}` takes {} argument{} and none was supplied; a method is not a \
+                         value, call it as `{path}(..)`",
+                        params.len(),
+                        if params.len() == 1 { "" } else { "s" }
+                    ),
+                    "method path without arguments",
+                    span,
+                ));
+                return (TypedExprKind::Null, InferType::Dynamic);
+            }
             self.arity_error(&entry.name, params.len(), args.len(), span);
             for a in args {
                 self.infer_expr(a);

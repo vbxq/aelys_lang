@@ -1,0 +1,10 @@
+struct P { x: i64 }
+impl P {
+    fn get(&self) -> i64 { return self.x }
+}
+fn main() {
+    let p = P { x: 1 }
+    let r = &p
+    let rr = &r
+    println(rr.get())
+}
