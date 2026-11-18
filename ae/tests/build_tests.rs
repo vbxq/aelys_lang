@@ -148,6 +148,14 @@ fn run_works_from_a_subdirectory() {
 }
 
 #[test]
+fn a_bin_named_obj_builds() {
+    let dir = project("obj", "", PRINTS_ONE);
+    let output = ae(&dir, &["run"]);
+    assert_ok(&output);
+    assert_eq!(output.stdout, "1\n");
+}
+
+#[test]
 fn a_bin_at_the_package_root_reads_only_its_modules() {
     use std::os::unix::fs::PermissionsExt;
     let dir = scratch("b_rootbin");

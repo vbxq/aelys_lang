@@ -131,7 +131,7 @@ fn build_one(
     profile: Profile,
     link: &LinkRequirement,
 ) -> Result<aelys_driver::Lowered> {
-    let obj_dir = out_dir.join("obj");
+    let obj_dir = out_dir.join(".obj");
     std::fs::create_dir_all(&obj_dir)
         .map_err(|err| io_error(format_args!("cannot create `{}`", obj_dir.display()), err))?;
     let object = obj_dir.join(format!("{}.o", bin.name));
