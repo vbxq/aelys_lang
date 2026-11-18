@@ -13,6 +13,30 @@ mod struct_decl;
 mod types;
 
 impl Parser {
+    pub(crate) fn starts_item(&self) -> bool {
+        let contextual = |word: &str| {
+            matches!(&self.peek().kind, TokenKind::Identifier(w) if w == word)
+                && matches!(
+                    self.peek_at(1).kind,
+                    TokenKind::Identifier(_) | TokenKind::Lt
+                )
+        };
+        match &self.peek().kind {
+            TokenKind::Fn
+            | TokenKind::Struct
+            | TokenKind::Enum
+            | TokenKind::Pub
+            | TokenKind::Const
+            | TokenKind::Nogc
+            | TokenKind::Extern
+            | TokenKind::Needs
+            | TokenKind::At
+            | TokenKind::Let => true,
+            TokenKind::Unsafe => self.peek_at(1).kind == TokenKind::Extern,
+            _ => self.starts_type_alias() || contextual("impl") || contextual("trait"),
+        }
+    }
+
     pub fn declaration(&mut self) -> Result<Stmt> {
         if self.check(&TokenKind::Needs) {
             return Err(self.error(CompileErrorKind::NeedsOutsidePrologue));

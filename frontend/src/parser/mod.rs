@@ -94,21 +94,7 @@ impl Parser {
             match &self.peek().kind {
                 TokenKind::LBrace => depth += 1,
                 TokenKind::RBrace => depth = depth.saturating_sub(1),
-                TokenKind::Fn
-                | TokenKind::Struct
-                | TokenKind::Enum
-                | TokenKind::Pub
-                | TokenKind::Const
-                | TokenKind::Nogc
-                | TokenKind::Extern
-                | TokenKind::Unsafe
-                | TokenKind::Needs
-                | TokenKind::At
-                | TokenKind::Let
-                    if depth == 0 =>
-                {
-                    return;
-                }
+                _ if depth == 0 && self.starts_item() => return,
                 _ => {}
             }
             self.advance();
