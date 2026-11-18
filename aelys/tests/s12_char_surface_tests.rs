@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -281,13 +281,12 @@ impl Harness {
 
 
 const C1_THE_MULTIBYTE_CLASS: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
+fn main() {
+    let s: String = "éab";
     for c in s {
-        println(c)
-        println(c as i64)
+        println!("{}", c);
+        println!("{}", c as i64);
     }
-    return 0
 }
 "#;
 
@@ -300,14 +299,13 @@ fn c1_a_multibyte_string_yields_its_scalar_values() {
 }
 
 const C2_BYTES_AND_CHARACTERS: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s.bytes.len)
-    println(str.char_count(s))
-    println(s.len)
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s.as_bytes().len());
+    println!("{}", str::char_count(s));
+    println!("{}", s.len());
 }
 "#;
 
@@ -319,17 +317,16 @@ fn c2_the_byte_count_and_the_character_count_are_both_readable() {
 }
 
 const C3_LITERALS: &str = r#"
-fn main() -> i64 {
-    println('é' as i64)
-    println('日' as i64)
-    println('\n' as i64)
-    println('\'' as i64)
-    println('\\' as i64)
-    println('\t' as i64)
-    println('\0' as i64)
-    println('\r' as i64)
-    println('a' as i64)
-    return 0
+fn main() {
+    println!("{}", 'é' as i64);
+    println!("{}", '日' as i64);
+    println!("{}", '\n' as i64);
+    println!("{}", '\'' as i64);
+    println!("{}", '\\' as i64);
+    println!("{}", '\t' as i64);
+    println!("{}", '\0' as i64);
+    println!("{}", '\r' as i64);
+    println!("{}", 'a' as i64);
 }
 "#;
 
@@ -341,19 +338,18 @@ fn c3_every_literal_form_is_one_scalar_value() {
 }
 
 const C4_COMPARISONS: &str = r#"
-fn main() -> i64 {
-    let a: char = 'a'
-    let z: char = 'z'
-    let e: char = 'é'
-    println(a == a)
-    println(a != z)
-    println(a < z)
-    println(z <= z)
-    println(z > a)
-    println(a >= a)
-    println(e > z)
-    println(a < e)
-    return 0
+fn main() {
+    let a: char = 'a';
+    let z: char = 'z';
+    let e: char = 'é';
+    println!("{}", a == a);
+    println!("{}", a != z);
+    println!("{}", a < z);
+    println!("{}", z <= z);
+    println!("{}", z > a);
+    println!("{}", a >= a);
+    println!("{}", e > z);
+    println!("{}", a < e);
 }
 "#;
 
@@ -370,20 +366,19 @@ fn c4_the_six_comparisons_order_by_code_point() {
 }
 
 const C5_IN_AND_OUT: &str = r#"
-fn main() -> i64 {
-    let e: char = 'é'
-    println(e as i64)
-    println(char::from_i64(233) == e)
-    println(char::from_i64(97))
-    println(char::is_scalar(0))
-    println(char::is_scalar(1114111))
-    println(char::is_scalar(1114112))
-    println(char::is_scalar(55296))
-    println(char::is_scalar(57343))
-    println(char::is_scalar(55295))
-    println(char::is_scalar(0 - 1))
-    println(string::from_char('日'))
-    return 0
+fn main() {
+    let e: char = 'é';
+    println!("{}", e as i64);
+    println!("{}", char::from_i64(233) == e);
+    println!("{}", char::from_i64(97));
+    println!("{}", char::is_scalar(0));
+    println!("{}", char::is_scalar(1114111));
+    println!("{}", char::is_scalar(1114112));
+    println!("{}", char::is_scalar(55296));
+    println!("{}", char::is_scalar(57343));
+    println!("{}", char::is_scalar(55295));
+    println!("{}", char::is_scalar(0 - 1));
+    println!("{}", '日'.to_string());
 }
 "#;
 
@@ -399,23 +394,20 @@ fn c5_the_way_in_and_the_way_out_round_trip() {
 }
 
 const C6_ABOVE_THE_RANGE: &str = r#"
-fn main() -> i64 {
-    println(char::from_i64(1114112))
-    return 0
+fn main() {
+    println!("{}", char::from_i64(1114112));
 }
 "#;
 
 const C6_A_SURROGATE: &str = r#"
-fn main() -> i64 {
-    println(char::from_i64(55296))
-    return 0
+fn main() {
+    println!("{}", char::from_i64(55296));
 }
 "#;
 
 const C6_BELOW_THE_RANGE: &str = r#"
-fn main() -> i64 {
-    println(char::from_i64(0 - 1))
-    return 0
+fn main() {
+    println!("{}", char::from_i64(0 - 1));
 }
 "#;
 
@@ -431,15 +423,14 @@ fn c6_from_i64_panics_naming_the_value_and_the_ranges() {
 }
 
 const C7_BOTH_PRINT_PATHS: &str = r#"
-fn main() -> i64 {
-    let e: char = 'é'
-    let j: char = '日'
-    println(e)
-    println("{e}")
-    println(j)
-    println("{j}")
-    println("<{e}{j}>")
-    return 0
+fn main() {
+    let e: char = 'é';
+    let j: char = '日';
+    println!("{}", e);
+    println!("{e}");
+    println!("{}", j);
+    println!("{j}");
+    println!("<{e}{j}>");
 }
 "#;
 
@@ -451,14 +442,13 @@ fn c7_println_and_interpolation_both_print_the_character() {
 }
 
 const C8_A_CHAR_LITERAL_INSIDE_AN_INTERPOLATION: &str = r#"
-fn id(c: char) -> char { return c }
+fn id(c: char) -> char { c }
 
-fn main() -> i64 {
-    println("{ id('}') }")
-    println("{ id('{') }")
-    println("{ id('\"') }")
-    println("{ id('\'') }")
-    return 0
+fn main() {
+    println!("{}", id('}'));
+    println!("{}", id('{'));
+    println!("{}", id('\"'));
+    println!("{}", id('\''));
 }
 "#;
 
@@ -475,18 +465,16 @@ fn c8_a_char_literal_holding_a_delimiter_survives_interpolation() {
 }
 
 const C9_STRING_INDEX_READ: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s[0])
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s[0]);
 }
 "#;
 
 const C9_STRING_INDEX_WRITE: &str = r#"
-fn main() -> i64 {
-    let mut s: string = "éab"
-    s[0] = "x"
-    return 0
+fn main() {
+    let mut s: String = "éab";
+    s[0] = "x";
 }
 "#;
 
@@ -511,40 +499,36 @@ fn c9_indexing_a_string_is_refused_and_the_advice_is_not_the_byte_view() {
 }
 
 const C10_CHAR_EQUALS_INT: &str = r#"
-fn main() -> i64 {
-    println('a' == 97)
-    return 0
+fn main() {
+    println!("{}", 'a' == 97);
 }
 "#;
 
 const C10_INT_AS_CHAR: &str = r#"
-fn main() -> i64 {
-    let n: i64 = 97
-    let c: char = n as char
-    return 0
+fn main() {
+    let n: i64 = 97;
+    let c: char = n as char;
 }
 "#;
 
 const C10_CHAR_ANNOTATION_TAKES_AN_INT: &str = r#"
-fn main() -> i64 {
-    let c: char = 97
-    return 0
+fn main() {
+    let c: char = 97;
 }
 "#;
 
 const C10_CHAR_ARITHMETIC: &str = r#"
-fn main() -> i64 {
-    let c: char = 'a'
-    let d: char = c + 'b'
-    return 0
+fn main() {
+    let c: char = 'a';
+    let d: char = c + 'b';
 }
 "#;
 
 const C10_CHAR_ARGUMENT_TAKES_AN_INT: &str = r#"
-fn f(c: char) -> i64 { return c as i64 }
+use std::process::ExitCode; fn f(c: char) -> i64 { c as i64 }
 
-fn main() -> i64 {
-    return f(97)
+fn main() -> ExitCode {
+    return ExitCode::from(f(97) as u8);
 }
 "#;
 
@@ -640,56 +624,52 @@ fn main() -> i64 {
 "#;
 
 const C12_NOGC_READING_SURFACE: &str = r#"
-nogc fn count_upper(s: string) -> i64 {
-    let mut n: i64 = 0
+nogc fn count_upper(s: String) -> i64 {
+    let mut n: i64 = 0;
     for c in s {
-        if c >= 'A' and c <= 'Z' { n = n + 1 }
+        if c >= 'A' && c <= 'Z' { n = n + 1; }
     }
-    return n
+    n
 }
 
-nogc fn scalar(c: char) -> i64 { return c as i64 }
+nogc fn scalar(c: char) -> i64 { c as i64 }
 
-nogc fn back(i: i64) -> char { return char::from_i64(i) }
+nogc fn back(i: i64) -> char { char::from_i64(i) }
 
-nogc fn admits(i: i64) -> bool { return char::is_scalar(i) }
+nogc fn admits(i: i64) -> bool { char::is_scalar(i) }
 
-fn main() -> i64 {
-    println(count_upper("aBcDé"))
-    println(scalar('é'))
-    println(back(97))
-    println(admits(233))
-    return 0
+fn main() {
+    println!("{}", count_upper("aBcDé"));
+    println!("{}", scalar('é'));
+    println!("{}", back(97));
+    println!("{}", admits(233));
 }
 "#;
 
 const C12_A_NOGC_BOUND_AT_CHAR: &str = r#"
-nogc fn keep<T: nogc>(x: T) -> i64 { let y = x
- return 0 }
+nogc fn keep<T: nogc>(x: T) -> i64 { let y = x;
+ 0 }
 
-fn main() -> i64 {
-    println(keep('a'))
-    println(keep(7))
-    return 0
+fn main() {
+    println!("{}", keep('a'));
+    println!("{}", keep(7));
 }
 "#;
 
 const C12_A_NOGC_BOUND_AT_STRING: &str = r#"
-nogc fn keep<T: nogc>(x: T) -> i64 { let y = x
- return 0 }
+nogc fn keep<T: nogc>(x: T) -> i64 { let y = x;
+ 0 }
 
-fn main() -> i64 {
-    println(keep("a"))
-    return 0
+fn main() {
+    println!("{}", keep("a"));
 }
 "#;
 
 const C12_FROM_CHAR_IS_NOT_NOGC: &str = r#"
-nogc fn one(c: char) -> string { return string::from_char(c) }
+nogc fn one(c: char) -> String { c.to_string() }
 
-fn main() -> i64 {
-    println(one('a'))
-    return 0
+fn main() {
+    println!("{}", one('a'));
 }
 "#;
 
@@ -715,9 +695,9 @@ fn c12_the_reading_surface_crosses_the_nogc_fence_and_the_exit_does_not() {
 }
 
 const C13_FFI: &str = r#"
-unsafe extern fn cfn(c: char) -> i64
+extern "C" { fn cfn(c: char) -> i64; }
 
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 #[test]
@@ -733,52 +713,50 @@ fn c13_the_external_surface_refuses_a_char_by_name() {
 }
 
 const C14_UPPER_WITH_BYTES: &str = r#"
-needs std.str as str
-fn upper(s: string) -> string {
-    let up: string = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    let mut t: string = ""
-    let mut i: i64 = 0
-    while i < s.bytes.len {
-        let k: i64 = str.char_len(s, i)
-        if k < 1 { return t }
-        let b: u8 = s.bytes[i]
-        if k == 1 and b >= 97 and b <= 122 {
-            let j: i64 = (b as i64) - 97
-            t = t + string::substring_bytes(up, j, j + 1)
-        } else { t = t + string::substring_bytes(s, i, i + k) }
-        i = i + k
+use std::str as str;
+fn upper(s: String) -> String {
+    let up: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let mut t: String = "";
+    let mut i: i64 = 0;
+    while i < s.as_bytes().len() {
+        let k: i64 = str::char_len(s, i);
+        if k < 1 { return t; }
+        let b: u8 = s.as_bytes()[i];
+        if k == 1 && b >= 97 && b <= 122 {
+            let j: i64 = (b as i64) - 97;
+            t = t + up[j..j + 1].to_string();
+        } else { t = t + s[i..i + k].to_string(); }
+        i = i + k;
     }
-    return t
+    t
 }
 
-fn main() -> i64 {
-    println(upper("hello wérld 123!"))
-    println("[" + upper("") + "]")
-    println(upper("éé"))
-    println(upper("aA1é zZ"))
-    return 0
+fn main() {
+    println!("{}", upper("hello wérld 123!"));
+    println!("{}", "[" + upper("") + "]");
+    println!("{}", upper("éé"));
+    println!("{}", upper("aA1é zZ"));
 }
 "#;
 
 const C14_UPPER_WITH_CHAR: &str = r#"
-fn upper(s: string) -> string {
-    let mut t: string = ""
+fn upper(s: String) -> String {
+    let mut t: String = "";
     for c in s {
-        if c >= 'a' and c <= 'z' {
-            t = t + string::from_char(char::from_i64(c as i64 - 32))
+        if c >= 'a' && c <= 'z' {
+            t = t + char::from_i64(c as i64 - 32).to_string();
         } else {
-            t = t + string::from_char(c)
+            t = t + c.to_string();
         }
     }
-    return t
+    t
 }
 
-fn main() -> i64 {
-    println(upper("hello wérld 123!"))
-    println("[" + upper("") + "]")
-    println(upper("éé"))
-    println(upper("aA1é zZ"))
-    return 0
+fn main() {
+    println!("{}", upper("hello wérld 123!"));
+    println!("{}", "[" + upper("") + "]");
+    println!("{}", upper("éé"));
+    println!("{}", upper("aA1é zZ"));
 }
 "#;
 
@@ -809,34 +787,33 @@ fn c14_the_ordinary_program_is_shorter_with_char_and_answers_the_same() {
 }
 
 const C15_ONE_PASS_VALUES: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
-nogc fn scalars(s: string) -> i64 {
-    let mut acc: i64 = 0
-    for c in s { acc = acc + (c as i64) }
-    return acc
+nogc fn scalars(s: String) -> i64 {
+    let mut acc: i64 = 0;
+    for c in s { acc = acc + (c as i64); }
+    acc
 }
 
-nogc fn visits(s: string) -> i64 {
-    let mut n: i64 = 0
-    for c in s { n = n + 1 }
-    return n
+nogc fn visits(s: String) -> i64 {
+    let mut n: i64 = 0;
+    for c in s { n = n + 1; }
+    n
 }
 
-fn main() -> i64 {
-    for c in "éab" { println(c) }
-    println(visits("héllo"))
-    println(scalars("héllo"))
-    println(visits(""))
-    println(scalars(""))
-    for c in "ab日" { println(c as i64) }
-    for c in "a𝄞b" { println(c as i64) }
-    println(result.some_or(str.char_at("héllo", 1), '?'))
-    println(result.some_or(str.char_at("a𝄞b", 1), '?') as i64)
-    println(result.some_or(str.char_at("ab日", 2), '?') as i64)
-    if result.is_none(str.char_at("ab日", 3)) { println(1) } else { println(0) }
-    return 0
+fn main() {
+    for c in "éab" { println!("{}", c); }
+    println!("{}", visits("héllo"));
+    println!("{}", scalars("héllo"));
+    println!("{}", visits(""));
+    println!("{}", scalars(""));
+    for c in "ab日" { println!("{}", c as i64); }
+    for c in "a𝄞b" { println!("{}", c as i64); }
+    println!("{}", result::some_or(str::char_at("héllo", 1), '?'));
+    println!("{}", result::some_or(str::char_at("a𝄞b", 1), '?') as i64);
+    println!("{}", result::some_or(str::char_at("ab日", 2), '?') as i64);
+    if result::is_none(str::char_at("ab日", 3)) { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -867,30 +844,29 @@ const C16_SPAN_BOUND: f64 = 12.0;
 const C16_MIN_NET_MS: f64 = 0.20;
 
 const C16_FLOOR: &str = r#"
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
 fn c16_src(doublings: u32) -> String {
     format!(
         r#"
-fn main() -> i64 {{
-    let mut s: string = "abcdefgh"
-    let mut i: i64 = 0
+use std::process::ExitCode; fn main() -> ExitCode {{
+    let mut s: String = "abcdefgh";
+    let mut i: i64 = 0;
     while i < {doublings} {{
-        s = s + s
-        i = i + 1
+        s = s + s;
+        i = i + 1;
     }}
-    let mut acc: i64 = 0
-    let mut r: i64 = 0
+    let mut acc: i64 = 0;
+    let mut r: i64 = 0;
     while r < {C16_REPS} {{
         for c in s {{
-            acc = acc + (c as i64)
+            acc = acc + (c as i64);
         }}
-        r = r + 1
+        r = r + 1;
     }}
-    return acc % 7
+    return ExitCode::from((acc % 7) as u8);
 }}
 "#
     )

@@ -41,7 +41,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_add() {
     let program = infer_ok(
         r#"
 fn double(x) {
-    let y = x + x
+    let y = x + x;
 }
 "#,
     );
@@ -68,7 +68,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_mul() {
     let program = infer_ok(
         r#"
 fn square(n) {
-    let y = n * n
+    let y = n * n;
 }
 "#,
     );
@@ -94,7 +94,7 @@ fn oneof_does_not_override_equal_binding() {
     let program = infer_ok(
         r#"
 fn add_i32(a: i32, b: i32) -> i32 {
-    return a + b
+    a + b
 }
 "#,
     );
@@ -121,7 +121,7 @@ fn oneof_unresolved_var_defaults_to_i64_for_bitwise() {
     let program = infer_ok(
         r#"
 fn mask(x) {
-    let y = x & x
+    let y = x & x;
 }
 "#,
     );
@@ -149,8 +149,8 @@ fn oneof_on_dynamic_is_harmless() {
         sema_err(
             r#"
 fn test() {
-    let x: bool = true
-    let y = x + 1
+    let x: bool = true;
+    let y = x + 1;
 }
 "#
         ),
@@ -167,9 +167,9 @@ fn oneof_temp_subst_merged_on_success() {
         sema_ok(
             r#"
 fn test() -> i64 {
-    let x: i64 = 10
-    let y: i64 = 20
-    return x + y
+    let x: i64 = 10;
+    let y: i64 = 20;
+    x + y
 }
 "#
         ),
@@ -184,11 +184,11 @@ fn oneof_merge_does_not_break_existing_bindings() {
         sema_ok(
             r#"
 fn add(a: i32, b: i32) -> i32 {
-    return a + b
+    a + b
 }
 
 fn test() -> i32 {
-    return add(1, 2)
+    add(1, 2)
 }
 "#
         ),
@@ -203,7 +203,7 @@ fn oneof_still_rejects_invalid_types() {
         sema_err(
             r#"
 fn test() -> bool {
-    return true + false
+    true + false
 }
 "#
         ),

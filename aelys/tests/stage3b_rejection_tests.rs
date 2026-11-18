@@ -60,10 +60,10 @@ fn run_exit(body: &str, level: OptimizationLevel) -> Option<i32> {
 #[test]
 fn slice_of_vec_reads_the_buffer() {
     let src = r#"
-fn main() -> i64 {
-    let v = vec[11, 22, 33]
-    let s = v[0..2]
-    return s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![11, 22, 33];
+    let s = v[0..2];
+    return ExitCode::from(s[1] as u8);
 }
 "#;
     accepts(src);
@@ -80,11 +80,11 @@ fn main() -> i64 {
 #[test]
 fn write_through_a_vec_slice_lands_at_every_opt_level() {
     let src = r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let s = v[0..2]
-    s[0] = 99
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let s = v[0..2];
+    s[0] = 99;
+    return ExitCode::from(v[0] as u8);
 }
 "#;
     accepts(src);
@@ -94,12 +94,12 @@ fn main() -> i64 {
         }
     }
     let aliased = r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w: Vec<i64> = v
-    let s = v[0..2]
-    s[0] = 99
-    return v[0] - w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w: Vec<i64> = v;
+    let s = v[0..2];
+    s[0] = 99;
+    return ExitCode::from((v[0] - w[0]) as u8);
 }
 "#;
     accepts(aliased);
@@ -113,11 +113,11 @@ fn main() -> i64 {
 #[test]
 fn write_through_a_shared_view_is_rejected_at_every_opt_level() {
     let src = r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let s = v[0..2]
-    s[0] = 99
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let s = v[0..2];
+    s[0] = 99;
+    return ExitCode::from(v[0] as u8);
 }
 "#;
     for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
@@ -133,10 +133,10 @@ fn main() -> i64 {
 #[test]
 fn slice_of_array_compiles_and_runs() {
     let src = r#"
-fn main() -> i64 {
-    let a = [10, 20, 30]
-    let s = a[0..2]
-    return s[0] + s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [10, 20, 30];
+    let s = a[0..2];
+    return ExitCode::from((s[0] + s[1]) as u8);
 }
 "#;
     accepts(src);
@@ -149,13 +149,13 @@ fn main() -> i64 {
 fn foreach_over_vec_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let mut total = 0;
     for x in v {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
     );
@@ -169,13 +169,13 @@ fn main() -> i64 {
 #[test]
 fn foreach_over_vec_is_rejected_at_every_opt_level() {
     let src = r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let mut total = 0;
     for x in v {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#;
     for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
@@ -187,13 +187,13 @@ fn main() -> i64 {
 #[test]
 fn foreach_over_array_compiles_and_runs() {
     let src = r#"
-fn main() -> i64 {
-    let a = [10, 20, 30]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [10, 20, 30];
+    let mut total = 0;
     for x in a {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#;
     accepts(src);
@@ -206,13 +206,13 @@ fn main() -> i64 {
 fn foreach_over_string_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let s = "abc"
-    let mut n = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let s = "abc";
+    let mut n = 0;
     for c in s {
-        n = n + 1
+        n = n + 1;
     }
-    return n
+    return ExitCode::from(n as u8);
 }
 "#,
     );
@@ -222,11 +222,11 @@ fn main() -> i64 {
 fn mut_ref_into_vec_index_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let r = &mut v[0]
-    *r = 9
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let r = &mut v[0];
+    *r = 9;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
     );
@@ -241,11 +241,11 @@ fn main() -> i64 {
 fn mut_ref_into_array_index_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut a = [1, 2, 3]
-    let r = &mut a[0]
-    *r = 9
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a = [1, 2, 3];
+    let r = &mut a[0];
+    *r = 9;
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     );
@@ -255,11 +255,11 @@ fn main() -> i64 {
 #[test]
 fn mut_ref_into_index_is_rejected_at_every_opt_level() {
     let src = r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let r = &mut v[0]
-    *r = 9
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let r = &mut v[0];
+    *r = 9;
+    return ExitCode::from(v[0] as u8);
 }
 "#;
     for level in [OptimizationLevel::None, OptimizationLevel::Aggressive] {
@@ -271,10 +271,10 @@ fn main() -> i64 {
 #[test]
 fn immutable_ref_into_vec_index_compiles_and_runs() {
     let src = r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    return ExitCode::from((*r) as u8);
 }
 "#;
     accepts(src);
@@ -290,12 +290,12 @@ fn main() -> i64 {
 fn mut_ref_into_struct_field_is_rejected() {
     let err = reject(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let mut p = Point{x: 1, y: 2}
-    let a = &mut p.x
-    *a = 10
-    return p.x
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let mut p = Point{x: 1, y: 2};
+    let a = &mut p.x;
+    *a = 10;
+    return ExitCode::from(p.x as u8);
 }
 "#,
     );
@@ -309,11 +309,11 @@ fn main() -> i64 {
 fn immutable_ref_into_struct_field_compiles_and_runs() {
     let Some(code) = run_exit(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let p = Point{x: 7, y: 2}
-    let a = &p.x
-    return *a
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let p = Point{x: 7, y: 2};
+    let a = &p.x;
+    return ExitCode::from((*a) as u8);
 }
 "#,
         OptimizationLevel::None,
@@ -326,13 +326,13 @@ fn main() -> i64 {
 #[test]
 fn ref_into_rc_payload_field_compiles_and_runs() {
     let src = r#"
-struct Cell { x: i64 }
-fn read(p: &i64) -> i64 { return *p }
-fn main() -> i64 {
-    let r = Rc::new(Cell{x: 7})
-    let p = &Rc::get(r).x
-    let q = Rc::new(Cell{x: 31})
-    return read(p) + Rc::get(q).x
+use std::process::ExitCode; struct Cell { x: i64 }
+fn read(p: &i64) -> i64 { *p }
+fn main() -> ExitCode {
+    let r = Rc::new(Cell{x: 7});
+    let p = &Rc::get(r).x;
+    let q = Rc::new(Cell{x: 31});
+    return ExitCode::from((read(p) + Rc::get(q).x) as u8);
 }
 "#;
     accepts(src);
@@ -353,12 +353,12 @@ fn main() -> i64 {
 #[test]
 fn ref_into_bound_payload_field_compiles_and_runs() {
     let src = r#"
-struct Cell { x: i64 }
-fn main() -> i64 {
-    let r = Rc::new(Cell{x: 7})
-    let c = Rc::get(r)
-    let p = &c.x
-    return *p
+use std::process::ExitCode; struct Cell { x: i64 }
+fn main() -> ExitCode {
+    let r = Rc::new(Cell{x: 7});
+    let c = Rc::get(r);
+    let p = &c.x;
+    return ExitCode::from((*p) as u8);
 }
 "#;
     accepts(src);

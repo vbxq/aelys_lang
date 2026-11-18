@@ -18,11 +18,10 @@ fn must_use_menu_names_error_type_and_all_routes() {
 enum Result<T, E> { Ok(T), Err(E) }
 enum MyErr { Boom }
 
-fn get() -> Result<i64, MyErr> { return Result::Ok(1) }
+fn get() -> Result<i64, MyErr> { Result::Ok(1) }
 
-fn main() -> i64 {
-    get()
-    return 0
+fn main() {
+    get();
 }
 "#;
     let err = reject(src);
@@ -55,14 +54,14 @@ fn question_mismatch_note_points_at_map_error() {
 enum Result<T, E> { Ok(T), Err(E) }
 enum Fault { Bad }
 
-fn inner() -> Result<i64, Fault> { return Result::Err(Fault::Bad) }
+fn inner() -> Result<i64, Fault> { Result::Err(Fault::Bad) }
 
 fn outer() -> Result<i64, i64> {
-    let v: i64 = inner()?
-    return Result::Ok(v)
+    let v: i64 = inner()?;
+    Result::Ok(v)
 }
 
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
     let err = reject(src);
     assert!(
@@ -78,15 +77,15 @@ fn main() -> i64 { return 0 }
 #[test]
 fn non_exhaustive_catch_note_says_catch() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get() -> Result<i64, E> { return Result::Err(E::B) }
+fn get() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 {
-    return get() catch {
-        E::A => 1,
-    }
+fn main() -> ExitCode {
+    return ExitCode::from((match get() { Ok(v) => v,
+        Err(E::A) => 1,
+    }) as u8);
 }
 "#;
     let err = reject(src);
@@ -104,13 +103,13 @@ fn main() -> i64 {
 #[test]
 fn non_exhaustive_match_note_still_says_match() {
     let src = r#"
-enum E { A, B }
+use std::process::ExitCode; enum E { A, B }
 
-fn main() -> i64 {
-    let e: E = E::A
-    return match e {
+fn main() -> ExitCode {
+    let e: E = E::A;
+    return ExitCode::from((match e {
         E::A => 1,
-    }
+    }) as u8);
 }
 "#;
     let err = reject(src);
@@ -131,11 +130,10 @@ fn question_outside_result_or_option_fn_is_rejected() {
 enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn get() -> Result<i64, E> { return Result::Ok(1) }
+fn get() -> Result<i64, E> { Result::Ok(1) }
 
-fn main() -> i64 {
-    let v: i64 = get()?
-    return 0
+fn main() {
+    let v: i64 = get()?;
 }
 "#;
     let err = reject(src);
@@ -157,12 +155,12 @@ enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
 fn f() -> Result<i64, E> {
-    let x: i64 = 3
-    let y: i64 = x?
-    return Result::Ok(0)
+    let x: i64 = 3;
+    let y: i64 = x?;
+    Result::Ok(0)
 }
 
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
     let err = reject(src);
     assert!(
@@ -179,12 +177,12 @@ fn main() -> i64 { return 0 }
 #[test]
 fn into_ok_on_fallible_result_names_error_type() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum RealErr { Boom }
 
-fn maybe() -> Result<i64, RealErr> { return Result::Ok(5) }
+fn maybe() -> Result<i64, RealErr> { Result::Ok(5) }
 
-fn main() -> i64 { return maybe().into_ok() }
+fn main() -> ExitCode { return ExitCode::from(maybe().into_ok() as u8); }
 "#;
     let err = reject(src);
     assert!(
@@ -202,12 +200,12 @@ fn main() -> i64 { return maybe().into_ok() }
 #[test]
 fn unwrap_unchecked_outside_unsafe_names_unsafe() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn mk_ok() -> Result<i64, E> { return Result::Ok(5) }
+fn mk_ok() -> Result<i64, E> { Result::Ok(5) }
 
-fn main() -> i64 { return mk_ok().unwrap_unchecked() }
+fn main() -> ExitCode { return ExitCode::from(mk_ok().unwrap_unchecked() as u8); }
 "#;
     let err = reject(src);
     assert!(
@@ -224,14 +222,14 @@ fn main() -> i64 { return mk_ok().unwrap_unchecked() }
 #[test]
 fn expect_non_literal_names_string_literal() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn ok_val() -> Result<i64, E> { return Result::Ok(1) }
+fn ok_val() -> Result<i64, E> { Result::Ok(1) }
 
-fn main() -> i64 {
-    let msg: i64 = 7
-    return ok_val().expect(msg)
+fn main() -> ExitCode {
+    let msg: i64 = 7;
+    return ExitCode::from(ok_val().expect(msg) as u8);
 }
 "#;
     let err = reject(src);
@@ -251,9 +249,9 @@ fn never_outside_result_error_slot_is_rejected() {
     let src = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 
-fn f() -> Never { return 5 }
+fn f() -> Never { 5 }
 
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
     let err = reject(src);
     assert!(
@@ -273,12 +271,11 @@ fn map_error_non_function_is_rejected() {
 enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Bad }
 
-fn get() -> Result<i64, EA> { return Result::Ok(1) }
+fn get() -> Result<i64, EA> { Result::Ok(1) }
 
-fn main() -> i64 {
-    let x: i64 = 3
-    let r: Result<i64, EA> = get().map_error(x)
-    return 0
+fn main() {
+    let x: i64 = 3;
+    let r: Result<i64, EA> = get().map_error(x);
 }
 "#;
     let err = reject(src);

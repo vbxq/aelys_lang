@@ -17,7 +17,7 @@ pub fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -280,18 +280,17 @@ pub fn fabricated_level_disagreements() -> Vec<(&'static str, Leg, Leg)> {
 // the extractor reads this file too, so this program is a member of the swept population and not a fixture beside it
 pub const OPTIMIZER_WITNESS: &str = "\
 fn optimizer_witness_sum(n: i64) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        acc = acc + i * 3
-        i = i + 1
+        acc = acc + i * 3;
+        i = i + 1;
     }
-    return acc
+    acc
 }
 
-fn main() -> i64 {
-    println(optimizer_witness_sum(10))
-    return 0
+fn main() {
+    println!(\"{}\", optimizer_witness_sum(10));
 }
 ";
 

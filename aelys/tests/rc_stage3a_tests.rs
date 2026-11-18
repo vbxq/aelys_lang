@@ -96,12 +96,12 @@ fn find_core_archive(file: &str) -> Option<PathBuf> {
 fn t1_carrier_copy_frees_once() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    let m: Node = n
-    return Rc::get(m.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    let m: Node = n;
+    return ExitCode::from(Rc::get(m.next) as u8);
 }
 "#,
     ) else {
@@ -122,12 +122,11 @@ fn t2_drop_releases_the_field() {
     let ir = rc_ir(
         r#"
 struct Node { next: Rc<i64> }
-fn main() -> i64 {
+fn main() {
     {
-        let a: Rc<i64> = Rc::new(7)
-        let n: Node = Node { next: a }
+        let a: Rc<i64> = Rc::new(7);
+        let n: Node = Node { next: a };
     }
-    return 0
 }
 "#,
     );
@@ -139,12 +138,11 @@ fn main() -> i64 {
     let Some((code, stderr)) = run_with_stats(
         r#"
 struct Node { next: Rc<i64> }
-fn main() -> i64 {
+fn main() {
     {
-        let a: Rc<i64> = Rc::new(7)
-        let n: Node = Node { next: a }
+        let a: Rc<i64> = Rc::new(7);
+        let n: Node = Node { next: a };
     }
-    return 0
 }
 "#,
     ) else {
@@ -161,11 +159,11 @@ fn main() -> i64 {
 fn t3_construction_from_live_emits_one_retain() {
     let ir = rc_ir(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    return Rc::get(n.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
     );
@@ -180,10 +178,10 @@ fn main() -> i64 {
 fn t3bis_construction_from_fresh_rc_new_has_no_retain() {
     let ir = rc_ir(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let n: Node = Node { next: Rc::new(7) }
-    return Rc::get(n.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let n: Node = Node { next: Rc::new(7) };
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
     );
@@ -194,10 +192,10 @@ fn main() -> i64 {
     );
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let n: Node = Node { next: Rc::new(7) }
-    return Rc::get(n.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let n: Node = Node { next: Rc::new(7) };
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
     ) else {
@@ -214,11 +212,11 @@ fn main() -> i64 {
 fn t4_pure_value_carrier_emits_no_rc_calls() {
     let ir = rc_ir(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let p: Point = Point { x: 3, y: 4 }
-    let q: Point = p
-    return q.x
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let p: Point = Point { x: 3, y: 4 };
+    let q: Point = p;
+    return ExitCode::from(q.x as u8);
 }
 "#,
     );
@@ -238,14 +236,14 @@ fn main() -> i64 {
 fn t5_returned_carrier_field_is_not_released() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Node { next: Rc<i64> }
+use std::process::ExitCode; struct Node { next: Rc<i64> }
 fn make() -> Node {
-    let r: Rc<i64> = Rc::new(7)
-    return Node { next: r }
+    let r: Rc<i64> = Rc::new(7);
+    Node { next: r }
 }
-fn main() -> i64 {
-    let n: Node = make()
-    return Rc::get(n.next)
+fn main() -> ExitCode {
+    let n: Node = make();
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
     ) else {
@@ -265,13 +263,13 @@ fn main() -> i64 {
 fn t6_borrowed_carrier_arg_has_no_callee_release() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Node { next: Rc<i64> }
-fn touch(n: Node) -> i64 { return 0 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: r }
-    let unused: i64 = touch(n)
-    return Rc::get(n.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn touch(n: Node) -> i64 { 0 }
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: r };
+    let unused: i64 = touch(n);
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
     ) else {
@@ -291,14 +289,14 @@ fn main() -> i64 {
 fn t7_nested_transitive_carrier_frees_once() {
     let ir = rc_ir(
         r#"
-struct B { r: Rc<i64> }
+use std::process::ExitCode; struct B { r: Rc<i64> }
 struct A { b: B }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(9)
-    let inner: B = B { r: x }
-    let a: A = A { b: inner }
-    let a2: A = a
-    return Rc::get(a2.b.r)
+fn main() -> ExitCode {
+    let x: Rc<i64> = Rc::new(9);
+    let inner: B = B { r: x };
+    let a: A = A { b: inner };
+    let a2: A = a;
+    return ExitCode::from(Rc::get(a2.b.r) as u8);
 }
 "#,
     );
@@ -313,14 +311,14 @@ fn main() -> i64 {
 
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct B { r: Rc<i64> }
+use std::process::ExitCode; struct B { r: Rc<i64> }
 struct A { b: B }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(9)
-    let inner: B = B { r: x }
-    let a: A = A { b: inner }
-    let a2: A = a
-    return Rc::get(a2.b.r)
+fn main() -> ExitCode {
+    let x: Rc<i64> = Rc::new(9);
+    let inner: B = B { r: x };
+    let a: A = A { b: inner };
+    let a2: A = a;
+    return ExitCode::from(Rc::get(a2.b.r) as u8);
 }
 "#,
     ) else {
@@ -341,10 +339,9 @@ fn t8_enum_carrier_frees_once() {
     let Some((code, stderr)) = run_with_stats(
         r#"
 enum Holder { Cell(Rc<i64>) }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(5)
-    let e: Holder = Holder::Cell(x)
-    return 0
+fn main() {
+    let x: Rc<i64> = Rc::new(5);
+    let e: Holder = Holder::Cell(x);
 }
 "#,
     ) else {
@@ -363,10 +360,9 @@ fn trej_a_generic_struct_of_rc_in_field_is_refused_at_the_literal() {
         r#"
 struct Wrap<T> { v: T }
 struct S { w: Wrap<Rc<i64>> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(1)
-    let s: S = S { w: Wrap { v: a } }
-    return 0
+fn main() {
+    let a: Rc<i64> = Rc::new(1);
+    let s: S = S { w: Wrap { v: a } };
 }
 "#,
     );
@@ -381,7 +377,7 @@ fn trej_b_array_of_rc_in_field_is_rejected() {
     let err = rc_reject(
         r#"
 struct S { arr: [Rc<i64>; 2] }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -395,7 +391,7 @@ fn trej_b_vec_of_rc_in_field_is_rejected() {
     let err = rc_reject(
         r#"
 struct S { v: vec<Rc<i64>> }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -408,13 +404,13 @@ fn main() -> i64 { return 0 }
 fn trej_c_field_assign_rc_field_releases_the_old_value() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(1)
-    let b: Rc<i64> = Rc::new(2)
-    let mut n: Node = Node { next: a }
-    n.next = b
-    return Rc::get(n.next) + Rc::get(a) * 10
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(1);
+    let b: Rc<i64> = Rc::new(2);
+    let mut n: Node = Node { next: a };
+    n.next = b;
+    return ExitCode::from((Rc::get(n.next) + Rc::get(a) * 10) as u8);
 }
 "#,
     ) else {
@@ -433,12 +429,11 @@ fn trej_d_field_assign_carrier_field_is_rejected() {
         r#"
 struct B { r: Rc<i64> }
 struct A { b: B }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(1)
-    let y: Rc<i64> = Rc::new(2)
-    let mut a: A = A { b: B { r: x } }
-    a.b = B { r: y }
-    return 0
+fn main() {
+    let x: Rc<i64> = Rc::new(1);
+    let y: Rc<i64> = Rc::new(2);
+    let mut a: A = A { b: B { r: x } };
+    a.b = B { r: y };
 }
 "#,
     );
@@ -453,14 +448,13 @@ fn trej_e_carrier_abandoned_by_break_is_rejected() {
     let err = rc_reject(
         r#"
 struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let mut i: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
     while i < 3 {
-        let n: Node = Node { next: Rc::new(i) }
-        if i == 1 { break }
-        i = i + 1
+        let n: Node = Node { next: Rc::new(i) };
+        if i == 1 { break; }
+        i = i + 1;
     }
-    return 0
 }
 "#,
     );
@@ -474,15 +468,15 @@ fn main() -> i64 {
 fn trej_f_carrier_captured_by_closure_is_rejected() {
     let err = rc_reject(
         r#"
-struct Node { next: Rc<i64> }
-fn read_node(n: Node) -> i64 { return 0 }
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn read_node(n: Node) -> i64 { 0 }
 fn make() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    let f: fn() -> i64 = fn() -> i64 { return read_node(n) }
-    return f()
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    let f: fn() -> i64 = move || -> i64 { read_node(n) };
+    f()
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert!(
@@ -577,12 +571,12 @@ fn asan_probe(src: &str, expected_exit: i32, label: &str) {
 fn t_asan_carrier_copy_is_clean() {
     asan_probe(
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    let m: Node = n
-    return Rc::get(m.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    let m: Node = n;
+    return ExitCode::from(Rc::get(m.next) as u8);
 }
 "#,
         7,
@@ -594,14 +588,14 @@ fn main() -> i64 {
 fn t_asan_nested_transitive_is_clean() {
     asan_probe(
         r#"
-struct B { r: Rc<i64> }
+use std::process::ExitCode; struct B { r: Rc<i64> }
 struct A { b: B }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(9)
-    let inner: B = B { r: x }
-    let a: A = A { b: inner }
-    let a2: A = a
-    return Rc::get(a2.b.r)
+fn main() -> ExitCode {
+    let x: Rc<i64> = Rc::new(9);
+    let inner: B = B { r: x };
+    let a: A = A { b: inner };
+    let a2: A = a;
+    return ExitCode::from(Rc::get(a2.b.r) as u8);
 }
 "#,
         9,
@@ -613,16 +607,16 @@ fn main() -> i64 {
 fn f1_multivariant_rc_enum_frees_its_payload_once() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-enum E { A(Rc<i64>), B(i64) }
-fn main() -> i64 {
-    let e: E = E::B(99)
-    let f: E = E::A(Rc::new(5))
-    let mut out: i64 = 0
+use std::process::ExitCode; enum E { A(Rc<i64>), B(i64) }
+fn main() -> ExitCode {
+    let e: E = E::B(99);
+    let f: E = E::A(Rc::new(5));
+    let mut out: i64 = 0;
     match f {
-        E::A(r) => { out = Rc::get(r) }
-        E::B(x) => { out = x }
+        E::A(r) => { out = Rc::get(r); }
+        E::B(x) => { out = x; }
     }
-    return out
+    return ExitCode::from(out as u8);
 }
 "#,
     ) else {
@@ -636,17 +630,17 @@ fn main() -> i64 {
 fn f1_multivariant_rc_enum_in_a_struct_frees_its_payload_once() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-enum E { A(Rc<i64>), B(i64) }
+use std::process::ExitCode; enum E { A(Rc<i64>), B(i64) }
 struct S { e: E }
-fn main() -> i64 {
-    let s: S = S { e: E::A(Rc::new(6)) }
-    let t = s
-    let mut out: i64 = 0
+fn main() -> ExitCode {
+    let s: S = S { e: E::A(Rc::new(6)) };
+    let t = s;
+    let mut out: i64 = 0;
     match t.e {
-        E::A(r) => { out = Rc::get(r) }
-        E::B(x) => { out = x }
+        E::A(r) => { out = Rc::get(r); }
+        E::B(x) => { out = x; }
     }
-    return out
+    return ExitCode::from(out as u8);
 }
 "#,
     ) else {
@@ -661,10 +655,9 @@ fn f1_ok_mono_variant_rc_enum_still_compiles_and_frees_once() {
     let Some((code, stderr)) = run_with_stats(
         r#"
 enum Holder { Cell(Rc<i64>) }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(5)
-    let e: Holder = Holder::Cell(x)
-    return 0
+fn main() {
+    let x: Rc<i64> = Rc::new(5);
+    let e: Holder = Holder::Cell(x);
 }
 "#,
     ) else {
@@ -682,10 +675,9 @@ fn f1_ok_mono_variant_rc_enum_is_asan_clean() {
     asan_probe(
         r#"
 enum Holder { Cell(Rc<i64>) }
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(5)
-    let e: Holder = Holder::Cell(x)
-    return 0
+fn main() {
+    let x: Rc<i64> = Rc::new(5);
+    let e: Holder = Holder::Cell(x);
 }
 "#,
         0,
@@ -698,9 +690,8 @@ fn f1_no_overreject_multivariant_enum_without_rc_compiles() {
     let ir = rc_ir(
         r#"
 enum Color { Red, Green }
-fn main() -> i64 {
-    let c: Color = Color::Red
-    return 0
+fn main() {
+    let c: Color = Color::Red;
 }
 "#,
     );
@@ -721,9 +712,8 @@ fn f1_no_overreject_multivariant_enum_with_payload_but_no_rc_compiles() {
     let ir = rc_ir(
         r#"
 enum Opt { Some(i64), None }
-fn main() -> i64 {
-    let o: Opt = Opt::Some(7)
-    return 0
+fn main() {
+    let o: Opt = Opt::Some(7);
 }
 "#,
     );

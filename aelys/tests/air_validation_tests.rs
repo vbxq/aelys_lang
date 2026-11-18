@@ -52,10 +52,10 @@ fn stdlib_call_print() {
     let air = lower_with_globals(
         r#"
 fn greet() {
-    print("hello")
+    print!("hello");
 }
 "#,
-        &["print", "println"],
+        &["print;", "println"],
     );
 
     let f = func(&air, "greet");
@@ -81,14 +81,14 @@ fn int_literal_narrowing() {
     let air = lower_source(
         r#"
 fn take_i32(x: i32) {
-    return
+    return;
 }
 fn take_i16(y: i16) {
-    return
+    return;
 }
 fn caller() {
-    take_i32(2)
-    take_i16(2)
+    take_i32(2);
+    take_i16(2);
 }
 "#,
     );
@@ -131,10 +131,10 @@ fn caller() {
 fn overflow_literal_rejected() {
     let code = r#"
 fn small(x: i8) {
-    return
+    return;
 }
 fn caller() {
-    small(300)
+    small(300);
 }
 "#;
     let src = Source::new("<test>", code);
@@ -154,12 +154,12 @@ fn nested_closure_no_globals_in_env() {
     let air = lower_with_globals(
         r#"
 fn outer(x: i64) {
-    let inner = fn() {
-        print(x)
-    }
+    let inner = move || {
+        print!("{}", x)
+    };
 }
 "#,
-        &["print", "println"],
+        &["print;", "println"],
     );
 
     let env = air
@@ -192,7 +192,7 @@ fn struct_field_access() {
         r#"
 struct Point { x: i64, y: i64 }
 fn get_x(p: Point) -> i64 {
-    return p.x
+    p.x
 }
 "#,
     );
@@ -243,7 +243,7 @@ fn struct_init() {
         r#"
 struct Point { x: i64, y: i64 }
 fn make() -> Point {
-    return Point { x: 1, y: 2 }
+    Point { x: 1, y: 2 }
 }
 "#,
     );
@@ -272,10 +272,10 @@ fn cast_chain() {
     let air = lower_source(
         r#"
 fn chain() -> f64 {
-    let x: i64 = 42
-    let y = x as i32
-    let z = y as f64
-    return z
+    let x: i64 = 42;
+    let y = x as i32;
+    let z = y as f64;
+    z
 }
 "#,
     );
@@ -322,11 +322,11 @@ fn generic_monomorphized() {
     let air = lower_source(
         r#"
 fn identity<T>(x: T) -> T {
-    return x
+    x
 }
 fn caller() -> i32 {
-    let v: i32 = 42
-    return identity(v)
+    let v: i32 = 42;
+    identity(v)
 }
 "#,
     );
@@ -420,12 +420,12 @@ fn generic_struct_decl_only_is_accepted_by_sema() {
 fn gc_mode_propagation() {
     let air = lower_source(
         r#"
-@no_gc
+#[no_gc]
 fn manual_func() {
-    return
+    return;
 }
 fn managed_func() {
-    return
+    return;
 }
 "#,
     );
@@ -446,7 +446,7 @@ fn managed_func() {
 
     let code = r#"
 fn some_func() {
-    return
+    return;
 }
 "#;
     let src = Source::new("<test>", code);
@@ -469,16 +469,16 @@ fn some_func() {
 fn copy_elim_removes_param_to_local_copies() {
     let mut air = lower_source(
         r#"
-fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
-    let a64: i64 = x
-    let a32: i32 = y
-    let a16: i16 = z
-    let a8: i8 = w
-    let ab: bool = b
-    let af32: f32 = f
-    let af64: f64 = d
-    let sp: string = p
-    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: String) -> i64 {
+    let a64: i64 = x;
+    let a32: i32 = y;
+    let a16: i16 = z;
+    let a8: i8 = w;
+    let ab: bool = b;
+    let af32: f32 = f;
+    let af64: f64 = d;
+    let sp: String = p;
+    a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
 }
 "#,
     );
@@ -511,9 +511,9 @@ fn copy_elim_keeps_reassigned_param_copy() {
     let mut air = lower_source(
         r#"
 fn keep_copy(x: i64) -> i64 {
-    let mut y: i64 = x
-    y = y + 1
-    return y
+    let mut y: i64 = x;
+    y = y + 1;
+    y
 }
 "#,
     );
@@ -546,10 +546,10 @@ fn stdlib_call_println_uses_str_operand() {
     let air = lower_with_globals(
         r#"
 fn main() {
-    println("Hello")
+    println!("Hello");
 }
 "#,
-        &["print", "println"],
+        &["print;", "println"],
     );
 
     let f = func(&air, "main");
@@ -594,16 +594,16 @@ fn main() {
 fn dead_locals_removes_align_probe_copy_targets() {
     let mut air = lower_source(
         r#"
-fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: string) -> i64 {
-    let a64: i64 = x
-    let a32: i32 = y
-    let a16: i16 = z
-    let a8: i8 = w
-    let ab: bool = b
-    let af32: f32 = f
-    let af64: f64 = d
-    let sp: string = p
-    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
+fn align_probe(x: i64, y: i32, z: i16, w: i8, b: bool, f: f32, d: f64, p: String) -> i64 {
+    let a64: i64 = x;
+    let a32: i32 = y;
+    let a16: i16 = z;
+    let a8: i8 = w;
+    let ab: bool = b;
+    let af32: f32 = f;
+    let af64: f64 = d;
+    let sp: String = p;
+    a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64) + (af32 as i64) + (af64 as i64)
 }
 "#,
     );
@@ -628,12 +628,12 @@ fn multi_instantiation_generic_dispatches_correctly() {
     let air = lower_source(
         r#"
 fn identity<T>(x: T) -> T {
-    return x
+    x
 }
 fn caller() -> i64 {
-    let a: i32 = identity(42 as i32)
-    let b: i64 = identity(100)
-    return (a as i64) + b
+    let a: i32 = identity(42 as i32);
+    let b: i64 = identity(100);
+    (a as i64) + b
 }
 "#,
     );
@@ -883,7 +883,7 @@ fn function_param_call_lowers_to_indirect_call() {
     let air = lower_source(
         r#"
 fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
-    return f(x)
+    f(x)
 }
 "#,
     );
@@ -912,17 +912,17 @@ fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
 fn struct_fnptr_field_call_lowers_to_indirect_call() {
     let air = lower_source(
         r#"
-struct Holder {
+use std::process::ExitCode; struct Holder {
     f: fn(i64) -> i64,
 }
 
 fn inc(x: i64) -> i64 {
-    return x + 1
+    x + 1
 }
 
-fn main() -> i64 {
-    let h = Holder { f: inc }
-    return h.f(41)
+fn main() -> ExitCode {
+    let h = Holder { f: inc };
+    return ExitCode::from(h.f(41) as u8);
 }
 "#,
     );
@@ -969,14 +969,14 @@ fn main() -> i64 {
 fn function_identifier_as_value_lowers_to_fnref() {
     let air = lower_source(
         r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
-    return f(x)
+use std::process::ExitCode; fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    f(x)
 }
 fn inc(x: i64) -> i64 {
-    return x + 1
+    x + 1
 }
-fn main() -> i64 {
-    return apply(inc, 5)
+fn main() -> ExitCode {
+    return ExitCode::from(apply(inc, 5) as u8);
 }
 "#,
     );
@@ -1115,7 +1115,7 @@ fn validate_accepts_valid_lowered_program() {
     let air = lower_source(
         r#"
 fn add(a: i64, b: i64) -> i64 {
-    return a + b
+    a + b
 }
 "#,
     );
@@ -1133,11 +1133,11 @@ fn validate_accepts_valid_program_after_full_pipeline() {
     let mut air = lower_source(
         r#"
 fn identity<T>(x: T) -> T {
-    return x
+    x
 }
 fn caller() -> i32 {
-    let v: i32 = 42
-    return identity(v)
+    let v: i32 = 42;
+    identity(v)
 }
 "#,
     );
@@ -1405,10 +1405,10 @@ fn validate_opaque_does_not_appear_after_monomorphization() {
     let mut air = lower_source(
         r#"
 fn identity<T>(x: T) -> T {
-    return x
+    x
 }
 fn caller() -> i64 {
-    return identity(42)
+    identity(42)
 }
 "#,
     );
@@ -1430,10 +1430,10 @@ fn validate_print_builtin_does_not_produce_opaque_local() {
     let mut air = lower_with_globals(
         r#"
 fn main() {
-    println("hello world")
+    println!("hello world");
 }
 "#,
-        &["print", "println"],
+        &["print;", "println"],
     );
     compute_layouts(&mut air);
     let mut air = monomorphize(air).unwrap();
@@ -1527,7 +1527,7 @@ fn validate_accepts_null_typed_local() {
     let air = lower_source(
         r#"
 fn use_null() {
-    let x = null
+    let x = null;
 }
 "#,
     );

@@ -492,14 +492,14 @@ fn release01_58_the_level_comparator_reports_every_differing_pair() {
     let dir = tempdir().expect("tempdir");
     let one = leg_at(
         &dir.path().join("a"),
-        "fn main() -> i64 { let x: u8 = 1000\n return 0 }\n",
+        "fn main() { let x: u8 = 1000;\n }\n",
         None,
         OptimizationLevel::None,
         &[],
     );
     let two = leg_at(
         &dir.path().join("b"),
-        "fn main() -> i64 { let x: u8 = 1000\n return 0 }\n",
+        "fn main() { let x: u8 = 1000;\n }\n",
         None,
         OptimizationLevel::None,
         &[],
@@ -545,12 +545,12 @@ fn release01_59_a_reference_refusal_is_the_verdict_at_every_level() {
 const KEPT_DROPS: &[(&str, &str, &str)] = &[
     (
         "shared_vec_written",
-        "fn main() -> i64 { let mut v: Vec<i64> = vec[1, 2]\n    let w = v\n    v[0] = 5\n    println(\"{v[0]}\")\n    return 0 }\n",
+        "fn main() { let mut v: Vec<i64> = vec![1, 2];\n    let w = v;\n    v[0] = 5;\n    println!(\"{}\", v[0]);\n }\n",
         "[rc] allocs=2 frees=2\n[raw] allocs=0 frees=0\n",
     ),
     (
         "shared_vec_pushed_in_loop",
-        "fn main() -> i64 { let mut v: Vec<i64> = vec[1, 2]\n    for i in 0..3 { let w = v\n        Vec::push(v, i) }\n    println(\"{v.len}\")\n    return 0 }\n",
+        "fn main() { let mut v: Vec<i64> = vec![1, 2];\n    for i in 0..3 { let w = v;\n        Vec::push(v, i); }\n    println!(\"{}\", v.len());\n }\n",
         "[rc] allocs=4 frees=4\n[raw] allocs=0 frees=0\n",
     ),
 ];
@@ -581,7 +581,7 @@ fn release01_60_an_unused_binding_of_a_managed_value_is_kept_at_every_level() {
 #[test]
 fn release01_61_e0432_is_raised_only_when_the_optimized_half_alone_refuses() {
     let dir = tempdir().expect("tempdir");
-    let src = "fn main() -> i64 {\n    println(\"1\")\n    return 0\n}\n";
+    let src = "fn main() {\n    println!(\"1\");\n}\n";
     aelys_air::ablation::set_optimized_stage_refuses(true);
     let ablated = legs_of(dir.path(), "ablated", src, None, &[]);
     aelys_air::ablation::set_optimized_stage_refuses(false);

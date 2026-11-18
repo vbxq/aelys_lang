@@ -4,8 +4,8 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
-const LABS: &str = "unsafe extern fn labs(x: i64) -> i64\n";
-const FREE: &str = "unsafe extern fn free(p: &i64)\n";
+const LABS: &str = "extern \"C\" { fn labs(x: i64) -> i64; }\n";
+const FREE: &str = "extern \"C\" { fn free(p: &i64); }\n";
 
 fn rejects(id: &str, source: &str, code: &str, hits: usize) {
     let dir = tempdir().expect("tempdir");
@@ -49,7 +49,7 @@ fn answers(id: &str, source: &str, want: i32) {
 fn s3_a3_a_nested_empty_unsafe_block_stays_accepted() {
     answers(
         "S3-A3",
-        "fn main() -> i64 {\n    unsafe { unsafe { } }\n    return 7\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    unsafe { unsafe { } }\n    return ExitCode::from(7);\n}\n",
         7,
     );
 }
@@ -58,7 +58,7 @@ fn s3_a3_a_nested_empty_unsafe_block_stays_accepted() {
 fn s3_a4_an_empty_unsafe_block_in_a_lambda_stays_accepted() {
     answers(
         "S3-A4",
-        "fn main() -> i64 {\n    let f = fn() -> i64 {\n        unsafe { }\n        return 7\n    }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let f = move || -> i64 {\n        unsafe { }\n        7\n    };\n    return ExitCode::from(f() as u8);\n}\n",
         7,
     );
 }
@@ -297,7 +297,7 @@ fn s3_b18_bis_an_aelys_call_beside_a_declared_extern_stays_accepted() {
 fn s3_b19_a_nogc_extern_called_from_a_nogc_body_inside_a_block_is_accepted() {
     answers(
         "S3-B19",
-        "unsafe extern nogc fn labs(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    unsafe { return labs(-7) }\n}\nfn main() -> i64 { return c() }\n",
+        "use std::process::ExitCode; extern \"C\" { nogc fn labs(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    unsafe { return labs(-7); }\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n",
         7,
     );
 }
@@ -306,7 +306,7 @@ fn s3_b19_a_nogc_extern_called_from_a_nogc_body_inside_a_block_is_accepted() {
 fn s3_b20_a_plain_extern_called_from_a_nogc_body_inside_a_block_is_still_e0727() {
     rejects(
         "S3-B20",
-        "unsafe extern fn labs(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    unsafe { return labs(-7) }\n}\nfn main() -> i64 { return c() }\n",
+        "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    unsafe { return labs(-7); }\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n",
         "E0727",
         1,
     );

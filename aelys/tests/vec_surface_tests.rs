@@ -31,11 +31,10 @@ fn accepts(src: &str) {
 #[test]
 fn reject_form_grouping_initializer() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = (v)
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = (v);
 }",
     );
 }
@@ -43,11 +42,10 @@ fn reject_form_grouping_initializer() {
 #[test]
 fn accept_form_identifier_initializer() {
     accepts(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = v
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = v;
 }",
     );
 }
@@ -55,12 +53,11 @@ fn accept_form_identifier_initializer() {
 #[test]
 fn reject_form_if_initializer() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let c = 1
-    let w = if c == 1 { v } else { v }
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let c = 1;
+    let w = if c == 1 { v } else { v };
 }",
     );
 }
@@ -68,12 +65,11 @@ fn reject_form_if_initializer() {
 #[test]
 fn reject_form_block_initializer() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let z = 1
-    let w = { let q = z; v }
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let z = 1;
+    let w = { let q = z; v };
 }",
     );
 }
@@ -81,12 +77,11 @@ fn reject_form_block_initializer() {
 #[test]
 fn accept_form_call_initializer() {
     accepts(
-        "fn mk(a: vec<i64>) -> vec<i64> { return a }
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = mk(v)
-    return 0
+        "fn mk(a: vec<i64>) -> vec<i64> { a }
+fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = mk(v);
 }",
     );
 }
@@ -94,10 +89,9 @@ fn main() -> i64 {
 #[test]
 fn accept_form_vec_new_and_literal_initializers() {
     accepts(
-        "fn main() -> i64 {
-    let v: vec<i64> = Vec::new()
-    let w: vec<i64> = vec[1, 2]
-    return 0
+        "fn main() {
+    let v: vec<i64> = Vec::new();
+    let w: vec<i64> = vec![1, 2];
 }",
     );
 }
@@ -106,12 +100,11 @@ fn accept_form_vec_new_and_literal_initializers() {
 #[test]
 fn reject_form_conditional_return() {
     reject_e0412(
-        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { return if c == 1 { a } else { a } }
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = pick(v, 1)
-    return 0
+        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { if c == 1 { a } else { a } }
+fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = pick(v, 1);
 }",
     );
 }
@@ -119,12 +112,11 @@ fn main() -> i64 {
 #[test]
 fn accept_form_identifier_return() {
     accepts(
-        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { return a }
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = pick(v, 1)
-    return 0
+        "fn pick(a: vec<i64>, c: i64) -> vec<i64> { a }
+fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = pick(v, 1);
 }",
     );
 }
@@ -132,14 +124,13 @@ fn main() -> i64 {
 #[test]
 fn reject_form_grouping_deref_assign() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let mut u = Vec::new()
-    Vec::push(u, 2)
-    let r = &mut u
-    *r = (v)
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let mut u = Vec::new();
+    Vec::push(u, 2);
+    let r = &mut u;
+    *r = (v);
 }",
     );
 }
@@ -147,14 +138,13 @@ fn reject_form_grouping_deref_assign() {
 #[test]
 fn accept_form_identifier_deref_assign() {
     accepts(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let mut u = Vec::new()
-    Vec::push(u, 2)
-    let r = &mut u
-    *r = v
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let mut u = Vec::new();
+    Vec::push(u, 2);
+    let r = &mut u;
+    *r = v;
 }",
     );
 }
@@ -162,12 +152,11 @@ fn accept_form_identifier_deref_assign() {
 #[test]
 fn reject_shape_nested_vec_push() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let mut vv = Vec::new()
-    Vec::push(vv, inner)
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let mut vv = Vec::new();
+    Vec::push(vv, inner);
 }",
     );
 }
@@ -175,10 +164,9 @@ fn reject_shape_nested_vec_push() {
 #[test]
 fn accept_shape_primitive_push() {
     accepts(
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
 }",
     );
 }
@@ -186,11 +174,10 @@ fn accept_shape_primitive_push() {
 #[test]
 fn reject_shape_vec_literal_of_vec() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let v = vec[inner]
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let v = vec![inner];
 }",
     );
 }
@@ -198,9 +185,8 @@ fn reject_shape_vec_literal_of_vec() {
 #[test]
 fn accept_shape_vec_literal_of_primitive() {
     accepts(
-        "fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    return 0
+        "fn main() {
+    let v = vec![1, 2, 3];
 }",
     );
 }
@@ -208,11 +194,10 @@ fn accept_shape_vec_literal_of_primitive() {
 #[test]
 fn reject_shape_array_literal_of_vec() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let arr = [inner]
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let arr = [inner];
 }",
     );
 }
@@ -220,9 +205,8 @@ fn reject_shape_array_literal_of_vec() {
 #[test]
 fn accept_shape_array_literal_of_primitive() {
     accepts(
-        "fn main() -> i64 {
-    let arr = [1, 2, 3]
-    return 0
+        "fn main() {
+    let arr = [1, 2, 3];
 }",
     );
 }
@@ -230,11 +214,10 @@ fn accept_shape_array_literal_of_primitive() {
 #[test]
 fn reject_shape_sized_array_of_vec() {
     reject_e0412(
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let arr = [inner; 2]
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let arr = [inner; 2];
 }",
     );
 }
@@ -242,9 +225,9 @@ fn reject_shape_sized_array_of_vec() {
 #[test]
 fn accept_shape_sized_array_of_primitive() {
     accepts(
-        "fn main() -> i64 {
-    let arr = [0; 2]
-    return arr[0]
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let arr = [0; 2];
+    return ExitCode::from(arr[0] as u8);
 }",
     );
 }
@@ -252,25 +235,24 @@ fn accept_shape_sized_array_of_primitive() {
 #[test]
 fn reject_shape_generic_fn_with_vec_arg() {
     reject_e0412(
-        "fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }",
+        "use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }",
     );
 }
 
 #[test]
 fn accept_shape_generic_fn_with_primitive_arg() {
-    accepts("fn keep<T>(x: T) -> i64 { let y = x; return 0 }\nfn main() -> i64 { return keep(7) }");
+    accepts("use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }\nfn main() -> ExitCode { return ExitCode::from(keep(7) as u8); }");
 }
 
 #[test]
 fn accept_shape_generic_enum_with_vec_payload() {
     accepts(
         "enum Opt<T> { Some(T), Nil }
-fn main() -> i64 {
-    let mut i1 = Vec::new()
-    Vec::push(i1, 1)
-    let a = Opt::Some(i1)
-    return 0
+fn main() {
+    let mut i1 = Vec::new();
+    Vec::push(i1, 1);
+    let a = Opt::Some(i1);
 }",
     );
 }
@@ -279,9 +261,8 @@ fn main() -> i64 {
 fn accept_shape_generic_enum_with_primitive_payload() {
     accepts(
         "enum Opt<T> { Some(T), Nil }
-fn main() -> i64 {
-    let a = Opt::Some(4)
-    return 0
+fn main() {
+    let a = Opt::Some(4);
 }",
     );
 }

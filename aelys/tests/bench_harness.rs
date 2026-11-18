@@ -220,37 +220,36 @@ const D_ORACLE: i32 = 0;
 fn amplified_src() -> String {
     format!(
         r#"
-struct Node {{ val: i64, next: Rc<Node> }}
+use std::process::ExitCode; struct Node {{ val: i64, next: Rc<Node> }}
 fn use_vec(v: Vec<i64>) -> i64 {{
-    return v[0] + v[1]
+    v[0] + v[1]
 }}
-fn main() -> i64 {{
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+fn main() -> ExitCode {{
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < {D_COUNT} {{
-        let r: Rc<i64> = Rc::new(5)
-        let r2: Rc<i64> = r
-        let a: Rc<Node> = Rc::new(Node {{ val: 1, next: Rc::null() }})
-        let b: Rc<Node> = Rc::new(Node {{ val: 2, next: Rc::null() }})
-        a.next = b
-        b.next = a
-        let v = vec[10, 20, 30]
-        let w = v
-        Vec::push(w, 40)
-        let s = use_vec(v)
-        __aelys_collect()
-        acc = acc + Rc::get(r2) + v[0] + w[3] + s
-        i = i + 1
+        let r: Rc<i64> = Rc::new(5);
+        let r2: Rc<i64> = r;
+        let a: Rc<Node> = Rc::new(Node {{ val: 1, next: Rc::null() }});
+        let b: Rc<Node> = Rc::new(Node {{ val: 2, next: Rc::null() }});
+        a.next = b;
+        b.next = a;
+        let v = vec![10, 20, 30];
+        let w = v;
+        Vec::push(w, 40);
+        let s = use_vec(v);
+        __aelys_collect();
+        acc = acc + Rc::get(r2) + v[0] + w[3] + s;
+        i = i + 1;
     }}
-    return acc % 1000
+    return ExitCode::from((acc % 1000) as u8);
 }}
 "#
     )
 }
 
 const SPAWN_FLOOR_SRC: &str = r#"
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -263,41 +262,41 @@ const RC_DENSE_BEFORE_FLOOR_MS: f64 = 200.0;
 fn rc_dense_src() -> String {
     format!(
         r#"
-fn main() -> i64 {{
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+use std::process::ExitCode; fn main() -> ExitCode {{
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < {RC_DENSE_COUNT} {{
-        let a: Rc<i64> = Rc::new(7)
-        let b: Rc<i64> = a
-        let c: Rc<i64> = b
-        let d: Rc<i64> = c
-        acc = acc + Rc::get(d)
-        i = i + 1
+        let a: Rc<i64> = Rc::new(7);
+        let b: Rc<i64> = a;
+        let c: Rc<i64> = b;
+        let d: Rc<i64> = c;
+        acc = acc + Rc::get(d);
+        i = i + 1;
     }}
-    return acc % 1000
+    return ExitCode::from((acc % 1000) as u8);
 }}
 "#
     )
 }
 
 const SEAM4_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
 fn use_vec(v: Vec<i64>) -> i64 {
-    return v[0] + v[1]
+    v[0] + v[1]
 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let r2: Rc<i64> = r
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let v = vec[10, 20, 30]
-    let w = v
-    Vec::push(w, 40)
-    let s = use_vec(v)
-    __aelys_collect()
-    return Rc::get(r2) + v[0] + w[3] + s
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(5);
+    let r2: Rc<i64> = r;
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let v = vec![10, 20, 30];
+    let w = v;
+    Vec::push(w, 40);
+    let s = use_vec(v);
+    __aelys_collect();
+    return ExitCode::from((Rc::get(r2) + v[0] + w[3] + s) as u8);
 }
 "#;
 

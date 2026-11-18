@@ -28,7 +28,7 @@ fn sema_ok_with_builtins(code: &str) -> bool {
 #[test]
 fn generic_identity_function() {
     assert!(
-        sema_ok("fn id<T>(x: T) -> T { return x }"),
+        sema_ok("fn id<T>(x: T) -> T { x }"),
         "generic identity function should compile"
     );
 }
@@ -38,8 +38,8 @@ fn generic_with_concrete_call() {
     assert!(
         sema_ok(
             r#"
-fn id<T>(x: T) -> T { return x }
-fn use_it() -> i64 { return id(42) }
+fn id<T>(x: T) -> T { x }
+fn use_it() -> i64 { id(42) }
 "#
         ),
         "calling generic fn with concrete arg should compile"
@@ -51,10 +51,10 @@ fn generic_with_multiple_instantiations() {
     assert!(
         sema_ok(
             r#"
-fn first<T>(a: T, b: T) -> T { return a }
+fn first<T>(a: T, b: T) -> T { a }
 fn test() -> i64 {
-    let a = first(1, 2)
-    return a
+    let a = first(1, 2);
+    a
 }
 "#
         ),
@@ -67,10 +67,10 @@ fn simple_closure() {
     assert!(
         sema_ok(
             r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 { f(x) }
 fn test() -> i64 {
-    let double = fn(x: i64) -> i64 { return x * 2 }
-    return apply(double, 5)
+    let double = move |x: i64| -> i64 { x * 2 };
+    apply(double, 5)
 }
 "#
         ),
@@ -84,9 +84,9 @@ fn closure_capturing_local() {
         sema_ok(
             r#"
 fn test() -> i64 {
-    let offset: i64 = 10
-    let add_offset = fn(x: i64) -> i64 { return x + offset }
-    return add_offset(5)
+    let offset: i64 = 10;
+    let add_offset = move |x: i64| -> i64 { x + offset };
+    add_offset(5)
 }
 "#
         ),
@@ -101,9 +101,9 @@ fn recursive_factorial() {
             r#"
 fn factorial(n: i64) -> i64 {
     if n < 2 {
-        return 1
+        return 1;
     }
-    return n * factorial(n - 1)
+    n * factorial(n - 1)
 }
 "#
         ),
@@ -117,10 +117,10 @@ fn mutual_recursion_style() {
     assert!(
         sema_ok(
             r#"
-fn is_even(n: i64) -> bool { return n == 0 }
+fn is_even(n: i64) -> bool { n == 0 }
 fn is_odd(n: i64) -> bool {
-    if n == 0 { return false }
-    return is_even(n - 1)
+    if n == 0 { return false; }
+    is_even(n - 1)
 }
 "#
         ),
@@ -135,11 +135,11 @@ fn struct_with_methods_style() {
             r#"
 struct Point { x: i64, y: i64 }
 fn point_sum(p: Point) -> i64 {
-    return p.x + p.y
+    p.x + p.y
 }
 fn test() -> i64 {
-    let p = Point { x: 1, y: 2 }
-    return point_sum(p)
+    let p = Point { x: 1, y: 2 };
+    point_sum(p)
 }
 "#
         ),
@@ -155,9 +155,9 @@ fn nested_struct() {
 struct Inner { val: i64 }
 struct Outer { inner: Inner }
 fn test() -> i64 {
-    let inner = Inner { val: 42 }
-    let outer = Outer { inner: inner }
-    return outer.inner.val
+    let inner = Inner { val: 42 };
+    let outer = Outer { inner: inner };
+    outer.inner.val
 }
 "#
         ),
@@ -170,7 +170,7 @@ fn string_len() {
     assert!(
         sema_ok(
             r#"
-fn str_len(s: string) -> i64 { return s.len }
+fn str_len(s: String) -> i64 { s.len() }
 "#
         ),
         "string .len should compile"
@@ -182,7 +182,7 @@ fn string_concatenation() {
     assert!(
         sema_ok(
             r#"
-fn greet(name: string) -> string { return "Hello, " + name }
+fn greet(name: String) -> String { "Hello, " + name }
 "#
         ),
         "string concatenation should compile"
@@ -194,9 +194,9 @@ fn function_as_parameter() {
     assert!(
         sema_ok(
             r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }
-fn double(x: i64) -> i64 { return x * 2 }
-fn test() -> i64 { return apply(double, 5) }
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 { f(x) }
+fn double(x: i64) -> i64 { x * 2 }
+fn test() -> i64 { apply(double, 5) }
 "#
         ),
         "passing function as parameter should compile"
@@ -211,14 +211,14 @@ fn nested_if_with_returns() {
 fn classify(x: i64) -> i64 {
     if x > 0 {
         if x > 100 {
-            return 3
+            return 3;
         }
-        return 2
+        return 2;
     }
     if x == 0 {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#
         ),
@@ -232,14 +232,14 @@ fn while_with_early_return() {
         sema_ok(
             r#"
 fn find(arr: [i64; 10], n: i64, target: i64) -> i64 {
-    let mut i: i64 = 0
+    let mut i: i64 = 0;
     while i < n {
         if arr[i] == target {
-            return i
+            return i;
         }
-        i = i + 1
+        i = i + 1;
     }
-    return -1
+    -1
 }
 "#
         ),
@@ -250,7 +250,7 @@ fn find(arr: [i64; 10], n: i64, target: i64) -> i64 {
 #[test]
 fn rejects_string_minus_string() {
     assert!(
-        !sema_ok(r#"fn f() -> string { return "a" - "b" }"#),
+        !sema_ok(r#"fn f() -> String { "a" - "b" }"#),
         "string subtraction should be rejected"
     );
 }
@@ -258,7 +258,7 @@ fn rejects_string_minus_string() {
 #[test]
 fn rejects_bool_arithmetic() {
     assert!(
-        !sema_ok("fn f() -> bool { return true + false }"),
+        !sema_ok("fn f() -> bool { true + false }"),
         "bool addition should be rejected"
     );
 }
@@ -269,7 +269,7 @@ fn void_function_no_return() {
         sema_ok(
             r#"
 fn noop() -> void {
-    let x: i64 = 1
+    let x: i64 = 1;
 }
 "#
         ),
@@ -284,7 +284,7 @@ fn dynamic_type_unifies_with_anything() {
     assert!(
         sema_ok_with_builtins(
             r#"
-fn test() { println("hello") }
+fn test() { println!("hello"); }
 "#
         ),
         "Dynamic-typed println should accept string"
@@ -296,8 +296,8 @@ fn println_does_not_satisfy_non_void_return() {
     assert!(
         !sema_ok_with_builtins(
             r#"
-fn main() -> i64 {
-    println("hello")
+use std::process::ExitCode; fn main() -> ExitCode {
+    ExitCode::from(println!("hello") as u8)
 }
 "#
         ),
@@ -308,7 +308,7 @@ fn main() -> i64 {
 #[test]
 fn explicit_cast_i32_to_f64() {
     assert!(
-        sema_ok("fn f(x: i32) -> f64 { return x as f64 }"),
+        sema_ok("fn f(x: i32) -> f64 { x as f64 }"),
         "explicit cast should compile"
     );
 }
@@ -316,7 +316,7 @@ fn explicit_cast_i32_to_f64() {
 #[test]
 fn explicit_cast_chain() {
     assert!(
-        sema_ok("fn f(x: i64) -> i8 { return (x as i32) as i8 }"),
+        sema_ok("fn f(x: i64) -> i8 { (x as i32) as i8 }"),
         "chained casts should compile"
     );
 }
@@ -328,8 +328,8 @@ fn generic_with_struct_name_collision_rejected() {
         !sema_ok(
             r#"
 struct T { value: i64 }
-fn identity<T>(x: T) -> T { return x }
-fn test() -> i64 { return identity(42) }
+fn identity<T>(x: T) -> T { x }
+fn test() -> i64 { identity(42) }
 "#
         ),
         "struct T shadows type param T, so identity(42) should be rejected"
@@ -344,8 +344,8 @@ fn generic_struct_type_param_shadows_a_same_named_struct() {
 struct T { value: i64 }
 struct Box<T> { inner: T }
 fn test() -> i64 {
-    let b = Box { inner: 42 }
-    return b.inner
+    let b = Box { inner: 42 };
+    b.inner
 }
 "#
         ),
@@ -357,9 +357,9 @@ fn test() -> i64 {
 struct T { value: i64 }
 struct Box<T> { inner: T }
 fn test() -> i64 {
-    let b = Box { inner: 42 }
-    let t: T = b.inner
-    return t.value
+    let b = Box { inner: 42 };
+    let t: T = b.inner;
+    t.value
 }
 "#
         ),

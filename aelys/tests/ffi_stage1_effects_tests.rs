@@ -24,19 +24,19 @@ const SIX: [Effect; 6] = [
 ];
 
 // gates the call site on , so every call below carries its own block
-const NOGC_EXTERN: &str = "unsafe extern nogc fn e(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                           unsafe { return e(1) }\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
-const PLAIN_EXTERN: &str = "unsafe extern fn e(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                            unsafe { return e(1) }\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
-const NOGC_LIBC: &str = "unsafe extern nogc fn labs(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                         unsafe { return labs(-37) }\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
+const NOGC_EXTERN: &str = "use std::process::ExitCode; extern \"C\" { nogc fn e(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                           unsafe { return e(1); }\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
+const PLAIN_EXTERN: &str = "use std::process::ExitCode; extern \"C\" { fn e(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                            unsafe { return e(1); }\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
+const NOGC_LIBC: &str = "use std::process::ExitCode; extern \"C\" { nogc fn labs(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                         unsafe { return labs(-37); }\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
 
-const NOGC_EXTERN_BARE: &str = "unsafe extern nogc fn e(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                                return e(1)\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
-const PLAIN_EXTERN_BARE: &str = "unsafe extern fn e(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                                 return e(1)\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
-const NOGC_LIBC_BARE: &str = "unsafe extern nogc fn labs(x: i64) -> i64\n\nnogc fn c() -> i64 {\n    \
-                              return labs(-37)\n}\n\nfn main() -> i64 {\n    return c()\n}\n";
+const NOGC_EXTERN_BARE: &str = "use std::process::ExitCode; extern \"C\" { nogc fn e(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                                e(1)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
+const PLAIN_EXTERN_BARE: &str = "use std::process::ExitCode; extern \"C\" { fn e(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                                 e(1)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
+const NOGC_LIBC_BARE: &str = "use std::process::ExitCode; extern \"C\" { nogc fn labs(x: i64) -> i64; }\n\nnogc fn c() -> i64 {\n    \
+                              labs(-37)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(c() as u8);\n}\n";
 
 fn rejected_as_e0617(id: &str, source: &str) {
     let dir = tempdir().expect("tempdir");

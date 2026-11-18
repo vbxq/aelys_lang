@@ -29,12 +29,12 @@ const DIVERGES_BEYOND_THIS_COMPARISON: [(&str, &str); 2] = [
 
 // the extractor reads this file too, so a population that has stopped carrying this program has stopped reading the tree
 const EXTRACTOR_SELF_CHECK: &str = "\
-fn value_net_extractor_self_check() -> i64 {
-    return 0
+use std::process::ExitCode; fn value_net_extractor_self_check() -> i64 {
+    0
 }
 
-fn main() -> i64 {
-    return value_net_extractor_self_check()
+fn main() -> ExitCode {
+    return ExitCode::from(value_net_extractor_self_check() as u8);
 }
 ";
 

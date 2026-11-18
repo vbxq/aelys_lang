@@ -13,7 +13,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
 
 type Files = &'static [(&'static str, &'static str)];
 
-const MODULE_SEVEN: &str = "pub fn seven() -> i64 {\n    return 7\n}\n";
+const MODULE_SEVEN: &str = "pub fn seven() -> i64 {\n    7\n}\n";
 
 fn stage(files: Files) -> TempDir {
     let dir = tempdir().expect("tempdir");
@@ -214,7 +214,7 @@ fn group_mod_n1_needs_free_ir_is_byte_identical() {
 }
 
 #[cfg(unix)]
-const N3_SOURCE: &str = "fn main() -> i64 {\n    return 21\n}\n";
+const N3_SOURCE: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n    return ExitCode::from(21);\n}\n";
 
 #[cfg(unix)]
 fn n3_child_links_once() {
@@ -346,7 +346,7 @@ fn group_mod_m1_single_function_module() {
             ("m.aelys", MODULE_SEVEN),
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.seven()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::seven() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -362,11 +362,11 @@ fn group_mod_m9_value_crosses_the_module_boundary() {
         &[
             (
                 "m.aelys",
-                "pub fn hi() -> i64 {\n    println(\"hi\")\n    return 0\n}\n",
+                "pub fn hi() -> i64 {\n    println!(\"hi\");\n    0\n}\n",
             ),
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.hi()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::hi() as u8);\n}\n",
             ),
         ],
         "root.aelys",
@@ -433,7 +433,7 @@ fn group_mod_q2_intra_module_call_keeps_its_module() {
         &[
             (
                 "a/b.aelys",
-                "fn helper() -> i64 {\n    return 7\n}\n\npub fn tripled() -> i64 {\n    return helper() * 3\n}\n",
+                "fn helper() -> i64 {\n    7\n}\n\npub fn tripled() -> i64 {\n    helper() * 3\n}\n",
             ),
             (
                 "root.aelys",
@@ -453,7 +453,7 @@ fn group_mod_q3_global_function_reference_crosses() {
         &[
             (
                 "a/b.aelys",
-                "pub fn seven() -> i64 {\n    return 7\n}\n\npub let f: fn() -> i64 = seven\n",
+                "pub fn seven() -> i64 {\n    7\n}\n\npub static f: fn() -> i64 = seven;\n",
             ),
             (
                 "root.aelys",
@@ -466,7 +466,7 @@ fn group_mod_q3_global_function_reference_crosses() {
     );
 }
 
-const TYPE_ERROR_MODULE: &str = "pub fn bad() -> i64 {\n    return \"x\"\n}\n";
+const TYPE_ERROR_MODULE: &str = "pub fn bad() -> i64 {\n    \"x\"\n}\n";
 
 #[test]
 fn group_mod_t4_imported_module_is_compiled_and_named() {
@@ -475,7 +475,7 @@ fn group_mod_t4_imported_module_is_compiled_and_named() {
         &[("m.aelys", TYPE_ERROR_MODULE), ("root.aelys", "needs m\n")],
         "root.aelys",
         &["[E0301]"],
-        &["m.aelys", "return \"x\""],
+        &["m.aelys", "return \"x\";"],
         &[],
     );
 }
@@ -497,16 +497,16 @@ fn group_mod_x1_module_borrow_error_names_its_own_file() {
         &[
             (
                 "m.aelys",
-                "struct Resource { id: i64 }\n\npub fn leak() -> i64 {\n    let a = Resource { id: 1 }\n    let b = a\n    return a.id\n}\n",
+                "struct Resource { id: i64 }\n\npub fn leak() -> i64 {\n    let a = Resource { id: 1 };\n    let b = a;\n    a.id\n}\n",
             ),
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n}\n",
             ),
         ],
         "root.aelys",
         &["[E0701]"],
-        &["m.aelys", "return a.id"],
+        &["m.aelys", "return a.id;"],
         &[],
     );
 }
@@ -519,13 +519,13 @@ fn group_mod_x2_topological_order_reports_the_dependency_first() {
             ("m.aelys", TYPE_ERROR_MODULE),
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return \"y\"\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(\"y\" as u8);\n}\n",
             ),
         ],
         "root.aelys",
         &["[E0301]"],
-        &["m.aelys", "return \"x\""],
-        &["root.aelys", "return \"y\""],
+        &["m.aelys", "return \"x\";"],
+        &["root.aelys", "return \"y\";"],
     );
 }
 
@@ -543,7 +543,7 @@ fn group_mod_x2b_discovery_order_reports_the_root_first() {
         "root.aelys",
         &["[E0102]"],
         &["root.aelys"],
-        &["m.aelys", "return \"x\""],
+        &["m.aelys", "return \"x\";"],
     );
 }
 
@@ -556,7 +556,7 @@ fn group_mod_t1_empty_module_imported_and_unused() {
             ("m.aelys", ""),
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n}\n",
             ),
         ],
         "root.aelys",

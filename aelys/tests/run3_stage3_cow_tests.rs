@@ -26,7 +26,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -219,26 +219,23 @@ impl Harness {
 
 // managed container cannot be involved, so any reappearance of one in the text is a defect.
 
-const S3_12: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[1, 2, 3]\n\
-                     \x20   let r = &mut v[0]\n\
-                     \x20   *r = 101\n\
-                     \x20   return 0\n\
+const S3_12: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![1, 2, 3];\n\
+                     \x20   let r = &mut v[0];\n\
+                     \x20   *r = 101;\n\
                      }\n";
 
-const S3_13: &str = "fn main() -> i64 {\n\
-                     \x20   let mut a: [i64; 3] = [1, 2, 3]\n\
-                     \x20   let r = &mut a[0]\n\
-                     \x20   *r = 101\n\
-                     \x20   return 0\n\
+const S3_13: &str = "fn main() {\n\
+                     \x20   let mut a: [i64; 3] = [1, 2, 3];\n\
+                     \x20   let r = &mut a[0];\n\
+                     \x20   *r = 101;\n\
                      }\n";
 
 const S3_14: &str = "struct D { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut d: D = D{n: 1}\n\
-                     \x20   let r = &mut d.n\n\
-                     \x20   *r = 101\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut d: D = D{n: 1};\n\
+                     \x20   let r = &mut d.n;\n\
+                     \x20   *r = 101;\n\
                      }\n";
 
 #[test]
@@ -302,68 +299,62 @@ fn e0415_explain_states_a_reason_that_is_true_of_every_program_it_rejects() {
 // the detach moves from the air consumer to the air producer. these rows are the ones that
 
 const S3_01: &str = "fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                     \x20   (*r)[0] = 101\n\
-                     \x20   return 0\n\
+                     \x20   (*r)[0] = 101;\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   let q = poke(&mut v)\n\
-                     \x20   println(v[0])\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   let q = poke(&mut v);\n\
+                     \x20   println!(\"{}\", v[0]);\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
-const S3_02: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   v[0] = 101\n\
-                     \x20   println(v[0])\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+const S3_02: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   v[0] = 101;\n\
+                     \x20   println!(\"{}\", v[0]);\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
-const S3_09: &str = "nogc fn peek(r: &i64) -> i64 { return *r }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   println(peek(&v[0]))\n\
-                     \x20   println(peek(&w[0]))\n\
-                     \x20   return 0\n\
+const S3_09: &str = "nogc fn peek(r: &i64) -> i64 { *r }\n\
+                     fn main() {\n\
+                     \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   println!(\"{}\", peek(&v[0]));\n\
+                     \x20   println!(\"{}\", peek(&w[0]));\n\
                      }\n";
 
 const S3_10: &str = "fn grow(r: &mut Vec<i64>) -> i64 {\n\
-                     \x20   Vec::push(*r, 4)\n\
-                     \x20   return 0\n\
+                     \x20   Vec::push(*r, 4);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   let q = grow(&mut v)\n\
-                     \x20   println(v[0])\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   let q = grow(&mut v);\n\
+                     \x20   println!(\"{}\", v[0]);\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
-const S3_11: &str = "fn main() -> i64 {\n\
-                     \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   println(v[0])\n\
-                     \x20   println(v[2])\n\
-                     \x20   return 0\n\
+const S3_11: &str = "fn main() {\n\
+                     \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   println!(\"{}\", v[0]);\n\
+                     \x20   println!(\"{}\", v[2]);\n\
                      }\n";
 
 const S3_27: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let g = fn() -> i64 {\n\
-                     \x20       v[0] = S{n: 101}\n\
-                     \x20       return 0\n\
-                     \x20   }\n\
-                     \x20   let q = g()\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let g = move || -> i64 {\n\
+                     \x20       v[0] = S{n: 101};\n\
+                     \x20       0\n\
+                     \x20   };\n\
+                     \x20   let q = g();\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
 #[test]
@@ -463,133 +454,122 @@ fn s3_25_the_detach_is_intercepted_ahead_of_the_vec_runtime_splice_list() {
 // the E0429 family, discharged. every row below is a program the fence refused; each now
 
 const S3_03: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   v[0].n = 101\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   v[0].n = 101;\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
 const S3_04: &str = "struct S { n: i64 }\n\
                      fn poke(r: &mut Vec<S>) -> i64 {\n\
-                     \x20   (*r)[0].n = 101\n\
-                     \x20   return 0\n\
+                     \x20   (*r)[0].n = 101;\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let q = poke(&mut v)\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let q = poke(&mut v);\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
-const S3_05: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<[i64; 3]> = vec[[1, 2, 3], [4, 5, 6]]\n\
-                     \x20   let w: Vec<[i64; 3]> = v\n\
-                     \x20   v[0][1] = 101\n\
-                     \x20   println(v[0][1])\n\
-                     \x20   println(w[0][1])\n\
-                     \x20   return 0\n\
+const S3_05: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<[i64; 3]> = vec![[1, 2, 3], [4, 5, 6]];\n\
+                     \x20   let w: Vec<[i64; 3]> = v;\n\
+                     \x20   v[0][1] = 101;\n\
+                     \x20   println!(\"{}\", v[0][1]);\n\
+                     \x20   println!(\"{}\", w[0][1]);\n\
                      }\n";
 
 const S3_06: &str = "struct I { k: i64 }\n\
                      struct S { i: I }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{i: I{k: 7919}}, S{i: I{k: 2}}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   v[0].i.k = 101\n\
-                     \x20   println(v[0].i.k)\n\
-                     \x20   println(w[0].i.k)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{i: I{k: 7919}}, S{i: I{k: 2}}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   v[0].i.k = 101;\n\
+                     \x20   println!(\"{}\", v[0].i.k);\n\
+                     \x20   println!(\"{}\", w[0].i.k);\n\
                      }\n";
 
 const S3_07: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let g = fn(r: &mut Vec<S>) -> i64 {\n\
-                     \x20       (*r)[0].n = 101\n\
-                     \x20       return 0\n\
-                     \x20   }\n\
-                     \x20   let q = g(&mut v)\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let g = move |r: &mut Vec<S>| -> i64 {\n\
+                     \x20       (*r)[0].n = 101;\n\
+                     \x20       0\n\
+                     \x20   };\n\
+                     \x20   let q = g(&mut v);\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
 const S3_08: &str = "struct S { x: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{x: 7919}, S{x: 2}]\n\
-                     \x20   v[0].x = 101\n\
-                     \x20   println(v[0].x)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{x: 7919}, S{x: 2}];\n\
+                     \x20   v[0].x = 101;\n\
+                     \x20   println!(\"{}\", v[0].x);\n\
                      }\n";
 
 const S3_28: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let outer = fn(r: &mut Vec<S>) -> i64 {\n\
-                     \x20       let inner = fn(q: &mut Vec<S>) -> i64 {\n\
-                     \x20           (*q)[0].n = 101\n\
-                     \x20           return 0\n\
-                     \x20       }\n\
-                     \x20       return inner(r)\n\
-                     \x20   }\n\
-                     \x20   let z = outer(&mut v)\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let outer = move |r: &mut Vec<S>| -> i64 {\n\
+                     \x20       let inner = move |q: &mut Vec<S>| -> i64 {\n\
+                     \x20           (*q)[0].n = 101;\n\
+                     \x20           0\n\
+                     \x20       };\n\
+                     \x20       inner(r)\n\
+                     \x20   };\n\
+                     \x20   let z = outer(&mut v);\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
 const S3_30: &str = "struct S { a: [i64; 3] }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{a: [7919, 2, 3]}, S{a: [4, 5, 6]}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   v[0].a[0] = 101\n\
-                     \x20   println(v[0].a[0])\n\
-                     \x20   println(w[0].a[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{a: [7919, 2, 3]}, S{a: [4, 5, 6]}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   v[0].a[0] = 101;\n\
+                     \x20   println!(\"{}\", v[0].a[0]);\n\
+                     \x20   println!(\"{}\", w[0].a[0]);\n\
                      }\n";
 
 const S3_31: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   v[0].n += 101\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   v[0].n += 101;\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
 const S3_32: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 0}, S{n: 0}, S{n: 0}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let mut i: i64 = 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 0}, S{n: 0}, S{n: 0}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let mut i: i64 = 0;\n\
                      \x20   while i < 3 {\n\
-                     \x20       v[i].n = i + 1\n\
-                     \x20       i = i + 1\n\
+                     \x20       v[i].n = i + 1;\n\
+                     \x20       i = i + 1;\n\
                      \x20   }\n\
-                     \x20   println(v[2].n)\n\
-                     \x20   println(w[2].n)\n\
-                     \x20   println(i)\n\
-                     \x20   return 0\n\
+                     \x20   println!(\"{}\", v[2].n);\n\
+                     \x20   println!(\"{}\", w[2].n);\n\
+                     \x20   println!(\"{}\", i);\n\
                      }\n";
 
 const S3_33: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let u: Vec<S> = w\n\
-                     \x20   v[0].n = 101\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   println(u[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let u: Vec<S> = w;\n\
+                     \x20   v[0].n = 101;\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
+                     \x20   println!(\"{}\", u[0].n);\n\
                      }\n";
 
 #[test]
@@ -675,23 +655,22 @@ fn s3_33_three_way_sharing() {
 // s3-22 the effect rule and the detach hook must agree.
 
 const S3_22_STORE: &str = "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                           \x20   (*r)[0] = 101\n\
-                           \x20   return 0\n\
+                           \x20   (*r)[0] = 101;\n\
+                           \x20   0\n\
                            }\n\
-                           fn main() -> i64 { return 0 }\n";
+                           fn main() { }\n";
 
 // pick up a detach if the mode gate were wrong. a probe of reads that never form one would
-const S3_22_READS: &str = "nogc fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] }\n\
+const S3_22_READS: &str = "nogc fn peek(r: &Vec<i64>) -> i64 { (*r)[0] }\n\
                            nogc fn peekaddr(r: &Vec<i64>) -> i64 {\n\
-                           \x20   let p = &(*r)[0]\n\
-                           \x20   return *p\n\
+                           \x20   let p = &(*r)[0];\n\
+                           \x20   *p\n\
                            }\n\
-                           fn main() -> i64 {\n\
-                           \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                           \x20   let w: Vec<i64> = v\n\
-                           \x20   println(peek(&v))\n\
-                           \x20   println(peekaddr(&w))\n\
-                           \x20   return 0\n\
+                           fn main() {\n\
+                           \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                           \x20   let w: Vec<i64> = v;\n\
+                           \x20   println!(\"{}\", peek(&v));\n\
+                           \x20   println!(\"{}\", peekaddr(&w));\n\
                            }\n";
 
 fn declared_nogc_fns(src: &str) -> Vec<String> {
@@ -830,29 +809,27 @@ fn e0429_is_discharged_and_what_replaced_it_is_named() {
 // it by making depth 2 alias again: a capturing closure cannot mutate an outer `vec`, at any
 
 const S3_26: &str = "struct S { n: i64 }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                     \x20   let w: Vec<S> = v\n\
-                     \x20   let g = fn() -> i64 {\n\
-                     \x20       v[0].n = 101\n\
-                     \x20       return 0\n\
-                     \x20   }\n\
-                     \x20   let q = g()\n\
-                     \x20   println(v[0].n)\n\
-                     \x20   println(w[0].n)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                     \x20   let w: Vec<S> = v;\n\
+                     \x20   let g = move || -> i64 {\n\
+                     \x20       v[0].n = 101;\n\
+                     \x20       0\n\
+                     \x20   };\n\
+                     \x20   let q = g();\n\
+                     \x20   println!(\"{}\", v[0].n);\n\
+                     \x20   println!(\"{}\", w[0].n);\n\
                      }\n";
 
-const S3_29: &str = "fn main() -> i64 {\n\
-                     \x20   let mut x: i64 = 7919\n\
-                     \x20   let g = fn() -> i64 {\n\
-                     \x20       x = 101\n\
-                     \x20       return x\n\
-                     \x20   }\n\
-                     \x20   let q = g()\n\
-                     \x20   println(q)\n\
-                     \x20   println(x)\n\
-                     \x20   return 0\n\
+const S3_29: &str = "fn main() {\n\
+                     \x20   let mut x: i64 = 7919;\n\
+                     \x20   let g = move || -> i64 {\n\
+                     \x20       x = 101;\n\
+                     \x20       x\n\
+                     \x20   };\n\
+                     \x20   let q = g();\n\
+                     \x20   println!(\"{}\", q);\n\
+                     \x20   println!(\"{}\", x);\n\
                      }\n";
 
 #[test]
@@ -871,98 +848,88 @@ fn s3_29_a_capture_is_by_value_for_storage_the_closure_writes() {
 
 // the fences that were not retired. each names the code and why that code.
 
-const S3_15: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let s: &mut [i64] = v[0..3]\n\
-                     \x20   s[0] = 101\n\
-                     \x20   return 0\n\
+const S3_15: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let s: &mut [i64] = v[0..3];\n\
+                     \x20   s[0] = 101;\n\
                      }\n";
 
-const S3_16: &str = "fn view(r: &mut Vec<i64>) -> &mut [i64] { return (*r)[0..3] }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let s = view(&mut v)\n\
-                     \x20   s[0] = 101\n\
-                     \x20   return 0\n\
+const S3_16: &str = "fn view(r: &mut Vec<i64>) -> &mut [i64] { (*r)[0..3] }\n\
+                     fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let s = view(&mut v);\n\
+                     \x20   s[0] = 101;\n\
                      }\n";
 
-const S3_15_ALIASED: &str = "fn main() -> i64 {\n\
-                             \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                             \x20   let w: Vec<i64> = v\n\
-                             \x20   let s: &mut [i64] = v[0..3]\n\
-                             \x20   s[0] = 101\n\
-                             \x20   println(v[0])\n\
-                             \x20   println(w[0])\n\
-                             \x20   return 0\n\
+const S3_15_ALIASED: &str = "fn main() {\n\
+                             \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                             \x20   let w: Vec<i64> = v;\n\
+                             \x20   let s: &mut [i64] = v[0..3];\n\
+                             \x20   s[0] = 101;\n\
+                             \x20   println!(\"{}\", v[0]);\n\
+                             \x20   println!(\"{}\", w[0]);\n\
                              }\n";
 
-const S3_16_ALIASED: &str = "fn view(r: &mut Vec<i64>) -> &mut [i64] { return (*r)[0..3] }\n\
-                             fn main() -> i64 {\n\
-                             \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                             \x20   let w: Vec<i64> = v\n\
-                             \x20   let s = view(&mut v)\n\
-                             \x20   s[0] = 101\n\
-                             \x20   println(v[0])\n\
-                             \x20   println(w[0])\n\
-                             \x20   return 0\n\
+const S3_16_ALIASED: &str = "fn view(r: &mut Vec<i64>) -> &mut [i64] { (*r)[0..3] }\n\
+                             fn main() {\n\
+                             \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                             \x20   let w: Vec<i64> = v;\n\
+                             \x20   let s = view(&mut v);\n\
+                             \x20   s[0] = 101;\n\
+                             \x20   println!(\"{}\", v[0]);\n\
+                             \x20   println!(\"{}\", w[0]);\n\
                              }\n";
 
 const S3_17: &str = "enum Opt { Some(&mut [i64]), None }\n\
                      fn view(r: &mut Vec<i64>) -> Opt {\n\
-                     \x20   let s: &mut [i64] = (*r)[0..3]\n\
-                     \x20   return Opt::Some(s)\n\
+                     \x20   let s: &mut [i64] = (*r)[0..3];\n\
+                     \x20   Opt::Some(s)\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
-const S3_18: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let r = &mut v\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   (*r)[0] = 101\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+const S3_18: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let r = &mut v;\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   (*r)[0] = 101;\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
-const S3_19: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let r = &mut v\n\
-                     \x20   Vec::push(v, 4)\n\
-                     \x20   (*r)[0] = 101\n\
-                     \x20   println(v[0])\n\
-                     \x20   return 0\n\
+const S3_19: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let r = &mut v;\n\
+                     \x20   Vec::push(v, 4);\n\
+                     \x20   (*r)[0] = 101;\n\
+                     \x20   println!(\"{}\", v[0]);\n\
                      }\n";
 
-const S3_20: &str = "fn main() -> i64 {\n\
-                     \x20   let v: Vec<Vec<i64>> = vec[vec[1, 2], vec[3, 4]]\n\
-                     \x20   return 0\n\
+const S3_20: &str = "fn main() {\n\
+                     \x20   let v: Vec<Vec<i64>> = vec![vec![1, 2], vec![3, 4]];\n\
                      }\n";
 
 const S3_20B: &str = "struct P { n: i64 }\n\
-                      fn main() -> i64 {\n\
-                      \x20   let v: Rc<Vec<P>> = Rc::new(vec[P{n: 1}])\n\
-                      \x20   return 0\n\
+                      fn main() {\n\
+                      \x20   let v: Rc<Vec<P>> = Rc::new(vec![P{n: 1}]);\n\
                       }\n";
 
-const S3_20C: &str = "struct S { n: i64 }\n\
+const S3_20C: &str = "use std::process::ExitCode; struct S { n: i64 }\n\
                       fn poke<T>(v: T) -> i64 {\n\
-                      \x20   v[0].n = 101\n\
-                      \x20   return 0\n\
+                      \x20   v[0].n = 101;\n\
+                      \x20   0\n\
                       }\n\
-                      fn main() -> i64 {\n\
-                      \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                      \x20   return poke(v)\n\
+                      fn main() -> ExitCode {\n\
+                      \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                      \x20   return ExitCode::from(poke(v) as u8);\n\
                       }\n";
 
 const S3_21_RC: &str = "struct N { n: i64 }\n\
-                        fn main() -> i64 {\n\
-                        \x20   let v: Vec<Rc<N>> = vec[Rc::new(N{n: 1})]\n\
-                        \x20   return 0\n\
+                        fn main() {\n\
+                        \x20   let v: Vec<Rc<N>> = vec![Rc::new(N{n: 1})];\n\
                         }\n";
 
 const S3_21_STRUCT: &str = "struct S { v: Vec<i64> }\n\
-                            fn main() -> i64 {\n\
-                            \x20   let s: S = S{v: vec[1, 2, 3]}\n\
-                            \x20   return 0\n\
+                            fn main() {\n\
+                            \x20   let s: S = S{v: vec![1, 2, 3]};\n\
                             }\n";
 
 // the slice disjunct is discharged: the detach moved off the store, which cannot reach the `vec`
@@ -1086,23 +1053,21 @@ fn s3_24_the_c_and_codegen_uniqueness_predicates_stay_complements() {
     );
 }
 
-const S3_34: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   v[0] += 101\n\
-                     \x20   println(v[0])\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+const S3_34: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   v[0] += 101;\n\
+                     \x20   println!(\"{}\", v[0]);\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
-const S3_35: &str = "fn main() -> i64 {\n\
-                     \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     \x20   let w: Vec<i64> = v\n\
-                     \x20   let r = &mut v\n\
-                     \x20   *r = vec[101, 5, 6]\n\
-                     \x20   println((*r)[0])\n\
-                     \x20   println(w[0])\n\
-                     \x20   return 0\n\
+const S3_35: &str = "fn main() {\n\
+                     \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     \x20   let w: Vec<i64> = v;\n\
+                     \x20   let r = &mut v;\n\
+                     \x20   *r = vec![101, 5, 6];\n\
+                     \x20   println!(\"{}\", (*r)[0]);\n\
+                     \x20   println!(\"{}\", w[0]);\n\
                      }\n";
 
 // the index-compound row. `lower_index_assign` emits its detach immediately before its own
@@ -1228,7 +1193,7 @@ mod asan {
         let mut instrumented_and_run = 0usize;
 
         for (id, src) in ASAN_ROWS {
-            let path = h.write(id, "asan", src);
+            let path = h.write(id, "asan;", src);
             if crate::common::with_outline_str_counts(|| {
                 compile_file_with_llvm_variant(
                     &path,

@@ -38,7 +38,7 @@ fn duplicate_struct_field_names_rejected() {
     assert!(
         should_fail(
             r#"
-struct Foo { x: i64, x: string }
+struct Foo { x: i64, x: String }
 fn test() {}
 "#
         ),
@@ -64,7 +64,7 @@ fn three_duplicate_fields_rejected() {
     assert!(
         should_fail(
             r#"
-struct Bar { a: i64, b: string, a: bool }
+struct Bar { a: i64, b: String, a: bool }
 fn test() {}
 "#
         ),
@@ -79,7 +79,7 @@ fn struct_literal_duplicate_field_rejected() {
             r#"
 struct Foo { x: i64 }
 fn test() {
-    let f = Foo { x: 1, x: 2 }
+    let f = Foo { x: 1, x: 2 };
 }
 "#
         ),
@@ -92,9 +92,9 @@ fn struct_literal_duplicate_field_different_types_rejected() {
     assert!(
         should_fail(
             r#"
-struct Foo { x: i64, y: string }
+struct Foo { x: i64, y: String }
 fn test() {
-    let f = Foo { x: 1, y: "hi", x: 2 }
+    let f = Foo { x: 1, y: "hi", x: 2 };
 }
 "#
         ),
@@ -108,8 +108,8 @@ fn immutable_variable_reassignment_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 5
-    x = 10
+    let x = 5;
+    x = 10;
 }
 "#
         ),
@@ -122,8 +122,8 @@ fn mutable_variable_reassignment_accepted() {
     should_pass(
         r#"
 fn test() {
-    let mut x = 5
-    x = 10
+    let mut x = 5;
+    x = 10;
 }
 "#,
     );
@@ -135,7 +135,7 @@ fn immutable_param_reassignment_rejected() {
         should_fail(
             r#"
 fn test(x: i64) {
-    x = 10
+    x = 10;
 }
 "#
         ),
@@ -148,7 +148,7 @@ fn mutable_param_reassignment_accepted() {
     should_pass(
         r#"
 fn test(mut x: i64) {
-    x = 10
+    x = 10;
 }
 "#,
     );
@@ -159,8 +159,8 @@ fn duplicate_function_definitions_rejected() {
     assert!(
         should_fail(
             r#"
-fn foo() -> i64 { return 1 }
-fn foo() -> string { return "hello" }
+fn foo() -> i64 { 1 }
+fn foo() -> String { "hello" }
 fn test() {}
 "#
         ),
@@ -173,8 +173,8 @@ fn duplicate_function_same_signature_rejected() {
     assert!(
         should_fail(
             r#"
-fn foo() -> i64 { return 1 }
-fn foo() -> i64 { return 2 }
+fn foo() -> i64 { 1 }
+fn foo() -> i64 { 2 }
 fn test() {}
 "#
         ),
@@ -187,7 +187,7 @@ fn duplicate_parameter_names_rejected() {
     assert!(
         should_fail(
             r#"
-fn foo(x: i64, x: string) {}
+fn foo(x: i64, x: String) {}
 fn test() {}
 "#
         ),
@@ -202,8 +202,8 @@ fn error_recovery_doesnt_mask_subsequent_errors() {
         should_fail(
             r#"
 fn test() {
-    let x: i64 = "bad"
-    let y: string = 42
+    let x: i64 = "bad";
+    let y: String = 42;
 }
 "#
         ),
@@ -218,9 +218,9 @@ fn error_recovery_multiple_return_mismatches() {
             r#"
 fn test() -> i64 {
     if true {
-        return "nope"
+        return "nope";
     }
-    return "also nope"
+    "also nope"
 }
 "#
         ),
@@ -233,11 +233,11 @@ fn recursive_function_wrong_return_type() {
     assert!(
         should_fail(
             r#"
-fn fib(n: i64) -> string {
+fn fib(n: i64) -> String {
     if n <= 1 {
-        return n
+        return n;
     }
-    return fib(n - 1) + fib(n - 2)
+    fib(n - 1) + fib(n - 2)
 }
 fn test() {}
 "#
@@ -252,7 +252,7 @@ fn empty_array_with_wrong_type_annotation() {
         should_fail(
             r#"
 fn test() {
-    let x: [i64; 1] = ["hello"]
+    let x: [i64; 1] = ["hello"];
 }
 "#
         ),
@@ -265,9 +265,9 @@ fn array_element_type_mismatch_in_function_call() {
     assert!(
         should_fail(
             r#"
-fn sum(arr: [i64; 2]) -> i64 { return arr[0] }
+fn sum(arr: [i64; 2]) -> i64 { arr[0] }
 fn test() {
-    let x = sum(["hello", "world"])
+    let x = sum(["hello", "world"]);
 }
 "#
         ),
@@ -282,7 +282,7 @@ fn for_loop_variable_not_visible_outside() {
             r#"
 fn test() -> i64 {
     for i in 0..10 {}
-    return i
+    i
 }
 "#
         ),
@@ -297,9 +297,9 @@ fn while_body_variable_not_visible_outside() {
             r#"
 fn test() -> i64 {
     while true {
-        let x = 42
+        let x = 42;
     }
-    return x
+    x
 }
 "#
         ),
@@ -313,7 +313,7 @@ fn if_expr_different_branch_types_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = if true { 42 } else { "hello" }
+    let x = if true { 42 } else { "hello" };
 }
 "#
         ),
@@ -326,9 +326,9 @@ fn too_many_arguments_rejected() {
     assert!(
         should_fail(
             r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn add(a: i64, b: i64) -> i64 { a + b }
 fn test() {
-    let x = add(1, 2, 3)
+    let x = add(1, 2, 3);
 }
 "#
         ),
@@ -341,9 +341,9 @@ fn too_few_arguments_rejected() {
     assert!(
         should_fail(
             r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn add(a: i64, b: i64) -> i64 { a + b }
 fn test() {
-    let x = add(1)
+    let x = add(1);
 }
 "#
         ),
@@ -357,7 +357,7 @@ fn string_minus_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = "hello" - "world"
+    let x = "hello" - "world";
 }
 "#
         ),
@@ -371,7 +371,7 @@ fn bool_arithmetic_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = true + false
+    let x = true + false;
 }
 "#
         ),
@@ -386,9 +386,9 @@ fn struct_arithmetic_rejected() {
             r#"
 struct Foo { x: i64 }
 fn test() {
-    let a = Foo { x: 1 }
-    let b = Foo { x: 2 }
-    let c = a + b
+    let a = Foo { x: 1 };
+    let b = Foo { x: 2 };
+    let c = a + b;
 }
 "#
         ),
@@ -402,7 +402,7 @@ fn comparison_lt_different_types_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 42 < "hello"
+    let x = 42 < "hello";
 }
 "#
         ),
@@ -416,7 +416,7 @@ fn comparison_bool_lt_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = true < false
+    let x = true < false;
 }
 "#
         ),
@@ -430,8 +430,8 @@ fn index_on_bool_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = true
-    let y = x[0]
+    let x = true;
+    let y = x[0];
 }
 "#
         ),
@@ -445,8 +445,8 @@ fn index_on_integer_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 42
-    let y = x[0]
+    let x = 42;
+    let y = x[0];
 }
 "#
         ),
@@ -460,8 +460,8 @@ fn member_access_on_integer_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 42
-    let y = x.foo
+    let x = 42;
+    let y = x.foo;
 }
 "#
         ),
@@ -476,8 +476,8 @@ fn unknown_struct_field_rejected() {
             r#"
 struct Foo { x: i64 }
 fn test() {
-    let f = Foo { x: 1 }
-    let y = f.nonexistent
+    let f = Foo { x: 1 };
+    let y = f.nonexistent;
 }
 "#
         ),
@@ -491,7 +491,7 @@ fn string_to_int_cast_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = "hello" as i64
+    let x = "hello" as i64;
 }
 "#
         ),
@@ -506,8 +506,8 @@ fn struct_to_int_cast_rejected() {
             r#"
 struct Foo { x: i64 }
 fn test() {
-    let f = Foo { x: 1 }
-    let y = f as i64
+    let f = Foo { x: 1 };
+    let y = f as i64;
 }
 "#
         ),
@@ -521,7 +521,7 @@ fn bitwise_on_float_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 1.5 & 2.5
+    let x = 1.5 & 2.5;
 }
 "#
         ),
@@ -535,7 +535,7 @@ fn bitwise_on_string_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = "a" | "b"
+    let x = "a" | "b";
 }
 "#
         ),
@@ -549,7 +549,7 @@ fn logical_and_on_integers_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 1 and 2
+    let x = 1 && 2;
 }
 "#
         ),
@@ -563,7 +563,7 @@ fn logical_or_on_strings_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = "a" or "b"
+    let x = "a" || "b";
 }
 "#
         ),
@@ -576,11 +576,11 @@ fn inner_function_captures_dont_leak() {
     should_pass(
         r#"
 fn outer() -> i64 {
-    let x = 10
+    let x = 10;
     fn inner() -> i64 {
-        return x
+        x
     }
-    return inner()
+    inner()
 }
 fn test() {}
 "#,
@@ -592,9 +592,9 @@ fn shadowing_same_type_passes() {
     should_pass(
         r#"
 fn test() -> i64 {
-    let x = 5
-    let x = 10
-    return x
+    let x = 5;
+    let x = 10;
+    x
 }
 "#,
     );
@@ -604,10 +604,10 @@ fn test() -> i64 {
 fn shadowing_different_type_passes() {
     should_pass(
         r#"
-fn test() -> string {
-    let x: i64 = 5
-    let x: string = "hello"
-    return x
+fn test() -> String {
+    let x: i64 = 5;
+    let x: String = "hello";
+    x
 }
 "#,
     );
@@ -618,11 +618,11 @@ fn nested_block_scoping_passes() {
     should_pass(
         r#"
 fn test() -> i64 {
-    let x = 5
+    let x = 5;
     if true {
-        let y = x + 1
+        let y = x + 1;
     }
-    return x
+    x
 }
 "#,
     );
@@ -634,9 +634,9 @@ fn recursive_function_correct_types() {
         r#"
 fn factorial(n: i64) -> i64 {
     if n <= 1 {
-        return 1
+        return 1;
     }
-    return n * factorial(n - 1)
+    n * factorial(n - 1)
 }
 fn test() {}
 "#,
@@ -649,9 +649,9 @@ fn multiple_returns_same_type() {
         r#"
 fn abs(x: i64) -> i64 {
     if x < 0 {
-        return 0 - x
+        return 0 - x;
     }
-    return x
+    x
 }
 fn test() {}
 "#,

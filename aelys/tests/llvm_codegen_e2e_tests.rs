@@ -141,20 +141,20 @@ fn parse_branch_targets(line: &str) -> Vec<u32> {
 
 #[test]
 fn llvm_returns_integer_constant() {
-    let ir = compile_to_verified_ir("fn constant() -> i64 { return 42 }");
+    let ir = compile_to_verified_ir("fn constant() -> i64 { 42 }");
     assert!(ir.contains("ret i64"));
 }
 
 #[test]
 fn llvm_adds_two_parameters() {
-    let ir = compile_to_verified_ir("fn add(a: i64, b: i64) -> i64 { return a + b }");
+    let ir = compile_to_verified_ir("fn add(a: i64, b: i64) -> i64 { a + b }");
     assert!(ir.contains("add i64"));
     assert!(all_i64_stores_align8(&ir));
 }
 
 #[test]
 fn llvm_generates_conditional_branch() {
-    let ir = compile_to_verified_ir("fn choose(x: i64) -> i64 { if x > 0 { return 1 } return 2 }");
+    let ir = compile_to_verified_ir("fn choose(x: i64) -> i64 { if x > 0 { return 1; } 2 }");
     assert!(ir.contains("br i1"));
 }
 
@@ -163,11 +163,11 @@ fn llvm_generates_while_back_edge() {
     let ir = compile_to_verified_ir(
         r#"
 fn count(n: i64) -> i64 {
-    let mut i: i64 = 0
+    let mut i: i64 = 0;
     while i < n {
-        i = i + 1
+        i = i + 1;
     }
-    return i
+    i
 }
 "#,
     );
@@ -179,7 +179,7 @@ fn llvm_generates_sitofp_for_i32_to_f64() {
     let ir = compile_to_verified_ir(
         r#"
 fn cast_it(x: i32) -> f64 {
-    return x as f64
+    x as f64
 }
 "#,
     );
@@ -192,8 +192,8 @@ fn llvm_generates_gep_for_struct_init_and_access() {
         r#"
 struct Point { x: i64, y: i64 }
 fn read_x() -> i64 {
-    let p = Point { x: 1, y: 2 }
-    return p.x
+    let p = Point { x: 1, y: 2 };
+    p.x
 }
 "#,
     );
@@ -203,7 +203,7 @@ fn read_x() -> i64 {
 #[test]
 fn llvm_generates_function_call() {
     let ir = compile_to_verified_ir(
-        "fn callee(x: i64) -> i64 { return x } fn caller() -> i64 { return callee(7) }",
+        "fn callee(x: i64) -> i64 { x } fn caller() -> i64 { callee(7) }",
     );
     assert!(ir.contains("call"));
     assert!(ir.contains("@callee"));
@@ -211,14 +211,14 @@ fn llvm_generates_function_call() {
 
 #[test]
 fn llvm_emits_global_string_constant() {
-    let ir = compile_to_verified_ir("fn hello() -> string { return \"hello\" }");
+    let ir = compile_to_verified_ir("fn hello() -> String { \"hello\" }");
     assert!(ir.contains("@str_"));
     assert!(ir.contains("hello"));
 }
 
 #[test]
 fn llvm_lowers_println_to_aelys_write_with_slice_abi() {
-    let ir = compile_to_verified_ir("fn greet() { println(\"Hello\") }");
+    let ir = compile_to_verified_ir("fn greet() { println!(\"Hello\"); }");
     assert!(ir.contains("declare void @__aelys_write(ptr, i64)"), "{ir}");
     assert!(!ir.contains("declare i64 @println"), "{ir}");
     assert!(!ir.contains("declare void @println"), "{ir}");
@@ -239,10 +239,10 @@ fn echo_example() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let s = "Hello"
-    println(s)
-    return s.len
+use std::process::ExitCode; fn main() -> ExitCode {
+    let s = "Hello";
+    println!("{}", s);
+    return ExitCode::from(s.len() as u8);
 }
 "#,
     )
@@ -273,9 +273,8 @@ fn internal_nul_preserved() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    println("A\0B")
-    return 0
+fn main() {
+    println!("A\0B");
 }
 "#,
     )
@@ -305,8 +304,8 @@ fn len_on_temporary_literal_expression() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    return "hello".len
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from("hello".len() as u8);
 }
 "#,
     )
@@ -336,12 +335,12 @@ fn len_in_callee_on_string_parameter() {
     fs::write(
         &source_path,
         r#"
-fn sink(s: string) -> i64 {
-    return s.len
+use std::process::ExitCode; fn sink(s: String) -> i64 {
+    s.len()
 }
 
-fn main() -> i64 {
-    return sink("Hello")
+fn main() -> ExitCode {
+    return ExitCode::from(sink("Hello") as u8);
 }
 "#,
     )
@@ -367,22 +366,22 @@ fn main() -> i64 {
 fn llvm_main_fn_value_uses_backend_symbol_mapping() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-enum Holder<T> {
+use std::process::ExitCode; enum Holder<T> {
     Value(T),
     Empty,
 }
 
 fn bounce(h: Holder<fn() -> i64>) -> Holder<fn() -> i64> {
-    return h
+    h
 }
 
-fn main() -> i64 {
-    let h: Holder<fn() -> i64> = Holder::Value(main)
-    let out = bounce(h)
-    return match out {
-        Holder::Value(_) => 42
-        Holder::Empty => 0
-    }
+fn main() -> ExitCode {
+    let h: Holder<fn() -> i64> = Holder::Value(main);
+    let out = bounce(h);
+    return ExitCode::from((match out {
+        Holder::Value(_) => 42,
+        Holder::Empty => 0,
+    }) as u8);
 }
 "#,
     );
@@ -400,8 +399,8 @@ fn llvm_rejects_main_with_parameters_for_native_entry() {
     fs::write(
         &source_path,
         r#"
-fn main(x: i64) -> i64 {
-    return x
+use std::process::ExitCode; fn main(x: i64) -> ExitCode {
+    return ExitCode::from(x as u8);
 }
 "#,
     )
@@ -422,8 +421,8 @@ fn llvm_rejects_main_returning_i32_for_native_entry() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i32 {
-    return 1
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from(1);
 }
 "#,
     )
@@ -446,7 +445,7 @@ fn llvm_preserves_sema_diagnostic_for_return_null_in_i64_function() {
         r#"
 fn foo() -> i64 {
     for i in 0..10 {
-        return null
+        return null;
     }
 }
 "#,
@@ -477,11 +476,11 @@ fn llvm_sema_diagnostic_reports_multiple_errors_separately() {
         &source_path,
         r#"
 fn first() -> i64 {
-    return null
+    null
 }
 
 fn second() -> i64 {
-    return null
+    null
 }
 "#,
     )
@@ -513,8 +512,8 @@ fn llvm_native_entry_maps_negative_i64_main_exit_code_to_u8() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    return -1
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from(255);
 }
 "#,
     )
@@ -545,7 +544,7 @@ fn llvm_native_entry_returns_zero_for_void_main() {
         &source_path,
         r#"
 fn main() -> void {
-    let x: i64 = 1
+    let x: i64 = 1;
 }
 "#,
     )
@@ -581,8 +580,8 @@ enum Boxed<T> {
     Empty,
 }
 
-fn first_from_box(b: Boxed<Pair<i64, string>>) -> i64 {
-    return match b {
+fn first_from_box(b: Boxed<Pair<i64, String>>) -> i64 {
+    match b {
         Boxed::Value(p) => match p {
             Pair::Both(x, _) => x,
             Pair::Neither => -1,
@@ -612,8 +611,8 @@ enum Boxed<T> {
     Empty,
 }
 
-fn get_empty() -> Boxed<Pair<i64, string>> {
-    return Boxed::Empty
+fn get_empty() -> Boxed<Pair<i64, String>> {
+    Boxed::Empty
 }
 "#,
     );
@@ -637,7 +636,7 @@ enum Holder<T> {
 }
 
 fn apply_default() -> Holder<fn(i64) -> i64> {
-    return Holder::Empty
+    Holder::Empty
 }
 "#,
     );
@@ -651,25 +650,25 @@ fn apply_default() -> Holder<fn(i64) -> i64> {
 fn llvm_generic_enum_named_fn_payload_uses_fnptr_mono() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-enum Holder<T> {
+use std::process::ExitCode; enum Holder<T> {
     Value(T),
     Empty,
 }
 
 fn inc(x: i64) -> i64 {
-    return x + 1
+    x + 1
 }
 
 fn call_holder(h: Holder<fn(i64) -> i64>) -> i64 {
-    return match h {
-        Holder::Value(f) => f(41)
-        Holder::Empty => 0
+    match h {
+        Holder::Value(f) => f(41),
+        Holder::Empty => 0,
     }
 }
 
-fn main() -> i64 {
-    let h: Holder<fn(i64) -> i64> = Holder::Value(inc)
-    return call_holder(h)
+fn main() -> ExitCode {
+    let h: Holder<fn(i64) -> i64> = Holder::Value(inc);
+    return ExitCode::from(call_holder(h) as u8);
 }
 "#,
     );
@@ -693,12 +692,12 @@ fn llvm_multi_module_strings_compile_and_run() {
     fs::write(
         &module_path,
         r#"
-pub fn alpha() -> string {
-    return "A"
+pub fn alpha() -> String {
+    "A"
 }
 
-pub fn beta() -> string {
-    return "B"
+pub fn beta() -> String {
+    "B"
 }
 "#,
     )
@@ -707,12 +706,11 @@ pub fn beta() -> string {
     fs::write(
         &source_path,
         r#"
-needs strings
+mod strings;
 
-fn main() -> i64 {
-    println(strings.alpha())
-    println(strings.beta())
-    return 0
+fn main() {
+    println!("{}", strings::alpha());
+    println!("{}", strings::beta());
 }
 "#,
     )
@@ -750,7 +748,7 @@ fn llvm_void_function_without_explicit_return_uses_ret_void() {
     let ir = compile_to_verified_ir(
         r#"
 fn unit_like() -> void {
-    let x: i64 = 1
+    let x: i64 = 1;
 }
 "#,
     );
@@ -763,11 +761,11 @@ fn unit_like() -> void {
 fn llvm_string_iteration_compiles_and_calls_runtime() {
     let ir = compile_to_verified_ir(
         r#"
-fn first(s: string) -> i64 {
+fn first(s: String) -> i64 {
     for c in s {
-        return c as i64
+        return c as i64;
     }
-    return -1
+    -1
 }
 "#,
     );
@@ -796,8 +794,8 @@ fn llvm_string_index_is_refused_before_the_backend() {
     fs::write(
         &source_path,
         r#"
-fn char_at(s: string, i: i64) -> string {
-    return s[i]
+fn char_at(s: String, i: i64) -> String {
+    s[i]
 }
 "#,
     )
@@ -816,8 +814,8 @@ fn llvm_array_literal_index_read_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn second() -> i64 {
-    let arr = [10, 20, 30]
-    return arr[1]
+    let arr = [10, 20, 30];
+    arr[1]
 }
 "#,
     );
@@ -852,9 +850,9 @@ fn llvm_array_index_write_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn mutate() -> i64 {
-    let mut arr = [10, 20, 30]
-    arr[0] = 99
-    return arr[0]
+    let mut arr = [10, 20, 30];
+    arr[0] = 99;
+    arr[0]
 }
 "#,
     );
@@ -876,10 +874,10 @@ fn mutate() -> i64 {
 fn llvm_index_in_function_argument_compiles() {
     let ir = compile_to_verified_ir(
         r#"
-fn identity(x: i64) -> i64 { return x }
+fn identity(x: i64) -> i64 { x }
 fn use_index() -> i64 {
-    let arr = [10, 20, 30]
-    return identity(arr[1])
+    let arr = [10, 20, 30];
+    identity(arr[1])
 }
 "#,
     );
@@ -899,7 +897,7 @@ fn llvm_array_index_with_variable_has_bounds_check() {
     let ir = compile_to_verified_ir(
         r#"
 fn at(arr: [i64; 3], i: i64) -> i64 {
-    return arr[i]
+    arr[i]
 }
 "#,
     );
@@ -920,8 +918,8 @@ fn llvm_array_swap_pattern_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
-    let tmp = arr[i]
-    arr[i] = arr[j]
+    let tmp = arr[i];
+    arr[i] = arr[j];
     arr[j] = tmp
 }
 "#,
@@ -946,11 +944,11 @@ fn swap(mut arr: [i64; 3], i: i64, j: i64) -> void {
 fn llvm_string_literal_iteration_compiles() {
     let ir = compile_to_verified_ir(
         r#"
-fn first_char() -> string {
+fn first_char() -> String {
     for c in "hello" {
-        return string::from_char(c)
+        return c.to_string();
     }
-    return ""
+    ""
 }
 "#,
     );
@@ -973,13 +971,13 @@ fn llvm_loop_with_array_index_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn sum_array(arr: [i64; 10], n: i64) -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        total = total + arr[i]
-        i = i + 1
+        total = total + arr[i];
+        i = i + 1;
     }
-    return total
+    total
 }
 "#,
     );
@@ -999,7 +997,7 @@ fn llvm_void_function_with_assignment_produces_ret_void() {
     let ir = compile_to_verified_ir(
         r#"
 fn set_it(x: i64) -> void {
-    let mut y: i64 = 0
+    let mut y: i64 = 0;
     y = x
 }
 "#,
@@ -1038,7 +1036,7 @@ fn llvm_int_div_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
         r#"
 fn divide(a: i64, b: i64) -> i64 {
-    return a / b
+    a / b
 }
 "#,
     );
@@ -1065,7 +1063,7 @@ fn llvm_int_rem_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
         r#"
 fn modulo(a: i64, b: i64) -> i64 {
-    return a % b
+    a % b
 }
 "#,
     );
@@ -1084,7 +1082,7 @@ fn llvm_unsigned_div_emits_div_zero_check() {
     let ir = compile_to_verified_ir(
         r#"
 fn udivide(a: u64, b: u64) -> u64 {
-    return a / b
+    a / b
 }
 "#,
     );
@@ -1103,7 +1101,7 @@ fn llvm_float_div_has_no_div_zero_check() {
     let ir = compile_to_verified_ir(
         r#"
 fn fdivide(a: f64, b: f64) -> f64 {
-    return a / b
+    a / b
 }
 "#,
     );
@@ -1123,7 +1121,7 @@ fn llvm_div_zero_check_survives_o2() {
     let ir = compile_to_verified_ir_with_opt(
         r#"
 fn divide(a: i64, b: i64) -> i64 {
-    return a / b
+    a / b
 }
 "#,
         OptimizationLevel::Standard,
@@ -1142,10 +1140,10 @@ fn llvm_div_by_zero_runtime_panics() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: i64 = 42
-    let b: i64 = 0
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: i64 = 42;
+    let b: i64 = 0;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
     )
@@ -1183,10 +1181,10 @@ fn llvm_div_by_zero_runtime_panics_at_o2() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: i64 = 42
-    let b: i64 = 0
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: i64 = 42;
+    let b: i64 = 0;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
     )
@@ -1224,10 +1222,10 @@ fn llvm_rem_by_zero_runtime_panics() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: i64 = 42
-    let b: i64 = 0
-    return a % b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: i64 = 42;
+    let b: i64 = 0;
+    return ExitCode::from((a % b) as u8);
 }
 "#,
     )
@@ -1265,10 +1263,10 @@ fn llvm_normal_div_still_works() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: i64 = 100
-    let b: i64 = 4
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: i64 = 100;
+    let b: i64 = 4;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
     )
@@ -1302,13 +1300,13 @@ fn llvm_div_by_zero_in_loop_panics() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let mut sum: i64 = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut sum: i64 = 0;
     for i in 0..3 {
-        let divisor: i64 = 2 - i
-        sum = sum + 10 / divisor
+        let divisor: i64 = 2 - i;
+        sum = sum + 10 / divisor;
     }
-    return sum
+    return ExitCode::from(sum as u8);
 }
 "#,
     )

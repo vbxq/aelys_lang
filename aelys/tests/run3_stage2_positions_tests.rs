@@ -17,7 +17,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O3", OptimizationLevel::Aggressive),
 ];
 
-const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc"))];
+const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc;"))];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Phase {
@@ -71,7 +71,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -253,16 +253,16 @@ fn run_twin(h: &Harness, id: &str, t: &Twin) {
 
 fn required_verdict(class: Class, phase: Phase) -> Option<&'static str> {
     match (class, phase) {
-        (Class::MustBecomeAccepted, Phase::PreNarrowing) => Some("E0727"),
+        (Class::MustBecomeAccepted, Phase::PreNarrowing) => Some("E0727;"),
         (Class::MustBecomeAccepted, Phase::PostNarrowing) => None,
-        (Class::MustStayRejected, _) => Some("E0727"),
+        (Class::MustStayRejected, _) => Some("E0727;"),
         (Class::MustNotMoveAccepted, _) => None,
         (Class::MustNotMoveRejected(code), _) => Some(code),
         (Class::MustStayRejectedBehind(fence), _) => Some(fence),
         (Class::OnlyTheFenceHolds(fence), _) => Some(fence),
-        (Class::AcceptedButInert { .. }, Phase::PreNarrowing) => Some("E0727"),
+        (Class::AcceptedButInert { .. }, Phase::PreNarrowing) => Some("E0727;"),
         (Class::AcceptedButInert { .. }, Phase::PostNarrowing) => None,
-        (Class::AcceptedAndOwed(_), Phase::PreNarrowing) => Some("E0727"),
+        (Class::AcceptedAndOwed(_), Phase::PreNarrowing) => Some("E0727;"),
         (Class::AcceptedAndOwed(_), Phase::PostNarrowing) => None,
     }
 }
@@ -306,17 +306,16 @@ const GROUP_A: &[Row] = &[
         id: "A01",
         position: "Return <- Index.object",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] }\n\
-              fn main() -> i64 {\n\
-              \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-              \x20   return peek(&v)\n\
+        src: "use std::process::ExitCode; nogc fn peek(r: &Vec<i64>) -> i64 { (*r)[0] }\n\
+              fn main() -> ExitCode {\n\
+              \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+              \x20   return ExitCode::from(peek(&v) as u8);\n\
               }\n",
         twin: Some(Twin {
-            src: "fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+            src: "fn peek(r: &Vec<i64>) -> i64 { (*r)[0] }\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -329,15 +328,14 @@ const GROUP_A: &[Row] = &[
         position: "Member.object",
         class: Class::MustBecomeAccepted,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
-              nogc fn peek(s: &S) -> i64 { return (*s).n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(s: &S) -> i64 { (*s).n }\n\
+              fn main() { }\n",
         twin: Some(Twin {
             src: "struct S { r: Rc<i64>, n: i64 }\n\
-                  fn peek(s: &S) -> i64 { return (*s).n }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let s = S{r: Rc::new(11), n: 7919}\n\
-                  \x20   println(peek(&s))\n\
-                  \x20   return 0\n\
+                  fn peek(s: &S) -> i64 { (*s).n }\n\
+                  fn main() {\n\
+                  \x20   let s = S{r: Rc::new(11), n: 7919};\n\
+                  \x20   println!(\"{}\", peek(&s));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -351,16 +349,15 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct I { r: Rc<i64>, n: i64 }\n\
               struct S { i: I, m: i64 }\n\
-              nogc fn peek(s: &S) -> i64 { return (*s).i.n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(s: &S) -> i64 { (*s).i.n }\n\
+              fn main() { }\n",
         twin: Some(Twin {
             src: "struct I { r: Rc<i64>, n: i64 }\n\
                   struct S { i: I, m: i64 }\n\
-                  fn peek(s: &S) -> i64 { return (*s).i.n }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let s = S{i: I{r: Rc::new(11), n: 7919}, m: 3}\n\
-                  \x20   println(peek(&s))\n\
-                  \x20   return 0\n\
+                  fn peek(s: &S) -> i64 { (*s).i.n }\n\
+                  fn main() {\n\
+                  \x20   let s = S{i: I{r: Rc::new(11), n: 7919}, m: 3};\n\
+                  \x20   println!(\"{}\", peek(&s));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -375,21 +372,20 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn poke(d: &mut S) -> i64 {\n\
-              \x20   (*d).n = 5\n\
-              \x20   return 0\n\
+              \x20   (*d).n = 5;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "struct S { r: Rc<i64>, n: i64 }\n\
                   fn poke(d: &mut S) -> i64 {\n\
-                  \x20   (*d).n = 101\n\
-                  \x20   return 0\n\
+                  \x20   (*d).n = 101;\n\
+                  \x20   0\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let mut s = S{r: Rc::new(11), n: 7919}\n\
-                  \x20   let q = poke(&mut s)\n\
-                  \x20   println(s.n)\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let mut s = S{r: Rc::new(11), n: 7919};\n\
+                  \x20   let q = poke(&mut s);\n\
+                  \x20   println!(\"{}\", s.n);\n\
                   }\n",
             stdout: "101\n",
             exit: 0,
@@ -402,19 +398,18 @@ const GROUP_A: &[Row] = &[
         position: "Let.initializer",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let x: i64 = (*r)[0]\n\
-              \x20   return x\n\
+              \x20   let x: i64 = (*r)[0];\n\
+              \x20   x\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn peek(r: &Vec<i64>) -> i64 {\n\
-                  \x20   let x: i64 = (*r)[0]\n\
-                  \x20   return x\n\
+                  \x20   let x: i64 = (*r)[0];\n\
+                  \x20   x\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -426,14 +421,13 @@ const GROUP_A: &[Row] = &[
         id: "A06",
         position: "Grouping.inner",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return ((*r))[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 { ((*r))[0] }\n\
+              fn main() { }\n",
         twin: Some(Twin {
-            src: "fn peek(r: &Vec<i64>) -> i64 { return ((*r))[0] }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+            src: "fn peek(r: &Vec<i64>) -> i64 { ((*r))[0] }\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -445,14 +439,13 @@ const GROUP_A: &[Row] = &[
         id: "A07",
         position: "Cast.expr",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] as i64 }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 { (*r)[0] as i64 }\n\
+              fn main() { }\n",
         twin: Some(Twin {
-            src: "fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] as i64 }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+            src: "fn peek(r: &Vec<i64>) -> i64 { (*r)[0] as i64 }\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -465,19 +458,18 @@ const GROUP_A: &[Row] = &[
         position: "Slice.object",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let s: &[i64] = (*r)[0..2]\n\
-              \x20   return s[0]\n\
+              \x20   let s: &[i64] = (*r)[0..2];\n\
+              \x20   s[0]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn peek(r: &Vec<i64>) -> i64 {\n\
-                  \x20   let s: &[i64] = (*r)[0..2]\n\
-                  \x20   return s[0]\n\
+                  \x20   let s: &[i64] = (*r)[0..2];\n\
+                  \x20   s[0]\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -489,25 +481,25 @@ const GROUP_A: &[Row] = &[
         id: "A09",
         position: "Call.args, unmanaged projection",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn g(n: i64) -> i64 { return n }\n\
-              nogc fn peek(r: &Vec<i64>) -> i64 { return g((*r)[0]) }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn g(n: i64) -> i64 { n }\n\
+              nogc fn peek(r: &Vec<i64>) -> i64 { g((*r)[0]) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "A10",
         position: "Binary.left",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return (*r)[0] + 1 }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 { (*r)[0] + 1 }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "A11",
         position: "Unary.operand",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return -(*r)[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 { -(*r)[0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -515,10 +507,10 @@ const GROUP_A: &[Row] = &[
         position: "If(stmt).condition",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   if (*r)[0] > 0 { return 1 }\n\
-              \x20   return 0\n\
+              \x20   if (*r)[0] > 0 { return 1; }\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -526,10 +518,10 @@ const GROUP_A: &[Row] = &[
         position: "While.condition",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   while (*r)[0] > 0 { return 1 }\n\
-              \x20   return 0\n\
+              \x20   while (*r)[0] > 0 { return 1; }\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -537,11 +529,11 @@ const GROUP_A: &[Row] = &[
         position: "For.end",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let mut t: i64 = 0\n\
-              \x20   for i in 0..(*r)[0] { t = t + 1 }\n\
-              \x20   return t\n\
+              \x20   let mut t: i64 = 0;\n\
+              \x20   for i in 0..(*r)[0] { t = t + 1; }\n\
+              \x20   t\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -549,19 +541,19 @@ const GROUP_A: &[Row] = &[
         position: "Range.start and Range.end",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let mut t: i64 = 0\n\
-              \x20   for i in (*r)[0]..(*r)[1] { t = t + 1 }\n\
-              \x20   return t\n\
+              \x20   let mut t: i64 = 0;\n\
+              \x20   for i in (*r)[0]..(*r)[1] { t = t + 1; }\n\
+              \x20   t\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "A16",
         position: "Index.index",
         class: Class::MustBecomeAccepted,
-        src: "nogc fn peek(r: &Vec<i64>, w: &Vec<i64>) -> i64 { return (*w)[(*r)[0]] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>, w: &Vec<i64>) -> i64 { (*w)[(*r)[0]] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -570,10 +562,10 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn poke(d: &mut S, s: &S) -> i64 {\n\
-              \x20   (*d).n = (*s).n\n\
-              \x20   return 0\n\
+              \x20   (*d).n = (*s).n;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -581,10 +573,10 @@ const GROUP_A: &[Row] = &[
         position: "Expression(stmt)",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   (*r)[0]\n\
-              \x20   return 0\n\
+              \x20   (*r)[0];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -592,10 +584,10 @@ const GROUP_A: &[Row] = &[
         position: "Block.tail",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let x: i64 = { (*r)[0] }\n\
-              \x20   return x\n\
+              \x20   let x: i64 = { (*r)[0] };\n\
+              \x20   x\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -603,10 +595,10 @@ const GROUP_A: &[Row] = &[
         position: "And.left and And.right",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   if (*r)[0] > 0 && (*r)[1] > 0 { return 1 }\n\
-              \x20   return 0\n\
+              \x20   if (*r)[0] > 0 && (*r)[1] > 0 { return 1; }\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -614,19 +606,18 @@ const GROUP_A: &[Row] = &[
         position: "Reference.operand, interior",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let p: &i64 = &(*r)[0]\n\
-              \x20   return *p\n\
+              \x20   let p: &i64 = &(*r)[0];\n\
+              \x20   *p\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn peek(r: &Vec<i64>) -> i64 {\n\
-                  \x20   let p: &i64 = &(*r)[0]\n\
-                  \x20   return *p\n\
+                  \x20   let p: &i64 = &(*r)[0];\n\
+                  \x20   *p\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -639,19 +630,18 @@ const GROUP_A: &[Row] = &[
         position: "Reference.operand, whole",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let p: &Vec<i64> = &(*r)\n\
-              \x20   return (*p)[0]\n\
+              \x20   let p: &Vec<i64> = &(*r);\n\
+              \x20   (*p)[0]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn peek(r: &Vec<i64>) -> i64 {\n\
-                  \x20   let p: &Vec<i64> = &(*r)\n\
-                  \x20   return (*p)[0]\n\
+                  \x20   let p: &Vec<i64> = &(*r);\n\
+                  \x20   (*p)[0]\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -664,15 +654,14 @@ const GROUP_A: &[Row] = &[
         position: "Member.object over Index over Deref",
         class: Class::MustBecomeAccepted,
         src: "struct S { n: i64 }\n\
-              nogc fn peek(r: &Vec<S>) -> i64 { return (*r)[0].n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(r: &Vec<S>) -> i64 { (*r)[0].n }\n\
+              fn main() { }\n",
         twin: Some(Twin {
             src: "struct S { n: i64 }\n\
-                  fn peek(r: &Vec<S>) -> i64 { return (*r)[0].n }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-                  \x20   println(peek(&v))\n\
-                  \x20   return 0\n\
+                  fn peek(r: &Vec<S>) -> i64 { (*r)[0].n }\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+                  \x20   println!(\"{}\", peek(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -686,10 +675,10 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct S { n: i64 }\n\
               nogc fn peek(r: &Vec<S>) -> i64 {\n\
-              \x20   let p: &i64 = &(*r)[0].n\n\
-              \x20   return *p\n\
+              \x20   let p: &i64 = &(*r)[0].n;\n\
+              \x20   *p\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -698,10 +687,10 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct S { n: i64 }\n\
               nogc fn peek(r: &Vec<S>) -> i64 {\n\
-              \x20   let s: &[S] = (*r)[0..2]\n\
-              \x20   return 0\n\
+              \x20   let s: &[S] = (*r)[0..2];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -709,10 +698,10 @@ const GROUP_A: &[Row] = &[
         position: "If(expr).condition",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let x: i64 = if (*r)[0] > 0 { 1 } else { 2 }\n\
-              \x20   return x\n\
+              \x20   let x: i64 = if (*r)[0] > 0 { 1 } else { 2 };\n\
+              \x20   x\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -720,11 +709,11 @@ const GROUP_A: &[Row] = &[
         position: "Block.stmts, a non-tail statement",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let x: i64 = { let y: i64 = (*r)[0]\n\
-              \x20   y }\n\
-              \x20   return x\n\
+              \x20   let x: i64 = { let y: i64 = (*r)[0];\n\
+              \x20   y };\n\
+              \x20   x\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -732,11 +721,11 @@ const GROUP_A: &[Row] = &[
         position: "For.step",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let mut t: i64 = 0\n\
-              \x20   for i in 0..4 step (*r)[0] { t = t + 1 }\n\
-              \x20   return t\n\
+              \x20   let mut t: i64 = 0;\n\
+              \x20   for i in (0..4).step_by((*r)[0]) { t = t + 1; }\n\
+              \x20   t\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -744,10 +733,10 @@ const GROUP_A: &[Row] = &[
         position: "Or.left and Or.right",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   if (*r)[0] > 0 || (*r)[1] > 0 { return 1 }\n\
-              \x20   return 0\n\
+              \x20   if (*r)[0] > 0 || (*r)[1] > 0 { return 1; }\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // no caller exists or can exist, so the acceptance has never been executed and cannot be
@@ -759,8 +748,8 @@ const GROUP_A: &[Row] = &[
             callers: CALLERS_VEC_OF_MANAGED_STRUCT,
         },
         src: "struct S { r: Rc<i64>, n: i64 }\n\
-              nogc fn peek(s: &[S]) -> i64 { return s[0].n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(s: &[S]) -> i64 { s[0].n }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -769,10 +758,10 @@ const GROUP_A: &[Row] = &[
         class: Class::MustBecomeAccepted,
         src: "struct S { n: i64 }\n\
               nogc fn peek(r: &Vec<S>) -> i64 {\n\
-              \x20   let s: &[S] = (*r)[0..2]\n\
-              \x20   return s[0].n\n\
+              \x20   let s: &[S] = (*r)[0..2];\n\
+              \x20   s[0].n\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -783,8 +772,8 @@ const GROUP_A: &[Row] = &[
             callers: CALLERS_VEC_OF_MANAGED_STRUCT,
         },
         src: "struct S { r: Rc<i64>, n: i64 }\n\
-              nogc fn peek(v: &Vec<S>) -> i64 { return (*v)[0].n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(v: &Vec<S>) -> i64 { (*v)[0].n }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -796,10 +785,10 @@ const GROUP_A: &[Row] = &[
         },
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn peek(v: &Vec<S>) -> i64 {\n\
-              \x20   let s: &[S] = (*v)[0..2]\n\
-              \x20   return s[0].n\n\
+              \x20   let s: &[S] = (*v)[0..2];\n\
+              \x20   s[0].n\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -810,10 +799,10 @@ const GROUP_A: &[Row] = &[
             callers: CALLERS_VEC_OF_VEC,
         },
         src: "nogc fn peek(r: &Vec<Vec<i64>>) -> i64 {\n\
-              \x20   let s: &[Vec<i64>] = (*r)[0..2]\n\
-              \x20   return s[0][1]\n\
+              \x20   let s: &[Vec<i64>] = (*r)[0..2];\n\
+              \x20   s[0][1]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -821,44 +810,42 @@ const GROUP_A: &[Row] = &[
         position: "ArraySized.fill_value, a scalar copied out of a reference",
         class: Class::MustBecomeAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let a: [i64; 3] = [(*r)[0]; 3]\n\
-              \x20   return a[0]\n\
+              \x20   let a: [i64; 3] = [(*r)[0]; 3];\n\
+              \x20   a[0]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
 ];
 
 const CALLERS_VEC_OF_MANAGED_STRUCT: &[&str] = &[
-    "struct S { r: Rc<i64>, n: i64 }\n\
-     fn main() -> i64 {\n\
-     \x20   let v: Vec<S> = vec[S{r: Rc::new(11), n: 7919}]\n\
-     \x20   return v[0].n\n\
+    "use std::process::ExitCode; struct S { r: Rc<i64>, n: i64 }\n\
+     fn main() -> ExitCode {\n\
+     \x20   let v: Vec<S> = vec![S{r: Rc::new(11), n: 7919}];\n\
+     \x20   return ExitCode::from(v[0].n as u8);\n\
      }\n",
-    "struct S { r: Rc<i64>, n: i64 }\n\
-     fn main() -> i64 {\n\
-     \x20   let a: [S; 1] = [S{r: Rc::new(11), n: 7919}]\n\
-     \x20   return a[0].n\n\
+    "use std::process::ExitCode; struct S { r: Rc<i64>, n: i64 }\n\
+     fn main() -> ExitCode {\n\
+     \x20   let a: [S; 1] = [S{r: Rc::new(11), n: 7919}];\n\
+     \x20   return ExitCode::from(a[0].n as u8);\n\
      }\n",
 ];
 
 const CALLERS_VEC_OF_VEC: &[&str] = &[
-    "fn main() -> i64 {\n\
-     \x20   let v: Vec<Vec<i64>> = vec[vec[7919, 2], vec[3, 4]]\n\
-     \x20   return v[0][0]\n\
+    "use std::process::ExitCode; fn main() -> ExitCode {\n\
+     \x20   let v: Vec<Vec<i64>> = vec![vec![7919, 2], vec![3, 4]];\n\
+     \x20   return ExitCode::from(v[0][0] as u8);\n\
      }\n",
-    "fn main() -> i64 {\n\
-     \x20   let mut v: Vec<Vec<i64>> = Vec::new()\n\
-     \x20   return 0\n\
+    "fn main() {\n\
+     \x20   let mut v: Vec<Vec<i64>> = Vec::new();\n\
      }\n",
 ];
 
 const CONTROL_PLAIN_ELEMENT: (&str, &str, i64, i64) = (
     "struct S { n: i64 }\n\
-     fn main() -> i64 {\n\
-     \x20   let v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-     \x20   println(v[0].n)\n\
-     \x20   return 0\n\
+     fn main() {\n\
+     \x20   let v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+     \x20   println!(\"{}\", v[0].n);\n\
      }\n",
     "7919\n",
     1,
@@ -872,22 +859,21 @@ const GROUP_B: &[Row] = &[
         position: "IndexAssign.object, cow detach",
         class: Class::MustStayRejected,
         src: "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   (*r)[0] = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0] = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                  \x20   (*r)[0] = 101\n\
-                  \x20   return 0\n\
+                  \x20   (*r)[0] = 101;\n\
+                  \x20   0\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   let w: Vec<i64> = v\n\
-                  \x20   let q = poke(&mut v)\n\
-                  \x20   println(v[0])\n\
-                  \x20   println(w[0])\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   let w: Vec<i64> = v;\n\
+                  \x20   let q = poke(&mut v);\n\
+                  \x20   println!(\"{}\", v[0]);\n\
+                  \x20   println!(\"{}\", w[0]);\n\
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
@@ -900,23 +886,22 @@ const GROUP_B: &[Row] = &[
         position: "IndexAssign.object with a projected value",
         class: Class::MustStayRejected,
         src: "nogc fn poke(r: &Vec<i64>, w: &mut Vec<i64>) -> i64 {\n\
-              \x20   (*w)[0] = (*r)[0]\n\
-              \x20   return 0\n\
+              \x20   (*w)[0] = (*r)[0];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: Some(Twin {
             src: "fn poke(r: &Vec<i64>, w: &mut Vec<i64>) -> i64 {\n\
-                  \x20   (*w)[0] = (*r)[0]\n\
-                  \x20   return 0\n\
+                  \x20   (*w)[0] = (*r)[0];\n\
+                  \x20   0\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   let mut u: Vec<i64> = vec[1, 2, 3]\n\
-                  \x20   let t: Vec<i64> = u\n\
-                  \x20   let q = poke(&v, &mut u)\n\
-                  \x20   println(u[0])\n\
-                  \x20   println(t[0])\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   let mut u: Vec<i64> = vec![1, 2, 3];\n\
+                  \x20   let t: Vec<i64> = u;\n\
+                  \x20   let q = poke(&v, &mut u);\n\
+                  \x20   println!(\"{}\", u[0]);\n\
+                  \x20   println!(\"{}\", t[0]);\n\
                   }\n",
             stdout: "7919\n1\n",
             exit: 0,
@@ -929,10 +914,10 @@ const GROUP_B: &[Row] = &[
         position: "DerefAssign.value, Rc to Rc",
         class: Class::MustStayRejected,
         src: "nogc fn xfer(d: &mut Rc<i64>, s: &Rc<i64>) -> i64 {\n\
-              \x20   *d = *s\n\
-              \x20   return 0\n\
+              \x20   *d = *s;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -941,18 +926,18 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn xfer(d: &mut S, s: &S) -> i64 {\n\
-              \x20   *d = *s\n\
-              \x20   return 0\n\
+              \x20   *d = *s;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B05",
         position: "Return of an owned managed value",
         class: Class::MustStayRejected,
-        src: "nogc fn take(x: &Rc<i64>) -> Rc<i64> { return *x }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn take(x: &Rc<i64>) -> Rc<i64> { *x }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -960,27 +945,27 @@ const GROUP_B: &[Row] = &[
         position: "If(expr) arms yielding managed",
         class: Class::MustStayRejected,
         src: "nogc fn pick(d: &mut Rc<i64>, a: &Rc<i64>, b: &Rc<i64>, c: bool) -> i64 {\n\
-              \x20   *d = if c { *a } else { *b }\n\
-              \x20   return 0\n\
+              \x20   *d = if c { *a } else { *b };\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B07",
         position: "Call.args, managed by value",
         class: Class::MustStayRejected,
-        src: "nogc fn g(v: Vec<i64>) -> i64 { return 0 }\n\
-              nogc fn f(r: &Vec<i64>) -> i64 { return g(*r) }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn g(v: Vec<i64>) -> i64 { 0 }\n\
+              nogc fn f(r: &Vec<i64>) -> i64 { g(*r) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B08",
         position: "parameter, managed by value",
         class: Class::MustStayRejected,
-        src: "nogc fn f(v: Vec<i64>) -> i64 { return 0 }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn f(v: Vec<i64>) -> i64 { 0 }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -988,10 +973,10 @@ const GROUP_B: &[Row] = &[
         position: "Let of a managed local",
         class: Class::MustStayRejected,
         src: "nogc fn f() -> i64 {\n\
-              \x20   let v: Vec<i64> = vec[1, 2]\n\
-              \x20   return v[0]\n\
+              \x20   let v: Vec<i64> = vec![1, 2];\n\
+              \x20   v[0]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -999,10 +984,10 @@ const GROUP_B: &[Row] = &[
         position: "EnumVariant, Rc::new",
         class: Class::MustStayRejected,
         src: "nogc fn f() -> i64 {\n\
-              \x20   let a: Rc<i64> = Rc::new(7)\n\
-              \x20   return Rc::get(a)\n\
+              \x20   let a: Rc<i64> = Rc::new(7);\n\
+              \x20   Rc::get(a)\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1010,18 +995,18 @@ const GROUP_B: &[Row] = &[
         position: "EnumVariant, Vec::push",
         class: Class::MustStayRejected,
         src: "nogc fn f(v: Vec<i64>) -> i64 {\n\
-              \x20   Vec::push(v, 9)\n\
-              \x20   return 0\n\
+              \x20   Vec::push(v, 9);\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B12",
         position: "indirect call through a general fn pointer",
         class: Class::MustStayRejected,
-        src: "nogc fn f(g: fn(i64) -> i64) -> i64 { return g(1) }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn f(g: fn(i64) -> i64) -> i64 { g(1) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1029,10 +1014,10 @@ const GROUP_B: &[Row] = &[
         position: "FmtString",
         class: Class::MustStayRejected,
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   println(\"{(*r)[0]}\")\n\
-              \x20   return 0\n\
+              \x20   println!(\"{}\", (*r)[0]);\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // the lambda body is never walked, so this rejection comes from the indirect call and not
@@ -1041,13 +1026,13 @@ const GROUP_B: &[Row] = &[
         position: "call of a locally bound lambda",
         class: Class::MustStayRejected,
         src: "nogc fn f() -> i64 {\n\
-              \x20   let g = fn() -> i64 {\n\
-              \x20       let v: Vec<i64> = vec[1, 2]\n\
-              \x20       return v[0]\n\
-              \x20   }\n\
-              \x20   return g()\n\
+              \x20   let g = move || -> i64 {\n\
+              \x20       let v: Vec<i64> = vec![1, 2];\n\
+              \x20       v[0]\n\
+              \x20   };\n\
+              \x20   g()\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1056,12 +1041,12 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "nogc fn f() -> i64 {\n\
               \x20   fn inner() -> i64 {\n\
-              \x20       let v: Vec<i64> = vec[1, 2]\n\
-              \x20       return v[0]\n\
+              \x20       let v: Vec<i64> = vec![1, 2];\n\
+              \x20       v[0]\n\
               \x20   }\n\
-              \x20   return inner()\n\
+              \x20   inner()\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1069,11 +1054,11 @@ const GROUP_B: &[Row] = &[
         position: "callee summary propagation, sibling fn",
         class: Class::MustStayRejected,
         src: "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   (*r)[0] = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0] = 101;\n\
+              \x20   0\n\
               }\n\
-              nogc fn f(r: &mut Vec<i64>) -> i64 { return poke(r) }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn f(r: &mut Vec<i64>) -> i64 { poke(r) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1082,9 +1067,9 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { r: Rc<i64> }\n\
               nogc fn take(s: &S) -> Rc<i64> {\n\
-              \x20   return (*s).r\n\
+              \x20   (*s).r\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1093,10 +1078,10 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { r: Rc<i64> }\n\
               nogc fn dump(s: &S) -> i64 {\n\
-              \x20   (*s).r\n\
-              \x20   return 0\n\
+              \x20   (*s).r;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1105,10 +1090,10 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { r: Rc<i64> }\n\
               nogc fn f(s: &S) -> i64 {\n\
-              \x20   let q: Rc<i64> = (*s).r\n\
-              \x20   return 0\n\
+              \x20   let q: Rc<i64> = (*s).r;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // derived from a04's shape puts this row in group a and is wrong. the store does not detach
@@ -1118,10 +1103,10 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { n: i64 }\n\
               nogc fn poke(r: &mut Vec<S>) -> i64 {\n\
-              \x20   (*r)[0].n = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0].n = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1129,10 +1114,10 @@ const GROUP_B: &[Row] = &[
         position: "IndexAssign.index projected, target is a Vec",
         class: Class::MustStayRejected,
         src: "nogc fn poke(r: &mut Vec<i64>, w: &Vec<i64>) -> i64 {\n\
-              \x20   (*r)[(*w)[0]] = 1\n\
-              \x20   return 0\n\
+              \x20   (*r)[(*w)[0]] = 1;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // reachable through .unwrap(), .expect(), .into_ok() and .unwrap_unchecked(), never through
@@ -1142,16 +1127,16 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "enum Result<T, E> { Ok(T), Err(E) }\n\
               enum E { X }\n\
-              nogc fn take(r: &Result<Vec<i64>, E>) -> i64 { return (*r).unwrap()[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn take(r: &Result<Vec<i64>, E>) -> i64 { (*r).unwrap()[0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B23",
         position: "Binary with a String operand",
         class: Class::MustStayRejected,
-        src: "nogc fn f(a: string, b: string) -> string { return a + b }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn f(a: String, b: String) -> String { a + b }\n\
+              fn main() { }\n",
         twin: None,
     },
     // projection chain: index cannot repeat through a vec of vecs because stands behind it
@@ -1159,8 +1144,8 @@ const GROUP_B: &[Row] = &[
         id: "B24",
         position: "Index.object over a Vec of Vecs",
         class: Class::MustStayRejected,
-        src: "nogc fn f(r: &Vec<Vec<i64>>) -> i64 { return (*r)[0][0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn f(r: &Vec<Vec<i64>>) -> i64 { (*r)[0][0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1169,10 +1154,10 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { a: [i64; 2] }\n\
               nogc fn f(r: &mut Vec<S>) -> i64 {\n\
-              \x20   (*r)[0].a[1] = 5\n\
-              \x20   return 0\n\
+              \x20   (*r)[0].a[1] = 5;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // b26 and b27 were the store-side re-rooting escape: the chain the store clause reads is
@@ -1181,11 +1166,11 @@ const GROUP_B: &[Row] = &[
         position: "IndexAssign through a local slice of a Vec",
         class: Class::MustStayRejected,
         src: "nogc fn f(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let s: &mut [i64] = (*r)[0..2]\n\
-              \x20   s[0] = 1\n\
-              \x20   return 0\n\
+              \x20   let s: &mut [i64] = (*r)[0..2];\n\
+              \x20   s[0] = 1;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1194,11 +1179,11 @@ const GROUP_B: &[Row] = &[
         class: Class::MustStayRejected,
         src: "struct S { n: i64 }\n\
               nogc fn f(r: &mut Vec<S>) -> i64 {\n\
-              \x20   let s: &mut [S] = (*r)[0..2]\n\
-              \x20   s[0].n = 1\n\
-              \x20   return 0\n\
+              \x20   let s: &mut [S] = (*r)[0..2];\n\
+              \x20   s[0].n = 1;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1206,8 +1191,8 @@ const GROUP_B: &[Row] = &[
         position: "Member.object over a borrowed Rc of a non-scalar",
         class: Class::MustNotMoveRejected("E0410"),
         src: "struct S { n: i64 }\n\
-              nogc fn f(x: &Rc<S>) -> i64 { return (*x).n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn f(x: &Rc<S>) -> i64 { (*x).n }\n\
+              fn main() { }\n",
         twin: None,
     },
     // a reference's mutability, so `&t` reaching a `&mut t` position is . the eight rows stay
@@ -1216,11 +1201,11 @@ const GROUP_B: &[Row] = &[
         position: "Reference into a Vec element, mutable by let annotation",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let p: &mut i64 = &(*r)[0]\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = &(*r)[0];\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1228,24 +1213,24 @@ const GROUP_B: &[Row] = &[
         position: "the same, mutable by a call argument",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn w(p: &mut i64) -> i64 {\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              nogc fn poke(r: &mut Vec<i64>) -> i64 { return w(&(*r)[0]) }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn poke(r: &mut Vec<i64>) -> i64 { w(&(*r)[0]) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "B31",
         position: "the same, mutable by a return type",
         class: Class::MustNotMoveRejected("E0416"),
-        src: "nogc fn g(r: &mut Vec<i64>) -> &mut i64 { return &(*r)[0] }\n\
+        src: "nogc fn g(r: &mut Vec<i64>) -> &mut i64 { &(*r)[0] }\n\
               nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let p: &mut i64 = g(r)\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = g(r);\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1253,12 +1238,12 @@ const GROUP_B: &[Row] = &[
         position: "the same, mutable by assignment to an existing &mut",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn poke(r: &mut Vec<i64>, q: &mut i64) -> i64 {\n\
-              \x20   let mut p: &mut i64 = q\n\
-              \x20   p = &(*r)[0]\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let mut p: &mut i64 = q;\n\
+              \x20   p = &(*r)[0];\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1266,11 +1251,11 @@ const GROUP_B: &[Row] = &[
         position: "the same, mutable through if-expression arms",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn poke(r: &mut Vec<i64>, c: bool) -> i64 {\n\
-              \x20   let p: &mut i64 = if c { &(*r)[0] } else { &(*r)[1] }\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = if c { &(*r)[0] } else { &(*r)[1] };\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1278,11 +1263,11 @@ const GROUP_B: &[Row] = &[
         position: "the same, mutable through a block tail",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let p: &mut i64 = { &(*r)[0] }\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = { &(*r)[0] };\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1291,11 +1276,11 @@ const GROUP_B: &[Row] = &[
         class: Class::MustNotMoveRejected("E0416"),
         src: "struct S { n: i64 }\n\
               nogc fn poke(r: &mut Vec<S>) -> i64 {\n\
-              \x20   let p: &mut i64 = &(*r)[0].n\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = &(*r)[0].n;\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1303,12 +1288,12 @@ const GROUP_B: &[Row] = &[
         position: "the same, through a slice bound to a local",
         class: Class::MustNotMoveRejected("E0416"),
         src: "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let s: &mut [i64] = (*r)[0..2]\n\
-              \x20   let p: &mut i64 = &s[0]\n\
-              \x20   *p = 101\n\
-              \x20   return 0\n\
+              \x20   let s: &mut [i64] = (*r)[0..2];\n\
+              \x20   let p: &mut i64 = &s[0];\n\
+              \x20   *p = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
 ];
@@ -1319,8 +1304,8 @@ const GROUP_C: &[Row] = &[
         position: "Member.object, plain struct",
         class: Class::MustNotMoveAccepted,
         src: "struct P { n: i64 }\n\
-              nogc fn peek(s: &P) -> i64 { return (*s).n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(s: &P) -> i64 { (*s).n }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1329,58 +1314,56 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveAccepted,
         src: "struct P { n: i64 }\n\
               nogc fn poke(d: &mut P) -> i64 {\n\
-              \x20   (*d).n = 5\n\
-              \x20   return 0\n\
+              \x20   (*d).n = 5;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C03",
         position: "Index.object, slice parameter",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn peek(s: &[i64]) -> i64 { return s[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(s: &[i64]) -> i64 { s[0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C04",
         position: "Call.args, managed by reference",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn g(r: &Vec<i64>) -> i64 { return 0 }\n\
-              nogc fn f(r: &Vec<i64>) -> i64 { return g(r) }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn g(r: &Vec<i64>) -> i64 { 0 }\n\
+              nogc fn f(r: &Vec<i64>) -> i64 { g(r) }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C05",
         position: "Call.args, nogc fn pointer",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn ok() -> i64 { return 7 }\n\
-              nogc fn apply(g: nogc fn() -> i64) -> i64 { return g() }\n\
-              fn main() -> i64 { return apply(ok) }\n",
+        src: "use std::process::ExitCode; nogc fn ok() -> i64 { 7 }\n\
+              nogc fn apply(g: nogc fn() -> i64) -> i64 { g() }\n\
+              fn main() -> ExitCode { return ExitCode::from(apply(ok) as u8); }\n",
         twin: None,
     },
     Row {
         id: "C06",
         position: "A8 W-read",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn peek(r: &i64) -> i64 { return *r }\n\
-              fn main() -> i64 {\n\
-              \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-              \x20   let w: Vec<i64> = v\n\
-              \x20   println(peek(&v[0]))\n\
-              \x20   println(peek(&w[0]))\n\
-              \x20   return 0\n\
+        src: "nogc fn peek(r: &i64) -> i64 { *r }\n\
+              fn main() {\n\
+              \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+              \x20   let w: Vec<i64> = v;\n\
+              \x20   println!(\"{}\", peek(&v[0]));\n\
+              \x20   println!(\"{}\", peek(&w[0]));\n\
               }\n",
         twin: Some(Twin {
-            src: "nogc fn peek(r: &i64) -> i64 { return *r }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   let w: Vec<i64> = v\n\
-                  \x20   println(peek(&v[0]))\n\
-                  \x20   println(peek(&w[0]))\n\
-                  \x20   return 0\n\
+            src: "nogc fn peek(r: &i64) -> i64 { *r }\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   let w: Vec<i64> = v;\n\
+                  \x20   println!(\"{}\", peek(&v[0]));\n\
+                  \x20   println!(\"{}\", peek(&w[0]));\n\
                   }\n",
             stdout: "7919\n7919\n",
             exit: 0,
@@ -1393,29 +1376,27 @@ const GROUP_C: &[Row] = &[
         position: "A8 W-transfer",
         class: Class::MustNotMoveAccepted,
         src: "fn poke(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   (*r)[0] = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0] = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-              \x20   let w: Vec<i64> = v\n\
-              \x20   let q = poke(&mut v)\n\
-              \x20   println(v[0])\n\
-              \x20   println(w[0])\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+              \x20   let w: Vec<i64> = v;\n\
+              \x20   let q = poke(&mut v);\n\
+              \x20   println!(\"{}\", v[0]);\n\
+              \x20   println!(\"{}\", w[0]);\n\
               }\n",
         twin: Some(Twin {
             src: "fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                  \x20   (*r)[0] = 101\n\
-                  \x20   return 0\n\
+                  \x20   (*r)[0] = 101;\n\
+                  \x20   0\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   let w: Vec<i64> = v\n\
-                  \x20   let q = poke(&mut v)\n\
-                  \x20   println(v[0])\n\
-                  \x20   println(w[0])\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   let w: Vec<i64> = v;\n\
+                  \x20   let q = poke(&mut v);\n\
+                  \x20   println!(\"{}\", v[0]);\n\
+                  \x20   println!(\"{}\", w[0]);\n\
                   }\n",
             stdout: "101\n7919\n",
             exit: 0,
@@ -1428,33 +1409,33 @@ const GROUP_C: &[Row] = &[
         id: "C08",
         position: "LambdaInner.body, uncalled",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn f() -> i64 {\n\
-              \x20   let g = fn() -> i64 {\n\
-              \x20       let v: Vec<i64> = vec[1, 2]\n\
-              \x20       return v[0]\n\
-              \x20   }\n\
-              \x20   return 0\n\
+        src: "use std::process::ExitCode; nogc fn f() -> i64 {\n\
+              \x20   let g = move || -> i64 {\n\
+              \x20       let v: Vec<i64> = vec![1, 2];\n\
+              \x20       v[0]\n\
+              \x20   };\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return f() }\n",
+              fn main() -> ExitCode { return ExitCode::from(f() as u8); }\n",
         twin: None,
     },
     Row {
         id: "C09",
         position: "LambdaInner.params, uncalled",
         class: Class::MustNotMoveAccepted,
-        src: "nogc fn f() -> i64 {\n\
-              \x20   let g = fn(v: Vec<i64>) -> i64 { return 0 }\n\
-              \x20   return 0\n\
+        src: "use std::process::ExitCode; nogc fn f() -> i64 {\n\
+              \x20   let g = move |v: Vec<i64>| -> i64 { 0 };\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return f() }\n",
+              fn main() -> ExitCode { return ExitCode::from(f() as u8); }\n",
         twin: None,
     },
     Row {
         id: "C10",
         position: "Index.object without a deref",
         class: Class::MustNotMoveRejected("E0304"),
-        src: "nogc fn peek(r: &Vec<i64>) -> i64 { return r[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(r: &Vec<i64>) -> i64 { r[0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1462,16 +1443,16 @@ const GROUP_C: &[Row] = &[
         position: "Member.object without a deref",
         class: Class::MustNotMoveAccepted,
         src: "struct S { r: Rc<i64>, n: i64 }\n\
-              nogc fn peek(s: &S) -> i64 { return s.n }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn peek(s: &S) -> i64 { s.n }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C12",
         position: "Deref.inner, managed",
         class: Class::MustNotMoveRejected("E0304"),
-        src: "nogc fn peek(rr: & &Vec<i64>) -> i64 { return (*(*rr))[0] }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn peek(rr: & &Vec<i64>) -> i64 { (*(*rr))[0] }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1479,10 +1460,10 @@ const GROUP_C: &[Row] = &[
         position: "ForEach.iterable",
         class: Class::MustNotMoveRejected("E0414"),
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   for x in *r { return 1 }\n\
-              \x20   return 0\n\
+              \x20   for x in *r { return 1; }\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1491,10 +1472,10 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveRejected("E0410"),
         src: "struct S { r: Rc<i64>, n: i64 }\n\
               nogc fn poke(d: &mut S, s: &S) -> i64 {\n\
-              \x20   (*d).r = (*s).r\n\
-              \x20   return 0\n\
+              \x20   (*d).r = (*s).r;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1502,18 +1483,18 @@ const GROUP_C: &[Row] = &[
         position: "DerefAssign.value, Vec",
         class: Class::MustNotMoveRejected("E0412"),
         src: "nogc fn xfer(d: &mut Vec<i64>, s: &Vec<i64>) -> i64 {\n\
-              \x20   *d = *s\n\
-              \x20   return 0\n\
+              \x20   *d = *s;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C16",
         position: "Return of a Vec by value",
         class: Class::MustNotMoveRejected("E0412"),
-        src: "nogc fn take(r: &Vec<i64>) -> Vec<i64> { return *r }\n\
-              fn main() -> i64 { return 0 }\n",
+        src: "nogc fn take(r: &Vec<i64>) -> Vec<i64> { *r }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1521,11 +1502,11 @@ const GROUP_C: &[Row] = &[
         position: "Assign.value, managed name target",
         class: Class::MustNotMoveRejected("E0412"),
         src: "nogc fn f(s: &Vec<i64>) -> i64 {\n\
-              \x20   let mut v: Vec<i64> = vec[1]\n\
-              \x20   v = *s\n\
-              \x20   return 0\n\
+              \x20   let mut v: Vec<i64> = vec![1];\n\
+              \x20   v = *s;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1533,9 +1514,9 @@ const GROUP_C: &[Row] = &[
         position: "Match.scrutinee, managed",
         class: Class::MustNotMoveRejected("E0727"),
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   return match *r { _ => 0 }\n\
+              \x20   match *r { _ => 0 }\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1553,12 +1534,12 @@ const GROUP_C: &[Row] = &[
         id: "C20",
         position: "Call.args, lambda where a nogc fn pointer is expected",
         class: Class::MustNotMoveRejected("E0729"),
-        src: "nogc fn apply(g: nogc fn() -> i64) -> i64 { return g() }\n\
-              fn main() -> i64 {\n\
-              \x20   return apply(fn() -> i64 {\n\
-              \x20       let v: Vec<i64> = vec[1, 2]\n\
-              \x20       return v[0]\n\
-              \x20   })\n\
+        src: "use std::process::ExitCode; nogc fn apply(g: nogc fn() -> i64) -> i64 { g() }\n\
+              fn main() -> ExitCode {\n\
+              \x20   return ExitCode::from(apply(move || -> i64 {\n\
+              \x20       let v: Vec<i64> = vec![1, 2];\n\
+              \x20       v[0]\n\
+              \x20   }) as u8);\n\
               }\n",
         twin: None,
     },
@@ -1568,10 +1549,10 @@ const GROUP_C: &[Row] = &[
         position: "ArrayLiteral.elements, projected",
         class: Class::MustNotMoveAccepted,
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   let a: [i64; 2] = [(*r)[0], 1]\n\
-              \x20   return a[0]\n\
+              \x20   let a: [i64; 2] = [(*r)[0], 1];\n\
+              \x20   a[0]\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     // reclassified: the projection yields i64, so E0714 was over-rejecting and c40 pins the closure
@@ -1581,10 +1562,10 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveAccepted,
         src: "struct P { n: i64 }\n\
               nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   let p = P{n: (*r)[0]}\n\
-              \x20   return p.n\n\
+              \x20   let p = P{n: (*r)[0]};\n\
+              \x20   p.n\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1592,10 +1573,10 @@ const GROUP_C: &[Row] = &[
         position: "TupleLiteral.elements, projected",
         class: Class::MustNotMoveAccepted,
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
-              \x20   let t: (i64, i64) = ((*r)[0], 1)\n\
-              \x20   return 0\n\
+              \x20   let t: (i64, i64) = ((*r)[0], 1);\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1603,10 +1584,10 @@ const GROUP_C: &[Row] = &[
         position: "Reference.operand, &mut to an element",
         class: Class::MustNotMoveRejected("E0415"),
         src: "nogc fn f(r: &mut Vec<i64>) -> i64 {\n\
-              \x20   let p: &mut i64 = &mut (*r)[0]\n\
-              \x20   return 0\n\
+              \x20   let p: &mut i64 = &mut (*r)[0];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1614,10 +1595,10 @@ const GROUP_C: &[Row] = &[
         position: "a nogc fn type on a local binding",
         class: Class::MustNotMoveRejected("E0728"),
         src: "nogc fn f() -> i64 {\n\
-              \x20   let g: nogc fn() -> i64 = fn() -> i64 { return 7 }\n\
-              \x20   return 0\n\
+              \x20   let g: nogc fn() -> i64 = move || -> i64 { 7 };\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1626,8 +1607,8 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveAccepted,
         src: "enum Result<T, E> { Ok(T), Err(E) }\n\
               enum E { X }\n\
-              nogc fn take(r: &Result<i64, E>) -> i64 { return (*r).unwrap() }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn take(r: &Result<i64, E>) -> i64 { (*r).unwrap() }\n\
+              fn main() { }\n",
         twin: None,
     },
     // the second of the two rows that bound the projection chain: a vec cannot sit under a field
@@ -1636,8 +1617,8 @@ const GROUP_C: &[Row] = &[
         position: "a struct field of Vec type, read through a shared reference",
         class: Class::MustNotMoveAccepted,
         src: "struct S { v: Vec<i64> }\n\
-              nogc fn f(s: &S) -> i64 { return 0 }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn f(s: &S) -> i64 { 0 }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1645,10 +1626,10 @@ const GROUP_C: &[Row] = &[
         position: "IndexAssign.object of Rc type",
         class: Class::MustNotMoveRejected("E0304"),
         src: "nogc fn f(x: &Rc<Vec<i64>>) -> i64 {\n\
-              \x20   (*x)[0] = 1\n\
-              \x20   return 0\n\
+              \x20   (*x)[0] = 1;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1690,11 +1671,11 @@ const GROUP_C: &[Row] = &[
         id: "C34",
         position: "F3 callable, a nogc generic over a generic struct instantiated at i64",
         class: Class::MustNotMoveAccepted,
-        src: "struct G<T> { n: T }\n\
-              nogc fn f<T>(g: G<T>) -> i64 { return 0 }\n\
-              fn main() -> i64 {\n\
-              \x20   let g: G<i64> = G{n: 1}\n\
-              \x20   return f(g)\n\
+        src: "use std::process::ExitCode; struct G<T> { n: T }\n\
+              nogc fn f<T>(g: G<T>) -> i64 { 0 }\n\
+              fn main() -> ExitCode {\n\
+              \x20   let g: G<i64> = G{n: 1};\n\
+              \x20   return ExitCode::from(f(g) as u8);\n\
               }\n",
         twin: None,
     },
@@ -1703,8 +1684,8 @@ const GROUP_C: &[Row] = &[
         position: "F3 callable, a generic struct holding a Vec taken by value, refused by the effects",
         class: Class::MustNotMoveRejected("E0727"),
         src: "struct G<T> { n: Vec<T> }\n\
-              nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn f(g: G<i64>) -> i64 { 0 }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1712,8 +1693,8 @@ const GROUP_C: &[Row] = &[
         position: "F3 callable, a carrier holding a Vec taken by value, refused by the effects",
         class: Class::MustNotMoveRejected("E0727"),
         src: "struct G { n: Vec<i64> }\n\
-              nogc fn f(g: G) -> i64 { return 0 }\n\
-              fn main() -> i64 { return 0 }\n",
+              nogc fn f(g: G) -> i64 { 0 }\n\
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1721,9 +1702,8 @@ const GROUP_C: &[Row] = &[
         position: "F3 callable, a generic struct holding an Rc, refused at the binding",
         class: Class::MustNotMoveRejected("E0410"),
         src: "struct G<T> { n: T }\n\
-              fn main() -> i64 {\n\
-              \x20   let g: G<Rc<i64>> = G{n: Rc::new(1)}\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let g: G<Rc<i64>> = G{n: Rc::new(1)};\n\
               }\n",
         twin: None,
     },
@@ -1732,23 +1712,21 @@ const GROUP_C: &[Row] = &[
         position: "Reference.operand through an Index into a Vec, then a read-only local",
         class: Class::MustNotMoveAccepted,
         src: "nogc fn peek_local(r: &Vec<i64>) -> i64 {\n\
-              \x20   let p: &i64 = &(*r)[0]\n\
-              \x20   return *p\n\
+              \x20   let p: &i64 = &(*r)[0];\n\
+              \x20   *p\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-              \x20   println(peek_local(&v))\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+              \x20   println!(\"{}\", peek_local(&v));\n\
               }\n",
         twin: Some(Twin {
             src: "nogc fn peek_local(r: &Vec<i64>) -> i64 {\n\
-                  \x20   let p: &i64 = &(*r)[0]\n\
-                  \x20   return *p\n\
+                  \x20   let p: &i64 = &(*r)[0];\n\
+                  \x20   *p\n\
                   }\n\
-                  fn main() -> i64 {\n\
-                  \x20   let v: Vec<i64> = vec[7919, 2, 3]\n\
-                  \x20   println(peek_local(&v))\n\
-                  \x20   return 0\n\
+                  fn main() {\n\
+                  \x20   let v: Vec<i64> = vec![7919, 2, 3];\n\
+                  \x20   println!(\"{}\", peek_local(&v));\n\
                   }\n",
             stdout: "7919\n",
             exit: 0,
@@ -1761,10 +1739,10 @@ const GROUP_C: &[Row] = &[
         position: "ArraySized.fill_value, a stored reference",
         class: Class::MustNotMoveRejected("E0714"),
         src: "nogc fn f(x: &i64) -> i64 {\n\
-              \x20   let a: [&i64; 2] = [x; 2]\n\
-              \x20   return 0\n\
+              \x20   let a: [&i64; 2] = [x; 2];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1772,10 +1750,10 @@ const GROUP_C: &[Row] = &[
         position: "ArrayLiteral.elements, a reference reached through an array of references",
         class: Class::MustNotMoveRejected("E0714"),
         src: "nogc fn f(a: [&i64; 2]) -> i64 {\n\
-              \x20   let b: [&i64; 1] = [a[0]]\n\
-              \x20   return 0\n\
+              \x20   let b: [&i64; 1] = [a[0]];\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1784,25 +1762,24 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveRejected("E0714"),
         src: "struct Q { p: &i64 }\n\
               nogc fn f(a: [&i64; 2]) -> i64 {\n\
-              \x20   let q = Q{p: a[0]}\n\
-              \x20   return 0\n\
+              \x20   let q = Q{p: a[0]};\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C41",
         position: "FmtString.parts, a reference that outlives its referent",
         class: Class::MustNotMoveRejected("E0722"),
-        src: "fn main() -> i64 {\n\
-              \x20   let anchor: i64 = 3\n\
-              \x20   let mut r: &i64 = &anchor\n\
+        src: "fn main() {\n\
+              \x20   let anchor: i64 = 3;\n\
+              \x20   let mut r: &i64 = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: i64 = 7\n\
-              \x20       r = &inner\n\
+              \x20       let inner: i64 = 7;\n\
+              \x20       r = &inner;\n\
               \x20   }\n\
-              \x20   println(\"{*r}\")\n\
-              \x20   return 0\n\
+              \x20   println!(\"{}\", *r);\n\
               }\n",
         twin: None,
     },
@@ -1811,17 +1788,16 @@ const GROUP_C: &[Row] = &[
         position: "If.then_branch, a reference that outlives its referent",
         class: Class::MustNotMoveRejected("E0722"),
         src: "struct P { n: i64 }\n\
-              fn pick() -> bool { return true }\n\
-              fn main() -> i64 {\n\
-              \x20   let anchor: P = P{n: 7}\n\
-              \x20   let c: bool = pick()\n\
-              \x20   let mut r: &P = &anchor\n\
+              fn pick() -> bool { true }\n\
+              fn main() {\n\
+              \x20   let anchor: P = P{n: 7};\n\
+              \x20   let c: bool = pick();\n\
+              \x20   let mut r: &P = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: P = P{n: 42}\n\
-              \x20       r = if c { &inner } else { &anchor }\n\
+              \x20       let inner: P = P{n: 42};\n\
+              \x20       r = if c { &inner } else { &anchor };\n\
               \x20   }\n\
-              \x20   println((*r).n)\n\
-              \x20   return 0\n\
+              \x20   println!(\"{}\", (*r).n);\n\
               }\n",
         twin: None,
     },
@@ -1831,16 +1807,15 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveRejected("E0722"),
         src: "struct P { n: i64 }\n\
               enum Pick { A, B }\n\
-              fn main() -> i64 {\n\
-              \x20   let anchor: P = P{n: 7}\n\
-              \x20   let k: Pick = Pick::A\n\
-              \x20   let mut r: &P = &anchor\n\
+              fn main() {\n\
+              \x20   let anchor: P = P{n: 7};\n\
+              \x20   let k: Pick = Pick::A;\n\
+              \x20   let mut r: &P = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: P = P{n: 77}\n\
-              \x20       r = match k { Pick::A => &inner, Pick::B => &anchor }\n\
+              \x20       let inner: P = P{n: 77};\n\
+              \x20       r = match k { Pick::A => &inner, Pick::B => &anchor };\n\
               \x20   }\n\
-              \x20   println((*r).n)\n\
-              \x20   return 0\n\
+              \x20   println!(\"{}\", (*r).n);\n\
               }\n",
         twin: None,
     },
@@ -1848,17 +1823,16 @@ const GROUP_C: &[Row] = &[
         id: "C44",
         position: "stmt.ForEach.iterable, a slice that outlives its base",
         class: Class::MustNotMoveRejected("E0722"),
-        src: "fn main() -> i64 {\n\
-              \x20   let anchor: [i64; 1] = [9]\n\
-              \x20   let mut s: &[i64] = anchor[..]\n\
+        src: "fn main() {\n\
+              \x20   let anchor: [i64; 1] = [9];\n\
+              \x20   let mut s: &[i64] = anchor[..];\n\
               \x20   {\n\
-              \x20       let base: [i64; 3] = [1, 2, 3]\n\
-              \x20       s = base[..]\n\
+              \x20       let base: [i64; 3] = [1, 2, 3];\n\
+              \x20       s = base[..];\n\
               \x20   }\n\
-              \x20   let mut t: i64 = 0\n\
-              \x20   for x in s { t = t + x }\n\
-              \x20   println(t)\n\
-              \x20   return 0\n\
+              \x20   let mut t: i64 = 0;\n\
+              \x20   for x in s { t = t + x; }\n\
+              \x20   println!(\"{}\", t);\n\
               }\n",
         twin: None,
     },
@@ -1868,10 +1842,10 @@ const GROUP_C: &[Row] = &[
         class: Class::MustNotMoveRejected("E0714"),
         src: "enum OptR { Some(&i64), None }\n\
               nogc fn f(r: &i64) -> i64 {\n\
-              \x20   let o: OptR = OptR::Some(r)\n\
-              \x20   return 0\n\
+              \x20   let o: OptR = OptR::Some(r);\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
@@ -1879,27 +1853,26 @@ const GROUP_C: &[Row] = &[
         position: "Block.tail, a reference propagated out of a block",
         class: Class::MustNotMoveAccepted,
         src: "nogc fn peek(r: &Vec<i64>) -> i64 {\n\
-              \x20   let p: &i64 = { let q: &i64 = &(*r)[0]\n\
-              \x20   q }\n\
-              \x20   return *p\n\
+              \x20   let p: &i64 = { let q: &i64 = &(*r)[0];\n\
+              \x20   q };\n\
+              \x20   *p\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         twin: None,
     },
     Row {
         id: "C47",
         position: "Index.index, a subscript read through a reference",
         class: Class::MustNotMoveRejected("E0722"),
-        src: "fn main() -> i64 {\n\
-              \x20   let a: [i64; 3] = [1, 2, 3]\n\
-              \x20   let anchor: i64 = 0\n\
-              \x20   let mut r: &i64 = &anchor\n\
+        src: "fn main() {\n\
+              \x20   let a: [i64; 3] = [1, 2, 3];\n\
+              \x20   let anchor: i64 = 0;\n\
+              \x20   let mut r: &i64 = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: i64 = 1\n\
-              \x20       r = &inner\n\
+              \x20       let inner: i64 = 1;\n\
+              \x20       r = &inner;\n\
               \x20   }\n\
-              \x20   println(a[*r])\n\
-              \x20   return 0\n\
+              \x20   println!(\"{}\", a[*r]);\n\
               }\n",
         twin: None,
     },
@@ -1907,17 +1880,16 @@ const GROUP_C: &[Row] = &[
         id: "C48",
         position: "stmt.For.end, a bound read through a reference",
         class: Class::MustNotMoveRejected("E0722"),
-        src: "fn main() -> i64 {\n\
-              \x20   let anchor: i64 = 0\n\
-              \x20   let mut r: &i64 = &anchor\n\
+        src: "fn main() {\n\
+              \x20   let anchor: i64 = 0;\n\
+              \x20   let mut r: &i64 = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: i64 = 2\n\
-              \x20       r = &inner\n\
+              \x20       let inner: i64 = 2;\n\
+              \x20       r = &inner;\n\
               \x20   }\n\
-              \x20   let mut t: i64 = 0\n\
-              \x20   for i in 0..*r { t = t + 1 }\n\
-              \x20   println(t)\n\
-              \x20   return 0\n\
+              \x20   let mut t: i64 = 0;\n\
+              \x20   for i in 0..*r { t = t + 1; }\n\
+              \x20   println!(\"{}\", t);\n\
               }\n",
         twin: None,
     },
@@ -1925,37 +1897,36 @@ const GROUP_C: &[Row] = &[
         id: "C49",
         position: "And.right, a side read through a reference",
         class: Class::MustNotMoveRejected("E0722"),
-        src: "fn pick() -> bool { return true }\n\
-              fn main() -> i64 {\n\
-              \x20   let anchor: bool = false\n\
-              \x20   let mut r: &bool = &anchor\n\
+        src: "fn pick() -> bool { true }\n\
+              fn main() {\n\
+              \x20   let anchor: bool = false;\n\
+              \x20   let mut r: &bool = &anchor;\n\
               \x20   {\n\
-              \x20       let inner: bool = true\n\
-              \x20       r = &inner\n\
+              \x20       let inner: bool = true;\n\
+              \x20       r = &inner;\n\
               \x20   }\n\
-              \x20   let c: bool = pick() && *r\n\
-              \x20   println(1)\n\
-              \x20   return 0\n\
+              \x20   let c: bool = pick() && *r;\n\
+              \x20   println!(\"{}\", 1);\n\
               }\n",
         twin: None,
     },
 ];
 
 const F3_GENERIC_STRUCT_BY_VALUE: &str = "struct G<T> { n: T }\n\
-                                          nogc fn f<T>(g: G<T>) -> i64 { return 0 }\n\
-                                          fn main() -> i64 { return 0 }\n";
+                                          nogc fn f<T>(g: G<T>) -> i64 { 0 }\n\
+                                          fn main() { }\n";
 const F3_GENERIC_STRUCT_BY_REF: &str = "struct G<T> { n: T }\n\
-                                        nogc fn f<T>(g: &G<T>) -> i64 { return 0 }\n\
-                                        fn main() -> i64 { return 0 }\n";
+                                        nogc fn f<T>(g: &G<T>) -> i64 { 0 }\n\
+                                        fn main() { }\n";
 const F3_GENERIC_STRUCT_AS_RETURN: &str = "struct G<T> { n: T }\n\
-                                           nogc fn f<T>(g: G<T>) -> G<T> { return g }\n\
-                                           fn main() -> i64 { return 0 }\n";
+                                           nogc fn f<T>(g: G<T>) -> G<T> { g }\n\
+                                           fn main() { }\n";
 const F3_GENERIC_ENUM: &str = "enum E<T> { One(Vec<T>), None }\n\
-                               nogc fn f<T>(e: E<T>) -> i64 { return 0 }\n\
-                               fn main() -> i64 { return 0 }\n";
+                               nogc fn f<T>(e: E<T>) -> i64 { 0 }\n\
+                               fn main() { }\n";
 const F3_EXPLICIT_NOGC_BOUND: &str = "struct G<T> { n: T }\n\
-                                      nogc fn f<T: nogc>(g: G<T>) -> i64 { return 0 }\n\
-                                      fn main() -> i64 { return 0 }\n";
+                                      nogc fn f<T: nogc>(g: G<T>) -> i64 { 0 }\n\
+                                      fn main() { }\n";
 
 #[allow(non_snake_case)]
 const fn INERT_TWIN(src: &'static str) -> Twin {
@@ -1996,13 +1967,12 @@ const GROUP_D: &[Store] = &[
         id: "D01",
         position: "Field under Index, static index",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   v[0].n = 101\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   v[0].n = 101;\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2016,13 +1986,12 @@ const GROUP_D: &[Store] = &[
         position: "Field under Field under Index",
         src: "struct I { n: i64 }\n\
               struct S { i: I }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{i: I{n: 7919}}, S{i: I{n: 2}}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   v[0].i.n = 101\n\
-              \x20   println(v[0].i.n)\n\
-              \x20   println(w[0].i.n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{i: I{n: 7919}}, S{i: I{n: 2}}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   v[0].i.n = 101;\n\
+              \x20   println!(\"{}\", v[0].i.n);\n\
+              \x20   println!(\"{}\", w[0].i.n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2035,13 +2004,12 @@ const GROUP_D: &[Store] = &[
         id: "D03",
         position: "Index under Field under Index, an array field of an element",
         src: "struct S { a: [i64; 2] }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{a: [7919, 1]}, S{a: [2, 3]}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   v[0].a[0] = 101\n\
-              \x20   println(v[0].a[0])\n\
-              \x20   println(w[0].a[0])\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{a: [7919, 1]}, S{a: [2, 3]}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   v[0].a[0] = 101;\n\
+              \x20   println!(\"{}\", v[0].a[0]);\n\
+              \x20   println!(\"{}\", w[0].a[0]);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2053,13 +2021,12 @@ const GROUP_D: &[Store] = &[
     Store {
         id: "D04",
         position: "Index under Index, a Vec of arrays",
-        src: "fn main() -> i64 {\n\
-              \x20   let mut v: Vec<[i64; 2]> = vec[[7919, 1], [2, 3]]\n\
-              \x20   let w: Vec<[i64; 2]> = v\n\
-              \x20   v[0][0] = 101\n\
-              \x20   println(v[0][0])\n\
-              \x20   println(w[0][0])\n\
-              \x20   return 0\n\
+        src: "fn main() {\n\
+              \x20   let mut v: Vec<[i64; 2]> = vec![[7919, 1], [2, 3]];\n\
+              \x20   let w: Vec<[i64; 2]> = v;\n\
+              \x20   v[0][0] = 101;\n\
+              \x20   println!(\"{}\", v[0][0]);\n\
+              \x20   println!(\"{}\", w[0][0]);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2073,16 +2040,15 @@ const GROUP_D: &[Store] = &[
         position: "Field under Index through a &mut parameter",
         src: "struct S { n: i64 }\n\
               fn poke(r: &mut Vec<S>) -> i64 {\n\
-              \x20   (*r)[0].n = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0].n = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let q = poke(&mut v)\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let q = poke(&mut v);\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2095,13 +2061,12 @@ const GROUP_D: &[Store] = &[
         id: "D06",
         position: "Field under Index, compound store",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   v[0].n = v[0].n + 1\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   v[0].n = v[0].n + 1;\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "7920\n7919\n",
@@ -2114,14 +2079,13 @@ const GROUP_D: &[Store] = &[
         id: "D07",
         position: "Field under Index, dynamic index",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let mut i: i64 = 0\n\
-              \x20   v[i].n = 101\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let mut i: i64 = 0;\n\
+              \x20   v[i].n = 101;\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2135,13 +2099,12 @@ const GROUP_D: &[Store] = &[
         id: "D08",
         position: "control, whole element store",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   v[0] = S{n: 101}\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   v[0] = S{n: 101};\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2155,16 +2118,15 @@ const GROUP_D: &[Store] = &[
         position: "control, whole element store through a &mut parameter",
         src: "struct S { n: i64 }\n\
               fn poke(r: &mut Vec<S>) -> i64 {\n\
-              \x20   (*r)[0] = S{n: 101}\n\
-              \x20   return 0\n\
+              \x20   (*r)[0] = S{n: 101};\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let q = poke(&mut v)\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let q = poke(&mut v);\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2181,30 +2143,30 @@ fn the_requirement_table_is_pinned_in_both_phases() {
     use Phase::*;
     assert_eq!(
         required_verdict(MustBecomeAccepted, PreNarrowing),
-        Some("E0727")
+        Some("E0727;")
     );
     assert_eq!(required_verdict(MustBecomeAccepted, PostNarrowing), None);
     assert_eq!(
         required_verdict(MustStayRejected, PreNarrowing),
-        Some("E0727")
+        Some("E0727;")
     );
     assert_eq!(
         required_verdict(MustStayRejected, PostNarrowing),
-        Some("E0727")
+        Some("E0727;")
     );
     assert_eq!(required_verdict(MustNotMoveAccepted, PreNarrowing), None);
     assert_eq!(required_verdict(MustNotMoveAccepted, PostNarrowing), None);
     assert_eq!(
         required_verdict(MustNotMoveRejected("E0304"), PostNarrowing),
-        Some("E0304")
+        Some("E0304;")
     );
     assert_eq!(
         required_verdict(MustStayRejectedBehind("E0429"), PreNarrowing),
-        Some("E0429")
+        Some("E0429;")
     );
     assert_eq!(
         required_verdict(MustStayRejectedBehind("E0429"), PostNarrowing),
-        Some("E0429")
+        Some("E0429;")
     );
 }
 
@@ -2362,17 +2324,16 @@ const GROUP_L: &[Store] = &[
         id: "L01",
         position: "Field under Index, inside a lambda body",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let g = fn(r: &mut Vec<S>) -> i64 {\n\
-              \x20       (*r)[0].n = 101\n\
-              \x20       return 0\n\
-              \x20   }\n\
-              \x20   let q = g(&mut v)\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let g = move |r: &mut Vec<S>| -> i64 {\n\
+              \x20       (*r)[0].n = 101;\n\
+              \x20       0\n\
+              \x20   };\n\
+              \x20   let q = g(&mut v);\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2387,17 +2348,16 @@ const GROUP_L: &[Store] = &[
         id: "L02",
         position: "control, whole element inside the same lambda",
         src: "struct S { n: i64 }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let g = fn(r: &mut Vec<S>) -> i64 {\n\
-              \x20       (*r)[0] = S{n: 101}\n\
-              \x20       return 0\n\
-              \x20   }\n\
-              \x20   let q = g(&mut v)\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let g = move |r: &mut Vec<S>| -> i64 {\n\
+              \x20       (*r)[0] = S{n: 101};\n\
+              \x20       0\n\
+              \x20   };\n\
+              \x20   let q = g(&mut v);\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2411,16 +2371,15 @@ const GROUP_L: &[Store] = &[
         position: "the same store one frame out, at top level",
         src: "struct S { n: i64 }\n\
               fn poke(r: &mut Vec<S>) -> i64 {\n\
-              \x20   (*r)[0].n = 101\n\
-              \x20   return 0\n\
+              \x20   (*r)[0].n = 101;\n\
+              \x20   0\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   let mut v: Vec<S> = vec[S{n: 7919}, S{n: 2}]\n\
-              \x20   let w: Vec<S> = v\n\
-              \x20   let q = poke(&mut v)\n\
-              \x20   println(v[0].n)\n\
-              \x20   println(w[0].n)\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   let mut v: Vec<S> = vec![S{n: 7919}, S{n: 2}];\n\
+              \x20   let w: Vec<S> = v;\n\
+              \x20   let q = poke(&mut v);\n\
+              \x20   println!(\"{}\", v[0].n);\n\
+              \x20   println!(\"{}\", w[0].n);\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "101\n7919\n",
@@ -2434,13 +2393,13 @@ const GROUP_L: &[Store] = &[
         position: "nogc reaching the lambda that stores",
         src: "struct S { n: i64 }\n\
               nogc fn f(r: &mut Vec<S>) -> i64 {\n\
-              \x20   let g = fn(q: &mut Vec<S>) -> i64 {\n\
-              \x20       (*q)[0].n = 101\n\
-              \x20       return 0\n\
-              \x20   }\n\
-              \x20   return g(r)\n\
+              \x20   let g = move |q: &mut Vec<S>| -> i64 {\n\
+              \x20       (*q)[0].n = 101;\n\
+              \x20       0\n\
+              \x20   };\n\
+              \x20   g(r)\n\
               }\n\
-              fn main() -> i64 { return 0 }\n",
+              fn main() { }\n",
         verdict: Verdict::Fenced("E0727"),
         owed: "nothing, the indirect call keeps nogc out and is why this is not gating",
     },
@@ -2449,15 +2408,14 @@ const GROUP_L: &[Store] = &[
         position: "the lambda body is not walked at all, uncalled",
         src: "struct S { n: i64 }\n\
               nogc fn f() -> i64 {\n\
-              \x20   let g = fn(q: &mut Vec<S>) -> i64 {\n\
-              \x20       (*q)[0].n = 101\n\
-              \x20       return 0\n\
-              \x20   }\n\
-              \x20   return 7\n\
+              \x20   let g = move |q: &mut Vec<S>| -> i64 {\n\
+              \x20       (*q)[0].n = 101;\n\
+              \x20       0\n\
+              \x20   };\n\
+              \x20   7\n\
               }\n\
-              fn main() -> i64 {\n\
-              \x20   println(f())\n\
-              \x20   return 0\n\
+              fn main() {\n\
+              \x20   println!(\"{}\", f());\n\
               }\n",
         verdict: Verdict::Runs {
             stdout: "7\n",
@@ -2544,13 +2502,13 @@ fn no_value_producing_builder_drops_its_operand() {
          E0722. every such site reads through `read_operand` or reaches a value instead"
     );
     assert_eq!(
-        build.matches("Aggregate(Vec::new())").count(),
+        build.matches("Aggregate(Vec::new());").count(),
         0,
         "an aggregate built from an empty operand list names nothing it was built from, so \
          E0714's loop, liveness, the conflict events and the move check all walk past it"
     );
     assert_eq!(
-        build.matches("BirOperand::Const").count(),
+        build.matches("BirOperand::Const;").count(),
         16,
         "the number of mentions of the constant operand moved. thirteen are value-producing \
          arms, each of which owes a row in VALUE_BUILDER_EXCLUSIONS; one is the guard in \
@@ -2950,38 +2908,34 @@ fn every_covered_position_has_a_reference_typed_witness() {
     );
 }
 
-const AGGREGATE_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() -> i64 {\n\
-     \x20   let mut a: [i64; 2] = [1, 2]\n\
-     \x20   let p: &mut [i64] = a[..]\n\
-     \x20   let b: [i64; 2] = [a[0]; 2]\n\
-     \x20   p[0] = 9\n\
-     \x20   println(b[0])\n\
-     \x20   return 0\n\
+const AGGREGATE_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() {\n\
+     \x20   let mut a: [i64; 2] = [1, 2];\n\
+     \x20   let p: &mut [i64] = a[..];\n\
+     \x20   let b: [i64; 2] = [a[0]; 2];\n\
+     \x20   p[0] = 9;\n\
+     \x20   println!(\"{}\", b[0]);\n\
      }\n";
 
-const FMT_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() -> i64 {\n\
-     \x20   let mut a: [i64; 2] = [1, 2]\n\
-     \x20   let p: &mut [i64] = a[..]\n\
-     \x20   println(\"{a[0]}\")\n\
-     \x20   p[0] = 9\n\
-     \x20   return 0\n\
+const FMT_READS_A_MUTABLY_BORROWED_BASE: &str = "fn main() {\n\
+     \x20   let mut a: [i64; 2] = [1, 2];\n\
+     \x20   let p: &mut [i64] = a[..];\n\
+     \x20   println!(\"{}\", a[0]);\n\
+     \x20   p[0] = 9;\n\
      }\n";
 
 const FILL_USES_AN_AFFINE_LOCAL_AGAIN: &str = "struct Resource { n: i64 }\n\
-     fn main() -> i64 {\n\
-     \x20   let r: Resource = Resource{n: 1}\n\
-     \x20   let a: [Resource; 2] = [r; 2]\n\
-     \x20   println(r.n)\n\
-     \x20   return 0\n\
+     fn main() {\n\
+     \x20   let r: Resource = Resource{n: 1};\n\
+     \x20   let a: [Resource; 2] = [r; 2];\n\
+     \x20   println!(\"{}\", r.n);\n\
      }\n";
 
 const FILL_MOVES_AN_AFFINE_LOCAL_TWICE: &str = "struct Resource { n: i64 }\n\
-     fn sink(x: Resource) -> i64 { return x.n }\n\
-     fn main() -> i64 {\n\
-     \x20   let r: Resource = Resource{n: 1}\n\
-     \x20   let a: [Resource; 2] = [r; 2]\n\
-     \x20   println(sink(r))\n\
-     \x20   return 0\n\
+     fn sink(x: Resource) -> i64 { x.n }\n\
+     fn main() {\n\
+     \x20   let r: Resource = Resource{n: 1};\n\
+     \x20   let a: [Resource; 2] = [r; 2];\n\
+     \x20   println!(\"{}\", sink(r));\n\
      }\n";
 
 #[test]
@@ -3321,13 +3275,13 @@ fn the_effect_decision_surface_is_one_file() {
     let root = repo_root();
     let effects = fs::read_to_string(root.join("air/src/bir/effects.rs")).expect("effects.rs");
     assert_eq!(
-        effects.matches("Effect::Managed").count(),
+        effects.matches("Effect::Managed;").count(),
         12,
         "the number of mentions of the managed effect changed. this is a drift detector over the \
          whole file, not a count of inserting sites"
     );
     assert_eq!(
-        effects.matches("set.insert(Effect::Managed)").count(),
+        effects.matches("set.insert(Effect::Managed);").count(),
         7,
         "the inserting sites are the parameter rule, alloc_managed, the managed-local rule, the \
          node rule, the store clause's two arms and the mutable-view clause. the other five \
@@ -3530,13 +3484,13 @@ fn the_inert_rows_have_no_caller_and_their_plain_twin_runs() {
 
 #[test]
 fn the_a9_transfer_witness_discriminates() {
-    const READ: &str = "nogc fn get(r: &Vec<i64>) -> i64 { return (*r)[0] }\n\
-                        fn main() -> i64 { return 0 }\n";
+    const READ: &str = "nogc fn get(r: &Vec<i64>) -> i64 { (*r)[0] }\n\
+                        fn main() { }\n";
     const TRANSFER: &str = "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                            \x20   (*r)[0] = 101\n\
-                            \x20   return 0\n\
+                            \x20   (*r)[0] = 101;\n\
+                            \x20   0\n\
                             }\n\
-                            fn main() -> i64 { return 0 }\n";
+                            fn main() { }\n";
     let h = Harness::new();
     for (tag, opt) in LEVELS {
         let rendered = h.reject("W_transfer_nogc", tag, TRANSFER, *opt);
@@ -3575,7 +3529,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
     let root = repo_root();
     let tt = fs::read_to_string(root.join("sema/src/types/type_table.rs")).expect("type table");
     assert_eq!(
-        tt.matches("type_params.is_empty()").count(),
+        tt.matches("type_params.is_empty();").count(),
         3,
         "the early-outs that make a generic nominal type read as Copy moved. a generic struct is \
          scanned through its instantiated fields and a generic enum still reads as Copy, so F3's \

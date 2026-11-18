@@ -48,7 +48,7 @@ fn test() {}
 fn struct_field_valid_types_accepted() {
     should_pass(
         r#"
-struct Foo { x: i64, y: string, z: bool }
+struct Foo { x: i64, y: String, z: bool }
 fn test() {}
 "#,
     );
@@ -100,7 +100,7 @@ fn cast_to_unknown_type_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x = 42 as Nonexistent
+    let x = 42 as Nonexistent;
 }
 "#
         ),
@@ -113,7 +113,7 @@ fn cast_to_valid_type_accepted() {
     should_pass(
         r#"
 fn test() {
-    let x = 42 as i32
+    let x = 42 as i32;
 }
 "#,
     );
@@ -124,7 +124,7 @@ fn cast_to_bool_from_int_accepted() {
     should_pass(
         r#"
 fn test() {
-    let x = 1 as bool
+    let x = 1 as bool;
 }
 "#,
     );
@@ -136,7 +136,7 @@ fn let_unknown_type_annotation_rejected() {
         should_fail(
             r#"
 fn test() {
-    let x: Nonexistent = 42
+    let x: Nonexistent = 42;
 }
 "#
         ),
@@ -149,7 +149,7 @@ fn let_valid_type_annotation_accepted() {
     should_pass(
         r#"
 fn test() {
-    let x: i64 = 42
+    let x: i64 = 42;
 }
 "#,
     );
@@ -185,8 +185,8 @@ fn test() {}
 fn generic_function_type_param_not_rejected() {
     should_pass(
         r#"
-fn id<T>(x: T) -> T { return x }
-fn test() { let y = id(42) }
+fn id<T>(x: T) -> T { x }
+fn test() { let y = id(42); }
 "#,
     );
 }
@@ -195,8 +195,8 @@ fn test() { let y = id(42) }
 fn generic_function_multiple_type_params_not_rejected() {
     should_pass(
         r#"
-fn pair<A, B>(a: A, b: B) -> A { return a }
-fn test() { let y = pair(1, "hi") }
+fn pair<A, B>(a: A, b: B) -> A { a }
+fn test() { let y = pair(1, "hi"); }
 "#,
     );
 }

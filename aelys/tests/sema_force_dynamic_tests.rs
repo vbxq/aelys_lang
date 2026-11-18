@@ -39,11 +39,11 @@ fn force_dynamic_does_not_poison_function_return_type() {
     assert!(
         sema_err(
             r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn add(a: i64, b: i64) -> i64 { a + b }
 
 fn main() {
-    let bad = add(1, "hello")
-    let good: i64 = add(2, 3)
+    let bad = add(1, "hello");
+    let good: i64 = add(2, 3);
 }
 "#
         ),
@@ -60,9 +60,9 @@ fn force_dynamic_does_not_walk_into_array_element_type() {
         sema_err(
             r#"
 fn main() {
-    let arr = [1, 2, 3]
-    let bad: string = arr
-    let elem: i64 = arr[0]
+    let arr = [1, 2, 3];
+    let bad: String = arr;
+    let elem: i64 = arr[0];
 }
 "#
         ),
@@ -77,8 +77,8 @@ fn independent_errors_both_reported() {
     let count = sema_error_count(
         r#"
 fn main() {
-    let a: string = 42
-    let b: i64 = "hello"
+    let a: String = 42;
+    let b: i64 = "hello";
 }
 "#,
     );
@@ -95,11 +95,11 @@ fn valid_program_still_passes() {
     assert!(
         sema_ok(
             r#"
-fn sum(a: i64, b: i64) -> i64 { return a + b }
+fn sum(a: i64, b: i64) -> i64 { a + b }
 
 fn main() {
-    let x: i64 = sum(1, 2)
-    let y: i64 = sum(3, 4)
+    let x: i64 = sum(1, 2);
+    let y: i64 = sum(3, 4);
 }
 "#
         ),

@@ -171,30 +171,30 @@ const FIXTURES: &[(&str, &str)] = &[
     (
         "SI-D01",
         r#"
-fn side() -> i64 {
-    println(9)
-    return 2
+use std::process::ExitCode; fn side() -> i64 {
+    println!("{}", 9);
+    2
 }
 fn twice(x: i64) -> i64 {
-    return x + x
+    x + x
 }
-fn main() -> i64 {
-    return twice(side())
+fn main() -> ExitCode {
+    return ExitCode::from(twice(side()) as u8);
 }
 "#,
     ),
     (
         "SI-D02",
         r#"
-fn side() -> i64 {
-    println(9)
-    return 2
+use std::process::ExitCode; fn side() -> i64 {
+    println!("{}", 9);
+    2
 }
 fn thrice(x: i64) -> i64 {
-    return x + x + x
+    x + x + x
 }
-fn main() -> i64 {
-    return thrice(side())
+fn main() -> ExitCode {
+    return ExitCode::from(thrice(side()) as u8);
 }
 "#,
     ),
@@ -202,19 +202,19 @@ fn main() -> i64 {
         // int_min / -1 was undefined in the backend: sigfpe at -o0, a folded constant at -o2
         "SI-D05",
         r#"
-fn main() -> i64 {
-    let a = 0 - 9223372036854775807 - 1
-    let b = 0 - 1
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 9223372036854775807 - 1;
+    let b = 0 - 1;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
     ),
     (
         "SI-D06",
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::null()
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::null();
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
     ),
@@ -223,11 +223,10 @@ fn main() -> i64 {
         r#"
 struct Resource { id: i64 }
 fn use_it() {
-    let a = Resource{id: 7}
+    let a = Resource{id: 7};
 }
-fn main() -> i64 {
-    use_it()
-    return 0
+fn main() {
+    use_it();
 }
 "#,
     ),
@@ -235,12 +234,11 @@ fn main() -> i64 {
         "SI-D08",
         r#"
 fn make(x: i64) -> Rc<i64> {
-    println(9)
-    return Rc::new(x)
+    println!("{}", 9);
+    Rc::new(x)
 }
-fn main() -> i64 {
-    discard make(3)
-    return 0
+fn main() {
+    let _ = make(3);
 }
 "#,
     ),
@@ -248,17 +246,17 @@ fn main() -> i64 {
         // value stability across a real reallocation: the alias is taken while the buffer is small
         "SI-D09",
         r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    let mut i = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    let mut i = 0;
     while i < 40 {
-        Vec::push(v, i)
-        i = i + 1
+        Vec::push(v, i);
+        i = i + 1;
     }
-    let w = v
-    Vec::push(v, 99)
-    let junk = vec[77, 77, 77]
-    return w[0] + w[39] + v[40]
+    let w = v;
+    Vec::push(v, 99);
+    let junk = vec![77, 77, 77];
+    return ExitCode::from((w[0] + w[39] + v[40]) as u8);
 }
 "#,
     ),
@@ -267,66 +265,65 @@ fn main() -> i64 {
         "SI-D10",
         r#"
 enum Opt<T> { Some(T), Nil }
-fn main() -> i64 {
-    let mut i1 = Vec::new()
-    Vec::push(i1, 1)
-    let a = Opt::Some(i1)
-    return 0
+fn main() {
+    let mut i1 = Vec::new();
+    Vec::push(i1, 1);
+    let a = Opt::Some(i1);
 }
 "#,
     ),
     (
         "SI-D11",
         r#"
-fn main() -> i64 {
-    let mut i = 0
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut i = 0;
+    let mut total = 0;
     while i < 3 {
-        println("row {i} of 3")
-        total = total + i
-        i = i + 1
+        println!("row {i} of 3");
+        total = total + i;
+        i = i + 1;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
     ),
     (
         "SI-D12",
         r#"
-fn main() -> i64 {
-    let base = 4
-    let f = fn(x: i64) -> i64 {
-        println(x)
-        return x + base
-    }
-    return f(3) + f(2)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base = 4;
+    let f = move |x: i64| -> i64 {
+        println!("{}", x);
+        x + base
+    };
+    return ExitCode::from((f(3) + f(2)) as u8);
 }
 "#,
     ),
     (
         "SI-D13",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    v[0] = 9
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    v[0] = 9;
+    return ExitCode::from(w[0] as u8);
 }
 "#,
     ),
     (
         "SI-D14",
         r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 3)
-    let w = v
-    Vec::push(v, 4)
-    Vec::push(v, 5)
-    let junk = vec[77, 77, 77]
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 3);
+    let w = v;
+    Vec::push(v, 4);
+    Vec::push(v, 5);
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(w[0] as u8);
 }
 "#,
     ),
@@ -334,21 +331,21 @@ fn main() -> i64 {
         // `?` short-circuits on the error path, so the second marker must not print at any level
         "SI-D15",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 fn probe(x: i64) -> Result<i64, i64> {
-    println("probe {x}")
+    println!("probe {x}");
     if x < 0 {
-        return Result::Err(4)
+        return Result::Err(4);
     }
-    return Result::Ok(x + 1)
+    Result::Ok(x + 1)
 }
 fn chain(x: i64) -> Result<i64, i64> {
-    let a = probe(x)?
-    let b = probe(a - 3)?
-    return Result::Ok(a + b)
+    let a = probe(x)?;
+    let b = probe(a - 3)?;
+    Result::Ok(a + b)
 }
-fn main() -> i64 {
-    return match chain(1) { Result::Ok(v) => v, Result::Err(e) => e }
+fn main() -> ExitCode {
+    return ExitCode::from((match chain(1) { Result::Ok(v) => v, Result::Err(e) => e }) as u8);
 }
 "#,
     ),
@@ -410,11 +407,10 @@ const PREOPT_FIXTURES: &[(&str, &str, &str)] = &[
         "SI-D09",
         "E0204",
         r#"
-pub let g: i64 = 1
-pub let g: i64 = 2
-fn main() -> i64 {
-    println(g)
-    return 0
+pub static g: i64 = 1;
+pub static g: i64 = 2;
+fn main() {
+    println!("{}", g);
 }
 "#,
     ),
@@ -422,13 +418,12 @@ fn main() -> i64 {
         "SI-D10",
         "E0204",
         r#"
-pub let g: i64 = 1
-pub let mut g: i64 = 2
-fn main() -> i64 {
-    println(g)
-    g = 99
-    println(g)
-    return 0
+pub static g: i64 = 1;
+pub static mut g: i64 = 2;
+fn main() {
+    println!("{}", g);
+    g = 99;
+    println!("{}", g);
 }
 "#,
     ),
@@ -437,13 +432,12 @@ fn main() -> i64 {
         "E0702",
         r#"
 struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
+fn main() {
+    let a = Resource{id: 1};
     if false {
-        let b = a
-        let c = a
+        let b = a;
+        let c = a;
     }
-    return 0
 }
 "#,
     ),
@@ -451,14 +445,14 @@ fn main() -> i64 {
         "SI-D04",
         "E0711",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
     if false {
-        return *r
+        return ExitCode::from((*r) as u8);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 "#,
     ),
@@ -1035,10 +1029,10 @@ const S03A_ROWS: &[(&str, S03aExpect, &str)] = &[
             &["unsupported non-constant array size", "compile-time constant"],
         ),
         r#"
-fn main() -> i64 {
-    let n = 4
-    let a = [0; n]
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let n = 4;
+    let a = [0; n];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1049,10 +1043,10 @@ fn main() -> i64 {
             &["unsupported non-constant array size", "compile-time constant"],
         ),
         r#"
-let N: i64 = 4
-fn main() -> i64 {
-    let a = [0; N]
-    return a[0]
+use std::process::ExitCode; static N: i64 = 4;
+fn main() -> ExitCode {
+    let a = [0; N];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1063,10 +1057,10 @@ fn main() -> i64 {
             &["unsupported non-constant array size", "compile-time constant"],
         ),
         r#"
-fn four() -> i64 { return 4 }
-fn main() -> i64 {
-    let a = [0; four()]
-    return a[0]
+use std::process::ExitCode; fn four() -> i64 { 4 }
+fn main() -> ExitCode {
+    let a = [0; four()];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1077,9 +1071,9 @@ fn main() -> i64 {
             &["unsupported non-constant array size", "compile-time constant"],
         ),
         r#"
-fn main() -> i64 {
-    let n = 4
-    return [7; n][0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let n = 4;
+    return ExitCode::from([7; n][0] as u8);
 }
 "#,
     ),
@@ -1099,9 +1093,9 @@ fn main() -> i64 { return g[0] }
         "S0.3a-R6 literal has more elements than the annotation",
         S03aExpect::Refused("E0301", &["[i64; 4]", "[i64; 2]"]),
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [1, 2, 3, 4]
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 2] = [1, 2, 3, 4];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1109,9 +1103,9 @@ fn main() -> i64 {
         "S0.3a-R7 repeat is longer than the annotation",
         S03aExpect::Refused("E0301", &["[i64; 4]", "[i64; 2]"]),
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [7; 4]
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 2] = [7; 4];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1119,9 +1113,9 @@ fn main() -> i64 {
         "S0.3a-R8 repeat is shorter than the annotation",
         S03aExpect::Refused("E0301", &["[i64; 2]", "[i64; 4]"]),
         r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [7; 2]
-    return a[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 4] = [7; 2];
+    return ExitCode::from(a[3] as u8);
 }
 "#,
     ),
@@ -1129,9 +1123,9 @@ fn main() -> i64 {
         "S0.3a-C1 literal repeat size",
         S03aExpect::Ran(0, ""),
         r#"
-fn main() -> i64 {
-    let a = [0; 4]
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [0; 4];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1139,10 +1133,10 @@ fn main() -> i64 {
         "S0.3a-C2 literal repeat size with a fill",
         S03aExpect::Ran(7, "28\n"),
         r#"
-fn main() -> i64 {
-    let a = [7; 4]
-    println(a[0] + a[1] + a[2] + a[3])
-    return a[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [7; 4];
+    println!("{}", a[0] + a[1] + a[2] + a[3]);
+    return ExitCode::from(a[3] as u8);
 }
 "#,
     ),
@@ -1150,10 +1144,10 @@ fn main() -> i64 {
         "S0.3a-C3 annotated length with a global repeat size",
         S03aExpect::Ran(0, ""),
         r#"
-let N: i64 = 4
-fn main() -> i64 {
-    let a: [i64; 4] = [0; N]
-    return a[0]
+use std::process::ExitCode; static N: i64 = 4;
+fn main() -> ExitCode {
+    let a: [i64; 4] = [0; N];
+    return ExitCode::from(a[0] as u8);
 }
 "#,
     ),
@@ -1161,11 +1155,11 @@ fn main() -> i64 {
         "S0.3a-C4 annotated length fills every slot",
         S03aExpect::Ran(7, "28\n"),
         r#"
-let N: i64 = 4
-fn main() -> i64 {
-    let a: [i64; 4] = [7; N]
-    println(a[0] + a[1] + a[2] + a[3])
-    return a[3]
+use std::process::ExitCode; static N: i64 = 4;
+fn main() -> ExitCode {
+    let a: [i64; 4] = [7; N];
+    println!("{}", a[0] + a[1] + a[2] + a[3]);
+    return ExitCode::from(a[3] as u8);
 }
 "#,
     ),
@@ -1173,11 +1167,11 @@ fn main() -> i64 {
         "S0.3a-C5 annotated length with a local repeat size",
         S03aExpect::Ran(7, "28\n"),
         r#"
-fn main() -> i64 {
-    let n = 4
-    let a: [i64; 4] = [7; n]
-    println(a[0] + a[1] + a[2] + a[3])
-    return a[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let n = 4;
+    let a: [i64; 4] = [7; n];
+    println!("{}", a[0] + a[1] + a[2] + a[3]);
+    return ExitCode::from(a[3] as u8);
 }
 "#,
     ),
@@ -1185,10 +1179,10 @@ fn main() -> i64 {
         "S0.3a-G1 closed arithmetic repeat size",
         S03aExpect::Ran(7, "28\n"),
         r#"
-fn main() -> i64 {
-    let a = [7; 2 + 2]
-    println(a[0] + a[1] + a[2] + a[3])
-    return a[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [7; 2 + 2];
+    println!("{}", a[0] + a[1] + a[2] + a[3]);
+    return ExitCode::from(a[3] as u8);
 }
 "#,
     ),
@@ -1196,34 +1190,34 @@ fn main() -> i64 {
         "S0.3a-G2 closed arithmetic file-scope initializer",
         S03aExpect::Ran(4, ""),
         r#"
-let g: i64 = 2 + 2
-fn main() -> i64 { return g }
+use std::process::ExitCode; static g: i64 = 2 + 2;
+fn main() -> ExitCode { return ExitCode::from(g as u8); }
 "#,
     ),
     (
         "S0.3a-G3 parenthesised file-scope initializer",
         S03aExpect::Ran(7, ""),
         r#"
-let g: i64 = (7)
-fn main() -> i64 { return g }
+use std::process::ExitCode; static g: i64 = (7);
+fn main() -> ExitCode { return ExitCode::from(g as u8); }
 "#,
     ),
     (
         "S0.3a-G4 cast file-scope initializer",
         S03aExpect::Ran(3, ""),
         r#"
-let g: i64 = 3 as i64
-fn main() -> i64 { return g }
+use std::process::ExitCode; static g: i64 = 3 as i64;
+fn main() -> ExitCode { return ExitCode::from(g as u8); }
 "#,
     ),
     (
         "S0.3a-G5 unary file-scope initializer",
         S03aExpect::Ran(5, ""),
         r#"
-let g: bool = not false
-fn main() -> i64 {
-    if g { return 5 }
-    return 0
+use std::process::ExitCode; static g: bool = !false;
+fn main() -> ExitCode {
+    if g { return ExitCode::from(5); }
+    return ExitCode::SUCCESS;
 }
 "#,
     ),
@@ -1235,14 +1229,14 @@ fn main() -> i64 {
 ];
 
 const S03A_INLINE_RECURSIVE: &str = r#"
-@inline
+use std::process::ExitCode; #[inline]
 fn fact(n: i64) -> i64 {
-    if n <= 1 { return 1 }
-    return n * fact(n - 1)
+    if n <= 1 { return 1; }
+    n * fact(n - 1)
 }
 
-fn main() -> i64 {
-    return fact(5)
+fn main() -> ExitCode {
+    return ExitCode::from(fact(5) as u8);
 }
 "#;
 
@@ -1432,11 +1426,11 @@ const S03B_ROWS: &[(&str, S03bExpect, &str)] = &[
         "S0.3b-K01 a carrier field from a call",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn mkrc() -> Rc<i64> { return Rc::new(7) }
-fn main() -> i64 {
-    let w: W = W{ r: mkrc() }
-    return Rc::get(w.r)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn mkrc() -> Rc<i64> { Rc::new(7) }
+fn main() -> ExitCode {
+    let w: W = W{ r: mkrc() };
+    return ExitCode::from(Rc::get(w.r) as u8);
 }
 "#,
     ),
@@ -1444,22 +1438,22 @@ fn main() -> i64 {
         "S0.3b-K03 an enum payload from a call",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-enum W { V(Rc<i64>) }
-fn mkrc() -> Rc<i64> { return Rc::new(7) }
-fn main() -> i64 { let w: W = W::V(mkrc())
-    return match w { W::V(r) => Rc::get(r) } }
+use std::process::ExitCode; enum W { V(Rc<i64>) }
+fn mkrc() -> Rc<i64> { Rc::new(7) }
+fn main() -> ExitCode { let w: W = W::V(mkrc());
+    return ExitCode::from((match w { W::V(r) => Rc::get(r) }) as u8); }
 "#,
     ),
     (
         "S0.3b-N1 the same call whose callee cannot be inlined away",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn seven() -> i64 { return 7 }
-fn mkrc() -> Rc<i64> { return Rc::new(seven()) }
-fn main() -> i64 {
-    let w: W = W{ r: mkrc() }
-    return Rc::get(w.r)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn seven() -> i64 { 7 }
+fn mkrc() -> Rc<i64> { Rc::new(seven()) }
+fn main() -> ExitCode {
+    let w: W = W{ r: mkrc() };
+    return ExitCode::from(Rc::get(w.r) as u8);
 }
 "#,
     ),
@@ -1467,12 +1461,12 @@ fn main() -> i64 {
         "S0.3b-N2 a callee that returns a field of its argument",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn get(w: W) -> Rc<i64> { return w.r }
-fn main() -> i64 {
-    let a: W = W{ r: Rc::new(7) }
-    let b: W = W{ r: get(a) }
-    return Rc::get(b.r)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn get(w: W) -> Rc<i64> { w.r }
+fn main() -> ExitCode {
+    let a: W = W{ r: Rc::new(7) };
+    let b: W = W{ r: get(a) };
+    return ExitCode::from(Rc::get(b.r) as u8);
 }
 "#,
     ),
@@ -1485,17 +1479,17 @@ fn main() -> i64 {
         "S0.3b-N4 an Rc conditional whose branches disagree on provenance, escaping its binding",
         S03bExpect::Ran(15, "", "[rc] allocs=2 frees=2"),
         r#"
-struct W { r: Rc<i64> }
-fn pick() -> bool { return true }
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn pick() -> bool { true }
 fn mk() -> W {
-    let a: Rc<i64> = Rc::new(1)
-    let c: bool = pick()
-    return W{ r: if c { a } else { Rc::new(2) } }
+    let a: Rc<i64> = Rc::new(1);
+    let c: bool = pick();
+    W{ r: if c { a } else { Rc::new(2) } }
 }
-fn main() -> i64 {
-    let w: W = mk()
-    let junk: Rc<i64> = Rc::new(5)
-    return Rc::get(w.r) * 10 + Rc::get(junk)
+fn main() -> ExitCode {
+    let w: W = mk();
+    let junk: Rc<i64> = Rc::new(5);
+    return ExitCode::from((Rc::get(w.r) * 10 + Rc::get(junk)) as u8);
 }
 "#,
     ),
@@ -1506,77 +1500,77 @@ fn main() -> i64 {
             &["[rc]", "field `O.w`", "both one or both the other"],
         ),
         r#"
-struct W { r: Rc<i64> }
+use std::process::ExitCode; struct W { r: Rc<i64> }
 struct O { w: W }
-fn pick() -> bool { return true }
-fn main() -> i64 { let s: W = W{ r: Rc::new(1) }
-    let c: bool = pick()
-    let o: O = O{ w: if c { s } else { W{ r: Rc::new(2) } } }
-    return Rc::get(o.w.r) }
+fn pick() -> bool { true }
+fn main() -> ExitCode { let s: W = W{ r: Rc::new(1) };
+    let c: bool = pick();
+    let o: O = O{ w: if c { s } else { W{ r: Rc::new(2) } } };
+    return ExitCode::from(Rc::get(o.w.r) as u8); }
 "#,
     ),
     (
         "S0.3b-N5 two nested functions of one name still collide",
         S03bExpect::Refused("E0427", &["same symbol `dup`"]),
         r#"
-fn outer() -> i64 {
-    fn dup() -> i64 { return 1 }
-    return dup()
+use std::process::ExitCode; fn outer() -> i64 {
+    fn dup() -> i64 { 1 }
+    dup()
 }
 fn other() -> i64 {
-    fn dup() -> i64 { return 2 }
-    return dup()
+    fn dup() -> i64 { 2 }
+    dup()
 }
-fn main() -> i64 { return outer() + other() }
+fn main() -> ExitCode { return ExitCode::from((outer() + other()) as u8); }
 "#,
     ),
     (
         "S0.3b-K02 a conditional whose branches both read a binding",
         S03bExpect::Ran(1, "", "[rc] allocs=2 frees=2"),
         r#"
-struct W { r: Rc<i64> }
-fn pick() -> bool { return true }
-fn main() -> i64 { let a: Rc<i64> = Rc::new(1)
-    let b: Rc<i64> = Rc::new(2)
-    let c: bool = pick()
-    let w: W = W{ r: if c { a } else { b } }
-    return Rc::get(w.r) }
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn pick() -> bool { true }
+fn main() -> ExitCode { let a: Rc<i64> = Rc::new(1);
+    let b: Rc<i64> = Rc::new(2);
+    let c: bool = pick();
+    let w: W = W{ r: if c { a } else { b } };
+    return ExitCode::from(Rc::get(w.r) as u8); }
 "#,
     ),
     (
         "S0.3b-D05 two generic instances that once shared one symbol",
         S03bExpect::Ran(1, "", "[rc] allocs=0 frees=0"),
         r#"
-struct A_B { x: i64 }
+use std::process::ExitCode; struct A_B { x: i64 }
 struct B { x: i64 }
-fn f<T>(v: T) -> i64 { return 1 }
-fn f_A<T>(v: T) -> i64 { return 2 }
-fn main() -> i64 { let p: A_B = A_B{x: 1}
-    let r = f(p)
-    if false { let q: B = B{x: 2}
-        let s = f_A(q) }
-    return r }
+fn f<T>(v: T) -> i64 { 1 }
+fn f_A<T>(v: T) -> i64 { 2 }
+fn main() -> ExitCode { let p: A_B = A_B{x: 1};
+    let r = f(p);
+    if false { let q: B = B{x: 2};
+        let s = f_A(q); }
+    return ExitCode::from(r as u8); }
 "#,
     ),
     (
         "S0.3b-G1 a conditional whose branches are both fresh",
         S03bExpect::Ran(1, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn pick() -> bool { return true }
-fn main() -> i64 { let c: bool = pick()
-    let w: W = W{ r: if c { Rc::new(1) } else { Rc::new(2) } }
-    return Rc::get(w.r) }
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn pick() -> bool { true }
+fn main() -> ExitCode { let c: bool = pick();
+    let w: W = W{ r: if c { Rc::new(1) } else { Rc::new(2) } };
+    return ExitCode::from(Rc::get(w.r) as u8); }
 "#,
     ),
     (
         "S0.3b-C1 a carrier field from a fresh literal",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn main() -> i64 {
-    let w: W = W{ r: Rc::new(7) }
-    return Rc::get(w.r)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn main() -> ExitCode {
+    let w: W = W{ r: Rc::new(7) };
+    return ExitCode::from(Rc::get(w.r) as u8);
 }
 "#,
     ),
@@ -1584,11 +1578,11 @@ fn main() -> i64 {
         "S0.3b-C2 a carrier field cloned from a binding",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct W { r: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let w: W = W{ r: a }
-    return Rc::get(w.r)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let w: W = W{ r: a };
+    return ExitCode::from(Rc::get(w.r) as u8);
 }
 "#,
     ),
@@ -1596,11 +1590,11 @@ fn main() -> i64 {
         "S0.3b-C3 an enum payload cloned from a binding",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-enum W { V(Rc<i64>) }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let w: W = W::V(a)
-    return match w { W::V(r) => Rc::get(r) }
+use std::process::ExitCode; enum W { V(Rc<i64>) }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let w: W = W::V(a);
+    return ExitCode::from((match w { W::V(r) => Rc::get(r) }) as u8);
 }
 "#,
     ),
@@ -1608,30 +1602,30 @@ fn main() -> i64 {
         "S0.3b-C4 a nested carrier literal",
         S03bExpect::Ran(7, "", "[rc] allocs=1 frees=1"),
         r#"
-struct Inner { r: Rc<i64> }
+use std::process::ExitCode; struct Inner { r: Rc<i64> }
 struct Outer { i: Inner }
-fn main() -> i64 {
-    let o: Outer = Outer{ i: Inner{ r: Rc::new(7) } }
-    return Rc::get(o.i.r)
+fn main() -> ExitCode {
+    let o: Outer = Outer{ i: Inner{ r: Rc::new(7) } };
+    return ExitCode::from(Rc::get(o.i.r) as u8);
 }
 "#,
     ),
 ];
 
 const S03B_LENT_COUNT_THEN_REUSE: &str = r#"
-struct W { r: Rc<i64> }
-fn get(w: W) -> Rc<i64> { return w.r }
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn get(w: W) -> Rc<i64> { w.r }
 fn boom() -> i64 {
-    let a: W = W{ r: Rc::new(7) }
-    let b: W = W{ r: get(a) }
-    return Rc::get(b.r)
+    let a: W = W{ r: Rc::new(7) };
+    let b: W = W{ r: get(a) };
+    Rc::get(b.r)
 }
-fn main() -> i64 {
-    let x: i64 = boom()
-    let p: Rc<i64> = Rc::new(1)
-    let q: Rc<i64> = Rc::new(2)
-    let r: Rc<i64> = Rc::new(3)
-    return x + Rc::get(p) + Rc::get(q) + Rc::get(r)
+fn main() -> ExitCode {
+    let x: i64 = boom();
+    let p: Rc<i64> = Rc::new(1);
+    let q: Rc<i64> = Rc::new(2);
+    let r: Rc<i64> = Rc::new(3);
+    return ExitCode::from((x + Rc::get(p) + Rc::get(q) + Rc::get(r)) as u8);
 }
 "#;
 
@@ -1806,10 +1800,10 @@ enum S03cExpect {
 }
 
 const S03C_ARRAY_SIZE_IS_A_BINDING: &str = r#"
-fn main() -> i64 {
-    let n = 4
-    let a = [0; n]
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let n = 4;
+    let a = [0; n];
+    return ExitCode::from(a[0] as u8);
 }
 "#;
 
@@ -1818,15 +1812,15 @@ const S03C_ROWS: &[(&str, S03cExpect, &str)] = &[
         "S0.3c-A1 both sides accept a program the optimizer rewrites",
         S03cExpect::Runs(14, "8\n9\n", "[rc] allocs=0 frees=0"),
         r#"
-fn double(x: i64) -> i64 { return x + x }
+use std::process::ExitCode; fn double(x: i64) -> i64 { x + x }
 fn side() -> i64 {
-    println(9)
-    return 3
+    println!("{}", 9);
+    3
 }
-fn main() -> i64 {
-    let k = double(2 + 2)
-    println(k)
-    return double(side()) + k
+fn main() -> ExitCode {
+    let k = double(2 + 2);
+    println!("{}", k);
+    return ExitCode::from((double(side()) + k) as u8);
 }
 "#,
     ),
@@ -1847,14 +1841,13 @@ fn main() -> i64 {
             &["an Rc<T> live in a loop body is abandoned by `break`"],
         ),
         r#"
-fn main() -> i64 {
-    let mut i = 0
+fn main() {
+    let mut i = 0;
     while i < 3 {
-        let r: Rc<i64> = Rc::new(7)
-        if i == 1 { break }
-        i = i + 1
+        let r: Rc<i64> = Rc::new(7);
+        if i == 1 { break; }
+        i = i + 1;
     }
-    return 0
 }
 "#,
     ),
@@ -1869,54 +1862,53 @@ fn main() -> i64 {
         ),
         r#"
 enum Opt<T> { Some(T), Nil }
-fn main() -> i64 {
-    let a: Opt<Vec<Vec<i64>>> = Opt::Nil
-    return 0
+fn main() {
+    let a: Opt<Vec<Vec<i64>>> = Opt::Nil;
 }
 "#,
     ),
 ];
 
 const S03C_MOVED_COUNT_THEN_REUSE: &str = r#"
-struct W { r: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let w: W = W{ r: a }
-    let x: i64 = Rc::get(w.r)
-    let p: Rc<i64> = Rc::new(1)
-    let q: Rc<i64> = Rc::new(2)
-    let s: Rc<i64> = Rc::new(3)
-    return x + Rc::get(p) + Rc::get(q) + Rc::get(s)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let w: W = W{ r: a };
+    let x: i64 = Rc::get(w.r);
+    let p: Rc<i64> = Rc::new(1);
+    let q: Rc<i64> = Rc::new(2);
+    let s: Rc<i64> = Rc::new(3);
+    return ExitCode::from((x + Rc::get(p) + Rc::get(q) + Rc::get(s)) as u8);
 }
 "#;
 
 const S03B_K02_THEN_REUSE: &str = r#"
-struct W { r: Rc<i64> }
-fn pick() -> bool { return true }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(1)
-    let b: Rc<i64> = Rc::new(2)
-    let c: bool = pick()
-    let w: W = W{ r: if c { a } else { b } }
-    let x: i64 = Rc::get(w.r)
-    let p: Rc<i64> = Rc::new(10)
-    let q: Rc<i64> = Rc::new(20)
-    let s: Rc<i64> = Rc::new(30)
-    return x + Rc::get(p) + Rc::get(q) + Rc::get(s)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn pick() -> bool { true }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(1);
+    let b: Rc<i64> = Rc::new(2);
+    let c: bool = pick();
+    let w: W = W{ r: if c { a } else { b } };
+    let x: i64 = Rc::get(w.r);
+    let p: Rc<i64> = Rc::new(10);
+    let q: Rc<i64> = Rc::new(20);
+    let s: Rc<i64> = Rc::new(30);
+    return ExitCode::from((x + Rc::get(p) + Rc::get(q) + Rc::get(s)) as u8);
 }
 "#;
 
 const S03B_G1_THEN_REUSE: &str = r#"
-struct W { r: Rc<i64> }
-fn pick() -> bool { return true }
-fn main() -> i64 {
-    let c: bool = pick()
-    let w: W = W{ r: if c { Rc::new(1) } else { Rc::new(2) } }
-    let x: i64 = Rc::get(w.r)
-    let p: Rc<i64> = Rc::new(10)
-    let q: Rc<i64> = Rc::new(20)
-    let s: Rc<i64> = Rc::new(30)
-    return x + Rc::get(p) + Rc::get(q) + Rc::get(s)
+use std::process::ExitCode; struct W { r: Rc<i64> }
+fn pick() -> bool { true }
+fn main() -> ExitCode {
+    let c: bool = pick();
+    let w: W = W{ r: if c { Rc::new(1) } else { Rc::new(2) } };
+    let x: i64 = Rc::get(w.r);
+    let p: Rc<i64> = Rc::new(10);
+    let q: Rc<i64> = Rc::new(20);
+    let s: Rc<i64> = Rc::new(30);
+    return ExitCode::from((x + Rc::get(p) + Rc::get(q) + Rc::get(s)) as u8);
 }
 "#;
 

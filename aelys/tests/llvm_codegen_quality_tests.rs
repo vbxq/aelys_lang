@@ -52,41 +52,41 @@ fn llvm_uses_expected_alignment_for_mutable_locals() {
     let ir = compile_to_verified_ir_with_opt(
         r#"
 fn int_align(n: i64) -> i64 {
-    let mut a64: i64 = 0
-    let mut a32: i32 = 0
-    let mut a16: i16 = 0
-    let mut a8: i8 = 0
-    let mut ab: bool = false
+    let mut a64: i64 = 0;
+    let mut a32: i32 = 0;
+    let mut a16: i16 = 0;
+    let mut a8: i8 = 0;
+    let mut ab: bool = false;
     while a64 < n {
-        a8 = a8 + (1 as i8)
-        a16 = a16 + (1 as i16)
-        a32 = a32 + 1
-        a64 = a64 + 1
-        if ab { ab = false } else { ab = true }
+        a8 = a8 + (1 as i8);
+        a16 = a16 + (1 as i16);
+        a32 = a32 + 1;
+        a64 = a64 + 1;
+        if ab { ab = false; } else { ab = true; }
     }
-    return a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64)
+    a64 + (a32 as i64) + (a16 as i64) + (a8 as i64) + (ab as i64)
 }
 
 fn float_align(n: i64) -> f64 {
-    let mut af32: f32 = 0.0 as f32
-    let mut af64: f64 = 0.0
-    let mut i: i64 = 0
+    let mut af32: f32 = 0.0 as f32;
+    let mut af64: f64 = 0.0;
+    let mut i: i64 = 0;
     while i < n {
-        af32 = af32 + (1.0 as f32)
-        af64 = af64 + 1.0
-        i = i + 1
+        af32 = af32 + (1.0 as f32);
+        af64 = af64 + 1.0;
+        i = i + 1;
     }
-    return af64 + (af32 as f64)
+    af64 + (af32 as f64)
 }
 
-fn string_align(s: string, n: i64) -> string {
-    let mut sp: string = s
-    let mut i: i64 = 0
+fn string_align(s: String, n: i64) -> String {
+    let mut sp: String = s;
+    let mut i: i64 = 0;
     while i < n {
-        sp = s
-        i = i + 1
+        sp = s;
+        i = i + 1;
     }
-    return sp
+    sp
 }
 "#,
         OptimizationLevel::None,
@@ -131,11 +131,11 @@ fn llvm_ssa_params_skip_alloca() {
     let ir = compile_to_verified_ir(
         r#"
 fn add(a: i64, b: i64) -> i64 {
-    return a + b
+    a + b
 }
 
 fn identity(x: i64) -> i64 {
-    return x
+    x
 }
 "#,
     );
@@ -152,27 +152,27 @@ fn llvm_verify_passes_for_fibonacci_sum_and_vec2_length() {
         r#"
 fn fibonacci(n: i32) -> i64 {
     if n <= 1 {
-        return n as i64
+        return n as i64;
     }
-    return fibonacci(n - 1) + fibonacci(n - 2)
+    fibonacci(n - 1) + fibonacci(n - 2)
 }
 "#,
         r#"
 fn sum(n: i32) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i32 = 0
+    let mut acc: i64 = 0;
+    let mut i: i32 = 0;
     while i < n {
-        acc = acc + i as i64
-        i = i + 1
+        acc = acc + i as i64;
+        i = i + 1;
     }
-    return acc
+    acc
 }
 "#,
         r#"
 struct Vec2 { x: f64, y: f64 }
 
 fn vec2_length(v: Vec2) -> f64 {
-    return v.x * v.x + v.y * v.y
+    v.x * v.x + v.y * v.y
 }
 "#,
     ];
@@ -188,11 +188,11 @@ fn llvm_calls_match_fastcc_declarations() {
     let ir = compile_to_verified_ir_with_opt(
         r#"
 fn callee(x: i64) -> i64 {
-    return x + 1
+    x + 1
 }
 
 fn caller(v: i64) -> i64 {
-    return callee(v)
+    callee(v)
 }
 "#,
         OptimizationLevel::None,
@@ -206,13 +206,13 @@ fn caller(v: i64) -> i64 {
 fn llvm_o2_eliminates_allocas_via_mem2reg() {
     let source = r#"
 fn sum(n: i64) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        acc = acc + i
-        i = i + 1
+        acc = acc + i;
+        i = i + 1;
     }
-    return acc
+    acc
 }
 "#;
     let ir_o0 = compile_to_verified_ir_with_opt(source, OptimizationLevel::None);

@@ -63,11 +63,11 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
 fn p1_copy_then_push_leaves_original_unchanged() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[0] + b[1] + b[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[0] + b[1] + b[2] + b[3]) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -90,13 +90,13 @@ fn main() -> i64 {
 fn p1_sharp_shared_push_with_realloc_keeps_original() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 10)
-    Vec::push(b, 20)
-    Vec::push(b, 30)
-    return a[0] + a[1] + a[2]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 10);
+    Vec::push(b, 20);
+    Vec::push(b, 30);
+    return ExitCode::from((a[0] + a[1] + a[2]) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -118,10 +118,10 @@ fn main() -> i64 {
 fn p2_unshared_push_does_not_allocate() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    Vec::push(a, 9)
-    return a[0] + a[1] + a[2] + a[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    Vec::push(a, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + a[3]) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -140,10 +140,10 @@ fn main() -> i64 {
 fn p2_shared_push_allocates_one_more_than_unshared() {
     let Some((_, unshared)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    Vec::push(a, 9)
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    Vec::push(a, 9);
+    return ExitCode::from(a[0] as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -152,11 +152,11 @@ fn main() -> i64 {
     };
     let Some((_, shared)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from(a[0] as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -180,11 +180,11 @@ fn p6_asan_shared_push_is_clean() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[3]) as u8);
 }
 "#,
     )
@@ -324,9 +324,8 @@ fn n1_vec_of_struct_bearing_rc_is_rejected() {
     let err = rc_reject(
         r#"
 struct S { r: Rc<i64> }
-fn main() -> i64 {
-    let v = vec[S { r: Rc::new(1) }]
-    return 0
+fn main() {
+    let v = vec![S { r: Rc::new(1) }];
 }
 "#,
     );
@@ -342,9 +341,8 @@ fn n2_vec_of_nested_struct_bearing_rc_is_rejected() {
         r#"
 struct Inner { r: Rc<i64> }
 struct Outer { i: Inner }
-fn main() -> i64 {
-    let v = vec[Outer { i: Inner { r: Rc::new(1) } }]
-    return 0
+fn main() {
+    let v = vec![Outer { i: Inner { r: Rc::new(1) } }];
 }
 "#,
     );
@@ -359,9 +357,8 @@ fn n3_array_of_struct_bearing_rc_is_rejected() {
     let err = rc_reject(
         r#"
 struct S { r: Rc<i64> }
-fn main() -> i64 {
-    let a = [S { r: Rc::new(1) }]
-    return 0
+fn main() {
+    let a = [S { r: Rc::new(1) }];
 }
 "#,
     );
@@ -377,9 +374,9 @@ fn n4_inline_return_vec_of_struct_rc_is_rejected() {
         r#"
 struct S { r: Rc<i64> }
 fn make() -> i64 {
-    return Rc::get(vec[S { r: Rc::new(1) }][0].r)
+    Rc::get(vec![S { r: Rc::new(1) }][0].r)
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -393,10 +390,9 @@ fn n5_push_of_struct_bearing_rc_is_rejected() {
     let err = rc_reject(
         r#"
 struct S { r: Rc<i64> }
-fn main() -> i64 {
-    let v = Vec::new()
-    Vec::push(v, S { r: Rc::new(1) })
-    return 0
+fn main() {
+    let v = Vec::new();
+    Vec::push(v, S { r: Rc::new(1) });
 }
 "#,
     );
@@ -410,10 +406,10 @@ fn main() -> i64 {
 fn n_positive_plain_struct_vec_is_accepted() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let v = vec[Point { x: 3, y: 4 }]
-    return v[0].x + v[0].y
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let v = vec![Point { x: 3, y: 4 }];
+    return ExitCode::from((v[0].x + v[0].y) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -430,11 +426,11 @@ fn main() -> i64 {
 fn p8_leak_variant_keeps_value_semantics_frees_nothing() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[3]) as u8);
 }
 "#,
         RuntimeVariant::Leak,
@@ -456,13 +452,13 @@ fn main() -> i64 {
 fn vec_new_then_grow_reads_back() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 4)
-    Vec::push(v, 8)
-    return v[0] + v[1] + v[2] + v[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 4);
+    Vec::push(v, 8);
+    return ExitCode::from((v[0] + v[1] + v[2] + v[3]) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -479,15 +475,15 @@ fn main() -> i64 {
 fn f1_vec_param_mutation_does_not_corrupt_caller() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn f(v: Vec<i64>) {
-    Vec::push(v, 99)
+use std::process::ExitCode; fn f(v: Vec<i64>) {
+    Vec::push(v, 99);
 }
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    Vec::push(a, 4)
-    f(a)
-    Vec::push(a, 5)
-    return a[4]
+fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    Vec::push(a, 4);
+    f(a);
+    Vec::push(a, 5);
+    return ExitCode::from(a[4] as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -512,12 +508,12 @@ fn main() -> i64 {
 fn f1_read_only_vec_param_is_sound() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn g(v: Vec<i64>) -> i64 {
-    return v[0]
+use std::process::ExitCode; fn g(v: Vec<i64>) -> i64 {
+    v[0]
 }
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    return g(a)
+fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    return ExitCode::from(g(a) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -538,14 +534,14 @@ fn main() -> i64 {
 fn f1_returned_vec_param_escapes_balanced() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn id(v: Vec<i64>) -> Vec<i64> {
-    return v
+use std::process::ExitCode; fn id(v: Vec<i64>) -> Vec<i64> {
+    v
 }
-fn main() -> i64 {
-    let a = vec[10, 20, 30]
-    let b = id(a)
-    Vec::push(b, 99)
-    return a[0] + a[1] + a[2] + b[3]
+fn main() -> ExitCode {
+    let a = vec![10, 20, 30];
+    let b = id(a);
+    Vec::push(b, 99);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[3]) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -568,10 +564,10 @@ fn main() -> i64 {
 fn f2_struct_with_vec_field_runs() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct H { v: Vec<i64> }
-fn main() -> i64 {
-    let h = H { v: vec[1, 2, 3] }
-    return h.v[0]
+use std::process::ExitCode; struct H { v: Vec<i64> }
+fn main() -> ExitCode {
+    let h = H { v: vec![1, 2, 3] };
+    return ExitCode::from(h.v[0] as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -586,11 +582,11 @@ fn main() -> i64 {
 fn f2_nested_struct_with_vec_field_runs() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Inner { v: Vec<i64> }
+use std::process::ExitCode; struct Inner { v: Vec<i64> }
 struct Outer { i: Inner }
-fn main() -> i64 {
-    let o = Outer { i: Inner { v: vec[4, 5] } }
-    return o.i.v[1]
+fn main() -> ExitCode {
+    let o = Outer { i: Inner { v: vec![4, 5] } };
+    return ExitCode::from(o.i.v[1] as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -605,11 +601,11 @@ fn main() -> i64 {
 fn f2_forward_referenced_vec_carrier_runs() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Outer { i: Inner }
+use std::process::ExitCode; struct Outer { i: Inner }
 struct Inner { v: Vec<i64> }
-fn main() -> i64 {
-    let o = Outer { i: Inner { v: vec[6, 7] } }
-    return o.i.v[0] + o.i.v.len
+fn main() -> ExitCode {
+    let o = Outer { i: Inner { v: vec![6, 7] } };
+    return ExitCode::from((o.i.v[0] + o.i.v.len()) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -624,14 +620,14 @@ fn main() -> i64 {
 fn f2_enum_with_vec_payload_is_accepted() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-enum E { Has(Vec<i64>), None }
-fn main() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 4)
-    let e = E::Has(v)
-    Vec::push(v, 5)
-    match e { E::Has(w) => { return w.len * 10 + v.len } E::None => { return 0 } }
-    return 0
+use std::process::ExitCode; enum E { Has(Vec<i64>), None }
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 4);
+    let e = E::Has(v);
+    Vec::push(v, 5);
+    match e { E::Has(w) => { return ExitCode::from((w.len() * 10 + v.len()) as u8); } E::None => { return ExitCode::SUCCESS; } }
+    return ExitCode::SUCCESS;
 }
 "#,
         RuntimeVariant::Rc,
@@ -647,10 +643,10 @@ fn main() -> i64 {
 fn f2_positive_struct_without_vec_is_accepted() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let p = Point { x: 3, y: 4 }
-    return p.x + p.y
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let p = Point { x: 3, y: 4 };
+    return ExitCode::from((p.x + p.y) as u8);
 }
 "#,
         RuntimeVariant::Rc,

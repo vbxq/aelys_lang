@@ -24,53 +24,51 @@ long probe_f32(float x) { printf("f32=%.1f\n", (double)x); return 0; }
 "#;
 
 const NARROW_AELYS: &str = "\
-unsafe extern fn opaque(x: i64) -> i64
-unsafe extern fn probe_i8(x: i8) -> i64
-unsafe extern fn probe_u8(x: u8) -> i64
-unsafe extern fn probe_i16(x: i16) -> i64
-unsafe extern fn probe_u16(x: u16) -> i64
-unsafe extern fn probe_bool(x: bool) -> i64
+extern \"C\" { fn opaque(x: i64) -> i64; }
+extern \"C\" { fn probe_i8(x: i8) -> i64; }
+extern \"C\" { fn probe_u8(x: u8) -> i64; }
+extern \"C\" { fn probe_i16(x: i16) -> i64; }
+extern \"C\" { fn probe_u16(x: u16) -> i64; }
+extern \"C\" { fn probe_bool(x: bool) -> i64; }
 
-fn main() -> i64 {
+fn main() {
     unsafe {
-        let narrow: i64 = opaque(511)
-        let wide: i64 = opaque(70000)
-        probe_i8(narrow as i8)
-        probe_u8(narrow as u8)
-        probe_i16(wide as i16)
-        probe_u16(wide as u16)
-        probe_bool(narrow > 0)
+        let narrow: i64 = opaque(511);
+        let wide: i64 = opaque(70000);
+        probe_i8(narrow as i8);
+        probe_u8(narrow as u8);
+        probe_i16(wide as i16);
+        probe_u16(wide as u16);
+        probe_bool(narrow > 0);
     }
-    return 0
 }
 ";
 
 const WIDE_AELYS: &str = "\
-unsafe extern fn probe_i32(x: i32) -> i32
-unsafe extern fn probe_u32(x: u32) -> u32
-unsafe extern fn probe_i64(x: i64) -> i64
-unsafe extern fn probe_u64(x: u64) -> u64
-unsafe extern fn probe_f32(x: f32) -> f32
-unsafe extern fn probe_f64(x: f64) -> f64
-unsafe extern fn probe_i8(x: i8) -> i8
+use std::process::ExitCode; extern \"C\" { fn probe_i32(x: i32) -> i32; }
+extern \"C\" { fn probe_u32(x: u32) -> u32; }
+extern \"C\" { fn probe_i64(x: i64) -> i64; }
+extern \"C\" { fn probe_u64(x: u64) -> u64; }
+extern \"C\" { fn probe_f32(x: f32) -> f32; }
+extern \"C\" { fn probe_f64(x: f64) -> f64; }
+extern \"C\" { fn probe_i8(x: i8) -> i8; }
 
 fn probe_native_i8(x: i8) -> i8 {
-    return x
+    x
 }
 
-fn main() -> i64 {
-    return probe_native_i8(1) as i64
+fn main() -> ExitCode {
+    return ExitCode::from((probe_native_i8(1) as i64) as u8);
 }
 ";
 
 const F32_AELYS: &str = "\
-unsafe extern fn probe_f32(x: f32) -> i64
+extern \"C\" { fn probe_f32(x: f32) -> i64; }
 
-fn main() -> i64 {
-    let a: f32 = 1.5
-    let b: f32 = a - 3.0
-    unsafe { probe_f32(b) }
-    return 0
+fn main() {
+    let a: f32 = 1.5;
+    let b: f32 = a - 3.0;
+    unsafe { probe_f32(b); }
 }
 ";
 
@@ -161,7 +159,7 @@ fn emitted_ir(id: &str, aelys: &str, opt: OptimizationLevel) -> String {
 // gates the call site on , so the old bare spelling is kept as a rejected twin
 #[test]
 fn f4_1_bis_the_old_bare_spelling_of_a_narrow_call_is_now_e0617() {
-    let bare = "unsafe extern fn probe_i8(x: i8) -> i64\n\nfn main() -> i64 {\n    probe_i8(1)\n    return 0\n}\n";
+    let bare = "extern \"C\" { fn probe_i8(x: i8) -> i64; }\n\nfn main() {\n    probe_i8(1);\n}\n";
     let rendered = match aelys_driver::compile_to_typed_ast(bare) {
         Ok(_) => panic!("F4-1-bis: the bare call MUST be rejected\n{bare}"),
         Err(rendered) => rendered.to_string(),

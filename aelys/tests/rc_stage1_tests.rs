@@ -36,10 +36,10 @@ fn p1_rc_new_allocates_header_plus_data() {
     let ir = rc_ir(
         r#"
 fn make() -> Rc<i64> {
-    let a: Rc<i64> = Rc::new(42)
-    return a
+    let a: Rc<i64> = Rc::new(42);
+    a
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -57,10 +57,10 @@ fn p2_rc_new_writes_refcount_one() {
     let ir = rc_ir(
         r#"
 fn make() -> Rc<i64> {
-    let a: Rc<i64> = Rc::new(1)
-    return a
+    let a: Rc<i64> = Rc::new(1);
+    a
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -87,13 +87,13 @@ fn main() -> i64 { return 0 }
 fn p3_clone_emits_retain() {
     let ir = rc_ir(
         r#"
-fn use_rc(a: Rc<i64>) -> i64 { return 0 }
+use std::process::ExitCode; fn use_rc(a: Rc<i64>) -> i64 { 0 }
 fn make() -> i64 {
-    let a: Rc<i64> = Rc::new(42)
-    let b: Rc<i64> = a
-    return use_rc(b)
+    let a: Rc<i64> = Rc::new(42);
+    let b: Rc<i64> = a;
+    use_rc(b)
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert!(
@@ -106,12 +106,12 @@ fn main() -> i64 { return make() }
 fn p4_scope_exit_emits_release() {
     let ir = rc_ir(
         r#"
-fn use_rc(a: Rc<i64>) -> i64 { return 0 }
+use std::process::ExitCode; fn use_rc(a: Rc<i64>) -> i64 { 0 }
 fn make() -> i64 {
-    let a: Rc<i64> = Rc::new(42)
-    return use_rc(a)
+    let a: Rc<i64> = Rc::new(42);
+    use_rc(a)
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert!(
@@ -125,10 +125,10 @@ fn p5_return_does_not_release_the_returned_handle() {
     let ir = rc_ir(
         r#"
 fn make() -> Rc<i64> {
-    let a: Rc<i64> = Rc::new(9)
-    return a
+    let a: Rc<i64> = Rc::new(9);
+    a
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     let make_body = function_body(&ir, "@make");
@@ -146,13 +146,13 @@ fn main() -> i64 { return 0 }
 fn p6_pure_value_program_emits_no_rc_calls() {
     let ir = rc_ir(
         r#"
-struct P { x: i64 }
+use std::process::ExitCode; struct P { x: i64 }
 fn make() -> i64 {
-    let y: P = P { x: 5 }
-    let z: P = y
-    return z.x
+    let y: P = P { x: 5 };
+    let z: P = y;
+    z.x
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert!(
@@ -195,14 +195,14 @@ fn p8_rc_program_compiles_links_and_runs() {
     fs::write(
         &source_path,
         r#"
-fn touch(a: Rc<i64>) -> i64 { return 1 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    let c: Rc<i64> = b
-    let n: i64 = touch(c)
-    println("rc ok")
-    return n + 41
+use std::process::ExitCode; fn touch(a: Rc<i64>) -> i64 { 1 }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    let c: Rc<i64> = b;
+    let n: i64 = touch(c);
+    println!("rc ok");
+    return ExitCode::from((n + 41) as u8);
 }
 "#,
     )
@@ -246,15 +246,15 @@ fn main() -> i64 {
 fn p9_no_release_on_closure_env_only_on_rc() {
     let ir = rc_ir(
         r#"
-fn use_rc(a: Rc<i64>) -> i64 { return 0 }
+use std::process::ExitCode; fn use_rc(a: Rc<i64>) -> i64 { 0 }
 fn make() -> i64 {
-    let a: Rc<i64> = Rc::new(9)
-    let cap: i64 = 5
-    let f: fn() -> i64 = fn() -> i64 { return cap }
-    let n: i64 = use_rc(a)
-    return f()
+    let a: Rc<i64> = Rc::new(9);
+    let cap: i64 = 5;
+    let f: fn() -> i64 = move || -> i64 { cap };
+    let n: i64 = use_rc(a);
+    f()
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     let body = function_body(&ir, "@make");
@@ -274,11 +274,11 @@ fn p10_return_releases_other_rc_not_the_returned() {
     let ir = rc_ir(
         r#"
 fn make() -> Rc<i64> {
-    let a: Rc<i64> = Rc::new(1)
-    let b: Rc<i64> = Rc::new(2)
-    return a
+    let a: Rc<i64> = Rc::new(1);
+    let b: Rc<i64> = Rc::new(2);
+    a
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     let body = function_body(&ir, "@make");
@@ -299,13 +299,13 @@ fn main() -> i64 { return 0 }
 fn p11_passes_preserve_retain_release_with_param() {
     let ir = rc_ir(
         r#"
-fn keep(p: Rc<i64>) -> i64 {
-    let q: Rc<i64> = p
-    return 0
+use std::process::ExitCode; fn keep(p: Rc<i64>) -> i64 {
+    let q: Rc<i64> = p;
+    0
 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(3)
-    return keep(a)
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(3);
+    return ExitCode::from(keep(a) as u8);
 }
 "#,
     );
@@ -334,9 +334,9 @@ fn p12_rc_get_reads_value_through_handle() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(42)
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(42);
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
     )
@@ -375,9 +375,9 @@ fn main() -> i64 {
 fn p13_rc_get_emits_a_load_no_extra_refcount_op() {
     let ir = rc_ir(
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(42)
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(42);
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
     );
@@ -406,10 +406,10 @@ fn p14_rc_get_reads_through_borrowed_param() {
     fs::write(
         &source_path,
         r#"
-fn val(a: Rc<i64>) -> i64 { return Rc::get(a) }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    return val(r)
+use std::process::ExitCode; fn val(a: Rc<i64>) -> i64 { Rc::get(a) }
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(7);
+    return ExitCode::from(val(r) as u8);
 }
 "#,
     )
@@ -448,10 +448,9 @@ fn main() -> i64 {
 fn n1_rc_mut_reassigned_releases_the_old_handle() {
     let ir = rc_ir(
         r#"
-fn main() -> i64 {
-    let mut a: Rc<i64> = Rc::new(0)
-    a = Rc::new(1)
-    return 0
+fn main() {
+    let mut a: Rc<i64> = Rc::new(0);
+    a = Rc::new(1);
 }
 "#,
     );
@@ -466,10 +465,9 @@ fn main() -> i64 {
 fn n2_indirect_rc_init_is_rejected() {
     let err = rc_reject(
         r#"
-fn main() -> i64 {
-    let c: bool = true
-    let a: Rc<i64> = if c { Rc::new(0) } else { Rc::new(1) }
-    return 0
+fn main() {
+    let c: bool = true;
+    let a: Rc<i64> = if c { Rc::new(0) } else { Rc::new(1) };
 }
 "#,
     );
@@ -484,7 +482,7 @@ fn n3_rc_field_in_struct_now_declares_stage3a() {
     let ir = rc_ir(
         r#"
 struct S { r: Rc<i64> }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -498,7 +496,7 @@ fn n3_rc_field_in_enum_now_declares_stage3a() {
     let ir = rc_ir(
         r#"
 enum E { V(Rc<i64>) }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -511,9 +509,8 @@ fn main() -> i64 { return 0 }
 fn n3bis_array_literal_of_rc_is_rejected() {
     let err = rc_reject(
         r#"
-fn main() -> i64 {
-    let v = [Rc::new(1), Rc::new(2)]
-    return 0
+fn main() {
+    let v = [Rc::new(1), Rc::new(2)];
 }
 "#,
     );
@@ -527,14 +524,13 @@ fn main() -> i64 {
 fn n4_rc_abandoned_by_break_is_rejected() {
     let err = rc_reject(
         r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
     while i < 3 {
-        let r: Rc<i64> = Rc::new(i)
-        if i == 1 { break }
-        i = i + 1
+        let r: Rc<i64> = Rc::new(i);
+        if i == 1 { break; }
+        i = i + 1;
     }
-    return 0
 }
 "#,
     );
@@ -548,13 +544,13 @@ fn main() -> i64 {
 fn n5_closure_capturing_rc_is_rejected() {
     let err = rc_reject(
         r#"
-fn deref_use(x: Rc<i64>) -> i64 { return 0 }
+use std::process::ExitCode; fn deref_use(x: Rc<i64>) -> i64 { 0 }
 fn make() -> i64 {
-    let a: Rc<i64> = Rc::new(42)
-    let f: fn() -> i64 = fn() -> i64 { return deref_use(a) }
-    return f()
+    let a: Rc<i64> = Rc::new(42);
+    let f: fn() -> i64 = move || -> i64 { deref_use(a) };
+    f()
 }
-fn main() -> i64 { return make() }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert!(
@@ -569,11 +565,11 @@ fn n6_generic_struct_holding_rc_is_refused_at_the_literal() {
         r#"
 struct Box<T> { v: T }
 fn make() -> Box<Rc<i64>> {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Box<Rc<i64>> = Box { v: a }
-    return b
+    let a: Rc<i64> = Rc::new(7);
+    let b: Box<Rc<i64>> = Box { v: a };
+    b
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -588,9 +584,9 @@ fn n6_nested_generic_struct_holding_rc_is_refused_at_the_literal() {
         r#"
 struct Box<T> { v: T }
 fn make() -> Box<Box<Rc<i64>>> {
-    return Box { v: Box { v: Rc::new(7) } }
+    Box { v: Box { v: Rc::new(7) } }
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -604,10 +600,9 @@ fn n7_generic_enum_holding_rc_in_let_is_counted_by_tag() {
     let ir = rc_ir(
         r#"
 enum Opt<T> { Some(T), None }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let x = Opt::Some(a)
-    return 0
+fn main() {
+    let a: Rc<i64> = Rc::new(7);
+    let x = Opt::Some(a);
 }
 "#,
     );
@@ -623,12 +618,11 @@ fn n7_generic_enum_holding_rc_in_return_is_counted_by_tag() {
         r#"
 enum Opt<T> { Some(T), None }
 fn make() -> Opt<Rc<i64>> {
-    let a: Rc<i64> = Rc::new(7)
-    return Opt::Some(a)
+    let a: Rc<i64> = Rc::new(7);
+    Opt::Some(a)
 }
-fn main() -> i64 {
-    let o = make()
-    return 0
+fn main() {
+    let o = make();
 }
 "#,
     );
@@ -643,11 +637,11 @@ fn n8_array_of_rc_returned_is_rejected() {
     let err = rc_reject(
         r#"
 fn make() -> [Rc<i64>; 2] {
-    let a: Rc<i64> = Rc::new(1)
-    let b: Rc<i64> = Rc::new(2)
-    return [a, b]
+    let a: Rc<i64> = Rc::new(1);
+    let b: Rc<i64> = Rc::new(2);
+    [a, b]
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(

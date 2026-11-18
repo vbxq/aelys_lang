@@ -115,14 +115,14 @@ fn reject_row(id: &str, files: Files, sources: &SourceOptions, code: &str, needl
 }
 
 const PRINTS: &str = r#"
-needs std.io
+use std::process::ExitCode; use std::io;
 
 nogc fn banner() -> i64 {
-    return io.print_out("héllo, wörld ✓\n")
+    io::print_out("héllo, wörld ✓\n")
 }
 
-fn main() -> i64 {
-    return banner()
+fn main() -> ExitCode {
+    return ExitCode::from(banner() as u8);
 }
 "#;
 
@@ -146,8 +146,8 @@ fn main() -> i64 {
 }
 "#;
 
-const LOCAL_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    return 99\n}\n";
-const ROOT_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    return 7\n}\n";
+const LOCAL_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    99\n}\n";
+const ROOT_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    7\n}\n";
 
 #[test]
 fn s32_a_module_resolves_from_an_include_root() {
@@ -267,12 +267,12 @@ fn s32_a_library_module_that_imports_a_sibling_compiles_on_its_own() {
 }
 
 const PRELUDE_OPTION: &str = r#"
-fn main() -> i64 {
-    let o: Option<i64> = Some(41)
-    return match o {
+use std::process::ExitCode; fn main() -> ExitCode {
+    let o: Option<i64> = Some(41);
+    return ExitCode::from((match o {
         Some(v) => v + 1,
         None => 0,
-    }
+    }) as u8);
 }
 "#;
 
@@ -301,15 +301,15 @@ fn s33_no_prelude_takes_the_name_back_out_of_scope() {
 }
 
 const OWN_OPTION: &str = r#"
-enum Option<T> { Some(T), None, Both(T, T) }
+use std::process::ExitCode; enum Option<T> { Some(T), None, Both(T, T) }
 
-fn main() -> i64 {
-    let o: Option<i64> = Option::Both(20, 22)
-    return match o {
+fn main() -> ExitCode {
+    let o: Option<i64> = Option::Both(20, 22);
+    return ExitCode::from((match o {
         Option::Some(v) => v,
         Option::None => 0,
         Option::Both(a, b) => a + b,
-    }
+    }) as u8);
 }
 "#;
 
@@ -339,15 +339,15 @@ fn s33_a_program_that_defines_its_own_option_keeps_it_with_no_diagnostic() {
 const OWN_OPTION_MODULE: &str = "pub enum Option<T> { Some(T), None, Triple(T, T, T) }\n";
 
 const IMPORTED_OPTION: &str = r#"
-needs Option from mine
+use std::process::ExitCode; mod mine; use mine::Option;
 
-fn main() -> i64 {
-    let o: Option<i64> = Option::Triple(10, 14, 18)
-    return match o {
+fn main() -> ExitCode {
+    let o: Option<i64> = Option::Triple(10, 14, 18);
+    return ExitCode::from((match o {
         Option::Some(v) => v,
         Option::None => 0,
         Option::Triple(a, b, c) => a + b + c,
-    }
+    }) as u8);
 }
 "#;
 
@@ -366,18 +366,18 @@ fn s33_an_explicit_import_of_the_name_outranks_the_prelude() {
 }
 
 const EXPLICIT_RESULT: &str = r#"
-needs std.result
+use std::process::ExitCode; use std::result;
 
-fn main() -> i64 {
-    let a: result.Result<i64, i64> = result.Result::Ok(7)
-    let b: result.Result<i64, i64> = result.Result::Err(3)
-    let s: result.Option<i64> = result.Option::Some(9)
-    let n: result.Option<i64> = result.Option::None
-    if result.is_ok(a) { println(1) } else { println(0) }
-    if result.is_err(b) { println(1) } else { println(0) }
-    if result.is_some(s) { println(1) } else { println(0) }
-    if result.is_none(n) { println(1) } else { println(0) }
-    return result.unwrap_or(a, -1) + result.some_or(s, -3)
+fn main() -> ExitCode {
+    let a: result::Result<i64, i64> = result::Result::Ok(7);
+    let b: result::Result<i64, i64> = result::Result::Err(3);
+    let s: result::Option<i64> = result::Option::Some(9);
+    let n: result::Option<i64> = result::Option::None;
+    if result::is_ok(a) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_err(b) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_some(s) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_none(n) { println!("{}", 1); } else { println!("{}", 0); }
+    return ExitCode::from((result::unwrap_or(a, -1) + result::some_or(s, -3)) as u8);
 }
 "#;
 
@@ -406,12 +406,12 @@ fn s33_an_explicit_needs_std_result_program_is_unmoved_by_the_prelude() {
 }
 
 const MIXED_CARRIER: &str = r#"
-needs std.result
+use std::process::ExitCode; use std::result;
 
-fn main() -> i64 {
-    let s: Option<i64> = result.Option::Some(40)
-    let t: result.Option<i64> = Some(2)
-    return result.some_or(s, 0) + result.some_or(t, 0)
+fn main() -> ExitCode {
+    let s: Option<i64> = result::Option::Some(40);
+    let t: result::Option<i64> = Some(2);
+    return ExitCode::from((result::some_or(s, 0) + result::some_or(t, 0)) as u8);
 }
 "#;
 
@@ -428,8 +428,8 @@ fn s33_the_prelude_name_and_the_module_qualified_name_are_one_type() {
 }
 
 const NO_PRELUDE_NEEDED: &str = r#"
-fn main() -> i64 {
-    return 42
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from(42);
 }
 "#;
 

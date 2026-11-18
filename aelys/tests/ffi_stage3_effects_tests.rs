@@ -50,8 +50,8 @@ fn pin(id: &str, eff: EffectSet, expected: [bool; 6]) {
     }
 }
 
-const A_BARE: &str = "nogc fn c() -> i64 {\n    let v = vec[1, 2, 3]\n    return 7\n}\nfn main() -> i64 { return c() }\n";
-const A_UNSAFE: &str = "nogc fn c() -> i64 {\n    unsafe { let v = vec[1, 2, 3] }\n    return 7\n}\nfn main() -> i64 { return c() }\n";
+const A_BARE: &str = "use std::process::ExitCode; nogc fn c() -> i64 {\n    let v = vec![1, 2, 3];\n    7\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
+const A_UNSAFE: &str = "use std::process::ExitCode; nogc fn c() -> i64 {\n    unsafe { let v = vec![1, 2, 3]; }\n    7\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
 
 #[test]
 fn s3_c1_unsafe_does_not_re_enable_managed_allocation_in_nogc() {
@@ -63,8 +63,8 @@ fn s3_c1_bis_the_bare_twin_is_rejected_the_same_way() {
     rejects("S3-C1'", A_BARE, "E0727");
 }
 
-const B_BARE: &str = "fn m() -> i64 {\n    let v = vec[1, 2, 3]\n    return 7\n}\nnogc fn c() -> i64 {\n    return m()\n}\nfn main() -> i64 { return c() }\n";
-const B_UNSAFE: &str = "fn m() -> i64 {\n    let v = vec[1, 2, 3]\n    return 7\n}\nnogc fn c() -> i64 {\n    unsafe { return m() }\n}\nfn main() -> i64 { return c() }\n";
+const B_BARE: &str = "use std::process::ExitCode; fn m() -> i64 {\n    let v = vec![1, 2, 3];\n    7\n}\nnogc fn c() -> i64 {\n    m()\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
+const B_UNSAFE: &str = "use std::process::ExitCode; fn m() -> i64 {\n    let v = vec![1, 2, 3];\n    7\n}\nnogc fn c() -> i64 {\n    unsafe { return m(); }\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
 
 #[test]
 fn s3_c2_unsafe_does_not_let_nogc_call_managed_code() {
@@ -76,8 +76,8 @@ fn s3_c2_bis_the_bare_twin_is_rejected_the_same_way() {
     rejects("S3-C2'", B_BARE, "E0727");
 }
 
-const C_BARE: &str = "fn c() -> i64 {\n    let v = vec[1, 2, 3]\n    return v[0]\n}\nfn main() -> i64 { return c() }\n";
-const C_UNSAFE: &str = "fn c() -> i64 {\n    unsafe {\n        let v = vec[1, 2, 3]\n        return v[0]\n    }\n}\nfn main() -> i64 { return c() }\n";
+const C_BARE: &str = "use std::process::ExitCode; fn c() -> i64 {\n    let v = vec![1, 2, 3];\n    v[0]\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
+const C_UNSAFE: &str = "use std::process::ExitCode; fn c() -> i64 {\n    unsafe {\n        let v = vec![1, 2, 3];\n        return v[0];\n    }\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
 
 #[test]
 fn s3_c3_the_effect_walk_descends_into_a_nested_block() {
@@ -94,8 +94,8 @@ fn s3_c3_the_effect_walk_descends_into_a_nested_block() {
     }
 }
 
-const D_BARE: &str = "fn main() -> i64 {\n    let mut a: i64 = 7\n    let r: &mut i64 = &mut a\n    let s: &mut i64 = &mut a\n    return *r\n}\n";
-const D_UNSAFE: &str = "fn main() -> i64 {\n    let mut a: i64 = 7\n    unsafe {\n        let r: &mut i64 = &mut a\n        let s: &mut i64 = &mut a\n        return *r\n    }\n}\n";
+const D_BARE: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut a: i64 = 7;\n    let r: &mut i64 = &mut a;\n    let s: &mut i64 = &mut a;\n    return ExitCode::from((*r) as u8);\n}\n";
+const D_UNSAFE: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut a: i64 = 7;\n    unsafe {\n        let r: &mut i64 = &mut a;\n        let s: &mut i64 = &mut a;\n        return ExitCode::from((*r) as u8);\n    }\n}\n";
 
 #[test]
 fn s3_c4_unsafe_does_not_drop_a_live_guard() {
@@ -107,7 +107,7 @@ fn s3_c4_bis_the_bare_twin_is_rejected_the_same_way() {
     rejects("S3-C4'", D_BARE, "E0713");
 }
 
-const E_UNSAFE: &str = "fn m() -> i64 {\n    let v = vec[1, 2, 3]\n    return 7\n}\nfn take(f: nogc fn() -> i64) -> i64 {\n    return f()\n}\nfn main() -> i64 {\n    unsafe { return take(m) }\n}\n";
+const E_UNSAFE: &str = "use std::process::ExitCode; fn m() -> i64 {\n    let v = vec![1, 2, 3];\n    7\n}\nfn take(f: nogc fn() -> i64) -> i64 {\n    f()\n}\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(take(m) as u8); }\n}\n";
 
 #[test]
 fn s3_c5_the_nogc_bound_is_the_second_route_of_the_managed_clause() {
@@ -116,7 +116,7 @@ fn s3_c5_the_nogc_bound_is_the_second_route_of_the_managed_clause() {
 
 #[test]
 fn s3_c6_a_managed_allocation_in_a_lambda_body_of_a_nogc_fn_still_compiles() {
-    let source = "nogc fn c() -> i64 {\n    let f = fn() -> i64 {\n        let v = vec[1, 2, 3]\n        return 7\n    }\n    return 7\n}\nfn main() -> i64 { return c() }\n";
+    let source = "use std::process::ExitCode; nogc fn c() -> i64 {\n    let f = move || -> i64 {\n        let v = vec![1, 2, 3];\n        7\n    };\n    7\n}\nfn main() -> ExitCode { return ExitCode::from(c() as u8); }\n";
     let dir = tempdir().expect("tempdir");
     let root = dir.path().join("root.aelys");
     fs::write(&root, source).expect("write fixture");

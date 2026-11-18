@@ -83,51 +83,47 @@ fn for_every_shape(src: &str, check: impl Fn(&Run, &str)) {
 }
 
 const HELLO: &str = r#"
-fn main() -> i64 {
-    println("hello")
-    return 0
+fn main() {
+    println!("hello");
 }
 "#;
 
 const ONE_INTERPOLATION: &str = r#"
-fn main() -> i64 {
-    let n = 7
-    println("{n}")
-    return 0
+fn main() {
+    let n = 7;
+    println!("{n}");
 }
 "#;
 
 const THREE_INTERPOLATIONS: &str = r#"
-fn main() -> i64 {
-    let n = 7
-    println("{n}")
-    println("{n}")
-    println("{n}")
-    return 0
+fn main() {
+    let n = 7;
+    println!("{n}");
+    println!("{n}");
+    println!("{n}");
 }
 "#;
 
 const ESCAPING_INTERPOLATION: &str = r#"
-let mut k: string = ""
+static mut k: String = "";
 
-fn main() -> i64 {
-    let n = 7
-    k = "{n}"
-    println(k)
-    return 0
+fn main() {
+    let n = 7;
+    k = format!("{n}");
+    println!("{}", k);
 }
 "#;
 
 const UNBOUND_VEC: &str = r#"
-fn main() -> i64 {
-    return Vec::len(vec[1, 2])
+use std::process::ExitCode; fn main() -> ExitCode {
+    return ExitCode::from(Vec::len(vec![1, 2]) as u8);
 }
 "#;
 
 const BOUND_VEC: &str = r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    return Vec::len(v)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    return ExitCode::from(Vec::len(v) as u8);
 }
 "#;
 
@@ -260,13 +256,12 @@ fn a_bound_vec_keeps_its_single_release() {
 #[test]
 fn a_loop_reuses_one_frame_buffer() {
     let src = r#"
-fn main() -> i64 {
-    let mut i = 0
+fn main() {
+    let mut i = 0;
     while i < 5 {
-        println("{i}")
-        i = i + 1
+        println!("{i}");
+        i = i + 1;
     }
-    return 0
 }
 "#;
     for_every_shape(src, |run, at| {
@@ -291,14 +286,14 @@ fn main() -> i64 {
 #[test]
 fn a_vec_temporary_released_inside_a_loop_is_balanced() {
     let src = r#"
-fn main() -> i64 {
-    let mut i = 0
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut i = 0;
+    let mut total = 0;
     while i < 4 {
-        total = total + Vec::len(vec[1, 2, 3])
-        i = i + 1
+        total = total + Vec::len(vec![1, 2, 3]);
+        i = i + 1;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#;
     for_every_shape(src, |run, at| {
@@ -315,13 +310,13 @@ fn main() -> i64 {
 #[test]
 fn a_returned_vec_temporary_is_not_released_by_its_maker() {
     let src = r#"
-fn mk() -> Vec<i64> {
-    return vec[1, 2]
+use std::process::ExitCode; fn mk() -> Vec<i64> {
+    vec![1, 2]
 }
 
-fn main() -> i64 {
-    let v = mk()
-    return Vec::len(v)
+fn main() -> ExitCode {
+    let v = mk();
+    return ExitCode::from(Vec::len(v) as u8);
 }
 "#;
     for_every_shape(src, |run, at| {
@@ -339,10 +334,9 @@ fn main() -> i64 {
 #[test]
 fn a_float_interpolation_takes_the_wider_frame_buffer() {
     let src = r#"
-fn main() -> i64 {
-    let f = 1.5
-    println("{f}")
-    return 0
+fn main() {
+    let f = 1.5;
+    println!("{f}");
 }
 "#;
     for_every_shape(src, |run, at| {

@@ -123,8 +123,8 @@ fn i8_arg_to_i64_param_inserts_cast() {
     let code = r#"
 fn takes_i64(x: i64) -> i64 { x }
 fn main() {
-    let v: i8 = 5
-    takes_i64(v)
+    let v: i8 = 5;
+    takes_i64(v);
 }
 "#;
     let air = source_to_air(code);
@@ -142,8 +142,8 @@ fn u8_arg_to_i32_param_inserts_cast() {
     let code = r#"
 fn takes_i32(x: i32) -> i32 { x }
 fn main() {
-    let v: u8 = 5
-    takes_i32(v)
+    let v: u8 = 5;
+    takes_i32(v);
 }
 "#;
     let air = source_to_air(code);
@@ -161,8 +161,8 @@ fn i32_arg_to_f64_param_inserts_cast() {
     let code = r#"
 fn takes_f64(x: f64) -> f64 { x }
 fn main() {
-    let v: i32 = 42
-    takes_f64(v)
+    let v: i32 = 42;
+    takes_f64(v);
 }
 "#;
     let air = source_to_air(code);
@@ -181,7 +181,7 @@ fn literal_narrowing_still_works() {
     let code = r#"
 fn takes_i8(x: i8) -> i8 { x }
 fn main() {
-    takes_i8(5)
+    takes_i8(5);
 }
 "#;
     let air = source_to_air(code);

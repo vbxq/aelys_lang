@@ -216,20 +216,20 @@ fn seam1_probe_no_trace_excludes_vec_buffer_from_collector() {
 }
 
 const SEAM1_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
 fn use_vec(v: Vec<i64>) -> i64 {
-    return v[0]
+    v[0]
 }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let data = vec[7, 8, 9]
-    let first = use_vec(data)
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let data = vec![7, 8, 9];
+    let first = use_vec(data);
     // now collect: with the bug, the vec buffer (a stale candidate) is mis-traced
-    __aelys_collect()
-    return data[0] + first
+    __aelys_collect();
+    return ExitCode::from((data[0] + first) as u8);
 }
 "#;
 
@@ -282,14 +282,14 @@ fn seam1_vec_buffer_not_mistraced_asan_clean() {
 }
 
 const SEAM1_NO_RC_TYPE_SRC: &str = r#"
-fn use_vec(v: Vec<i64>) -> i64 {
-    return v[0]
+use std::process::ExitCode; fn use_vec(v: Vec<i64>) -> i64 {
+    v[0]
 }
-fn main() -> i64 {
-    let data = vec[7, 8, 9]
-    let first = use_vec(data)
-    __aelys_collect()
-    return data[0] + first
+fn main() -> ExitCode {
+    let data = vec![7, 8, 9];
+    let first = use_vec(data);
+    __aelys_collect();
+    return ExitCode::from((data[0] + first) as u8);
 }
 "#;
 
@@ -321,11 +321,11 @@ fn seam1_vec_buffer_no_rc_type_no_oob_table_read() {
 #[test]
 fn seam2_cow_copy_through_immix_value_semantics() {
     let src = r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[3]) as u8);
 }
 "#;
     let Some((code, _stdout, stderr)) = run_with_env(
@@ -362,16 +362,16 @@ fn main() -> i64 {
 #[test]
 fn seam3_collector_free_reclaimed_by_immix_no_uaf() {
     let src = r#"
-struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 11, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 22, next: Rc::null() })
-    a.next = b
-    b.next = a
-    __aelys_collect()
-    let c: Rc<Node> = Rc::new(Node { val: 33, next: Rc::null() })
-    let d: Rc<Node> = Rc::new(Node { val: 44, next: Rc::null() })
-    return c.val + d.val
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 11, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 22, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    __aelys_collect();
+    let c: Rc<Node> = Rc::new(Node { val: 33, next: Rc::null() });
+    let d: Rc<Node> = Rc::new(Node { val: 44, next: Rc::null() });
+    return ExitCode::from((c.val + d.val) as u8);
 }
 "#;
     let Some((code, _stdout, stderr)) = run_with_env(
@@ -407,23 +407,23 @@ fn main() -> i64 {
 }
 
 const SEAM4_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
 fn use_vec(v: Vec<i64>) -> i64 {
-    return v[0] + v[1]
+    v[0] + v[1]
 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let r2: Rc<i64> = r
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let v = vec[10, 20, 30]
-    let w = v
-    Vec::push(w, 40)
-    let s = use_vec(v)
-    __aelys_collect()
-    return Rc::get(r2) + v[0] + w[3] + s
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(5);
+    let r2: Rc<i64> = r;
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let v = vec![10, 20, 30];
+    let w = v;
+    Vec::push(w, 40);
+    let s = use_vec(v);
+    __aelys_collect();
+    return ExitCode::from((Rc::get(r2) + v[0] + w[3] + s) as u8);
 }
 "#;
 

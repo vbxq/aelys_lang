@@ -86,7 +86,7 @@ fn classify_exit(status: ExitStatus) -> Verdict {
 fn linker_available() -> bool {
     let dir = tempdir().expect("tempdir");
     let probe = dir.path().join("canary.aelys");
-    fs::write(&probe, "fn main() -> i64 { return 0 }").expect("write canary");
+    fs::write(&probe, "fn main() { }").expect("write canary");
     match compile_file_with_llvm(&probe, OptimizationLevel::Standard, false) {
         Ok(()) => true,
         Err(err) => !linker_unavailable(&err.to_string()),

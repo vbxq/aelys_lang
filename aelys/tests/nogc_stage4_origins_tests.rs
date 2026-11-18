@@ -62,11 +62,10 @@ fn return_ref_to_local_is_rejected() {
     let err = reject(
         r#"
 fn bad() -> &i64 {
-    let x = 5
-    return &x
+    let x = 5;
+    &x
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -85,10 +84,9 @@ fn return_ref_to_param_compiles() {
     accepts(
         r#"
 fn good(r: &i64) -> &i64 {
-    return r
+    r
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -101,14 +99,13 @@ fn stage3_return_ref_gap_is_rejected() {
 fn touch(r: &Resource) {
 }
 fn get(r: &Resource) -> &Resource {
-    return r
+    r
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = get(&a)
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = get(&a);
+    let b = a;
+    touch(r);
 }
 "#,
     );
@@ -129,14 +126,13 @@ fn stage3_gap_twin_borrow_dead_before_move_compiles() {
 fn touch(r: &Resource) {
 }
 fn get(r: &Resource) -> &Resource {
-    return r
+    r
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = get(&a)
-    touch(r)
-    let b = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = get(&a);
+    touch(r);
+    let b = a;
 }
 "#,
     );
@@ -147,15 +143,15 @@ fn main() -> i64 {
 fn temp_repoint_uaf_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let mut r = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let mut r = &a;
     {
-        let x = 5
-        let tmp = &x
-        r = tmp
+        let x = 5;
+        let tmp = &x;
+        r = tmp;
     }
-    return *r
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -174,15 +170,15 @@ fn main() -> i64 {
 fn temp_repoint_reborrow_twin_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let mut r = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let mut r = &a;
     {
-        let x = 5
-        let tmp = &x
-        r = &*tmp
+        let x = 5;
+        let tmp = &x;
+        r = &*tmp;
     }
-    return *r
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -201,15 +197,15 @@ fn main() -> i64 {
 fn same_scope_borrow_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let r = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let r = &a;
     {
-        let x = 5
-        let s = &x
-        let y = *s
+        let x = 5;
+        let s = &x;
+        let y = *s;
     }
-    return *r
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -219,12 +215,12 @@ fn main() -> i64 {
 fn safe_reference_repoint_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let b = 20
-    let mut r = &a
-    r = &b
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let b = 20;
+    let mut r = &a;
+    r = &b;
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -235,11 +231,10 @@ fn main() -> i64 {
 fn projected_ref_store_uaf_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut arr = []
-    let x = 5
-    arr[0] = &x
-    return 0
+fn main() {
+    let mut arr = [];
+    let x = 5;
+    arr[0] = &x;
 }
 "#,
     );
@@ -257,10 +252,10 @@ fn main() -> i64 {
 fn projected_value_store_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let mut arr = [1, 2, 3]
-    arr[0] = 5
-    return arr[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut arr = [1, 2, 3];
+    arr[0] = 5;
+    return ExitCode::from(arr[0] as u8);
 }
 "#,
     );
@@ -271,13 +266,12 @@ fn main() -> i64 {
 fn closure_capturing_reference_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let r = &a
-    let f = fn() -> i64 {
-        return *r
-    }
-    return 0
+fn main() {
+    let a = 10;
+    let r = &a;
+    let f = move || -> i64 {
+        *r
+    };
 }
 "#,
     );
@@ -295,12 +289,11 @@ fn main() -> i64 {
 fn closure_capturing_value_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let f = fn() -> i64 {
-        return a
-    }
-    return 0
+fn main() {
+    let a = 10;
+    let f = move || -> i64 {
+        a
+    };
 }
 "#,
     );
@@ -311,13 +304,12 @@ fn returned_call_result_hits_floor() {
     let err = reject(
         r#"
 fn id(r: &i64) -> &i64 {
-    return r
+    r
 }
 fn via(r: &i64) -> &i64 {
-    return id(r)
+    id(r)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -335,13 +327,13 @@ fn main() -> i64 {
 #[test]
 fn id_passthrough_compiles_and_runs() {
     let src = r#"
-fn id(r: &i64) -> &i64 {
-    return r
+use std::process::ExitCode; fn id(r: &i64) -> &i64 {
+    r
 }
-fn main() -> i64 {
-    let a = 10
-    let r = id(&a)
-    return *r
+fn main() -> ExitCode {
+    let a = 10;
+    let r = id(&a);
+    return ExitCode::from((*r) as u8);
 }
 "#;
     accepts(src);
@@ -359,10 +351,9 @@ fn first_of_slice_ref_compiles() {
     accepts(
         r#"
 fn first(v: &[i64]) -> &i64 {
-    return &v[0]
+    &v[0]
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -372,18 +363,18 @@ fn main() -> i64 {
 fn nll_across_call_compiles() {
     accepts(
         r#"
-fn id(r: &i64) -> &i64 {
-    return r
+use std::process::ExitCode; fn id(r: &i64) -> &i64 {
+    r
 }
 fn read(r: &i64) -> i64 {
-    return *r
+    *r
 }
-fn main() -> i64 {
-    let mut a = 10
-    let r = id(&a)
-    let t = read(r)
-    a = 20
-    return t
+fn main() -> ExitCode {
+    let mut a = 10;
+    let r = id(&a);
+    let t = read(r);
+    a = 20;
+    return ExitCode::from(t as u8);
 }
 "#,
     );
@@ -394,16 +385,16 @@ fn main() -> i64 {
 fn nested_ref_deref_copy_uaf_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let mut outer = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let mut outer = &a;
     {
-        let x = 5
-        let r = &x
-        let pp = &r
-        outer = *pp
+        let x = 5;
+        let r = &x;
+        let pp = &r;
+        outer = *pp;
     }
-    return *outer
+    return ExitCode::from((*outer) as u8);
 }
 "#,
     );
@@ -417,11 +408,10 @@ fn main() -> i64 {
 fn nested_ref_construction_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let x = 5
-    let r = &x
-    let pp = &r
-    return 0
+fn main() {
+    let x = 5;
+    let r = &x;
+    let pp = &r;
 }
 "#,
     );

@@ -36,12 +36,12 @@ fn assert_e0727(err: &str) {
 fn reject_direct_managed_intrinsic() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -51,12 +51,12 @@ fn main() -> i64 { return f() }
 fn twin_direct_managed_intrinsic_compiles() {
     accepts(
         "\
-fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; fn f() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
 }
@@ -65,12 +65,12 @@ fn main() -> i64 { return f() }
 fn reject_transitive_through_general_callee() {
     let err = reject(
         "\
-fn g() -> Rc<i64> { return Rc::new(0) }
+use std::process::ExitCode; fn g() -> Rc<i64> { Rc::new(0) }
 nogc fn f() -> i64 {
-    g()
-    return 0
+    g();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -80,12 +80,12 @@ fn main() -> i64 { return f() }
 fn twin_transitive_through_general_callee_compiles() {
     accepts(
         "\
-fn g() -> Rc<i64> { return Rc::new(0) }
+use std::process::ExitCode; fn g() -> Rc<i64> { Rc::new(0) }
 fn f() -> i64 {
-    g()
-    return 0
+    g();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
 }
@@ -95,14 +95,14 @@ fn main() -> i64 { return f() }
 fn reject_indirect_allocating_closure() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    let c = fn() -> i64 {
-        let v = vec[1, 2, 3]
-        return v[0]
-    }
-    return c()
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let c = move || -> i64 {
+        let v = vec![1, 2, 3];
+        v[0]
+    };
+    c()
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -112,14 +112,14 @@ fn main() -> i64 { return f() }
 fn twin_indirect_allocating_closure_compiles() {
     accepts(
         "\
-fn f() -> i64 {
-    let c = fn() -> i64 {
-        let v = vec[1, 2, 3]
-        return v[0]
-    }
-    return c()
+use std::process::ExitCode; fn f() -> i64 {
+    let c = move || -> i64 {
+        let v = vec![1, 2, 3];
+        v[0]
+    };
+    c()
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
 }
@@ -129,8 +129,8 @@ fn main() -> i64 { return f() }
 fn accept_nogc_slice_sum_panic_only() {
     accepts(
         "\
-nogc fn sum3(s: &[i64]) -> i64 { return s[0] + s[1] + s[2] }
-fn main() -> i64 { return 0 }
+nogc fn sum3(s: &[i64]) -> i64 { s[0] + s[1] + s[2] }
+fn main() { }
 ",
     );
 }
@@ -139,9 +139,9 @@ fn main() -> i64 { return 0 }
 fn accept_nogc_calls_pure_nogc() {
     accepts(
         "\
-nogc fn helper(x: i64) -> i64 { return x + 1 }
-nogc fn f() -> i64 { return helper(41) }
-fn main() -> i64 { return f() }
+use std::process::ExitCode; nogc fn helper(x: i64) -> i64 { x + 1 }
+nogc fn f() -> i64 { helper(41) }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
 }

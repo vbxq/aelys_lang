@@ -113,18 +113,18 @@ fn assert_returns_every_level(label: &str, src: &str, expected: i32) {
 }
 
 const INT_MIN_DIV: &str = r#"
-fn main() -> i64 {
-    let a = 0 - 9223372036854775807 - 1
-    let b = 0 - 1
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 9223372036854775807 - 1;
+    let b = 0 - 1;
+    return ExitCode::from((a / b) as u8);
 }
 "#;
 
 const INT_MIN_REM: &str = r#"
-fn main() -> i64 {
-    let a = 0 - 9223372036854775807 - 1
-    let b = 0 - 1
-    return a % b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 9223372036854775807 - 1;
+    let b = 0 - 1;
+    return ExitCode::from((a % b) as u8);
 }
 "#;
 
@@ -140,26 +140,26 @@ fn defect1_int_min_rem_traps_every_level() {
 
 #[test]
 fn defect1_ordinary_division_still_correct() {
-    assert_returns_every_level("7 / 2", "fn main() -> i64 { return 7 / 2 }\n", 3);
+    assert_returns_every_level("7 / 2", "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from((7 / 2) as u8); }\n", 3);
     assert_returns_every_level(
         "-8 / -1",
-        "fn main() -> i64 { let a = 0 - 8; let b = 0 - 1; return a / b }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { let a = 0 - 8; let b = 0 - 1; return ExitCode::from((a / b) as u8); }\n",
         8,
     );
     assert_returns_every_level(
         "INT_MIN / 2",
-        "fn main() -> i64 { let a = 0 - 9223372036854775807 - 1; return a / 2 + 4611686018427387904 }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { let a = 0 - 9223372036854775807 - 1; return ExitCode::from((a / 2 + 4611686018427387904) as u8); }\n",
         0,
     );
-    assert_returns_every_level("7 % 3", "fn main() -> i64 { return 7 % 3 }\n", 1);
+    assert_returns_every_level("7 % 3", "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from((7 % 3) as u8); }\n", 1);
 }
 
 const MUT_REF_IMMUTABLE: &str = r#"
-fn main() -> i64 {
-    let x = 1
-    let a = &mut x
-    *a = 2
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x = 1;
+    let a = &mut x;
+    *a = 2;
+    return ExitCode::from(x as u8);
 }
 "#;
 
@@ -172,7 +172,7 @@ fn defect2_mut_ref_of_immutable_binding_is_e0417() {
 fn defect2_mut_ref_of_mutable_binding_compiles_and_mutates() {
     assert_returns_every_level(
         "&mut let-mut",
-        "fn main() -> i64 { let mut x = 1; let a = &mut x; *a = 2; return x }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { let mut x = 1; let a = &mut x; *a = 2; return ExitCode::from(x as u8); }\n",
         2,
     );
 }
@@ -181,15 +181,15 @@ fn defect2_mut_ref_of_mutable_binding_compiles_and_mutates() {
 fn defect2_immutable_ref_of_immutable_binding_compiles() {
     assert_returns_every_level(
         "&x immutable",
-        "fn main() -> i64 { let x = 5; let a = &x; return *a }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { let x = 5; let a = &x; return ExitCode::from((*a) as u8); }\n",
         5,
     );
 }
 
 const RC_GET_NULL: &str = r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::null()
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::null();
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#;
 
@@ -202,23 +202,23 @@ fn defect3_rc_get_null_traps_every_level() {
 fn defect3_rc_get_of_real_rc_returns_value() {
     assert_returns_every_level(
         "Rc::get(Rc::new(42))",
-        "fn main() -> i64 { let r = Rc::new(42); return Rc::get(r) }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { let r = Rc::new(42); return ExitCode::from(Rc::get(r) as u8); }\n",
         42,
     );
 }
 
 const NESTED_SHADOW: &str = r#"
-fn pick<A, B>(a: A, b: B) -> A {
-    return a
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A {
+    a
 }
 fn other() -> i64 {
     fn pick<A, B>(a: A, b: B) -> B {
-        return b
+        b
     }
-    return pick(1, 2)
+    pick(1, 2)
 }
-fn main() -> i64 {
-    return pick(7, 8)
+fn main() -> ExitCode {
+    return ExitCode::from(pick(7, 8) as u8);
 }
 "#;
 
@@ -232,12 +232,12 @@ fn defect4_unique_nested_name_compiles() {
     assert_returns_every_level(
         "unique nested name",
         r#"
-fn pick<A, B>(a: A, b: B) -> A { return a }
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A { a }
 fn other() -> i64 {
-    fn choose<A, B>(a: A, b: B) -> B { return b }
-    return choose(1, 2)
+    fn choose<A, B>(a: A, b: B) -> B { b }
+    choose(1, 2)
 }
-fn main() -> i64 { return pick(7, 8) }
+fn main() -> ExitCode { return ExitCode::from(pick(7, 8) as u8); }
 "#,
         7,
     );
@@ -248,8 +248,8 @@ fn defect4_plain_top_level_generic_call_works() {
     assert_returns_every_level(
         "plain top-level",
         r#"
-fn pick<A, B>(a: A, b: B) -> A { return a }
-fn main() -> i64 { return pick(7, 8) }
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A { a }
+fn main() -> ExitCode { return ExitCode::from(pick(7, 8) as u8); }
 "#,
         7,
     );

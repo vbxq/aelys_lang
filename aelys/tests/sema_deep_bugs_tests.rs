@@ -26,7 +26,7 @@ fn force_dynamic_handles_vec_inner_type() {
     let result = sema_ok(
         r#"
 fn f() {
-    let v = vec[1, "hello"]
+    let v = vec![1, "hello"];
 }
 "#,
     );
@@ -43,7 +43,7 @@ fn rejects_for_each_on_integer() {
             r#"
 fn f() {
     for x in 42 {
-        let y = x
+        let y = x;
     }
 }
 "#
@@ -59,7 +59,7 @@ fn rejects_for_each_on_bool() {
             r#"
 fn f() {
     for x in true {
-        let y = x
+        let y = x;
     }
 }
 "#
@@ -75,9 +75,9 @@ fn rejects_for_each_on_struct() {
             r#"
 struct Point { x: i64, y: i64 }
 fn f() {
-    let p = Point { x: 1, y: 2 }
+    let p = Point { x: 1, y: 2 };
     for x in p {
-        let y = x
+        let y = x;
     }
 }
 "#
@@ -92,9 +92,9 @@ fn for_each_on_array_is_ok() {
         sema_ok(
             r#"
 fn f() {
-    let arr = [1, 2, 3]
+    let arr = [1, 2, 3];
     for x in arr {
-        let y = x
+        let y = x;
     }
 }
 "#
@@ -110,7 +110,7 @@ fn for_each_on_string_is_ok() {
             r#"
 fn f() {
     for c in "hello" {
-        let x = c
+        let x = c;
     }
 }
 "#
@@ -128,7 +128,7 @@ fn rejects_struct_literal_with_unknown_field() {
             r#"
 struct Point { x: i64, y: i64 }
 fn f() {
-    let p = Point { x: 1, y: 2, z: 3 }
+    let p = Point { x: 1, y: 2, z: 3 };
 }
 "#
         ),
@@ -143,7 +143,7 @@ fn rejects_struct_literal_with_missing_field() {
             r#"
 struct Point { x: i64, y: i64 }
 fn f() {
-    let p = Point { x: 1 }
+    let p = Point { x: 1 };
 }
 "#
         ),
@@ -158,7 +158,7 @@ fn struct_literal_with_all_fields_is_ok() {
             r#"
 struct Point { x: i64, y: i64 }
 fn f() {
-    let p = Point { x: 1, y: 2 }
+    let p = Point { x: 1, y: 2 };
 }
 "#
         ),
@@ -172,13 +172,13 @@ fn empty_array_type_is_resolved() {
         sema_ok(
             r#"
 fn f() {
-    let arr: [i64; 0] = []
+    let arr: [i64; 0] = [];
 }
 "#
         ),
         "empty array literal should compile"
     );
-    let src = Source::new("<test>", "fn f() {\n    let arr = []\n}\n");
+    let src = Source::new("<test>", "fn f() {\n    let arr = [];\n}\n");
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
     let stmts = Parser::new(tokens, src.clone())
         .parse()
@@ -201,7 +201,7 @@ fn unannotated_function_return_compiles() {
         sema_ok(
             r#"
 fn noop() {
-    let x = 1
+    let x = 1;
 }
 "#
         ),
@@ -222,9 +222,9 @@ fn nested_struct_field_access_validates_types() {
 struct Inner { val: i64 }
 struct Outer { inner: Inner }
 fn test() -> i64 {
-    let i = Inner { val: 10 }
-    let o = Outer { inner: i }
-    return o.inner.val
+    let i = Inner { val: 10 };
+    let o = Outer { inner: i };
+    o.inner.val
 }
 "#
         ),
@@ -240,8 +240,8 @@ fn rejects_field_access_on_wrong_struct() {
 struct A { x: i64 }
 struct B { y: i64 }
 fn f() -> i64 {
-    let a = A { x: 1 }
-    return a.y
+    let a = A { x: 1 };
+    a.y
 }
 "#
         ),
@@ -257,7 +257,7 @@ fn rejects_slice_on_integer() {
         sema_err(
             r#"
 fn f() -> i64 {
-    return 42[0..1]
+    42[0..1]
 }
 "#
         ),
@@ -271,8 +271,8 @@ fn rejects_index_on_bool() {
         sema_err(
             r#"
 fn f() {
-    let b = true
-    let x = b[0]
+    let b = true;
+    let x = b[0];
 }
 "#
         ),
@@ -285,11 +285,11 @@ fn rejects_index_on_var_that_resolves_to_scalar() {
     assert!(
         sema_err(
             r#"
-fn bad(x) -> i64 {
-    return x[0]
+use std::process::ExitCode; fn bad(x) -> i64 {
+    x[0]
 }
-fn main() -> i64 {
-    return bad(1)
+fn main() -> ExitCode {
+    return ExitCode::from(bad(1) as u8);
 }
 "#
         ),
@@ -302,11 +302,11 @@ fn rejects_member_on_var_that_resolves_to_scalar() {
     assert!(
         sema_err(
             r#"
-fn bad(x) -> i64 {
-    return x.foo
+use std::process::ExitCode; fn bad(x) -> i64 {
+    x.foo
 }
-fn main() -> i64 {
-    return bad(1)
+fn main() -> ExitCode {
+    return ExitCode::from(bad(1) as u8);
 }
 "#
         ),
@@ -319,11 +319,11 @@ fn rejects_invalid_cast_after_var_resolution() {
     assert!(
         sema_err(
             r#"
-fn bad_cast(x) -> i64 {
-    return x as i64
+use std::process::ExitCode; fn bad_cast(x) -> i64 {
+    x as i64
 }
-fn main() -> i64 {
-    return bad_cast("hello")
+fn main() -> ExitCode {
+    return ExitCode::from(bad_cast("hello") as u8);
 }
 "#
         ),
@@ -336,11 +336,11 @@ fn rejects_generic_cast_with_invalid_instantiation() {
     assert!(
         sema_err(
             r#"
-fn bad<T>(x: T) -> i64 {
-    return x as i64
+use std::process::ExitCode; fn bad<T>(x: T) -> i64 {
+    x as i64
 }
-fn main() -> i64 {
-    return bad("hello")
+fn main() -> ExitCode {
+    return ExitCode::from(bad("hello") as u8);
 }
 "#
         ),
@@ -358,7 +358,7 @@ fn bad(iter) {
     }
 }
 fn main() {
-    bad(1)
+    bad(1);
 }
 "#
         ),
@@ -372,9 +372,9 @@ fn rejects_generic_type_param_escape_from_struct_field() {
         sema_err(
             r#"
 struct Box<T> { value: T }
-fn bad() -> string {
-    let b = Box { value: 1 }
-    return b.value
+fn bad() -> String {
+    let b = Box { value: 1 };
+    b.value
 }
 "#
         ),
@@ -387,12 +387,12 @@ fn rejects_member_access_on_unconstrained_generic_param() {
     assert!(
         sema_err(
             r#"
-fn getfoo<T>(x: T) -> i64 {
-    return x.foo
+use std::process::ExitCode; fn getfoo<T>(x: T) -> i64 {
+    x.foo
 }
 
-fn main() -> i64 {
-    return getfoo(1)
+fn main() -> ExitCode {
+    return ExitCode::from(getfoo(1) as u8);
 }
 "#
         ),
@@ -405,12 +405,12 @@ fn rejects_call_on_unconstrained_generic_param() {
     assert!(
         sema_err(
             r#"
-fn bad<T>(x: T) -> i64 {
-    return x()
+use std::process::ExitCode; fn bad<T>(x: T) -> i64 {
+    x()
 }
 
-fn main() -> i64 {
-    return bad(1)
+fn main() -> ExitCode {
+    return ExitCode::from(bad(1) as u8);
 }
 "#
         ),
@@ -425,10 +425,10 @@ fn rejects_generic_type_param_escape_from_direct_generic_call() {
             r#"
 struct Box<T> { value: T }
 fn id<T>(x: T) -> T {
-    return x
+    x
 }
-fn bad() -> string {
-    return id(Box { value: 1 }.value)
+fn bad() -> String {
+    id(Box { value: 1 }.value)
 }
 "#
         ),
@@ -441,15 +441,15 @@ fn rejects_lambda_with_active_generic_type_param() {
     assert!(
         sema_err(
             r#"
-fn outer<T>(x: T) -> T {
-    let f = fn() -> T {
-        return x
-    }
-    return f()
+use std::process::ExitCode; fn outer<T>(x: T) -> T {
+    let f = move || -> T {
+        x
+    };
+    f()
 }
 
-fn main() -> i64 {
-    return outer(1)
+fn main() -> ExitCode {
+    return ExitCode::from(outer(1) as u8);
 }
 "#
         ),
@@ -463,8 +463,8 @@ fn rejects_string_index_assignment() {
         sema_err(
             r#"
 fn bad() {
-    let mut s = "abc"
-    s[0] = "x"
+    let mut s = "abc";
+    s[0] = "x";
 }
 "#
         ),
@@ -478,9 +478,9 @@ fn accepts_array_slice_expression() {
         !sema_err(
             r#"
 fn ok() -> i64 {
-    let arr = [1, 2, 3]
-    let x = arr[0..1]
-    return x[0]
+    let arr = [1, 2, 3];
+    let x = arr[0..1];
+    x[0]
 }
 "#
         ),
@@ -493,15 +493,15 @@ fn rejects_generic_if_condition_with_non_bool_instantiation() {
     assert!(
         sema_err(
             r#"
-fn bad<T>(x: T) -> i64 {
+use std::process::ExitCode; fn bad<T>(x: T) -> i64 {
     if x {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 
-fn main() -> i64 {
-    return bad(1)
+fn main() -> ExitCode {
+    return ExitCode::from(bad(1) as u8);
 }
 "#
         ),

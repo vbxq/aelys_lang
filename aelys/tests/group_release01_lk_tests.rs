@@ -78,165 +78,157 @@ fn release01_96_an_assignment_whose_source_is_its_destination_frees_what_it_held
             Case {
                 name: "closure_same",
                 src: r#"fn mkc(i: i64) -> fn(i64) -> i64 {
-    let k: string = "a{i}" + "z"
-    return fn(x: i64) -> i64 { return x + k.len }
+    let k: String = format!("a{i}") + "z";
+    move |x: i64| -> i64 { x + k.len() }
 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut x: fn(i64) -> i64 = mkc(i)
-        x = { x }
-        n = n + x(1)
-        i = i + 1
+        let mut x: fn(i64) -> i64 = mkc(i);
+        x = { x; }
+        n = n + x(1);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "5890\n",
             },
             Case {
                 name: "enum_same",
-                src: r#"enum E { A(string), B }
+                src: r#"enum E { A(String), B }
 fn elen(e: &E) -> i64 {
     match *e {
-        E::A(s) => return s.len,
+        E::A(s) => return s.len(),
         E::B => return 0,
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut x: E = E::A("a{i}" + "z")
-        x = x
-        n = n + elen(&x)
-        i = i + 1
+        let mut x: E = E::A(format!("a{i}") + "z");
+        x = x;
+        n = n + elen(&x);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "4890\n",
             },
             Case {
                 name: "in_callee",
-                src: r#"fn f(s: string) -> i64 {
-    let mut t: string = s
-    t = t
-    return t.len
+                src: r#"fn f(s: String) -> i64 {
+    let mut t: String = s;
+    t = t;
+    t.len()
 }
-fn g(s: string) -> string {
-    let mut t = s
-    t = t
-    t = t + t
-    t = t
-    return t
+fn g(s: String) -> String {
+    let mut t = s;
+    t = t;
+    t = t + t;
+    t = t;
+    t
 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let s: string = "a{i}" + "z"
-        n = n + f(s) + g(s).len
-        i = i + 1
+        let s: String = format!("a{i}") + "z";
+        n = n + f(s) + g(s).len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "14670\n",
             },
             Case {
                 name: "string_block",
-                src: r#"fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut s: string = "a{i}" + "z"
-        s = { s }
-        n = n + s.len
-        i = i + 1
+        let mut s: String = format!("a{i}") + "z";
+        s = { s; }
+        n = n + s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "4890\n",
             },
             Case {
                 name: "string_inlined_identity",
-                src: r#"fn id(s: string) -> string { return s }
-fn gid<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"fn id(s: String) -> String { s }
+fn gid<T>(x: T) -> T { x }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut s: string = "abc{i}"
-        s = id(s)
-        s = gid(s)
-        n = n + s.len
-        i = i + 1
+        let mut s: String = format!("abc{i}");
+        s = id(s);
+        s = gid(s);
+        n = n + s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "5890\n",
             },
             Case {
                 name: "string_same",
-                src: r#"fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 100000 {
-        let mut s: string = "abcdefgh{i}"
-        s = s
-        n = n + s.len
-        i = i + 1
+        let mut s: String = format!("abcdefgh{i}");
+        s = s;
+        n = n + s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "1288890\n",
             },
             Case {
                 name: "struct_same",
-                src: r#"struct P { s: string }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"struct P { s: String }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut p = P { s: "a{i}" }
-        p = p
-        n = n + p.s.len
-        i = i + 1
+        let mut p = P { s: format!("a{i}") };
+        p = p;
+        n = n + p.s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "3890\n",
             },
             Case {
                 name: "vec_and_rc_same",
-                src: r#"struct R { s: string }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"struct R { s: String }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut v: Vec<string> = vec["a{i}", "b"]
-        v = v
-        let mut r: Rc<R> = Rc::new(R { s: "a{i}" + "z" })
-        r = r
-        n = n + v.len + Rc::get(r).s.len
-        i = i + 1
+        let mut v: Vec<String> = vec![format!("a{i}"), "b"];
+        v = v;
+        let mut r: Rc<R> = Rc::new(R { s: format!("a{i}") + "z" });
+        r = r;
+        n = n + v.len() + Rc::get(r).s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "6890\n",
@@ -252,130 +244,124 @@ fn release01_97_an_array_lent_as_a_slice_frees_its_elements_at_scope_end() {
         &[
             Case {
                 name: "element_outlives_array",
-                src: r#"fn first(a: &[string]) -> string { return a[0] }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut keep: string = ""
-    let mut kept: string = ""
+                src: r#"fn first(a: &[String]) -> String { a[0] }
+fn main() {
+    let mut i: i64 = 0;
+    let mut keep: String = "";
+    let mut kept: String = "";
     while i < 1000 {
-        let a: [string; 2] = ["a{i}" + "z", "b"]
-        keep = first(a[..])
-        let e: string = {
-            let b: [string; 2] = ["c{i}" + "z", "d"]
-            let s = b[..]
+        let a: [String; 2] = [format!("a{i}") + "z", "b"];
+        keep = first(a[..]);
+        let e: String = {
+            let b: [String; 2] = [format!("c{i}") + "z", "d"];
+            let s = b[..];
             s[0]
-        }
-        kept = e
-        i = i + 1
+        };
+        kept = e;
+        i = i + 1;
     }
-    println(keep)
-    println(kept)
-    return 0
+    println!("{}", keep);
+    println!("{}", kept);
 }
 "#,
                 out: "a999z\nc999z\n",
             },
             Case {
                 name: "foreach_view",
-                src: r#"fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
-    let mut keep: string = ""
+                src: r#"fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
+    let mut keep: String = "";
     while i < 1000 {
-        let a: [string; 2] = ["a{i}" + "z", "b{i}"]
+        let a: [String; 2] = [format!("a{i}") + "z", format!("b{i}")];
         for x in a[..] {
-            n = n + x.len
-            keep = x
+            n = n + x.len();
+            keep = x;
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(keep)
-    println(n)
-    return 0
+    println!("{}", keep);
+    println!("{}", n);
 }
 "#,
                 out: "b999\n8780\n",
             },
             Case {
                 name: "read_views",
-                src: r#"fn rm(a: &mut [string]) -> i64 { return a[0].len }
-fn rs(a: &[string]) -> i64 { return a[1].len }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"fn rm(a: &mut [String]) -> i64 { a[0].len() }
+fn rs(a: &[String]) -> i64 { a[1].len() }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut a: [string; 2] = ["a{i}" + "z", "b{i}" + "z"]
-        n = n + rm(a[..]) + rs(a[..])
-        let s = a[..]
-        n = n + s[0].len
-        i = i + 1
+        let mut a: [String; 2] = [format!("a{i}") + "z", format!("b{i}") + "z"];
+        n = n + rm(a[..]) + rs(a[..]);
+        let s = a[..];
+        n = n + s[0].len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "14670\n",
             },
             Case {
                 name: "self_store_through_view",
-                src: r#"struct P { s: string, k: i64 }
-fn gid<T>(x: T) -> T { return x }
-fn sp(a: &mut [P]) { a[0] = gid(a[0]) }
-fn ss(a: &mut [string], i: i64) { a[0] = if i > 5 { a[0] } else { a[0] } }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+                src: r#"struct P { s: String, k: i64 }
+fn gid<T>(x: T) -> T { x }
+fn sp(a: &mut [P]) { a[0] = gid(a[0]); }
+fn ss(a: &mut [String], i: i64) { a[0] = if i > 5 { a[0] } else { a[0] }; }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut a: [P; 2] = [P { s: "a{i}" + "z", k: i }, P { s: "b", k: 0 }]
-        sp(a[..])
-        let mut b: [string; 2] = ["c{i}" + "z", "d"]
-        ss(b[..], i)
-        n = n + a[0].s.len + b[0].len
-        i = i + 1
+        let mut a: [P; 2] = [P { s: format!("a{i}") + "z", k: i }, P { s: "b", k: 0 }];
+        sp(a[..]);
+        let mut b: [String; 2] = [format!("c{i}") + "z", "d"];
+        ss(b[..], i);
+        n = n + a[0].s.len() + b[0].len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "9780\n",
             },
             Case {
                 name: "store_outer",
-                src: r#"fn seti(a: &mut [string], s: string) { a[0] = s }
-fn main() -> i64 {
-    let mut a: [string; 2] = ["x", "y"]
-    let mut i: i64 = 0
+                src: r#"fn seti(a: &mut [String], s: String) { a[0] = s; }
+fn main() {
+    let mut a: [String; 2] = ["x", "y"];
+    let mut i: i64 = 0;
     while i < 1000 {
-        seti(a[..], "ab" + "{i}")
-        i = i + 1
+        seti(a[..], "ab" + format!("{i}"));
+        i = i + 1;
     }
-    println(a[0])
-    return 0
+    println!("{}", a[0]);
 }
 "#,
                 out: "ab999\n",
             },
             Case {
                 name: "swap_through_view",
-                src: r#"fn sw(a: &mut [string]) {
-    let t = a[0]
-    a[0] = a[1]
-    a[1] = t
+                src: r#"fn sw(a: &mut [String]) {
+    let t = a[0];
+    a[0] = a[1];
+    a[1] = t;
 }
-struct H { a: [string; 2], z: i64 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+struct H { a: [String; 2], z: i64 }
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 1000 {
-        let mut a: [string; 2] = ["a{i}" + "z", "bb{i}" + "z"]
-        sw(a[..])
-        let mut h = H { a: ["c{i}" + "z", "d"], z: 0 }
-        sw(h.a[..])
-        n = n + a[0].len + h.a[1].len
-        i = i + 1
+        let mut a: [String; 2] = [format!("a{i}") + "z", format!("bb{i}") + "z"];
+        sw(a[..]);
+        let mut h = H { a: [format!("c{i}") + "z", "d"], z: 0 };
+        sw(h.a[..]);
+        n = n + a[0].len() + h.a[1].len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#,
                 out: "10780\n",

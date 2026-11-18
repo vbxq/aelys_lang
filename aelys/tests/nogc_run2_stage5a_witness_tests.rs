@@ -58,18 +58,18 @@ fn chain_of(src: &str, root: &str) -> Vec<Step> {
 }
 
 const THREE_HOP: &str = "\
-fn leaf() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; fn leaf() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
 fn helper() -> i64 {
-    return leaf()
+    leaf()
 }
 nogc fn f() -> i64 {
-    return helper()
+    helper()
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ";
 
 #[test]
@@ -94,12 +94,12 @@ fn twin_three_hop_compiles() {
 fn direct_one_hop_anchors_on_the_operation() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -112,11 +112,11 @@ fn main() -> i64 { return f() }
 fn naming_trap_names_the_operation_not_the_local_type() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    return 0
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let mut v: Vec<i64> = Vec::new();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -129,8 +129,8 @@ fn main() -> i64 { return f() }
 fn managed_parameter_is_named_when_no_operation_exists() {
     let err = reject(
         "\
-nogc fn f(v: Vec<i64>) -> i64 { return 0 }
-fn main() -> i64 { return 0 }
+nogc fn f(v: Vec<i64>) -> i64 { 0 }
+fn main() { }
 ",
     );
     assert_e0727(&err);
@@ -142,12 +142,12 @@ fn main() -> i64 { return 0 }
 fn transitive_chain_descends_past_the_returned_value() {
     let err = reject(
         "\
-fn g() -> Rc<i64> { return Rc::new(0) }
+use std::process::ExitCode; fn g() -> Rc<i64> { Rc::new(0) }
 nogc fn f() -> i64 {
-    g()
-    return 0
+    g();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -157,18 +157,18 @@ fn main() -> i64 { return f() }
 }
 
 const MUTUAL: &str = "\
-fn a(n: i64) -> i64 { return b(n) }
+use std::process::ExitCode; fn a(n: i64) -> i64 { b(n) }
 fn b(n: i64) -> i64 {
-    a(n)
-    return c(n)
+    a(n);
+    c(n)
 }
 fn c(n: i64) -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-nogc fn f() -> i64 { return a(1) }
-fn main() -> i64 { return f() }
+nogc fn f() -> i64 { a(1) }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ";
 
 #[test]
@@ -194,14 +194,14 @@ fn twin_mutual_recursion_compiles() {
 }
 
 const PAST_CULPRIT: &str = "\
-fn a() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return b()
+use std::process::ExitCode; fn a() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    b()
 }
-fn b() -> i64 { return a() }
-nogc fn f() -> i64 { return a() }
-fn main() -> i64 { return f() }
+fn b() -> i64 { a() }
+nogc fn f() -> i64 { a() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ";
 
 #[test]
@@ -238,11 +238,11 @@ fn twin_descent_past_the_culprit_compiles() {
 fn indirect_builtin_call_gets_the_honest_wording() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    println(\"hi\")
-    return 0
+use std::process::ExitCode; nogc fn f() -> i64 {
+    println!(\"hi\");
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -269,14 +269,14 @@ fn main() -> i64 { return f() }
 fn indirect_closure_call_gets_the_honest_wording() {
     let err = reject(
         "\
-nogc fn f() -> i64 {
-    let c = fn() -> i64 {
-        let v = vec[1, 2, 3]
-        return v[0]
-    }
-    return c()
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let c = move || -> i64 {
+        let v = vec![1, 2, 3];
+        v[0]
+    };
+    c()
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_e0727(&err);
@@ -294,20 +294,20 @@ fn main() -> i64 { return f() }
 }
 
 const COLLISION: &str = "\
-fn outer() -> i64 {
+use std::process::ExitCode; fn outer() -> i64 {
     fn dup() -> i64 {
-        let mut v = Vec::new()
-        Vec::push(v, 1)
-        return 0
+        let mut v = Vec::new();
+        Vec::push(v, 1);
+        0
     }
-    return dup()
+    dup()
 }
 fn other() -> i64 {
-    fn dup() -> i64 { return 0 }
-    return dup()
+    fn dup() -> i64 { 0 }
+    dup()
 }
-nogc fn f() -> i64 { return outer() }
-fn main() -> i64 { return f() + other() }
+nogc fn f() -> i64 { outer() }
+fn main() -> ExitCode { return ExitCode::from((f() + other()) as u8); }
 ";
 
 #[test]
@@ -350,20 +350,20 @@ fn bodies_named(src: &str, name: &str) -> usize {
 }
 
 const DIRECT_COLLISION: &str = "\
-fn dup() -> i64 { return 0 }
+use std::process::ExitCode; fn dup() -> i64 { 0 }
 fn holder() -> i64 {
-    let g = fn() -> i64 {
+    let g = move || -> i64 {
         fn dup() -> i64 {
-            let mut v = Vec::new()
-            Vec::push(v, 1)
-            return 0
+            let mut v = Vec::new();
+            Vec::push(v, 1);
+            0
         }
-        return 0
-    }
-    return g()
+        0
+    };
+    g()
 }
-nogc fn f() -> i64 { return dup() }
-fn main() -> i64 { return f() + holder() }
+nogc fn f() -> i64 { dup() }
+fn main() -> ExitCode { return ExitCode::from((f() + holder()) as u8); }
 ";
 
 #[test]
@@ -391,19 +391,19 @@ fn direct_collision_never_names_the_ambiguous_callee_as_a_hop() {
 }
 
 const SHADOWED_NOGC: &str = "\
-fn holder() -> i64 {
-    let g = fn() -> i64 {
+use std::process::ExitCode; fn holder() -> i64 {
+    let g = move || -> i64 {
         fn f() -> i64 {
-            let mut v = Vec::new()
-            Vec::push(v, 1)
-            return 0
+            let mut v = Vec::new();
+            Vec::push(v, 1);
+            0
         }
-        return 0
-    }
-    return g()
+        0
+    };
+    g()
 }
-nogc fn f() -> i64 { return 0 }
-fn main() -> i64 { return f() + holder() }
+nogc fn f() -> i64 { 0 }
+fn main() -> ExitCode { return ExitCode::from((f() + holder()) as u8); }
 ";
 
 #[test]
@@ -447,12 +447,12 @@ fn shadowed_nogc_body_says_the_effects_were_merged() {
 #[test]
 fn a_deep_chain_is_elided_and_its_carets_are_capped() {
     let mut src = String::from(
-        "fn h0() -> i64 {\n    let mut v = Vec::new()\n    Vec::push(v, 1)\n    return 0\n}\n",
+        "fn h0() -> i64 {\n    let mut v = Vec::new();\n    Vec::push(v, 1);\n    0\n}\n",
     );
     for i in 1..=200 {
-        src.push_str(&format!("fn h{}() -> i64 {{ return h{}() }}\n", i, i - 1));
+        src.push_str(&format!("fn h{}() -> i64 {{ h{}() }}\n", i, i - 1));
     }
-    src.push_str("nogc fn f() -> i64 { return h200() }\nfn main() -> i64 { return f() }\n");
+    src.push_str("use std::process::ExitCode; nogc fn f() -> i64 { h200() }\nfn main() -> ExitCode { return ExitCode::from(f() as u8); }\n");
 
     let err = reject(&src);
     assert_e0727(&err);
@@ -513,58 +513,58 @@ fn reconstructed_chain_is_identical_across_runs() {
 fn accepted_programs_are_untouched() {
     accepts(
         "\
-nogc fn sum3(s: &[i64]) -> i64 { return s[0] + s[1] + s[2] }
-nogc fn helper(x: i64) -> i64 { return x + 1 }
-nogc fn f() -> i64 { return helper(41) }
-fn main() -> i64 { return f() }
+use std::process::ExitCode; nogc fn sum3(s: &[i64]) -> i64 { s[0] + s[1] + s[2] }
+nogc fn helper(x: i64) -> i64 { x + 1 }
+nogc fn f() -> i64 { helper(41) }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
 }
 
 const STAGE0_MANAGED_COLLISION: &str = r#"
-fn dup() -> i64 { return 0 }
+use std::process::ExitCode; fn dup() -> i64 { 0 }
 fn outer() -> i64 {
     fn dup() -> i64 {
-        let mut v = Vec::new()
-        Vec::push(v, 1)
-        return 0
+        let mut v = Vec::new();
+        Vec::push(v, 1);
+        0
     }
-    return dup()
+    dup()
 }
-nogc fn f() -> i64 { return outer() }
-fn main() -> i64 { return f() }
+nogc fn f() -> i64 { outer() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 "#;
 
 const STAGE0_EFFECT_FREE_SHADOW: &str = r#"
-fn dup() -> i64 { return 0 }
+use std::process::ExitCode; fn dup() -> i64 { 0 }
 fn outer() -> i64 {
-    fn dup() -> i64 { return 0 }
-    return dup()
+    fn dup() -> i64 { 0 }
+    dup()
 }
-nogc fn f() -> i64 { return outer() }
-fn main() -> i64 { return f() }
+nogc fn f() -> i64 { outer() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 "#;
 
 const STAGE0_RESERVED_MANAGED: &str = r#"
-nogc fn __f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; nogc fn __f() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return __f() }
+fn main() -> ExitCode { return ExitCode::from(__f() as u8); }
 "#;
 
 const STAGE0_MULTIPLE_SHADOWS: &str = r#"
-fn dup() -> i64 { return 0 }
+use std::process::ExitCode; fn dup() -> i64 { 0 }
 fn first() -> i64 {
-    fn dup() -> i64 { return 1 }
-    return dup()
+    fn dup() -> i64 { 1 }
+    dup()
 }
 fn second() -> i64 {
-    fn dup() -> i64 { return 2 }
-    return dup()
+    fn dup() -> i64 { 2 }
+    dup()
 }
-fn main() -> i64 { return first() + second() }
+fn main() -> ExitCode { return ExitCode::from((first() + second()) as u8); }
 "#;
 
 fn assert_code_before(err: &str, first: &str, second: &str) {
@@ -606,7 +606,7 @@ fn reserved_managed_nogc_reports_e0727_before_reserved_name() {
 
 #[test]
 fn non_shadow_sema_errors_remain_fatal() {
-    let err = reject("fn main() -> i64 { return missing() }\n");
+    let err = reject("use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from(missing() as u8); }\n");
     has(&err, "[E0201]");
     lacks(&err, "[E0418]");
 }

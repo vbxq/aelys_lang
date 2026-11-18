@@ -428,13 +428,13 @@ const GROUP_V: &[(&str, &str, Oracle)] = &[
     (
         "SI-V17",
         r#"
-struct Cell { x: i64 }
-fn read(p: &i64) -> i64 { return *p }
-fn main() -> i64 {
-    let r = Rc::new(Cell{x: 7})
-    let p = &Rc::get(r).x
-    let q = Rc::new(Cell{x: 31})
-    return read(p) + Rc::get(q).x
+use std::process::ExitCode; struct Cell { x: i64 }
+fn read(p: &i64) -> i64 { *p }
+fn main() -> ExitCode {
+    let r = Rc::new(Cell{x: 7});
+    let p = &Rc::get(r).x;
+    let q = Rc::new(Cell{x: 31});
+    return ExitCode::from((read(p) + Rc::get(q).x) as u8);
 }
 "#,
         Oracle::Balanced(38),
@@ -442,11 +442,11 @@ fn main() -> i64 {
     (
         "SI-V01",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    v[0] = 9
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    v[0] = 9;
+    return ExitCode::from(w[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -454,12 +454,12 @@ fn main() -> i64 {
     (
         "SI-V02",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let mut w = vec[7, 7, 7]
-    w = v
-    v[0] = 9
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let mut w = vec![7, 7, 7];
+    w = v;
+    v[0] = 9;
+    return ExitCode::from(w[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -467,11 +467,11 @@ fn main() -> i64 {
     (
         "SI-V03",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    v[0] += 8
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    v[0] += 8;
+    return ExitCode::from(w[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -479,14 +479,14 @@ fn main() -> i64 {
     (
         "SI-V04",
         r#"
-fn poke(mut x: Vec<i64>) -> i64 {
-    x[0] = 9
-    return x[0]
+use std::process::ExitCode; fn poke(mut x: Vec<i64>) -> i64 {
+    x[0] = 9;
+    x[0]
 }
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let _ = poke(v)
-    return v[0]
+fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let _ = poke(v);
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -494,15 +494,15 @@ fn main() -> i64 {
     (
         "SI-V05",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    let mut i = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    let mut i = 0;
     while i < 3 {
-        v[i] = 9
-        i = i + 1
+        v[i] = 9;
+        i = i + 1;
     }
-    return w[0] + w[1] + w[2]
+    return ExitCode::from((w[0] + w[1] + w[2]) as u8);
 }
 "#,
         Oracle::Balanced(6),
@@ -510,19 +510,19 @@ fn main() -> i64 {
     (
         "SI-V06",
         r#"
-fn make() -> fn() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    let f = fn() -> i64 {
-        v[0] = 9
-        return w[0]
-    }
-    return f
+use std::process::ExitCode; fn make() -> fn() -> i64 {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    let f = move || -> i64 {
+        v[0] = 9;
+        w[0]
+    };
+    f
 }
-fn main() -> i64 {
-    let g = make()
-    let junk = vec[77, 77, 77]
-    return g()
+fn main() -> ExitCode {
+    let g = make();
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(g() as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -530,11 +530,11 @@ fn main() -> i64 {
     (
         "SI-V07",
         r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[0] + b[1] + b[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[0] + b[1] + b[2] + b[3]) as u8);
 }
 "#,
         Oracle::Balanced(21),
@@ -542,11 +542,11 @@ fn main() -> i64 {
     (
         "SI-V08",
         r#"
-fn main() -> i64 {
-    let a = [1, 2, 3]
-    let mut b = a
-    b[0] = 9
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [1, 2, 3];
+    let mut b = a;
+    b[0] = 9;
+    return ExitCode::from(a[0] as u8);
 }
 "#,
         Oracle::Exit(1),
@@ -555,14 +555,14 @@ fn main() -> i64 {
         // both directions of the aliasing relation, so a fix that detaches the wrong side is caught
         "SI-V09",
         r#"
-fn main() -> i64 {
-    let mut a = vec[1, 2, 3]
-    let b = a
-    a[0] = 9
-    let mut c = vec[4, 5, 6]
-    let d = c
-    c[1] = 8
-    return a[0] + b[0] + c[1] + d[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a = vec![1, 2, 3];
+    let b = a;
+    a[0] = 9;
+    let mut c = vec![4, 5, 6];
+    let d = c;
+    c[1] = 8;
+    return ExitCode::from((a[0] + b[0] + c[1] + d[1]) as u8);
 }
 "#,
         Oracle::Balanced(23),
@@ -571,16 +571,16 @@ fn main() -> i64 {
         // stale-but-correct read is impossible. this row must never return 77.
         "SI-V10",
         r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 3)
-    let w = v
-    Vec::push(v, 4)
-    Vec::push(v, 5)
-    let junk = vec[77, 77, 77]
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 3);
+    let w = v;
+    Vec::push(v, 4);
+    Vec::push(v, 5);
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(w[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -588,11 +588,11 @@ fn main() -> i64 {
     (
         "SI-V11",
         r#"
-fn main() -> i64 {
-    let mut v = vec[7, 2, 3]
-    v = v
-    v[0] = v[0]
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![7, 2, 3];
+    v = v;
+    v[0] = v[0];
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::Balanced(7),
@@ -600,11 +600,11 @@ fn main() -> i64 {
     (
         "SI-V12",
         r#"
-fn id(x: Vec<i64>) -> Vec<i64> { return x }
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let w = id(v)
-    return w[0] + v[0]
+use std::process::ExitCode; fn id(x: Vec<i64>) -> Vec<i64> { x }
+fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let w = id(v);
+    return ExitCode::from((w[0] + v[0]) as u8);
 }
 "#,
         Oracle::Balanced(2),
@@ -612,14 +612,14 @@ fn main() -> i64 {
     (
         "SI-V13",
         r#"
-fn main() -> i64 {
-    let mut v = vec[0, 0, 0, 0]
-    let mut i = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![0, 0, 0, 0];
+    let mut i = 0;
     while i < 1000000 {
-        v[i % 4] = i
-        i = i + 1
+        v[i % 4] = i;
+        i = i + 1;
     }
-    return v[0]
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::AllocsAt("-O0", OptimizationLevel::None, 60, 1),
@@ -627,17 +627,17 @@ fn main() -> i64 {
     (
         "SI-V14",
         r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 3)
-    let mut w = Vec::new()
-    w = v
-    Vec::push(w, 4)
-    w[0] = 9
-    let junk = vec[77, 77, 77]
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 3);
+    let mut w = Vec::new();
+    w = v;
+    Vec::push(w, 4);
+    w[0] = 9;
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -645,16 +645,16 @@ fn main() -> i64 {
     (
         "SI-V15",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let mut acc = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let mut acc = 0;
     if v[2] == 3 {
-        let w = v
-        v[0] = 9
-        let junk = vec[77, 77, 77]
-        acc = w[0]
+        let w = v;
+        v[0] = 9;
+        let junk = vec![77, 77, 77];
+        acc = w[0];
     }
-    return acc
+    return ExitCode::from(acc as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -662,20 +662,20 @@ fn main() -> i64 {
     (
         "SI-V16",
         r#"
-fn grow(mut x: Vec<i64>) -> i64 {
-    Vec::push(x, 4)
-    Vec::push(x, 5)
-    x[0] = 9
-    return x[0]
+use std::process::ExitCode; fn grow(mut x: Vec<i64>) -> i64 {
+    Vec::push(x, 4);
+    Vec::push(x, 5);
+    x[0] = 9;
+    x[0]
 }
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 3)
-    let _ = grow(v)
-    let junk = vec[77, 77, 77]
-    return v[0]
+fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 3);
+    let _ = grow(v);
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -692,12 +692,12 @@ const GROUP_S: &[(&str, &str, Oracle)] = &[
     (
         "SI-S01",
         r#"
-struct P { x: i64, y: i64 }
-fn main() -> i64 {
-    let mut a = P{x: 1, y: 2}
-    let b = a
-    a.x = 9
-    return b.x
+use std::process::ExitCode; struct P { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let mut a = P{x: 1, y: 2};
+    let b = a;
+    a.x = 9;
+    return ExitCode::from(b.x as u8);
 }
 "#,
         Oracle::Exit(1),
@@ -705,15 +705,15 @@ fn main() -> i64 {
     (
         "SI-S02",
         r#"
-struct P { x: i64, y: i64 }
+use std::process::ExitCode; struct P { x: i64, y: i64 }
 fn poke(mut p: P) -> i64 {
-    p.x = 9
-    return p.x
+    p.x = 9;
+    p.x
 }
-fn main() -> i64 {
-    let mut a = P{x: 1, y: 2}
-    let _ = poke(a)
-    return a.x
+fn main() -> ExitCode {
+    let mut a = P{x: 1, y: 2};
+    let _ = poke(a);
+    return ExitCode::from(a.x as u8);
 }
 "#,
         Oracle::Exit(1),
@@ -721,12 +721,12 @@ fn main() -> i64 {
     (
         "SI-S03",
         r#"
-struct Box { cells: [i64; 3] }
-fn main() -> i64 {
-    let mut a = Box{cells: [1, 2, 3]}
-    let b = a
-    a.cells[0] = 9
-    return b.cells[0]
+use std::process::ExitCode; struct Box { cells: [i64; 3] }
+fn main() -> ExitCode {
+    let mut a = Box{cells: [1, 2, 3]};
+    let b = a;
+    a.cells[0] = 9;
+    return ExitCode::from(b.cells[0] as u8);
 }
 "#,
         Oracle::Exit(1),
@@ -734,10 +734,10 @@ fn main() -> i64 {
     (
         "SI-T01",
         r#"
-fn main() -> i64 {
-    let s = "hello"
-    let t = s
-    return t.len
+use std::process::ExitCode; fn main() -> ExitCode {
+    let s = "hello";
+    let t = s;
+    return ExitCode::from(t.len() as u8);
 }
 "#,
         Oracle::Exit(5),
@@ -745,10 +745,10 @@ fn main() -> i64 {
     (
         "SI-T02",
         r#"
-fn main() -> i64 {
-    let a = "abc"
-    let b = a + "de"
-    return a.len + b.len
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = "abc";
+    let b = a + "de";
+    return ExitCode::from((a.len() + b.len()) as u8);
 }
 "#,
         Oracle::Exit(8),
@@ -759,10 +759,9 @@ const GROUP_T_REJECTS: &[(&str, &str, &str)] = &[(
     "SI-T03",
     "E0304",
     r#"
-fn main() -> i64 {
-    let mut s = "hello"
-    s[0] = "z"
-    return 0
+fn main() {
+    let mut s = "hello";
+    s[0] = "z";
 }
 "#,
 )];
@@ -781,11 +780,11 @@ const GROUP_M_REJECTS: &[(&str, &str, &str)] = &[
         "SI-M01",
         "E0701",
         r#"
-struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    return a.id
+use std::process::ExitCode; struct Resource { id: i64 }
+fn main() -> ExitCode {
+    let a = Resource{id: 1};
+    let b = a;
+    return ExitCode::from(a.id as u8);
 }
 "#,
     ),
@@ -794,11 +793,10 @@ fn main() -> i64 {
         "E0702",
         r#"
 struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    let c = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    let c = a;
 }
 "#,
     ),
@@ -806,14 +804,14 @@ fn main() -> i64 {
         "SI-M03",
         "E0703",
         r#"
-struct Resource { id: i64 }
-fn main() -> i64 {
-    let cond = true
-    let a = Resource{id: 1}
+use std::process::ExitCode; struct Resource { id: i64 }
+fn main() -> ExitCode {
+    let cond = true;
+    let a = Resource{id: 1};
     if cond {
-        let b = a
+        let b = a;
     }
-    return a.id
+    return ExitCode::from(a.id as u8);
 }
 "#,
     ),
@@ -824,12 +822,11 @@ fn main() -> i64 {
 struct Resource { id: i64 }
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    let b = a;
+    touch(r);
 }
 "#,
     ),
@@ -838,13 +835,12 @@ fn main() -> i64 {
         "E0702",
         r#"
 struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
+fn main() {
+    let a = Resource{id: 1};
     if false {
-        let b = a
-        let c = a
+        let b = a;
+        let c = a;
     }
-    return 0
 }
 "#,
     ),
@@ -853,12 +849,12 @@ fn main() -> i64 {
 const GROUP_M_SCAFFOLD: &[(&str, &str, Oracle)] = &[(
     "SI-M06",
     r#"
-struct Handle { id: i64 }
-fn main() -> i64 {
-    let a = Handle{id: 1}
-    let b = a
-    let c = a
-    return a.id
+use std::process::ExitCode; struct Handle { id: i64 }
+fn main() -> ExitCode {
+    let a = Handle{id: 1};
+    let b = a;
+    let c = a;
+    return ExitCode::from(a.id as u8);
 }
 "#,
     Oracle::Exit(1),
@@ -869,11 +865,11 @@ const GROUP_B_REJECTS: &[(&str, &str, &str)] = &[
         "SI-B01",
         "E0711",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
+    return ExitCode::from((*r) as u8);
 }
 "#,
     ),
@@ -881,13 +877,13 @@ fn main() -> i64 {
         "SI-B02",
         "E0713",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &mut x
-    *r1 = 5
-    *r2 = 6
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &mut x;
+    *r1 = 5;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 "#,
     ),
@@ -895,11 +891,11 @@ fn main() -> i64 {
         "SI-B03",
         "E0711",
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    Vec::push(v, 40)
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    Vec::push(v, 40);
+    return ExitCode::from((*r) as u8);
 }
 "#,
     ),
@@ -907,14 +903,14 @@ fn main() -> i64 {
         "SI-B04",
         "E0711",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
     if false {
-        return *r
+        return ExitCode::from((*r) as u8);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 "#,
     ),
@@ -924,13 +920,13 @@ const GROUP_B_ACCEPTS: &[(&str, &str, Oracle)] = &[
     (
         "SI-B05",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    *r1 = 5
-    let r2 = &mut x
-    *r2 = 6
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    *r1 = 5;
+    let r2 = &mut x;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 "#,
         Oracle::Exit(6),
@@ -938,15 +934,15 @@ fn main() -> i64 {
     (
         "SI-B06",
         r#"
-struct Resource { id: i64 }
+use std::process::ExitCode; struct Resource { id: i64 }
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    touch(r)
-    let b = a
-    return b.id
+fn main() -> ExitCode {
+    let a = Resource{id: 1};
+    let r = &a;
+    touch(r);
+    let b = a;
+    return ExitCode::from(b.id as u8);
 }
 "#,
         Oracle::Exit(1),
@@ -954,11 +950,11 @@ fn main() -> i64 {
     (
         "SI-B07",
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &mut x
-    *r = 9
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &mut x;
+    *r = 9;
+    return ExitCode::from(x as u8);
 }
 "#,
         Oracle::Exit(9),
@@ -966,14 +962,14 @@ fn main() -> i64 {
     (
         "SI-B08",
         r#"
-fn f(r: &mut i64) {
-    let r2 = &mut *r
-    *r2 = 5
+use std::process::ExitCode; fn f(r: &mut i64) {
+    let r2 = &mut *r;
+    *r2 = 5;
 }
-fn main() -> i64 {
-    let mut x = 0
-    f(&mut x)
-    return x
+fn main() -> ExitCode {
+    let mut x = 0;
+    f(&mut x);
+    return ExitCode::from(x as u8);
 }
 "#,
         Oracle::Exit(5),
@@ -982,13 +978,13 @@ fn main() -> i64 {
         // the same reborrow taken twice, so a fix that collapses one level but not the chain is caught
         "SI-B09",
         r#"
-fn main() -> i64 {
-    let mut x = 1
-    let r = &mut x
-    let q = &mut *r
-    let p = &mut *q
-    *p = 9
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 1;
+    let r = &mut x;
+    let q = &mut *r;
+    let p = &mut *q;
+    *p = 9;
+    return ExitCode::from(x as u8);
 }
 "#,
         Oracle::Exit(9),
@@ -1008,15 +1004,15 @@ const GROUP_R: &[(&str, &str, Oracle)] = &[
     (
         "SI-R01",
         r#"
-fn f(c: bool) -> i64 {
-    let r = Rc::new(5)
+use std::process::ExitCode; fn f(c: bool) -> i64 {
+    let r = Rc::new(5);
     if c {
-        return Rc::get(r)
+        return Rc::get(r);
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    return f(true)
+fn main() -> ExitCode {
+    return ExitCode::from(f(true) as u8);
 }
 "#,
         Oracle::Balanced(5),
@@ -1024,20 +1020,20 @@ fn main() -> i64 {
     (
         "SI-R02",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 fn probe(x: i64) -> Result<i64, i64> {
     if x < 0 {
-        return Result::Err(4)
+        return Result::Err(4);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
 fn chain(x: i64) -> Result<i64, i64> {
-    let r = Rc::new(10)
-    let a = probe(x)?
-    return Result::Ok(a + Rc::get(r))
+    let r = Rc::new(10);
+    let a = probe(x)?;
+    Result::Ok(a + Rc::get(r))
 }
-fn main() -> i64 {
-    return match chain(0 - 1) { Result::Ok(v) => v, Result::Err(e) => e }
+fn main() -> ExitCode {
+    return ExitCode::from((match chain(0 - 1) { Result::Ok(v) => v, Result::Err(e) => e }) as u8);
 }
 "#,
         Oracle::Balanced(4),
@@ -1045,12 +1041,12 @@ fn main() -> i64 {
     (
         "SI-R03",
         r#"
-struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    let m: Node = n
-    return Rc::get(m.next)
+use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    let m: Node = n;
+    return ExitCode::from(Rc::get(m.next) as u8);
 }
 "#,
         Oracle::Balanced(7),
@@ -1058,13 +1054,13 @@ fn main() -> i64 {
     (
         "SI-R04",
         r#"
-struct Node { next: Rc<i64> }
+use std::process::ExitCode; struct Node { next: Rc<i64> }
 fn make(v: i64) -> Node {
-    return Node { next: Rc::new(v) }
+    Node { next: Rc::new(v) }
 }
-fn main() -> i64 {
-    let n = make(6)
-    return Rc::get(n.next)
+fn main() -> ExitCode {
+    let n = make(6);
+    return ExitCode::from(Rc::get(n.next) as u8);
 }
 "#,
         Oracle::Balanced(6),
@@ -1073,11 +1069,10 @@ fn main() -> i64 {
         "SI-R05",
         r#"
 fn make() -> Rc<i64> {
-    return Rc::new(42)
+    Rc::new(42)
 }
-fn main() -> i64 {
-    discard make()
-    return 0
+fn main() {
+    let _ = make();
 }
 "#,
         Oracle::AllocsAt("-O0", OptimizationLevel::None, 0, 1),
@@ -1085,15 +1080,15 @@ fn main() -> i64 {
     (
         "SI-R06",
         r#"
-fn main() -> i64 {
-    let mut i = 0
-    let mut acc = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut i = 0;
+    let mut acc = 0;
     while i < 100 {
-        let r = Rc::new(i)
-        acc = acc + Rc::get(r)
-        i = i + 1
+        let r = Rc::new(i);
+        acc = acc + Rc::get(r);
+        i = i + 1;
     }
-    return acc % 7
+    return ExitCode::from((acc % 7) as u8);
 }
 "#,
         Oracle::Balanced(1),
@@ -1104,21 +1099,21 @@ const GROUP_E: &[(&str, &str, Oracle)] = &[
     (
         "SI-E01",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 fn inner(x: i64) -> Result<i64, i64> {
     if x < 0 {
-        return Result::Err(4)
+        return Result::Err(4);
     }
-    return Result::Ok(x + 1)
+    Result::Ok(x + 1)
 }
 fn outer(x: i64) -> Result<i64, i64> {
-    let a = inner(x)?
-    println(7)
-    let b = inner(a)?
-    return Result::Ok(a + b)
+    let a = inner(x)?;
+    println!("{}", 7);
+    let b = inner(a)?;
+    Result::Ok(a + b)
 }
-fn main() -> i64 {
-    return match outer(1) { Result::Ok(v) => v, Result::Err(e) => e }
+fn main() -> ExitCode {
+    return ExitCode::from((match outer(1) { Result::Ok(v) => v, Result::Err(e) => e }) as u8);
 }
 "#,
         Oracle::ExitOut(5, "7\n"),
@@ -1127,21 +1122,21 @@ fn main() -> i64 {
         // the err path short-circuits, so the marker must not print
         "SI-E02",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 fn inner(x: i64) -> Result<i64, i64> {
     if x < 0 {
-        return Result::Err(4)
+        return Result::Err(4);
     }
-    return Result::Ok(x + 1)
+    Result::Ok(x + 1)
 }
 fn outer(x: i64) -> Result<i64, i64> {
-    let a = inner(x)?
-    println(7)
-    let b = inner(a)?
-    return Result::Ok(a + b)
+    let a = inner(x)?;
+    println!("{}", 7);
+    let b = inner(a)?;
+    Result::Ok(a + b)
 }
-fn main() -> i64 {
-    return match outer(0 - 1) { Result::Ok(v) => v, Result::Err(e) => e }
+fn main() -> ExitCode {
+    return ExitCode::from((match outer(0 - 1) { Result::Ok(v) => v, Result::Err(e) => e }) as u8);
 }
 "#,
         Oracle::ExitOut(4, ""),
@@ -1149,14 +1144,14 @@ fn main() -> i64 {
     (
         "SI-E03",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum Fault { X }
-fn bad() -> Result<i64, Fault> { return Result::Err(Fault::X) }
-fn good() -> Result<i64, Fault> { return Result::Ok(7) }
-fn main() -> i64 {
-    let a = bad() catch |e| 100
-    let b = good() catch |e| 100
-    return a + b
+fn bad() -> Result<i64, Fault> { Result::Err(Fault::X) }
+fn good() -> Result<i64, Fault> { Result::Ok(7) }
+fn main() -> ExitCode {
+    let a = match bad() { Ok(v) => v, Err(e) => 100 };
+    let b = match good() { Ok(v) => v, Err(e) => 100 };
+    return ExitCode::from((a + b) as u8);
 }
 "#,
         Oracle::Exit(107),
@@ -1165,12 +1160,11 @@ fn main() -> i64 {
         "SI-E04",
         r#"
 fn noise() -> i64 {
-    println(7)
-    return 1
+    println!("{}", 7);
+    1
 }
-fn main() -> i64 {
-    discard noise()
-    return 0
+fn main() {
+    let _ = noise();
 }
 "#,
         Oracle::ExitOut(0, "7\n"),
@@ -1188,10 +1182,10 @@ const GROUP_A: &[(&str, &str, Oracle)] = &[
     (
         "SI-A01",
         r#"
-fn main() -> i64 {
-    let a = 0 - 9223372036854775807 - 1
-    let b = 0 - 1
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 9223372036854775807 - 1;
+    let b = 0 - 1;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
         Oracle::Exit(134),
@@ -1199,10 +1193,10 @@ fn main() -> i64 {
     (
         "SI-A02",
         r#"
-fn main() -> i64 {
-    let a = 0 - 9223372036854775807 - 1
-    let b = 0 - 1
-    return a % b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 9223372036854775807 - 1;
+    let b = 0 - 1;
+    return ExitCode::from((a % b) as u8);
 }
 "#,
         Oracle::Exit(134),
@@ -1210,9 +1204,9 @@ fn main() -> i64 {
     (
         "SI-A03",
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::null()
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::null();
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
         Oracle::Exit(134),
@@ -1220,10 +1214,10 @@ fn main() -> i64 {
     (
         "SI-A04",
         r#"
-fn main() -> i64 {
-    let a = 12
-    let b = 0
-    return a / b
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 12;
+    let b = 0;
+    return ExitCode::from((a / b) as u8);
 }
 "#,
         Oracle::Exit(134),
@@ -1231,10 +1225,10 @@ fn main() -> i64 {
     (
         "SI-A05",
         r#"
-fn main() -> i64 {
-    let a = 0 - 8
-    let b = 0 - 1
-    return 7 / 2 + a / b - 8
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 0 - 8;
+    let b = 0 - 1;
+    return ExitCode::from((7 / 2 + a / b - 8) as u8);
 }
 "#,
         Oracle::Exit(3),
@@ -1242,9 +1236,9 @@ fn main() -> i64 {
     (
         "SI-A06",
         r#"
-fn main() -> i64 {
-    let r = Rc::new(42)
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r = Rc::new(42);
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
         Oracle::Balanced(42),
@@ -1269,24 +1263,24 @@ const GROUP_X: &[XRow] = &[
         id: "SI-X02",
         code: "E0414",
         rejected: r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let mut total = 0;
     for x in v {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let a = [1, 2, 3]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = [1, 2, 3];
+    let mut total = 0;
     for x in a {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
             6,
@@ -1296,20 +1290,20 @@ fn main() -> i64 {
         id: "SI-X03",
         code: "E0415",
         rejected: r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let r = &mut v[0]
-    *r = 9
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let r = &mut v[0];
+    *r = 9;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &mut x
-    *r = 9
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &mut x;
+    *r = 9;
+    return ExitCode::from(x as u8);
 }
 "#,
             9,
@@ -1319,21 +1313,21 @@ fn main() -> i64 {
         id: "SI-X15",
         code: "E0415",
         rejected: r#"
-struct P { x: i64, y: i64 }
-fn main() -> i64 {
-    let mut p = P{x: 1, y: 2}
-    let r = &mut p.x
-    *r = 9
-    return p.x
+use std::process::ExitCode; struct P { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let mut p = P{x: 1, y: 2};
+    let r = &mut p.x;
+    *r = 9;
+    return ExitCode::from(p.x as u8);
 }
 "#,
         twin: Some((
             r#"
-struct P { x: i64, y: i64 }
-fn main() -> i64 {
-    let p = P{x: 7, y: 2}
-    let r = &p.x
-    return *r
+use std::process::ExitCode; struct P { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let p = P{x: 7, y: 2};
+    let r = &p.x;
+    return ExitCode::from((*r) as u8);
 }
 "#,
             7,
@@ -1343,20 +1337,20 @@ fn main() -> i64 {
         id: "SI-X05",
         code: "E0417",
         rejected: r#"
-fn main() -> i64 {
-    let x = 1
-    let a = &mut x
-    *a = 2
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x = 1;
+    let a = &mut x;
+    *a = 2;
+    return ExitCode::from(x as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut x = 1
-    let a = &mut x
-    *a = 2
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 1;
+    let a = &mut x;
+    *a = 2;
+    return ExitCode::from(x as u8);
 }
 "#,
             2,
@@ -1366,32 +1360,32 @@ fn main() -> i64 {
         id: "SI-X06",
         code: "E0418",
         rejected: r#"
-fn pick<A, B>(a: A, b: B) -> A {
-    return a
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A {
+    a
 }
 fn other() -> i64 {
     fn pick<A, B>(a: A, b: B) -> B {
-        return b
+        b
     }
-    return pick(1, 2)
+    pick(1, 2)
 }
-fn main() -> i64 {
-    return pick(7, 8)
+fn main() -> ExitCode {
+    return ExitCode::from(pick(7, 8) as u8);
 }
 "#,
         twin: Some((
             r#"
-fn pick<A, B>(a: A, b: B) -> A {
-    return a
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A {
+    a
 }
 fn other() -> i64 {
     fn choose<A, B>(a: A, b: B) -> B {
-        return b
+        b
     }
-    return choose(1, 2)
+    choose(1, 2)
 }
-fn main() -> i64 {
-    return pick(7, 8)
+fn main() -> ExitCode {
+    return ExitCode::from(pick(7, 8) as u8);
 }
 "#,
             7,
@@ -1402,13 +1396,13 @@ fn main() -> i64 {
         code: "E0419",
         rejected: r#"
 enum Vec { Empty, One(i64) }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
         twin: Some((
             r#"
 enum MyList { Empty, One(i64) }
 struct RefCount { count: i64 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
             0,
         )),
@@ -1418,21 +1412,19 @@ fn main() -> i64 { return 0 }
         code: "E0420",
         rejected: r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = (b)
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = (b);
 }
 "#,
         twin: Some((
             r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
 }
 "#,
             0,
@@ -1442,21 +1434,20 @@ fn main() -> i64 {
         id: "SI-X09",
         code: "E0412",
         rejected: r#"
-fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let mut vv = Vec::new()
-    Vec::push(vv, inner)
-    return 0
+fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let mut vv = Vec::new();
+    Vec::push(vv, inner);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut flat = Vec::new()
-    Vec::push(flat, 1)
-    Vec::push(flat, 2)
-    return flat[0] + flat[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut flat = Vec::new();
+    Vec::push(flat, 1);
+    Vec::push(flat, 2);
+    return ExitCode::from((flat[0] + flat[1]) as u8);
 }
 "#,
             3,
@@ -1466,18 +1457,17 @@ fn main() -> i64 {
         id: "SI-X10",
         code: "E0412",
         rejected: r#"
-fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let arr = [inner]
-    return 0
+fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let arr = [inner];
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let arr = [1, 2, 3]
-    return arr[0] + arr[2]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let arr = [1, 2, 3];
+    return ExitCode::from((arr[0] + arr[2]) as u8);
 }
 "#,
             4,
@@ -1487,17 +1477,17 @@ fn main() -> i64 {
         id: "SI-X11",
         code: "E0412",
         rejected: r#"
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 {
-    let v = vec[1, 2]
-    return keep(v)
+use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode {
+    let v = vec![1, 2];
+    return ExitCode::from(keep(v) as u8);
 }
 "#,
         twin: Some((
             r#"
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 {
-    return keep(5) + 4
+use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode {
+    return ExitCode::from((keep(5) + 4) as u8);
 }
 "#,
             4,
@@ -1507,20 +1497,20 @@ fn main() -> i64 {
         id: "SI-X12",
         code: "E0412",
         rejected: r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let mut w = (v)
-    w[0] = 9
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let mut w = (v);
+    w[0] = 9;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let mut w = v
-    w[0] = 9
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let mut w = v;
+    w[0] = 9;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
             1,
@@ -1530,27 +1520,27 @@ fn main() -> i64 {
         id: "SI-X13",
         code: "E0412",
         rejected: r#"
-fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
-    return if c == 1 { a } else { a }
+use std::process::ExitCode; fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
+    if c == 1 { a } else { a }
 }
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let w = pick(v, 1)
-    return w[0]
+fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let w = pick(v, 1);
+    return ExitCode::from(w[0] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
+use std::process::ExitCode; fn pick(a: Vec<i64>, c: i64) -> Vec<i64> {
     if c == 1 {
-        return a
+        return a;
     }
-    return a
+    a
 }
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let w = pick(v, 1)
-    return w[0]
+fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let w = pick(v, 1);
+    return ExitCode::from(w[0] as u8);
 }
 "#,
             1,
@@ -1560,10 +1550,9 @@ fn main() -> i64 {
         id: "SI-X14",
         code: "E0304",
         rejected: r#"
-fn main() -> i64 {
-    let mut s = "hello"
-    s[0] = "z"
-    return 0
+fn main() {
+    let mut s = "hello";
+    s[0] = "z";
 }
 "#,
         twin: None,
@@ -1601,14 +1590,13 @@ const GROUP_PA: &[(&str, &str, Oracle)] = &[
         r#"
 struct Cell { f: i64, g: i64 }
 fn poke(pr: &mut Cell) -> i64 {
-    (*pr).f = 101
-    return 0
+    (*pr).f = 101;
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 6031, g: 0 }
-    let q = poke(&mut c)
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 6031, g: 0 };
+    let q = poke(&mut c);
+    println!("{}", c.f);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1616,12 +1604,11 @@ fn main() -> i64 {
     (
         "SI-PA02",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [67, 2, 3]
-    let r = &mut a
-    (*r)[0] = 101
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [67, 2, 3];
+    let r = &mut a;
+    (*r)[0] = 101;
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1630,11 +1617,10 @@ fn main() -> i64 {
         "SI-PA03",
         r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let rc: Rc<Cell> = Rc::new(Cell { f: 6011, g: 0 })
-    Rc::get(rc).f = 101
-    println(Rc::get(rc).f)
-    return 0
+fn main() {
+    let rc: Rc<Cell> = Rc::new(Cell { f: 6011, g: 0 });
+    Rc::get(rc).f = 101;
+    println!("{}", Rc::get(rc).f);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1643,12 +1629,11 @@ fn main() -> i64 {
         "SI-PA04",
         r#"
 struct Ar { a: [i64; 3] }
-fn main() -> i64 {
-    let mut ar: Ar = Ar { a: [1903, 2, 3] }
-    let sv = ar.a[..]
-    sv[0] = 101
-    println(ar.a[0])
-    return 0
+fn main() {
+    let mut ar: Ar = Ar { a: [1903, 2, 3] };
+    let sv = ar.a[..];
+    sv[0] = 101;
+    println!("{}", ar.a[0]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1658,14 +1643,13 @@ fn main() -> i64 {
         "SI-PA05",
         r#"
 fn addone(r: &mut Vec<i64>) -> i64 {
-    Vec::push((*r), 101)
-    return 0
+    Vec::push((*r), 101);
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919]
-    let q = addone(&mut v)
-    println(v[1])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919];
+    let q = addone(&mut v);
+    println!("{}", v[1]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1675,14 +1659,13 @@ fn main() -> i64 {
         "SI-PA06",
         r#"
 struct S { f: i64 }
-let mut ga: [i64; 3] = [1901, 2, 3]
-let mut gs: S = S { f: 1901 }
-fn main() -> i64 {
-    ga[0] = 101
-    gs.f = 101
-    println(ga[0])
-    println(gs.f)
-    return 0
+static mut ga: [i64; 3] = [1901, 2, 3];
+static mut gs: S = S { f: 1901 };
+fn main() {
+    ga[0] = 101;
+    gs.f = 101;
+    println!("{}", ga[0]);
+    println!("{}", gs.f);
 }
 "#,
         Oracle::ExitOut(0, "101\n101\n"),
@@ -1693,14 +1676,13 @@ fn main() -> i64 {
 struct In { z: [i64; 3] }
 struct Out { i: In }
 fn poke(p: &mut Out) -> i64 {
-    (*p).i.z[0] = 101
-    return 0
+    (*p).i.z[0] = 101;
+    0
 }
-fn main() -> i64 {
-    let mut o: Out = Out { i: In { z: [7, 8, 9] } }
-    let q = poke(&mut o)
-    println(o.i.z[0])
-    return 0
+fn main() {
+    let mut o: Out = Out { i: In { z: [7, 8, 9] } };
+    let q = poke(&mut o);
+    println!("{}", o.i.z[0]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1713,14 +1695,13 @@ struct L3 { d: L4 }
 struct L2 { c: L3 }
 struct L1 { b: L2 }
 fn poke(p: &mut L1) -> i64 {
-    (*p).b.c.d.v = 101
-    return 0
+    (*p).b.c.d.v = 101;
+    0
 }
-fn main() -> i64 {
-    let mut x: L1 = L1 { b: L2 { c: L3 { d: L4 { v: 7 } } } }
-    let q = poke(&mut x)
-    println(x.b.c.d.v)
-    return 0
+fn main() {
+    let mut x: L1 = L1 { b: L2 { c: L3 { d: L4 { v: 7 } } } };
+    let q = poke(&mut x);
+    println!("{}", x.b.c.d.v);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1731,14 +1712,13 @@ fn main() -> i64 {
 struct Inner { z: [i64; 2] }
 struct Outer { rows: [Inner; 2] }
 fn poke(p: &mut Outer) -> i64 {
-    (*p).rows[1].z[1] = 101
-    return 0
+    (*p).rows[1].z[1] = 101;
+    0
 }
-fn main() -> i64 {
-    let mut o: Outer = Outer { rows: [Inner { z: [1, 2] }, Inner { z: [3, 4] }] }
-    let q = poke(&mut o)
-    println(o.rows[1].z[1])
-    return 0
+fn main() {
+    let mut o: Outer = Outer { rows: [Inner { z: [1, 2] }, Inner { z: [3, 4] }] };
+    let q = poke(&mut o);
+    println!("{}", o.rows[1].z[1]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1747,14 +1727,13 @@ fn main() -> i64 {
         "SI-PA10",
         r#"
 fn poke(r: &mut i64) -> i64 {
-    (*r) = 101
-    return 0
+    (*r) = 101;
+    0
 }
-fn main() -> i64 {
-    let mut x: i64 = 7
-    let q = poke(&mut x)
-    println(x)
-    return 0
+fn main() {
+    let mut x: i64 = 7;
+    let q = poke(&mut x);
+    println!("{}", x);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1763,14 +1742,13 @@ fn main() -> i64 {
         "SI-PA11",
         r#"
 fn bump(pr: &mut i64) -> i64 {
-    (*pr)++
-    return 0
+    (*pr) += 1;
+    0
 }
-fn main() -> i64 {
-    let mut x: i64 = 100
-    let q = bump(&mut x)
-    println(x)
-    return 0
+fn main() {
+    let mut x: i64 = 100;
+    let q = bump(&mut x);
+    println!("{}", x);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1780,14 +1758,13 @@ fn main() -> i64 {
         r#"
 struct Cell { f: i64, g: i64 }
 fn bump(pr: &mut Cell) -> i64 {
-    (*pr).f += 94
-    return 0
+    (*pr).f += 94;
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 7, g: 0 }
-    let q = bump(&mut c)
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 7, g: 0 };
+    let q = bump(&mut c);
+    println!("{}", c.f);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -1797,17 +1774,16 @@ fn main() -> i64 {
         "SI-PA13",
         r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 1, g: 0 }
-    let f = fn () -> i64 {
-        c.f = c.f + 1
-        println(c.f)
-        return c.f
-    }
-    let a = f()
-    let b = f()
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 1, g: 0 };
+    let f = move || -> i64 {
+        c.f = c.f + 1;
+        println!("{}", c.f);
+        c.f
+    };
+    let a = f();
+    let b = f();
+    println!("{}", c.f);
 }
 "#,
         Oracle::ExitOut(0, "2\n3\n1\n"),
@@ -1815,17 +1791,16 @@ fn main() -> i64 {
     (
         "SI-PA13b",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let f = fn () -> i64 {
-        a[0] = a[0] + 1
-        println(a[0])
-        return a[0]
-    }
-    let x = f()
-    let y = f()
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let f = move || -> i64 {
+        a[0] = a[0] + 1;
+        println!("{}", a[0]);
+        a[0]
+    };
+    let x = f();
+    let y = f();
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "2\n3\n1\n"),
@@ -1833,17 +1808,16 @@ fn main() -> i64 {
     (
         "SI-PA14",
         r#"
-fn main() -> i64 {
-    let mut c: i64 = 1
-    let f = fn () -> i64 {
-        c = c + 1
-        println(c)
-        return c
-    }
-    let a = f()
-    let b = f()
-    println(c)
-    return 0
+fn main() {
+    let mut c: i64 = 1;
+    let f = move || -> i64 {
+        c = c + 1;
+        println!("{}", c);
+        c
+    };
+    let a = f();
+    let b = f();
+    println!("{}", c);
 }
 "#,
         Oracle::ExitOut(0, "2\n3\n1\n"),
@@ -1852,16 +1826,15 @@ fn main() -> i64 {
         "SI-PA15",
         r#"
 fn poke(r: &mut Vec<i64>) -> i64 {
-    (*r)[0] = 101
-    return 0
+    (*r)[0] = 101;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let w: Vec<i64> = v
-    let q = poke(&mut v)
-    println(v[0])
-    println(w[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let w: Vec<i64> = v;
+    let q = poke(&mut v);
+    println!("{}", v[0]);
+    println!("{}", w[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "101\n7919\n", 2, 2),
@@ -1870,14 +1843,14 @@ fn main() -> i64 {
         // still be freed exactly once. this is what catches emit_vec_detach's pointer form
         "SI-PA16",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    (*r)[0] = 101
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    (*r)[0] = 101;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let q = poke(&mut v)
-    return v[0] - 101
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let q = poke(&mut v);
+    return ExitCode::from((v[0] - 101) as u8);
 }
 "#,
         Oracle::Balanced(0),
@@ -1885,16 +1858,16 @@ fn main() -> i64 {
     (
         "SI-PA17",
         r#"
-struct Node { val: i64, next: Rc<Node> }
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
 fn bump(p: &mut Node) -> i64 {
-    (*p).val = 101
-    return 0
+    (*p).val = 101;
+    0
 }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let p = &mut Rc::get(a)
-    let q = bump(p)
-    return Rc::get(a).val - 101
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let p = &mut Rc::get(a);
+    let q = bump(p);
+    return ExitCode::from((Rc::get(a).val - 101) as u8);
 }
 "#,
         Oracle::Balanced(0),
@@ -1902,12 +1875,12 @@ fn main() -> i64 {
     (
         "SI-PA18",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7, 8, 9]
-    let f = fn () -> i64 {
-        return v[0]
-    }
-    return f() - 7
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![7, 8, 9];
+    let f = move || -> i64 {
+        v[0]
+    };
+    return ExitCode::from((f() - 7) as u8);
 }
 "#,
         Oracle::Balanced(0),
@@ -1916,11 +1889,10 @@ fn main() -> i64 {
         "SI-PA19",
         r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let n: Rc<Cell> = Rc::null()
-    n.f = 101
-    println(7919)
-    return 0
+fn main() {
+    let n: Rc<Cell> = Rc::null();
+    n.f = 101;
+    println!("{}", 7919);
 }
 "#,
         Oracle::ExitOutErr(134, "", "null pointer dereference"),
@@ -1929,11 +1901,10 @@ fn main() -> i64 {
         "SI-PA20",
         r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let n: Rc<Cell> = Rc::null()
-    Rc::get(n).f = 101
-    println(7919)
-    return 0
+fn main() {
+    let n: Rc<Cell> = Rc::null();
+    Rc::get(n).f = 101;
+    println!("{}", 7919);
 }
 "#,
         Oracle::ExitOutErr(134, "", "null pointer dereference"),
@@ -1944,15 +1915,14 @@ fn main() -> i64 {
 struct Cell { f: i64, g: i64 }
 fn drain(pr: &mut Cell) -> i64 {
     while (*pr).f > 0 {
-        (*pr).f = (*pr).f - 1
+        (*pr).f = (*pr).f - 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 5, g: 0 }
-    let q = drain(&mut c)
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 5, g: 0 };
+    let q = drain(&mut c);
+    println!("{}", c.f);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -1963,16 +1933,15 @@ fn main() -> i64 {
 struct Cell { f: i64, g: i64 }
 fn drain(pr: &mut Cell) -> i64 {
     if (*pr).f > 0 {
-        (*pr).f = (*pr).f - 1
-        return drain(pr)
+        (*pr).f = (*pr).f - 1;
+        return drain(pr);
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 5, g: 0 }
-    let q = drain(&mut c)
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 5, g: 0 };
+    let q = drain(&mut c);
+    println!("{}", c.f);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -1980,13 +1949,12 @@ fn main() -> i64 {
     (
         "SI-PA23",
         r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [1, 2, 3, 4]
-    let s = a[0..4]
-    let t = s[0..2]
-    println(t[0])
-    println(t[1])
-    return 0
+fn main() {
+    let a: [i64; 4] = [1, 2, 3, 4];
+    let s = a[0..4];
+    let t = s[0..2];
+    println!("{}", t[0]);
+    println!("{}", t[1]);
 }
 "#,
         Oracle::AllocAgreeOut(0, "1\n2\n"),
@@ -1995,11 +1963,10 @@ fn main() -> i64 {
         // v1: `&v[0]` on a vec compiles and reads right. it never reaches the detach dispatch,
         "SI-PA24",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1973, 2, 3]
-    let e = &v[0]
-    println(*e)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1973, 2, 3];
+    let e = &v[0];
+    println!("{}", *e);
 }
 "#,
         Oracle::ExitOut(0, "1973\n"),
@@ -2007,12 +1974,11 @@ fn main() -> i64 {
     (
         "SI-PA09b",
         r#"
-fn main() -> i64 {
-    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
-    let r = &mut a
-    (*r)[1][1][1] = 101
-    println(a[1][1][1])
-    return 0
+fn main() {
+    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    let r = &mut a;
+    (*r)[1][1][1] = 101;
+    println!("{}", a[1][1][1]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -2021,14 +1987,13 @@ fn main() -> i64 {
         "SI-PA25",
         r#"
 fn peek(r: &mut Vec<i64>) -> i64 {
-    let e = &(*r)[0]
-    return *e
+    let e = &(*r)[0];
+    *e
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let a = peek(&mut v)
-    println(a)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let a = peek(&mut v);
+    println!("{}", a);
 }
 "#,
         Oracle::ExitOut(0, "7919\n"),
@@ -2036,16 +2001,15 @@ fn main() -> i64 {
     (
         "SI-PA26",
         r#"
-fn main() -> i64 {
-    let c: i64 = 7
-    let outer = fn () -> i64 {
-        let inner = fn () -> i64 {
-            return c
-        }
-        return inner()
-    }
-    println(outer())
-    return 0
+fn main() {
+    let c: i64 = 7;
+    let outer = move || -> i64 {
+        let inner = move || -> i64 {
+            c
+        };
+        inner()
+    };
+    println!("{}", outer());
 }
 "#,
         Oracle::ExitOut(0, "7\n"),
@@ -2054,16 +2018,15 @@ fn main() -> i64 {
         "SI-PA27",
         r#"
 struct S { f: i64, g: i64 }
-fn main() -> i64 {
-    let s: S = S { f: 7, g: 0 }
-    let outer = fn () -> i64 {
-        let inner = fn () -> i64 {
-            return s.f
-        }
-        return inner()
-    }
-    println(outer())
-    return 0
+fn main() {
+    let s: S = S { f: 7, g: 0 };
+    let outer = move || -> i64 {
+        let inner = move || -> i64 {
+            s.f
+        };
+        inner()
+    };
+    println!("{}", outer());
 }
 "#,
         Oracle::ExitOut(0, "7\n"),
@@ -2071,16 +2034,15 @@ fn main() -> i64 {
     (
         "SI-PA28",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [7, 8, 9]
-    let outer = fn () -> i64 {
-        let inner = fn () -> i64 {
-            return a[0]
-        }
-        return inner()
-    }
-    println(outer())
-    return 0
+fn main() {
+    let a: [i64; 3] = [7, 8, 9];
+    let outer = move || -> i64 {
+        let inner = move || -> i64 {
+            a[0]
+        };
+        inner()
+    };
+    println!("{}", outer());
 }
 "#,
         Oracle::ExitOut(0, "7\n"),
@@ -2089,16 +2051,15 @@ fn main() -> i64 {
         "SI-PA29",
         r#"
 struct Big { a: i64, b: i64, c: i64, d: i64 }
-fn main() -> i64 {
-    let s: Big = Big { a: 1, b: 2, c: 3, d: 4 }
-    let outer = fn () -> i64 {
-        let inner = fn () -> i64 {
-            return s.a + s.b + s.c + s.d
-        }
-        return inner()
-    }
-    println(outer())
-    return 0
+fn main() {
+    let s: Big = Big { a: 1, b: 2, c: 3, d: 4 };
+    let outer = move || -> i64 {
+        let inner = move || -> i64 {
+            s.a + s.b + s.c + s.d
+        };
+        inner()
+    };
+    println!("{}", outer());
 }
 "#,
         Oracle::ExitOut(0, "10\n"),
@@ -2106,16 +2067,15 @@ fn main() -> i64 {
     (
         "SI-PA30",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[7, 8, 9]
-    let outer = fn () -> i64 {
-        let inner = fn () -> i64 {
-            return v[0]
-        }
-        return inner()
-    }
-    println(outer())
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![7, 8, 9];
+    let outer = move || -> i64 {
+        let inner = move || -> i64 {
+            v[0]
+        };
+        inner()
+    };
+    println!("{}", outer());
 }
 "#,
         Oracle::ExitOut(0, "7\n"),
@@ -2124,20 +2084,19 @@ fn main() -> i64 {
         "SI-PA31",
         r#"
 fn make_f() -> fn() -> fn() -> i64 {
-    let a: i64 = 1
-    return fn() -> fn() -> i64 {
-        let b: i64 = 2
-        return fn() -> i64 {
-            return a + b
+    let a: i64 = 1;
+    move || -> fn() -> i64 {
+        let b: i64 = 2;
+        move || -> i64 {
+            a + b
         }
     }
 }
-fn main() -> i64 {
-    let f = make_f()
-    let g = f()
-    let h = g()
-    println(h)
-    return 0
+fn main() {
+    let f = make_f();
+    let g = f();
+    let h = g();
+    println!("{}", h);
 }
 "#,
         Oracle::ExitOut(0, "3\n"),
@@ -2146,17 +2105,16 @@ fn main() -> i64 {
         // only leaked (frees 1 -> 0), which balanced and namedleak both accept; four iterations
         "SI-PA32",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let f = fn () -> i64 {
-        v = vec[9, 9, 9]
-        return v[0]
-    }
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let f = move || -> i64 {
+        v = vec![9, 9, 9];
+        v[0]
+    };
     for i in 0..4 {
-        println(f())
+        println!("{}", f());
     }
-    println(v[0])
-    return 0
+    println!("{}", v[0]);
 }
 "#,
         Oracle::ExitOut(0, "9\n9\n9\n9\n1\n"),
@@ -2164,16 +2122,15 @@ fn main() -> i64 {
     (
         "SI-PA33",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let f = fn () -> i64 {
-        v = vec[9, 9, 9]
-        return v[0]
-    }
-    let a = f()
-    println(a)
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let f = move || -> i64 {
+        v = vec![9, 9, 9];
+        v[0]
+    };
+    let a = f();
+    println!("{}", a);
+    println!("{}", v[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "9\n1\n", 3, 3),
@@ -2181,11 +2138,10 @@ fn main() -> i64 {
     (
         "SI-PA34",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33, 44]
-    let s = v[0..3]
-    println(s[3])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33, 44];
+    let s = v[0..3];
+    println!("{}", s[3]);
 }
 "#,
         Oracle::ExitOutErr(134, "", "index out of bounds"),
@@ -2194,13 +2150,12 @@ fn main() -> i64 {
         "SI-PA35",
         r#"
 fn peek(r: &Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    return s[1]
+    let s = (*r)[0..3];
+    s[1]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    println(peek(&v))
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    println!("{}", peek(&v));
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -2209,13 +2164,12 @@ fn main() -> i64 {
         "SI-PA36",
         r#"
 fn sum(r: &Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    return s[0] + s[1] + s[2]
+    let s = (*r)[0..3];
+    s[0] + s[1] + s[2]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    println(sum(&v))
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    println!("{}", sum(&v));
 }
 "#,
         Oracle::ExitOutStats(0, "66\n", 1, 1),
@@ -2224,13 +2178,12 @@ fn main() -> i64 {
         "SI-PA37",
         r#"
 struct Cell { x: i64 }
-fn read(p: &i64) -> i64 { return *p }
-fn main() -> i64 {
-    let r = Rc::new(Cell { x: 7 })
-    let p = &Rc::get(r).x
-    let q = Rc::new(Cell { x: 31 })
-    println(read(p) + Rc::get(q).x)
-    return 0
+fn read(p: &i64) -> i64 { *p }
+fn main() {
+    let r = Rc::new(Cell { x: 7 });
+    let p = &Rc::get(r).x;
+    let q = Rc::new(Cell { x: 31 });
+    println!("{}", read(p) + Rc::get(q).x);
 }
 "#,
         Oracle::ExitOutStats(0, "38\n", 2, 2),
@@ -2241,15 +2194,14 @@ fn main() -> i64 {
 struct Cell { f: i64 }
 fn drain(pr: &mut Cell) -> i64 {
     while (*pr).f > 0 {
-        (*pr).f = (*pr).f - 1
+        (*pr).f = (*pr).f - 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 3 }
-    let q = drain(&mut c)
-    println(c.f)
-    return 0
+fn main() {
+    let mut c: Cell = Cell { f: 3 };
+    let q = drain(&mut c);
+    println!("{}", c.f);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2258,14 +2210,13 @@ fn main() -> i64 {
         "SI-PA39",
         r#"
 struct Ar { a: [i64; 3] }
-fn main() -> i64 {
-    let mut ar: Ar = Ar { a: [3, 0, 0] }
-    let s = ar.a[..]
+fn main() {
+    let mut ar: Ar = Ar { a: [3, 0, 0] };
+    let s = ar.a[..];
     while s[0] > 0 {
-        s[0] = s[0] - 1
+        s[0] = s[0] - 1;
     }
-    println(ar.a[0])
-    return 0
+    println!("{}", ar.a[0]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2274,12 +2225,11 @@ fn main() -> i64 {
         "SI-PA40",
         r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let n: Rc<Cell> = Rc::null()
-    println(101)
-    n.f = 101
-    println(7919)
-    return 0
+fn main() {
+    let n: Rc<Cell> = Rc::null();
+    println!("{}", 101);
+    n.f = 101;
+    println!("{}", 7919);
 }
 "#,
         Oracle::ExitOutErr(134, "101\n", "null pointer dereference"),
@@ -2288,18 +2238,17 @@ fn main() -> i64 {
         "SI-PA41",
         r#"
 struct S { f: i64 }
-let mut ga: [i64; 3] = [1901, 2, 3]
-let mut gs: S = S { f: 1901 }
+static mut ga: [i64; 3] = [1901, 2, 3];
+static mut gs: S = S { f: 1901 };
 fn write_globals() -> i64 {
-    ga[0] = 101
-    gs.f = 101
-    return 0
+    ga[0] = 101;
+    gs.f = 101;
+    0
 }
-fn main() -> i64 {
-    let q = write_globals()
-    println(ga[0])
-    println(gs.f)
-    return 0
+fn main() {
+    let q = write_globals();
+    println!("{}", ga[0]);
+    println!("{}", gs.f);
 }
 "#,
         Oracle::ExitOut(0, "101\n101\n"),
@@ -2307,13 +2256,13 @@ fn main() -> i64 {
     (
         "SI-PAA01",
         r#"
-fn read(s: &[i64]) -> i64 {
-    let t = s[0..2]
-    return t[1]
+use std::process::ExitCode; fn read(s: &[i64]) -> i64 {
+    let t = s[0..2];
+    t[1]
 }
-fn main() -> i64 {
-    let a: [i64; 4] = [11, 22, 33, 44]
-    return read(a[..])
+fn main() -> ExitCode {
+    let a: [i64; 4] = [11, 22, 33, 44];
+    return ExitCode::from(read(a[..]) as u8);
 }
 "#,
         Oracle::AllocAgreeOut(22, ""),
@@ -2321,13 +2270,13 @@ fn main() -> i64 {
     (
         "SI-PAA02",
         r#"
-fn cut(s: &[i64]) -> &[i64] {
-    return s[0..2]
+use std::process::ExitCode; fn cut(s: &[i64]) -> &[i64] {
+    s[0..2]
 }
-fn main() -> i64 {
-    let a: [i64; 4] = [11, 22, 33, 44]
-    let t = cut(a[..])
-    return t[1]
+fn main() -> ExitCode {
+    let a: [i64; 4] = [11, 22, 33, 44];
+    let t = cut(a[..]);
+    return ExitCode::from(t[1] as u8);
 }
 "#,
         Oracle::AllocAgreeOut(22, ""),
@@ -2335,12 +2284,11 @@ fn main() -> i64 {
     (
         "SI-PAA03",
         r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [11, 22, 33, 44]
-    let s = a[..]
-    let t = s[0..2]
-    println(t[1])
-    return 0
+fn main() {
+    let a: [i64; 4] = [11, 22, 33, 44];
+    let s = a[..];
+    let t = s[0..2];
+    println!("{}", t[1]);
 }
 "#,
         Oracle::AllocAgreeOut(0, "22\n"),
@@ -2350,15 +2298,14 @@ fn main() -> i64 {
         r#"
 fn drain(r: &mut i64) -> i64 {
     while *r > 0 {
-        (*r)--
+        (*r) -= 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut x: i64 = 3
-    let q = drain(&mut x)
-    println(x)
-    return 0
+fn main() {
+    let mut x: i64 = 3;
+    let q = drain(&mut x);
+    println!("{}", x);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2366,14 +2313,13 @@ fn main() -> i64 {
     (
         "SI-PA47",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [3, 0, 0]
-    let r = &mut a
+fn main() {
+    let mut a: [i64; 3] = [3, 0, 0];
+    let r = &mut a;
     while (*r)[0] > 0 {
-        (*r)[0] = (*r)[0] - 1
+        (*r)[0] = (*r)[0] - 1;
     }
-    println(a[0])
-    return 0
+    println!("{}", a[0]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2381,17 +2327,17 @@ fn main() -> i64 {
     (
         "SI-PA48",
         r#"
-struct Cell { f: i64 }
+use std::process::ExitCode; struct Cell { f: i64 }
 fn drain(r: Rc<Cell>) -> i64 {
     while Rc::get(r).f > 0 {
-        Rc::get(r).f = Rc::get(r).f - 1
+        Rc::get(r).f = Rc::get(r).f - 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let r = Rc::new(Cell { f: 3 })
-    let q = drain(r)
-    return q
+fn main() -> ExitCode {
+    let r = Rc::new(Cell { f: 3 });
+    let q = drain(r);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::Balanced(0),
@@ -2400,18 +2346,17 @@ fn main() -> i64 {
         "SI-PA49",
         r#"
 fn fill(r: &mut Vec<i64>) -> i64 {
-    let mut i = 1
+    let mut i = 1;
     while i < 4 {
-        Vec::push((*r), i)
-        i = i + 1
+        Vec::push((*r), i);
+        i = i + 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[0]
-    let q = fill(&mut v)
-    println(v[3])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![0];
+    let q = fill(&mut v);
+    println!("{}", v[3]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "3\n"),
@@ -2421,16 +2366,15 @@ fn main() -> i64 {
         r#"
 fn drain(r: &mut i64) -> i64 {
     if *r > 0 {
-        (*r)--
-        return drain(r)
+        (*r) -= 1;
+        return drain(r);
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut x: i64 = 3
-    let q = drain(&mut x)
-    println(x)
-    return 0
+fn main() {
+    let mut x: i64 = 3;
+    let q = drain(&mut x);
+    println!("{}", x);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2439,14 +2383,13 @@ fn main() -> i64 {
         "SI-PA51",
         r#"
 fn add(r: &mut Vec<i64>) -> i64 {
-    Vec::push((*r), 101)
-    return 0
+    Vec::push((*r), 101);
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2]
-    let q = add(&mut v)
-    println(v[2])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2];
+    let q = add(&mut v);
+    println!("{}", v[2]);
 }
 "#,
         Oracle::ExitOut(0, "101\n"),
@@ -2455,14 +2398,13 @@ fn main() -> i64 {
         "SI-PA52",
         r#"
 fn bump(s: &mut [i64]) -> i64 {
-    s[0]++
-    return 0
+    s[0] += 1;
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    let q = bump(a[..])
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 2, 3];
+    let q = bump(a[..]);
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "8\n"),
@@ -2470,16 +2412,15 @@ fn main() -> i64 {
     (
         "SI-PA53",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[7]
-    let f = fn () -> i64 {
-        Vec::push(v, 101)
-        return v[0]
-    }
-    let inside = f()
-    println(inside)
-    println(v[0])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![7];
+    let f = move || -> i64 {
+        Vec::push(v, 101);
+        v[0]
+    };
+    let inside = f();
+    println!("{}", inside);
+    println!("{}", v[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "7\n7\n", 3, 3),
@@ -2487,14 +2428,14 @@ fn main() -> i64 {
     (
         "SI-PAA04",
         r#"
-fn read(s: &[i64]) -> i64 {
-    let t = s[0..3]
-    let u = t[0..1]
-    return u[0]
+use std::process::ExitCode; fn read(s: &[i64]) -> i64 {
+    let t = s[0..3];
+    let u = t[0..1];
+    u[0]
 }
-fn main() -> i64 {
-    let a: [i64; 4] = [11, 22, 33, 44]
-    return read(a[..])
+fn main() -> ExitCode {
+    let a: [i64; 4] = [11, 22, 33, 44];
+    return ExitCode::from(read(a[..]) as u8);
 }
 "#,
         Oracle::AllocAgreeOut(11, ""),
@@ -2503,17 +2444,16 @@ fn main() -> i64 {
         "SI-PAO02",
         r#"
 fn make() -> fn() -> fn() -> i64 {
-    let a: i64 = 1
-    return fn () -> fn() -> i64 {
-        let b: i64 = 2
-        return fn () -> i64 { return a + b }
+    let a: i64 = 1;
+    move || -> fn() -> i64 {
+        let b: i64 = 2;
+        move || -> i64 { a + b }
     }
 }
-fn main() -> i64 {
-    let f = make()
-    let g = f()
-    println(g())
-    return 0
+fn main() {
+    let f = make();
+    let g = f();
+    println!("{}", g());
 }
 "#,
         Oracle::ExitOut(0, "3\n"),
@@ -2522,11 +2462,10 @@ fn main() -> i64 {
         "SI-PA54",
         r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
 }
 "#,
         Oracle::ExitOutStats(0, "", 2, 2),
@@ -2535,15 +2474,14 @@ fn main() -> i64 {
         "SI-PA55",
         r#"
 fn grow(r: &mut Vec<i64>) -> i64 {
-    let q = &mut *r
-    Vec::push((*q), 101)
-    return 0
+    let q = &mut *r;
+    Vec::push((*q), 101);
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7]
-    let q = grow(&mut v)
-    println(v[1])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7];
+    let q = grow(&mut v);
+    println!("{}", v[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "101\n", 1, 1),
@@ -2553,16 +2491,15 @@ fn main() -> i64 {
         r#"
 fn grow(r: &mut Vec<i64>, i: i64) -> i64 {
     if i < 3 {
-        Vec::push((*r), i)
-        return grow(r, i + 1)
+        Vec::push((*r), i);
+        return grow(r, i + 1);
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[0]
-    let q = grow(&mut v, 1)
-    println(v[2])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![0];
+    let q = grow(&mut v, 1);
+    println!("{}", v[2]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "2\n"),
@@ -2570,15 +2507,15 @@ fn main() -> i64 {
     (
         "SI-PA57",
         r#"
-let mut g: i64 = 3
+use std::process::ExitCode; static mut g: i64 = 3;
 fn drain() -> i64 {
     while g > 0 {
-        g--
+        g -= 1;
     }
-    return g
+    g
 }
-fn main() -> i64 {
-    return drain()
+fn main() -> ExitCode {
+    return ExitCode::from(drain() as u8);
 }
 "#,
         Oracle::Terminates(20_000, 0, ""),
@@ -2589,15 +2526,14 @@ fn main() -> i64 {
 struct Cell { a: [i64; 3] }
 fn drain(r: &mut Cell) -> i64 {
     while (*r).a[0] > 0 {
-        (*r).a[0]--
+        (*r).a[0] -= 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { a: [3, 0, 0] }
-    let q = drain(&mut c)
-    println(c.a[0])
-    return 0
+fn main() {
+    let mut c: Cell = Cell { a: [3, 0, 0] };
+    let q = drain(&mut c);
+    println!("{}", c.a[0]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2605,11 +2541,11 @@ fn main() -> i64 {
     (
         "SI-PA59",
         r#"
-fn main() -> i64 {
-    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
-    let r = &mut a
-    (*r)[1][1][1] = 101
-    return a[1][1][1] - 101
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [[[i64; 2]; 2]; 2] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]];
+    let r = &mut a;
+    (*r)[1][1][1] = 101;
+    return ExitCode::from((a[1][1][1] - 101) as u8);
 }
 "#,
         Oracle::ExitOut(0, ""),
@@ -2617,17 +2553,17 @@ fn main() -> i64 {
     (
         "SI-PA60",
         r#"
-struct L3 { d: i64 }
+use std::process::ExitCode; struct L3 { d: i64 }
 struct L2 { c: L3 }
 struct L1 { b: L2 }
 fn poke(r: &mut L1) -> i64 {
-    (*r).b.c.d = 101
-    return 0
+    (*r).b.c.d = 101;
+    0
 }
-fn main() -> i64 {
-    let mut x: L1 = L1 { b: L2 { c: L3 { d: 7 } } }
-    let q = poke(&mut x)
-    return x.b.c.d - 101
+fn main() -> ExitCode {
+    let mut x: L1 = L1 { b: L2 { c: L3 { d: 7 } } };
+    let q = poke(&mut x);
+    return ExitCode::from((x.b.c.d - 101) as u8);
 }
 "#,
         Oracle::ExitOut(0, ""),
@@ -2635,16 +2571,16 @@ fn main() -> i64 {
     (
         "SI-PA61",
         r#"
-struct Mid { g: [i64; 1] }
+use std::process::ExitCode; struct Mid { g: [i64; 1] }
 struct Top { f: [Mid; 1] }
 fn poke(r: &mut Top) -> i64 {
-    (*r).f[0].g[0] = 101
-    return 0
+    (*r).f[0].g[0] = 101;
+    0
 }
-fn main() -> i64 {
-    let mut x: Top = Top { f: [Mid { g: [7] }] }
-    let q = poke(&mut x)
-    return x.f[0].g[0] - 101
+fn main() -> ExitCode {
+    let mut x: Top = Top { f: [Mid { g: [7] }] };
+    let q = poke(&mut x);
+    return ExitCode::from((x.f[0].g[0] - 101) as u8);
 }
 "#,
         Oracle::ExitOut(0, ""),
@@ -2652,20 +2588,20 @@ fn main() -> i64 {
     (
         "SI-PA63",
         r#"
-struct Holder { a: [i64; 3] }
+use std::process::ExitCode; struct Holder { a: [i64; 3] }
 fn down(r: &mut Holder) -> i64 {
     if (*r).a[0] > 0 {
-        (*r).a[0] = (*r).a[0] - 1
-        let q = down(r)
-        return q
+        (*r).a[0] = (*r).a[0] - 1;
+        let q = down(r);
+        return q;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut h: Holder = Holder { a: [3, 0, 0] }
-    let q = down(&mut h)
-    println(h.a[0])
-    return q
+fn main() -> ExitCode {
+    let mut h: Holder = Holder { a: [3, 0, 0] };
+    let q = down(&mut h);
+    println!("{}", h.a[0]);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2673,20 +2609,20 @@ fn main() -> i64 {
     (
         "SI-PA64",
         r#"
-struct Cell { f: i64, g: i64 }
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
 fn down(r: &mut Cell) -> i64 {
     if (*r).f > 0 {
-        (*r).f = (*r).f - 1
-        let q = down(r)
-        return q
+        (*r).f = (*r).f - 1;
+        let q = down(r);
+        return q;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 3, g: 0 }
-    let q = down(&mut c)
-    println(c.f)
-    return q
+fn main() -> ExitCode {
+    let mut c: Cell = Cell { f: 3, g: 0 };
+    let q = down(&mut c);
+    println!("{}", c.f);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::Terminates(20_000, 0, "0\n"),
@@ -2694,13 +2630,13 @@ fn main() -> i64 {
     (
         "SI-PAA05",
         r#"
-fn read(s: &[i64]) -> i64 {
-    let t = s[0..2]
-    return t[0]
+use std::process::ExitCode; fn read(s: &[i64]) -> i64 {
+    let t = s[0..2];
+    t[0]
 }
-fn main() -> i64 {
-    let a: [i64; 4] = [11, 22, 33, 44]
-    return read(a[..])
+fn main() -> ExitCode {
+    let a: [i64; 4] = [11, 22, 33, 44];
+    return ExitCode::from(read(a[..]) as u8);
 }
 "#,
         Oracle::AllocAgreeOut(11, ""),
@@ -2709,19 +2645,18 @@ fn main() -> i64 {
         "SI-PAA06",
         r#"
 fn run(s: &mut [i64]) -> i64 {
-    let t = s[0..2]
-    let mut i = 0
+    let t = s[0..2];
+    let mut i = 0;
     while i < 1 {
-        t[0] = 101
-        i = i + 1
+        t[0] = 101;
+        i = i + 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 0, 0]
-    let q = run(a[..])
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 0, 0];
+    let q = run(a[..]);
+    println!("{}", a[0]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "101\n"),
@@ -2730,16 +2665,15 @@ fn main() -> i64 {
         "SI-PAA07",
         r#"
 fn run(s: &mut [i64]) -> i64 {
-    let t = s[0..2]
-    t[0] = 101
-    println(s[0])
-    return 0
+    let t = s[0..2];
+    t[0] = 101;
+    println!("{}", s[0]);
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 0, 0]
-    let q = run(a[..])
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 3] = [7, 0, 0];
+    let q = run(a[..]);
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "101\n101\n"),
@@ -2747,17 +2681,17 @@ fn main() -> i64 {
     (
         "SI-PAA08",
         r#"
-fn run(s: &mut [i64]) -> i64 {
-    let t = s[0..2]
-    t[0] = 101
-    println(s[0])
-    return 0
+use std::process::ExitCode; fn run(s: &mut [i64]) -> i64 {
+    let t = s[0..2];
+    t[0] = 101;
+    println!("{}", s[0]);
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 0, 0]
-    let q = run(a[..])
-    println(a[0])
-    return q
+fn main() -> ExitCode {
+    let mut a: [i64; 3] = [7, 0, 0];
+    let q = run(a[..]);
+    println!("{}", a[0]);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::ExitOut(0, "101\n101\n"),
@@ -2769,14 +2703,13 @@ const GROUP_CA: &[(&str, &str, Oracle)] = &[
     (
         "SI-PACA01",
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 0]
-    let mut b: [i64; 2] = [0, 0]
+fn main() {
+    let a: [i64; 2] = [9, 0];
+    let mut b: [i64; 2] = [0, 0];
     while b[0] < 8 {
-        b[0] = a[0] * 1
+        b[0] = a[0] * 1;
     }
-    println(b[0])
-    return 0
+    println!("{}", b[0]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "9\n"),
@@ -2784,12 +2717,11 @@ fn main() -> i64 {
     (
         "SI-PACA02",
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 5]
-    let mut b: [i64; 2] = [0, 0]
-    b[0] = a[0] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let a: [i64; 2] = [9, 5];
+    let mut b: [i64; 2] = [0, 0];
+    b[0] = a[0] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2797,12 +2729,11 @@ fn main() -> i64 {
     (
         "SI-PACA03",
         r#"
-fn main() -> i64 {
-    let a = vec[9, 5]
-    let mut b = vec[0, 0]
-    b[0] = a[0] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let a = vec![9, 5];
+    let mut b = vec![0, 0];
+    b[0] = a[0] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2810,11 +2741,10 @@ fn main() -> i64 {
     (
         "SI-PACA04",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 2] = [9, 1]
-    a[0] = a[1] * 2
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 2] = [9, 1];
+    a[0] = a[1] * 2;
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "2\n"),
@@ -2824,15 +2754,14 @@ fn main() -> i64 {
         "SI-PACA05",
         r#"
 fn side() -> i64 {
-    println(77)
-    return 0
+    println!("{}", 77);
+    0
 }
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 5]
-    let mut b: [i64; 2] = [0, 0]
-    b[0] = a[side()] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let a: [i64; 2] = [9, 5];
+    let mut b: [i64; 2] = [0, 0];
+    b[0] = a[side()] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "77\n18\n"),
@@ -2841,12 +2770,11 @@ fn main() -> i64 {
         "SI-PACA06",
         r#"
 struct P { x: i64 }
-fn main() -> i64 {
-    let p: P = P { x: 9 }
-    let mut q: P = P { x: 0 }
-    q.x = p.x * 2
-    println(q.x)
-    return 0
+fn main() {
+    let p: P = P { x: 9 };
+    let mut q: P = P { x: 0 };
+    q.x = p.x * 2;
+    println!("{}", q.x);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2856,12 +2784,11 @@ fn main() -> i64 {
         r#"
 struct Inner { v: i64 }
 struct Outer { i: Inner }
-fn main() -> i64 {
-    let a: Outer = Outer { i: Inner { v: 9 } }
-    let mut b: Outer = Outer { i: Inner { v: 0 } }
-    b.i.v = a.i.v * 2
-    println(b.i.v)
-    return 0
+fn main() {
+    let a: Outer = Outer { i: Inner { v: 9 } };
+    let mut b: Outer = Outer { i: Inner { v: 0 } };
+    b.i.v = a.i.v * 2;
+    println!("{}", b.i.v);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2870,14 +2797,13 @@ fn main() -> i64 {
         "SI-PACA08",
         r#"
 fn g(v: i64) -> i64 {
-    return v
+    v
 }
-fn main() -> i64 {
-    let s: [i64; 2] = [9, 5]
-    let mut d: [i64; 2] = [0, 0]
-    d[0] = g(s[0] * 2)
-    println(d[0])
-    return 0
+fn main() {
+    let s: [i64; 2] = [9, 5];
+    let mut d: [i64; 2] = [0, 0];
+    d[0] = g(s[0] * 2);
+    println!("{}", d[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2886,12 +2812,11 @@ fn main() -> i64 {
         "SI-PACA09",
         r#"
 struct P { d: [i64; 2] }
-fn main() -> i64 {
-    let p: P = P { d: [9, 5] }
-    let mut b: [i64; 2] = [0, 0]
-    b[0] = p.d[0] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let p: P = P { d: [9, 5] };
+    let mut b: [i64; 2] = [0, 0];
+    b[0] = p.d[0] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2899,13 +2824,12 @@ fn main() -> i64 {
     (
         "SI-PACA10",
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 5]
-    let mut b: [i64; 2] = [0, 0]
-    let i: i64 = 0
-    b[i] = a[i] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let a: [i64; 2] = [9, 5];
+    let mut b: [i64; 2] = [0, 0];
+    let i: i64 = 0;
+    b[i] = a[i] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2913,16 +2837,16 @@ fn main() -> i64 {
     (
         "SI-PACA11",
         r#"
-fn poke(src: &Vec<i64>, dst: &mut Vec<i64>) -> i64 {
-    (*dst)[0] = (*src)[0] * 2
-    return 0
+use std::process::ExitCode; fn poke(src: &Vec<i64>, dst: &mut Vec<i64>) -> i64 {
+    (*dst)[0] = (*src)[0] * 2;
+    0
 }
-fn main() -> i64 {
-    let s: Vec<i64> = vec[9, 2]
-    let mut d: Vec<i64> = vec[0, 0]
-    let q = poke(&s, &mut d)
-    println(d[0])
-    return q
+fn main() -> ExitCode {
+    let s: Vec<i64> = vec![9, 2];
+    let mut d: Vec<i64> = vec![0, 0];
+    let q = poke(&s, &mut d);
+    println!("{}", d[0]);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2931,12 +2855,11 @@ fn main() -> i64 {
         "SI-PACA12",
         r#"
 struct P { x: i64 }
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 5]
-    let mut q: P = P { x: 0 }
-    q.x = a[0] * 2
-    println(q.x)
-    return 0
+fn main() {
+    let a: [i64; 2] = [9, 5];
+    let mut q: P = P { x: 0 };
+    q.x = a[0] * 2;
+    println!("{}", q.x);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2945,12 +2868,11 @@ fn main() -> i64 {
         "SI-PACA13",
         r#"
 struct P { x: i64 }
-fn main() -> i64 {
-    let p: P = P { x: 9 }
-    let mut b: [i64; 2] = [0, 0]
-    b[0] = p.x * 2
-    println(b[0])
-    return 0
+fn main() {
+    let p: P = P { x: 9 };
+    let mut b: [i64; 2] = [0, 0];
+    b[0] = p.x * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2958,11 +2880,10 @@ fn main() -> i64 {
     (
         "SI-PACA14",
         r#"
-fn main() -> i64 {
-    let mut b: [i64; 2] = [1, 0]
-    b[0] += 3
-    println(b[0])
-    return 0
+fn main() {
+    let mut b: [i64; 2] = [1, 0];
+    b[0] += 3;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "4\n"),
@@ -2970,11 +2891,10 @@ fn main() -> i64 {
     (
         "SI-PACA15",
         r#"
-fn main() -> i64 {
-    let mut b: [i64; 2] = [9, 0]
-    b[0] = b[0] * 2
-    println(b[0])
-    return 0
+fn main() {
+    let mut b: [i64; 2] = [9, 0];
+    b[0] = b[0] * 2;
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2982,12 +2902,11 @@ fn main() -> i64 {
     (
         "SI-PACA16",
         r#"
-fn main() -> i64 {
-    let a: [i64; 2] = [9, 5]
-    let mut b: [i64; 2] = [0, 0]
-    b[0] = 2 * a[0]
-    println(b[0])
-    return 0
+fn main() {
+    let a: [i64; 2] = [9, 5];
+    let mut b: [i64; 2] = [0, 0];
+    b[0] = 2 * a[0];
+    println!("{}", b[0]);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -2996,11 +2915,10 @@ fn main() -> i64 {
         "SI-PACA17",
         r#"
 struct P { x: i64 }
-fn main() -> i64 {
-    let mut p: P = P { x: 1 }
-    p.x += 3
-    println(p.x)
-    return 0
+fn main() {
+    let mut p: P = P { x: 1 };
+    p.x += 3;
+    println!("{}", p.x);
 }
 "#,
         Oracle::ExitOut(0, "4\n"),
@@ -3008,14 +2926,13 @@ fn main() -> i64 {
     (
         "SI-PACA18",
         r#"
-fn main() -> i64 {
-    let a: i64 = 9
-    let mut b: i64 = 0
-    let pa: &i64 = &a
-    let pb: &mut i64 = &mut b
-    *pb = *pa * 2
-    println(b)
-    return 0
+fn main() {
+    let a: i64 = 9;
+    let mut b: i64 = 0;
+    let pa: &i64 = &a;
+    let pb: &mut i64 = &mut b;
+    *pb = *pa * 2;
+    println!("{}", b);
 }
 "#,
         Oracle::ExitOut(0, "18\n"),
@@ -3024,14 +2941,13 @@ fn main() -> i64 {
         "SI-PACA19",
         r#"
 fn side() -> i64 {
-    println(77)
-    return 0
+    println!("{}", 77);
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 2] = [9, 5]
-    a[side()] += 3
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 2] = [9, 5];
+    a[side()] += 3;
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "77\n12\n"),
@@ -3040,11 +2956,10 @@ fn main() -> i64 {
         "SI-PACA20",
         r#"
 struct P { d: [i64; 2] }
-fn main() -> i64 {
-    let mut p: P = P { d: [9, 5] }
-    p.d[0] += 3
-    println(p.d[0])
-    return 0
+fn main() {
+    let mut p: P = P { d: [9, 5] };
+    p.d[0] += 3;
+    println!("{}", p.d[0]);
 }
 "#,
         Oracle::ExitOut(0, "12\n"),
@@ -3054,11 +2969,10 @@ fn main() -> i64 {
         r#"
 struct Inner { v: i64 }
 struct Outer { i: Inner }
-fn main() -> i64 {
-    let mut b: Outer = Outer { i: Inner { v: 9 } }
-    b.i.v += 3
-    println(b.i.v)
-    return 0
+fn main() {
+    let mut b: Outer = Outer { i: Inner { v: 9 } };
+    b.i.v += 3;
+    println!("{}", b.i.v);
 }
 "#,
         Oracle::ExitOut(0, "12\n"),
@@ -3066,15 +2980,15 @@ fn main() -> i64 {
     (
         "SI-PACA22",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    (*r)[0] += 3
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    (*r)[0] += 3;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[9, 2]
-    let q = poke(&mut v)
-    println(v[0])
-    return q
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![9, 2];
+    let q = poke(&mut v);
+    println!("{}", v[0]);
+    return ExitCode::from(q as u8);
 }
 "#,
         Oracle::ExitOut(0, "12\n"),
@@ -3082,12 +2996,11 @@ fn main() -> i64 {
     (
         "SI-PACA23",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 2] = [9, 5]
-    let i: i64 = 0
-    a[i]++
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64; 2] = [9, 5];
+    let i: i64 = 0;
+    a[i] += 1;
+    println!("{}", a[0]);
 }
 "#,
         Oracle::ExitOut(0, "10\n"),
@@ -3096,11 +3009,10 @@ fn main() -> i64 {
         "SI-PACA24",
         r#"
 struct P { x: i64 }
-fn main() -> i64 {
-    let mut p: P = P { x: 9 }
-    p.x++
-    println(p.x)
-    return 0
+fn main() {
+    let mut p: P = P { x: 9 };
+    p.x += 1;
+    println!("{}", p.x);
 }
 "#,
         Oracle::ExitOut(0, "10\n"),
@@ -3129,23 +3041,22 @@ const GROUP_PA_X: &[XRow] = &[
         rejected: r#"
 struct Cell { f: i64, g: i64 }
 fn mkc() -> Cell {
-    return Cell { f: 7, g: 0 }
+    Cell { f: 7, g: 0 }
 }
-fn main() -> i64 {
-    mkc().f = 101
-    return 0
+fn main() {
+    mkc().f = 101;
 }
 "#,
         twin: Some((
             r#"
-struct Cell { f: i64, g: i64 }
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
 fn mkc() -> Cell {
-    return Cell { f: 7, g: 0 }
+    Cell { f: 7, g: 0 }
 }
-fn main() -> i64 {
-    let mut c: Cell = mkc()
-    c.f = 101
-    return c.f - 100
+fn main() -> ExitCode {
+    let mut c: Cell = mkc();
+    c.f = 101;
+    return ExitCode::from((c.f - 100) as u8);
 }
 "#,
             1,
@@ -3155,28 +3066,28 @@ fn main() -> i64 {
         id: "SI-PAX02",
         code: "E0422",
         rejected: r#"
-struct Cell { f: i64, g: i64 }
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
 fn poke(r: &Cell) -> i64 {
-    (*r).f = 101
-    return 0
+    (*r).f = 101;
+    0
 }
-fn main() -> i64 {
-    let mut s: Cell = Cell { f: 6031, g: 0 }
-    let q = poke(&s)
-    return s.f
+fn main() -> ExitCode {
+    let mut s: Cell = Cell { f: 6031, g: 0 };
+    let q = poke(&s);
+    return ExitCode::from(s.f as u8);
 }
 "#,
         twin: Some((
             r#"
-struct Cell { f: i64, g: i64 }
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
 fn poke(r: &mut Cell) -> i64 {
-    (*r).f = 1
-    return 0
+    (*r).f = 1;
+    0
 }
-fn main() -> i64 {
-    let mut s: Cell = Cell { f: 6031, g: 0 }
-    let q = poke(&mut s)
-    return s.f
+fn main() -> ExitCode {
+    let mut s: Cell = Cell { f: 6031, g: 0 };
+    let q = poke(&mut s);
+    return ExitCode::from(s.f as u8);
 }
 "#,
             1,
@@ -3186,26 +3097,26 @@ fn main() -> i64 {
         id: "SI-PAX03",
         code: "E0422",
         rejected: r#"
-fn poke(r: &i64) -> i64 {
-    *r = 101
-    return 0
+use std::process::ExitCode; fn poke(r: &i64) -> i64 {
+    *r = 101;
+    0
 }
-fn main() -> i64 {
-    let x: i64 = 7
-    let q = poke(&x)
-    return x
+fn main() -> ExitCode {
+    let x: i64 = 7;
+    let q = poke(&x);
+    return ExitCode::from(x as u8);
 }
 "#,
         twin: Some((
             r#"
-fn poke(r: &mut i64) -> i64 {
-    *r = 1
-    return 0
+use std::process::ExitCode; fn poke(r: &mut i64) -> i64 {
+    *r = 1;
+    0
 }
-fn main() -> i64 {
-    let mut x: i64 = 7
-    let q = poke(&mut x)
-    return x
+fn main() -> ExitCode {
+    let mut x: i64 = 7;
+    let q = poke(&mut x);
+    return ExitCode::from(x as u8);
 }
 "#,
             1,
@@ -3215,27 +3126,27 @@ fn main() -> i64 {
         id: "SI-PAX04",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let f = fn () -> i64 {
-        let e = &v[0]
-        return *e
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let f = move || -> i64 {
+        let e = &v[0];
+        *e
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: Some((
             r#"
-fn apply(f: fn(&i64) -> i64, p: &i64) -> i64 {
-    return f(p)
+use std::process::ExitCode; fn apply(f: fn(&i64) -> i64, p: &i64) -> i64 {
+    f(p)
 }
-fn main() -> i64 {
-    let n: i64 = 1
-    let r = &n
-    let g = fn (p: &i64) -> i64 {
-        return *p
-    }
-    return apply(g, r)
+fn main() -> ExitCode {
+    let n: i64 = 1;
+    let r = &n;
+    let g = move |p: &i64| -> i64 {
+        *p
+    };
+    return ExitCode::from(apply(g, r) as u8);
 }
 "#,
             1,
@@ -3245,22 +3156,22 @@ fn main() -> i64 {
         id: "SI-PAX05",
         code: "E0424",
         rejected: r#"
-let mut g: i64 = 1901
-fn main() -> i64 {
-    let r = &mut g
-    *r = 101
-    return g
+use std::process::ExitCode; static mut g: i64 = 1901;
+fn main() -> ExitCode {
+    let r = &mut g;
+    *r = 101;
+    return ExitCode::from(g as u8);
 }
 "#,
         twin: Some((
             r#"
-struct S { f: i64 }
-let mut ga: [i64; 3] = [1901, 2, 3]
-let mut gs: S = S { f: 1901 }
-fn main() -> i64 {
-    ga[0] = 1
-    gs.f = 0
-    return ga[0] + gs.f
+use std::process::ExitCode; struct S { f: i64 }
+static mut ga: [i64; 3] = [1901, 2, 3];
+static mut gs: S = S { f: 1901 };
+fn main() -> ExitCode {
+    ga[0] = 1;
+    gs.f = 0;
+    return ExitCode::from((ga[0] + gs.f) as u8);
 }
 "#,
             1,
@@ -3271,25 +3182,25 @@ fn main() -> i64 {
         code: "E0721",
         // pass as if it borrowed the caller. makes that address real
         rejected: r#"
-struct Cell { f: i64, g: i64 }
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
 fn leak(c: Cell) -> &i64 {
-    return &c.f
+    &c.f
 }
-fn main() -> i64 {
-    let x: Cell = Cell { f: 7, g: 0 }
-    let r = leak(x)
-    return *r
+fn main() -> ExitCode {
+    let x: Cell = Cell { f: 7, g: 0 };
+    let r = leak(x);
+    return ExitCode::from((*r) as u8);
 }
 "#,
         twin: Some((
             r#"
-fn passthru(p: &i64) -> &i64 {
-    return p
+use std::process::ExitCode; fn passthru(p: &i64) -> &i64 {
+    p
 }
-fn main() -> i64 {
-    let x: i64 = 1
-    let r = passthru(&x)
-    return *r
+fn main() -> ExitCode {
+    let x: i64 = 1;
+    let r = passthru(&x);
+    return ExitCode::from((*r) as u8);
 }
 "#,
             1,
@@ -3299,25 +3210,25 @@ fn main() -> i64 {
         id: "SI-PAX06b",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let mut c: i64 = 1
-    let f = fn () -> i64 {
-        let r = &mut c
-        *r = c + 1
-        return c
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut c: i64 = 1;
+    let f = move || -> i64 {
+        let r = &mut c;
+        *r = c + 1;
+        c
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut c: i64 = 0
-    let f = fn () -> i64 {
-        c = c + 1
-        return c
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut c: i64 = 0;
+    let f = move || -> i64 {
+        c = c + 1;
+        c
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
             1,
@@ -3328,12 +3239,12 @@ fn main() -> i64 {
         code: "E0711",
         // borrow checker, not by anything designed for it
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let e = &v[0]
-    Vec::push(v, 4)
-    Vec::push(v, 5)
-    return *e
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let e = &v[0];
+    Vec::push(v, 4);
+    Vec::push(v, 5);
+    return ExitCode::from((*e) as u8);
 }
 "#,
         twin: None,
@@ -3342,13 +3253,13 @@ fn main() -> i64 {
         id: "SI-PAX08",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let f = fn () -> i64 {
-        let e = &v[0]
-        return *e
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let f = move || -> i64 {
+        let e = &v[0];
+        *e
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: None,
@@ -3357,17 +3268,16 @@ fn main() -> i64 {
         id: "SI-PAX09",
         code: "E0421",
         rejected: r#"
-fn main() -> i64 {
-    [337, 0, 0][0] = 101
-    return 0
+fn main() {
+    [337, 0, 0][0] = 101;
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [337, 0, 0]
-    a[0] = 101
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64; 3] = [337, 0, 0];
+    a[0] = 101;
+    return ExitCode::from(a[0] as u8);
 }
 "#,
             101,
@@ -3378,18 +3288,17 @@ fn main() -> i64 {
         code: "E0421",
         rejected: r#"
 struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    Cell { f: 337, g: 0 }.f = 101
-    return 0
+fn main() {
+    Cell { f: 337, g: 0 }.f = 101;
 }
 "#,
         twin: Some((
             r#"
-struct Cell { f: i64, g: i64 }
-fn main() -> i64 {
-    let mut c: Cell = Cell { f: 337, g: 0 }
-    c.f = 101
-    return c.f
+use std::process::ExitCode; struct Cell { f: i64, g: i64 }
+fn main() -> ExitCode {
+    let mut c: Cell = Cell { f: 337, g: 0 };
+    c.f = 101;
+    return ExitCode::from(c.f as u8);
 }
 "#,
             101,
@@ -3399,23 +3308,23 @@ fn main() -> i64 {
         id: "SI-PAX11",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let mut cv: [i64; 3] = [619, 2, 3]
-    let f = fn () -> i64 {
-        let r = &cv[0]
-        cv[0] = 101
-        return *r
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut cv: [i64; 3] = [619, 2, 3];
+    let f = move || -> i64 {
+        let r = &cv[0];
+        cv[0] = 101;
+        *r
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: Some((
             r#"
-fn read(p: &i64) -> i64 { return *p }
-fn main() -> i64 {
-    let x: i64 = 5
-    let f = fn (p: &i64) -> i64 { return read(p) }
-    return f(&x)
+use std::process::ExitCode; fn read(p: &i64) -> i64 { *p }
+fn main() -> ExitCode {
+    let x: i64 = 5;
+    let f = move |p: &i64| -> i64 { read(p) };
+    return ExitCode::from(f(&x) as u8);
 }
 "#,
             5,
@@ -3425,19 +3334,19 @@ fn main() -> i64 {
         id: "SI-PAX12",
         code: "E0415",
         rejected: r#"
-let mut g: [i64; 3] = [1901, 2, 3]
-fn main() -> i64 {
-    let r = &mut g[0]
-    *r = 101
-    return g[0]
+use std::process::ExitCode; static mut g: [i64; 3] = [1901, 2, 3];
+fn main() -> ExitCode {
+    let r = &mut g[0];
+    *r = 101;
+    return ExitCode::from(g[0] as u8);
 }
 "#,
         twin: Some((
             r#"
-let mut g: [i64; 3] = [1901, 2, 3]
-fn main() -> i64 {
-    g[0] = 101
-    return g[0]
+use std::process::ExitCode; static mut g: [i64; 3] = [1901, 2, 3];
+fn main() -> ExitCode {
+    g[0] = 101;
+    return ExitCode::from(g[0] as u8);
 }
 "#,
             101,
@@ -3447,14 +3356,14 @@ fn main() -> i64 {
         id: "SI-PAX13",
         code: "E0422",
         rejected: r#"
-fn poke(r: &i64) -> i64 {
-    let q = &mut *r
-    *q = 101
-    return 0
+use std::process::ExitCode; fn poke(r: &i64) -> i64 {
+    let q = &mut *r;
+    *q = 101;
+    0
 }
-fn main() -> i64 {
-    let x: i64 = 7
-    return poke(&x)
+fn main() -> ExitCode {
+    let x: i64 = 7;
+    return ExitCode::from(poke(&x) as u8);
 }
 "#,
         twin: None,
@@ -3463,13 +3372,13 @@ fn main() -> i64 {
         id: "SI-PAX14",
         code: "E0422",
         rejected: r#"
-fn bump(r: &i64) -> i64 {
-    (*r)++
-    return 0
+use std::process::ExitCode; fn bump(r: &i64) -> i64 {
+    (*r) += 1;
+    0
 }
-fn main() -> i64 {
-    let x: i64 = 7
-    return bump(&x)
+fn main() -> ExitCode {
+    let x: i64 = 7;
+    return ExitCode::from(bump(&x) as u8);
 }
 "#,
         twin: None,
@@ -3486,10 +3395,10 @@ fn main() -> i64 {
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [7, 2, 3]
-    a[0]++
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64; 3] = [7, 2, 3];
+    a[0] += 1;
+    return ExitCode::from(a[0] as u8);
 }
 "#,
             8,
@@ -3499,13 +3408,13 @@ fn main() -> i64 {
         id: "SI-PAX16",
         code: "E0422",
         rejected: r#"
-fn grow(r: &Vec<i64>) -> i64 {
-    Vec::push((*r), 101)
-    return 0
+use std::process::ExitCode; fn grow(r: &Vec<i64>) -> i64 {
+    Vec::push((*r), 101);
+    0
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[7]
-    return grow(&v)
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![7];
+    return ExitCode::from(grow(&v) as u8);
 }
 "#,
         twin: None,
@@ -3514,9 +3423,8 @@ fn main() -> i64 {
         id: "SI-PAX17",
         code: "E0421",
         rejected: r#"
-fn main() -> i64 {
-    Vec::push(vec[7], 101)
-    return 0
+fn main() {
+    Vec::push(vec![7], 101);
 }
 "#,
         twin: None,
@@ -3526,10 +3434,9 @@ fn main() -> i64 {
         code: "E0421",
         rejected: r#"
 struct Cell { f: i64 }
-fn main() -> i64 {
-    let r = &mut Cell { f: 7 }
-    r.f = 101
-    return 0
+fn main() {
+    let r = &mut Cell { f: 7 };
+    r.f = 101;
 }
 "#,
         twin: None,
@@ -3539,17 +3446,16 @@ fn main() -> i64 {
         code: "E0419",
         rejected: r#"
 enum Vec { Empty, One(i64) }
-fn main() -> i64 {
-    let x: Vec = Vec::One(7)
-    return 0
+fn main() {
+    let x: Vec = Vec::One(7);
 }
 "#,
         twin: Some((
             r#"
-enum MyList { Empty, One(i64) }
-fn main() -> i64 {
-    let x: MyList = MyList::One(7)
-    return match x { MyList::One(v) => v, MyList::Empty => 0 }
+use std::process::ExitCode; enum MyList { Empty, One(i64) }
+fn main() -> ExitCode {
+    let x: MyList = MyList::One(7);
+    return ExitCode::from((match x { MyList::One(v) => v, MyList::Empty => 0 }) as u8);
 }
 "#,
             7,
@@ -3659,21 +3565,20 @@ fn main() -> i64 {
         id: "SI-PAX30",
         code: "E0412",
         rejected: r#"
-fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let mut outer = Vec::new()
-    Vec::push(outer, inner)
-    return 0
+fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let mut outer = Vec::new();
+    Vec::push(outer, inner);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    return v[0] + v[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    return ExitCode::from((v[0] + v[1]) as u8);
 }
 "#,
             3,
@@ -3683,24 +3588,24 @@ fn main() -> i64 {
         id: "SI-PAX31",
         code: "E0414",
         rejected: r#"
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let mut total = 0;
     for x in v {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let mut total = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    let mut total = 0;
     for x in a {
-        total = total + x
+        total = total + x;
     }
-    return total
+    return ExitCode::from(total as u8);
 }
 "#,
             6,
@@ -3710,20 +3615,20 @@ fn main() -> i64 {
         id: "SI-PAX32",
         code: "E0417",
         rejected: r#"
-fn main() -> i64 {
-    let x: i64 = 1
-    let a = &mut x
-    *a = 2
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 1;
+    let a = &mut x;
+    *a = 2;
+    return ExitCode::from(x as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut x: i64 = 1
-    let a = &mut x
-    *a = 2
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x: i64 = 1;
+    let a = &mut x;
+    *a = 2;
+    return ExitCode::from(x as u8);
 }
 "#,
             2,
@@ -3733,21 +3638,21 @@ fn main() -> i64 {
         id: "SI-PAX33",
         code: "E0418",
         rejected: r#"
-fn pick<A, B>(a: A, b: B) -> A { return a }
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A { a }
 fn other() -> i64 {
-    fn pick<A, B>(a: A, b: B) -> B { return b }
-    return pick(1, 2)
+    fn pick<A, B>(a: A, b: B) -> B { b }
+    pick(1, 2)
 }
-fn main() -> i64 { return pick(7, 8) }
+fn main() -> ExitCode { return ExitCode::from(pick(7, 8) as u8); }
 "#,
         twin: Some((
             r#"
-fn pick<A, B>(a: A, b: B) -> A { return a }
+use std::process::ExitCode; fn pick<A, B>(a: A, b: B) -> A { a }
 fn other() -> i64 {
-    fn choose<A, B>(a: A, b: B) -> B { return b }
-    return choose(1, 2)
+    fn choose<A, B>(a: A, b: B) -> B { b }
+    choose(1, 2)
 }
-fn main() -> i64 { return pick(7, 8) }
+fn main() -> ExitCode { return ExitCode::from(pick(7, 8) as u8); }
 "#,
             7,
         )),
@@ -3757,21 +3662,19 @@ fn main() -> i64 { return pick(7, 8) }
         code: "E0420",
         rejected: r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = (b)
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = (b);
 }
 "#,
         twin: Some((
             r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
 }
 "#,
             0,
@@ -3781,28 +3684,28 @@ fn main() -> i64 {
         id: "SI-PAX35",
         code: "E0424",
         rejected: r#"
-let mut g: i64 = 3
+use std::process::ExitCode; static mut g: i64 = 3;
 fn drain(r: &mut i64) -> i64 {
     while *r > 0 {
-        (*r)--
+        (*r) -= 1;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let q = drain(&mut g)
-    return g
+fn main() -> ExitCode {
+    let q = drain(&mut g);
+    return ExitCode::from(g as u8);
 }
 "#,
         twin: Some((
             r#"
-let mut g: i64 = 3
+use std::process::ExitCode; static mut g: i64 = 3;
 fn drain() -> i64 {
     while g > 0 {
-        g--
+        g -= 1;
     }
-    return g
+    g
 }
-fn main() -> i64 { return drain() }
+fn main() -> ExitCode { return ExitCode::from(drain() as u8); }
 "#,
             0,
         )),
@@ -3811,34 +3714,34 @@ fn main() -> i64 { return drain() }
         id: "SI-PAX36",
         code: "E0424",
         rejected: r#"
-let mut g: i64 = 3
+use std::process::ExitCode; static mut g: i64 = 3;
 fn down(r: &mut i64) -> i64 {
     if *r > 0 {
-        *r = *r - 1
-        let q = down(r)
-        return q
+        *r = *r - 1;
+        let q = down(r);
+        return q;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let q = down(&mut g)
-    println(g)
-    return q
+fn main() -> ExitCode {
+    let q = down(&mut g);
+    println!("{}", g);
+    return ExitCode::from(q as u8);
 }
 "#,
         twin: Some((
             r#"
-let mut g: i64 = 3
+use std::process::ExitCode; static mut g: i64 = 3;
 fn down() -> i64 {
     if g > 0 {
-        g = g - 1
-        let q = down()
-        return q
+        g = g - 1;
+        let q = down();
+        return q;
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    return down()
+fn main() -> ExitCode {
+    return ExitCode::from(down() as u8);
 }
 "#,
             0,
@@ -3848,23 +3751,23 @@ fn main() -> i64 {
         id: "SI-PAO01",
         code: "E0721",
         rejected: r#"
-fn bad(x: i64) -> &i64 {
-    return &x
+use std::process::ExitCode; fn bad(x: i64) -> &i64 {
+    &x
 }
-fn main() -> i64 {
-    let r = bad(7)
-    return *r
+fn main() -> ExitCode {
+    let r = bad(7);
+    return ExitCode::from((*r) as u8);
 }
 "#,
         twin: Some((
             r#"
-fn good(x: &i64) -> &i64 {
-    return x
+use std::process::ExitCode; fn good(x: &i64) -> &i64 {
+    x
 }
-fn main() -> i64 {
-    let x: i64 = 7
-    let r = good(&x)
-    return *r
+fn main() -> ExitCode {
+    let x: i64 = 7;
+    let r = good(&x);
+    return ExitCode::from((*r) as u8);
 }
 "#,
             7,
@@ -4146,11 +4049,10 @@ const GROUP_S2: &[(&str, &str, Oracle)] = &[
         // the formation bounds check: silent -o-divergent garbage at base, a named trap now
         "S2-B01",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let s = a[0..10]
-    println(s[0])
-    return 0
+fn main() {
+    let a: [i64; 3] = [1, 2, 3];
+    let s = a[0..10];
+    println!("{}", s[0]);
 }
 "#,
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
@@ -4159,13 +4061,12 @@ fn main() -> i64 {
         // a runtime end bound, so the check cannot be folded away
         "S2-B03",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let mut n = 3
-    n = n + 7
-    let s = a[0..n]
-    println(s[0])
-    return 0
+fn main() {
+    let a: [i64; 3] = [1, 2, 3];
+    let mut n = 3;
+    n = n + 7;
+    let s = a[0..n];
+    println!("{}", s[0]);
 }
 "#,
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
@@ -4173,10 +4074,10 @@ fn main() -> i64 {
     (
         "S2-B04",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let s = a[0..3]
-    return s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let s = a[0..3];
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         Oracle::ExitOut(22, ""),
@@ -4184,10 +4085,10 @@ fn main() -> i64 {
     (
         "S2-B05",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let s = a[0..0]
-    return 7
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let s = a[0..0];
+    return ExitCode::from(7);
 }
 "#,
         Oracle::ExitOut(7, ""),
@@ -4195,10 +4096,10 @@ fn main() -> i64 {
     (
         "S2-B06",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let s = a[0..10]
-    return 7
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    let s = a[0..10];
+    return ExitCode::from(7);
 }
 "#,
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
@@ -4206,13 +4107,13 @@ fn main() -> i64 {
     (
         "S2-B07",
         r#"
-nogc fn f(a: &[i64], n: i64) -> i64 {
-    let s = a[0..n]
-    return 0
+use std::process::ExitCode; nogc fn f(a: &[i64], n: i64) -> i64 {
+    let s = a[0..n];
+    0
 }
-fn main() -> i64 {
-    let arr: [i64; 3] = [1, 2, 3]
-    return f(arr[..], 9)
+fn main() -> ExitCode {
+    let arr: [i64; 3] = [1, 2, 3];
+    return ExitCode::from(f(arr[..], 9) as u8);
 }
 "#,
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
@@ -4220,13 +4121,13 @@ fn main() -> i64 {
     (
         "S2-B08",
         r#"
-fn n() -> i64 {
-    return 0 - 1
+use std::process::ExitCode; fn n() -> i64 {
+    0 - 1
 }
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let s = a[0..n()]
-    return 7
+fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    let s = a[0..n()];
+    return ExitCode::from(7);
 }
 "#,
         Oracle::ExitOutErr(134, "", "slice range out of bounds"),
@@ -4235,14 +4136,14 @@ fn main() -> i64 {
         // the origins companion must not over-reject a re-slice of a reference-typed parameter
         "S2-L08",
         r#"
-fn f(a: &[i64]) -> &[i64] {
-    let s = a[0..4]
-    return s[0..2]
+use std::process::ExitCode; fn f(a: &[i64]) -> &[i64] {
+    let s = a[0..4];
+    s[0..2]
 }
-fn main() -> i64 {
-    let arr: [i64; 4] = [1, 2, 3, 4]
-    let r = f(arr[..])
-    return r[1]
+fn main() -> ExitCode {
+    let arr: [i64; 4] = [1, 2, 3, 4];
+    let r = f(arr[..]);
+    return ExitCode::from(r[1] as u8);
 }
 "#,
         Oracle::ExitOut(2, ""),
@@ -4250,10 +4151,10 @@ fn main() -> i64 {
     (
         "S2-L10a",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let s = a[0..2]
-    return s[0] + a[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    let s = a[0..2];
+    return ExitCode::from((s[0] + a[1]) as u8);
 }
 "#,
         Oracle::ExitOut(3, ""),
@@ -4261,11 +4162,11 @@ fn main() -> i64 {
     (
         "S2-L10b",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    let s = a[0..2]
-    let t = a[0..3]
-    return s[0] + t[2]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    let s = a[0..2];
+    let t = a[0..3];
+    return ExitCode::from((s[0] + t[2]) as u8);
 }
 "#,
         Oracle::ExitOut(4, ""),
@@ -4273,11 +4174,11 @@ fn main() -> i64 {
     (
         "S2-L10c",
         r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [1, 2, 3, 4]
-    let s = a[0..4]
-    let t = s[0..2]
-    return t[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 4] = [1, 2, 3, 4];
+    let s = a[0..4];
+    let t = s[0..2];
+    return ExitCode::from(t[1] as u8);
 }
 "#,
         Oracle::ExitOut(2, ""),
@@ -4286,11 +4187,10 @@ fn main() -> i64 {
         // a slice of a vec addresses the buffer, which is the capability the stage delivers
         "S2-A01",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..2]
-    println(s[1])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..2];
+    println!("{}", s[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4298,11 +4198,10 @@ fn main() -> i64 {
     (
         "S2-A02",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..]
-    println(s[1])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..];
+    println!("{}", s[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4310,11 +4209,10 @@ fn main() -> i64 {
     (
         "S2-A03",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[..]
-    println(s[1])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[..];
+    println!("{}", s[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4322,13 +4220,13 @@ fn main() -> i64 {
     (
         "S2-A04",
         r#"
-fn f(v: Vec<i64>) -> i64 {
-    let s = v[0..2]
-    return s[1]
+use std::process::ExitCode; fn f(v: Vec<i64>) -> i64 {
+    let s = v[0..2];
+    s[1]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    return f(v)
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    return ExitCode::from(f(v) as u8);
 }
 "#,
         Oracle::ExitOut(22, ""),
@@ -4336,13 +4234,13 @@ fn main() -> i64 {
     (
         "S2-A05",
         r#"
-fn f(r: &Vec<i64>) -> i64 {
-    let s = (*r)[0..2]
-    return s[1]
+use std::process::ExitCode; fn f(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..2];
+    s[1]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    return f(&v)
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    return ExitCode::from(f(&v) as u8);
 }
 "#,
         Oracle::ExitOut(22, ""),
@@ -4350,10 +4248,9 @@ fn main() -> i64 {
     (
         "S2-A06",
         r#"
-fn main() -> i64 {
-    let v = vec[11, 22, 33]
-    println(v[..][1])
-    return 0
+fn main() {
+    let v = vec![11, 22, 33];
+    println!("{}", v[..][1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4362,11 +4259,10 @@ fn main() -> i64 {
         // seven elements, so the length and the element cannot coincide
         "S2-A07",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33, 44, 55, 66, 77]
-    let s = v[..]
-    println(s[1])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33, 44, 55, 66, 77];
+    let s = v[..];
+    println!("{}", s[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4374,11 +4270,10 @@ fn main() -> i64 {
     (
         "S2-A08",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..0]
-    println(7)
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..0];
+    println!("{}", 7);
 }
 "#,
         Oracle::ExitOutStats(0, "7\n", 1, 1),
@@ -4386,11 +4281,10 @@ fn main() -> i64 {
     (
         "S2-A09",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[7]
-    let s = v[0..1]
-    println(s[0])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![7];
+    let s = v[0..1];
+    println!("{}", s[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "7\n", 1, 1),
@@ -4398,12 +4292,11 @@ fn main() -> i64 {
     (
         "S2-A10",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    let t = s[0..2]
-    println(t[1])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    let t = s[0..2];
+    println!("{}", t[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 1, 1),
@@ -4412,12 +4305,12 @@ fn main() -> i64 {
         // the read shape 's interprocedural half must not cost
         "S2-A11",
         r#"
-fn sum(s: &[i64]) -> i64 {
-    return s[0] + s[1]
+use std::process::ExitCode; fn sum(s: &[i64]) -> i64 {
+    s[0] + s[1]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    return sum(v[..])
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    return ExitCode::from(sum(v[..]) as u8);
 }
 "#,
         Oracle::ExitOut(33, ""),
@@ -4425,11 +4318,11 @@ fn main() -> i64 {
     (
         "S2-A12",
         r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let s = a[0..3]
-    let t = s[..]
-    return t[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let s = a[0..3];
+    let t = s[..];
+    return ExitCode::from(t[1] as u8);
 }
 "#,
         Oracle::ExitOut(22, ""),
@@ -4437,11 +4330,11 @@ fn main() -> i64 {
     (
         "S2-M05",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let s = a[0..2]
-    s[0] = 99
-    return a[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let s = a[0..2];
+    s[0] = 99;
+    return ExitCode::from(a[0] as u8);
 }
 "#,
         Oracle::ExitOut(99, ""),
@@ -4449,11 +4342,10 @@ fn main() -> i64 {
     (
         "S2-M06",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    println(s[0])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![1, 2, 3];
+    let s = v[0..2];
+    println!("{}", s[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "1\n", 1, 1),
@@ -4461,13 +4353,12 @@ fn main() -> i64 {
     (
         "S2-M07",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    println(s[0])
-    v[0] = 99
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let s = v[0..2];
+    println!("{}", s[0]);
+    v[0] = 99;
+    println!("{}", v[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "1\n99\n", 1, 1),
@@ -4476,13 +4367,13 @@ fn main() -> i64 {
         // the base is born and buried inside the lambda, so nothing it borrows can outlive it
         "S2-F12",
         r#"
-fn main() -> i64 {
-    let f = fn () -> i64 {
-        let a: [i64; 3] = [11, 22, 33]
-        let s = a[0..2]
-        return s[1]
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let f = move || -> i64 {
+        let a: [i64; 3] = [11, 22, 33];
+        let s = a[0..2];
+        s[1]
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         Oracle::ExitOut(22, ""),
@@ -4490,17 +4381,17 @@ fn main() -> i64 {
     (
         "S2-M15",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    (*r)[0] = 99
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    (*r)[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    println(v[0])
-    return z
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&mut v);
+    println!("{}", w[0]);
+    println!("{}", v[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
@@ -4509,11 +4400,11 @@ fn main() -> i64 {
     (
         "SI-X01",
         r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let s = v[0..2]
-    s[0] = 99
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let s = v[0..2];
+    s[0] = 99;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::ExitOutStats(99, "", 1, 1),
@@ -4521,14 +4412,13 @@ fn main() -> i64 {
     (
         "S2-M01",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let w: Vec<i64> = v
-    let s = v[0..2]
-    s[0] = 99
-    println(v[0])
-    println(w[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let w: Vec<i64> = v;
+    let s = v[0..2];
+    s[0] = 99;
+    println!("{}", v[0]);
+    println!("{}", w[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "99\n1\n", 2, 2),
@@ -4536,12 +4426,12 @@ fn main() -> i64 {
     (
         "S2-M02",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    let t = s
-    t[0] = 99
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let s = v[0..2];
+    let t = s;
+    t[0] = 99;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::ExitOutStats(99, "", 1, 1),
@@ -4549,12 +4439,12 @@ fn main() -> i64 {
     (
         "S2-M03",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..3]
-    let u = s[0..2]
-    u[0] = 99
-    return v[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let s = v[0..3];
+    let u = s[0..2];
+    u[0] = 99;
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         Oracle::ExitOutStats(99, "", 1, 1),
@@ -4562,18 +4452,18 @@ fn main() -> i64 {
     (
         "S2-M11",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    s[0] = 99
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3];
+    s[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    println(v[0])
-    return z
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&mut v);
+    println!("{}", w[0]);
+    println!("{}", v[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         Oracle::ExitOutStats(0, "11\n99\n", 2, 2),
@@ -4581,17 +4471,17 @@ fn main() -> i64 {
     (
         "S2-M12",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[..]
-    s[0] = 99
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[..];
+    s[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    return z
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&mut v);
+    println!("{}", w[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         Oracle::ExitOutStats(0, "11\n", 2, 2),
@@ -4600,18 +4490,18 @@ fn main() -> i64 {
         // a re-slice inside the callee, so the write's dest is two borrows from the referent
         "S2-M14",
         r#"
-fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    let t = s[0..2]
-    t[0] = 99
-    return 0
+use std::process::ExitCode; fn poke(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3];
+    let t = s[0..2];
+    t[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    return z
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&mut v);
+    println!("{}", w[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         Oracle::ExitOutStats(0, "11\n", 2, 2),
@@ -4619,17 +4509,17 @@ fn main() -> i64 {
     (
         "S2-M16",
         r#"
-struct Ar { a: [i64; 3] }
+use std::process::ExitCode; struct Ar { a: [i64; 3] }
 fn poke(r: &mut Ar) -> i64 {
-    let s = (*r).a[0..3]
-    s[0] = 99
-    return 0
+    let s = (*r).a[0..3];
+    s[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let mut b = Ar { a: [11, 22, 33] }
-    let z = poke(&mut b)
-    println(b.a[0])
-    return z
+fn main() -> ExitCode {
+    let mut b = Ar { a: [11, 22, 33] };
+    let z = poke(&mut b);
+    println!("{}", b.a[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         Oracle::ExitOutStats(0, "99\n", 0, 0),
@@ -4637,14 +4527,13 @@ fn main() -> i64 {
     (
         "S2-X02",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    v[0] = 99
-    let s = w[..]
-    println(v[0])
-    println(s[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    v[0] = 99;
+    let s = w[..];
+    println!("{}", v[0]);
+    println!("{}", s[0]);
 }
 "#,
         Oracle::ExitOutStats(0, "99\n11\n", 2, 2),
@@ -4652,12 +4541,11 @@ fn main() -> i64 {
     (
         "S2-X04",
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..2]
-    let t = v[0..3]
-    println(s[0] + t[2])
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..2];
+    let t = v[0..3];
+    println!("{}", s[0] + t[2]);
 }
 "#,
         Oracle::ExitOutStats(0, "44\n", 1, 1),
@@ -4665,13 +4553,12 @@ fn main() -> i64 {
     (
         "S2-X03",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..2]
-    println(s[1])
-    Vec::push(v, 44)
-    println(v[3])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..2];
+    println!("{}", s[1]);
+    Vec::push(v, 44);
+    println!("{}", v[3]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n44\n", 1, 1),
@@ -4679,18 +4566,17 @@ fn main() -> i64 {
     (
         "S2-F11",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..2]
-    let f = fn () -> i64 {
-        Vec::push(v, 44)
-        Vec::push(v, 45)
-        Vec::push(v, 46)
-        return 0
-    }
-    let q = f()
-    println(s[1])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..2];
+    let f = move || -> i64 {
+        Vec::push(v, 44);
+        Vec::push(v, 45);
+        Vec::push(v, 46);
+        0
+    };
+    let q = f();
+    println!("{}", s[1]);
 }
 "#,
         Oracle::ExitOutStats(0, "22\n", 3, 3),
@@ -4698,16 +4584,15 @@ fn main() -> i64 {
     (
         "S2-T01",
         r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [3, 0, 0]
-    let s = a[0..3]
-    let mut guard = 0
+fn main() {
+    let mut a: [i64; 3] = [3, 0, 0];
+    let s = a[0..3];
+    let mut guard = 0;
     while s[0] > 0 {
-        s[0] = s[0] - 1
-        guard = guard + 1
+        s[0] = s[0] - 1;
+        guard = guard + 1;
     }
-    println(guard)
-    return 0
+    println!("{}", guard);
 }
 "#,
         Oracle::Terminates(20_000, 0, "3\n"),
@@ -4715,16 +4600,15 @@ fn main() -> i64 {
     (
         "S2-T03",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[0]
-    let mut i = 1
+fn main() {
+    let mut v: Vec<i64> = vec![0];
+    let mut i = 1;
     while i < 100 {
-        Vec::push(v, i)
-        i = i + 1
+        Vec::push(v, i);
+        i = i + 1;
     }
-    let s = v[..]
-    println(s[99])
-    return 0
+    let s = v[..];
+    println!("{}", s[99]);
 }
 "#,
         Oracle::Terminates(20_000, 0, "99\n"),
@@ -4742,18 +4626,18 @@ const GROUP_S2_X: &[XRow] = &[
         id: "S2-F01",
         code: "E0425",
         rejected: r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [1, 2, 3, 4]
-    let s = a[1..3]
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 4] = [1, 2, 3, 4];
+    let s = a[1..3];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let a: [i64; 4] = [1, 2, 3, 4]
-    let s = a[0..3]
-    return s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 4] = [1, 2, 3, 4];
+    let s = a[0..3];
+    return ExitCode::from(s[1] as u8);
 }
 "#,
             2,
@@ -4763,21 +4647,21 @@ fn main() -> i64 {
         id: "S2-L01",
         code: "E0711",
         rejected: r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let s = a[0..3]
-    a[1] = 99
-    return s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let s = a[0..3];
+    a[1] = 99;
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let s = a[0..3]
-    let x = s[1]
-    a[1] = 99
-    return x + a[1] - 97
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let s = a[0..3];
+    let x = s[1];
+    a[1] = 99;
+    return ExitCode::from((x + a[1] - 97) as u8);
 }
 "#,
             4,
@@ -4787,26 +4671,26 @@ fn main() -> i64 {
         id: "S2-L03",
         code: "E0722",
         rejected: r#"
-fn main() -> i64 {
-    let base: [i64; 3] = [0, 0, 0]
-    let mut s = base[..]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base: [i64; 3] = [0, 0, 0];
+    let mut s = base[..];
     if true {
-        let a: [i64; 3] = [1, 2, 3]
-        s = a[..]
+        let a: [i64; 3] = [1, 2, 3];
+        s = a[..];
     }
-    return s[1]
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         twin: Some((
             r#"
-fn main() -> i64 {
-    let base: [i64; 3] = [0, 0, 0]
-    let a: [i64; 3] = [1, 2, 3]
-    let mut s = base[..]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base: [i64; 3] = [0, 0, 0];
+    let a: [i64; 3] = [1, 2, 3];
+    let mut s = base[..];
     if true {
-        s = a[..]
+        s = a[..];
     }
-    return s[1]
+    return ExitCode::from(s[1] as u8);
 }
 "#,
             2,
@@ -4816,13 +4700,13 @@ fn main() -> i64 {
         id: "S2-L09",
         code: "E0721",
         rejected: r#"
-fn mk() -> &[i64] {
-    let a: [i64; 3] = [1, 2, 3]
-    return a[..]
+use std::process::ExitCode; fn mk() -> &[i64] {
+    let a: [i64; 3] = [1, 2, 3];
+    a[..]
 }
-fn main() -> i64 {
-    let s = mk()
-    return s[1]
+fn main() -> ExitCode {
+    let s = mk();
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         twin: None,
@@ -4831,18 +4715,18 @@ fn main() -> i64 {
         id: "S2-L11",
         code: "E0721",
         rejected: r#"
-fn id(s: &[i64]) -> &[i64] {
-    return s
+use std::process::ExitCode; fn id(s: &[i64]) -> &[i64] {
+    s
 }
 fn h() -> &[i64] {
-    let a: [i64; 3] = [11, 22, 33]
-    let s = a[0..3]
-    let t = id(s)
-    return t[0..2]
+    let a: [i64; 3] = [11, 22, 33];
+    let s = a[0..3];
+    let t = id(s);
+    t[0..2]
 }
-fn main() -> i64 {
-    let u = h()
-    return u[1]
+fn main() -> ExitCode {
+    let u = h();
+    return ExitCode::from(u[1] as u8);
 }
 "#,
         twin: None,
@@ -4851,11 +4735,11 @@ fn main() -> i64 {
         id: "S2-L02",
         code: "E0711",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    v[1] = 99
-    return s[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    v[1] = 99;
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         twin: None,
@@ -4864,11 +4748,11 @@ fn main() -> i64 {
         id: "S2-L04",
         code: "E0711",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    Vec::push(v, 44)
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    Vec::push(v, 44);
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: None,
@@ -4877,14 +4761,14 @@ fn main() -> i64 {
         id: "S2-L05",
         code: "E0711",
         rejected: r#"
-fn f(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    Vec::push((*r), 44)
-    return s[0]
+use std::process::ExitCode; fn f(r: &mut Vec<i64>) -> i64 {
+    let s = (*r)[0..3];
+    Vec::push((*r), 44);
+    s[0]
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    return f(&mut v)
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    return ExitCode::from(f(&mut v) as u8);
 }
 "#,
         twin: None,
@@ -4893,11 +4777,11 @@ fn main() -> i64 {
         id: "S2-L06",
         code: "E0711",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    v = vec[9, 9, 9]
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    v = vec![9, 9, 9];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: None,
@@ -4907,12 +4791,12 @@ fn main() -> i64 {
         id: "S2-L07",
         code: "E0711",
         rejected: r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    let t = s[0..2]
-    Vec::push(v, 44)
-    return t[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    let t = s[0..2];
+    Vec::push(v, 44);
+    return ExitCode::from(t[0] as u8);
 }
 "#,
         twin: None,
@@ -4921,14 +4805,14 @@ fn main() -> i64 {
         id: "S2-L03v",
         code: "E0722",
         rejected: r#"
-fn main() -> i64 {
-    let base: Vec<i64> = vec[0, 0, 0]
-    let mut s = base[..]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base: Vec<i64> = vec![0, 0, 0];
+    let mut s = base[..];
     if true {
-        let a: Vec<i64> = vec[1, 2, 3]
-        s = a[..]
+        let a: Vec<i64> = vec![1, 2, 3];
+        s = a[..];
     }
-    return s[1]
+    return ExitCode::from(s[1] as u8);
 }
 "#,
         twin: None,
@@ -4937,14 +4821,14 @@ fn main() -> i64 {
         id: "S2-M04",
         code: "E0422",
         rejected: r#"
-fn poke(s: &[i64]) -> i64 {
-    s[0] = 9
-    return 0
+use std::process::ExitCode; fn poke(s: &[i64]) -> i64 {
+    s[0] = 9;
+    0
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let q = poke(v[..])
-    return v[0]
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1, 2, 3];
+    let q = poke(v[..]);
+    return ExitCode::from(v[0] as u8);
 }
 "#,
         twin: None,
@@ -4953,28 +4837,28 @@ fn main() -> i64 {
         id: "S2-M09",
         code: "E0422",
         rejected: r#"
-fn d(s: &[i64]) -> i64 {
-    let t = s[0..1]
-    t[0] = 9
-    return 0
+use std::process::ExitCode; fn d(s: &[i64]) -> i64 {
+    let t = s[0..1];
+    t[0] = 9;
+    0
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let z = d(v[0..3])
-    return v[0] + z
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1, 2, 3];
+    let z = d(v[0..3]);
+    return ExitCode::from((v[0] + z) as u8);
 }
 "#,
         twin: Some((
             r#"
-fn d(s: &mut [i64]) -> i64 {
-    let t = s[0..1]
-    t[0] = 9
-    return 0
+use std::process::ExitCode; fn d(s: &mut [i64]) -> i64 {
+    let t = s[0..1];
+    t[0] = 9;
+    0
 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let z = d(a[0..3])
-    return a[0] + z
+fn main() -> ExitCode {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let z = d(a[0..3]);
+    return ExitCode::from((a[0] + z) as u8);
 }
 "#,
             9,
@@ -4984,17 +4868,17 @@ fn main() -> i64 {
         id: "S2-M10",
         code: "E0422",
         rejected: r#"
-fn poke(r: &Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    s[0] = 99
-    return 0
+use std::process::ExitCode; fn poke(r: &Vec<i64>) -> i64 {
+    let s = (*r)[0..3];
+    s[0] = 99;
+    0
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&v)
-    println(w[0])
-    return z
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&v);
+    println!("{}", w[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         twin: None,
@@ -5003,20 +4887,20 @@ fn main() -> i64 {
         id: "S2-M13",
         code: "E0422",
         rejected: r#"
-fn wr(s: &[i64]) -> i64 {
-    s[0] = 99
-    return 0
+use std::process::ExitCode; fn wr(s: &[i64]) -> i64 {
+    s[0] = 99;
+    0
 }
 fn poke(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[0..3]
-    return wr(s)
+    let s = (*r)[0..3];
+    wr(s)
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let z = poke(&mut v)
-    println(w[0])
-    return z
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let z = poke(&mut v);
+    println!("{}", w[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         twin: None,
@@ -5025,13 +4909,13 @@ fn main() -> i64 {
         id: "S2-F08",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let f = fn () -> i64 {
-        let s = a[0..2]
-        return s[1]
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let f = move || -> i64 {
+        let s = a[0..2];
+        s[1]
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: None,
@@ -5040,13 +4924,13 @@ fn main() -> i64 {
         id: "S2-F07",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let f = fn () -> i64 {
-        let s = v[0..2]
-        return s[1]
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let f = move || -> i64 {
+        let s = v[0..2];
+        s[1]
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: None,
@@ -5055,18 +4939,18 @@ fn main() -> i64 {
         id: "S2-F14",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let w: Vec<i64> = v
-    let f = fn () -> i64 {
-        let u = v
-        let s = u[0..3]
-        s[0] = 99
-        return 0
-    }
-    let z = f()
-    println(w[0])
-    return z
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let w: Vec<i64> = v;
+    let f = move || -> i64 {
+        let u = v;
+        let s = u[0..3];
+        s[0] = 99;
+        0
+    };
+    let z = f();
+    println!("{}", w[0]);
+    return ExitCode::from(z as u8);
 }
 "#,
         twin: None,
@@ -5075,13 +4959,13 @@ fn main() -> i64 {
         id: "S2-F15",
         code: "E0423",
         rejected: r#"
-fn main() -> i64 {
-    let f = fn () -> i64 {
-        let v: Vec<i64> = vec[11, 22, 33]
-        let s = v[0..3]
-        return s[1]
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let f = move || -> i64 {
+        let v: Vec<i64> = vec![11, 22, 33];
+        let s = v[0..3];
+        s[1]
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: None,
@@ -5090,16 +4974,16 @@ fn main() -> i64 {
         id: "S2-F09",
         code: "E0423",
         rejected: r#"
-fn apply(g: fn(&[i64]) -> &[i64], s: &[i64]) -> i64 {
-    let r = g(s)
-    return r[0]
+use std::process::ExitCode; fn apply(g: fn(&[i64]) -> &[i64], s: &[i64]) -> i64 {
+    let r = g(s);
+    r[0]
 }
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let f = fn (s: &[i64]) -> &[i64] {
-        return s
-    }
-    return apply(f, a[..])
+fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let f = move |s: &[i64]| -> &[i64] {
+        s
+    };
+    return ExitCode::from(apply(f, a[..]) as u8);
 }
 "#,
         twin: None,
@@ -5108,13 +4992,13 @@ fn main() -> i64 {
         id: "S2-F10",
         code: "E0725",
         rejected: r#"
-fn main() -> i64 {
-    let a: [i64; 3] = [11, 22, 33]
-    let s = a[0..2]
-    let f = fn () -> i64 {
-        return s[1]
-    }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64; 3] = [11, 22, 33];
+    let s = a[0..2];
+    let f = move || -> i64 {
+        s[1]
+    };
+    return ExitCode::from(f() as u8);
 }
 "#,
         twin: None,
@@ -5123,14 +5007,14 @@ fn main() -> i64 {
         id: "S2-C07",
         code: "E0711",
         rejected: r#"
-fn f(r: &Vec<i64>) -> &[i64] {
-    return (*r)[0..2]
+use std::process::ExitCode; fn f(r: &Vec<i64>) -> &[i64] {
+    (*r)[0..2]
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33]
-    let s = f(&v)
-    Vec::push(v, 44)
-    return s[0]
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![11, 22, 33];
+    let s = f(&v);
+    Vec::push(v, 44);
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: None,
@@ -5139,13 +5023,13 @@ fn main() -> i64 {
         id: "S2-C07b",
         code: "E0721",
         rejected: r#"
-fn f(v: Vec<i64>) -> &[i64] {
-    return v[0..2]
+use std::process::ExitCode; fn f(v: Vec<i64>) -> &[i64] {
+    v[0..2]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let s = f(v)
-    return s[0]
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1, 2, 3];
+    let s = f(v);
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: None,
@@ -5154,11 +5038,10 @@ fn main() -> i64 {
         id: "S2-C08",
         code: "E0714",
         rejected: r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1, 2, 3]
-    let s = v[0..2]
-    let arr = [s, s]
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![1, 2, 3];
+    let s = v[0..2];
+    let arr = [s, s];
 }
 "#,
         twin: None,
@@ -5167,10 +5050,10 @@ fn main() -> i64 {
         id: "S2-F05",
         code: "E0902",
         rejected: r#"
-let gv: Vec<i64> = vec[1, 2, 3]
-fn main() -> i64 {
-    let s = gv[0..2]
-    return s[0]
+use std::process::ExitCode; static gv: Vec<i64> = vec![1, 2, 3];
+fn main() -> ExitCode {
+    let s = gv[0..2];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         twin: None,
@@ -5227,36 +5110,38 @@ fn group_s2_fails_closed() {
 }
 
 #[test]
-fn s2_string_slice_is_opt_level_independent() {
+fn s2_slice_form_refusal_is_opt_level_independent() {
     let h = Harness::new();
-    let rows: &[(&str, &str, Oracle)] = &[
+    let rows: &[(&str, &str)] = &[
         (
             "S2-F03",
             r#"
-fn main() -> i64 {
-    let t = "abcdef"
-    let s = t[0..2]
-    println(s)
-    return 22
+use std::process::ExitCode; fn main() -> ExitCode {
+    let t = "abcdef";
+    let s = t[0..2];
+    return ExitCode::from(22);
 }
 "#,
-            Oracle::ExitOut(22, "ab\n"),
         ),
         (
             "S2-F03b",
             r#"
-fn main() -> i64 {
-    let t = "abcdef"
-    let s = t[..]
-    println(s)
-    return 22
+use std::process::ExitCode; fn main() -> ExitCode {
+    let t = "abcdef";
+    let s = t[..];
+    return ExitCode::from(22);
 }
 "#,
-            Oracle::ExitOut(22, "abcdef\n"),
         ),
     ];
-    for (id, src, oracle) in rows {
-        run_row(&h, id, src, *oracle);
+    for (id, src) in rows {
+        for (name, opt) in LEVELS {
+            let rendered = h.reject(id, name, src, *opt);
+            assert!(
+                rendered.contains("[E0425]"),
+                "{id} at {name} MUST be rejected with E0425, got:\n{rendered}"
+            );
+        }
     }
 }
 
@@ -5264,13 +5149,13 @@ fn main() -> i64 {
 fn s2_generic_slice_refusal_is_opt_level_independent() {
     let h = Harness::new();
     let src = r#"
-fn firstof<T>(x: T) -> i64 {
-    let s = x[0..1]
-    return 5
+use std::process::ExitCode; fn firstof<T>(x: T) -> i64 {
+    let s = x[0..1];
+    5
 }
-fn main() -> i64 {
-    let a: [i64; 3] = [1, 2, 3]
-    return firstof(a)
+fn main() -> ExitCode {
+    let a: [i64; 3] = [1, 2, 3];
+    return ExitCode::from(firstof(a) as u8);
 }
 "#;
     for (name, opt) in LEVELS {
@@ -5291,11 +5176,11 @@ mod asan {
         (
             "SI-V01",
             r#"
-fn main() -> i64 {
-    let mut v = vec[1, 2, 3]
-    let w = v
-    v[0] = 9
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = vec![1, 2, 3];
+    let w = v;
+    v[0] = 9;
+    return ExitCode::from(w[0] as u8);
 }
 "#,
             1,
@@ -5303,14 +5188,14 @@ fn main() -> i64 {
         (
             "SI-V04",
             r#"
-fn poke(mut x: Vec<i64>) -> i64 {
-    x[0] = 9
-    return x[0]
+use std::process::ExitCode; fn poke(mut x: Vec<i64>) -> i64 {
+    x[0] = 9;
+    x[0]
 }
-fn main() -> i64 {
-    let v = vec[1, 2, 3]
-    let _ = poke(v)
-    return v[0]
+fn main() -> ExitCode {
+    let v = vec![1, 2, 3];
+    let _ = poke(v);
+    return ExitCode::from(v[0] as u8);
 }
 "#,
             1,
@@ -5318,16 +5203,16 @@ fn main() -> i64 {
         (
             "SI-V10",
             r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    Vec::push(v, 2)
-    Vec::push(v, 3)
-    let w = v
-    Vec::push(v, 4)
-    Vec::push(v, 5)
-    let junk = vec[77, 77, 77]
-    return w[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    Vec::push(v, 2);
+    Vec::push(v, 3);
+    let w = v;
+    Vec::push(v, 4);
+    Vec::push(v, 5);
+    let junk = vec![77, 77, 77];
+    return ExitCode::from(w[0] as u8);
 }
 "#,
             1,
@@ -5335,15 +5220,15 @@ fn main() -> i64 {
         (
             "SI-R01",
             r#"
-fn f(c: bool) -> i64 {
-    let r = Rc::new(5)
+use std::process::ExitCode; fn f(c: bool) -> i64 {
+    let r = Rc::new(5);
     if c {
-        return Rc::get(r)
+        return Rc::get(r);
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    return f(true)
+fn main() -> ExitCode {
+    return ExitCode::from(f(true) as u8);
 }
 "#,
             5,
@@ -5351,10 +5236,10 @@ fn main() -> i64 {
         (
             "S2-A07",
             r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33, 44, 55, 66, 77]
-    let s = v[..]
-    return s[6] - 55
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33, 44, 55, 66, 77];
+    let s = v[..];
+    return ExitCode::from((s[6] - 55) as u8);
 }
 "#,
             22,
@@ -5362,11 +5247,11 @@ fn main() -> i64 {
         (
             "S2-A10",
             r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[11, 22, 33]
-    let s = v[0..3]
-    let t = s[0..2]
-    return t[1]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![11, 22, 33];
+    let s = v[0..3];
+    let t = s[0..2];
+    return ExitCode::from(t[1] as u8);
 }
 "#,
             22,
@@ -5374,15 +5259,15 @@ fn main() -> i64 {
         (
             "S2-T03",
             r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[0]
-    let mut i = 1
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![0];
+    let mut i = 1;
     while i < 100 {
-        Vec::push(v, i)
-        i = i + 1
+        Vec::push(v, i);
+        i = i + 1;
     }
-    let s = v[..]
-    return s[99] - 77
+    let s = v[..];
+    return ExitCode::from((s[99] - 77) as u8);
 }
 "#,
             22,
@@ -5521,12 +5406,11 @@ fn main() -> i64 {
             "SI-X09",
             "asan",
             r#"
-fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let mut vv = Vec::new()
-    Vec::push(vv, inner)
-    return 0
+fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let mut vv = Vec::new();
+    Vec::push(vv, inner);
 }
 "#,
             OptimizationLevel::None,
@@ -5540,8 +5424,8 @@ fn main() -> i64 {
 
 // substitution so a hand-copied twin cannot drift away from the program it twins
 const DECL_MARKER: &str = "@DECL@";
-const NOGC_VIOLATING_DECL: &str = "nogc fn bad() -> Vec<i64> { return Vec::new() }";
-const NOGC_CLEAN_DECL: &str = "nogc fn bad() -> i64 { return 42 }";
+const NOGC_VIOLATING_DECL: &str = "nogc fn bad() -> Vec<i64> { Vec::new() }";
+const NOGC_CLEAN_DECL: &str = "nogc fn bad() -> i64 { 42 }";
 
 struct NRow {
     id: &'static str,
@@ -5938,19 +5822,19 @@ fn marker_lines(rendered: &str, marker: char) -> usize {
 fn n30_named_hop_chain_replaces_the_indirect_call() {
     let h = Harness::new();
     let src = r#"
-fn host() -> i64 {
+use std::process::ExitCode; fn host() -> i64 {
     {
         fn allocs() -> Vec<i64> {
-            return Vec::new()
+            Vec::new()
         }
         nogc fn caller() -> i64 {
-            let v = allocs()
-            return 0
+            let v = allocs();
+            0
         }
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host() }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#;
     for (name, opt) in REJECT_LEVELS {
         let rendered = h.reject("SI-N30", name, src, *opt);
@@ -5973,11 +5857,11 @@ fn main() -> i64 { return host() }
 fn n40_format_string_interpolation_is_named_not_caret_accurate() {
     let h = Harness::new();
     let src = r#"
-fn host(n: i64) -> i64 {
-    println("{ 0 + { nogc fn bad() -> Vec<i64> { return Vec::new() }  n } }")
-    return 0
+use std::process::ExitCode; fn host(n: i64) -> i64 {
+    println!("{}", 0 + { nogc fn bad() -> Vec<i64> { return Vec::new() }  n });
+    0
 }
-fn main() -> i64 { return host(0) }
+fn main() -> ExitCode { return ExitCode::from(host(0) as u8); }
 "#;
     for (name, opt) in REJECT_LEVELS {
         let rendered = h.reject("SI-N40", name, src, *opt);
@@ -5992,20 +5876,19 @@ fn main() -> i64 { return host(0) }
 
 const N50_SRC: &str = r#"
 fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 1
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    1
 }
 fn g() -> i64 {
     {
-        nogc fn f() -> i64 { return 99 }
+        nogc fn f() -> i64 { 99 }
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    println(f())
-    println(g())
-    return 0
+fn main() {
+    println!("{}", f());
+    println!("{}", g());
 }
 "#;
 
@@ -6025,19 +5908,18 @@ fn n50_declared_over_rejection_is_e0727() {
 fn n60_e0418_renders_exactly_one_label() {
     let h = Harness::new();
     let src = r#"
-fn dup() -> i64 { return 1 }
+fn dup() -> i64 { 1 }
 fn outer() -> i64 {
     fn dup() -> i64 {
-        let a = 1
-        let b = 2
-        let c = 3
-        return a + b + c
+        let a = 1;
+        let b = 2;
+        let c = 3;
+        a + b + c
     }
-    return dup()
+    dup()
 }
-fn main() -> i64 {
-    println(outer())
-    return 0
+fn main() {
+    println!("{}", outer());
 }
 "#;
     for (name, opt) in REJECT_LEVELS {
@@ -6059,18 +5941,17 @@ const GROUP_N: &[(&str, &str, Oracle)] = &[
         "SI-N70",
         r#"
 fn host(n: i64) -> i64 {
-    let mut i = 0
-    let mut r = 0
+    let mut i = 0;
+    let mut r = 0;
     while i < n {
-        nogc fn clean() -> i64 { return 42 }
-        r = clean()
-        i = i + 1
+        nogc fn clean() -> i64 { 42 }
+        r = clean();
+        i = i + 1;
     }
-    return r
+    r
 }
-fn main() -> i64 {
-    println(host(1))
-    return 0
+fn main() {
+    println!("{}", host(1));
 }
 "#,
         Oracle::ExitOut(0, "42\n"),
@@ -6079,22 +5960,21 @@ fn main() -> i64 {
         "SI-N71",
         r#"
 fn host(n: i64) -> i64 {
-    let mut i = 0
-    let mut r = 0
+    let mut i = 0;
+    let mut r = 0;
     while i < n {
         fn grow() -> i64 {
-            let mut v = Vec::new()
-            Vec::push(v, 1)
-            return v[0]
+            let mut v = Vec::new();
+            Vec::push(v, 1);
+            v[0]
         }
-        r = grow()
-        i = i + 1
+        r = grow();
+        i = i + 1;
     }
-    return r
+    r
 }
-fn main() -> i64 {
-    println(host(1))
-    return 0
+fn main() {
+    println!("{}", host(1));
 }
 "#,
         Oracle::ExitOutStats(0, "1\n", 1, 1),
@@ -6102,19 +5982,19 @@ fn main() -> i64 {
     (
         "SI-N72",
         r#"
-fn host() -> i64 {
+use std::process::ExitCode; fn host() -> i64 {
     {
         fn make() -> Vec<i64> {
-            let mut v = Vec::new()
-            Vec::push(v, 1)
-            return v
+            let mut v = Vec::new();
+            Vec::push(v, 1);
+            v
         }
-        let w = make()
-        println(w[0])
+        let w = make();
+        println!("{}", w[0]);
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host() }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#,
         Oracle::ExitOutStats(0, "1\n", 1, 1),
     ),
@@ -6143,17 +6023,16 @@ const GROUP_N_SYM: &[SymRow] = &[
         code: "E0427",
         src: r#"
 fn p() -> i64 {
-    fn a() -> i64 { return 1 }
-    return a()
+    fn a() -> i64 { 1 }
+    a()
 }
 fn q() -> i64 {
-    fn a() -> i64 { return 2 }
-    return a()
+    fn a() -> i64 { 2 }
+    a()
 }
-fn main() -> i64 {
-    println(p())
-    println(q())
-    return 0
+fn main() {
+    println!("{}", p());
+    println!("{}", q());
 }
 "#,
         no_backend_error: false,
@@ -6162,16 +6041,15 @@ fn main() -> i64 {
         id: "SI-S02",
         code: "E0427",
         src: r#"
-fn dup() -> i64 { return 0 }
+fn dup() -> i64 { 0 }
 fn outer() -> i64 {
     {
-        fn dup() -> i64 { return 5 }
-        return dup()
+        fn dup() -> i64 { 5 }
+        dup()
     }
 }
-fn main() -> i64 {
-    println(outer())
-    return 0
+fn main() {
+    println!("{}", outer());
 }
 "#,
         no_backend_error: false,
@@ -6180,16 +6058,15 @@ fn main() -> i64 {
         id: "SI-S03",
         code: "E0427",
         src: r#"
-fn dup(x: i64) -> i64 { return x }
+fn dup(x: i64) -> i64 { x }
 fn outer() -> i64 {
     {
-        fn dup() -> i64 { return 5 }
-        return dup()
+        fn dup() -> i64 { 5 }
+        dup()
     }
 }
-fn main() -> i64 {
-    println(outer())
-    return 0
+fn main() {
+    println!("{}", outer());
 }
 "#,
         no_backend_error: true,
@@ -6199,20 +6076,19 @@ fn main() -> i64 {
         code: "E0427",
         src: r#"
 fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 1
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    1
 }
 fn g() -> i64 {
     {
-        fn f() -> i64 { return 99 }
+        fn f() -> i64 { 99 }
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    println(f())
-    println(g())
-    return 0
+fn main() {
+    println!("{}", f());
+    println!("{}", g());
 }
 "#,
         no_backend_error: false,
@@ -6221,13 +6097,13 @@ fn main() -> i64 {
         id: "SI-S10",
         code: "E0428",
         src: r#"
-fn __aelys_main() -> i64 {
-    println(111)
-    return 0
+use std::process::ExitCode; fn __aelys_main() -> i64 {
+    println!("{}", 111);
+    0
 }
-fn main() -> i64 {
-    println(222)
-    return __aelys_main()
+fn main() -> ExitCode {
+    println!("{}", 222);
+    return ExitCode::from(__aelys_main() as u8);
 }
 "#,
         no_backend_error: false,
@@ -6236,13 +6112,13 @@ fn main() -> i64 {
         id: "SI-S11",
         code: "E0428",
         src: r#"
-fn main() -> i64 {
-    println(222)
-    return __aelys_main()
+use std::process::ExitCode; fn main() -> ExitCode {
+    println!("{}", 222);
+    return ExitCode::from(__aelys_main() as u8);
 }
 fn __aelys_main() -> i64 {
-    println(111)
-    return 0
+    println!("{}", 111);
+    0
 }
 "#,
         no_backend_error: false,
@@ -6251,13 +6127,13 @@ fn __aelys_main() -> i64 {
         id: "SI-S12",
         code: "E0428",
         src: r#"
-fn __aelys_user_main() -> i64 {
-    println(111)
-    return 0
+use std::process::ExitCode; fn __aelys_user_main() -> i64 {
+    println!("{}", 111);
+    0
 }
-fn main() -> i64 {
-    println(222)
-    return __aelys_user_main()
+fn main() -> ExitCode {
+    println!("{}", 222);
+    return ExitCode::from(__aelys_user_main() as u8);
 }
 "#,
         no_backend_error: true,
@@ -6269,20 +6145,19 @@ fn main() -> i64 {
         src: r#"
 fn o1() -> i64 {
     {
-        fn g<T>(x: T) -> i64 { return 1 }
-        return g(1)
+        fn g<T>(x: T) -> i64 { 1 }
+        g(1)
     }
 }
 fn o2() -> i64 {
     {
-        fn g<T>(x: T) -> i64 { return 2 }
-        return g(1)
+        fn g<T>(x: T) -> i64 { 2 }
+        g(1)
     }
 }
-fn main() -> i64 {
-    println(o1())
-    println(o2())
-    return 0
+fn main() {
+    println!("{}", o1());
+    println!("{}", o2());
 }
 "#,
         no_backend_error: false,
@@ -6293,20 +6168,19 @@ fn main() -> i64 {
         src: r#"
 fn o1() -> i64 {
     {
-        fn g(x: i64) -> i64 { return 1 }
-        return g(1)
+        fn g(x: i64) -> i64 { 1 }
+        g(1)
     }
 }
 fn o2() -> i64 {
     {
-        fn g(x: i64) -> i64 { return 2 }
-        return g(1)
+        fn g(x: i64) -> i64 { 2 }
+        g(1)
     }
 }
-fn main() -> i64 {
-    println(o1())
-    println(o2())
-    return 0
+fn main() {
+    println!("{}", o1());
+    println!("{}", o2());
 }
 "#,
         no_backend_error: false,
@@ -6315,12 +6189,11 @@ fn main() -> i64 {
         id: "SI-S22",
         code: "E0428",
         src: r#"
-fn __mono_ident_i64(x: i64) -> i64 { return 105 }
-fn ident<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    println(__mono_ident_i64(1))
-    println(ident(105))
-    return 0
+fn __mono_ident_i64(x: i64) -> i64 { 105 }
+fn ident<T>(x: T) -> T { x }
+fn main() {
+    println!("{}", __mono_ident_i64(1));
+    println!("{}", ident(105));
 }
 "#,
         no_backend_error: false,
@@ -6330,14 +6203,13 @@ fn main() -> i64 {
         code: "E0428",
         src: r#"
 fn first() -> i64 {
-    let f = fn (x: i64) -> i64 { return x }
-    return f(5)
+    let f = move |x: i64| -> i64 { x };
+    f(5)
 }
-fn __lambda_1(x: i64) -> i64 { return 77 }
-fn main() -> i64 {
-    println(first())
-    println(__lambda_1(77))
-    return 0
+fn __lambda_1(x: i64) -> i64 { 77 }
+fn main() {
+    println!("{}", first());
+    println!("{}", __lambda_1(77));
 }
 "#,
         no_backend_error: true,
@@ -6347,18 +6219,17 @@ fn main() -> i64 {
         id: "SI-S25",
         code: "E0427",
         src: r#"
-fn dup() -> i64 { return 0 }
+fn dup() -> i64 { 0 }
 fn holder() -> i64 {
-    let g = fn() -> i64 {
-        fn dup() -> i64 { return 5 }
-        return 0
-    }
-    return g()
+    let g = move || -> i64 {
+        fn dup() -> i64 { 5 }
+        0
+    };
+    g()
 }
-fn main() -> i64 {
-    println(dup())
-    println(holder())
-    return 0
+fn main() {
+    println!("{}", dup());
+    println!("{}", holder());
 }
 "#,
         no_backend_error: false,
@@ -6367,10 +6238,9 @@ fn main() -> i64 {
         id: "L1",
         code: "E0428",
         src: r#"
-fn __helper(x: i64) -> i64 { return x * 2 }
-fn main() -> i64 {
-    println(__helper(21))
-    return 0
+fn __helper(x: i64) -> i64 { x * 2 }
+fn main() {
+    println!("{}", __helper(21));
 }
 "#,
         no_backend_error: false,
@@ -6380,14 +6250,13 @@ fn main() -> i64 {
 const SI_S24_ONCE_COLLIDED: &str = r#"
 struct B { v: i64 }
 struct A_B { v: i64 }
-fn f<T>(x: T) -> i64 { return 1 }
-fn f_A<T>(x: T) -> i64 { return 2 }
-fn main() -> i64 {
-    let b = B { v: 0 }
-    let ab = A_B { v: 0 }
-    println(f(ab))
-    println(f_A(b))
-    return 0
+fn f<T>(x: T) -> i64 { 1 }
+fn f_A<T>(x: T) -> i64 { 2 }
+fn main() {
+    let b = B { v: 0 };
+    let ab = A_B { v: 0 };
+    println!("{}", f(ab));
+    println!("{}", f_A(b));
 }
 "#;
 
@@ -6396,27 +6265,27 @@ const GROUP_N_SYM_CONTROLS: &[(&str, &str, Oracle)] = &[
     (
         "SI-S00",
         r#"
-fn outer() -> i64 {
-    fn a() -> i64 { return 1 }
-    fn b() -> i64 { return 2 }
-    println(a())
-    println(b())
-    return 0
+use std::process::ExitCode; fn outer() -> i64 {
+    fn a() -> i64 { 1 }
+    fn b() -> i64 { 2 }
+    println!("{}", a());
+    println!("{}", b());
+    0
 }
-fn main() -> i64 { return outer() }
+fn main() -> ExitCode { return ExitCode::from(outer() as u8); }
 "#,
         Oracle::ExitOut(0, "1\n2\n"),
     ),
     (
         "SI-S11ctl",
         r#"
-fn main() -> i64 {
-    println(222)
-    return helper()
+use std::process::ExitCode; fn main() -> ExitCode {
+    println!("{}", 222);
+    return ExitCode::from(helper() as u8);
 }
 fn helper() -> i64 {
-    println(111)
-    return 0
+    println!("{}", 111);
+    0
 }
 "#,
         Oracle::Terminates(5000, 0, "222\n111\n"),
@@ -6426,20 +6295,19 @@ fn helper() -> i64 {
         r#"
 fn o1() -> i64 {
     {
-        fn ga<T>(x: T) -> i64 { return 1 }
-        return ga(1)
+        fn ga<T>(x: T) -> i64 { 1 }
+        ga(1)
     }
 }
 fn o2() -> i64 {
     {
-        fn gb<T>(x: T) -> i64 { return 2 }
-        return gb(1)
+        fn gb<T>(x: T) -> i64 { 2 }
+        gb(1)
     }
 }
-fn main() -> i64 {
-    println(o1())
-    println(o2())
-    return 0
+fn main() {
+    println!("{}", o1());
+    println!("{}", o2());
 }
 "#,
         Oracle::ExitOut(0, "1\n2\n"),
@@ -6448,14 +6316,13 @@ fn main() -> i64 {
         "SI-S23ctl",
         r#"
 fn first() -> i64 {
-    let f = fn (x: i64) -> i64 { return x }
-    return f(5)
+    let f = move |x: i64| -> i64 { x };
+    f(5)
 }
-fn helper(x: i64) -> i64 { return 77 }
-fn main() -> i64 {
-    println(first())
-    println(helper(77))
-    return 0
+fn helper(x: i64) -> i64 { 77 }
+fn main() {
+    println!("{}", first());
+    println!("{}", helper(77));
 }
 "#,
         Oracle::ExitOut(0, "5\n77\n"),
@@ -6463,10 +6330,9 @@ fn main() -> i64 {
     (
         "L1ctl",
         r#"
-fn helper(x: i64) -> i64 { return x * 2 }
-fn main() -> i64 {
-    println(helper(21))
-    return 0
+fn helper(x: i64) -> i64 { x * 2 }
+fn main() {
+    println!("{}", helper(21));
 }
 "#,
         Oracle::ExitOut(0, "42\n"),
@@ -6629,64 +6495,60 @@ const GROUP_N_DIV: &[(&str, &str)] = &[
     (
         "SI-D01",
         r#"
-fn main() -> i64 {
-    let c = 1 > 0
+fn main() {
+    let c = 1 > 0;
     if c {
-        nogc fn bad() -> Vec<i64> { return Vec::new() }
+        nogc fn bad() -> Vec<i64> { Vec::new() }
     }
-    return 0
 }
 "#,
     ),
     (
         "SI-D02",
         r#"
-fn main() -> i64 {
-    let c = 1 > 2
+fn main() {
+    let c = 1 > 2;
     if c {
-        let q = 1
+        let q = 1;
     } else {
-        nogc fn bad() -> Vec<i64> { return Vec::new() }
+        nogc fn bad() -> Vec<i64> { Vec::new() }
     }
-    return 0
 }
 "#,
     ),
     (
         "SI-D03",
         r#"
-fn main() -> i64 {
+fn main() {
     if true {
-        nogc fn bad() -> Vec<i64> { return Vec::new() }
+        nogc fn bad() -> Vec<i64> { Vec::new() }
     }
-    return 0
 }
 "#,
     ),
     (
         "SI-D04",
         r#"
-fn host() -> i64 {
-    let c = 2 > 1
+use std::process::ExitCode; fn host() -> i64 {
+    let c = 2 > 1;
     if c {
-        nogc fn bad() -> Vec<i64> { return Vec::new() }
+        nogc fn bad() -> Vec<i64> { Vec::new() }
     }
-    return 0
+    0
 }
-fn main() -> i64 { return host() }
+fn main() -> ExitCode { return ExitCode::from(host() as u8); }
 "#,
     ),
     (
         "SI-D05",
         r#"
-fn main() -> i64 {
-    let c = 1 > 0
+fn main() {
+    let c = 1 > 0;
     if c {
         if c {
-            nogc fn bad() -> Vec<i64> { return Vec::new() }
+            nogc fn bad() -> Vec<i64> { Vec::new() }
         }
     }
-    return 0
 }
 "#,
     ),
@@ -6753,36 +6615,33 @@ fn group_n_o_invariance() {
 }
 
 const STAGE3_UNIQUE_MUT_SLICE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-    s[0] = 101
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+    s[0] = 101;
+    println!("{}", v[0]);
 }
 "#;
 
 const STAGE3_SHARED_MUT_SLICE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let alias = v
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-    s[0] = 101
-    println(alias[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let alias = v;
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+    s[0] = 101;
+    println!("{}", alias[0]);
 }
 "#;
 
 const STAGE3_NOGC_MUT_SLICE: &str = r#"
 nogc fn view(r: &mut Vec<i64>) -> &mut [i64] {
-    return Vec::try_as_unique_mut_slice(*r)
+    Vec::try_as_unique_mut_slice(*r)
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = view(&mut v)
-    s[0] = 101
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = view(&mut v);
+    s[0] = 101;
+    println!("{}", v[0]);
 }
 "#;
 
@@ -6823,12 +6682,11 @@ fn stage3_unique_mut_slice_is_effect_free_inside_nogc() {
 }
 
 const STAGE3_I32_MUT_SLICE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i32> = vec[7919 as i32, 2 as i32, 3 as i32]
-    let mut s: &mut [i32] = Vec::try_as_unique_mut_slice(v)
-    s[0] = 101 as i32
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i32> = vec![7919 as i32, 2 as i32, 3 as i32];
+    let mut s: &mut [i32] = Vec::try_as_unique_mut_slice(v);
+    s[0] = 101 as i32;
+    println!("{}", v[0]);
 }
 "#;
 
@@ -6845,12 +6703,11 @@ fn stage3_unique_mut_slice_splices_non_i64_element_sizes() {
 }
 
 const STAGE3_OUT_OF_BOUNDS_MUT_SLICE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-    s[3] = 101
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+    s[3] = 101;
+    println!("{}", v[0]);
 }
 "#;
 
@@ -6871,13 +6728,12 @@ const STAGE3_EXCLUSIVITY_REJECTS: &[(&str, &str, &str)] = &[
         "S3-UMS-alias-after",
         "E0713",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-    let alias = v
-    s[0] = 101
-    println(alias[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+    let alias = v;
+    s[0] = 101;
+    println!("{}", alias[0]);
 }
 "#,
     ),
@@ -6885,13 +6741,12 @@ fn main() -> i64 {
         "S3-UMS-realloc",
         "E0711",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-    Vec::push(v, 4)
-    s[0] = 101
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+    Vec::push(v, 4);
+    s[0] = 101;
+    println!("{}", v[0]);
 }
 "#,
     ),
@@ -6934,12 +6789,11 @@ const STAGE3_GAP_FORMS: &[(&str, &str, &str)] = &[
         "E0711",
         r#"
 struct Box { v: Vec<i64> }
-fn main() -> i64 {
-    let mut b = Box{v: vec[7919, 2, 3]}
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(b.v)
-    Vec::push(b.v, 4)
-    s[0] = 101
-    return 0
+fn main() {
+    let mut b = Box{v: vec![7919, 2, 3]};
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(b.v);
+    Vec::push(b.v, 4);
+    s[0] = 101;
 }
 "#,
     ),
@@ -6947,11 +6801,10 @@ fn main() -> i64 {
         "S3-UMS-gap-rc",
         "E0412",
         r#"
-fn main() -> i64 {
-    let r = Rc::new(vec[7919, 2, 3])
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(Rc::get(r))
-    s[0] = 101
-    return 0
+fn main() {
+    let r = Rc::new(vec![7919, 2, 3]);
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(Rc::get(r));
+    s[0] = 101;
 }
 "#,
     ),
@@ -6959,11 +6812,10 @@ fn main() -> i64 {
         "S3-UMS-gap-nested",
         "E0412",
         r#"
-fn main() -> i64 {
-    let mut v: Vec<Vec<i64>> = vec[vec[7919, 2, 3]]
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v[0])
-    s[0] = 101
-    return 0
+fn main() {
+    let mut v: Vec<Vec<i64>> = vec![vec![7919, 2, 3]];
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(v[0]);
+    s[0] = 101;
 }
 "#,
     ),
@@ -6989,19 +6841,17 @@ fn stage3_unique_mut_slice_gap_stays_closed_by_the_vec_surface() {
 
 const STAGE3_SHARED_REF_MUT_SLICE: &str = r#"
 fn view(r: &Vec<i64>) -> &mut [i64] {
-    return Vec::try_as_unique_mut_slice(*r)
+    Vec::try_as_unique_mut_slice(*r)
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    let mut s: &mut [i64] = view(&v)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    let mut s: &mut [i64] = view(&v);
 }
 "#;
 
 const STAGE3_NONPLACE_MUT_SLICE: &str = r#"
-fn main() -> i64 {
-    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(1)
-    return 0
+fn main() {
+    let mut s: &mut [i64] = Vec::try_as_unique_mut_slice(1);
 }
 "#;
 
@@ -7021,47 +6871,44 @@ fn stage3_unique_mut_slice_runtime_and_splice_guards_are_present() {
 
 const STAGE6_DEFAULT_R1: &str = r#"
 nogc fn read(v: &Vec<i64>) -> i64 {
-    let s: &[i64] = Vec::as_slice(*v)
-    return Vec::len(*v) + s[0] - 7919
+    let s: &[i64] = Vec::as_slice(*v);
+    Vec::len(*v) + s[0] - 7919
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7919, 2, 3]
-    println(read(&v))
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7919, 2, 3];
+    println!("{}", read(&v));
+    println!("{}", v[0]);
 }
 "#;
 
 const STAGE6_DEFAULT_R2: &str = r#"
 struct Vec3 { x: i64, y: i64, z: i64 }
 nogc fn compute_normals(vertices: &[Vec3], normals: &mut [Vec3]) -> i64 {
-    normals[0].x = vertices[0].y
-    return 0
+    normals[0].x = vertices[0].y;
+    0
 }
-fn main() -> i64 {
-    let mut vertices: Vec<Vec3> = vec[Vec3 { x: 7919, y: 101, z: 3 }]
-    let mut normals: Vec<Vec3> = vec[Vec3 { x: 0, y: 0, z: 0 }]
-    let src: &[Vec3] = Vec::as_slice(vertices)
-    let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals)
-    compute_normals(src, dst)
-    println(normals[0].x)
-    println(vertices[0].x)
-    return 0
+fn main() {
+    let mut vertices: Vec<Vec3> = vec![Vec3 { x: 7919, y: 101, z: 3 }];
+    let mut normals: Vec<Vec3> = vec![Vec3 { x: 0, y: 0, z: 0 }];
+    let src: &[Vec3] = Vec::as_slice(vertices);
+    let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals);
+    compute_normals(src, dst);
+    println!("{}", normals[0].x);
+    println!("{}", vertices[0].x);
 }
 "#;
 
 const STAGE6_DEFAULT_R3: &str = r#"
-nogc fn peek(v: &Vec<i64>) -> i64 { return (*v)[0] }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[7919, 2, 3]
-    println(peek(&v))
-    return 0
+nogc fn peek(v: &Vec<i64>) -> i64 { (*v)[0] }
+fn main() {
+    let v: Vec<i64> = vec![7919, 2, 3];
+    println!("{}", peek(&v));
 }
 "#;
 
 const STAGE6_DEFAULT_KEEP_CALLBACK: &str = r#"
-nogc fn invoke(x: i64) -> i64 { return x + 1 }
-fn main() -> i64 { println(invoke(1)); return 0 }
+nogc fn invoke(x: i64) -> i64 { x + 1 }
+fn main() { println!("{}", invoke(1)); }
 "#;
 
 const STAGE6_DEFAULT_REJECTS: &[(&str, &str, &str)] = &[
@@ -7070,27 +6917,27 @@ const STAGE6_DEFAULT_REJECTS: &[(&str, &str, &str)] = &[
         "E0727",
         r#"
 nogc fn bad(v: &mut Vec<i64>) -> i64 {
-    Vec::push(*v, 101)
-    return 0
+    Vec::push(*v, 101);
+    0
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     ),
     (
         "SI-NG-callback",
         "E0727",
         r#"
-nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }
-fn inc(x: i64) -> i64 { return x + 1 }
-fn main() -> i64 { return invoke(inc, 1) }
+use std::process::ExitCode; nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { f(x) }
+fn inc(x: i64) -> i64 { x + 1 }
+fn main() -> ExitCode { return ExitCode::from(invoke(inc, 1) as u8); }
 "#,
     ),
     (
         "SI-NG-by-value",
         "E0727",
         r#"
-nogc fn owns(v: Vec<i64>) -> i64 { return Vec::len(v) }
-fn main() -> i64 { return 0 }
+nogc fn owns(v: Vec<i64>) -> i64 { Vec::len(v) }
+fn main() { }
 "#,
     ),
 ];
@@ -7316,9 +7163,9 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.seven()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::seven() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn seven() -> i64 {\n    return 7\n}\n"),
+            ("m.aelys", "pub fn seven() -> i64 {\n    7\n}\n"),
         ],
         ModOracle::Stats(7, "", 0, 0),
     ),
@@ -7327,11 +7174,11 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    println(m.greet())\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n    println!(\"{}\", m::greet());\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn greet() -> string {\n    return \"hello\"\n}\n",
+                "pub fn greet() -> String {\n    \"hello\"\n}\n",
             ),
         ],
         ModOracle::ExitOut(0, "hello\n"),
@@ -7341,11 +7188,11 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let xs = m.build(4)\n    return Vec::len(xs)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let xs = m::build(4);\n    return ExitCode::from(Vec::len(xs) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn build(n: i64) -> vec<i64> {\n    let mut xs: vec<i64> = Vec::new()\n    Vec::push(xs, n)\n    return xs\n}\n",
+                "pub fn build(n: i64) -> vec<i64> {\n    let mut xs: vec<i64> = Vec::new();\n    Vec::push(xs, n);\n    xs\n}\n",
             ),
         ],
         ModOracle::Balanced(1, ""),
@@ -7356,11 +7203,11 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.clean(6) + m.plain(2)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::clean(6) + m::plain(2)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub nogc fn clean(n: i64) -> i64 {\n    return n + 1\n}\n\npub fn plain(n: i64) -> i64 {\n    return n + 1\n}\n\npub fn unreached() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+                "pub nogc fn clean(n: i64) -> i64 {\n    n + 1\n}\n\npub fn plain(n: i64) -> i64 {\n    n + 1\n}\n\npub fn unreached() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n",
             ),
         ],
         ModOracle::Stats(10, "", 0, 0),
@@ -7370,11 +7217,11 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(3, 4)\n    return p.a + p.b\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::make(3, 4);\n    return ExitCode::from((p.a + p.b) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> P {\n    return P { a: x, b: y }\n}\n",
+                "pub struct P { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> P {\n    P { a: x, b: y }\n}\n",
             ),
         ],
         ModOracle::Stats(7, "", 0, 0),
@@ -7384,11 +7231,11 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return match m.pick() {\n        m.T::Some(n) => n\n        m.T::None => 0\n    }\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from((match m::pick() {\n        m::T::Some(n) => n,\n        m::T::None => 0,\n    }) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub enum T { None, Some(i64) }\n\npub fn pick() -> T {\n    return T::Some(8)\n}\n",
+                "pub enum T { None, Some(i64) }\n\npub fn pick() -> T {\n    T::Some(8)\n}\n",
             ),
         ],
         ModOracle::Stats(8, "", 0, 0),
@@ -7399,15 +7246,15 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs x\nneeds y\n\nfn main() -> i64 {\n    return x.make() + y.make()\n}\n",
+                "use std::process::ExitCode; mod x;\nmod y;\n\nfn main() -> ExitCode {\n    return ExitCode::from((x::make() + y::make()) as u8);\n}\n",
             ),
             (
                 "x.aelys",
-                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 10 }\n    return h.v\n}\n",
+                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 10 };\n    h.v\n}\n",
             ),
             (
                 "y.aelys",
-                "struct Holder { hi: i64, lo: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { hi: 20, lo: 3 }\n    return h.hi + h.lo\n}\n",
+                "struct Holder { hi: i64, lo: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { hi: 20, lo: 3 };\n    h.hi + h.lo\n}\n",
             ),
         ],
         ModOracle::Stats(33, "", 0, 0),
@@ -7417,15 +7264,15 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.run() + q.run()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    return ExitCode::from((p::run() + q::run()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "pub fn run() -> i64 {\n    let base: i64 = 10\n    let f = fn(a: i64) -> i64 { return a + base }\n    return f(1)\n}\n",
+                "pub fn run() -> i64 {\n    let base: i64 = 10;\n    let f = move |a: i64| -> i64 { a + base };\n    f(1)\n}\n",
             ),
             (
                 "q.aelys",
-                "pub fn run() -> i64 {\n    let base: i64 = 20\n    let g = fn(a: i64) -> i64 { return a + base }\n    return g(1)\n}\n",
+                "pub fn run() -> i64 {\n    let base: i64 = 20;\n    let g = move |a: i64| -> i64 { a + base };\n    g(1)\n}\n",
             ),
         ],
         ModOracle::ExitOut(32, ""),
@@ -7439,15 +7286,15 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
             ),
             (
                 "util.aelys",
-                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 1\n}\n",
+                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    1\n}\n",
             ),
             (
                 "app.aelys",
-                "needs util\n\npub fn go() -> i64 {\n    return util.helper()\n}\n",
+                "mod util;\n\npub fn go() -> i64 {\n    util::helper()\n}\n",
             ),
             (
                 "app/util.aelys",
-                "pub nogc fn helper() -> i64 {\n    return 40\n}\n",
+                "pub nogc fn helper() -> i64 {\n    40\n}\n",
             ),
         ],
         ModOracle::Stats(40, "", 0, 0),
@@ -7457,15 +7304,15 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs a\n\nfn main() -> i64 {\n    return a.f()\n}\n",
+                "use std::process::ExitCode; mod a;\n\nfn main() -> ExitCode {\n    return ExitCode::from(a::f() as u8);\n}\n",
             ),
             (
                 "a.aelys",
-                "needs b\n\npub fn f() -> i64 {\n    return b.g() + 1\n}\n\npub fn one() -> i64 {\n    return 1\n}\n",
+                "mod b;\n\npub fn f() -> i64 {\n    b::g() + 1\n}\n\npub fn one() -> i64 {\n    1\n}\n",
             ),
             (
                 "b.aelys",
-                "needs a\n\npub fn g() -> i64 {\n    return a.one() + 2\n}\n",
+                "mod a;\n\npub fn g() -> i64 {\n    a::one() + 2\n}\n",
             ),
         ],
         ModOracle::Stats(4, "", 0, 0),
@@ -7475,15 +7322,15 @@ const MOD_ROWS: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs mid\n\nfn main() -> i64 {\n    let p = mid.pass(41)\n    return mid.take(p)\n}\n",
+                "use std::process::ExitCode; mod mid;\n\nfn main() -> ExitCode {\n    let p = mid::pass(41);\n    return ExitCode::from(mid::take(p) as u8);\n}\n",
             ),
             (
                 "mid.aelys",
-                "needs a\n\npub fn pass(x: i64) -> a.P {\n    return a.make(x)\n}\n\npub fn take(p: a.P) -> i64 {\n    return a.read(p)\n}\n",
+                "mod a;\n\npub fn pass(x: i64) -> a::P {\n    a::make(x)\n}\n\npub fn take(p: a::P) -> i64 {\n    a::read(p)\n}\n",
             ),
             (
                 "a.aelys",
-                "pub struct P { pub v: i64 }\n\npub fn make(x: i64) -> P {\n    return P { v: x }\n}\n\npub fn read(p: P) -> i64 {\n    return p.v\n}\n",
+                "pub struct P { pub v: i64 }\n\npub fn make(x: i64) -> P {\n    P { v: x }\n}\n\npub fn read(p: P) -> i64 {\n    p.v\n}\n",
             ),
         ],
         ModOracle::Stats(41, "", 0, 0),
@@ -7496,7 +7343,7 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         "E0601",
         &[(
             "root.aelys",
-            "needs nope\n\nfn main() -> i64 {\n    return 0\n}\n",
+            "mod nope;\n\nfn main() {\n}\n",
         )],
     ),
     (
@@ -7505,10 +7352,10 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\nneeds n as m\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m;\nmod n; use n as m;\n\nfn main() {\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
-            ("n.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    2\n}\n"),
         ],
     ),
     (
@@ -7516,7 +7363,7 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         "E0604",
         &[(
             "root.aelys",
-            "needs __hidden\n\nfn main() -> i64 {\n    return 0\n}\n",
+            "mod __hidden;\n\nfn main() {\n}\n",
         )],
     ),
     (
@@ -7525,9 +7372,9 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.secret()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::secret() as u8);\n}\n",
             ),
-            ("m.aelys", "fn secret() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "fn secret() -> i64 {\n    1\n}\n"),
         ],
     ),
     (
@@ -7536,9 +7383,9 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.absent()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::absent() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn seven() -> i64 {\n    return 7\n}\n"),
+            ("m.aelys", "pub fn seven() -> i64 {\n    7\n}\n"),
         ],
     ),
     (
@@ -7557,7 +7404,7 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
                 "root.aelys",
                 "fn main() -> i64 {\n    return 0\n}\n\nneeds m\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
     ),
     (
@@ -7566,9 +7413,9 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m.*\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m; use m::*;\n\nfn main() {\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
     ),
     (
@@ -7577,11 +7424,11 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.make(3).v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::make(3).v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "pub struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
     ),
@@ -7591,11 +7438,11 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(1)\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n    let p = m::make(1);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
     ),
@@ -7605,11 +7452,11 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.allocates()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::allocates()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+                "pub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n",
             ),
         ],
     ),
@@ -7619,11 +7466,11 @@ const MOD_REJECTS: &[(&str, &str, ModuleFiles)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn leak() -> i64 {\n    let a = m.make(1)\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn leak() -> i64 {\n    let a = m::make(1);\n    let b = a;\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(leak() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n",
+                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    Resource { id: n }\n}\n",
             ),
         ],
     ),
@@ -7635,9 +7482,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.f()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::f() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
         ModOracle::Stats(1, "", 0, 0),
     ),
@@ -7646,10 +7493,10 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\nneeds n as k\n\nfn main() -> i64 {\n    return m.f() + k.g()\n}\n",
+                "use std::process::ExitCode; mod m;\nmod n; use n as k;\n\nfn main() -> ExitCode {\n    return ExitCode::from((m::f() + k::g()) as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
-            ("n.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    2\n}\n"),
         ],
         ModOracle::Stats(3, "", 0, 0),
     ),
@@ -7658,9 +7505,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.shown()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::shown() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn shown() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn shown() -> i64 {\n    1\n}\n"),
         ],
         ModOracle::Stats(1, "", 0, 0),
     ),
@@ -7669,11 +7516,11 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.make(3).v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::make(3).v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
         ModOracle::Stats(3, "", 0, 0),
@@ -7683,11 +7530,11 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.make(1).v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::make(1).v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
         ModOracle::Stats(1, "", 0, 0),
@@ -7697,9 +7544,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.clean()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::clean()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn clean() -> i64 {\n    return 4\n}\n"),
+            ("m.aelys", "pub fn clean() -> i64 {\n    4\n}\n"),
         ],
         ModOracle::Stats(4, "", 0, 0),
     ),
@@ -7708,11 +7555,11 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let a = m.make(9)\n    let b = a\n    return b.id\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let a = m::make(9);\n    let b = a;\n    return ExitCode::from(b.id as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n",
+                "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    Resource { id: n }\n}\n",
             ),
         ],
         ModOracle::Stats(9, "9\n", 0, 0),
@@ -7722,13 +7569,13 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs a\n\nfn main() -> i64 {\n    return a.f()\n}\n",
+                "use std::process::ExitCode; mod a;\n\nfn main() -> ExitCode {\n    return ExitCode::from(a::f() as u8);\n}\n",
             ),
             (
                 "a.aelys",
-                "needs b\n\npub fn f() -> i64 {\n    return b.g()\n}\n",
+                "mod b;\n\npub fn f() -> i64 {\n    b::g()\n}\n",
             ),
-            ("b.aelys", "pub fn g() -> i64 {\n    return 2\n}\n"),
+            ("b.aelys", "pub fn g() -> i64 {\n    2\n}\n"),
         ],
         ModOracle::Stats(2, "", 0, 0),
     ),
@@ -7737,9 +7584,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs hidden\n\nfn main() -> i64 {\n    return hidden.f()\n}\n",
+                "use std::process::ExitCode; mod hidden;\n\nfn main() -> ExitCode {\n    return ExitCode::from(hidden::f() as u8);\n}\n",
             ),
-            ("hidden.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("hidden.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
         ModOracle::Stats(1, "", 0, 0),
     ),
@@ -7748,9 +7595,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.present()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::present() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn present() -> i64 {\n    return 7\n}\n"),
+            ("m.aelys", "pub fn present() -> i64 {\n    7\n}\n"),
         ],
         ModOracle::Stats(7, "", 0, 0),
     ),
@@ -7759,9 +7606,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs gl\n\nfn main() -> i64 {\n    return gl.f()\n}\n",
+                "use std::process::ExitCode; mod gl;\n\nfn main() -> ExitCode {\n    return ExitCode::from(gl::f() as u8);\n}\n",
             ),
-            ("gl.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("gl.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
         ModOracle::Stats(1, "", 0, 0),
     ),
@@ -7770,10 +7617,10 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs m\nneeds n\n\nfn main() -> i64 {\n    return m.f() + n.g()\n}\n",
+                "use std::process::ExitCode; mod m;\nmod n;\n\nfn main() -> ExitCode {\n    return ExitCode::from((m::f() + n::g()) as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
-            ("n.aelys", "pub fn g() -> i64 {\n    return 5\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
+            ("n.aelys", "pub fn g() -> i64 {\n    5\n}\n"),
         ],
         ModOracle::Stats(6, "", 0, 0),
     ),
@@ -7782,9 +7629,9 @@ const MOD_KEPT: &[(&str, ModuleFiles, ModOracle)] = &[
         &[
             (
                 "root.aelys",
-                "needs f from m\n\nfn main() -> i64 {\n    return f()\n}\n",
+                "use std::process::ExitCode; mod m; use m::f;\n\nfn main() -> ExitCode {\n    return ExitCode::from(f() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn f() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn f() -> i64 {\n    1\n}\n"),
         ],
         ModOracle::Stats(1, "", 0, 0),
     ),
@@ -7813,14 +7660,14 @@ const FFI_LEVELS: &[(&str, OptimizationLevel)] = &[
 ];
 
 const FFI_HEAD: &str =
-    "unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn ffsl(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(ffsl(1024) as u8); }\n}\n";
 
-const FFI_AUDITED_NOGC: &str = "unsafe extern nogc fn ffsl(x: i64) -> i64\n\nnogc fn probe(x: i64) -> i64 {\n    unsafe { return ffsl(x) }\n}\n\nfn main() -> i64 {\n    return probe(1024)\n}\n";
+const FFI_AUDITED_NOGC: &str = "use std::process::ExitCode; extern \"C\" { nogc fn ffsl(x: i64) -> i64; }\n\nnogc fn probe(x: i64) -> i64 {\n    unsafe { return ffsl(x); }\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(probe(1024) as u8);\n}\n";
 
-const FFI_TWIN_FFSL: &str = "unsafe extern fn malloc(n: i64) -> i64\nunsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n";
+const FFI_TWIN_FFSL: &str = "use std::process::ExitCode; extern \"C\" { fn malloc(n: i64) -> i64; }\nextern \"C\" { fn ffsl(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(ffsl(1024) as u8); }\n}\n";
 
 const FFI_TWIN_LABS: &str =
-    "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return labs(-7) }\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(labs(-7) as u8); }\n}\n";
 
 fn ffi_run_everywhere(h: &Harness, id: &str, src: &str, exit: i32, allocs: i64, frees: i64) {
     for (level, opt) in FFI_LEVELS {
@@ -7860,15 +7707,15 @@ const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
     (
         "SI-FFI-E0613-decl",
         "E0613",
-        "unsafe extern fn aelys_immix_alloc(n: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "extern \"C\" { fn aelys_immix_alloc(n: i64) -> i64; }\n\nfn main() {\n}\n",
         FFI_TWIN_FFSL,
         11,
     ),
     (
         "SI-FFI-E0613-def",
         "E0613",
-        "fn malloc(n: i64) -> i64 {\n    return n\n}\n\nfn main() -> i64 {\n    return malloc(3)\n}\n",
-        "fn mallocate(n: i64) -> i64 {\n    return n\n}\n\nfn main() -> i64 {\n    return mallocate(3)\n}\n",
+        "use std::process::ExitCode; fn malloc(n: i64) -> i64 {\n    n\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(malloc(3) as u8);\n}\n",
+        "use std::process::ExitCode; fn mallocate(n: i64) -> i64 {\n    n\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(mallocate(3) as u8);\n}\n",
         3,
     ),
     (
@@ -7895,7 +7742,7 @@ const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
     (
         "SI-FFI-E0615-string",
         "E0615",
-        "unsafe extern fn f(x: string) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "extern \"C\" { fn f(x: String) -> i64; }\n\nfn main() {\n}\n",
         FFI_HEAD,
         11,
     ),
@@ -7903,43 +7750,43 @@ const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
     (
         "SI-FFI-E0615-case",
         "E0615",
-        "unsafe extern fn f(x: sTRING) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "extern \"C\" { fn f(x: sTRING) -> i64; }\n\nfn main() {\n}\n",
         FFI_HEAD,
         11,
     ),
     (
         "SI-FFI-E0615-return-ref",
         "E0615",
-        "unsafe extern fn f(x: i64) -> &i64\n\nfn main() -> i64 {\n    return 0\n}\n",
-        "unsafe extern fn takes_ref(x: &i64) -> i64\nunsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n",
+        "extern \"C\" { fn f(x: i64) -> &i64; }\n\nfn main() {\n}\n",
+        "use std::process::ExitCode; extern \"C\" { fn takes_ref(x: &i64) -> i64; }\nextern \"C\" { fn ffsl(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(ffsl(1024) as u8); }\n}\n",
         11,
     ),
     (
         "SI-FFI-E0616-let",
         "E0616",
-        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    let g = labs\n    return 0\n}\n",
+        "extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() {\n    let g = labs;\n}\n",
         FFI_TWIN_LABS,
         7,
     ),
     (
         "SI-FFI-E0616-argument",
         "E0616",
-        "unsafe extern fn labs(x: i64) -> i64\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    return g(-7)\n}\n\nfn main() -> i64 {\n    return apply(labs)\n}\n",
-        "fn neg(x: i64) -> i64 {\n    return 0 - x\n}\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    return g(-7)\n}\n\nfn main() -> i64 {\n    return apply(neg)\n}\n",
+        "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    g(-7)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(apply(labs) as u8);\n}\n",
+        "use std::process::ExitCode; fn neg(x: i64) -> i64 {\n    0 - x\n}\n\nfn apply(g: fn(i64) -> i64) -> i64 {\n    g(-7)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(apply(neg) as u8);\n}\n",
         7,
     ),
     (
         "SI-FFI-E0617-bare",
         "E0617",
-        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    return labs(-7)\n}\n",
+        "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    return ExitCode::from(labs(-7) as u8);\n}\n",
         FFI_TWIN_LABS,
         7,
     ),
     (
         "SI-FFI-E0617-condition",
         "E0617",
-        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    if labs(-7) > 0 { return 1 }\n    return 0\n}\n",
-        "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    if unsafe { labs(-7) } > 0 { return 1 }\n    return 0\n}\n",
+        "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    if labs(-7) > 0 { return ExitCode::from(1); }\n    return ExitCode::SUCCESS;\n}\n",
+        "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    if unsafe { labs(-7) } > 0 { return ExitCode::from(1); }\n    return ExitCode::SUCCESS;\n}\n",
         1,
     ),
 ];
@@ -7947,39 +7794,39 @@ const FFI_PAIRS: &[(&str, &str, &str, &str, i32)] = &[
 const FFI_E0612_REFUSED: ModuleFiles = &[
     (
         "root.aelys",
-        "needs a\nneeds b\n\nfn main() -> i64 {\n    return a.use_a(-20) + b.use_b(-17)\n}\n",
+        "use std::process::ExitCode; mod a;\nmod b;\n\nfn main() -> ExitCode {\n    return ExitCode::from((a::use_a(-20) + b::use_b(-17)) as u8);\n}\n",
     ),
     (
         "a.aelys",
-        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+        "extern \"C\" { fn labs(x: i64) -> i64; }\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x); }\n}\n",
     ),
     (
         "b.aelys",
-        "unsafe extern nogc fn labs(x: i64) -> i64\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+        "extern \"C\" { nogc fn labs(x: i64) -> i64; }\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x); }\n}\n",
     ),
 ];
 
 const FFI_E0612_TWIN: ModuleFiles = &[
     (
         "root.aelys",
-        "needs a\nneeds b\n\nfn main() -> i64 {\n    return a.use_a(-20) + b.use_b(-17)\n}\n",
+        "use std::process::ExitCode; mod a;\nmod b;\n\nfn main() -> ExitCode {\n    return ExitCode::from((a::use_a(-20) + b::use_b(-17)) as u8);\n}\n",
     ),
     (
         "a.aelys",
-        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+        "extern \"C\" { fn labs(x: i64) -> i64; }\n\npub fn use_a(x: i64) -> i64 {\n    unsafe { return labs(x); }\n}\n",
     ),
     (
         "b.aelys",
-        "unsafe extern fn labs(x: i64) -> i64\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x) }\n}\n",
+        "extern \"C\" { fn labs(x: i64) -> i64; }\n\npub fn use_b(x: i64) -> i64 {\n    unsafe { return labs(x); }\n}\n",
     ),
 ];
 
 const FFI_LIB_C: &str = "long aelys_si_ffi_triple(long x) { return 3 * x; }\n";
 
-const FFI_LIB_AE: &str = "unsafe extern fn aelys_si_ffi_triple(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return aelys_si_ffi_triple(14) }\n}\n";
+const FFI_LIB_AE: &str = "use std::process::ExitCode; extern \"C\" { fn aelys_si_ffi_triple(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(aelys_si_ffi_triple(14) as u8); }\n}\n";
 
 // the allocating shape, so a member defining a reserved symbol is actually pulled in
-const FFI_LIB_ALLOCATING_AE: &str = "unsafe extern fn aelys_si_ffi_triple(x: i64) -> i64\n\nfn main() -> i64 {\n    let mut v = Vec::new()\n    Vec::push(v, 11)\n    unsafe { return aelys_si_ffi_triple(14) }\n}\n";
+const FFI_LIB_ALLOCATING_AE: &str = "use std::process::ExitCode; extern \"C\" { fn aelys_si_ffi_triple(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    let mut v = Vec::new();\n    Vec::push(v, 11);\n    unsafe { return ExitCode::from(aelys_si_ffi_triple(14) as u8); }\n}\n";
 
 const FFI_HOSTILE_MEMCPY_C: &str = "#include <stddef.h>\nvoid *memcpy(void *d, const void *s, size_t n) {\n    unsigned char *a = d; const unsigned char *b = s;\n    while (n--) *a++ = *b++;\n    return d;\n}\n";
 

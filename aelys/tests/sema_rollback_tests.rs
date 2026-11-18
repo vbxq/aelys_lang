@@ -127,12 +127,12 @@ fn partial_unification_failure_does_not_corrupt_later_inference() {
     assert!(
         sema_err(
             r#"
-fn takes_int(x: i64) -> i64 { return x }
-fn takes_str(x: string) -> string { return x }
+fn takes_int(x: i64) -> i64 { x }
+fn takes_str(x: String) -> String { x }
 
 fn main() {
-    let a = takes_int(42)
-    let b: string = a
+    let a = takes_int(42);
+    let b: String = a;
 }
 "#
         ),
@@ -147,8 +147,8 @@ fn type_error_does_not_poison_unrelated_variables() {
         sema_ok(
             r#"
 fn good() -> i64 {
-    let x: i64 = 42
-    return x
+    let x: i64 = 42;
+    x
 }
 "#
         ),
@@ -163,7 +163,7 @@ fn function_type_mismatch_still_detected() {
         sema_err(
             r#"
 fn f() -> i64 {
-    return "hello"
+    "hello"
 }
 "#
         ),
@@ -175,13 +175,13 @@ fn f() -> i64 {
 fn multiple_errors_reported_independently() {
     // two independent type errors should both be reported, not silently suppressed by Dynamic from the first error
     let code = r#"
-fn f(x: i64, y: string) -> i64 {
-    return x
+fn f(x: i64, y: String) -> i64 {
+    x
 }
 
 fn main() {
-    let a: string = 42
-    let b: i64 = "hello"
+    let a: String = 42;
+    let b: i64 = "hello";
 }
 "#;
     let src = Source::new("<test>", code);

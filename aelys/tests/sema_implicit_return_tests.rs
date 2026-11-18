@@ -63,7 +63,7 @@ fn empty_body_with_string_return_is_rejected() {
     assert!(
         should_fail(
             r#"
-fn bar() -> string {
+fn bar() -> String {
 }
 "#
         ),
@@ -80,7 +80,7 @@ fn let_as_last_stmt_with_return_type_is_rejected() {
         should_fail(
             r#"
 fn foo() -> i64 {
-    let x = 5
+    let x = 5;
 }
 "#
         ),
@@ -93,7 +93,7 @@ fn let_as_last_stmt_void_function_is_ok() {
     should_pass(
         r#"
 fn foo() {
-    let x = 5
+    let x = 5;
 }
 "#,
     );
@@ -108,7 +108,7 @@ fn while_as_last_stmt_with_return_type_is_rejected() {
             r#"
 fn foo() -> i64 {
     while false {
-        return 42
+        return 42;
     }
 }
 "#
@@ -125,7 +125,7 @@ fn for_as_last_stmt_with_known_non_empty_range_is_accepted() {
         r#"
 fn foo() -> i64 {
     for i in 0..10 {
-        return 42
+        return 42;
     }
 }
 "#,
@@ -139,7 +139,7 @@ fn for_as_last_stmt_with_known_empty_range_is_rejected() {
             r#"
 fn foo() -> i64 {
     for i in 10..10 {
-        return 42
+        return 42;
     }
 }
 "#
@@ -155,7 +155,7 @@ fn if_without_else_as_last_stmt_with_return_type_is_rejected() {
             r#"
 fn foo() -> i64 {
     if true {
-        return 42
+        return 42;
     }
 }
 "#
@@ -170,7 +170,7 @@ fn nested_function_as_last_stmt_with_return_type_is_rejected() {
         should_fail(
             r#"
 fn foo() -> i64 {
-    fn inner() -> i64 { return 1 }
+    fn inner() -> i64 { 1 }
 }
 "#
         ),
@@ -184,7 +184,7 @@ fn explicit_return_before_let_is_ok() {
     should_pass(
         r#"
 fn foo() -> i64 {
-    return 42
+    42
 }
 "#,
     );
@@ -222,9 +222,9 @@ fn if_else_with_explicit_returns_is_ok() {
         r#"
 fn foo(x: bool) -> i64 {
     if x {
-        return 42
+        42
     } else {
-        return 0
+        0
     }
 }
 "#,
@@ -254,9 +254,9 @@ fn one_path_returns_other_doesnt_is_rejected() {
             r#"
 fn foo(x: bool) -> i64 {
     if x {
-        return 42
+        return 42;
     }
-    let y = 10
+    let y = 10;
 }
 "#
         ),
@@ -270,9 +270,9 @@ fn foreach_as_last_stmt_with_return_type_is_rejected() {
         should_fail(
             r#"
 fn foo() -> i64 {
-    let arr = [1, 2, 3]
+    let arr = [1, 2, 3];
     for x in arr {
-        return x
+        return x;
     }
 }
 "#
@@ -288,7 +288,7 @@ fn block_ending_with_let_with_return_type_is_rejected() {
             r#"
 fn foo() -> i64 {
     {
-        let x = 42
+        let x = 42;
     }
 }
 "#

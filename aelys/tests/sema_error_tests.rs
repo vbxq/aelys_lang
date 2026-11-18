@@ -14,13 +14,13 @@ fn sema_check(code: &str) -> Result<(), Vec<TypeError>> {
 
 #[test]
 fn rejects_binary_type_mismatch() {
-    let result = sema_check("fn f() { let x = 1 + \"hello\" }");
+    let result = sema_check("fn f() { let x = 1 + \"hello\"; }");
     assert!(result.is_err(), "adding i64 and string should be rejected");
 }
 
 #[test]
 fn rejects_return_type_mismatch() {
-    let result = sema_check(r#"fn f() -> i64 { return "text" }"#);
+    let result = sema_check(r#"fn f() -> i64 { "text" }"#);
     assert!(
         result.is_err(),
         "returning string from i64 function should be rejected"
@@ -41,19 +41,19 @@ fn rejects_while_non_bool_condition() {
 
 #[test]
 fn rejects_array_mixed_types() {
-    let result = sema_check(r#"fn f() { let a = [1, "two", 3] }"#);
+    let result = sema_check(r#"fn f() { let a = [1, "two", 3]; }"#);
     assert!(result.is_err(), "array with mixed types should be rejected");
 }
 
 #[test]
 fn rejects_undefined_variable() {
-    let result = sema_check("fn f() { let y = x + 1 }");
+    let result = sema_check("fn f() { let y = x + 1; }");
     assert!(result.is_err(), "undefined variable x should be rejected");
 }
 
 #[test]
 fn rejects_argument_type_mismatch() {
-    let result = sema_check(r#"fn f(x: i64) {} fn g() { f("str") }"#);
+    let result = sema_check(r#"fn f(x: i64) {} fn g() { f("str"); }"#);
     assert!(
         result.is_err(),
         "passing string to i64 param should be rejected"
@@ -65,8 +65,8 @@ fn multiple_errors_collected_not_just_first() {
     // two independent type errors in separate functions. Sema should report both, not just the first one.
     let result = sema_check(
         r#"
-fn f() -> i64 { return "bad" }
-fn g() -> string { return 42 }
+fn f() -> i64 { "bad" }
+fn g() -> String { 42 }
 "#,
     );
     let errors = result.unwrap_err();
@@ -82,8 +82,8 @@ fn rejects_index_assign_on_i64() {
     let result = sema_check(
         r#"
 fn f() {
-    let mut x: i64 = 42
-    x[0] = 10
+    let mut x: i64 = 42;
+    x[0] = 10;
 }
 "#,
     );
@@ -98,8 +98,8 @@ fn rejects_index_assign_on_bool() {
     let result = sema_check(
         r#"
 fn f() {
-    let mut b: bool = true
-    b[0] = false
+    let mut b: bool = true;
+    b[0] = false;
 }
 "#,
     );
@@ -114,8 +114,8 @@ fn accepts_index_assign_on_array() {
     let result = sema_check(
         r#"
 fn f() {
-    let mut arr = [1, 2, 3]
-    arr[0] = 10
+    let mut arr = [1, 2, 3];
+    arr[0] = 10;
 }
 "#,
     );
@@ -131,8 +131,8 @@ fn accepts_index_assign_on_vec() {
     let result = sema_check(
         r#"
 fn f() {
-    let mut v = Vec<i64>[1, 2, 3]
-    v[0] = 10
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    v[0] = 10;
 }
 "#,
     );
@@ -148,8 +148,8 @@ fn rejects_index_assign_on_immutable_array() {
     let result = sema_check(
         r#"
 fn f() {
-    let arr = [1, 2, 3]
-    arr[0] = 10
+    let arr = [1, 2, 3];
+    arr[0] = 10;
 }
 "#,
     );
@@ -164,8 +164,8 @@ fn rejects_index_assign_on_immutable_vec() {
     let result = sema_check(
         r#"
 fn f() {
-    let v = Vec<i64>[1, 2, 3]
-    v[0] = 10
+    let v: Vec<i64> = vec![1, 2, 3];
+    v[0] = 10;
 }
 "#,
     );
@@ -180,7 +180,7 @@ fn accepts_index_assign_on_mut_param() {
     let result = sema_check(
         r#"
 fn f(mut arr: [i64; 3]) {
-    arr[0] = 10
+    arr[0] = 10;
 }
 "#,
     );
@@ -196,7 +196,7 @@ fn rejects_legacy_array_type_annotation() {
     let result = sema_check(
         r#"
 fn f(arr: Array<i64>) -> i64 {
-    return arr[0]
+    arr[0]
 }
 "#,
     );
@@ -220,7 +220,7 @@ fn accepts_bracket_array_annotation() {
     let result = sema_check(
         r#"
 fn f(arr: [i64; 3]) -> i64 {
-    return arr[0]
+    arr[0]
 }
 "#,
     );
@@ -259,17 +259,17 @@ fn std_module_codes(code: &str) -> Vec<(String, String)> {
 #[test]
 fn a_std_module_accepts_methods_on_builtin_heads() {
     let errors = std_module_codes(
-        "impl string { pub fn twice(self) -> string { return self + self } }\n\
-         impl<T> [T] { pub fn size(&self) -> i64 { return self.len } }\n\
-         impl<T> Vec<T> { pub fn size(&self) -> i64 { return Vec::len(*self) } }\n\
-         impl i64 { pub fn inc(self) -> i64 { return self + 1 } }",
+        "impl String { pub fn twice(self) -> String { self + self } }\n\
+         impl<T> [T] { pub fn size(&self) -> i64 { self.len() } }\n\
+         impl<T> Vec<T> { pub fn size(&self) -> i64 { Vec::len(*self) } }\n\
+         impl i64 { pub fn inc(self) -> i64 { self + 1 } }",
     );
     assert!(errors.is_empty(), "{errors:?}");
 }
 
 #[test]
 fn a_std_method_named_like_a_vec_intrinsic_is_refused() {
-    let errors = std_module_codes("impl<T> Vec<T> { pub fn get(&self) -> i64 { return 0 } }");
+    let errors = std_module_codes("impl<T> Vec<T> { pub fn get(&self) -> i64 { 0 } }");
     assert!(
         errors
             .iter()
@@ -280,7 +280,7 @@ fn a_std_method_named_like_a_vec_intrinsic_is_refused() {
 
 #[test]
 fn a_std_method_named_like_a_builtin_trait_method_is_refused() {
-    let errors = std_module_codes("impl string { pub fn cmp(self) -> i64 { return 0 } }");
+    let errors = std_module_codes("impl String { pub fn cmp(self) -> i64 { 0 } }");
     assert!(
         errors
             .iter()
@@ -291,7 +291,7 @@ fn a_std_method_named_like_a_builtin_trait_method_is_refused() {
 
 #[test]
 fn a_std_slice_method_by_value_is_refused() {
-    let errors = std_module_codes("impl<T> [T] { pub fn size(self) -> i64 { return 0 } }");
+    let errors = std_module_codes("impl<T> [T] { pub fn size(self) -> i64 { 0 } }");
     assert!(
         errors
             .iter()
@@ -302,7 +302,7 @@ fn a_std_slice_method_by_value_is_refused() {
 
 #[test]
 fn a_std_len_method_on_string_is_refused() {
-    let errors = std_module_codes("impl string { pub fn len(self) -> i64 { return 0 } }");
+    let errors = std_module_codes("impl String { pub fn len(self) -> i64 { 0 } }");
     assert!(
         errors
             .iter()
@@ -315,7 +315,7 @@ fn a_std_len_method_on_string_is_refused() {
 fn a_user_module_impl_on_a_builtin_head_stays_refused() {
     let src = Source::new(
         "<user>",
-        "impl string { pub fn twice(self) -> string { return self } }",
+        "impl String { pub fn twice(self) -> String { self } }",
     );
     let tokens = Lexer::with_source(src.clone()).scan().expect("lex failed");
     let stmts = Parser::new(tokens, src.clone())

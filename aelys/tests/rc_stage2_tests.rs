@@ -47,9 +47,9 @@ fn run_with_stats(src: &str, variant: RuntimeVariant) -> Option<(i32, String)> {
 fn s1_unshared_rc_allocs_one_frees_one() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(7);
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -70,10 +70,10 @@ fn main() -> i64 {
 fn s2_shared_rc_frees_once_not_per_handle() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    return Rc::get(b)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    return ExitCode::from(Rc::get(b) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -94,13 +94,13 @@ fn main() -> i64 {
 fn s3_stage1_shapes_run_under_real_rc_without_crash() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn touch(a: Rc<i64>) -> i64 { return 1 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    let c: Rc<i64> = b
-    let n: i64 = touch(c)
-    return n + 41
+use std::process::ExitCode; fn touch(a: Rc<i64>) -> i64 { 1 }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    let c: Rc<i64> = b;
+    let n: i64 = touch(c);
+    return ExitCode::from((n + 41) as u8);
 }
 "#,
         RuntimeVariant::Rc,
@@ -121,10 +121,10 @@ fn main() -> i64 {
 fn s4_leak_variant_never_frees() {
     let Some((code, stderr)) = run_with_stats(
         r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    return Rc::get(b)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    return ExitCode::from(Rc::get(b) as u8);
 }
 "#,
         RuntimeVariant::Leak,
@@ -194,10 +194,10 @@ fn asan_shared_rc_is_clean() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    return Rc::get(b)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    return ExitCode::from(Rc::get(b) as u8);
 }
 "#,
     )

@@ -42,7 +42,7 @@ fn compile_to_verified_ir(source: &str) -> String {
 #[test]
 fn return_i32_literal_zero() {
     assert!(
-        sema_ok("fn f() -> i32 { return 0 }"),
+        sema_ok("fn f() -> i32 { 0 }"),
         "return 0 in i32 fn should pass sema"
     );
 }
@@ -50,7 +50,7 @@ fn return_i32_literal_zero() {
 #[test]
 fn return_i32_literal_positive() {
     assert!(
-        sema_ok("fn f() -> i32 { return 42 }"),
+        sema_ok("fn f() -> i32 { 42 }"),
         "return 42 in i32 fn should pass sema"
     );
 }
@@ -58,7 +58,7 @@ fn return_i32_literal_positive() {
 #[test]
 fn return_i32_literal_max() {
     assert!(
-        sema_ok("fn f() -> i32 { return 2147483647 }"),
+        sema_ok("fn f() -> i32 { 2147483647 }"),
         "return i32::MAX should pass sema"
     );
 }
@@ -66,7 +66,7 @@ fn return_i32_literal_max() {
 #[test]
 fn return_i32_literal_overflow() {
     assert!(
-        !sema_ok("fn f() -> i32 { return 2147483648 }"),
+        !sema_ok("fn f() -> i32 { 2147483648 }"),
         "return i32::MAX+1 should FAIL sema"
     );
 }
@@ -74,7 +74,7 @@ fn return_i32_literal_overflow() {
 #[test]
 fn return_i8_literal() {
     assert!(
-        sema_ok("fn f() -> i8 { return 127 }"),
+        sema_ok("fn f() -> i8 { 127 }"),
         "return 127 in i8 fn should pass sema"
     );
 }
@@ -82,7 +82,7 @@ fn return_i8_literal() {
 #[test]
 fn return_i8_literal_overflow() {
     assert!(
-        !sema_ok("fn f() -> i8 { return 128 }"),
+        !sema_ok("fn f() -> i8 { 128 }"),
         "return 128 in i8 fn should FAIL sema"
     );
 }
@@ -90,7 +90,7 @@ fn return_i8_literal_overflow() {
 #[test]
 fn return_u8_literal() {
     assert!(
-        sema_ok("fn f() -> u8 { return 255 }"),
+        sema_ok("fn f() -> u8 { 255 }"),
         "return 255 in u8 fn should pass sema"
     );
 }
@@ -98,7 +98,7 @@ fn return_u8_literal() {
 #[test]
 fn return_u8_literal_overflow() {
     assert!(
-        !sema_ok("fn f() -> u8 { return 256 }"),
+        !sema_ok("fn f() -> u8 { 256 }"),
         "return 256 in u8 fn should FAIL sema"
     );
 }
@@ -106,7 +106,7 @@ fn return_u8_literal_overflow() {
 #[test]
 fn return_negative_i32() {
     // -1 is parsed as Unary(Neg, Int(1)) not as Int(-1). try_narrow_literal only matches TypedExprKind::Int so this will not be narrowed, producing Mismatch{I64, I32}.
-    let ok = sema_ok("fn f() -> i32 { return -1 }");
+    let ok = sema_ok("fn f() -> i32 { -1 }");
     assert!(
         ok,
         "return -1 in i32 fn should pass sema (narrowing bug if this fails)"
@@ -115,7 +115,7 @@ fn return_negative_i32() {
 
 #[test]
 fn return_negative_i8() {
-    let ok = sema_ok("fn f() -> i8 { return -1 }");
+    let ok = sema_ok("fn f() -> i8 { -1 }");
     assert!(
         ok,
         "return -1 in i8 fn should pass sema (narrowing BUG if this fails)"
@@ -126,7 +126,7 @@ fn return_negative_i8() {
 fn return_binop_i32() {
     // 1 + 2 -> both default to I64, result is I64. Return type is I32.
     // no narrowing for BinOp results
-    let ok = sema_ok("fn f() -> i32 { return 1 + 2 }");
+    let ok = sema_ok("fn f() -> i32 { 1 + 2 }");
     assert!(
         ok,
         "return 1+2 in i32 fn should pass sema (binop narrowing BUG if this fails)"
@@ -136,7 +136,7 @@ fn return_binop_i32() {
 #[test]
 fn return_i32_param_plus_literal() {
     // a is i32 param, 1 defaults to i64 -> binop constraint i32 == i64 --> fail ?
-    let ok = sema_ok("fn f(a: i32) -> i32 { return a + 1 }");
+    let ok = sema_ok("fn f(a: i32) -> i32 { a + 1 }");
     assert!(
         ok,
         "i32 param + literal should work (binop litteral bug if this fails)"
@@ -145,7 +145,7 @@ fn return_i32_param_plus_literal() {
 
 #[test]
 fn let_i32_annotation_literal() {
-    let ok = sema_ok("fn f() { let x: i32 = 42 }");
+    let ok = sema_ok("fn f() { let x: i32 = 42; }");
     assert!(
         ok,
         "let x: i32 = 42 should pass sema (let narrowing bug if this fails)"
@@ -154,7 +154,7 @@ fn let_i32_annotation_literal() {
 
 #[test]
 fn let_i8_annotation_literal() {
-    let ok = sema_ok("fn f() { let x: i8 = 10 }");
+    let ok = sema_ok("fn f() { let x: i8 = 10; }");
     assert!(
         ok,
         "let x: i8 = 10 should pass sema (let narrowing bug if this fails)"
@@ -163,7 +163,7 @@ fn let_i8_annotation_literal() {
 
 #[test]
 fn array_i32_annotation_with_literals() {
-    let ok = sema_ok("fn f() { let arr: [i32; 3] = [1, 2, 3] }");
+    let ok = sema_ok("fn f() { let arr: [i32; 3] = [1, 2, 3]; }");
     assert!(ok, "annotated i32 array with literals should pass sema");
 }
 
@@ -173,9 +173,9 @@ fn if_else_both_return_i32_literal() {
         r#"
 fn f(x: bool) -> i32 {
     if x {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#,
     );
@@ -189,11 +189,11 @@ fn if_else_return_i32_from_nested() {
 fn f(x: bool, y: bool) -> i32 {
     if x {
         if y {
-            return 1
+            return 1;
         }
-        return 2
+        return 2;
     }
-    return 3
+    3
 }
 "#,
     );
@@ -202,7 +202,7 @@ fn f(x: bool, y: bool) -> i32 {
 
 #[test]
 fn codegen_i32_return_literal() {
-    let ir = compile_to_verified_ir("fn f() -> i32 { return 42 }");
+    let ir = compile_to_verified_ir("fn f() -> i32 { 42 }");
     assert!(
         ir.contains("ret i32"),
         "i32 function should return i32, not i64:\n{ir}"
@@ -215,9 +215,9 @@ fn codegen_i32_if_else_returns() {
         r#"
 fn f(x: i32) -> i32 {
     if x > 0 {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#,
     );
@@ -235,13 +235,13 @@ fn f(x: i32) -> i32 {
 
 #[test]
 fn return_f32_literal() {
-    let ok = sema_ok("fn f() -> f32 { return 1.0 }");
+    let ok = sema_ok("fn f() -> f32 { 1.0 }");
     assert!(ok, "return 1.0 in f32 fn should pass sema");
 }
 
 #[test]
 fn return_f32_literal_codegen() {
-    let ir = compile_to_verified_ir("fn f() -> f32 { return 1.0 }");
+    let ir = compile_to_verified_ir("fn f() -> f32 { 1.0 }");
     assert!(
         ir.contains("ret float"),
         "f32 function should return float:\n{ir}"
@@ -254,8 +254,8 @@ fn assign_i32_literal() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let mut x: i32 = 0
-    x = 42
+    let mut x: i32 = 0;
+    x = 42;
 }
 "#,
     );
@@ -270,8 +270,8 @@ fn assign_i8_literal() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let mut x: i8 = 0
-    x = 10
+    let mut x: i8 = 0;
+    x = 10;
 }
 "#,
     );
@@ -287,7 +287,7 @@ fn struct_field_i32_literal() {
     let ok = sema_ok(
         r#"
 struct Foo { x: i32 }
-fn f() { let a = Foo { x: 42 } }
+fn f() { let a = Foo { x: 42 }; }
 "#,
     );
     assert!(ok, "struct field i32 init with literal should pass sema");
@@ -298,7 +298,7 @@ fn struct_field_i8_literal() {
     let ok = sema_ok(
         r#"
 struct Bar { val: i8 }
-fn f() { let b = Bar { val: 10 } }
+fn f() { let b = Bar { val: 10 }; }
 "#,
     );
     assert!(ok, "struct field i8 init with literal should pass sema");
@@ -316,8 +316,8 @@ fn index_assign_i32_array_literal() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let mut arr: [i32; 3] = [0, 0, 0]
-    arr[0] = 42
+    let mut arr: [i32; 3] = [0, 0, 0];
+    arr[0] = 42;
 }
 "#,
     );
@@ -326,7 +326,7 @@ fn f() {
 
 #[test]
 fn return_binop_chain_i32() {
-    let ok = sema_ok("fn f() -> i32 { return 1 + 2 + 3 }");
+    let ok = sema_ok("fn f() -> i32 { 1 + 2 + 3 }");
     assert!(
         ok,
         "return 1+2+3 in i32 fn should pass sema (binop chain bug if fails)"
@@ -339,7 +339,7 @@ fn return_i32_param_binop_literal_codegen() {
     let ir = compile_to_verified_ir(
         r#"
 fn add_one(x: i32) -> i32 {
-    return x + 1
+    x + 1
 }
 "#,
     );
@@ -351,11 +351,11 @@ fn while_loop_i32_counter() {
     let ok = sema_ok(
         r#"
 fn f() -> i32 {
-    let mut i: i32 = 0
+    let mut i: i32 = 0;
     while i < 10 {
-        i = i + 1
+        i = i + 1;
     }
-    return i
+    i
 }
 "#,
     );
@@ -368,7 +368,7 @@ fn comparison_i32_with_literal() {
     let ok = sema_ok(
         r#"
 fn f(x: i32) -> bool {
-    return x > 0
+    x > 0
 }
 "#,
     );
@@ -385,7 +385,7 @@ fn binary_literal_plus_non_narrowable_should_reject() {
     let ok = sema_ok(
         r#"
 fn f(x: i64) -> i32 {
-    return 1 + x
+    1 + x
 }
 "#,
     );
@@ -401,7 +401,7 @@ fn binary_non_narrowable_plus_literal_should_reject() {
     let ok = sema_ok(
         r#"
 fn f(x: i64) -> i32 {
-    return x + 1
+    x + 1
 }
 "#,
     );
@@ -414,7 +414,7 @@ fn f(x: i64) -> i32 {
 #[test]
 fn binary_both_literals_still_narrows() {
     // pure literal binary expressions should still narrow successfully
-    let ok = sema_ok("fn f() -> i32 { return 1 + 2 }");
+    let ok = sema_ok("fn f() -> i32 { 1 + 2 }");
     assert!(ok, "return (1 + 2) in i32 fn should still pass sema");
 }
 
@@ -424,7 +424,7 @@ fn binary_literal_plus_same_type_param_works() {
     let ok = sema_ok(
         r#"
 fn f(a: i32) -> i32 {
-    return a + 1
+    a + 1
 }
 "#,
     );
@@ -440,7 +440,7 @@ fn unary_non_narrowable_should_not_corrupt() {
     let ok = sema_ok(
         r#"
 fn negate(x: i64) -> i32 {
-    return -x
+    -x
 }
 "#,
     );
@@ -453,7 +453,7 @@ fn negate(x: i64) -> i32 {
 #[test]
 fn binary_add_overflow_i8_must_fail() {
     // 100 + 100 = 200, which overflows i8 (-128..127).
-    let ok = sema_ok("fn f() -> i8 { return 100 + 100 }");
+    let ok = sema_ok("fn f() -> i8 { 100 + 100 }");
     assert!(
         !ok,
         "return (100 + 100) as i8 must fail sema, result 200 overflows i8"
@@ -463,7 +463,7 @@ fn binary_add_overflow_i8_must_fail() {
 #[test]
 fn binary_add_within_i8_must_pass() {
     // 50 + 50 = 100, which fits in i8 (-128..127).
-    let ok = sema_ok("fn f() -> i8 { return 50 + 50 }");
+    let ok = sema_ok("fn f() -> i8 { 50 + 50 }");
     assert!(
         ok,
         "return (50 + 50) as i8 must pass sema, result 100 fits in i8"
@@ -473,7 +473,7 @@ fn binary_add_within_i8_must_pass() {
 #[test]
 fn binary_mul_overflow_i8_must_fail() {
     // 100 * 2 = 200, overflows i8.
-    let ok = sema_ok("fn f() -> i8 { return 100 * 2 }");
+    let ok = sema_ok("fn f() -> i8 { 100 * 2 }");
     assert!(
         !ok,
         "return (100 * 2) as i8 must fail sema, result 200 overflows i8"
@@ -482,7 +482,7 @@ fn binary_mul_overflow_i8_must_fail() {
 
 #[test]
 fn binary_sub_overflow_i8_must_fail() {
-    let ok = sema_ok("fn f() -> i8 { return 127 + 1 }");
+    let ok = sema_ok("fn f() -> i8 { 127 + 1 }");
     assert!(
         !ok,
         "return (127 + 1) as i8 must fail sema, result 128 overflows i8"
@@ -491,7 +491,7 @@ fn binary_sub_overflow_i8_must_fail() {
 
 #[test]
 fn binary_sub_within_i8_must_pass() {
-    let ok = sema_ok("fn f() -> i8 { return 100 - 50 }");
+    let ok = sema_ok("fn f() -> i8 { 100 - 50 }");
     assert!(
         ok,
         "return (100 - 50) as i8 must pass sema, result 50 fits in i8"
@@ -501,7 +501,7 @@ fn binary_sub_within_i8_must_pass() {
 #[test]
 fn binary_add_overflow_i16_must_fail() {
     // 30000 + 30000 = 60000, overflows i16 (-32768..32767).
-    let ok = sema_ok("fn f() -> i16 { return 30000 + 30000 }");
+    let ok = sema_ok("fn f() -> i16 { 30000 + 30000 }");
     assert!(
         !ok,
         "return (30000 + 30000) as i16 must fail sema, result 60000 overflows i16"
@@ -510,7 +510,7 @@ fn binary_add_overflow_i16_must_fail() {
 
 #[test]
 fn binary_add_within_i16_must_pass() {
-    let ok = sema_ok("fn f() -> i16 { return 10000 + 10000 }");
+    let ok = sema_ok("fn f() -> i16 { 10000 + 10000 }");
     assert!(
         ok,
         "return (10000 + 10000) as i16 must pass sema, result 20000 fits in i16"
@@ -519,7 +519,7 @@ fn binary_add_within_i16_must_pass() {
 
 #[test]
 fn binary_mul_within_i32_must_pass() {
-    let ok = sema_ok("fn f() -> i32 { return 1000 * 1000 }");
+    let ok = sema_ok("fn f() -> i32 { 1000 * 1000 }");
     assert!(
         ok,
         "return (1000 * 1000) as i32 must pass sema, result fits in i32"
@@ -535,7 +535,7 @@ fn struct_field_i32_narrowed_literal_with_constraint() {
         r#"
 struct Pair { a: i32, b: i32 }
 fn f() {
-    let p = Pair { a: 1, b: 2 }
+    let p = Pair { a: 1, b: 2 };
 }
 "#,
     );
@@ -552,7 +552,7 @@ fn struct_field_i8_narrowed_literal_with_constraint() {
         r#"
 struct Small { val: i8 }
 fn f() {
-    let s = Small { val: 100 }
+    let s = Small { val: 100 };
 }
 "#,
     );
@@ -570,8 +570,8 @@ fn let_i32_annotation_literal_with_constraint() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let x: i32 = 42
-    let y: i32 = x + 1
+    let x: i32 = 42;
+    let y: i32 = x + 1;
 }
 "#,
     );
@@ -583,7 +583,7 @@ fn let_i8_annotation_literal_with_constraint() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let x: i8 = 10
+    let x: i8 = 10;
 }
 "#,
     );
@@ -596,7 +596,7 @@ fn struct_field_string_where_i32_expected_rejected() {
         r#"
 struct Typed { val: i32 }
 fn f() {
-    let t = Typed { val: "wrong" }
+    let t = Typed { val: "wrong" };
 }
 "#,
     );
@@ -612,7 +612,7 @@ fn let_string_where_i64_expected_rejected() {
     let ok = sema_ok(
         r#"
 fn f() {
-    let x: i64 = "bad"
+    let x: i64 = "bad";
 }
 "#,
     );

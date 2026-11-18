@@ -223,9 +223,9 @@ fn check_pairs(row: &str, pairs: &[Pair]) {
 fn release01_82_the_rewrite_of_a_qualified_variant_drops_only_the_prelude_heads() {
     assert_eq!(
         unqualified(
-            "let a: Option<i64> = Option::Some(m.Option::None) + Option::Both + MyOption::None + Result::Err(1)"
+            "static a: Option<i64> = Option::Some(m.Option::None) + Option::Both + MyOption::None + Result::Err(1);"
         ),
-        "let a: Option<i64> = Some(m.Option::None) + Option::Both + MyOption::None + Err(1)"
+        "static a: Option<i64> = Some(m.Option::None) + Option::Both + MyOption::None + Err(1);"
     );
 }
 
@@ -236,7 +236,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
         &[
             Pair {
                 name: "some_bare",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::Some;\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -246,7 +246,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "some_call0",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some()\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::Some();\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -256,13 +256,13 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "some_call1",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some(1)\n    return match o { Option::Some(v) => v - 1, Option::None => 9 }\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Option::Some(1);\n    return ExitCode::from((match o { Option::Some(v) => v - 1, Option::None => 9 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
             Pair {
                 name: "some_call2",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some(1, 2)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::Some(1, 2);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -272,19 +272,19 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "none_bare",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::None\n    return match o { Option::Some(v) => v, Option::None => 0 }\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Option::None;\n    return ExitCode::from((match o { Option::Some(v) => v, Option::None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
             Pair {
                 name: "none_call0",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::None()\n    return match o { Option::Some(v) => v, Option::None => 0 }\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Option::None();\n    return ExitCode::from((match o { Option::Some(v) => v, Option::None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
             Pair {
                 name: "none_call1",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::None(1)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::None(1);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -294,7 +294,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "none_call2",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::None(1, 2)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::None(1, 2);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -304,7 +304,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "ok_bare",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Ok\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Ok;\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -314,7 +314,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "ok_call0",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Ok()\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Ok();\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -324,13 +324,13 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "ok_call1",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Ok(4)\n    return match r { Result::Ok(v) => v - 4, Result::Err(e) => e }\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let r: Result<i64, i64> = Result::Ok(4);\n    return ExitCode::from((match r { Result::Ok(v) => v - 4, Result::Err(e) => e }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
             Pair {
                 name: "ok_call2",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Ok(1, 2)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Ok(1, 2);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -340,7 +340,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "err_bare",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Err\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Err;\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -350,7 +350,7 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "err_call0",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Err()\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Err();\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -360,13 +360,13 @@ fn release01_83_each_unqualified_variant_form_answers_like_its_qualified_spellin
             },
             Pair {
                 name: "err_call1",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Err(6)\n    return match r { Result::Ok(v) => v, Result::Err(e) => e - 6 }\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let r: Result<i64, i64> = Result::Err(6);\n    return ExitCode::from((match r { Result::Ok(v) => v, Result::Err(e) => e - 6 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
             Pair {
                 name: "err_call2",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Err(1, 2)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Err(1, 2);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0302",
@@ -385,49 +385,49 @@ fn release01_84_error_handling_reads_an_unqualified_carrier_like_a_qualified_one
         &[
             Pair {
                 name: "try_result",
-                qualified: "fn f(x: i64) -> Result<i64, i64> {\n    if x > 0 { return Result::Ok(x) }\n    return Result::Err(7)\n}\nfn g(x: i64) -> Result<i64, i64> {\n    let v: i64 = f(x)?\n    return Result::Ok(v + 1)\n}\nfn main() -> i64 {\n    println(\"{g(2) catch |e| e} {g(0) catch |e| e}\")\n    return 0\n}\n",
+                qualified: "fn f(x: i64) -> Result<i64, i64> {\n    if x > 0 { return Result::Ok(x); }\n    Result::Err(7)\n}\nfn g(x: i64) -> Result<i64, i64> {\n    let v: i64 = f(x)?;\n    Result::Ok(v + 1)\n}\nfn main() {\n    println!(\"{} {}\", match g(2) { Ok(v) => v, Err(e) => e }, match g(0) { Ok(v) => v, Err(e) => e });\n}\n",
                 module: None,
                 expect: Expect::Runs("3 7\n"),
             },
             Pair {
                 name: "try_option",
-                qualified: "fn f(x: i64) -> Option<i64> {\n    if x > 0 { return Option::Some(x) }\n    return Option::None\n}\nfn g(x: i64) -> Option<i64> {\n    let v: i64 = f(x)?\n    return Option::Some(v + 1)\n}\nfn main() -> i64 {\n    let a: i64 = match g(4) { Option::Some(v) => v, Option::None => 0 }\n    let b: i64 = match g(0) { Option::Some(v) => v, Option::None => 9 }\n    println(\"{a} {b}\")\n    return 0\n}\n",
+                qualified: "fn f(x: i64) -> Option<i64> {\n    if x > 0 { return Option::Some(x); }\n    Option::None\n}\nfn g(x: i64) -> Option<i64> {\n    let v: i64 = f(x)?;\n    Option::Some(v + 1)\n}\nfn main() {\n    let a: i64 = match g(4) { Option::Some(v) => v, Option::None => 0 };\n    let b: i64 = match g(0) { Option::Some(v) => v, Option::None => 9 };\n    println!(\"{a} {b}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("5 9\n"),
             },
             Pair {
                 name: "catch_arms",
-                qualified: "enum E { Lo, Hi }\nfn f(x: i64) -> Result<i64, E> {\n    if x > 0 { return Result::Ok(x) }\n    return Result::Err(E::Hi)\n}\nfn main() -> i64 {\n    let v: i64 = f(0) catch { E::Lo => 1, E::Hi => 2 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "enum E { Lo, Hi }\nfn f(x: i64) -> Result<i64, E> {\n    if x > 0 { return Result::Ok(x); }\n    Result::Err(E::Hi)\n}\nfn main() {\n    let v: i64 = match f(0) { Ok(v) => v, Err(E::Lo) => 1, Err(E::Hi) => 2 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("2\n"),
             },
             Pair {
                 name: "map_error",
-                qualified: "enum EA { Lo, Hi }\nenum EB { Mild, Worse }\nfn widen(e: EA) -> EB {\n    match e {\n        EA::Lo => return EB::Mild,\n        EA::Hi => return EB::Worse,\n    }\n}\nfn get() -> Result<i64, EA> { return Result::Err(EA::Hi) }\nfn main() -> i64 {\n    let r: Result<i64, EB> = get().map_error(widen)\n    let v: i64 = match r {\n        Result::Ok(v) => v,\n        Result::Err(e) => match e { EB::Mild => 1, EB::Worse => 2 },\n    }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "enum EA { Lo, Hi }\nenum EB { Mild, Worse }\nfn widen(e: EA) -> EB {\n    match e {\n        EA::Lo => return EB::Mild,\n        EA::Hi => return EB::Worse,\n    }\n}\nfn get() -> Result<i64, EA> { Result::Err(EA::Hi) }\nfn main() {\n    let r: Result<i64, EB> = get().map_error(widen);\n    let v: i64 = match r {\n        Result::Ok(v) => v,\n        Result::Err(e) => match e { EB::Mild => 1, EB::Worse => 2 },\n    };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("2\n"),
             },
             Pair {
                 name: "unwrap_expect",
-                qualified: "fn f() -> Result<i64, i64> { return Result::Ok(5) }\nfn main() -> i64 {\n    let a: i64 = f().unwrap()\n    let b: i64 = f().expect(\"no\")\n    println(\"{a + b}\")\n    return 0\n}\n",
+                qualified: "fn f() -> Result<i64, i64> { Result::Ok(5) }\nfn main() {\n    let a: i64 = f().unwrap();\n    let b: i64 = f().expect(\"no\");\n    println!(\"{}\", a + b);\n}\n",
                 module: None,
                 expect: Expect::Runs("10\n"),
             },
             Pair {
                 name: "into_ok",
-                qualified: "fn f() -> Result<i64, Never> { return Result::Ok(3) }\nfn main() -> i64 {\n    println(\"{f().into_ok()}\")\n    return 0\n}\n",
+                qualified: "fn f() -> Result<i64, Never> { Result::Ok(3) }\nfn main() {\n    println!(\"{}\", f().into_ok());\n}\n",
                 module: None,
                 expect: Expect::Runs("3\n"),
             },
             Pair {
                 name: "unwrap_unchecked",
-                qualified: "fn f() -> Result<i64, i64> { return Result::Ok(8) }\nfn main() -> i64 {\n    let v: i64 = unsafe { f().unwrap_unchecked() }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn f() -> Result<i64, i64> { Result::Ok(8) }\nfn main() {\n    let v: i64 = unsafe { f().unwrap_unchecked() };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("8\n"),
             },
             Pair {
                 name: "unwrap_on_option",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some(4)\n    return o.unwrap()\n}\n",
+                qualified: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Option::Some(4);\n    return ExitCode::from(o.unwrap() as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0304",
@@ -437,7 +437,7 @@ fn release01_84_error_handling_reads_an_unqualified_carrier_like_a_qualified_one
             },
             Pair {
                 name: "dropped_result",
-                qualified: "fn main() -> i64 {\n    Result::Ok(3)\n    return 0\n}\n",
+                qualified: "fn main() {\n    Result::Ok(3);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0411",
@@ -447,7 +447,7 @@ fn release01_84_error_handling_reads_an_unqualified_carrier_like_a_qualified_one
             },
             Pair {
                 name: "dropped_annotated_result",
-                qualified: "fn f() -> Result<i64, i64> { return Result::Ok(1) }\nfn main() -> i64 {\n    f()\n    return 0\n}\n",
+                qualified: "fn f() -> Result<i64, i64> { Result::Ok(1) }\nfn main() {\n    f();\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0411",
@@ -457,7 +457,7 @@ fn release01_84_error_handling_reads_an_unqualified_carrier_like_a_qualified_one
             },
             Pair {
                 name: "discarded_result",
-                qualified: "fn main() -> i64 {\n    discard Result::Ok(3)\n    return 0\n}\n",
+                qualified: "fn main() {\n    let _ = Result::Ok(3);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0304",
@@ -467,7 +467,7 @@ fn release01_84_error_handling_reads_an_unqualified_carrier_like_a_qualified_one
             },
             Pair {
                 name: "discarded_bound_result",
-                qualified: "fn main() -> i64 {\n    let r: Result<i64, i64> = Result::Ok(3)\n    discard r\n    discard Result::Err(4).unwrap()\n    println(\"ok\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<i64, i64> = Result::Ok(3);\n    let _ = r;\n    let _ = Result::Err(4).unwrap();\n    println!(\"ok\");\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0304",
@@ -486,19 +486,19 @@ fn release01_85_a_nogc_function_infers_the_same_with_either_spelling() {
         &[
             Pair {
                 name: "nogc_result",
-                qualified: "nogc fn f(x: i64) -> Result<i64, i64> {\n    if x > 0 { return Result::Ok(x) }\n    return Result::Err(1)\n}\nnogc fn g(x: i64) -> Result<i64, i64> {\n    let v: i64 = f(x)?\n    return Result::Ok(v + 1)\n}\nnogc fn h(x: i64) -> i64 {\n    return f(x) catch |e| e\n}\nfn main() -> i64 {\n    println(\"{h(3) + (g(2) catch |e| e)}\")\n    return 0\n}\n",
+                qualified: "nogc fn f(x: i64) -> Result<i64, i64> {\n    if x > 0 { return Result::Ok(x); }\n    Result::Err(1)\n}\nnogc fn g(x: i64) -> Result<i64, i64> {\n    let v: i64 = f(x)?;\n    Result::Ok(v + 1)\n}\nnogc fn h(x: i64) -> i64 {\n    match f(x) { Ok(v) => v, Err(e) => e }\n}\nfn main() {\n    println!(\"{}\", h(3) + (match g(2) { Ok(v) => v, Err(e) => e }));\n}\n",
                 module: None,
                 expect: Expect::Runs("6\n"),
             },
             Pair {
                 name: "nogc_option",
-                qualified: "nogc fn k(x: i64) -> Option<i64> {\n    if x > 0 { return Option::Some(x) }\n    return Option::None\n}\nfn main() -> i64 {\n    let a: i64 = match k(5) { Option::Some(v) => v, Option::None => 0 }\n    let b: i64 = match k(0) { Option::Some(v) => v, Option::None => 1 }\n    println(\"{a + b}\")\n    return 0\n}\n",
+                qualified: "nogc fn k(x: i64) -> Option<i64> {\n    if x > 0 { return Option::Some(x); }\n    Option::None\n}\nfn main() {\n    let a: i64 = match k(5) { Option::Some(v) => v, Option::None => 0 };\n    let b: i64 = match k(0) { Option::Some(v) => v, Option::None => 1 };\n    println!(\"{}\", a + b);\n}\n",
                 module: None,
                 expect: Expect::Runs("6\n"),
             },
             Pair {
                 name: "nogc_string_payload",
-                qualified: "nogc fn f(x: i64) -> Result<string, i64> {\n    if x > 0 { return Result::Ok(\"a\") }\n    return Result::Err(1)\n}\nfn main() -> i64 { return 0 }\n",
+                qualified: "nogc fn f(x: i64) -> Result<String, i64> {\n    if x > 0 { return Result::Ok(\"a\"); }\n    Result::Err(1)\n}\nfn main() { }\n",
                 module: None,
                 expect: Expect::Runs(""),
             },
@@ -513,25 +513,25 @@ fn release01_86_generics_lambdas_globals_and_nesting_take_the_unqualified_spelli
         &[
             Pair {
                 name: "generic_id",
-                qualified: "fn id<T>(x: T) -> Option<T> { return Option::Some(x) }\nfn main() -> i64 {\n    let v: i64 = match id(5) { Option::Some(v) => v, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn id<T>(x: T) -> Option<T> { Option::Some(x) }\nfn main() {\n    let v: i64 = match id(5) { Option::Some(v) => v, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("5\n"),
             },
             Pair {
                 name: "lambda_capture",
-                qualified: "fn main() -> i64 {\n    let limit: i64 = 3\n    let f = fn(x: i64) -> Option<i64> { if x > limit { return Option::Some(x) } return Option::None }\n    let a: i64 = match f(5) { Option::Some(v) => v, Option::None => 0 }\n    let b: i64 = match f(1) { Option::Some(v) => v, Option::None => 7 }\n    println(\"{a} {b}\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let limit: i64 = 3;\n    let f = move |x: i64| -> Option<i64> { if x > limit { return Option::Some(x); } Option::None };\n    let a: i64 = match f(5) { Option::Some(v) => v, Option::None => 0 };\n    let b: i64 = match f(1) { Option::Some(v) => v, Option::None => 7 };\n    println!(\"{a} {b}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("5 7\n"),
             },
             Pair {
                 name: "global_none",
-                qualified: "let G: Option<i64> = Option::None\nfn main() -> i64 {\n    let v: i64 = match G { Option::Some(v) => v, Option::None => 7 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "static G: Option<i64> = Option::None;\nfn main() {\n    let v: i64 = match G { Option::Some(v) => v, Option::None => 7 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("7\n"),
             },
             Pair {
                 name: "let_none_unannotated",
-                qualified: "fn main() -> i64 {\n    let x = Option::None\n    return 0\n}\n",
+                qualified: "fn main() {\n    let x = Option::None;\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0304",
@@ -541,25 +541,25 @@ fn release01_86_generics_lambdas_globals_and_nesting_take_the_unqualified_spelli
             },
             Pair {
                 name: "let_mut_none_then_some",
-                qualified: "fn main() -> i64 {\n    let mut x = Option::None\n    x = Option::Some(1)\n    let v: i64 = match x { Option::Some(v) => v, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let mut x = Option::None;\n    x = Option::Some(1);\n    let v: i64 = match x { Option::Some(v) => v, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("1\n"),
             },
             Pair {
                 name: "nested_some",
-                qualified: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Option::Some(Option::Some(2))\n    let v: i64 = match o { Option::Some(i) => match i { Option::Some(v) => v, Option::None => 0 }, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<Option<i64>> = Option::Some(Option::Some(2));\n    let v: i64 = match o { Option::Some(i) => match i { Option::Some(v) => v, Option::None => 0 }, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("2\n"),
             },
             Pair {
                 name: "ok_of_none",
-                qualified: "fn main() -> i64 {\n    let r: Result<Option<i64>, i64> = Result::Ok(Option::None)\n    let v: i64 = match r { Result::Ok(o) => match o { Option::Some(v) => v, Option::None => 4 }, Result::Err(e) => e }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let r: Result<Option<i64>, i64> = Result::Ok(Option::None);\n    let v: i64 = match r { Result::Ok(o) => match o { Option::Some(v) => v, Option::None => 4 }, Result::Err(e) => e };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("4\n"),
             },
             Pair {
                 name: "string_payload_counters",
-                qualified: "fn wrap(s: string) -> Option<string> { return Option::Some(s + \"!\") }\nfn main() -> i64 {\n    let o: Option<string> = wrap(\"hi\")\n    let s: string = match o { Option::Some(v) => v, Option::None => \"\" }\n    println(s)\n    return 0\n}\n",
+                qualified: "fn wrap(s: String) -> Option<String> { Option::Some(s + \"!\") }\nfn main() {\n    let o: Option<String> = wrap(\"hi\");\n    let s: String = match o { Option::Some(v) => v, Option::None => \"\" };\n    println!(\"{}\", s);\n}\n",
                 module: None,
                 expect: Expect::Balanced("hi!\n"),
             },
@@ -574,13 +574,13 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
         &[
             Case {
                 name: "mixed_arms",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(4)\n    let v: i64 = match o { Some(v) => v, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                src: "fn main() {\n    let o: Option<i64> = Some(4);\n    let v: i64 = match o { Some(v) => v, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("4\n"),
             },
             Case {
                 name: "mixed_duplicate",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { Some(v) => v, Option::Some(w) => w + 1, None => 0 }\n}\n",
+                src: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Some(1);\n    return ExitCode::from((match o { Some(v) => v, Option::Some(w) => w + 1, None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0310",
@@ -590,7 +590,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "wildcard_not_last",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { None => 0, _ => 1, Some(v) => v }\n}\n",
+                src: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Some(1);\n    return ExitCode::from((match o { None => 0, _ => 1, Some(v) => v }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0310",
@@ -600,7 +600,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "non_exhaustive_local",
-                src: "enum Option<T> { Some(T), None, Both }\nfn main() -> i64 {\n    let o: Option<i64> = Option::Both\n    return match o { Some(v) => v, None => 0 }\n}\n",
+                src: "use std::process::ExitCode; enum Option<T> { Some(T), None, Both }\nfn main() -> ExitCode {\n    let o: Option<i64> = Option::Both;\n    return ExitCode::from((match o { Some(v) => v, None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -610,13 +610,13 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "local_option_takes_the_names",
-                src: "enum Option<T> { Some(T), None, Both }\nfn main() -> i64 {\n    let o: Option<i64> = Some(3)\n    let v: i64 = match o { Some(v) => v, None => 0, Option::Both => 9 }\n    println(\"{v}\")\n    return 0\n}\n",
+                src: "enum Option<T> { Some(T), None, Both }\nfn main() {\n    let o: Option<i64> = Some(3);\n    let v: i64 = match o { Some(v) => v, None => 0, Option::Both => 9 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("3\n"),
             },
             Case {
                 name: "pattern_of_another_enum",
-                src: "enum MyOpt { Some(i64), None }\nfn main() -> i64 {\n    let a: MyOpt = MyOpt::Some(4)\n    return match a { Some(v) => v, MyOpt::None => 0 }\n}\n",
+                src: "use std::process::ExitCode; enum MyOpt { Some(i64), None }\nfn main() -> ExitCode {\n    let a: MyOpt = MyOpt::Some(4);\n    return ExitCode::from((match a { Some(v) => v, MyOpt::None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -626,7 +626,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "not_a_variant",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { Some(v) => v, Nnoe => 0 }\n}\n",
+                src: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Some(1);\n    return ExitCode::from((match o { Some(v) => v, Nnoe => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0101",
@@ -636,7 +636,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "variant_of_the_scrutinee_written_bare",
-                src: "enum Color { Red, Green }\nfn main() -> i64 {\n    let c: Color = Color::Red\n    return match c { Red => 1, Color::Green => 2 }\n}\n",
+                src: "use std::process::ExitCode; enum Color { Red, Green }\nfn main() -> ExitCode {\n    let c: Color = Color::Red;\n    return ExitCode::from((match c { Red => 1, Color::Green => 2 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0101",
@@ -646,13 +646,13 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "nested_unit_variant",
-                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Some(None)\n    let v: i64 = match o { Some(None) => 1, Some(x) => 2, None => 3 }\n    println(\"{v}\")\n    return 0\n}\n",
+                src: "fn main() {\n    let o: Option<Option<i64>> = Some(None);\n    let v: i64 = match o { Some(None) => 1, Some(x) => 2, None => 3 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("1\n"),
             },
             Case {
                 name: "nested_qualified_variant",
-                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Option::Some(Option::None)\n    let v: i64 = match o { Option::Some(Option::Some(v)) => v, _ => 7 }\n    println(\"{v}\")\n    return 0\n}\n",
+                src: "fn main() {\n    let o: Option<Option<i64>> = Option::Some(Option::None);\n    let v: i64 = match o { Option::Some(Option::Some(v)) => v, _ => 7 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("7\n"),
             },
@@ -668,7 +668,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "lowercase_catch_all",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = None\n    let v: i64 = match o { Some(v) => v, other => 5 }\n    println(\"{v}\")\n    return 0\n}\n",
+                src: "fn main() {\n    let o: Option<i64> = None;\n    let v: i64 = match o { Some(v) => v, other => 5 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("5\n"),
             },
@@ -676,7 +676,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
     );
 }
 
-const SHADOWING_MODULE: &str = "pub enum Option<T> { Some(T), None, Many(T) }\npub fn wrap<T>(x: T) -> Option<T> { return Option::Some(x) }\npub fn get<T>(o: Option<T>, d: T) -> T {\n    return match o { Option::Some(v) => v, Option::None => d, Option::Many(v) => v }\n}\n";
+const SHADOWING_MODULE: &str = "pub enum Option<T> { Some(T), None, Many(T) }\npub fn wrap<T>(x: T) -> Option<T> { Option::Some(x) }\npub fn get<T>(o: Option<T>, d: T) -> T {\n    match o { Option::Some(v) => v, Option::None => d, Option::Many(v) => v }\n}\n";
 
 #[test]
 fn release01_88_a_module_resolves_the_names_against_its_own_scope() {
@@ -685,16 +685,16 @@ fn release01_88_a_module_resolves_the_names_against_its_own_scope() {
         &[
             Pair {
                 name: "module_shadows_option",
-                qualified: "needs m\nfn main() -> i64 {\n    let o: m.Option<i64> = m.wrap(5)\n    println(\"{m.get(o, 0)}\")\n    return 0\n}\n",
+                qualified: "mod m;\nfn main() {\n    let o: m::Option<i64> = m::wrap(5);\n    println!(\"{}\", m::get(o, 0));\n}\n",
                 module: Some(("m.aelys", SHADOWING_MODULE)),
                 expect: Expect::Runs("5\n"),
             },
             Pair {
                 name: "module_uses_prelude",
-                qualified: "needs m\nfn main() -> i64 {\n    let v: i64 = match m.half(8) { Option::Some(v) => v, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "mod m;\nfn main() {\n    let v: i64 = match m::half(8) { Option::Some(v) => v, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: Some((
                     "m.aelys",
-                    "pub fn half(x: i64) -> Option<i64> {\n    if x % 2 == 0 { return Option::Some(x / 2) }\n    return Option::None\n}\n",
+                    "pub fn half(x: i64) -> Option<i64> {\n    if x % 2 == 0 { return Option::Some(x / 2); }\n    Option::None\n}\n",
                 )),
                 expect: Expect::Runs("4\n"),
             },
@@ -704,7 +704,7 @@ fn release01_88_a_module_resolves_the_names_against_its_own_scope() {
         "release01_88",
         &[Case {
             name: "module_scrutinee_unqualified_arms",
-            src: "needs m\nfn main() -> i64 {\n    let o: m.Option<i64> = m.wrap(5)\n    return match o { Some(v) => v, None => 0, m.Option::Many(v) => v }\n}\n",
+            src: "use std::process::ExitCode; mod m;\nfn main() -> ExitCode {\n    let o: m::Option<i64> = m::wrap(5);\n    return ExitCode::from((match o { Some(v) => v, None => 0, m::Option::Many(v) => v }) as u8);\n}\n",
             module: Some(("m.aelys", SHADOWING_MODULE)),
             expect: Expect::Refused {
                 code: "E0301",
@@ -722,7 +722,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
         &[
             Case {
                 name: "local_result_without_ok",
-                src: "enum Result<T> { Yes(T), No }\nfn main() -> i64 {\n    let r: Result<i64> = Ok(3)\n    return 0\n}\n",
+                src: "enum Result<T> { Yes(T), No }\nfn main() {\n    let r: Result<i64> = Ok(3);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -732,7 +732,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
             },
             Case {
                 name: "pattern_on_local_result_without_err",
-                src: "enum Result<T> { Yes(T), No }\nfn main() -> i64 {\n    let r: Result<i64> = Result::Yes(3)\n    return match r { Err(e) => e, Result::Yes(v) => v, Result::No => 0 }\n}\n",
+                src: "use std::process::ExitCode; enum Result<T> { Yes(T), No }\nfn main() -> ExitCode {\n    let r: Result<i64> = Result::Yes(3);\n    return ExitCode::from((match r { Err(e) => e, Result::Yes(v) => v, Result::No => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -742,7 +742,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
             },
             Case {
                 name: "struct_named_option",
-                src: "struct Option { x: i64 }\nfn main() -> i64 {\n    let r = Some(3)\n    return 0\n}\n",
+                src: "struct Option { x: i64 }\nfn main() {\n    let r = Some(3);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -752,7 +752,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
             },
             Case {
                 name: "imported_option_without_none",
-                src: "needs Option from m\nfn main() -> i64 {\n    let o: Option = None\n    return 0\n}\n",
+                src: "mod m; use m::Option;\nfn main() {\n    let o: Option = None;\n}\n",
                 module: Some(("m.aelys", "pub enum Option { Some(i64), Nothing }\n")),
                 expect: Expect::Refused {
                     code: "E0301",
@@ -762,7 +762,7 @@ fn release01_89_the_names_resolve_to_the_enum_in_scope_or_say_why_not() {
             },
             Case {
                 name: "unqualified_dotted_type_head",
-                src: "fn main() -> i64 {\n    let r: std.result.Result<i64, i64> = Result::Ok(3)\n    return match r { Result::Ok(x) => x, Result::Err(_) => 0 }\n}\n",
+                src: "use std::process::ExitCode; fn main() -> ExitCode {\n    let r: std.result.Result<i64, i64> = Result::Ok(3);\n    return ExitCode::from((match r { Result::Ok(x) => x, Result::Err(_) => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0301",
@@ -780,7 +780,7 @@ fn release01_90_no_prelude_leaves_the_names_unresolved_with_a_named_error() {
     let root = dir.path().join("root.aelys");
     fs::write(
         &root,
-        "enum Choice { A, B }\nfn main() -> i64 {\n    let c: Choice = Choice::A\n    let r = Some(1)\n    return 0\n}\n",
+        "enum Choice { A, B }\nfn main() {\n    let c: Choice = Choice::A;\n    let r = Some(1);\n}\n",
     )
     .expect("write root");
     let no_prelude = SourceOptions {
@@ -810,7 +810,7 @@ fn reserved(name: &'static str, src: &'static str, at: (u32, u32), says: &'stati
     Case {
         name,
         src,
-        module: Some(("lib.aelys", "pub fn seven() -> i64 { return 7 }\n")),
+        module: Some(("lib.aelys", "pub fn seven() -> i64 { 7 }\n")),
         expect: Expect::Refused {
             code: "E0205",
             at,
@@ -894,7 +894,7 @@ fn release01_91_the_four_names_are_reserved_at_every_value_binding_site() {
             Case {
                 name: "implicit_namespace_name",
                 src: "needs None\nfn main() -> i64 { return 0 }\n",
-                module: Some(("None.aelys", "pub fn seven() -> i64 { return 7 }\n")),
+                module: Some(("None.aelys", "pub fn seven() -> i64 { 7 }\n")),
                 expect: Expect::Refused {
                     code: "E0205",
                     at: (1, 7),
@@ -903,7 +903,7 @@ fn release01_91_the_four_names_are_reserved_at_every_value_binding_site() {
             },
             Case {
                 name: "capitalized_pattern_binding",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(4)\n    return match o { Some(V) => 1, None => 0 }\n}\n",
+                src: "use std::process::ExitCode; fn main() -> ExitCode {\n    let o: Option<i64> = Some(4);\n    return ExitCode::from((match o { Some(V) => 1, None => 0 }) as u8);\n}\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0101",
@@ -923,7 +923,7 @@ fn release01_91_the_four_names_are_reserved_at_every_value_binding_site() {
             },
             Case {
                 name: "not_values_stay_free",
-                src: "struct S { None: i64 }\nstruct Some { x: i64 }\nenum MyOpt { Some(i64), None }\nfn main() -> i64 {\n    let s: S = S { None: 2 }\n    let t: Some = Some { x: 3 }\n    let o: MyOpt = MyOpt::None\n    let k: i64 = match o { MyOpt::Some(v) => v, MyOpt::None => 4 }\n    println(\"{s.None + t.x + k}\")\n    return 0\n}\n",
+                src: "struct S { None: i64 }\nstruct Some { x: i64 }\nenum MyOpt { Some(i64), None }\nfn main() {\n    let s: S = S { None: 2 };\n    let t: Some = Some { x: 3 };\n    let o: MyOpt = MyOpt::None;\n    let k: i64 = match o { MyOpt::Some(v) => v, MyOpt::None => 4 };\n    println!(\"{}\", s.None + t.x + k);\n}\n",
                 module: None,
                 expect: Expect::Runs("9\n"),
             },
@@ -938,13 +938,13 @@ fn release01_92_a_unit_function_named_like_a_prelude_type_keeps_the_type() {
         &[
             Case {
                 name: "fn_option_and_type_option",
-                src: "fn Option() -> i64 { return 2 }\nfn main() -> i64 {\n    let o: Option<i64> = Option::Some(1)\n    let v: i64 = match o { Option::Some(v) => v, Option::None => 0 }\n    println(\"{v + Option()}\")\n    return 0\n}\n",
+                src: "fn Option() -> i64 { 2 }\nfn main() {\n    let o: Option<i64> = Option::Some(1);\n    let v: i64 = match o { Option::Some(v) => v, Option::None => 0 };\n    println!(\"{}\", v + Option());\n}\n",
                 module: None,
                 expect: Expect::Runs("3\n"),
             },
             Case {
                 name: "local_duplicate_is_still_one_namespace",
-                src: "struct Foo { x: i64 }\nfn Foo() -> i64 { return 1 }\nfn main() -> i64 { return 0 }\n",
+                src: "struct Foo { x: i64 }\nfn Foo() -> i64 { 1 }\nfn main() { }\n",
                 module: None,
                 expect: Expect::Refused {
                     code: "E0204",
@@ -1044,9 +1044,9 @@ fn release01_93_the_embedded_std_is_the_std_directory() {
     );
 }
 
-const ABS: &str = "needs std.math\nfn main() -> i64 {\n    return math.abs(0 - 7)\n}\n";
-const LOUD_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    return 99\n}\n";
-const OWN_PRELUDE: &str = "pub fn seven() -> i64 { return 7 }\n";
+const ABS: &str = "use std::process::ExitCode; use std::math;\nfn main() -> ExitCode {\n    return ExitCode::from(math::abs(0 - 7) as u8);\n}\n";
+const LOUD_MATH: &str = "pub nogc fn abs(x: i64) -> i64 {\n    99\n}\n";
+const OWN_PRELUDE: &str = "pub fn seven() -> i64 { 7 }\n";
 
 #[test]
 fn release01_94_the_std_namespace_comes_from_one_source() {
@@ -1058,7 +1058,7 @@ fn release01_94_the_std_namespace_comes_from_one_source() {
     );
 
     let owned = stage(&[
-        ("root.aelys", "fn main() -> i64 {\n    return seven()\n}\n"),
+        ("root.aelys", "use std::process::ExitCode; fn main() -> ExitCode {\n    return ExitCode::from(seven() as u8);\n}\n"),
         ("std/prelude.aelys", OWN_PRELUDE),
     ]);
     assert_eq!(
@@ -1098,7 +1098,7 @@ fn release01_94_the_std_namespace_comes_from_one_source() {
     let ignored = stage(&[
         (
             "root.aelys",
-            "needs std.foo\nfn main() -> i64 { return foo.mine() }\n",
+            "use std::process::ExitCode; use std::foo;\nfn main() -> ExitCode { return ExitCode::from(foo::mine() as u8); }\n",
         ),
         ("std/foo.aelys", OWN_PRELUDE),
     ]);
@@ -1119,7 +1119,7 @@ fn release01_94_the_std_namespace_comes_from_one_source() {
 
     let nope = stage(&[(
         "root.aelys",
-        "needs std.nope\nfn main() -> i64 { return 0 }\n",
+        "use std::nope;\nfn main() { }\n",
     )]);
     let rendered = compiled(&nope.path().join("root.aelys"), &SourceOptions::default())
         .expect_err("std.nope does not exist");
@@ -1137,13 +1137,13 @@ fn release01_95_a_binding_without_letter_case_is_a_binding() {
         &[
             Pair {
                 name: "caseless_pattern_binding",
-                qualified: "fn main() -> i64 {\n    let o: Option<i64> = Option::Some(4)\n    let v: i64 = match o { Option::Some(値) => 値, Option::None => 0 }\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn main() {\n    let o: Option<i64> = Option::Some(4);\n    let v: i64 = match o { Option::Some(値) => 値, Option::None => 0 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("4\n"),
             },
             Pair {
                 name: "caseless_catch_binding",
-                qualified: "fn g() -> Result<i64, i64> { return Result::Err(2) }\nfn main() -> i64 {\n    let v: i64 = g() catch |値| 値 + 1\n    println(\"{v}\")\n    return 0\n}\n",
+                qualified: "fn g() -> Result<i64, i64> { Result::Err(2) }\nfn main() {\n    let v: i64 = match g() { Ok(v) => v, Err(値) => 値 + 1 };\n    println!(\"{v}\");\n}\n",
                 module: None,
                 expect: Expect::Runs("3\n"),
             },

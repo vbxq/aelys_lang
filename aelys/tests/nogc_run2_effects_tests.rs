@@ -18,7 +18,7 @@ fn critical1_managed_field_read_through_ref() {
     let src = "\
 struct S { r: Rc<i64> }
 fn f(src: &S) -> Rc<i64> {
-    return (*src).r
+    (*src).r
 }
 ";
     let eff = effects_of(src, "f");
@@ -33,7 +33,7 @@ fn f(src: &S) -> Rc<i64> {
 #[test]
 fn nogc_keystone_slice_arithmetic() {
     let src = r#"
-fn sum(a: &[i64]) -> i64 { return a[0] + a[1] }
+fn sum(a: &[i64]) -> i64 { a[0] + a[1] }
 "#;
     let eff = effects_of(src, "sum");
     assert!(
@@ -53,7 +53,7 @@ fn sum(a: &[i64]) -> i64 { return a[0] + a[1] }
 #[test]
 fn managed_param_even_if_unused() {
     let src = r#"
-fn f(r: Rc<i64>) -> i64 { return 5 }
+fn f(r: Rc<i64>) -> i64 { 5 }
 "#;
     let eff = effects_of(src, "f");
     assert!(
@@ -69,7 +69,7 @@ fn f(r: Rc<i64>) -> i64 { return 5 }
 #[test]
 fn rc_new_is_managed_alloc() {
     let src = r#"
-fn f() -> Rc<i64> { return Rc::new(5) }
+fn f() -> Rc<i64> { Rc::new(5) }
 "#;
     let eff = effects_of(src, "f");
     assert!(eff.contains(Effect::Managed));
@@ -80,8 +80,8 @@ fn f() -> Rc<i64> { return Rc::new(5) }
 fn vec_literal_is_managed_alloc() {
     let src = "\
 fn f() -> i64 {
-    let v = vec[1, 2, 3]
-    return v[0]
+    let v = vec![1, 2, 3];
+    v[0]
 }
 ";
     let eff = effects_of(src, "f");
@@ -93,8 +93,8 @@ fn f() -> i64 {
 fn vec_push_is_managed_alloc() {
     let src = "\
 fn push_one(v: Vec<i64>) -> i64 {
-    Vec::push(v, 9)
-    return v[0]
+    Vec::push(v, 9);
+    v[0]
 }
 ";
     let eff = effects_of(src, "push_one");
@@ -109,11 +109,11 @@ fn push_one(v: Vec<i64>) -> i64 {
 fn discarded_managed_result_is_managed() {
     let src = "\
 fn make_rc() -> Rc<i64> {
-    return Rc::new(1)
+    Rc::new(1)
 }
 fn dump() -> i64 {
-    make_rc()
-    return 0
+    make_rc();
+    0
 }
 ";
     let eff = effects_of(src, "dump");
@@ -129,14 +129,14 @@ fn dump() -> i64 {
 
 #[test]
 fn div_and_mod_are_panic() {
-    let div = effects_of("fn d(a: i64, b: i64) -> i64 { return a / b }", "d");
+    let div = effects_of("fn d(a: i64, b: i64) -> i64 { a / b }", "d");
     assert_eq!(
         div,
         EffectSet::EMPTY.with(Effect::Panic),
         "div carries only Panic"
     );
 
-    let modu = effects_of("fn m(a: i64, b: i64) -> i64 { return a % b }", "m");
+    let modu = effects_of("fn m(a: i64, b: i64) -> i64 { a % b }", "m");
     assert_eq!(
         modu,
         EffectSet::EMPTY.with(Effect::Panic),
@@ -149,8 +149,8 @@ fn div_and_mod_are_panic() {
 fn slice_range_is_panic_not_managed() {
     let src = "\
 fn sl(a: &[i64]) -> i64 {
-    let s = a[0..2]
-    return s[0]
+    let s = a[0..2];
+    s[0]
 }
 ";
     let eff = effects_of(src, "sl");
@@ -163,8 +163,8 @@ fn unwrap_panic_arm_is_panic() {
     let src = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
-fn ok_val() -> Result<i64, E> { return Result::Ok(9) }
-fn unwrapper() -> i64 { return ok_val().unwrap() }
+fn ok_val() -> Result<i64, E> { Result::Ok(9) }
+fn unwrapper() -> i64 { ok_val().unwrap() }
 "#;
     let eff = effects_of(src, "unwrapper");
     assert!(eff.contains(Effect::Panic), "the Err arm panics");
@@ -177,7 +177,7 @@ fn unwrapper() -> i64 { return ok_val().unwrap() }
 #[test]
 fn pure_arithmetic_is_empty() {
     let src = r#"
-fn pure(a: i64, b: i64) -> i64 { return a + b * a - b }
+fn pure(a: i64, b: i64) -> i64 { a + b * a - b }
 "#;
     assert_eq!(
         effects_of(src, "pure"),
@@ -189,11 +189,11 @@ fn pure(a: i64, b: i64) -> i64 { return a + b * a - b }
 #[test]
 fn capturing_closure_is_managed_alloc() {
     let src = r#"
-fn call_it(f: fn() -> i64) -> i64 { return f() }
+fn call_it(f: fn() -> i64) -> i64 { f() }
 fn make() -> i64 {
-    let x: i64 = 5
-    let g = fn() -> i64 { return x }
-    return call_it(g)
+    let x: i64 = 5;
+    let g = move || -> i64 { x };
+    call_it(g)
 }
 "#;
     let eff = effects_of(src, "make");

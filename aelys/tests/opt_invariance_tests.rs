@@ -99,11 +99,10 @@ const REJECT_FIXTURES: &[(&str, &str, &str)] = &[
         "reject_e0701_use_after_move",
         "E0701",
         "struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    println(a.id)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    println!(\"{}\", a.id);
 }
 ",
     ),
@@ -111,11 +110,10 @@ fn main() -> i64 {
         "reject_e0702_double_move",
         "E0702",
         "struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    let c = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    let c = a;
 }
 ",
     ),
@@ -123,14 +121,13 @@ fn main() -> i64 {
         "reject_e0703_maybe_moved_use",
         "E0703",
         "struct Resource { id: i64 }
-fn main() -> i64 {
-    let cond = true
-    let a = Resource{id: 1}
+fn main() {
+    let cond = true;
+    let a = Resource{id: 1};
     if cond {
-        let b = a
+        let b = a;
     }
-    println(a.id)
-    return 0
+    println!(\"{}\", a.id);
 }
 ",
     ),
@@ -139,65 +136,64 @@ fn main() -> i64 {
         "E0704",
         "struct Resource { id: i64 }
 fn f(c: bool) {
-    let a = Resource{id: 1}
+    let a = Resource{id: 1};
     if c {
-        let b = a
+        let b = a;
     }
 }
-fn main() -> i64 {
-    f(true)
-    return 0
+fn main() {
+    f(true);
 }
 ",
     ),
     (
         "reject_e0711_write_while_shared_borrow",
         "E0711",
-        "fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
-    return *r
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
+    return ExitCode::from((*r) as u8);
 }
 ",
     ),
     (
         "reject_e0711_push_while_element_borrowed",
         "E0711",
-        "fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    Vec::push(v, 40)
-    return *r
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    Vec::push(v, 40);
+    return ExitCode::from((*r) as u8);
 }
 ",
     ),
     (
         "reject_e0711_write_while_borrow_used_in_folded_branch",
         "E0711",
-        "fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
     if false {
-        return *r
+        return ExitCode::from((*r) as u8);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 ",
     ),
     (
         "reject_e0713_overlapping_mut_used_in_folded_branch",
         "E0713",
-        "fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &mut x
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &mut x;
     if false {
-        *r1 = 5
-        *r2 = 6
+        *r1 = 5;
+        *r2 = 6;
     }
-    return x
+    return ExitCode::from(x as u8);
 }
 ",
     ),
@@ -205,13 +201,12 @@ fn main() -> i64 {
         "reject_e0702_double_move_in_folded_branch",
         "E0702",
         "struct Resource { id: i64 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
+fn main() {
+    let a = Resource{id: 1};
     if false {
-        let b = a
-        let c = a
+        let b = a;
+        let c = a;
     }
-    return 0
 }
 ",
     ),
@@ -221,12 +216,11 @@ fn main() -> i64 {
         "struct Resource { id: i64 }
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    let b = a;
+    touch(r);
 }
 ",
     ),
@@ -237,38 +231,36 @@ fn main() -> i64 {
 fn touch(r: &Resource) {
 }
 fn get(r: &Resource) -> &Resource {
-    return r
+    r
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = get(&a)
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = get(&a);
+    let b = a;
+    touch(r);
 }
 ",
     ),
     (
         "reject_e0713_overlapping_mut_borrow",
         "E0713",
-        "fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &mut x
-    *r1 = 5
-    *r2 = 6
-    return x
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &mut x;
+    *r1 = 5;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 ",
     ),
     (
         "reject_e0714_ref_in_array_aggregate",
         "E0714",
-        "fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let a = &v[0]
-    let arr = [a]
-    return 0
+        "fn main() {
+    let v = vec![10, 20, 30];
+    let a = &v[0];
+    let arr = [a];
 }
 ",
     ),
@@ -276,10 +268,9 @@ fn main() -> i64 {
         "reject_e0714_ref_in_enum_payload",
         "E0714",
         "enum Box { Of(&i64), Empty }
-fn main() -> i64 {
-    let mut x = 5
-    let o = Box::Of(&x)
-    return 0
+fn main() {
+    let mut x = 5;
+    let o = Box::Of(&x);
 }
 ",
     ),
@@ -287,75 +278,72 @@ fn main() -> i64 {
         "reject_e0723_origin_through_call",
         "E0723",
         "fn id(r: &i64) -> &i64 {
-    return r
+    r
 }
 fn via(r: &i64) -> &i64 {
-    return id(r)
+    id(r)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 ",
     ),
     (
         "reject_e0725_ref_captured_by_closure",
         "E0725",
-        "fn main() -> i64 {
-    let a = 10
-    let r = &a
-    let f = fn() -> i64 {
-        return *r
-    }
-    return 0
+        "fn main() {
+    let a = 10;
+    let r = &a;
+    let f = move || -> i64 {
+        *r
+    };
 }
 ",
     ),
     (
         "reject_e0726_nested_ref",
         "E0726",
-        "fn main() -> i64 {
-    let x = 5
-    let r = &x
-    let pp = &r
-    return 0
+        "fn main() {
+    let x = 5;
+    let r = &x;
+    let pp = &r;
 }
 ",
     ),
     (
         "reject_e0727_nogc_allocates_rc",
         "E0727",
-        "nogc fn f() -> i64 {
-    let r = Rc::new(5)
-    return 0
+        "use std::process::ExitCode; nogc fn f() -> i64 {
+    let r = Rc::new(5);
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     ),
     (
         "reject_e0727_nogc_allocates_vec",
         "E0727",
-        "nogc fn f() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    return 0
+        "use std::process::ExitCode; nogc fn f() -> i64 {
+    let mut v: Vec<i64> = Vec::new();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     ),
     (
         "reject_e0727_nogc_through_call_chain",
         "E0727",
-        "fn leaf() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+        "use std::process::ExitCode; fn leaf() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
 fn helper() -> i64 {
-    return leaf()
+    leaf()
 }
 nogc fn f() -> i64 {
-    return helper()
+    helper()
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     ),
     (
@@ -363,70 +351,67 @@ fn main() -> i64 { return f() }
         // nogc call at `f` into the nested vec body . that shadow is now rejected e0418 in
         "reject_e0418_nested_fn_shadows_global",
         "E0418",
-        "fn dup() -> i64 { return 0 }
+        "use std::process::ExitCode; fn dup() -> i64 { 0 }
 fn holder() -> i64 {
     fn dup() -> i64 {
-        let mut v = Vec::new()
-        Vec::push(v, 1)
-        return 0
+        let mut v = Vec::new();
+        Vec::push(v, 1);
+        0
     }
-    return 0
+    0
 }
-nogc fn f() -> i64 { return dup() }
-fn main() -> i64 { return f() + holder() }
+nogc fn f() -> i64 { dup() }
+fn main() -> ExitCode { return ExitCode::from((f() + holder()) as u8); }
 ",
     ),
     // appear at -o0 and vanish at -o2. these pin every enforcement point across all four levels.
     (
         "reject_e0412_vec_producing_form_grouping",
         "E0412",
-        "fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    let w = (v)
-    return 0
+        "fn main() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    let w = (v);
 }
 ",
     ),
     (
         "reject_e0412_nested_vec_push",
         "E0412",
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let mut vv = Vec::new()
-    Vec::push(vv, inner)
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let mut vv = Vec::new();
+    Vec::push(vv, inner);
 }
 ",
     ),
     (
         "reject_e0412_array_of_vec",
         "E0412",
-        "fn main() -> i64 {
-    let mut inner = Vec::new()
-    Vec::push(inner, 1)
-    let arr = [inner]
-    return 0
+        "fn main() {
+    let mut inner = Vec::new();
+    Vec::push(inner, 1);
+    let arr = [inner];
 }
 ",
     ),
     (
         "reject_e0412_generic_fn_with_vec_arg",
         "E0412",
-        "fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
+        "use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }
 ",
     ),
     (
         // invariant. a live dangerous construct must reject at every level, and this fixture pins that.
         "reject_e0412_generic_enum_with_vec_array_payload",
         "E0412",
-        "enum Opt<T> { Some(T), Nil }
-fn main() -> i64 {
-    let a: Opt<[Vec<i64>; 1]> = Opt::Nil
-    let r: i64 = match a { Opt::Some(w) => w[0][0], Opt::Nil => 0 }
-    return r
+        "use std::process::ExitCode; enum Opt<T> { Some(T), Nil }
+fn main() -> ExitCode {
+    let a: Opt<[Vec<i64>; 1]> = Opt::Nil;
+    let r: i64 = match a { Opt::Some(w) => w[0][0], Opt::Nil => 0 };
+    return ExitCode::from(r as u8);
 }
 ",
     ),
@@ -435,13 +420,13 @@ fn main() -> i64 {
 const ACCEPT_FIXTURES: &[(&str, &str)] = &[
     (
         "accept_sequential_mut_borrows",
-        "fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    *r1 = 5
-    let r2 = &mut x
-    *r2 = 6
-    return x
+        "use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    *r1 = 5;
+    let r2 = &mut x;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 ",
     ),
@@ -450,56 +435,55 @@ const ACCEPT_FIXTURES: &[(&str, &str)] = &[
         "struct Resource { id: i64 }
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    touch(r)
-    let b = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    touch(r);
+    let b = a;
 }
 ",
     ),
     (
         "accept_nogc_compute_only",
-        "nogc fn f(x: i64) -> i64 {
-    let y = x * 2
-    return y + 1
+        "use std::process::ExitCode; nogc fn f(x: i64) -> i64 {
+    let y = x * 2;
+    y + 1
 }
-fn main() -> i64 { return f(20) }
+fn main() -> ExitCode { return ExitCode::from(f(20) as u8); }
 ",
     ),
     (
         "accept_managed_outside_nogc",
-        "fn g() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+        "use std::process::ExitCode; fn g() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return g() }
+fn main() -> ExitCode { return ExitCode::from(g() as u8); }
 ",
     ),
     (
         "accept_rc_carrier_moved",
-        "struct Node { next: Rc<i64> }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let n: Node = Node { next: a }
-    let m: Node = n
-    return Rc::get(m.next)
+        "use std::process::ExitCode; struct Node { next: Rc<i64> }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let n: Node = Node { next: a };
+    let m: Node = n;
+    return ExitCode::from(Rc::get(m.next) as u8);
 }
 ",
     ),
     (
         "accept_rc_returned_then_vec",
-        "struct Node { next: Rc<i64> }
+        "use std::process::ExitCode; struct Node { next: Rc<i64> }
 fn make(v: i64) -> Node {
-    return Node { next: Rc::new(v) }
+    Node { next: Rc::new(v) }
 }
-fn main() -> i64 {
-    let n = make(7)
-    let mut v = Vec::new()
-    Vec::push(v, Rc::get(n.next))
-    return v[0]
+fn main() -> ExitCode {
+    let n = make(7);
+    let mut v = Vec::new();
+    Vec::push(v, Rc::get(n.next));
+    return ExitCode::from(v[0] as u8);
 }
 ",
     ),

@@ -31,7 +31,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -243,27 +243,26 @@ impl Harness {
 
 
 const VEC_READS: &str = r#"
-needs std.result
-needs std.vec
+use std::result;
+use std::vec;
 
-fn main() -> i64 {
-    let a: [i64;5] = [3, 1, 4, 1, 5]
-    let v = vec.from_slice(a[..])
-    println(vec.len(&v))
-    if vec.is_empty(&v) { println(1) } else { println(0) }
-    println(result.some_or(vec.get(&v, 2), -777))
-    println(result.some_or(vec.get(&v, -1), -777))
-    println(result.some_or(vec.get(&v, 5), -777))
-    println(result.some_or(vec.first(&v), -777))
-    println(result.some_or(vec.last(&v), -777))
-    println(vec.index_of(&v, 4))
-    println(vec.index_of(&v, 9))
-    if vec.contains(&v, 5) { println(1) } else { println(0) }
-    if vec.contains(&v, 9) { println(1) } else { println(0) }
-    println(vec.sum(&v))
-    if vec.eq(&v, &v) { println(1) } else { println(0) }
-    if vec.is_sorted(&v) { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let a: [i64;5] = [3, 1, 4, 1, 5];
+    let v = vec::from_slice(a[..]);
+    println!("{}", vec::len(&v));
+    if vec::is_empty(&v) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", result::some_or(vec::get(&v, 2), -777));
+    println!("{}", result::some_or(vec::get(&v, -1), -777));
+    println!("{}", result::some_or(vec::get(&v, 5), -777));
+    println!("{}", result::some_or(vec::first(&v), -777));
+    println!("{}", result::some_or(vec::last(&v), -777));
+    println!("{}", vec::index_of(&v, 4));
+    println!("{}", vec::index_of(&v, 9));
+    if vec::contains(&v, 5) { println!("{}", 1); } else { println!("{}", 0); }
+    if vec::contains(&v, 9) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", vec::sum(&v));
+    if vec::eq(&v, &v) { println!("{}", 1); } else { println!("{}", 0); }
+    if vec::is_sorted(&v) { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -280,23 +279,22 @@ fn group_std_vec_reads_answer_and_allocate_only_the_source_vec() {
 }
 
 const VEC_EMPTY: &str = r#"
-needs std.result
-needs std.vec
+use std::result;
+use std::vec;
 
-fn main() -> i64 {
-    let mut z: [i64;0] = []
-    let e = vec.from_slice(z[..])
-    println(vec.len(&e))
-    if vec.is_empty(&e) { println(1) } else { println(0) }
-    if result.is_none(vec.get(&e, 0)) { println(1) } else { println(0) }
-    if result.is_none(vec.first(&e)) { println(1) } else { println(0) }
-    if result.is_none(vec.last(&e)) { println(1) } else { println(0) }
-    println(vec.index_of(&e, 3))
-    println(vec.sum(&e))
-    if vec.is_sorted(&e) { println(1) } else { println(0) }
-    println(vec.binary_search(&e, 3))
-    if vec.eq(&e, &e) { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let mut z: [i64;0] = [];
+    let e = vec::from_slice(z[..]);
+    println!("{}", vec::len(&e));
+    if vec::is_empty(&e) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_none(vec::get(&e, 0)) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_none(vec::first(&e)) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_none(vec::last(&e)) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", vec::index_of(&e, 3));
+    println!("{}", vec::sum(&e));
+    if vec::is_sorted(&e) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", vec::binary_search(&e, 3));
+    if vec::eq(&e, &e) { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -314,40 +312,39 @@ fn group_std_vec_answers_on_an_empty_vec_without_reading_out_of_bounds() {
 
 // eight bound vecs, so a builder that allocated twice or leaked one would move this count
 const VEC_BUILDERS: &str = r#"
-needs std.result
-needs std.slice
-needs std.vec
+use std::result;
+use std::slice;
+use std::vec;
 
-fn dbl(x: i64) -> i64 { return x * 2 }
-fn odd(x: i64) -> bool { return x % 2 == 1 }
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn dbl(x: i64) -> i64 { x * 2 }
+fn odd(x: i64) -> bool { x % 2 == 1 }
+fn add(a: i64, b: i64) -> i64 { a + b }
 
-fn main() -> i64 {
-    let a: [i64;5] = [3, 1, 4, 1, 5]
-    let b: [i64;2] = [9, 2]
-    let v = vec.from_slice(a[..])
-    let w = vec.from_slice(b[..])
-    let c = vec.copy(&v)
-    let cc = vec.concat(&v, &w)
-    let r = vec.reversed(&v)
-    let s = vec.sorted(&v)
-    let m = vec.map(&v, dbl)
-    let f = vec.filter(&v, odd)
-    println(vec.sum(&c))
-    println(vec.len(&cc))
-    println(vec.sum(&cc))
-    println(result.some_or(vec.first(&r), -777))
-    println(result.some_or(vec.last(&r), -777))
-    if vec.is_sorted(&s) { println(1) } else { println(0) }
-    println(vec.binary_search(&s, 4))
-    println(vec.sum(&m))
-    println(vec.len(&f))
-    println(vec.sum(&f))
-    println(vec.fold(&v, 100, add))
-    if vec.eq(&v, &c) { println(1) } else { println(0) }
-    if vec.eq(&v, &s) { println(1) } else { println(0) }
-    println(slice.sum(Vec::as_slice(v)))
-    return 0
+fn main() {
+    let a: [i64;5] = [3, 1, 4, 1, 5];
+    let b: [i64;2] = [9, 2];
+    let v = vec::from_slice(a[..]);
+    let w = vec::from_slice(b[..]);
+    let c = vec::copy(&v);
+    let cc = vec::concat(&v, &w);
+    let r = vec::reversed(&v);
+    let s = vec::sorted(&v);
+    let m = vec::map(&v, dbl);
+    let f = vec::filter(&v, odd);
+    println!("{}", vec::sum(&c));
+    println!("{}", vec::len(&cc));
+    println!("{}", vec::sum(&cc));
+    println!("{}", result::some_or(vec::first(&r), -777));
+    println!("{}", result::some_or(vec::last(&r), -777));
+    if vec::is_sorted(&s) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", vec::binary_search(&s, 4));
+    println!("{}", vec::sum(&m));
+    println!("{}", vec::len(&f));
+    println!("{}", vec::sum(&f));
+    println!("{}", vec::fold(&v, 100, add));
+    if vec::eq(&v, &c) { println!("{}", 1); } else { println!("{}", 0); }
+    if vec::eq(&v, &s) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", slice::sum(Vec::as_slice(v)));
 }
 "#;
 
@@ -364,15 +361,14 @@ fn group_std_vec_builders_allocate_exactly_one_vec_each() {
 }
 
 const VEC_TEMPORARY: &str = r#"
-needs std.vec
+use std::vec;
 
-fn dbl(x: i64) -> i64 { return x * 2 }
+fn dbl(x: i64) -> i64 { x * 2 }
 
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let v = vec.from_slice(a[..])
-    println(Vec::len(vec.map(&v, dbl)))
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let v = vec::from_slice(a[..]);
+    println!("{}", Vec::len(vec::map(&v, dbl)));
 }
 "#;
 
@@ -384,16 +380,15 @@ fn group_std_vec_an_unbound_temporary_is_freed_at_the_end_of_its_statement() {
 }
 
 const VEC_TEMPORARY_BOUND: &str = r#"
-needs std.vec
+use std::vec;
 
-fn dbl(x: i64) -> i64 { return x * 2 }
+fn dbl(x: i64) -> i64 { x * 2 }
 
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let v = vec.from_slice(a[..])
-    let m = vec.map(&v, dbl)
-    println(vec.sum(&m))
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let v = vec::from_slice(a[..]);
+    let m = vec::map(&v, dbl);
+    println!("{}", vec::sum(&m));
 }
 "#;
 
@@ -405,17 +400,16 @@ fn group_std_vec_the_same_value_bound_to_a_local_is_freed() {
 }
 
 const VEC_FIND: &str = r#"
-needs std.result
-needs std.vec
+use std::result;
+use std::vec;
 
-fn main() -> i64 {
-    let a: [i64;3] = [5, 6, 7]
-    let v = vec.from_slice(a[..])
-    println(result.some_or(vec.find(&v, 6), -777))
-    if result.is_none(vec.find(&v, 8)) { println(1) } else { println(0) }
-    println(vec.index_of(&v, 8))
-    println(vec.sum(&v))
-    return 0
+fn main() {
+    let a: [i64;3] = [5, 6, 7];
+    let v = vec::from_slice(a[..]);
+    println!("{}", result::some_or(vec::find(&v, 6), -777));
+    if result::is_none(vec::find(&v, 8)) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", vec::index_of(&v, 8));
+    println!("{}", vec::sum(&v));
 }
 "#;
 
@@ -427,34 +421,33 @@ fn group_std_vec_find_answers_an_option_where_index_of_answers_a_sentinel() {
 }
 
 const STR_PREDICATES: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "hello world"
-    if str.is_empty("") { println(1) } else { println(0) }
-    if str.is_empty(s) { println(1) } else { println(0) }
-    if str.starts_with(s, "hello") { println(1) } else { println(0) }
-    if str.starts_with(s, "hellp") { println(1) } else { println(0) }
-    if str.starts_with(s, "hello world!") { println(1) } else { println(0) }
-    if str.starts_with(s, "") { println(1) } else { println(0) }
-    if str.ends_with(s, "world") { println(1) } else { println(0) }
-    if str.ends_with(s, "worle") { println(1) } else { println(0) }
-    if str.ends_with(s, "") { println(1) } else { println(0) }
-    println(str.index_of(s, "o"))
-    println(str.index_of(s, "world"))
-    println(str.index_of(s, "zz"))
-    println(str.index_of(s, ""))
-    println(str.index_of(s, "hello world!"))
-    if str.contains(s, "lo wo") { println(1) } else { println(0) }
-    if str.contains(s, "lo  wo") { println(1) } else { println(0) }
-    println(result.some_or(str.char_at(s, 0), '?'))
-    println(result.some_or(str.char_at(s, 10), '?'))
-    if result.is_none(str.char_at(s, 11)) { println(1) } else { println(0) }
-    if result.is_none(str.char_at(s, -1)) { println(1) } else { println(0) }
-    if str.is_space(' ') { println(1) } else { println(0) }
-    if str.is_space('x') { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let s: String = "hello world";
+    if str::is_empty("") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::is_empty(s) { println!("{}", 1); } else { println!("{}", 0); }
+    if str::starts_with(s, "hello") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::starts_with(s, "hellp") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::starts_with(s, "hello world!") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::starts_with(s, "") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::ends_with(s, "world") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::ends_with(s, "worle") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::ends_with(s, "") { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", str::index_of(s, "o"));
+    println!("{}", str::index_of(s, "world"));
+    println!("{}", str::index_of(s, "zz"));
+    println!("{}", str::index_of(s, ""));
+    println!("{}", str::index_of(s, "hello world!"));
+    if str::contains(s, "lo wo") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::contains(s, "lo  wo") { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", result::some_or(str::char_at(s, 0), '?'));
+    println!("{}", result::some_or(str::char_at(s, 10), '?'));
+    if result::is_none(str::char_at(s, 11)) { println!("{}", 1); } else { println!("{}", 0); }
+    if result::is_none(str::char_at(s, -1)) { println!("{}", 1); } else { println!("{}", 0); }
+    if str::is_space(' ') { println!("{}", 1); } else { println!("{}", 0); }
+    if str::is_space('x') { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -470,24 +463,23 @@ fn group_std_str_predicates_answer_without_allocating() {
 }
 
 const STR_NOGC: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
-nogc fn every_str_predicate(s: string) -> i64 {
-    let mut acc: i64 = 0
-    if str.is_empty(s) { acc = acc + 1 }
-    if str.starts_with(s, "hel") { acc = acc + 2 }
-    if str.ends_with(s, "rld") { acc = acc + 4 }
-    if str.contains(s, "o w") { acc = acc + 8 }
-    if str.is_space(' ') { acc = acc + 16 }
-    acc = acc + str.index_of(s, "world")
-    if result.some_or(str.char_at(s, 0), '?') == 'h' { acc = acc + 1 }
-    return acc
+nogc fn every_str_predicate(s: String) -> i64 {
+    let mut acc: i64 = 0;
+    if str::is_empty(s) { acc = acc + 1; }
+    if str::starts_with(s, "hel") { acc = acc + 2; }
+    if str::ends_with(s, "rld") { acc = acc + 4; }
+    if str::contains(s, "o w") { acc = acc + 8; }
+    if str::is_space(' ') { acc = acc + 16; }
+    acc = acc + str::index_of(s, "world");
+    if result::some_or(str::char_at(s, 0), '?') == 'h' { acc = acc + 1; }
+    acc
 }
 
-fn main() -> i64 {
-    println(every_str_predicate("hello world"))
-    return 0
+fn main() {
+    println!("{}", every_str_predicate("hello world"));
 }
 "#;
 
@@ -499,26 +491,25 @@ fn group_std_str_reading_surface_is_callable_from_nogc() {
 }
 
 const STR_BUILDERS: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "hello world"
-    let a: string = str.substring(s, 0, 5)
-    let b: string = str.substring(s, 6, 11)
-    let c: string = str.substring(s, -3, 2)
-    let d: string = str.substring(s, 3, 99)
-    let e: string = str.substring(s, 4, 4)
-    println(a)
-    println(b)
-    println(c)
-    println(d)
-    println("[" + e + "]")
-    println(str.repeat("ab", 3))
-    println("[" + str.repeat("ab", 0) + "]")
-    println("[" + str.trim("  hi \t\n") + "]")
-    println("[" + str.trim("   ") + "]")
-    println("[" + str.trim("hi") + "]")
-    return 0
+fn main() {
+    let s: String = "hello world";
+    let a: String = str::substring(s, 0, 5);
+    let b: String = str::substring(s, 6, 11);
+    let c: String = str::substring(s, -3, 2);
+    let d: String = str::substring(s, 3, 99);
+    let e: String = str::substring(s, 4, 4);
+    println!("{}", a);
+    println!("{}", b);
+    println!("{}", c);
+    println!("{}", d);
+    println!("{}", "[" + e + "]");
+    println!("{}", str::repeat("ab", 3));
+    println!("{}", "[" + str::repeat("ab", 0) + "]");
+    println!("{}", "[" + str::trim("  hi \t\n") + "]");
+    println!("{}", "[" + str::trim("   ") + "]");
+    println!("{}", "[" + str::trim("hi") + "]");
 }
 "#;
 
@@ -535,29 +526,28 @@ fn group_std_str_builders_answer_and_every_concatenation_is_counted() {
 }
 
 const STR_SPLIT_JOIN: &str = r#"
-needs std.str
-needs std.vec
+use std::str;
+use std::vec;
 
-fn main() -> i64 {
-    let parts = str.split("a,b,,c", ",")
-    println(Vec::len(parts))
-    println(parts[0])
-    println("[" + parts[2] + "]")
-    println(parts[3])
-    let j: string = str.join(&parts, "-")
-    println(j)
-    let one = str.split("abc", ",")
-    println(Vec::len(one))
-    println(one[0])
-    let whole = str.split("abc", "")
-    println(Vec::len(whole))
-    println(whole[0])
-    let multi = str.split("aXXbXXc", "XX")
-    println(Vec::len(multi))
-    println(multi[1])
-    let k: string = str.join(&multi, "")
-    println(k)
-    return 0
+fn main() {
+    let parts = str::split("a,b,,c", ",");
+    println!("{}", Vec::len(parts));
+    println!("{}", parts[0]);
+    println!("{}", "[" + parts[2] + "]");
+    println!("{}", parts[3]);
+    let j: String = str::join(&parts, "-");
+    println!("{}", j);
+    let one = str::split("abc", ",");
+    println!("{}", Vec::len(one));
+    println!("{}", one[0]);
+    let whole = str::split("abc", "");
+    println!("{}", Vec::len(whole));
+    println!("{}", whole[0]);
+    let multi = str::split("aXXbXXc", "XX");
+    println!("{}", Vec::len(multi));
+    println!("{}", multi[1]);
+    let k: String = str::join(&multi, "");
+    println!("{}", k);
 }
 "#;
 
@@ -603,24 +593,23 @@ fn group_std_str_substring_allocates_once_per_call_whatever_it_copies() {
 }
 
 const STR_MULTIBYTE_READS: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "éléphant"
-    println(s.len)
-    println(str.char_count(s))
-    println(result.some_or(str.char_at(s, 0), '?'))
-    println(result.some_or(str.char_at(s, 7), '?'))
-    if result.is_none(str.char_at(s, 8)) { println(1) } else { println(0) }
-    if str.starts_with(s, "élé") { println(1) } else { println(0) }
-    if str.ends_with(s, "ant") { println(1) } else { println(0) }
-    if str.ends_with("éab", "ab") { println(1) } else { println(0) }
-    println(str.index_of(s, "phant"))
-    println(str.index_of("aé", "é"))
-    if str.contains("aé", "é") { println(1) } else { println(0) }
-    println(str.compare("é", "e"))
-    return 0
+fn main() {
+    let s: String = "éléphant";
+    println!("{}", s.len());
+    println!("{}", str::char_count(s));
+    println!("{}", result::some_or(str::char_at(s, 0), '?'));
+    println!("{}", result::some_or(str::char_at(s, 7), '?'));
+    if result::is_none(str::char_at(s, 8)) { println!("{}", 1); } else { println!("{}", 0); }
+    if str::starts_with(s, "élé") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::ends_with(s, "ant") { println!("{}", 1); } else { println!("{}", 0); }
+    if str::ends_with("éab", "ab") { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", str::index_of(s, "phant"));
+    println!("{}", str::index_of("aé", "é"));
+    if str::contains("aé", "é") { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", str::compare("é", "e"));
 }
 "#;
 
@@ -636,20 +625,19 @@ fn group_std_str_the_reading_surface_answers_on_a_multibyte_string() {
 }
 
 const STR_MULTIBYTE_BUILDERS: &str = r#"
-needs std.str
-needs std.vec
+use std::str;
+use std::vec;
 
-fn main() -> i64 {
-    let s: string = "éléphant"
-    println(str.substring(s, 0, 3))
-    println(str.substring(s, 3, 99))
-    println("[" + str.substring(s, 2, 2) + "]")
-    println("[" + str.trim("  élé \t\n") + "]")
-    let parts = str.split("é,à,ü", ",")
-    println(Vec::len(parts))
-    println(parts[1])
-    println(str.join(&parts, "-"))
-    return 0
+fn main() {
+    let s: String = "éléphant";
+    println!("{}", str::substring(s, 0, 3));
+    println!("{}", str::substring(s, 3, 99));
+    println!("{}", "[" + str::substring(s, 2, 2) + "]");
+    println!("{}", "[" + str::trim("  élé \t\n") + "]");
+    let parts = str::split("é,à,ü", ",");
+    println!("{}", Vec::len(parts));
+    println!("{}", parts[1]);
+    println!("{}", str::join(&parts, "-"));
 }
 "#;
 
@@ -667,14 +655,13 @@ fn group_std_str_the_building_surface_answers_on_a_multibyte_string() {
 
 // there is no `needs std.result` here: the prelude is the only thing that can put `option` and `result` in scope
 const STR_CARRIER_FROM_THE_PRELUDE: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    println(match str.char_at("éab", 0) { Some(c) => c, None => '?' })
-    println(match str.char_at("éab", 9) { Some(c) => c, None => '?' })
-    println(match str.parse_int("-42") { Ok(v) => v, Err(e) => 0 - e })
-    println(match str.parse_int("4é") { Ok(v) => v, Err(e) => 0 - e })
-    return 0
+fn main() {
+    println!("{}", match str::char_at("éab", 0) { Some(c) => c, None => '?' });
+    println!("{}", match str::char_at("éab", 9) { Some(c) => c, None => '?' });
+    println!("{}", match str::parse_int("-42") { Ok(v) => v, Err(e) => 0 - e });
+    println!("{}", match str::parse_int("4é") { Ok(v) => v, Err(e) => 0 - e });
 }
 "#;
 
@@ -686,22 +673,20 @@ fn group_std_str_names_the_carrier_without_importing_the_module_that_defines_it(
 }
 
 const STR_LEN_ADDRESS: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = str.trim("  hello  ")
-    let n = &s.len
-    return 0
+fn main() {
+    let s: String = str::trim("  hello  ");
+    let n = &s.len();
 }
 "#;
 
 const STR_LEN_WRITE: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let mut s: string = str.trim("  hello  ")
-    s.len = 9
-    return 0
+fn main() {
+    let mut s: String = str::trim("  hello  ");
+    s.len = 9;
 }
 "#;
 
@@ -723,15 +708,15 @@ fn group_std_str_the_length_of_a_library_string_is_a_value_and_never_a_place() {
 }
 
 const VEC_TEMPORARY_VIEW: &str = r#"
-needs std.vec
+use std::process::ExitCode; use std::vec;
 
-fn dbl(x: i64) -> i64 { return x * 2 }
+fn dbl(x: i64) -> i64 { x * 2 }
 
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let v = vec.from_slice(a[..])
-    let s: &[i64] = Vec::as_slice(vec.map(&v, dbl))
-    return s[0]
+fn main() -> ExitCode {
+    let a: [i64;3] = [1, 2, 3];
+    let v = vec::from_slice(a[..]);
+    let s: &[i64] = Vec::as_slice(vec::map(&v, dbl));
+    return ExitCode::from(s[0] as u8);
 }
 "#;
 
@@ -747,31 +732,30 @@ fn group_std_vec_a_slice_view_into_an_unbound_temporary_is_refused_by_name() {
 }
 
 const STR_PARSE_INT: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
-nogc fn val(s: string) -> i64 { return result.unwrap_or(str.parse_int(s), -777) }
-nogc fn code(s: string) -> i64 { return result.err_or(str.parse_int(s), 0) }
+nogc fn val(s: String) -> i64 { result::unwrap_or(str::parse_int(s), -777) }
+nogc fn code(s: String) -> i64 { result::err_or(str::parse_int(s), 0) }
 
-fn main() -> i64 {
-    println(val("0"))
-    println(val("-0"))
-    println(val("42"))
-    println(val("-42"))
-    println(val("007"))
-    println(val("9223372036854775807"))
-    println(val("-9223372036854775808"))
-    println(code("0"))
-    println(code(""))
-    println(code("-"))
-    println(code("1a"))
-    println(code("a"))
-    println(code("+1"))
-    println(code(" 1"))
-    println(code("9223372036854775808"))
-    println(code("-9223372036854775809"))
-    println(code("99999999999999999999"))
-    return 0
+fn main() {
+    println!("{}", val("0"));
+    println!("{}", val("-0"));
+    println!("{}", val("42"));
+    println!("{}", val("-42"));
+    println!("{}", val("007"));
+    println!("{}", val("9223372036854775807"));
+    println!("{}", val("-9223372036854775808"));
+    println!("{}", code("0"));
+    println!("{}", code(""));
+    println!("{}", code("-"));
+    println!("{}", code("1a"));
+    println!("{}", code("a"));
+    println!("{}", code("+1"));
+    println!("{}", code(" 1"));
+    println!("{}", code("9223372036854775808"));
+    println!("{}", code("-9223372036854775809"));
+    println!("{}", code("99999999999999999999"));
 }
 "#;
 
@@ -787,27 +771,26 @@ fn group_std_str_parse_int_answers_and_names_every_way_it_can_fail() {
 }
 
 const STR_INT_ROUND_TRIP: &str = r#"
-needs std.result
-needs std.str
+use std::result;
+use std::str;
 
 fn trip(n: i64) -> bool {
-    let s: string = str.from_int(n)
-    let back: i64 = result.unwrap_or(str.parse_int(s), -777)
-    return back == n
+    let s: String = str::from_int(n);
+    let back: i64 = result::unwrap_or(str::parse_int(s), -777);
+    back == n
 }
 
-fn main() -> i64 {
-    let min: i64 = 0 - 9223372036854775807 - 1
-    println(str.from_int(0))
-    println(str.from_int(-42))
-    println(str.from_int(9223372036854775807))
-    println(str.from_int(min))
-    if trip(0) { println(1) } else { println(0) }
-    if trip(7) { println(1) } else { println(0) }
-    if trip(-7) { println(1) } else { println(0) }
-    if trip(9223372036854775807) { println(1) } else { println(0) }
-    if trip(min) { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let min: i64 = 0 - 9223372036854775807 - 1;
+    println!("{}", str::from_int(0));
+    println!("{}", str::from_int(-42));
+    println!("{}", str::from_int(9223372036854775807));
+    println!("{}", str::from_int(min));
+    if trip(0) { println!("{}", 1); } else { println!("{}", 0); }
+    if trip(7) { println!("{}", 1); } else { println!("{}", 0); }
+    if trip(-7) { println!("{}", 1); } else { println!("{}", 0); }
+    if trip(9223372036854775807) { println!("{}", 1); } else { println!("{}", 0); }
+    if trip(min) { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -825,21 +808,19 @@ fn group_std_str_from_int_and_parse_int_round_trip_across_the_whole_range() {
 }
 
 const STR_PARSE_UNUSED: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    str.parse_int("1")
-    return 0
+fn main() {
+    str::parse_int("1");
 }
 "#;
 
 const STR_PARSE_DISCARDED: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    discard str.parse_int("1")
-    println(0)
-    return 0
+fn main() {
+    let _ = str::parse_int("1");
+    println!("{}", 0);
 }
 "#;
 

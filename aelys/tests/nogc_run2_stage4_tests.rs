@@ -36,8 +36,8 @@ fn assert_code(err: &str, code: &str) {
 fn reject_witness_non_generic_vec_by_value_is_still_e0727() {
     let err = reject(
         "\
-nogc fn keep(x: vec<i64>) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
+use std::process::ExitCode; nogc fn keep(x: vec<i64>) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }
 ",
     );
     assert_code(&err, "E0727");
@@ -47,8 +47,8 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
 fn reject_witness_generic_vec_by_value_is_now_e0730() {
     let err = reject(
         "\
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -62,8 +62,8 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
 fn compile_witness_generic_instantiated_with_i64() {
     accepts(
         "\
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { return keep(7) }
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { return ExitCode::from(keep(7) as u8); }
 ",
     );
 }
@@ -72,8 +72,8 @@ fn main() -> i64 { return keep(7) }
 fn plain_generic_with_a_vec_argument_is_now_e0412() {
     let err = reject(
         "\
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
+use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }
 ",
     );
     assert!(
@@ -88,8 +88,8 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
 fn reject_implicit_bound_instantiated_with_rc() {
     let err = reject(
         "\
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let r = Rc::new(7); return keep(r) }
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let r = Rc::new(7); return ExitCode::from(keep(r) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -100,8 +100,8 @@ fn main() -> i64 { let r = Rc::new(7); return keep(r) }
 fn compile_twin_plain_generic_instantiated_with_rc() {
     accepts(
         "\
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let r = Rc::new(7); return keep(r) }
+use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let r = Rc::new(7); return ExitCode::from(keep(r) as u8); }
 ",
     );
 }
@@ -110,8 +110,8 @@ fn main() -> i64 { let r = Rc::new(7); return keep(r) }
 fn reject_implicit_bound_instantiated_with_string() {
     let err = reject(
         "\
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let s = \"hi\"; return keep(s) }
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let s = \"hi\"; return ExitCode::from(keep(s) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -122,8 +122,8 @@ fn main() -> i64 { let s = \"hi\"; return keep(s) }
 fn compile_twin_plain_generic_instantiated_with_string() {
     accepts(
         "\
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let s = \"hi\"; return keep(s) }
+use std::process::ExitCode; fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let s = \"hi\"; return ExitCode::from(keep(s) as u8); }
 ",
     );
 }
@@ -133,8 +133,8 @@ fn main() -> i64 { let s = \"hi\"; return keep(s) }
 fn reject_bound_type_param_never_pinned_by_an_argument() {
     let err = reject(
         "\
-nogc fn make<U: nogc>() -> i64 { return 0 }
-fn main() -> i64 { return make() }
+use std::process::ExitCode; nogc fn make<U: nogc>() -> i64 { 0 }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -148,8 +148,8 @@ fn main() -> i64 { return make() }
 fn compile_twin_bound_type_param_pinned_by_an_argument() {
     accepts(
         "\
-nogc fn make<U: nogc>(u: U) -> i64 { return 0 }
-fn main() -> i64 { return make(1) }
+use std::process::ExitCode; nogc fn make<U: nogc>(u: U) -> i64 { 0 }
+fn main() -> ExitCode { return ExitCode::from(make(1) as u8); }
 ",
     );
 }
@@ -158,8 +158,8 @@ fn main() -> i64 { return make(1) }
 fn reject_explicit_bound_instantiated_with_vec() {
     let err = reject(
         "\
-fn keep<T: nogc>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
+use std::process::ExitCode; fn keep<T: nogc>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(keep(v) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -169,8 +169,8 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
 fn compile_twin_explicit_bound_instantiated_with_i64() {
     accepts(
         "\
-fn keep<T: nogc>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { return keep(3) }
+use std::process::ExitCode; fn keep<T: nogc>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { return ExitCode::from(keep(3) as u8); }
 ",
     );
 }
@@ -179,8 +179,8 @@ fn main() -> i64 { return keep(3) }
 fn reject_explicit_bound_instantiated_with_rc() {
     let err = reject(
         "\
-fn keep<T: nogc>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let r = Rc::new(7); return keep(r) }
+use std::process::ExitCode; fn keep<T: nogc>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let r = Rc::new(7); return ExitCode::from(keep(r) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -190,8 +190,8 @@ fn main() -> i64 { let r = Rc::new(7); return keep(r) }
 fn reject_mixed_bounds_only_the_bound_param_fires() {
     let err = reject(
         "\
-fn pick<T: nogc, U>(a: T, b: U) -> i64 { let x = a; let y = b; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return pick(v, 3) }
+use std::process::ExitCode; fn pick<T: nogc, U>(a: T, b: U) -> i64 { let x = a; let y = b; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(pick(v, 3) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -208,8 +208,8 @@ fn main() -> i64 { let v = vec[1, 2]; return pick(v, 3) }
 fn mixed_bounds_vec_in_the_unbounded_slot_is_now_e0412() {
     let err = reject(
         "\
-fn pick<T: nogc, U>(a: T, b: U) -> i64 { let x = a; let y = b; return 0 }
-fn main() -> i64 { let v = vec[1, 2]; return pick(3, v) }
+use std::process::ExitCode; fn pick<T: nogc, U>(a: T, b: U) -> i64 { let x = a; let y = b; 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from(pick(3, v) as u8); }
 ",
     );
     assert!(
@@ -224,9 +224,9 @@ fn main() -> i64 { let v = vec[1, 2]; return pick(3, v) }
 fn reject_abstract_type_param_fed_to_a_bound_param() {
     let err = reject(
         "\
-nogc fn sink<U: nogc>(u: U) -> i64 { return 0 }
-fn forward<T>(x: T) -> i64 { return sink(x) }
-fn main() -> i64 { return forward(1) }
+use std::process::ExitCode; nogc fn sink<U: nogc>(u: U) -> i64 { 0 }
+fn forward<T>(x: T) -> i64 { sink(x) }
+fn main() -> ExitCode { return ExitCode::from(forward(1) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -240,9 +240,9 @@ fn main() -> i64 { return forward(1) }
 fn compile_twin_same_forwarding_to_an_unbounded_target() {
     accepts(
         "\
-fn sink<U>(u: U) -> i64 { return 0 }
-fn forward<T>(x: T) -> i64 { return sink(x) }
-fn main() -> i64 { return forward(1) }
+use std::process::ExitCode; fn sink<U>(u: U) -> i64 { 0 }
+fn forward<T>(x: T) -> i64 { sink(x) }
+fn main() -> ExitCode { return ExitCode::from(forward(1) as u8); }
 ",
     );
 }
@@ -251,10 +251,10 @@ fn main() -> i64 { return forward(1) }
 fn reject_struct_hiding_an_rc_behind_a_nominal() {
     let err = reject(
         "\
-struct Node { v: i64 }
+use std::process::ExitCode; struct Node { v: i64 }
 struct Holder { n: Rc<Node> }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let h = Holder { n: Rc::new(Node { v: 1 }) }; return keep(h) }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let h = Holder { n: Rc::new(Node { v: 1 }) }; return ExitCode::from(keep(h) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -265,10 +265,10 @@ fn main() -> i64 { let h = Holder { n: Rc::new(Node { v: 1 }) }; return keep(h) 
 fn compile_twin_same_struct_through_an_unbounded_generic() {
     accepts(
         "\
-struct Node { v: i64 }
+use std::process::ExitCode; struct Node { v: i64 }
 struct Holder { n: Rc<Node> }
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let h = Holder { n: Rc::new(Node { v: 1 }) }; return keep(h) }
+fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let h = Holder { n: Rc::new(Node { v: 1 }) }; return ExitCode::from(keep(h) as u8); }
 ",
     );
 }
@@ -277,9 +277,9 @@ fn main() -> i64 { let h = Holder { n: Rc::new(Node { v: 1 }) }; return keep(h) 
 fn reject_struct_hiding_a_string_field() {
     let err = reject(
         "\
-struct Msg { text: string }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let m = Msg { text: \"hi\" }; return keep(m) }
+use std::process::ExitCode; struct Msg { text: String }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let m = Msg { text: \"hi\" }; return ExitCode::from(keep(m) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -289,16 +289,16 @@ fn main() -> i64 { let m = Msg { text: \"hi\" }; return keep(m) }
 fn generic_struct_argument_binds_the_nogc_type_param_to_its_type_argument() {
     accepts(
         "\
-struct Box2<T> { v: T }
-nogc fn keep<U>(x: Box2<U>) -> i64 { return 0 }
-fn main() -> i64 { let b = Box2 { v: 1 }; return keep(b) }
+use std::process::ExitCode; struct Box2<T> { v: T }
+nogc fn keep<U>(x: Box2<U>) -> i64 { 0 }
+fn main() -> ExitCode { let b = Box2 { v: 1 }; return ExitCode::from(keep(b) as u8); }
 ",
     );
     let err = reject(
         "\
-struct Box2<T> { v: T }
-nogc fn keep<U>(x: Box2<U>) -> i64 { return 0 }
-fn main() -> i64 { let b = Box2 { v: \"s\" + \"t\" }; return keep(b) }
+use std::process::ExitCode; struct Box2<T> { v: T }
+nogc fn keep<U>(x: Box2<U>) -> i64 { 0 }
+fn main() -> ExitCode { let b = Box2 { v: \"s\" + \"t\" }; return ExitCode::from(keep(b) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -312,9 +312,9 @@ fn main() -> i64 { let b = Box2 { v: \"s\" + \"t\" }; return keep(b) }
 fn compile_twin_all_primitive_value_struct() {
     accepts(
         "\
-struct P { x: i64, y: i64 }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let p = P { x: 1, y: 2 }; return keep(p) }
+use std::process::ExitCode; struct P { x: i64, y: i64 }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let p = P { x: 1, y: 2 }; return ExitCode::from(keep(p) as u8); }
 ",
     );
 }
@@ -323,9 +323,9 @@ fn main() -> i64 { let p = P { x: 1, y: 2 }; return keep(p) }
 fn reject_enum_hiding_a_string_payload() {
     let err = reject(
         "\
-enum Bad { None, Some(string) }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let o = Bad::Some(\"hi\"); return keep(o) }
+use std::process::ExitCode; enum Bad { None, Some(String) }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let o = Bad::Some(\"hi\"); return ExitCode::from(keep(o) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -335,9 +335,9 @@ fn main() -> i64 { let o = Bad::Some(\"hi\"); return keep(o) }
 fn compile_twin_enum_with_only_nogc_payloads() {
     accepts(
         "\
-enum Opt { None, Some(i64) }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let o = Opt::Some(3); return keep(o) }
+use std::process::ExitCode; enum Opt { None, Some(i64) }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let o = Opt::Some(3); return ExitCode::from(keep(o) as u8); }
 ",
     );
 }
@@ -346,8 +346,8 @@ fn main() -> i64 { let o = Opt::Some(3); return keep(o) }
 fn compile_fixed_array_is_a_nogc_value() {
     accepts(
         "\
-nogc fn keep<T>(v: T) -> i64 { let y = v; return 0 }
-fn main() -> i64 { let a = [1, 2, 3]; return keep(a) }
+use std::process::ExitCode; nogc fn keep<T>(v: T) -> i64 { let y = v; 0 }
+fn main() -> ExitCode { let a = [1, 2, 3]; return ExitCode::from(keep(a) as u8); }
 ",
     );
 }
@@ -356,8 +356,8 @@ fn main() -> i64 { let a = [1, 2, 3]; return keep(a) }
 fn reject_nogc_generic_bound_to_an_annotated_let() {
     let err = reject(
         "\
-nogc fn sink<U>(u: U) -> i64 { return 0 }
-fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return f(v) }
+use std::process::ExitCode; nogc fn sink<U>(u: U) -> i64 { 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; let f: fn(vec<i64>) -> i64 = sink; return ExitCode::from(f(v) as u8); }
 ",
     );
     assert_code(&err, "E0731");
@@ -368,8 +368,8 @@ fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return 
 fn twin_plain_generic_bound_to_an_annotated_let_is_refused_without_the_nogc_code() {
     let err = lower(
         "\
-fn sink<U>(u: U) -> i64 { return 0 }
-fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return f(v) }
+use std::process::ExitCode; fn sink<U>(u: U) -> i64 { 0 }
+fn main() -> ExitCode { let v = vec![1, 2]; let f: fn(vec<i64>) -> i64 = sink; return ExitCode::from(f(v) as u8); }
 ",
     )
     .expect_err("a generic function used as a value is refused");
@@ -387,9 +387,9 @@ fn main() -> i64 { let v = vec[1, 2]; let f: fn(vec<i64>) -> i64 = sink; return 
 fn reject_nogc_generic_passed_as_an_argument() {
     let err = reject(
         "\
-fn keep<T: nogc>(x: i64) -> i64 { return x }
-fn take(f: fn(i64) -> i64) -> i64 { return f(1) }
-fn main() -> i64 { return take(keep) }
+use std::process::ExitCode; fn keep<T: nogc>(x: i64) -> i64 { x }
+fn take(f: fn(i64) -> i64) -> i64 { f(1) }
+fn main() -> ExitCode { return ExitCode::from(take(keep) as u8); }
 ",
     );
     assert_code(&err, "E0731");
@@ -403,9 +403,9 @@ fn main() -> i64 { return take(keep) }
 fn compile_twin_non_generic_nogc_fn_passed_as_a_nogc_argument() {
     accepts(
         "\
-nogc fn one() -> i64 { return 1 }
-fn apply(f: nogc fn() -> i64) -> i64 { return f() }
-fn main() -> i64 { return apply(one) }
+use std::process::ExitCode; nogc fn one() -> i64 { 1 }
+fn apply(f: nogc fn() -> i64) -> i64 { f() }
+fn main() -> ExitCode { return ExitCode::from(apply(one) as u8); }
 ",
     );
 }
@@ -414,8 +414,8 @@ fn main() -> i64 { return apply(one) }
 fn compile_unbounded_generic_is_unchanged() {
     accepts(
         "\
-fn ident<T>(x: T) -> i64 { return 0 }
-fn main() -> i64 { return ident(41) }
+use std::process::ExitCode; fn ident<T>(x: T) -> i64 { 0 }
+fn main() -> ExitCode { return ExitCode::from(ident(41) as u8); }
 ",
     );
 }
@@ -425,9 +425,9 @@ fn main() -> i64 { return ident(41) }
 fn reject_bound_type_param_name_shadowed_by_a_real_struct() {
     let err = reject(
         "\
-struct T { a: i64 }
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let t = T { a: 1 }; return keep(t) }
+use std::process::ExitCode; struct T { a: i64 }
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let t = T { a: 1 }; return ExitCode::from(keep(t) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -441,9 +441,9 @@ fn main() -> i64 { let t = T { a: 1 }; return keep(t) }
 fn compile_twin_shadowed_type_param_name_without_nogc() {
     accepts(
         "\
-struct T { a: i64 }
-fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 { let t = T { a: 1 }; return keep(t) }
+use std::process::ExitCode; struct T { a: i64 }
+fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode { let t = T { a: 1 }; return ExitCode::from(keep(t) as u8); }
 ",
     );
 }
@@ -452,12 +452,12 @@ fn main() -> i64 { let t = T { a: 1 }; return keep(t) }
 fn reject_nested_nogc_generic_instantiated_with_vec() {
     let err = reject(
         "\
-fn outer() -> i64 {
-    nogc fn helper<T>(x: T) -> i64 { let y = x; return 0 }
-    let v = vec[1, 2]
-    return helper(v)
+use std::process::ExitCode; fn outer() -> i64 {
+    nogc fn helper<T>(x: T) -> i64 { let y = x; 0 }
+    let v = vec![1, 2];
+    helper(v)
 }
-fn main() -> i64 { return outer() }
+fn main() -> ExitCode { return ExitCode::from(outer() as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -467,11 +467,11 @@ fn main() -> i64 { return outer() }
 fn compile_twin_nested_nogc_generic_instantiated_with_i64() {
     accepts(
         "\
-fn outer() -> i64 {
-    nogc fn helper<T>(x: T) -> i64 { let y = x; return 0 }
-    return helper(1)
+use std::process::ExitCode; fn outer() -> i64 {
+    nogc fn helper<T>(x: T) -> i64 { let y = x; 0 }
+    helper(1)
 }
-fn main() -> i64 { return outer() }
+fn main() -> ExitCode { return ExitCode::from(outer() as u8); }
 ",
     );
 }
@@ -482,13 +482,13 @@ fn main() -> i64 { return outer() }
 fn reject_unbounded_generic_shadowing_a_bound_name_is_fail_closed() {
     let err = reject(
         "\
-nogc fn helper<T>(x: T) -> i64 { return 0 }
+use std::process::ExitCode; nogc fn helper<T>(x: T) -> i64 { 0 }
 fn outer() -> i64 {
-    fn helper<U>(y: U) -> i64 { return 1 }
-    let v = vec[1, 2]
-    return helper(v)
+    fn helper<U>(y: U) -> i64 { 1 }
+    let v = vec![1, 2];
+    helper(v)
 }
-fn main() -> i64 { return outer() }
+fn main() -> ExitCode { return ExitCode::from(outer() as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -498,12 +498,12 @@ fn main() -> i64 { return outer() }
 fn reject_partially_bound_shadow_cannot_weaken_a_bound_name() {
     let err = reject(
         "\
-nogc fn h<A, B>(a: A, b: B) -> i64 { let x = a; return 0 }
+use std::process::ExitCode; nogc fn h<A, B>(a: A, b: B) -> i64 { let x = a; 0 }
 fn outer() -> i64 {
-    fn h<A, B: nogc>(a: A, b: B) -> i64 { return 0 }
-    return 0
+    fn h<A, B: nogc>(a: A, b: B) -> i64 { 0 }
+    0
 }
-fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from((h(v, 1) + outer()) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -517,12 +517,12 @@ fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
 fn reject_shadow_with_different_type_param_names_cannot_weaken() {
     let err = reject(
         "\
-nogc fn h<A, B>(a: A, b: B) -> i64 { let x = a; return 0 }
+use std::process::ExitCode; nogc fn h<A, B>(a: A, b: B) -> i64 { let x = a; 0 }
 fn outer() -> i64 {
-    nogc fn h<B>(b: B) -> i64 { return 0 }
-    return 0
+    nogc fn h<B>(b: B) -> i64 { 0 }
+    0
 }
-fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from((h(v, 1) + outer()) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -536,16 +536,16 @@ fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
 fn reject_sibling_nested_generics_sharing_a_bare_name() {
     let err = reject(
         "\
-fn a() -> i64 {
-    nogc fn h<A, B>(x: A, y: B) -> i64 { let z = x; return 0 }
-    let v = vec[1, 2]
-    return h(v, 1)
+use std::process::ExitCode; fn a() -> i64 {
+    nogc fn h<A, B>(x: A, y: B) -> i64 { let z = x; 0 }
+    let v = vec![1, 2];
+    h(v, 1)
 }
 fn b() -> i64 {
-    fn h<A, B: nogc>(x: A, y: B) -> i64 { return 0 }
-    return 0
+    fn h<A, B: nogc>(x: A, y: B) -> i64 { 0 }
+    0
 }
-fn main() -> i64 { return a() + b() }
+fn main() -> ExitCode { return ExitCode::from((a() + b()) as u8); }
 ",
     );
     assert_code(&err, "E0730");
@@ -559,12 +559,12 @@ fn main() -> i64 { return a() + b() }
 fn bare_name_collision_without_any_nogc_is_now_e0418() {
     let err = reject(
         "\
-fn h<A, B>(a: A, b: B) -> i64 { let x = a; return 0 }
+use std::process::ExitCode; fn h<A, B>(a: A, b: B) -> i64 { let x = a; 0 }
 fn outer() -> i64 {
-    fn h<A, B>(a: A, b: B) -> i64 { return 0 }
-    return 0
+    fn h<A, B>(a: A, b: B) -> i64 { 0 }
+    0
 }
-fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
+fn main() -> ExitCode { let v = vec![1, 2]; return ExitCode::from((h(v, 1) + outer()) as u8); }
 ",
     );
     assert!(
@@ -577,13 +577,13 @@ fn main() -> i64 { let v = vec[1, 2]; return h(v, 1) + outer() }
 fn generic_shadowing_with_a_vec_argument_is_now_e0418() {
     let err = reject(
         "\
-fn helper<T>(x: T) -> i64 { return 0 }
+use std::process::ExitCode; fn helper<T>(x: T) -> i64 { 0 }
 fn outer() -> i64 {
-    fn helper<U>(y: U) -> i64 { return 1 }
-    let v = vec[1, 2]
-    return helper(v)
+    fn helper<U>(y: U) -> i64 { 1 }
+    let v = vec![1, 2];
+    helper(v)
 }
-fn main() -> i64 { return outer() }
+fn main() -> ExitCode { return ExitCode::from(outer() as u8); }
 ",
     );
     assert!(
@@ -597,8 +597,8 @@ fn main() -> i64 { return outer() }
 fn compile_non_generic_nogc_function_is_unaffected() {
     accepts(
         "\
-nogc fn add(a: i64, b: i64) -> i64 { return a + b }
-fn main() -> i64 { return add(1, 2) }
+use std::process::ExitCode; nogc fn add(a: i64, b: i64) -> i64 { a + b }
+fn main() -> ExitCode { return ExitCode::from(add(1, 2) as u8); }
 ",
     );
 }

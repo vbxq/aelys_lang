@@ -23,7 +23,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -242,11 +242,10 @@ impl Harness {
 }
 
 const L1_ARRAY_VIEW: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let s: &[i64] = a[..]
-    println(s.len)
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let s: &[i64] = a[..];
+    println!("{}", s.len());
 }
 "#;
 
@@ -258,13 +257,12 @@ fn len1_a_view_of_an_array_answers_its_length() {
 }
 
 const L2_VEC_VIEW: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[10, 20, 30, 40]
-    let n = Vec::len(v)
-    let s: &[i64] = v[..]
-    println(s.len)
-    println(s.len - n)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![10, 20, 30, 40];
+    let n = Vec::len(v);
+    let s: &[i64] = v[..];
+    println!("{}", s.len());
+    println!("{}", s.len() - n);
 }
 "#;
 
@@ -277,14 +275,13 @@ fn len2_a_view_of_a_vec_answers_what_vec_len_answers() {
 
 const L3_MUT_VIEW: &str = r#"
 nogc fn wcount(s: &mut [i64]) -> i64 {
-    return s.len
+    s.len()
 }
-fn main() -> i64 {
-    let mut a: [i64;5] = [1, 2, 3, 4, 5]
-    let m: &mut [i64] = a[..]
-    println(m.len)
-    println(wcount(m))
-    return 0
+fn main() {
+    let mut a: [i64;5] = [1, 2, 3, 4, 5];
+    let m: &mut [i64] = a[..];
+    println!("{}", m.len());
+    println!("{}", wcount(m));
 }
 "#;
 
@@ -297,13 +294,12 @@ fn len3_mutability_does_not_gate_reading_a_length() {
 
 const L4_NOGC: &str = r#"
 nogc fn count(s: &[i64]) -> i64 {
-    return s.len
+    s.len()
 }
-fn main() -> i64 {
-    let a: [i64;7] = [1, 2, 3, 4, 5, 6, 7]
-    let s: &[i64] = a[..]
-    println(count(s))
-    return 0
+fn main() {
+    let a: [i64;7] = [1, 2, 3, 4, 5, 6, 7];
+    let s: &[i64] = a[..];
+    println!("{}", count(s));
 }
 "#;
 
@@ -318,13 +314,12 @@ const L5_MODULE: &[(&str, &str)] = &[
     (
         "root.aelys",
         r#"
-needs lens
+mod lens;
 
-fn main() -> i64 {
-    let a: [i64;5] = [1, 2, 3, 4, 5]
-    let s: &[i64] = a[..]
-    println(lens.count(s))
-    return 0
+fn main() {
+    let a: [i64;5] = [1, 2, 3, 4, 5];
+    let s: &[i64] = a[..];
+    println!("{}", lens::count(s));
 }
 "#,
     ),
@@ -332,7 +327,7 @@ fn main() -> i64 {
         "lens.aelys",
         r#"
 pub nogc fn count(s: &[i64]) -> i64 {
-    return s.len
+    s.len()
 }
 "#,
     ),
@@ -346,13 +341,12 @@ fn len5_a_length_survives_a_module_boundary() {
 }
 
 const L6_RESLICE: &str = r#"
-fn main() -> i64 {
-    let a: [i64;4] = [1, 2, 3, 4]
-    let s: &[i64] = a[..]
-    let t: &[i64] = s[..]
-    println(t.len)
-    println(t.len - s.len)
-    return 0
+fn main() {
+    let a: [i64;4] = [1, 2, 3, 4];
+    let s: &[i64] = a[..];
+    let t: &[i64] = s[..];
+    println!("{}", t.len());
+    println!("{}", t.len() - s.len());
 }
 "#;
 
@@ -364,31 +358,31 @@ fn len6_a_reslice_reports_the_same_length() {
 }
 
 const L7_SCALAR: &str = r#"
-fn main() -> i64 {
-    let x: i64 = 7
-    return x.len
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 7;
+    return ExitCode::from(x.len() as u8);
 }
 "#;
 
 const L7_UNKNOWN_ON_SLICE: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let s: &[i64] = a[..]
-    return s.cap
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64;3] = [1, 2, 3];
+    let s: &[i64] = a[..];
+    return ExitCode::from(s.cap as u8);
 }
 "#;
 
 const L7_UNKNOWN_ON_VEC: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2]
-    return v.cap
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2];
+    return ExitCode::from(v.cap as u8);
 }
 "#;
 
 const L7_UNKNOWN_ON_ARRAY: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    return a.cap
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64;3] = [1, 2, 3];
+    return ExitCode::from(a.cap as u8);
 }
 "#;
 
@@ -418,11 +412,10 @@ fn len7_the_length_did_not_open_a_field_access_hole() {
 }
 
 const L8_EMPTY: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let e: &[i64] = a[0..0]
-    println(e.len)
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let e: &[i64] = a[0..0];
+    println!("{}", e.len());
 }
 "#;
 
@@ -434,15 +427,14 @@ fn len8_an_empty_view_answers_zero() {
 }
 
 const L9_NO_BINDING: &str = r#"
-fn view(s: &[i64]) -> &[i64] { return s }
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let mut v: Vec<i64> = vec[10, 20, 30, 40, 50]
-    let s: &[i64] = a[..]
-    println(a[..].len)
-    println(v[..].len)
-    println(view(s).len)
-    return 0
+fn view(s: &[i64]) -> &[i64] { s }
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let mut v: Vec<i64> = vec![10, 20, 30, 40, 50];
+    let s: &[i64] = a[..];
+    println!("{}", a[..].len());
+    println!("{}", v[..].len());
+    println!("{}", view(s).len());
 }
 "#;
 
@@ -454,13 +446,12 @@ fn len9_a_length_does_not_need_a_binding_first() {
 }
 
 const L10_SUB_RANGE: &str = r#"
-fn main() -> i64 {
-    let a: [i64;5] = [1, 2, 3, 4, 5]
-    let p: &[i64] = a[0..2]
-    println(p.len)
-    println(a[0..2].len)
-    println(a[0..2].len - a[..].len)
-    return 0
+fn main() {
+    let a: [i64;5] = [1, 2, 3, 4, 5];
+    let p: &[i64] = a[0..2];
+    println!("{}", p.len());
+    println!("{}", a[0..2].len());
+    println!("{}", a[0..2].len() - a[..].len());
 }
 "#;
 
@@ -472,15 +463,14 @@ fn len10_a_sub_range_reports_its_own_length_not_its_bases() {
 }
 
 const L11_VEC_BOTH_WAYS: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7, 7, 7, 7, 7, 7]
-    println(v.len)
-    println(Vec::len(v))
-    println(v.len - Vec::len(v))
-    Vec::push(v, 7)
-    println(v.len)
-    println(v.len - Vec::len(v))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7, 7, 7, 7, 7, 7];
+    println!("{}", v.len());
+    println!("{}", Vec::len(v));
+    println!("{}", v.len() - Vec::len(v));
+    Vec::push(v, 7);
+    println!("{}", v.len());
+    println!("{}", v.len() - Vec::len(v));
 }
 "#;
 
@@ -492,13 +482,12 @@ fn len11_a_vec_answers_the_same_length_both_ways() {
 }
 
 const L12_SIZED_ARRAY: &str = r#"
-fn plen(a: [i64;4]) -> i64 { return a.len }
-fn main() -> i64 {
-    let a: [i64;4] = [9, 9, 9, 9]
-    println(a.len)
-    println(plen(a))
-    println(a.len - plen(a))
-    return 0
+fn plen(a: [i64;4]) -> i64 { a.len() }
+fn main() {
+    let a: [i64;4] = [9, 9, 9, 9];
+    println!("{}", a.len());
+    println!("{}", plen(a));
+    println!("{}", a.len() - plen(a));
 }
 "#;
 
@@ -510,16 +499,15 @@ fn len12_a_sized_array_answers_its_length_here_and_as_a_parameter() {
 }
 
 const L13_NOGC_ARRAY: &str = r#"
-nogc fn alen(a: [i64;6]) -> i64 { return a.len }
+nogc fn alen(a: [i64;6]) -> i64 { a.len() }
 nogc fn local() -> i64 {
-    let b: [i64;2] = [1, 2]
-    return b.len
+    let b: [i64;2] = [1, 2];
+    b.len()
 }
-fn main() -> i64 {
-    let a: [i64;6] = [1, 2, 3, 4, 5, 6]
-    println(alen(a))
-    println(local())
-    return 0
+fn main() {
+    let a: [i64;6] = [1, 2, 3, 4, 5, 6];
+    println!("{}", alen(a));
+    println!("{}", local());
 }
 "#;
 
@@ -532,20 +520,20 @@ fn len13_an_array_length_inside_nogc_allocates_nothing() {
 
 // a vec never crosses the nogc fence, so `.len` on one inside nogc has no reachable spelling
 const L14_NOGC_VEC_PARAM: &str = r#"
-nogc fn vlen(v: Vec<i64>) -> i64 { return v.len }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    return vlen(v)
+use std::process::ExitCode; nogc fn vlen(v: Vec<i64>) -> i64 { v.len() }
+fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    return ExitCode::from(vlen(v) as u8);
 }
 "#;
 
 const L14_NOGC_VEC_LOCAL: &str = r#"
-nogc fn body() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    return v.len
+use std::process::ExitCode; nogc fn body() -> i64 {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    v.len()
 }
-fn main() -> i64 {
-    return body()
+fn main() -> ExitCode {
+    return ExitCode::from(body() as u8);
 }
 "#;
 
@@ -568,11 +556,10 @@ fn len14_a_vec_length_inside_nogc_is_refused_by_the_fence() {
 }
 
 const L15_NOGC_VEC_VIEW: &str = r#"
-nogc fn vlen(s: &[i64]) -> i64 { return s.len }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3, 4, 5, 6, 7, 8]
-    println(vlen(v[..]))
-    return 0
+nogc fn vlen(s: &[i64]) -> i64 { s.len() }
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+    println!("{}", vlen(v[..]));
 }
 "#;
 
@@ -584,13 +571,12 @@ fn len15_a_vec_view_read_inside_nogc_adds_no_allocation() {
 }
 
 const L16_STRING: &str = r#"
-fn mk() -> string { return "abcd" }
-fn main() -> i64 {
-    let s: string = "hello"
-    println(s.len)
-    println("hi".len)
-    println(mk().len)
-    return 0
+fn mk() -> String { "abcd" }
+fn main() {
+    let s: String = "hello";
+    println!("{}", s.len());
+    println!("{}", "hi".len());
+    println!("{}", mk().len());
 }
 "#;
 
@@ -602,35 +588,31 @@ fn len16_a_string_answers_its_length_from_any_receiver() {
 }
 
 const L17_ADDR_STRING: &str = r#"
-fn main() -> i64 {
-    let mut s: string = "hello"
-    let r = &s.len
-    return 0
+fn main() {
+    let mut s: String = "hello";
+    let r = &s.len();
 }
 "#;
 
 const L17_ADDR_SLICE: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let mut sl: &[i64] = a[..]
-    let r = &sl.len
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let mut sl: &[i64] = a[..];
+    let r = &sl.len();
 }
 "#;
 
 const L17_ADDR_VEC: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2]
-    let r = &v.len
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2];
+    let r = &v.len();
 }
 "#;
 
 const L17_ADDR_ARRAY: &str = r#"
-fn main() -> i64 {
-    let mut a: [i64;3] = [1, 2, 3]
-    let r = &a.len
-    return 0
+fn main() {
+    let mut a: [i64;3] = [1, 2, 3];
+    let r = &a.len();
 }
 "#;
 
@@ -646,35 +628,31 @@ fn len17_a_length_has_no_address() {
 }
 
 const L18_WRITE_STRING: &str = r#"
-fn main() -> i64 {
-    let mut s: string = "hello"
-    s.len = 9
-    return 0
+fn main() {
+    let mut s: String = "hello";
+    s.len = 9;
 }
 "#;
 
 const L18_WRITE_SLICE: &str = r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    let mut sl: &[i64] = a[..]
-    sl.len = 9
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    let mut sl: &[i64] = a[..];
+    sl.len = 9;
 }
 "#;
 
 const L18_WRITE_VEC: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2]
-    v.len = 9
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2];
+    v.len = 9;
 }
 "#;
 
 const L18_WRITE_ARRAY: &str = r#"
-fn main() -> i64 {
-    let mut a: [i64;3] = [1, 2, 3]
-    a.len = 9
-    return 0
+fn main() {
+    let mut a: [i64;3] = [1, 2, 3];
+    a.len = 9;
 }
 "#;
 

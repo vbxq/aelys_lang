@@ -731,13 +731,12 @@ int main(void) {
 fn p5b_cycle_collected_under_immix() {
     let src = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    __aelys_collect();
 }
 "#;
     let Some((code, stderr)) = run_with_env(
@@ -759,10 +758,10 @@ fn main() -> i64 {
 #[test]
 fn p6_counters_identical_under_immix() {
     let src = r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    return Rc::get(b)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    return ExitCode::from(Rc::get(b) as u8);
 }
 "#;
     let Some((code, stderr)) = run_with_env(
@@ -783,10 +782,10 @@ fn main() -> i64 {
 #[test]
 fn p7_escape_hatch_malloc_shared_rc() {
     let src = r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    return Rc::get(b)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    return ExitCode::from(Rc::get(b) as u8);
 }
 "#;
     let Some((code, stderr)) = run_with_env(
@@ -807,11 +806,11 @@ fn main() -> i64 {
 #[test]
 fn p7_escape_hatch_malloc_cow_value_semantics() {
     let src = r#"
-fn main() -> i64 {
-    let a = vec[1, 2, 3]
-    let b = a
-    Vec::push(b, 9)
-    return a[0] + a[1] + a[2] + b[3]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = vec![1, 2, 3];
+    let b = a;
+    Vec::push(b, 9);
+    return ExitCode::from((a[0] + a[1] + a[2] + b[3]) as u8);
 }
 "#;
     let Some((code, stderr)) = run_with_env(

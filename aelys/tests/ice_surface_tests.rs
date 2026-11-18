@@ -24,7 +24,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -287,12 +287,11 @@ impl Harness {
 const REPAIR: &str = "bind it to a name first and use that binding";
 
 const I1_LEN_OF_A_TEMPORARY: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3, 4, 5] }
-fn main() -> i64 {
-    println(Vec::len(mkv()))
-    println(mkv().len)
-    println(Vec::len(vec[7, 8]))
-    return 0
+fn mkv() -> Vec<i64> { vec![1, 2, 3, 4, 5] }
+fn main() {
+    println!("{}", Vec::len(mkv()));
+    println!("{}", mkv().len());
+    println!("{}", Vec::len(vec![7, 8]));
 }
 "#;
 
@@ -304,18 +303,16 @@ fn ice1_a_length_of_a_temporary_answers_the_length() {
 }
 
 const I2_CALL_SPELLING: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3, 4, 5] }
-fn main() -> i64 {
-    println(Vec::len(mkv()))
-    return 0
+fn mkv() -> Vec<i64> { vec![1, 2, 3, 4, 5] }
+fn main() {
+    println!("{}", Vec::len(mkv()));
 }
 "#;
 
 const I2_MEMBER_SPELLING: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3, 4, 5] }
-fn main() -> i64 {
-    println(mkv().len)
-    return 0
+fn mkv() -> Vec<i64> { vec![1, 2, 3, 4, 5] }
+fn main() {
+    println!("{}", mkv().len());
 }
 "#;
 
@@ -327,25 +324,25 @@ fn ice2_the_call_spelling_is_the_member_spelling() {
 }
 
 const I3_AS_SLICE_OF_A_TEMPORARY: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3] }
-fn main() -> i64 {
-    let s: &[i64] = Vec::as_slice(mkv())
-    return s.len
+use std::process::ExitCode; fn mkv() -> Vec<i64> { vec![1, 2, 3] }
+fn main() -> ExitCode {
+    let s: &[i64] = Vec::as_slice(mkv());
+    return ExitCode::from(s.len() as u8);
 }
 "#;
 
 const I3_MUT_SLICE_OF_A_TEMPORARY: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3] }
-fn main() -> i64 {
-    let s: &mut [i64] = Vec::try_as_unique_mut_slice(mkv())
-    return s.len
+use std::process::ExitCode; fn mkv() -> Vec<i64> { vec![1, 2, 3] }
+fn main() -> ExitCode {
+    let s: &mut [i64] = Vec::try_as_unique_mut_slice(mkv());
+    return ExitCode::from(s.len() as u8);
 }
 "#;
 
 const I3_AS_SLICE_OF_A_LITERAL: &str = r#"
-fn main() -> i64 {
-    let s: &[i64] = Vec::as_slice(vec[1, 2, 3])
-    return s.len
+use std::process::ExitCode; fn main() -> ExitCode {
+    let s: &[i64] = Vec::as_slice(vec![1, 2, 3]);
+    return ExitCode::from(s.len() as u8);
 }
 "#;
 
@@ -359,10 +356,9 @@ fn ice3_a_view_into_a_temporary_is_refused_by_name() {
 }
 
 const I4_NESTED_RC_READ: &str = r#"
-fn main() -> i64 {
-    let rr: Rc<Rc<i64>> = Rc::new(Rc::new(7))
-    println(Rc::get(Rc::get(rr)))
-    return 0
+fn main() {
+    let rr: Rc<Rc<i64>> = Rc::new(Rc::new(7));
+    println!("{}", Rc::get(Rc::get(rr)));
 }
 "#;
 
@@ -379,42 +375,38 @@ fn ice4_a_nested_rc_read_is_refused_by_name() {
 }
 
 const I5_LEN_ON_A_PLACE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    println(Vec::len(v))
-    Vec::push(v, 4)
-    println(Vec::len(v))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    println!("{}", Vec::len(v));
+    Vec::push(v, 4);
+    println!("{}", Vec::len(v));
 }
 "#;
 
 const I5_AS_SLICE_ON_A_PLACE: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let s: &[i64] = Vec::as_slice(v)
-    println(s.len)
-    println(s[2])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let s: &[i64] = Vec::as_slice(v);
+    println!("{}", s.len());
+    println!("{}", s[2]);
 }
 "#;
 
 const I5_AS_SLICE_THROUGH_A_DEREF: &str = r#"
 nogc fn read(v: &Vec<i64>) -> i64 {
-    let s: &[i64] = Vec::as_slice(*v)
-    return Vec::len(*v) + s[0]
+    let s: &[i64] = Vec::as_slice(*v);
+    Vec::len(*v) + s[0]
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[7, 2, 3]
-    println(read(&v))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![7, 2, 3];
+    println!("{}", read(&v));
 }
 "#;
 
 const I5_RC_GET_ONE_LAYER: &str = r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(101)
-    println(Rc::get(r))
-    return 0
+fn main() {
+    let r: Rc<i64> = Rc::new(101);
+    println!("{}", Rc::get(r));
 }
 "#;
 
@@ -429,23 +421,22 @@ fn ice5_the_shapes_that_were_already_fine_are_untouched() {
 }
 
 const I6_EVERY_INTERCEPT_ON_A_PLACE: &str = r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    let z: Rc<i64> = Rc::null()
-    let mut a: Vec<i64> = Vec::new()
-    Vec::push(a, 11)
-    Vec::push(a, 22)
-    let mut b: Vec<i64> = vec[1, 2, 3]
-    let s: &[i64] = Vec::as_slice(b)
-    let mut c: Vec<i64> = vec[4, 5]
-    let m: &mut [i64] = Vec::try_as_unique_mut_slice(c)
-    m[0] = 40
-    println(Rc::get(r))
-    println(Vec::len(a))
-    println(s.len)
-    println(Vec::len(c))
-    println(c[0])
-    return 0
+fn main() {
+    let r: Rc<i64> = Rc::new(7);
+    let z: Rc<i64> = Rc::null();
+    let mut a: Vec<i64> = Vec::new();
+    Vec::push(a, 11);
+    Vec::push(a, 22);
+    let mut b: Vec<i64> = vec![1, 2, 3];
+    let s: &[i64] = Vec::as_slice(b);
+    let mut c: Vec<i64> = vec![4, 5];
+    let m: &mut [i64] = Vec::try_as_unique_mut_slice(c);
+    m[0] = 40;
+    println!("{}", Rc::get(r));
+    println!("{}", Vec::len(a));
+    println!("{}", s.len());
+    println!("{}", Vec::len(c));
+    println!("{}", c[0]);
 }
 "#;
 
@@ -463,66 +454,59 @@ fn ice6_every_builtin_intercept_still_answers_on_a_place_receiver() {
 }
 
 const I7_RC_NEW: &str = r#"
-fn mki() -> i64 { return 7 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(mki())
-    println(Rc::get(r))
-    return 0
+fn mki() -> i64 { 7 }
+fn main() {
+    let r: Rc<i64> = Rc::new(mki());
+    println!("{}", Rc::get(r));
 }
 "#;
 
 const I7_RC_GET: &str = r#"
-fn mkr() -> Rc<i64> { return Rc::new(7) }
-fn main() -> i64 {
-    println(Rc::get(mkr()))
-    return 0
+fn mkr() -> Rc<i64> { Rc::new(7) }
+fn main() {
+    println!("{}", Rc::get(mkr()));
 }
 "#;
 
 const I7_RC_NULL: &str = r#"
-fn mkz() -> Rc<i64> { return Rc::null() }
-fn main() -> i64 {
-    println(Rc::get(mkz()))
-    return 0
+fn mkz() -> Rc<i64> { Rc::null() }
+fn main() {
+    println!("{}", Rc::get(mkz()));
 }
 "#;
 
 const I7_VEC_NEW: &str = r#"
-fn mkn() -> Vec<i64> { return Vec::new() }
-fn main() -> i64 {
-    println(Vec::len(mkn()))
-    return 0
+fn mkn() -> Vec<i64> { Vec::new() }
+fn main() {
+    println!("{}", Vec::len(mkn()));
 }
 "#;
 
 const I7_VEC_PUSH: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3] }
-fn main() -> i64 {
-    Vec::push(mkv(), 4)
-    return 0
+fn mkv() -> Vec<i64> { vec![1, 2, 3] }
+fn main() {
+    Vec::push(mkv(), 4);
 }
 "#;
 
 const I7_VEC_LEN: &str = r#"
-fn mkv() -> Vec<i64> { return vec[1, 2, 3] }
-fn main() -> i64 {
-    return Vec::len(mkv())
+use std::process::ExitCode; fn mkv() -> Vec<i64> { vec![1, 2, 3] }
+fn main() -> ExitCode {
+    return ExitCode::from(Vec::len(mkv()) as u8);
 }
 "#;
 
 const I8_GLOBAL_VEC: &str = r#"
-let mut gv: Vec<string> = Vec::new()
-fn main() -> i64 {
-    println("{Vec::len(gv)}")
-    return 0
+static mut gv: Vec<String> = Vec::new();
+fn main() {
+    println!("{}", Vec::len(gv));
 }
 "#;
 
 const I8_GLOBAL_RC: &str = r#"
-let gr: Rc<i64> = Rc::new(7)
-fn main() -> i64 {
-    println("{Rc::get(gr)}")
-    return 0
+static gr: Rc<i64> = Rc::new(7);
+fn main() {
+    println!("{}", Rc::get(gr));
 }
 "#;
 

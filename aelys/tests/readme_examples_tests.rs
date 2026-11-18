@@ -658,7 +658,7 @@ fn readme_census_rejects_an_unclassified_fence() {
     assert!(blocks_of(text).and_then(|b| census(&b)).is_err());
     let text = "```rust run\nfn main() -> i64 { return 0 }\n```\n";
     assert!(blocks_of(text).and_then(|b| census(&b)).is_err());
-    let main = "fn main() -> i64 { return 0 }\n";
+    let main = "fn main() { }\n";
     for text in [
         format!("~~~rust run\n{main}~~~\n\n~~~output\n~~~\n"),
         format!("Text:\n\n    {main}"),

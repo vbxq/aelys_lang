@@ -80,10 +80,10 @@ fn lower_optimized_full(source: &str) -> aelys_air::AirProgram {
 fn llvm_lowers_const_global_reads_to_real_global_storage() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-let g: i64 = 7
+use std::process::ExitCode; static g: i64 = 7;
 
-fn main() -> i64 {
-    return g
+fn main() -> ExitCode {
+    return ExitCode::from(g as u8);
 }
 "#,
     );
@@ -106,10 +106,10 @@ fn main() -> i64 {
 fn llvm_lowers_fnptr_global_to_function_symbol() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-let f: fn() -> i64 = main
+use std::process::ExitCode; static f: fn() -> i64 = main;
 
-fn main() -> i64 {
-    return f()
+fn main() -> ExitCode {
+    return ExitCode::from(f() as u8);
 }
 "#,
     );
@@ -132,11 +132,11 @@ fn main() -> i64 {
 fn llvm_lowers_fnptr_global_alias_to_same_function_symbol() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-let g: fn() -> i64 = main
-let h: fn() -> i64 = g
+use std::process::ExitCode; static g: fn() -> i64 = main;
+static h: fn() -> i64 = g;
 
-fn main() -> i64 {
-    return h()
+fn main() -> ExitCode {
+    return ExitCode::from(h() as u8);
 }
 "#,
     );
@@ -165,19 +165,19 @@ fn main() -> i64 {
 fn llvm_lowers_data_enum_global_alias_to_same_const_aggregate() {
     let ir = compile_source_to_verified_ir_without_link(
         r#"
-enum Option<T> {
+use std::process::ExitCode; enum Option<T> {
     Some(T),
     None,
 }
 
-let g: Option<i64> = Option::None
-let h: Option<i64> = g
+static g: Option<i64> = Option::None;
+static h: Option<i64> = g;
 
-fn main() -> i64 {
-    return match h {
-        Option::Some(v) => v
-        Option::None => 9
-    }
+fn main() -> ExitCode {
+    return ExitCode::from((match h {
+        Option::Some(v) => v,
+        Option::None => 9,
+    }) as u8);
 }
 "#,
     );
@@ -208,12 +208,12 @@ enum Color {
     Green,
 }
 
-let c: Color = Color::Green
+static c: Color = Color::Green;
 
 fn read_color() -> i64 {
-    return match c {
-        Color::Red => 1
-        Color::Green => 2
+    match c {
+        Color::Red => 1,
+        Color::Green => 2,
     }
 }
 "#,
@@ -234,12 +234,12 @@ enum Color {
     Green,
 }
 
-let c: Color = Color::Green
+static c: Color = Color::Green;
 
 fn read_color() -> i64 {
-    return match c {
-        Color::Red => 1
-        Color::Green => 2
+    match c {
+        Color::Red => 1,
+        Color::Green => 2,
     }
 }
 "#,
@@ -268,12 +268,12 @@ enum Color {
     Green,
 }
 
-let c: Color = Color::Green
+static c: Color = Color::Green;
 
 fn read_color() -> i64 {
-    return match c {
-        Color::Red => 1
-        Color::Green => 2
+    match c {
+        Color::Red => 1,
+        Color::Green => 2,
     }
 }
 "#,
@@ -298,12 +298,12 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::None
+static g: Option<i64> = Option::None;
 
 fn read_option() -> i64 {
-    return match g {
-        Option::Some(v) => v
-        Option::None => 33
+    match g {
+        Option::Some(v) => v,
+        Option::None => 33,
     }
 }
 "#,
@@ -326,12 +326,12 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::Some(42)
+static g: Option<i64> = Option::Some(42);
 
 fn read_option() -> i64 {
-    return match g {
-        Option::Some(v) => v
-        Option::None => 0
+    match g {
+        Option::Some(v) => v,
+        Option::None => 0,
     }
 }
 "#,
@@ -357,12 +357,12 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::None
+static g: Option<i64> = Option::None;
 
 fn read_option() -> i64 {
-    return match g {
-        Option::Some(v) => v
-        Option::None => 33
+    match g {
+        Option::Some(v) => v,
+        Option::None => 33,
     }
 }
 "#,
@@ -386,12 +386,12 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::Some(7)
+static g: Option<i64> = Option::Some(7);
 
 fn read_option() -> i64 {
-    return match g {
-        Option::Some(v) => v
-        Option::None => 0
+    match g {
+        Option::Some(v) => v,
+        Option::None => 0,
     }
 }
 

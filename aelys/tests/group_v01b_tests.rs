@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -265,16 +265,15 @@ impl Harness {
 }
 
 const V1_A_BOUND_STRING_IS_FREED: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 20 {
-        let s: string = "row " + "{i}"
-        n = n + s.len
-        i = i + 1
+        let s: String = "row " + format!("{i}");
+        n = n + s.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -286,19 +285,18 @@ fn v01b_1_a_bound_string_is_freed_when_its_binding_dies() {
 }
 
 const V2_A_VEC_OWNS_ITS_ELEMENTS: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        let mut v: Vec<string> = Vec::new()
-        Vec::push(v, victim(i))
-        Vec::push(v, victim(i + 1))
-        n = n + v[0].len + v[1].len
-        i = i + 1
+        let mut v: Vec<String> = Vec::new();
+        Vec::push(v, victim(i));
+        Vec::push(v, victim(i + 1));
+        n = n + v[0].len() + v[1].len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -310,19 +308,18 @@ fn v01b_2_a_vec_of_strings_owns_its_elements() {
 }
 
 const V3_A_STRUCT_OWNS_ITS_STRINGS: &str = r#"
-struct P { a: string, b: string }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct P { a: String, b: String }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        let p: P = P { a: victim(i), b: victim(i + 1) }
-        let q: P = p
-        n = n + q.a.len + q.b.len
-        i = i + 1
+        let p: P = P { a: victim(i), b: victim(i + 1) };
+        let q: P = p;
+        n = n + q.a.len() + q.b.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -334,20 +331,19 @@ fn v01b_3_a_struct_owns_the_strings_it_holds() {
 }
 
 const V4_AN_ENUM_OWNS_ITS_CHARGE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        let o: Option<string> = Some(victim(i))
+        let o: Option<String> = Some(victim(i));
         match o {
-            Some(x) => { n = n + x.len }
-            None => { n = n + 1 }
+            Some(x) => { n = n + x.len(); }
+            None => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -359,18 +355,17 @@ fn v01b_4_an_enum_owns_the_charge_its_tag_names() {
 }
 
 const V5_A_GLOBAL_GIVES_BACK: &str = r#"
-let mut g: string = "g0"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+static mut g: String = "g0";
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        g = victim(i)
-        n = n + g.len
-        i = i + 1
+        g = victim(i);
+        n = n + g.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -382,22 +377,21 @@ fn v01b_5_a_reassigned_global_gives_back_what_it_held() {
 }
 
 const V6_A_VEC_OF_ENUMS_STRIDES: &str = r#"
-fn main() -> i64 {
-    let mut v: Vec<Option<i64>> = Vec::new()
-    Vec::push(v, Some(11))
-    Vec::push(v, Some(22))
-    Vec::push(v, Some(33))
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut v: Vec<Option<i64>> = Vec::new();
+    Vec::push(v, Some(11));
+    Vec::push(v, Some(22));
+    Vec::push(v, Some(33));
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
         match v[i] {
-            Some(x) => { n = n * 100 + x }
-            None => { n = n * 100 }
+            Some(x) => { n = n * 100 + x; }
+            None => { n = n * 100; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 

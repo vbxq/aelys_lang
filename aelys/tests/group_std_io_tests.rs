@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -268,17 +268,16 @@ impl Harness {
 }
 
 const IO_WRITES: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
-    let hi: [u8;6] = [104, 101, 108, 108, 111, 10]
-    let bad: [u8;4] = [98, 97, 100, 10]
-    let mut none: [u8;0] = []
-    println(io.write_out(hi[..]))
-    println(io.write_err(bad[..]))
-    println(io.write_all(1, none[..]))
-    println(io.write_all(2, none[..]))
-    return 0
+fn main() {
+    let hi: [u8;6] = [104, 101, 108, 108, 111, 10];
+    let bad: [u8;4] = [98, 97, 100, 10];
+    let mut none: [u8;0] = [];
+    println!("{}", io::write_out(hi[..]));
+    println!("{}", io::write_err(bad[..]));
+    println!("{}", io::write_all(1, none[..]));
+    println!("{}", io::write_all(2, none[..]));
 }
 "#;
 
@@ -300,19 +299,18 @@ fn group_std_io_writes_a_line_to_stdout_and_to_stderr_without_allocating() {
 }
 
 const IO_LONG: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
+fn main() {
     let mut b: [u8;40] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    ]
-    for i in 0..39 { b[i] = 120 }
-    b[39] = 10
-    println(io.write_out(b[..]))
-    return 0
+    ];
+    for i in 0..39 { b[i] = 120; }
+    b[39] = 10;
+    println!("{}", io::write_out(b[..]));
 }
 "#;
 
@@ -334,20 +332,19 @@ fn group_std_io_write_all_reports_every_byte_of_a_long_buffer() {
 }
 
 const IO_ENV: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
-    let set: [u8;13] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 73, 79, 0]
-    let missing: [u8;15] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 78, 79, 80, 69, 0]
-    let unterminated: [u8;12] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 73, 79]
-    let mut empty: [u8;0] = []
-    println(io.env_len(set[..]))
-    println(io.env_len(missing[..]))
-    println(io.env_len(unterminated[..]))
-    println(io.env_len(empty[..]))
-    if io.env_is_set(set[..]) { println(1) } else { println(0) }
-    if io.env_is_set(missing[..]) { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let set: [u8;13] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 73, 79, 0];
+    let missing: [u8;15] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 78, 79, 80, 69, 0];
+    let unterminated: [u8;12] = [71, 82, 79, 85, 80, 95, 83, 84, 68, 95, 73, 79];
+    let mut empty: [u8;0] = [];
+    println!("{}", io::env_len(set[..]));
+    println!("{}", io::env_len(missing[..]));
+    println!("{}", io::env_len(unterminated[..]));
+    println!("{}", io::env_len(empty[..]));
+    if io::env_is_set(set[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    if io::env_is_set(missing[..]) { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -369,15 +366,14 @@ fn group_std_io_env_len_answers_for_a_set_a_missing_and_an_unterminated_name() {
 }
 
 const IO_TIME: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
-    let a: i64 = io.unix_time()
-    let b: i64 = io.unix_time()
-    if a > 1700000000 { println(1) } else { println(0) }
-    if b >= a { println(1) } else { println(0) }
-    if a < 4000000000 { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let a: i64 = io::unix_time();
+    let b: i64 = io::unix_time();
+    if a > 1700000000 { println!("{}", 1); } else { println!("{}", 0); }
+    if b >= a { println!("{}", 1); } else { println!("{}", 0); }
+    if a < 4000000000 { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -399,14 +395,13 @@ fn group_std_io_unix_time_is_a_plausible_epoch_second_and_never_goes_backwards()
 }
 
 const IO_EXIT: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
-    let m: [u8;3] = [111, 107, 10]
-    println(io.write_out(m[..]))
-    io.exit_with(42)
-    println(999)
-    return 0
+fn main() {
+    let m: [u8;3] = [111, 107, 10];
+    println!("{}", io::write_out(m[..]));
+    io::exit_with(42);
+    println!("{}", 999);
 }
 "#;
 
@@ -428,14 +423,13 @@ fn group_std_io_exit_with_carries_the_code_and_the_statement_after_it_never_runs
 }
 
 const IO_ABORT: &str = r#"
-needs std.io
+use std::io;
 
-fn main() -> i64 {
-    let m: [u8;3] = [111, 107, 10]
-    println(io.write_out(m[..]))
-    io.abort_now()
-    println(999)
-    return 0
+fn main() {
+    let m: [u8;3] = [111, 107, 10];
+    println!("{}", io::write_out(m[..]));
+    io::abort_now();
+    println!("{}", 999);
 }
 "#;
 
@@ -457,16 +451,15 @@ fn group_std_io_abort_now_leaves_through_sigabrt_and_never_reaches_the_next_stat
 }
 
 const IO_BESIDE_RUNTIME: &str = r#"
-needs std.io
-needs std.str
+use std::io;
+use std::str;
 
-fn main() -> i64 {
-    let n: [u8;15] = [65, 69, 76, 89, 83, 95, 82, 67, 95, 83, 84, 65, 84, 83, 0]
-    let m: [u8;3] = [111, 107, 10]
-    if io.env_is_set(n[..]) { println(1) } else { println(0) }
-    println(io.write_out(m[..]))
-    println(str.repeat("ab", 3))
-    return 0
+fn main() {
+    let n: [u8;15] = [65, 69, 76, 89, 83, 95, 82, 67, 95, 83, 84, 65, 84, 83, 0];
+    let m: [u8;3] = [111, 107, 10];
+    if io::env_is_set(n[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", io::write_out(m[..]));
+    println!("{}", str::repeat("ab", 3));
 }
 "#;
 
@@ -489,12 +482,12 @@ fn group_std_io_externs_link_beside_the_runtime_symbols_they_share() {
 
 // the exact spelling std/io.aelys uses, called the way std/io.aelys must never call it
 const IO_EXTERN_UNGUARDED: &str = r#"
-needs std.io
+use std::process::ExitCode; use std::io;
 
-unsafe extern nogc fn time(slot: u64) -> i64
+extern "C" { nogc fn time(slot: u64) -> i64; }
 
-fn main() -> i64 {
-    return time(0)
+fn main() -> ExitCode {
+    return ExitCode::from(time(0) as u8);
 }
 "#;
 
@@ -505,10 +498,9 @@ fn group_std_io_calling_the_modules_extern_outside_unsafe_is_still_e0617() {
 }
 
 const IO_EXTERN_RETURNS_REF: &str = r#"
-unsafe extern nogc fn getenv(name: &u8) -> &u8
+extern "C" { nogc fn getenv(name: &u8) -> &u8; }
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -519,14 +511,13 @@ fn group_std_io_an_extern_returning_a_reference_is_still_e0615() {
 }
 
 const IO_EXTERN_COLLIDES_WITH_WRAPPER: &str = r#"
-unsafe extern nogc fn exit(code: i32)
+extern "C" { nogc fn exit(code: i32); }
 
 pub nogc fn exit(code: i32) {
-    unsafe { exit(code) }
+    unsafe { exit(code); }
 }
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 

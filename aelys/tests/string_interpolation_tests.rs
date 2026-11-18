@@ -43,12 +43,11 @@ fn compile_run_capture_stdout(source: &str, opt: OptimizationLevel) -> Option<St
 #[test]
 fn interpolation_formats_string_int_and_bool_unopt() {
     let src = r#"
-fn main() -> i64 {
-    let name: string = "aelys"
-    let count: i64 = 42
-    let flag: bool = true
-    println("name={name} count={count} flag={flag}")
-    return 0
+fn main() {
+    let name: String = "aelys";
+    let count: i64 = 42;
+    let flag: bool = true;
+    println!("name={name} count={count} flag={flag}");
 }
 "#;
     let Some(stdout) = compile_run_capture_stdout(src, OptimizationLevel::None) else {
@@ -61,15 +60,14 @@ fn main() -> i64 {
 fn interpolation_formats_runtime_values_optimized() {
     let src = r#"
 fn make_count() -> i64 {
-    return 7
+    7
 }
 
-fn main() -> i64 {
-    let label: string = "hits"
-    let n: i64 = make_count()
-    let on: bool = false
-    println("{label}: {n} ({on})")
-    return 0
+fn main() {
+    let label: String = "hits";
+    let n: i64 = make_count();
+    let on: bool = false;
+    println!("{label}: {n} ({on})");
 }
 "#;
     let Some(stdout) = compile_run_capture_stdout(src, OptimizationLevel::Standard) else {
@@ -81,12 +79,11 @@ fn main() -> i64 {
 #[test]
 fn runtime_string_concat_with_plus_unopt() {
     let src = r#"
-fn main() -> i64 {
-    let a: string = "foo"
-    let b: string = "bar"
-    let joined: string = a + b
-    println(joined)
-    return 0
+fn main() {
+    let a: String = "foo";
+    let b: String = "bar";
+    let joined: String = a + b;
+    println!("{}", joined);
 }
 "#;
     let Some(stdout) = compile_run_capture_stdout(src, OptimizationLevel::None) else {

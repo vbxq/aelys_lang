@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::tempdir;
 
-const MAIN: &str = "\n\nfn main() -> i64 {\n    return 0\n}\n";
+const MAIN: &str = "\n\nfn main() {\n}\n";
 
 fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,48 +58,48 @@ fn twin_is_accepted(id: &str, decl: &str) {
 const PARAM_ROWS: [(&str, &str, &str); 9] = [
     (
         "F2-1",
-        "unsafe extern fn probe(x: string)",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: String); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-2",
-        "unsafe extern fn probe(x: void)",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: void); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-3",
-        "unsafe extern fn probe(x: Rc<i64>)",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: Rc<i64>); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-4",
-        "unsafe extern fn probe(x: fn(i64) -> i64)",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: fn(i64) -> i64); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-5",
-        "unsafe extern fn probe(x: [i64; 3])",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: [i64; 3]); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-6",
-        "unsafe extern fn probe(x: vec<i64>)",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: vec<i64>); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-7",
-        "unsafe extern fn probe(x: &[i64])",
-        "unsafe extern fn probe(x: i64)",
+        "extern \"C\" { fn probe(x: &[i64]); }",
+        "extern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-8",
-        "struct S {\n    a: i64,\n}\n\nunsafe extern fn probe(x: S)",
-        "struct S {\n    a: i64,\n}\n\nunsafe extern fn probe(x: i64)",
+        "struct S {\n    a: i64,\n}\n\nextern \"C\" { fn probe(x: S); }",
+        "struct S {\n    a: i64,\n}\n\nextern \"C\" { fn probe(x: i64); }",
     ),
     (
         "F2-9",
-        "enum E {\n    A,\n}\n\nunsafe extern fn probe(x: E)",
-        "enum E {\n    A,\n}\n\nunsafe extern fn probe(x: i64)",
+        "enum E {\n    A,\n}\n\nextern \"C\" { fn probe(x: E); }",
+        "enum E {\n    A,\n}\n\nextern \"C\" { fn probe(x: i64); }",
     ),
 ];
 
@@ -124,18 +124,23 @@ fn the_eleven_scalars_pass_in_both_positions_and_a_borrow_only_as_a_parameter() 
             "F2-10: `&i64` MUST be inside the surface as a parameter, rejected with:\n{rendered}"
         );
     }
-    rejected_e0615("F2-10", "unsafe extern fn probe(x: &i64) -> &i64");
+    rejected_e0615("F2-10", "extern \"C\" { fn probe(x: &i64) -> &i64; }");
 }
 
 #[test]
 fn a_reference_counted_pointer_is_rejected_where_a_borrow_is_not() {
-    rejected_e0615("F2-3", "unsafe extern fn probe(x: Rc<i64>)");
-    twin_is_accepted("F2-3", "unsafe extern fn probe(x: &i64)");
+    rejected_e0615("F2-3", "extern \"C\" { fn probe(x: Rc<i64>); }");
+    twin_is_accepted("F2-3", "extern \"C\" { fn probe(x: &i64); }");
+}
+
+#[test]
+fn the_str_alias_is_rejected_exactly_like_string() {
+    rejected_e0615("F2-11", "extern \"C\" { fn probe(x: String); }");
 }
 
 #[test]
 fn void_is_rejected_as_a_parameter_and_admitted_as_a_return() {
-    rejected_e0615("F2-2", "unsafe extern fn probe(x: void)");
+    rejected_e0615("F2-2", "extern \"C\" { fn probe(x: void); }");
     let source = format!("unsafe extern fn probe(x: i64) -> void{MAIN}");
     if let Err(rendered) = lower(&source) {
         panic!("F2-12: `void` MUST be admitted as a return type, rejected with:\n{rendered}");
@@ -145,7 +150,7 @@ fn void_is_rejected_as_a_parameter_and_admitted_as_a_return() {
 // the accepted spellings are open, so a table of names would be walked around by one capital letter
 #[test]
 fn an_odd_capitalisation_of_string_is_e0615_and_not_an_unknown_type_name() {
-    let rendered = rejected_e0615("F2-13", "unsafe extern fn probe(x: sTRING)");
+    let rendered = rejected_e0615("F2-13", "extern \"C\" { fn probe(x: sTRING); }");
     assert!(
         !rendered.contains("E0301"),
         "F2-13: `sTRING` reaches `InferType::String`, so the unknown-name verdict must not fire:\n{rendered}"
@@ -154,7 +159,7 @@ fn an_odd_capitalisation_of_string_is_e0615_and_not_an_unknown_type_name() {
 
 #[test]
 fn a_capitalised_type_name_is_e0615_and_not_the_downstream_vec_surface() {
-    let rendered = rejected_e0615("F2-14", "unsafe extern fn probe(x: String)");
+    let rendered = rejected_e0615("F2-14", "extern \"C\" { fn probe(x: String); }");
     assert!(
         !rendered.contains("E0412"),
         "F2-14: `String` becomes a struct type, and E0615 must precede the vec surface:\n{rendered}"
@@ -163,7 +168,7 @@ fn a_capitalised_type_name_is_e0615_and_not_the_downstream_vec_surface() {
 
 #[test]
 fn an_unannotated_parameter_is_e0615_and_not_the_downstream_vec_surface() {
-    let rendered = rejected_e0615("F2-15", "unsafe extern fn probe(x)");
+    let rendered = rejected_e0615("F2-15", "extern \"C\" { fn probe(x); }");
     assert!(
         !rendered.contains("E0412"),
         "F2-15: the parameter annotation is optional in the grammar, so the surface has to hold \
@@ -173,7 +178,7 @@ fn an_unannotated_parameter_is_e0615_and_not_the_downstream_vec_surface() {
         rendered.contains("'_'"),
         "F2-15: an unwritten parameter annotation reaches the surface as `_`:\n{rendered}"
     );
-    let rendered = rejected_e0615("F2-16", "unsafe extern fn probe(x) -> i64");
+    let rendered = rejected_e0615("F2-16", "extern \"C\" { fn probe(x) -> i64; }");
     assert!(
         !rendered.contains("E0412"),
         "F2-16: an annotated return does not rescue an unwritten parameter:\n{rendered}"
@@ -183,8 +188,8 @@ fn an_unannotated_parameter_is_e0615_and_not_the_downstream_vec_surface() {
 #[test]
 fn the_bare_form_and_a_nogc_claim_stay_outside_the_surface_verdict() {
     for decl in [
-        "unsafe extern fn probe()",
-        "unsafe extern nogc fn probe(x: i64) -> i64",
+        "extern \"C\" { fn probe(); }",
+        "extern \"C\" { nogc fn probe(x: i64) -> i64; }",
     ] {
         let source = format!("{decl}{MAIN}");
         if let Err(rendered) = lower(&source) {
@@ -195,7 +200,7 @@ fn the_bare_form_and_a_nogc_claim_stay_outside_the_surface_verdict() {
 
 #[test]
 fn an_ordinary_aelys_body_is_untouched_by_the_surface() {
-    let source = format!("fn probe(x: string) -> string {{\n    return x\n}}{MAIN}");
+    let source = format!("fn probe(x: String) -> String {{\n    x\n}}{MAIN};");
     if let Err(rendered) = lower(&source) {
         panic!("F2-18: the surface only binds a foreign declaration, rejected with:\n{rendered}");
     }
@@ -288,26 +293,26 @@ fn twelve_variants_are_admitted_as_a_parameter_and_twelve_as_a_return() {
 }
 
 const BORROW_ROWS: [(&str, &str); 5] = [
-    ("F2-21", "unsafe extern fn probe(x: &string)"),
-    ("F2-22", "unsafe extern fn probe(x: &Rc<i64>)"),
-    ("F2-23", "unsafe extern fn probe(x: &vec<i64>)"),
+    ("F2-21", "extern \"C\" { fn probe(x: &String); }"),
+    ("F2-22", "extern \"C\" { fn probe(x: &Rc<i64>); }"),
+    ("F2-23", "extern \"C\" { fn probe(x: &vec<i64>); }"),
     (
         "F2-24",
-        "struct S {\n    a: i64,\n}\n\nunsafe extern fn probe(x: &S)",
+        "struct S {\n    a: i64,\n}\n\nextern \"C\" { fn probe(x: &S); }",
     ),
-    ("F2-25", "unsafe extern fn probe(x: &fn(i64) -> i64)"),
+    ("F2-25", "extern \"C\" { fn probe(x: &fn(i64) -> i64); }"),
 ];
 
 // a borrow of a rejected type reaches c as the address of a managed header, and reads arbitrary bytes
 #[test]
 fn a_borrow_of_a_rejected_type_is_rejected_and_the_i64_borrows_are_not() {
     for (id, decl) in [
-        ("F2-26", "unsafe extern fn probe(x: &i64)"),
-        ("F2-27", "unsafe extern fn probe(x: &mut i64)"),
+        ("F2-26", "extern \"C\" { fn probe(x: &i64); }"),
+        ("F2-27", "extern \"C\" { fn probe(x: &mut i64); }"),
     ] {
         twin_is_accepted(id, decl);
     }
-    rejected_e0615("F2-29", "unsafe extern fn probe(x: i64) -> &i64");
+    rejected_e0615("F2-29", "extern \"C\" { fn probe(x: i64) -> &i64; }");
     // every row is walked before the verdict, so an ablation names all five and not just the first
     let mut admitted = Vec::new();
     for (id, decl) in BORROW_ROWS {
@@ -325,8 +330,8 @@ fn a_borrow_of_a_rejected_type_is_rejected_and_the_i64_borrows_are_not() {
         "a borrow of a rejected type MUST stay outside the surface, admitted:\n{}",
         admitted.join("\n")
     );
-    rejected_e0615("F2-28", "unsafe extern fn probe(x: &void)");
-    rejected_e0615("F2-7", "unsafe extern fn probe(x: &[i64])");
+    rejected_e0615("F2-28", "extern \"C\" { fn probe(x: &void); }");
+    rejected_e0615("F2-7", "extern \"C\" { fn probe(x: &[i64]); }");
 }
 
 #[test]

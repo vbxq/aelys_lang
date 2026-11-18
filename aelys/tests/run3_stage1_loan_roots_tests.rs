@@ -133,11 +133,11 @@ const STRUCT_S: &str = "struct S { r: Rc<i64>, a: [i64;3] }\n";
 fn w1_write_through_a_shared_view_of_a_non_mut_vec_is_e0422() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    s[0] = 9
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    s[0] = 9;
+    return ExitCode::from(s[0] as u8);
 }
 "#,
     );
@@ -145,12 +145,11 @@ fn main() -> i64 {
     assert!(err.contains("shared `&[i64]`"), "got: {err}");
     accepts_and_runs(
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    s[0] = 9;
+    println!("{}", s[0]);
 }
 "#,
         "9\n",
@@ -163,22 +162,22 @@ fn main() -> i64 {
 fn w2_write_through_a_slice_of_a_non_mut_array_is_e0422() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1,2,3]
-    let s = a[..]
-    s[0] = 9
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64;3] = [1,2,3];
+    let s = a[..];
+    s[0] = 9;
+    return ExitCode::from(s[0] as u8);
 }
 "#,
     );
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         r#"
-fn main() -> i64 {
-    let mut a: [i64;3] = [1,2,3]
-    let s = a[..]
-    s[0] = 9
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64;3] = [1,2,3];
+    let s = a[..];
+    s[0] = 9;
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         "",
@@ -192,22 +191,22 @@ fn w3_reborrow_of_a_shared_vec_ref_is_e0422() {
     let err = rejects(
         r#"
 fn get(r: &Vec<i64>) -> i64 {
-    let s = (*r)[..]
-    s[0] = 9
-    return s[0]
+    let s = (*r)[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(err.contains("E0422"), "got: {err}");
     accepts(
         r#"
 fn get(r: &mut Vec<i64>) -> i64 {
-    let s = (*r)[..]
-    s[0] = 9
-    return s[0]
+    let s = (*r)[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
 }
@@ -216,25 +215,24 @@ fn main() -> i64 { return 0 }
 fn w4_reslice_of_a_shared_view_stays_shared_and_is_e0422() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    let t = s[..]
-    t[0] = 9
-    return t[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    let t = s[..];
+    t[0] = 9;
+    return ExitCode::from(t[0] as u8);
 }
 "#,
     );
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    let t = s[..]
-    t[0] = 9
-    println(t[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    let t = s[..];
+    t[0] = 9;
+    println!("{}", t[0]);
 }
 "#,
         "9\n",
@@ -247,25 +245,24 @@ fn main() -> i64 {
 fn w5_copy_of_a_shared_view_is_e0422() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    let t = s
-    t[0] = 9
-    return t[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    let t = s;
+    t[0] = 9;
+    return ExitCode::from(t[0] as u8);
 }
 "#,
     );
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    let t = s
-    t[0] = 9
-    println(t[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    let t = s;
+    t[0] = 9;
+    println!("{}", t[0]);
 }
 "#,
         "9\n",
@@ -278,14 +275,14 @@ fn main() -> i64 {
 fn w6_a_callee_writing_its_shared_slice_parameter_is_e0422() {
     let err = rejects(
         r#"
-fn wr(s: &[i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+use std::process::ExitCode; fn wr(s: &[i64]) -> i64 {
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    return wr(s)
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    return ExitCode::from(wr(s) as u8);
 }
 "#,
     );
@@ -294,14 +291,13 @@ fn main() -> i64 {
     accepts_and_runs(
         r#"
 fn wr(s: &mut [i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    println(wr(s))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    println!("{}", wr(s));
 }
 "#,
         "9\n",
@@ -315,14 +311,13 @@ fn w7_an_array_slice_passed_to_a_shared_writer_is_e0422() {
     let err = rejects(
         r#"
 fn wr(s: &[i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 {
-    let a: [i64;3] = [1,2,3]
-    let s = a[..]
-    println(wr(s))
-    return 0
+fn main() {
+    let a: [i64;3] = [1,2,3];
+    let s = a[..];
+    println!("{}", wr(s));
 }
 "#,
     );
@@ -330,14 +325,13 @@ fn main() -> i64 {
     accepts_and_runs(
         r#"
 fn wr(s: &mut [i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 {
-    let mut a: [i64;3] = [1,2,3]
-    let s = a[..]
-    println(wr(s))
-    return 0
+fn main() {
+    let mut a: [i64;3] = [1,2,3];
+    let s = a[..];
+    println!("{}", wr(s));
 }
 "#,
         "9\n",
@@ -352,16 +346,15 @@ fn w8_the_write_one_frame_down_is_refused_in_the_callee() {
         r#"
 fn rec(s: &[i64], n: i64) -> i64 {
     if n == 0 {
-        s[0] = 9
-        return s[0]
+        s[0] = 9;
+        return s[0];
     }
-    return rec(s, n - 1)
+    rec(s, n - 1)
 }
-fn main() -> i64 {
-    let a: [i64;3] = [1,2,3]
-    let s = a[..]
-    println(rec(s, 2))
-    return 0
+fn main() {
+    let a: [i64;3] = [1,2,3];
+    let s = a[..];
+    println!("{}", rec(s, 2));
 }
 "#,
     );
@@ -370,16 +363,15 @@ fn main() -> i64 {
         r#"
 fn rec(s: &mut [i64], n: i64) -> i64 {
     if n == 0 {
-        s[0] = 9
-        return s[0]
+        s[0] = 9;
+        return s[0];
     }
-    return rec(s, n - 1)
+    rec(s, n - 1)
 }
-fn main() -> i64 {
-    let mut a: [i64;3] = [1,2,3]
-    let s = a[..]
-    println(rec(s, 2))
-    return 0
+fn main() {
+    let mut a: [i64;3] = [1,2,3];
+    let s = a[..];
+    println!("{}", rec(s, 2));
 }
 "#,
         "9\n",
@@ -392,12 +384,11 @@ fn main() -> i64 {
 fn w9_vec_slice_passed_to_a_reader_runs() {
     accepts_and_runs(
         r#"
-fn rd(s: &[i64]) -> i64 { return s[0] }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    println(rd(s))
-    return 0
+fn rd(s: &[i64]) -> i64 { s[0] }
+fn main() {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    println!("{}", rd(s));
 }
 "#,
         "1\n",
@@ -410,11 +401,11 @@ fn main() -> i64 {
 fn w10_write_to_a_borrowed_vec_is_e0711() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let r = &v[0]
-    v = vec[4,5,6]
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let r = &v[0];
+    v = vec![4,5,6];
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -425,11 +416,11 @@ fn main() -> i64 {
 fn w11_write_to_a_borrowed_array_is_e0711() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let mut a: [i64;3] = [1,2,3]
-    let s = a[..]
-    a = [4,5,6]
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut a: [i64;3] = [1,2,3];
+    let s = a[..];
+    a = [4,5,6];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
     );
@@ -440,11 +431,11 @@ fn main() -> i64 {
 fn w12_write_to_a_borrowed_scalar_is_e0711() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let mut x: i64 = 1
-    let r = &x
-    x = 5
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x: i64 = 1;
+    let r = &x;
+    x = 5;
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -455,10 +446,9 @@ fn main() -> i64 {
 fn w13_mut_ref_into_a_vec_element_is_still_e0415() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let r = &mut v[0]
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![1,2,3];
+    let r = &mut v[0];
 }
 "#,
     );
@@ -469,10 +459,9 @@ fn main() -> i64 {
 fn w14_amp_of_a_slice_expression_is_still_e0421() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = &v[..]
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = &v[..];
 }
 "#,
     );
@@ -483,9 +472,8 @@ fn main() -> i64 {
 fn w16_rc_of_vec_is_still_fenced() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let v: Rc<Vec<i64>> = Rc::new(vec[1,2,3])
-    return 0
+fn main() {
+    let v: Rc<Vec<i64>> = Rc::new(vec![1,2,3]);
 }
 "#,
     );
@@ -496,13 +484,12 @@ fn main() -> i64 {
 fn w17_ref_to_rc_at_a_let_reads_through_and_stays_balanced() {
     accepts_and_runs(
         r#"
-fn get(p: &Rc<i64>) -> i64 { return Rc::get(*p) }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let p: &Rc<i64> = &r
-    println(get(p))
-    println(Rc::get(*p))
-    return 0
+fn get(p: &Rc<i64>) -> i64 { Rc::get(*p) }
+fn main() {
+    let r: Rc<i64> = Rc::new(5);
+    let p: &Rc<i64> = &r;
+    println!("{}", get(p));
+    println!("{}", Rc::get(*p));
 }
 "#,
         "5\n5\n",
@@ -515,12 +502,11 @@ fn main() -> i64 {
 fn w17b_writing_an_rc_while_a_reference_to_it_is_live_is_e0711() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let mut r: Rc<i64> = Rc::new(5)
-    let p: &Rc<i64> = &r
-    r = Rc::new(9)
-    println(Rc::get(*p))
-    return 0
+fn main() {
+    let mut r: Rc<i64> = Rc::new(5);
+    let p: &Rc<i64> = &r;
+    r = Rc::new(9);
+    println!("{}", Rc::get(*p));
 }
 "#,
     );
@@ -531,14 +517,14 @@ fn main() -> i64 {
 fn w19_borrow_outliving_its_vec_is_e0722() {
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let x: i64 = 0
-    let mut p: &i64 = &x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 0;
+    let mut p: &i64 = &x;
     if true {
-        let v: Vec<i64> = vec[1,2,3]
-        p = &v[0]
+        let v: Vec<i64> = vec![1,2,3];
+        p = &v[0];
     }
-    return *p
+    return ExitCode::from((*p) as u8);
 }
 "#,
     );
@@ -549,15 +535,15 @@ fn main() -> i64 {
 fn w20_the_write_two_frames_down_is_refused_where_it_is_written() {
     let err = rejects(
         r#"
-fn wr(s: &[i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+use std::process::ExitCode; fn wr(s: &[i64]) -> i64 {
+    s[0] = 9;
+    s[0]
 }
-fn mid(s: &[i64]) -> i64 { return wr(s) }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    return mid(s)
+fn mid(s: &[i64]) -> i64 { wr(s) }
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    return ExitCode::from(mid(s) as u8);
 }
 "#,
     );
@@ -566,15 +552,14 @@ fn main() -> i64 {
     accepts_and_runs(
         r#"
 fn wr(s: &mut [i64]) -> i64 {
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }
-fn mid(s: &mut [i64]) -> i64 { return wr(s) }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    println(mid(s))
-    return 0
+fn mid(s: &mut [i64]) -> i64 { wr(s) }
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    println!("{}", mid(s));
 }
 "#,
         "9\n",
@@ -587,17 +572,17 @@ fn main() -> i64 {
 fn w21_a_recursive_writer_of_a_shared_slice_is_e0422() {
     let err = rejects(
         r#"
-fn rec(s: &[i64], n: i64) -> i64 {
+use std::process::ExitCode; fn rec(s: &[i64], n: i64) -> i64 {
     if n == 0 {
-        s[0] = 9
-        return s[0]
+        s[0] = 9;
+        return s[0];
     }
-    return rec(s, n - 1)
+    rec(s, n - 1)
 }
-fn main() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    return rec(s, 2)
+fn main() -> ExitCode {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    return ExitCode::from(rec(s, 2) as u8);
 }
 "#,
     );
@@ -606,16 +591,15 @@ fn main() -> i64 {
         r#"
 fn rec(s: &mut [i64], n: i64) -> i64 {
     if n == 0 {
-        s[0] = 9
-        return s[0]
+        s[0] = 9;
+        return s[0];
     }
-    return rec(s, n - 1)
+    rec(s, n - 1)
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    println(rec(s, 2))
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    println!("{}", rec(s, 2));
 }
 "#,
         "9\n",
@@ -627,26 +611,24 @@ fn main() -> i64 {
 #[test]
 fn u1_slice_of_an_array_field_next_to_an_rc_field_needs_a_mut_root() {
     let err = rejects(&format!(
-        r#"{STRUCT_S}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+        r#"{STRUCT_S};
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{{}}", s[0]);
 }}
 "#
     ));
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
-fn main() -> i64 {{
-    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+            r#"{STRUCT_S};
+fn main() {{
+    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{{}}", s[0]);
 }}
 "#
         ),
@@ -659,32 +641,30 @@ fn main() -> i64 {{
 #[test]
 fn u2_that_slice_passed_to_a_writer_needs_a_mut_view() {
     let err = rejects(&format!(
-        r#"{STRUCT_S}
+        r#"{STRUCT_S};
 fn w(s: &[i64]) -> i64 {{
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    println(w(s))
-    return 0
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    println!("{{}}", w(s));
 }}
 "#
     ));
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
+            r#"{STRUCT_S};
 fn w(s: &mut [i64]) -> i64 {{
-    s[0] = 9
-    return s[0]
+    s[0] = 9;
+    s[0]
 }}
-fn main() -> i64 {{
-    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    println(w(s))
-    return 0
+fn main() {{
+    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    println!("{{}}", w(s));
 }}
 "#
         ),
@@ -700,12 +680,11 @@ fn u3_nested_struct_holding_the_rc_needs_a_mut_root() {
         r#"
 struct Inner { r: Rc<i64> }
 struct Outer { i: Inner, a: [i64;3] }
-fn main() -> i64 {
-    let x: Outer = Outer { i: Inner { r: Rc::new(5) }, a: [4,5,6] }
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+fn main() {
+    let x: Outer = Outer { i: Inner { r: Rc::new(5) }, a: [4,5,6] };
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
 }
 "#,
     );
@@ -714,12 +693,11 @@ fn main() -> i64 {
         r#"
 struct Inner { r: Rc<i64> }
 struct Outer { i: Inner, a: [i64;3] }
-fn main() -> i64 {
-    let mut x: Outer = Outer { i: Inner { r: Rc::new(5) }, a: [4,5,6] }
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+fn main() {
+    let mut x: Outer = Outer { i: Inner { r: Rc::new(5) }, a: [4,5,6] };
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
 }
 "#,
         "9\n",
@@ -733,12 +711,11 @@ fn u5_the_same_struct_without_an_rc_field_allocates_nothing() {
     let err = rejects(
         r#"
 struct T { b: i64, a: [i64;3] }
-fn main() -> i64 {
-    let x: T = T { b: 1, a: [4,5,6] }
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+fn main() {
+    let x: T = T { b: 1, a: [4,5,6] };
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
 }
 "#,
     );
@@ -746,12 +723,11 @@ fn main() -> i64 {
     accepts_and_runs(
         r#"
 struct T { b: i64, a: [i64;3] }
-fn main() -> i64 {
-    let mut x: T = T { b: 1, a: [4,5,6] }
-    let s = x.a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+fn main() {
+    let mut x: T = T { b: 1, a: [4,5,6] };
+    let s = x.a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
 }
 "#,
         "9\n",
@@ -763,32 +739,30 @@ fn main() -> i64 {
 #[test]
 fn u7_the_struct_as_a_by_value_parameter_needs_a_mut_parameter() {
     let err = rejects(&format!(
-        r#"{STRUCT_S}
+        r#"{STRUCT_S};
 fn f(x: S) -> i64 {{
-    let s = x.a[..]
-    s[0] = 9
-    return s[0]
+    let s = x.a[..];
+    s[0] = 9;
+    s[0]
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    println(f(x))
-    return 0
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    println!("{{}}", f(x));
 }}
 "#
     ));
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
+            r#"{STRUCT_S};
 fn f(mut x: S) -> i64 {{
-    let s = x.a[..]
-    s[0] = 9
-    return s[0]
+    let s = x.a[..];
+    s[0] = 9;
+    s[0]
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    println(f(x))
-    return 0
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    println!("{{}}", f(x));
 }}
 "#
         ),
@@ -801,28 +775,26 @@ fn main() -> i64 {{
 #[test]
 fn u8_reslice_off_the_array_field_needs_a_mut_root() {
     let err = rejects(&format!(
-        r#"{STRUCT_S}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    let t = s[..]
-    t[0] = 9
-    println(t[0])
-    return 0
+        r#"{STRUCT_S};
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    let t = s[..];
+    t[0] = 9;
+    println!("{{}}", t[0]);
 }}
 "#
     ));
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
-fn main() -> i64 {{
-    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    let t = s[..]
-    t[0] = 9
-    println(t[0])
-    return 0
+            r#"{STRUCT_S};
+fn main() {{
+    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    let t = s[..];
+    t[0] = 9;
+    println!("{{}}", t[0]);
 }}
 "#
         ),
@@ -875,11 +847,10 @@ fn direct_field_write_on_a_non_mut_binding_is_still_accepted() {
     accepts_and_runs(
         r#"
 struct T { b: i64, a: [i64;3] }
-fn main() -> i64 {
-    let x: T = T { b: 1, a: [4,5,6] }
-    x.a[0] = 9
-    println(x.a[0])
-    return 0
+fn main() {
+    let x: T = T { b: 1, a: [4,5,6] };
+    x.a[0] = 9;
+    println!("{}", x.a[0]);
 }
 "#,
         "9\n",
@@ -888,11 +859,10 @@ fn main() -> i64 {
     );
     let err = rejects(
         r#"
-fn main() -> i64 {
-    let a: [i64;3] = [4,5,6]
-    a[0] = 9
-    println(a[0])
-    return 0
+fn main() {
+    let a: [i64;3] = [4,5,6];
+    a[0] = 9;
+    println!("{}", a[0]);
 }
 "#,
     );
@@ -903,13 +873,12 @@ fn main() -> i64 {
 fn u10_borrowing_the_whole_struct_runs() {
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
-fn take(w: &S) -> i64 {{ return 0 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let q = take(&x)
-    println(q)
-    return 0
+            r#"{STRUCT_S};
+fn take(w: &S) -> i64 {{ 0 }}
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let q = take(&x);
+    println!("{{}}", q);
 }}
 "#
         ),
@@ -944,35 +913,35 @@ fn main() -> i64 {{
 fn i1_indirect_call_with_an_rc_argument_needs_a_mut_result() {
     let err = rejects(
         r#"
-struct S { a: [i64;3] }
-fn pick(p: &Rc<i64>, x: &S) -> &S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Rc<i64>, x: &S) -> &S { x }
 fn go(g: fn(&Rc<i64>, &S) -> &S) -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let x: S = S { a: [4,5,6] }
-    let w = g(&r, &x)
-    let s = (*w).a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+    let r: Rc<i64> = Rc::new(5);
+    let x: S = S { a: [4,5,6] };
+    let w = g(&r, &x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
+    0
 }
-fn main() -> i64 { return go(pick) }
+fn main() -> ExitCode { return ExitCode::from(go(pick) as u8); }
 "#,
     );
     assert!(err.contains("E0422"), "got: {err}");
     accepts_and_runs(
         r#"
-struct S { a: [i64;3] }
-fn pick(p: &Rc<i64>, x: &mut S) -> &mut S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Rc<i64>, x: &mut S) -> &mut S { x }
 fn go(g: fn(&Rc<i64>, &mut S) -> &mut S) -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let mut x: S = S { a: [4,5,6] }
-    let w = g(&r, &mut x)
-    let s = (*w).a[..]
-    s[0] = 9
-    println(s[0])
-    return 0
+    let r: Rc<i64> = Rc::new(5);
+    let mut x: S = S { a: [4,5,6] };
+    let w = g(&r, &mut x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    println!("{}", s[0]);
+    0
 }
-fn main() -> i64 { return go(pick) }
+fn main() -> ExitCode { return ExitCode::from(go(pick) as u8); }
 "#,
         "9\n",
         0,
@@ -981,17 +950,17 @@ fn main() -> i64 { return go(pick) }
 }
 
 const IND2_CTL: &str = r#"
-struct S { a: [i64;3] }
-fn pick(p: &Vec<i64>, x: &S) -> &S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Vec<i64>, x: &S) -> &S { x }
 fn go(g: fn(&Vec<i64>, &S) -> &S) -> i64 {
-    let r: Vec<i64> = vec[5,6,7]
-    let x: S = S { a: [4,5,6] }
-    let w = g(&r, &x)
-    let s = (*w).a[..]
-    s[0] = 9
-    return s[0]
+    let r: Vec<i64> = vec![5,6,7];
+    let x: S = S { a: [4,5,6] };
+    let w = g(&r, &x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return go(pick) }
+fn main() -> ExitCode { return ExitCode::from(go(pick) as u8); }
 "#;
 
 #[test]
@@ -1009,33 +978,33 @@ fn x1_the_vec_in_the_message_is_gone_and_both_spellings_agree() {
         "the message that named a Vec the slice does not come from is back; got: {err}"
     );
     let direct = r#"
-struct S { a: [i64;3] }
-fn pick(p: &Vec<i64>, x: &S) -> &S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Vec<i64>, x: &S) -> &S { x }
 fn go() -> i64 {
-    let r: Vec<i64> = vec[5,6,7]
-    let x: S = S { a: [4,5,6] }
-    let w = pick(&r, &x)
-    let s = (*w).a[..]
-    s[0] = 9
-    return s[0]
+    let r: Vec<i64> = vec![5,6,7];
+    let x: S = S { a: [4,5,6] };
+    let w = pick(&r, &x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return go() }
+fn main() -> ExitCode { return ExitCode::from(go() as u8); }
 "#;
     let direct_err = rejects(direct);
     assert!(direct_err.contains("E0422"), "got: {direct_err}");
     accepts(
         r#"
-struct S { a: [i64;3] }
-fn pick(p: &Vec<i64>, x: &mut S) -> &mut S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Vec<i64>, x: &mut S) -> &mut S { x }
 fn go() -> i64 {
-    let r: Vec<i64> = vec[5,6,7]
-    let mut x: S = S { a: [4,5,6] }
-    let w = pick(&r, &mut x)
-    let s = (*w).a[..]
-    s[0] = 9
-    return s[0]
+    let r: Vec<i64> = vec![5,6,7];
+    let mut x: S = S { a: [4,5,6] };
+    let w = pick(&r, &mut x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return go() }
+fn main() -> ExitCode { return ExitCode::from(go() as u8); }
 "#,
     );
 }
@@ -1045,12 +1014,11 @@ fn e1_an_enum_carrying_an_rc_runs_with_a_live_refcount() {
     accepts_and_runs(
         r#"
 enum E { A(Rc<i64>) }
-fn f(e: &E) -> i64 { return 0 }
-fn main() -> i64 {
-    let e: E = E::A(Rc::new(7))
-    let q = f(&e)
-    println(q)
-    return 0
+fn f(e: &E) -> i64 { 0 }
+fn main() {
+    let e: E = E::A(Rc::new(7));
+    let q = f(&e);
+    println!("{}", q);
 }
 "#,
         "0\n",
@@ -1064,12 +1032,11 @@ fn e2_the_plain_enum_twin_allocates_nothing() {
     accepts_and_runs(
         r#"
 enum E { A(i64), B(i64) }
-fn f(e: &E) -> i64 { return 0 }
-fn main() -> i64 {
-    let e: E = E::A(1)
-    let q = f(&e)
-    println(q)
-    return 0
+fn f(e: &E) -> i64 { 0 }
+fn main() {
+    let e: E = E::A(1);
+    let q = f(&e);
+    println!("{}", q);
 }
 "#,
         "0\n",
@@ -1084,10 +1051,10 @@ fn f1_an_array_of_a_struct_holding_an_rc_is_accepted() {
         r#"
 struct S { r: Rc<i64> }
 fn f(a: [S;2]) -> i64 {
-    let p = &a
-    return 0
+    let p = &a;
+    0
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
 }
@@ -1096,12 +1063,11 @@ fn main() -> i64 { return 0 }
 fn c1r_a_borrowed_rc_with_no_projection_runs() {
     accepts_and_runs(
         r#"
-fn take(p: &Rc<i64>) -> i64 { return 0 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let q = take(&r)
-    println(q)
-    return 0
+fn take(p: &Rc<i64>) -> i64 { 0 }
+fn main() {
+    let r: Rc<i64> = Rc::new(5);
+    let q = take(&r);
+    println!("{}", q);
 }
 "#,
         "0\n",
@@ -1114,10 +1080,10 @@ fn main() -> i64 {
 fn c3r_a_borrowed_scalar_runs_without_allocating() {
     accepts_and_runs(
         r#"
-fn main() -> i64 {
-    let x: i64 = 1
-    let r = &x
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 1;
+    let r = &x;
+    return ExitCode::from((*r) as u8);
 }
 "#,
         "",
@@ -1130,15 +1096,14 @@ fn main() -> i64 {
 fn u12_a_used_peeled_ref_runs() {
     accepts_and_runs(
         &format!(
-            r#"{STRUCT_S}
+            r#"{STRUCT_S};
 fn f(w: &S) -> i64 {{
-    let q = &*w
-    return (*q).a[0]
+    let q = &*w;
+    (*q).a[0]
 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    println(f(&x))
-    return 0
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    println!("{{}}", f(&x));
 }}
 "#
         ),
@@ -1195,10 +1160,10 @@ fn dump_stays_off_without_the_env_var() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1,2,3]
-    let s = a[..]
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64;3] = [1,2,3];
+    let s = a[..];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
     )
@@ -1217,12 +1182,11 @@ fn main() -> i64 {
 fn c1r_an_rc_root_with_no_projection_is_managed() {
     assert_class(
         r#"
-fn take(p: &Rc<i64>) -> i64 { return 0 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let q = take(&r)
-    println(q)
-    return 0
+fn take(p: &Rc<i64>) -> i64 { 0 }
+fn main() {
+    let r: Rc<i64> = Rc::new(5);
+    let q = take(&r);
+    println!("{}", q);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Rc(I64) class=Managed"#],
@@ -1233,13 +1197,12 @@ fn main() -> i64 {
 fn c2r_a_slice_root_is_unknown() {
     assert_class(
         &format!(
-            r#"{STRUCT_S}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    let t = s[..]
-    println(t[0])
-    return 0
+            r#"{STRUCT_S};
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    let t = s[..];
+    println!("{{}}", t[0]);
 }}
 "#
         ),
@@ -1254,20 +1217,20 @@ fn main() -> i64 {{
 fn c3r_an_array_of_scalars_and_a_scalar_are_unmanaged() {
     assert_class(
         r#"
-fn main() -> i64 {
-    let a: [i64;3] = [1,2,3]
-    let s = a[..]
-    return s[0]
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: [i64;3] = [1,2,3];
+    let s = a[..];
+    return ExitCode::from(s[0] as u8);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Array(I64, Some(3)) class=Unmanaged"#],
     );
     assert_class(
         r#"
-fn main() -> i64 {
-    let x: i64 = 1
-    let r = &x
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 1;
+    let r = &x;
+    return ExitCode::from((*r) as u8);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%0 proj=[] ty=I64 class=Unmanaged"#],
@@ -1278,12 +1241,11 @@ fn main() -> i64 {
 fn u1_class_a_field_projection_is_unknown() {
     assert_class(
         &format!(
-            r#"{STRUCT_S}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let s = x.a[..]
-    println(s[0])
-    return 0
+            r#"{STRUCT_S};
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let s = x.a[..];
+    println!("{{}}", s[0]);
 }}
 "#
         ),
@@ -1296,11 +1258,10 @@ fn u5_class_the_unmanaged_twin_is_unknown_too() {
     assert_class(
         r#"
 struct T { b: i64, a: [i64;3] }
-fn main() -> i64 {
-    let x: T = T { b: 1, a: [4,5,6] }
-    let s = x.a[..]
-    println(s[0])
-    return 0
+fn main() {
+    let x: T = T { b: 1, a: [4,5,6] };
+    let s = x.a[..];
+    println!("{}", s[0]);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%2 proj=[Field(a)] ty=Struct("T", []) class=Unknown"#],
@@ -1334,13 +1295,12 @@ fn main() -> i64 {{
 fn u10_class_the_whole_struct_is_managed() {
     assert_class(
         &format!(
-            r#"{STRUCT_S}
-fn take(w: &S) -> i64 {{ return 0 }}
-fn main() -> i64 {{
-    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }}
-    let q = take(&x)
-    println(q)
-    return 0
+            r#"{STRUCT_S};
+fn take(w: &S) -> i64 {{ 0 }}
+fn main() {{
+    let x: S = S {{ r: Rc::new(5), a: [4,5,6] }};
+    let q = take(&x);
+    println!("{{}}", q);
 }}
 "#
         ),
@@ -1374,17 +1334,17 @@ fn main() -> i64 {{
 fn i1_class_the_rc_loan_is_managed_and_the_program_still_compiles() {
     assert_class(
         r#"
-struct S { a: [i64;3] }
-fn pick(p: &Rc<i64>, x: &S) -> &S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Rc<i64>, x: &S) -> &S { x }
 fn go(g: fn(&Rc<i64>, &S) -> &S) -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let x: S = S { a: [4,5,6] }
-    let w = g(&r, &x)
-    let s = (*w).a[..]
-    println(s[0])
-    return 0
+    let r: Rc<i64> = Rc::new(5);
+    let x: S = S { a: [4,5,6] };
+    let w = g(&r, &x);
+    let s = (*w).a[..];
+    println!("{}", s[0]);
+    0
 }
-fn main() -> i64 { return go(pick) }
+fn main() -> ExitCode { return ExitCode::from(go(pick) as u8); }
 "#,
         &[
             r#"LOANROOT fn=go loan=0 root=%2 proj=[] ty=Rc(I64) class=Managed"#,
@@ -1399,12 +1359,11 @@ fn e1_class_an_enum_holding_an_rc_is_managed() {
     assert_class(
         r#"
 enum E { A(Rc<i64>) }
-fn f(e: &E) -> i64 { return 0 }
-fn main() -> i64 {
-    let e: E = E::A(Rc::new(7))
-    let q = f(&e)
-    println(q)
-    return 0
+fn f(e: &E) -> i64 { 0 }
+fn main() {
+    let e: E = E::A(Rc::new(7));
+    let q = f(&e);
+    println!("{}", q);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%2 proj=[] ty=Enum("E", []) class=Managed"#],
@@ -1416,12 +1375,11 @@ fn e2_class_the_plain_enum_twin_is_unmanaged() {
     assert_class(
         r#"
 enum E { A(i64), B(i64) }
-fn f(e: &E) -> i64 { return 0 }
-fn main() -> i64 {
-    let e: E = E::A(1)
-    let q = f(&e)
-    println(q)
-    return 0
+fn f(e: &E) -> i64 { 0 }
+fn main() {
+    let e: E = E::A(1);
+    let q = f(&e);
+    println!("{}", q);
 }
 "#,
         &[r#"LOANROOT fn=main loan=0 root=%1 proj=[] ty=Enum("E", []) class=Unmanaged"#],
@@ -1434,10 +1392,10 @@ fn f1_class_an_array_of_a_managed_struct_is_managed() {
         r#"
 struct S { r: Rc<i64> }
 fn f(a: [S;2]) -> i64 {
-    let p = &a
-    return 0
+    let p = &a;
+    0
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
         &[r#"LOANROOT fn=f loan=0 root=%0 proj=[] ty=Array(Struct("S", []), Some(2)) class=Managed"#],
     );
@@ -1447,12 +1405,12 @@ fn main() -> i64 { return 0 }
 fn a_rejected_program_dumps_each_loan_once() {
     assert_class(
         r#"
-nogc fn f() -> i64 {
-    let v: Vec<i64> = vec[1,2,3]
-    let s = v[..]
-    return s[0]
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let v: Vec<i64> = vec![1,2,3];
+    let s = v[..];
+    s[0]
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 "#,
         &[r#"LOANROOT fn=f loan=0 root=%1 proj=[] ty=Vec(I64) class=Managed"#],
     );
@@ -1557,7 +1515,7 @@ mod asan {
         Some(exe)
     }
 
-    const PLANTED_LEAK: &str = "fn mk() -> Rc<i64> {\n    return Rc::new(7)\n}\nfn burn() -> i64 {\n    let a: Rc<i64> = mk()\n    let b: Rc<i64> = mk()\n    return Rc::get(a) + Rc::get(b)\n}\nfn main() -> i64 {\n    println(burn())\n    return 0\n}\n";
+    const PLANTED_LEAK: &str = "fn mk() -> Rc<i64> {\n    Rc::new(7)\n}\nfn burn() -> i64 {\n    let a: Rc<i64> = mk();\n    let b: Rc<i64> = mk();\n    Rc::get(a) + Rc::get(b)\n}\nfn main() {\n    println!(\"{}\", burn());\n}\n";
 
     fn planted_leak(dir: &Path) -> String {
         let Some(_leak) = build_asan_archive_with(dir, "aelys_rc_leak.c", "aelys-core-leak-asan")
@@ -1623,17 +1581,17 @@ mod asan {
             (
                 "i1",
                 r#"
-struct S { a: [i64;3] }
-fn pick(p: &Rc<i64>, x: &mut S) -> &mut S { return x }
+use std::process::ExitCode; struct S { a: [i64;3] }
+fn pick(p: &Rc<i64>, x: &mut S) -> &mut S { x }
 fn go(g: fn(&Rc<i64>, &mut S) -> &mut S) -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let mut x: S = S { a: [4,5,6] }
-    let w = g(&r, &mut x)
-    let s = (*w).a[..]
-    s[0] = 9
-    return s[0]
+    let r: Rc<i64> = Rc::new(5);
+    let mut x: S = S { a: [4,5,6] };
+    let w = g(&r, &mut x);
+    let s = (*w).a[..];
+    s[0] = 9;
+    s[0]
 }
-fn main() -> i64 { return go(pick) }
+fn main() -> ExitCode { return ExitCode::from(go(pick) as u8); }
 "#
                 .to_string(),
                 9,
@@ -1641,11 +1599,11 @@ fn main() -> i64 { return go(pick) }
             (
                 "e1",
                 r#"
-enum E { A(Rc<i64>) }
-fn f(e: &E) -> i64 { return 0 }
-fn main() -> i64 {
-    let e: E = E::A(Rc::new(7))
-    return f(&e)
+use std::process::ExitCode; enum E { A(Rc<i64>) }
+fn f(e: &E) -> i64 { 0 }
+fn main() -> ExitCode {
+    let e: E = E::A(Rc::new(7));
+    return ExitCode::from(f(&e) as u8);
 }
 "#
                 .to_string(),
@@ -1711,7 +1669,7 @@ fn main() -> i64 {
             panic!("the ASan tier must build its archive on a machine with clang and ar");
         };
         let src = format!(
-            "{STRUCT_S}\nfn main() -> i64 {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }}\n    let s = x.a[..]\n    s[0] = 9\n    println(s[0])\n    return 0\n}}\n"
+            "{STRUCT_S};\nfn main() {{\n    let mut x: S = S {{ r: Rc::new(5), a: [4,5,6] }};\n    let s = x.a[..];\n    s[0] = 9;\n    println!(\"{{}}\", s[0]);\n}}\n"
         );
         let run = |id: &str, src: &str, allocator: &str| {
             let Some(exe) = link_instrumented(dir.path(), id, src) else {
@@ -1768,10 +1726,10 @@ fn main() -> i64 {
         };
         let bound = loop_body(
             "",
-            "        let t: string = \"{i}\"\n        let s: string = \"row \" + t\n",
+            "        static t: String = format!(\"{i}\");\n        static s: String = \"row \" + t;\n",
             "",
         );
-        let unbound = loop_body("", "        let s: string = \"row \" + \"{i}\"\n", "");
+        let unbound = loop_body("", "        static s: String = \"row \" + format!(\"{i}\");\n", "");
 
         // leaksanitizer replaces the program's own exit code, so only a clean leg can answer 25
         let run = |id: &str, src: &str, allocator: &str, clean: bool| {

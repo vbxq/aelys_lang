@@ -4,7 +4,7 @@ use aelys_syntax::Span;
 
 #[test]
 fn test_compile_error_format() {
-    let source = Source::new("test.aelys", "let x = 10\nprint(username)\nlet y = 20");
+    let source = Source::new("test.aelys", "static x: i64 = 10;\nprint!(\"{}\", username);\nstatic y: i64 = 20;");
     let error = CompileError::new(
         CompileErrorKind::UndefinedVariable("username".to_string()),
         Span::new(17, 25, 2, 7),

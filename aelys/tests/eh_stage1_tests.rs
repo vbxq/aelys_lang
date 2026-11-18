@@ -74,7 +74,7 @@ fn parse_stats(stderr: &str) -> Option<(i64, i64)> {
 }
 
 const BEHAVIORAL_SRC: &str = r#"
-enum Result<T, E> {
+use std::process::ExitCode; enum Result<T, E> {
     Ok(T),
     Err(E),
 }
@@ -86,54 +86,54 @@ enum Option<T> {
 
 fn step_a(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(7)
+        return Result::Err(7);
     }
-    return Result::Ok(x + 1)
+    Result::Ok(x + 1)
 }
 
 fn step_b(x: i64) -> Result<i64, i64> {
     if x > 100 {
-        return Result::Err(9)
+        return Result::Err(9);
     }
-    return Result::Ok(x * 2)
+    Result::Ok(x * 2)
 }
 
 fn load_mesh(x: i64) -> Result<i64, i64> {
-    let a: i64 = step_a(x)?
-    let b: i64 = step_b(a)?
-    return Result::Ok(b)
+    let a: i64 = step_a(x)?;
+    let b: i64 = step_b(a)?;
+    Result::Ok(b)
 }
 
 fn first_positive(x: i64) -> Option<i64> {
     if x > 0 {
-        return Option::Some(x)
+        return Option::Some(x);
     }
-    return Option::None
+    Option::None
 }
 
 fn chain_opt(x: i64) -> Option<i64> {
-    let v: i64 = first_positive(x)?
-    return Option::Some(v + 100)
+    let v: i64 = first_positive(x)?;
+    Option::Some(v + 100)
 }
 
-fn main() -> i64 {
+fn main() -> ExitCode {
     let happy: i64 = match load_mesh(10) {
-        Result::Ok(v) => v
-        Result::Err(e) => e
-    }
+        Result::Ok(v) => v,
+        Result::Err(e) => e,
+    };
     let sad: i64 = match load_mesh(0) {
-        Result::Ok(v) => v
-        Result::Err(e) => e
-    }
+        Result::Ok(v) => v,
+        Result::Err(e) => e,
+    };
     let opt_some: i64 = match chain_opt(5) {
-        Option::Some(v) => v
-        Option::None => 0
-    }
+        Option::Some(v) => v,
+        Option::None => 0,
+    };
     let opt_none: i64 = match chain_opt(0) {
-        Option::Some(v) => v
-        Option::None => 1
-    }
-    return happy + sad + opt_some + opt_none
+        Option::Some(v) => v,
+        Option::None => 1,
+    };
+    return ExitCode::from((happy + sad + opt_some + opt_none) as u8);
 }
 "#;
 
@@ -165,14 +165,13 @@ enum Fault {
     Bad,
 }
 fn inner() -> Result<i64, Fault> {
-    return Result::Err(Fault::Bad)
+    Result::Err(Fault::Bad)
 }
 fn outer() -> Result<i64, i64> {
-    let v: i64 = inner()?
-    return Result::Ok(v)
+    let v: i64 = inner()?;
+    Result::Ok(v)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -182,14 +181,13 @@ enum Result<T, E> {
     Err(E),
 }
 fn inner() -> Result<i64, i64> {
-    return Result::Err(5)
+    Result::Err(5)
 }
 fn outer() -> Result<i64, i64> {
-    let v: i64 = inner()?
-    return Result::Ok(v)
+    let v: i64 = inner()?;
+    Result::Ok(v)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -208,35 +206,35 @@ fn negative_oracle_matching_error_type_compiles() {
 }
 
 const SEAM_SRC: &str = r#"
-enum Result<T, E> {
+use std::process::ExitCode; enum Result<T, E> {
     Ok(T),
     Err(E),
 }
 
 fn may_fail(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(3)
+        return Result::Err(3);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
 
 fn with_rc(x: i64) -> Result<i64, i64> {
-    let node: Rc<i64> = Rc::new(99)
-    let y: i64 = may_fail(x)?
-    let got: i64 = Rc::get(node)
-    return Result::Ok(y + got)
+    let node: Rc<i64> = Rc::new(99);
+    let y: i64 = may_fail(x)?;
+    let got: i64 = Rc::get(node);
+    Result::Ok(y + got)
 }
 
-fn main() -> i64 {
+fn main() -> ExitCode {
     let a: i64 = match with_rc(0) {
-        Result::Ok(v) => v
-        Result::Err(e) => e
-    }
+        Result::Ok(v) => v,
+        Result::Err(e) => e,
+    };
     let b: i64 = match with_rc(5) {
-        Result::Ok(v) => v
-        Result::Err(e) => e
-    }
-    return a + b
+        Result::Ok(v) => v,
+        Result::Err(e) => e,
+    };
+    return ExitCode::from((a + b) as u8);
 }
 "#;
 

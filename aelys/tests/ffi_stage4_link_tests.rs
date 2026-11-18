@@ -15,8 +15,8 @@ const LEVELS: [(&str, OptimizationLevel); 4] = [
 
 const TRIPLE_C: &str = "long aelys_stage4_triple(long x) { return 3 * x; }\n";
 
-const TRIPLE_AE: &str = "unsafe extern fn aelys_stage4_triple(x: i64) -> i64\n\
-                         fn main() -> i64 { unsafe { return aelys_stage4_triple(14) } }\n";
+const TRIPLE_AE: &str = "use std::process::ExitCode; extern \"C\" { fn aelys_stage4_triple(x: i64) -> i64; }\n\
+                         fn main() -> ExitCode { unsafe { return ExitCode::from(aelys_stage4_triple(14) as u8); } }\n";
 
 // a missing toolchain must redden the row, never skip it
 fn tool(name: &str) -> String {
@@ -315,7 +315,7 @@ fn a_library_with_no_external_declaration_at_all_still_compiles() {
     compile(
         dir.path(),
         "l13",
-        "fn main() -> i64 { return 7 }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from(7); }\n",
         &link,
         OptimizationLevel::None,
     )
@@ -350,7 +350,7 @@ fn a_program_without_main_is_never_linked() {
     compile(
         dir.path(),
         "l15",
-        "fn helper() -> i64 { return 1 }\n",
+        "fn helper() -> i64 { 1 }\n",
         &link,
         OptimizationLevel::None,
     )
@@ -375,7 +375,7 @@ fn a_hostile_archive_defining_main_never_runs() {
     compile(
         dir.path(),
         "l16",
-        "fn main() -> i64 { return 5 }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from(5); }\n",
         &link,
         OptimizationLevel::None,
     )
@@ -385,11 +385,11 @@ fn a_hostile_archive_defining_main_never_runs() {
     assert!(!stdout.contains("HOSTILE MAIN"), "L16: {stdout}");
 }
 
-const ALLOCATING_AE: &str = "unsafe extern fn aelys_stage4_triple(x: i64) -> i64\n\
-                             fn main() -> i64 {\n\
-                             \u{20}   let mut v = Vec::new()\n\
-                             \u{20}   Vec::push(v, 11)\n\
-                             \u{20}   unsafe { return aelys_stage4_triple(14) }\n\
+const ALLOCATING_AE: &str = "use std::process::ExitCode; extern \"C\" { fn aelys_stage4_triple(x: i64) -> i64; }\n\
+                             fn main() -> ExitCode {\n\
+                             \u{20}   let mut v = Vec::new();\n\
+                             \u{20}   Vec::push(v, 11);\n\
+                             \u{20}   unsafe { return ExitCode::from(aelys_stage4_triple(14) as u8); }\n\
                              }\n";
 
 #[test]
@@ -469,7 +469,7 @@ const IFUNC_MEMCMP_C: &str = "#include <stddef.h>\n\
      __attribute__((ifunc(\"resolve_memcmp\")));\n";
 
 const STRING_COMPARE_AE: &str = "fn main() {\n\
-     \u{20}   if \"abc\" == \"xyz\" { println(\"EQUAL\") } else { println(\"DIFFERENT\") }\n\
+     \u{20}   if \"abc\" == \"xyz\" { println!(\"EQUAL\"); } else { println!(\"DIFFERENT\"); }\n\
      }\n";
 
 #[test]
@@ -653,9 +653,9 @@ fn the_link_failure_help_names_the_channel_and_the_declaration() {
 #[test]
 fn the_help_names_every_declaration_when_more_than_one_is_missing() {
     let dir = with_triple_archive();
-    let source = "unsafe extern fn aelys_stage4_triple(x: i64) -> i64\n\
-                  unsafe extern fn aelys_stage4_absent(x: i64) -> i64\n\
-                  fn main() -> i64 { unsafe { return aelys_stage4_triple(1) + aelys_stage4_absent(2) } }\n";
+    let source = "use std::process::ExitCode; extern \"C\" { fn aelys_stage4_triple(x: i64) -> i64; }\n\
+                  extern \"C\" { fn aelys_stage4_absent(x: i64) -> i64; }\n\
+                  fn main() -> ExitCode { unsafe { return ExitCode::from((aelys_stage4_triple(1) + aelys_stage4_absent(2)) as u8); } }\n";
     let link = link_to(dir.path(), &["mystage4"]);
     let err = compile(dir.path(), "d3", source, &link, OptimizationLevel::None).expect_err("D3");
     assert!(err.contains("aelys_stage4_triple"), "D3: {err}");
@@ -678,7 +678,7 @@ fn a_link_failure_with_no_external_declaration_carries_no_ffi_help() {
     let err = compile(
         dir.path(),
         "d5",
-        "fn main() -> i64 { return 3 }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from(3); }\n",
         &link,
         OptimizationLevel::None,
     )

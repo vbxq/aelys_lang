@@ -304,10 +304,9 @@ fn group_v01_r01_array_const_length_runs() {
     let _pin = pin_legs("r01", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r01",
-        "fn main() -> i64 {\n\
-         \x20   let a = [7; 2 + 2]\n\
-         \x20   println(a[3])\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let a = [7; 2 + 2];\n\
+         \x20   println!(\"{}\", a[3]);\n\
          }\n",
         0,
         "7\n",
@@ -321,10 +320,9 @@ fn group_v01_r02_array_length_mismatch_refused() {
     let _pin = pin_legs("r02", LEVELS.len());
     h.refuses(
         "r02",
-        "fn main() -> i64 {\n\
-         \x20   let a: [i64; 2] = [1, 2, 3, 4]\n\
-         \x20   println(a[0])\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let a: [i64; 2] = [1, 2, 3, 4];\n\
+         \x20   println!(\"{}\", a[0]);\n\
          }\n",
         "E0301",
         "expected `[i64; 2]`, found `[i64; 4]`",
@@ -337,10 +335,9 @@ fn group_v01_r03_const_index_outside_array_refused() {
     let _pin = pin_legs("r03", LEVELS.len());
     h.refuses(
         "r03",
-        "fn main() -> i64 {\n\
-         \x20   let a: [i64; 4] = [1, 2, 3, 4]\n\
-         \x20   println(a[7])\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let a: [i64; 4] = [1, 2, 3, 4];\n\
+         \x20   println!(\"{}\", a[7]);\n\
          }\n",
         "E0433",
         "[const-index] index 7 is outside `[_; 4]`, whose elements are 0 to 3",
@@ -353,11 +350,10 @@ fn group_v01_r04_array_nonconst_length_refused() {
     let _pin = pin_legs("r04", LEVELS.len());
     h.refuses(
         "r04",
-        "fn main() -> i64 {\n\
-         \x20   let n: i64 = 4\n\
-         \x20   let a = [0; n]\n\
-         \x20   println(a[0])\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let n: i64 = 4;\n\
+         \x20   let a = [0; n];\n\
+         \x20   println!(\"{}\", a[0]);\n\
          }\n",
         "E0902",
         "unsupported non-constant array size",
@@ -409,15 +405,14 @@ fn group_v01_r06_rc_carrier_from_a_conditional_runs() {
     );
 }
 
-const INLINE_RECURSIVE: &str = "@inline\n\
+const INLINE_RECURSIVE: &str = "#[inline]\n\
                                 fn probe(n: i64) -> i64 {\n\
-                                \x20   if n <= 0 { return 0 }\n\
-                                \x20   return probe(n - 1)\n\
+                                \x20   if n <= 0 { return 0; }\n\
+                                \x20   probe(n - 1)\n\
                                 }\n\
                                 \n\
-                                fn main() -> i64 {\n\
-                                \x20   println(probe(3))\n\
-                                \x20   return 0\n\
+                                fn main() {\n\
+                                \x20   println!(\"{}\", probe(3));\n\
                                 }\n";
 
 #[test]
@@ -444,9 +439,8 @@ fn group_v01_r07_werror_input_is_the_same_at_every_level() {
 
 const NET_FIXTURE: &str = "enum Opt<T> { Some(T), Nil }\n\
                            \n\
-                           fn main() -> i64 {\n\
-                           \x20   let a: Opt<[Vec<i64>; 1]> = Opt::Nil\n\
-                           \x20   return 0\n\
+                           fn main() {\n\
+                           \x20   let a: Opt<[Vec<i64>; 1]> = Opt::Nil;\n\
                            }\n";
 
 #[test]
@@ -476,11 +470,10 @@ fn group_v01_r09_file_scope_and_runs() {
     let _pin = pin_legs("r09", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r09",
-        "pub let g: bool = true and false\n\
+        "pub static g: bool = true && false;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   if g { println(1) } else { println(0) }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   if g { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
          }\n",
         0,
         "0\n",
@@ -494,15 +487,14 @@ fn group_v01_r10_char_class_eab() {
     let _pin = pin_legs("r10", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r10",
-        "fn main() -> i64 {\n\
-         \x20   let s: string = \"éab\"\n\
-         \x20   println(s.bytes.len)\n\
+        "fn main() {\n\
+         \x20   let s: String = \"éab\";\n\
+         \x20   println!(\"{}\", s.as_bytes().len());\n\
          \x20   for c in s {\n\
-         \x20       println(c)\n\
-         \x20       println(c as i64)\n\
-         \x20       println(\"{c}\")\n\
+         \x20       println!(\"{}\", c);\n\
+         \x20       println!(\"{}\", c as i64);\n\
+         \x20       println!(\"{c}\");\n\
          \x20   }\n\
-         \x20   return 0\n\
          }\n",
         0,
         "4\né\n233\né\na\n97\na\nb\n98\nb\n",
@@ -516,16 +508,15 @@ fn group_v01_r11_char_literals_and_six_operators() {
     let _pin = pin_legs("r11", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r11",
-        "fn main() -> i64 {\n\
-         \x20   let a: char = 'é'\n\
-         \x20   let b: char = 'a'\n\
-         \x20   if a == b { println(1) } else { println(0) }\n\
-         \x20   if a != b { println(1) } else { println(0) }\n\
-         \x20   if a < b { println(1) } else { println(0) }\n\
-         \x20   if a <= b { println(1) } else { println(0) }\n\
-         \x20   if a > b { println(1) } else { println(0) }\n\
-         \x20   if a >= b { println(1) } else { println(0) }\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let a: char = 'é';\n\
+         \x20   let b: char = 'a';\n\
+         \x20   if a == b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   if a != b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   if a < b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   if a <= b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   if a > b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   if a >= b { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
          }\n",
         0,
         "0\n1\n0\n0\n1\n1\n",
@@ -539,10 +530,9 @@ fn group_v01_r12_char_from_i64_outside_the_range_panics() {
     let _pin = pin_legs("r12", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r12",
-        "fn main() -> i64 {\n\
-         \x20   let c: char = char::from_i64(1114112)\n\
-         \x20   println(c)\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let c: char = char::from_i64(1114112);\n\
+         \x20   println!(\"{}\", c);\n\
          }\n",
         134,
         "",
@@ -556,10 +546,9 @@ fn group_v01_r13_char_from_i64_inside_the_range_runs() {
     let _pin = pin_legs("r13", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r13",
-        "fn main() -> i64 {\n\
-         \x20   println(char::from_i64(233))\n\
-         \x20   println(char::from_i64(97))\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   println!(\"{}\", char::from_i64(233));\n\
+         \x20   println!(\"{}\", char::from_i64(97));\n\
          }\n",
         0,
         "é\na\n",
@@ -573,10 +562,9 @@ fn group_v01_r14_string_index_refused() {
     let _pin = pin_legs("r14", LEVELS.len());
     h.refuses(
         "r14",
-        "fn main() -> i64 {\n\
-         \x20   let s: string = \"éab\"\n\
-         \x20   println(s[0])\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let s: String = \"éab\";\n\
+         \x20   println!(\"{}\", s[0]);\n\
          }\n",
         "E0304",
         "`.len` counts bytes while `s[i]` counted characters",
@@ -591,19 +579,18 @@ fn group_v01_r15_bytes_of_a_call_result_refused() {
     let _pin = pin_legs("r15", LEVELS.len());
     h.refuses(
         "r15",
-        "fn mkheap(k: i64) -> string { return \"hel\" + \"lo\" }\n\
+        "fn mkheap(k: i64) -> String { \"hel\" + \"lo\" }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let s: &[u8] = mkheap(4).bytes\n\
-         \x20   println(s[0])\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let s: &[u8] = mkheap(4).as_bytes();\n\
+         \x20   println!(\"{}\", s[0]);\n\
          }\n",
         "E0421",
         NO_PLACE_BYTES,
     );
 }
 
-const RC_STRUCT: &str = "struct N { n: string }\n\n";
+const RC_STRUCT: &str = "struct N { n: String }\n\n";
 
 #[test]
 fn group_v01_r16_bytes_through_an_rc_temporary_refused() {
@@ -631,11 +618,10 @@ fn group_v01_r17_bytes_of_a_literal_runs() {
     let _pin = pin_legs("r17", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r17",
-        "fn main() -> i64 {\n\
-         \x20   let l: &[u8] = \"hi\".bytes\n\
-         \x20   println(l[0])\n\
-         \x20   println(l.len)\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let l: &[u8] = \"hi\".as_bytes();\n\
+         \x20   println!(\"{}\", l[0]);\n\
+         \x20   println!(\"{}\", l.len());\n\
          }\n",
         0,
         "104\n2\n",
@@ -669,24 +655,23 @@ fn group_v01_r19_generic_library_over_two_element_types() {
     let _pin = pin_legs("r19", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r19",
-        "needs std.slice\n\
+        "use std::slice;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let mut vi: Vec<i64> = Vec::new()\n\
-         \x20   Vec::push(vi, 3)\n\
-         \x20   Vec::push(vi, 9)\n\
-         \x20   Vec::push(vi, 5)\n\
-         \x20   let si: &[i64] = Vec::as_slice(vi)\n\
-         \x20   match slice.max(si) { Some(m) => println(m), None => println(-1) }\n\
-         \x20   match slice.min(si) { Some(m) => println(m), None => println(-1) }\n\
-         \x20   let mut vc: Vec<char> = Vec::new()\n\
-         \x20   Vec::push(vc, 'a')\n\
-         \x20   Vec::push(vc, 'z')\n\
-         \x20   Vec::push(vc, 'm')\n\
-         \x20   let sc: &[char] = Vec::as_slice(vc)\n\
-         \x20   match slice.max(sc) { Some(m) => println(m), None => println('?') }\n\
-         \x20   match slice.min(sc) { Some(m) => println(m), None => println('?') }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let mut vi: Vec<i64> = Vec::new();\n\
+         \x20   Vec::push(vi, 3);\n\
+         \x20   Vec::push(vi, 9);\n\
+         \x20   Vec::push(vi, 5);\n\
+         \x20   let si: &[i64] = Vec::as_slice(vi);\n\
+         \x20   match slice::max(si) { Some(m) => println!(\"{}\", m), None => println!(\"{}\", -1) }\n\
+         \x20   match slice::min(si) { Some(m) => println!(\"{}\", m), None => println!(\"{}\", -1) }\n\
+         \x20   let mut vc: Vec<char> = Vec::new();\n\
+         \x20   Vec::push(vc, 'a');\n\
+         \x20   Vec::push(vc, 'z');\n\
+         \x20   Vec::push(vc, 'm');\n\
+         \x20   let sc: &[char] = Vec::as_slice(vc);\n\
+         \x20   match slice::max(sc) { Some(m) => println!(\"{}\", m), None => println!(\"{}\", '?') }\n\
+         \x20   match slice::min(sc) { Some(m) => println!(\"{}\", m), None => println!(\"{}\", '?') }\n\
          }\n",
         0,
         "9\n3\nz\na\n",
@@ -700,11 +685,10 @@ fn group_v01_r20_ord_includes_string() {
     let _pin = pin_legs("r20", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r20",
-        "fn mx<T: ord>(a: T, b: T) -> T { if a > b { return a } return b }\n\
+        "fn mx<T: Ord>(a: T, b: T) -> T { if a > b { return a; } b }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   println(mx(\"abc\", \"abd\"))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", mx(\"abc\", \"abd\"));\n\
          }\n",
         0,
         "abd\n",
@@ -718,22 +702,21 @@ fn group_v01_r21_eq_bound_over_two_element_types() {
     let _pin = pin_legs("r21", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r21",
-        "needs std.slice\n\
+        "use std::slice;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let mut vc: Vec<char> = Vec::new()\n\
-         \x20   Vec::push(vc, 'a')\n\
-         \x20   Vec::push(vc, 'z')\n\
-         \x20   Vec::push(vc, 'm')\n\
-         \x20   let sc: &[char] = Vec::as_slice(vc)\n\
-         \x20   println(slice.index_of(sc, 'm'))\n\
-         \x20   if slice.contains(sc, 'q') { println(1) } else { println(0) }\n\
-         \x20   let mut vi: Vec<i64> = Vec::new()\n\
-         \x20   Vec::push(vi, 4)\n\
-         \x20   Vec::push(vi, 8)\n\
-         \x20   let si: &[i64] = Vec::as_slice(vi)\n\
-         \x20   println(slice.index_of(si, 8))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let mut vc: Vec<char> = Vec::new();\n\
+         \x20   Vec::push(vc, 'a');\n\
+         \x20   Vec::push(vc, 'z');\n\
+         \x20   Vec::push(vc, 'm');\n\
+         \x20   let sc: &[char] = Vec::as_slice(vc);\n\
+         \x20   println!(\"{}\", slice::index_of(sc, 'm'));\n\
+         \x20   if slice::contains(sc, 'q') { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
+         \x20   let mut vi: Vec<i64> = Vec::new();\n\
+         \x20   Vec::push(vi, 4);\n\
+         \x20   Vec::push(vi, 8);\n\
+         \x20   let si: &[i64] = Vec::as_slice(vi);\n\
+         \x20   println!(\"{}\", slice::index_of(si, 8));\n\
          }\n",
         0,
         "2\n0\n1\n",
@@ -747,10 +730,9 @@ fn group_v01_r22_expected_found_order() {
     let _pin = pin_legs("r22", LEVELS.len());
     h.refuses(
         "r22",
-        "fn main() -> i64 {\n\
-         \x20   let x: i64 = true\n\
-         \x20   println(x)\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let x: i64 = true;\n\
+         \x20   println!(\"{}\", x);\n\
          }\n",
         "E0301",
         "expected `i64`, found `bool`",
@@ -763,18 +745,17 @@ fn group_v01_r23_character_loop_values() {
     let _pin = pin_legs("r23", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r23",
-        "fn main() -> i64 {\n\
-         \x20   let s: string = \"héllo ca été là\"\n\
-         \x20   let mut n: i64 = 0\n\
-         \x20   let mut acc: i64 = 0\n\
+        "fn main() {\n\
+         \x20   let s: String = \"héllo ca été là\";\n\
+         \x20   let mut n: i64 = 0;\n\
+         \x20   let mut acc: i64 = 0;\n\
          \x20   for c in s {\n\
-         \x20       n = n + 1\n\
-         \x20       acc = acc + (c as i64)\n\
+         \x20       n = n + 1;\n\
+         \x20       acc = acc + (c as i64);\n\
          \x20   }\n\
-         \x20   println(n)\n\
-         \x20   println(acc)\n\
-         \x20   println(s.bytes.len)\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", n);\n\
+         \x20   println!(\"{}\", acc);\n\
+         \x20   println!(\"{}\", s.as_bytes().len());\n\
          }\n",
         0,
         "15\n1870\n19\n",
@@ -788,15 +769,14 @@ fn group_v01_r24_plain_arithmetic_control() {
     let _pin = pin_legs("r24", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r24",
-        "fn main() -> i64 {\n\
-         \x20   let mut i: i64 = 0\n\
-         \x20   let mut t: i64 = 0\n\
+        "fn main() {\n\
+         \x20   let mut i: i64 = 0;\n\
+         \x20   let mut t: i64 = 0;\n\
          \x20   while i < 5 {\n\
-         \x20       t = t + i * i\n\
-         \x20       i = i + 1\n\
+         \x20       t = t + i * i;\n\
+         \x20       i = i + 1;\n\
          \x20   }\n\
-         \x20   println(t)\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", t);\n\
          }\n",
         0,
         "30\n",
@@ -810,15 +790,14 @@ fn group_v01_r25_byte_view_loop_control() {
     let _pin = pin_legs("r25", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "r25",
-        "fn main() -> i64 {\n\
-         \x20   let s: string = \"héllo\"\n\
-         \x20   let mut sum: i64 = 0\n\
-         \x20   for b in s.bytes {\n\
-         \x20       sum = sum + (b as i64)\n\
+        "fn main() {\n\
+         \x20   let s: String = \"héllo\";\n\
+         \x20   let mut sum: i64 = 0;\n\
+         \x20   for b in s.as_bytes() {\n\
+         \x20       sum = sum + (b as i64);\n\
          \x20   }\n\
-         \x20   println(sum)\n\
-         \x20   println(s.bytes.len)\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", sum);\n\
+         \x20   println!(\"{}\", s.as_bytes().len());\n\
          }\n",
         0,
         "795\n6\n",
@@ -894,10 +873,9 @@ fn group_v01_w1_generic_struct_carrier_runs() {
         "w1",
         "struct Wrapper<T> { v: T }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let w: Wrapper<i64> = Wrapper { v: 5 }\n\
-         \x20   println(w.v)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let w: Wrapper<i64> = Wrapper { v: 5 };\n\
+         \x20   println!(\"{}\", w.v);\n\
          }\n",
         0,
         "5\n",
@@ -913,10 +891,9 @@ fn group_v01_w2_generic_enum_payload_runs() {
         "w2",
         "enum Box<T> { Full(T), Empty }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let b: Box<i64> = Box::Full(6)\n\
-         \x20   match b { Box::Full(v) => println(v), Box::Empty => println(-1) }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let b: Box<i64> = Box::Full(6);\n\
+         \x20   match b { Box::Full(v) => println!(\"{}\", v), Box::Empty => println!(\"{}\", -1) }\n\
          }\n",
         0,
         "6\n",
@@ -930,11 +907,10 @@ fn group_v01_w3_file_scope_binary_initializer_runs() {
     let _pin = pin_legs("w3", LEVELS.len() * ALLOCATORS.len());
     h.runs(
         "w3",
-        "pub let g: i64 = 2 + 2\n\
+        "pub static g: i64 = 2 + 2;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   println(g)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", g);\n\
          }\n",
         0,
         "4\n",
@@ -950,12 +926,11 @@ fn group_v01_w4_generic_function_over_a_struct_runs() {
         "w4",
         "struct P { a: i64 }\n\
          \n\
-         fn pick<T>(p: P, x: T) -> T { return x }\n\
+         fn pick<T>(p: P, x: T) -> T { x }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let p: P = P { a: 3 }\n\
-         \x20   println(pick(p, 42))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let p: P = P { a: 3 };\n\
+         \x20   println!(\"{}\", pick(p, 42));\n\
          }\n",
         0,
         "42\n",

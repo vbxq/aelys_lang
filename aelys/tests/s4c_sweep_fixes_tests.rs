@@ -24,7 +24,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -257,108 +257,102 @@ impl Harness {
 const ESCAPE_SAYS: &str = "does not live long enough; it is borrowed and the borrow is used after";
 
 const S4C_MATCH_BINDER_I64: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let anchor: i64 = 0
-    let mut r: &i64 = &anchor
+
+fn main() {
+    let anchor: i64 = 0;
+    let mut r: &i64 = &anchor;
     {
-        let o: Option<i64> = Some(7)
+        let o: Option<i64> = Some(7);
         match o {
             Some(t) => r = &t,
             None => r = &anchor,
         }
     }
-    println(*r)
-    return 0
+    println!("{}", *r);
 }
 "#;
 
 const S4C_MATCH_BINDER_BYTES: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let anchor: string = "zz"
-    let mut b: &[u8] = anchor.bytes
+
+fn main() {
+    let anchor: String = "zz";
+    let mut b: &[u8] = anchor.as_bytes();
     {
-        let o: Option<string> = Some("hi" + "!")
+        let o: Option<String> = Some("hi" + "!");
         match o {
-            Some(t) => b = t.bytes,
-            None => b = anchor.bytes,
+            Some(t) => b = t.as_bytes(),
+            None => b = anchor.as_bytes(),
         }
     }
-    println(b[0] as i64)
-    return 0
+    println!("{}", b[0] as i64);
 }
 "#;
 
 const S4C_MATCH_BINDER_USER_ENUM: &str = r#"
 enum B { F(i64), G }
 
-fn main() -> i64 {
-    let anchor: i64 = 0
-    let mut r: &i64 = &anchor
+fn main() {
+    let anchor: i64 = 0;
+    let mut r: &i64 = &anchor;
     {
-        let o: B = B::F(7)
+        let o: B = B::F(7);
         match o {
             B::F(t) => r = &t,
             B::G => r = &anchor,
         }
     }
-    println(*r)
-    return 0
+    println!("{}", *r);
 }
 "#;
 
 // the arm binder gets one slot per loop, so the next iteration overwrites what the borrow names
 const S4C_MATCH_BINDER_IN_A_LOOP: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let anchor: i64 = 0
-    let mut r: &i64 = &anchor
+
+fn main() {
+    let anchor: i64 = 0;
+    let mut r: &i64 = &anchor;
     for i in 0..2 {
-        let o: Option<i64> = Some(i * 10 + 1)
+        let o: Option<i64> = Some(i * 10 + 1);
         match o {
-            Some(t) => { if i == 0 { r = &t } }
-            None => r = &anchor
+            Some(t) => { if i == 0 { r = &t; } }
+            None => r = &anchor,
         }
     }
-    println(*r)
-    return 0
+    println!("{}", *r);
 }
 "#;
 
 const S4C_CATCH_BINDER: &str = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 
-fn get() -> Result<i64, i64> { return Result::Err(7) }
+fn get() -> Result<i64, i64> { Result::Err(7) }
 
-fn main() -> i64 {
-    let anchor: i64 = 0
-    let mut r: &i64 = &anchor
+fn main() {
+    let anchor: i64 = 0;
+    let mut r: &i64 = &anchor;
     {
-        let n: i64 = get() catch |e| {
-            r = &e
+        let n: i64 = match get() { Ok(v) => v, Err(e) => {
+            r = &e;
             0
-        }
-        println(n)
+        } };
+        println!("{}", n);
     }
-    println(*r)
-    return 0
+    println!("{}", *r);
 }
 "#;
 
 const S4C_LET_TWIN: &str = r#"
-fn main() -> i64 {
-    let anchor: i64 = 0
-    let mut r: &i64 = &anchor
+fn main() {
+    let anchor: i64 = 0;
+    let mut r: &i64 = &anchor;
     {
-        let t: i64 = 7
-        r = &t
+        let t: i64 = 7;
+        r = &t;
     }
-    println(*r)
-    return 0
+    println!("{}", *r);
 }
 "#;
 
@@ -391,111 +385,104 @@ fn s4c_3_the_let_twin_is_the_control_the_rule_already_had() {
 }
 
 const S4C_BINDER_READ: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let o: Option<i64> = Some(7);
     match o {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
-    return 0
 }
 "#;
 
 const S4C_BINDER_BORROWED_INSIDE: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let o: Option<i64> = Some(7);
     match o {
         Some(t) => {
-            let p: &i64 = &t
-            println(*p)
+            let p: &i64 = &t;
+            println!("{}", *p);
         }
-        None => println(0)
+        None => println!("{}", 0),
     }
-    return 0
 }
 "#;
 
 const S4C_BINDER_BYTES_INSIDE: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<string> = Some("hi")
+
+fn main() {
+    let o: Option<String> = Some("hi");
     match o {
         Some(s) => {
-            let b: &[u8] = s.bytes
-            println(b[0] as i64)
-            println(s)
+            let b: &[u8] = s.as_bytes();
+            println!("{}", b[0] as i64);
+            println!("{}", s);
         }
-        None => println(0)
+        None => println!("{}", 0),
     }
-    return 0
 }
 "#;
 
 const S4C_BINDER_PASSED_BY_REFERENCE: &str = r#"
-needs Option from std.result
 
-fn take(p: &i64) -> i64 { return *p }
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
+fn take(p: &i64) -> i64 { *p }
+
+fn main() {
+    let o: Option<i64> = Some(7);
     match o {
-        Some(t) => println(take(&t)),
-        None => println(0)
+        Some(t) => println!("{}", take(&t)),
+        None => println!("{}", 0),
     }
-    return 0
 }
 "#;
 
 const S4C_BINDER_NESTED: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let o: Option<i64> = Some(7);
     match o {
         Some(t) => {
-            let i: Option<i64> = Some(t + 1)
+            let i: Option<i64> = Some(t + 1);
             match i {
-                Some(t) => println(t),
-                None => println(0)
+                Some(t) => println!("{}", t),
+                None => println!("{}", 0),
             }
         }
-        None => println(0)
+        None => println!("{}", 0),
     }
-    return 0
 }
 "#;
 
 const S4C_BINDER_IN_A_LOOP: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let mut n: i64 = 0
+
+fn main() {
+    let mut n: i64 = 0;
     for i in 0..3 {
-        let o: Option<i64> = Some(i)
+        let o: Option<i64> = Some(i);
         match o {
             Some(t) => n = n + t,
-            None => n = n + 0
+            None => n = n + 0,
         }
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
 const S4C_CATCH_BINDER_INSIDE: &str = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 
-fn get() -> Result<i64, i64> { return Result::Err(7) }
+fn get() -> Result<i64, i64> { Result::Err(7) }
 
-fn main() -> i64 {
-    let n: i64 = get() catch |e| e + 1
-    println(n)
-    return 0
+fn main() {
+    let n: i64 = match get() { Ok(v) => v, Err(e) => e + 1 };
+    println!("{}", n);
 }
 "#;
 
@@ -517,7 +504,7 @@ fn s4c_4_a_binder_that_stays_inside_its_arm_still_runs() {
 }
 
 fn binary_mismatch(body: &str) -> String {
-    format!("fn main() -> i64 {{\n{body}\n    println(0)\n    return 0\n}}\n")
+    format!("fn main() {{\n{body};\n    println!(\"{{}}\", 0);\n}}\n")
 }
 
 #[test]
@@ -526,57 +513,57 @@ fn s4c_5_a_binary_operand_mismatch_names_the_left_operand_first() {
     for (id, body, says) in [
         (
             "S4c-5a",
-            "    let x: i64 = 1 + true",
+            "    static x: i64 = 1 + true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5b",
-            "    let x: i64 = 1 - true",
+            "    static x: i64 = 1 - true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5c",
-            "    let x: i64 = 6 / true",
+            "    static x: i64 = 6 / true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5d",
-            "    let x: i64 = 1 % true",
+            "    static x: i64 = 1 % true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5e",
-            "    let x: i64 = 1 << true",
+            "    static x: i64 = 1 << true;",
             "expected `i64`, found `bool`",
         ),
         (
             "S4c-5f",
-            "    let b: bool = 1 < \"a\"",
+            "    static b: bool = 1 < \"a\";",
             "expected `i64`, found `string`",
         ),
         (
             "S4c-5g",
-            "    let x: i64 = 1 + \"a\"",
+            "    static x: i64 = 1 + \"a\";",
             "expected `i64`, found `string`",
         ),
         (
             "S4c-5h",
-            "    let s: string = \"a\" + 1",
+            "    static s: String = \"a\" + 1;",
             "expected `string`, found `i64`",
         ),
         (
             "S4c-5i",
-            "    let c: char = 'b'\n    let t: string = \"a\" + c",
+            "    static c: char = 'b';\n    static t: String = \"a\" + c;",
             "expected `string`, found `char`",
         ),
         (
             "S4c-5j",
-            "    let c: char = 'b'\n    let b: bool = c < \"a\"",
+            "    static c: char = 'b';\n    static b: bool = c < \"a\";",
             "expected `char`, found `string`",
         ),
         (
             "S4c-5k",
-            "    let c: char = 'b'\n    let b: bool = \"a\" < c",
+            "    static c: char = 'b';\n    static b: bool = \"a\" < c;",
             "expected `string`, found `char`",
         ),
     ] {
@@ -586,20 +573,19 @@ fn s4c_5_a_binary_operand_mismatch_names_the_left_operand_first() {
 }
 
 const S4C_ARITHMETIC_STILL_RUNS: &str = r#"
-fn main() -> i64 {
-    let a: i64 = 7 + 3
-    let b: i64 = a - 2
-    let c: i64 = b * 3
-    let d: i64 = c / 4
-    let e: i64 = d % 5
-    let f: i64 = e << 2
-    let g: i64 = f | 1
-    println(g)
-    if a < c { println(1) } else { println(0) }
-    if a == 10 { println(1) } else { println(0) }
-    println("ab" + "cd")
-    if 'a' < 'b' { println(1) } else { println(0) }
-    return 0
+fn main() {
+    let a: i64 = 7 + 3;
+    let b: i64 = a - 2;
+    let c: i64 = b * 3;
+    let d: i64 = c / 4;
+    let e: i64 = d % 5;
+    let f: i64 = e << 2;
+    let g: i64 = f | 1;
+    println!("{}", g);
+    if a < c { println!("{}", 1); } else { println!("{}", 0); }
+    if a == 10 { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", "ab" + "cd");
+    if 'a' < 'b' { println!("{}", 1); } else { println!("{}", 0); }
 }
 "#;
 
@@ -611,19 +597,17 @@ fn s4c_6_the_operators_that_type_check_still_answer() {
 }
 
 const S4C_MISSING_EXTERN: &str = r#"
-unsafe extern fn s4c_no_such_symbol_anywhere() -> i64
+extern "C" { fn s4c_no_such_symbol_anywhere() -> i64; }
 
-fn main() -> i64 {
-    if false { unsafe { println(s4c_no_such_symbol_anywhere()) } }
-    println(1)
-    return 0
+fn main() {
+    if false { unsafe { println!("{}", s4c_no_such_symbol_anywhere()); } }
+    println!("{}", 1);
 }
 "#;
 
 const S4C_NO_EXTERN: &str = r#"
-fn main() -> i64 {
-    println(1)
-    return 0
+fn main() {
+    println!("{}", 1);
 }
 "#;
 

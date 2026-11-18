@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -400,30 +400,29 @@ impl Harness {
 const RC1_MODULE: &str = r#"pub struct W { pub r: Rc<i64> }
 
 pub fn get(w: W, y: Rc<i64>) -> i64 {
-    return Rc::get(w.r) * 1000 + Rc::get(y)
+    Rc::get(w.r) * 1000 + Rc::get(y)
 }
 
-pub enum E { A(string), B }
+pub enum E { A(String), B }
 "#;
 
-const RC1_IMPORTED_CARRIER_LITERAL: &str = r#"needs m
+const RC1_IMPORTED_CARRIER_LITERAL: &str = r#"mod m;
 
-fn mk(i: i64) -> m.W {
-    let a: Rc<i64> = Rc::new(i)
-    return m.W { r: a }
+fn mk(i: i64) -> m::W {
+    let a: Rc<i64> = Rc::new(i);
+    m::W { r: a }
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 3 {
-        let w: m.W = mk(i)
-        let p: Rc<i64> = Rc::new(9)
-        n = n + m.get(w, p)
-        i = i + 1
+        let w: m::W = mk(i);
+        let p: Rc<i64> = Rc::new(9);
+        n = n + m::get(w, p);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -442,23 +441,22 @@ fn rc_1_an_imported_carrier_literal_takes_its_share() {
     h.assert_legs(24);
 }
 
-const RC2_IMPORTED_ENUM_OWNS_ITS_STRING: &str = r#"needs m
+const RC2_IMPORTED_ENUM_OWNS_ITS_STRING: &str = r#"mod m;
 
-fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 10 {
-        let e: m.E = m.E::A(victim(i))
+        let e: m::E = m::E::A(victim(i));
         match e {
-            m.E::A(s) => { n = n + s.len }
-            m.E::B => { n = n + 1 }
+            m::E::A(s) => { n = n + s.len(); }
+            m::E::B => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -478,22 +476,21 @@ fn rc_2_an_imported_enum_owns_its_string() {
 }
 
 const RC3_Q10: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 3 {
-        let base: [i64; 2] = [0, 0]
-        let mut s: &[i64] = base[0..2]
+        let base: [i64; 2] = [0, 0];
+        let mut s: &[i64] = base[0..2];
         if i >= 0 {
-            let a: Rc<[i64; 4]> = Rc::new([i, 5, 6, 7])
-            s = Rc::get(a)[0..2]
+            let a: Rc<[i64; 4]> = Rc::new([i, 5, 6, 7]);
+            s = Rc::get(a)[0..2];
         }
-        let p: Rc<[i64; 4]> = Rc::new([9, 9, 9, 9])
-        n = n + s[0] * 1000 + Rc::get(p)[0]
-        i = i + 1
+        let p: Rc<[i64; 4]> = Rc::new([9, 9, 9, 9]);
+        n = n + s[0] * 1000 + Rc::get(p)[0];
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -506,18 +503,17 @@ fn rc_3_q10_a_slice_into_a_dying_rc_payload_keeps_the_payload_alive() {
 }
 
 const RC4_LOOP_ASSIGN: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
-    let mut i: i64 = 0
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
+    let mut i: i64 = 0;
     while i < 3 {
-        let a: Rc<[i64; 2]> = Rc::new([i, 5])
-        s = Rc::get(a)[0..2]
-        i = i + 1
+        let a: Rc<[i64; 2]> = Rc::new([i, 5]);
+        s = Rc::get(a)[0..2];
+        i = i + 1;
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -530,18 +526,17 @@ fn rc_4_a_view_assigned_in_a_loop_holds_the_payload_of_its_turn() {
 }
 
 const RC5_VIEW_COPY: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
-    let c: bool = true
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
+    let c: bool = true;
     if c {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        let t: &[i64] = Rc::get(a)[0..2]
-        s = t
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        let t: &[i64] = Rc::get(a)[0..2];
+        s = t;
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -553,16 +548,15 @@ fn rc_5_a_view_copied_from_another_view_binding_takes_its_own_share() {
 }
 
 const RC6_REF_ELEM: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &i64 = &base[0]
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &i64 = &base[0];
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        s = &Rc::get(a)[0]
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        s = &Rc::get(a)[0];
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(*s * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", *s * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -575,16 +569,15 @@ fn rc_6_a_reference_into_an_rc_payload_keeps_the_payload_alive() {
 
 const RC7_CARRIER_FIELD: &str = r#"
 struct H { r: Rc<[i64; 2]> }
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
     {
-        let h: H = H { r: Rc::new([1, 5]) }
-        s = Rc::get(h.r)[0..2]
+        let h: H = H { r: Rc::new([1, 5]) };
+        s = Rc::get(h.r)[0..2];
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -596,22 +589,21 @@ fn rc_7_a_view_through_a_carrier_field_keeps_the_payload_alive() {
 }
 
 const RC8_BACKEDGE: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
-    let mut t: &[i64] = base[0..2]
-    let mut i: i64 = 0
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
+    let mut t: &[i64] = base[0..2];
+    let mut i: i64 = 0;
     while i < 2 {
-        s = t
+        s = t;
         {
-            let a: Rc<[i64; 2]> = Rc::new([i + 1, 5])
-            t = Rc::get(a)[0..2]
+            let a: Rc<[i64; 2]> = Rc::new([i + 1, 5]);
+            t = Rc::get(a)[0..2];
         }
-        i = i + 1
+        i = i + 1;
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -624,18 +616,17 @@ fn rc_8_a_view_copied_before_its_source_is_lowered_survives_the_back_edge() {
 
 const RC9_ARG_HOLDER: &str = r#"
 fn f(s: &[i64], z: i64) -> i64 {
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    return s[0] * 1000 + Rc::get(p)[0]
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    s[0] * 1000 + Rc::get(p)[0]
 }
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut t: &[i64] = base[0..2]
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut t: &[i64] = base[0..2];
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        t = Rc::get(a)[0..2]
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        t = Rc::get(a)[0..2];
     }
-    println(f(t, { t = base[0..2]; 0 }))
-    return 0
+    println!("{}", f(t, { t = base[0..2]; 0 }));
 }
 "#;
 
@@ -648,21 +639,20 @@ fn rc_9_a_call_argument_holds_its_view_while_a_sibling_rebinds_the_source() {
 }
 
 const RC10_FOR_HOLDER: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut t: &[i64] = base[0..2]
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut t: &[i64] = base[0..2];
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        t = Rc::get(a)[0..2]
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        t = Rc::get(a)[0..2];
     }
-    let mut n: i64 = 0
+    let mut n: i64 = 0;
     for x in t {
-        t = base[0..2]
-        let p: Rc<[i64; 2]> = Rc::new([9, 9])
-        n = n * 100 + x * 10 + Rc::get(p)[0]
+        t = base[0..2];
+        let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+        n = n * 100 + x * 10 + Rc::get(p)[0];
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -675,24 +665,23 @@ fn rc_10_a_for_loop_holds_its_collection_while_the_body_rebinds_it() {
 }
 
 const RC11_RETURN_IN_ARG: &str = r#"
-fn keep(x: &[i64], k: i64) -> &[i64] { return x }
+fn keep(x: &[i64], k: i64) -> &[i64] { x }
 fn f(c: bool) -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
         s = keep(Rc::get(a)[0..2], {
-            if c { return 7 }
+            if c { return 7; }
             1
-        })
+        });
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    return s[0] * 1000 + Rc::get(p)[0]
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    s[0] * 1000 + Rc::get(p)[0]
 }
-fn main() -> i64 {
-    println(f(false))
-    println(f(true))
-    return 0
+fn main() {
+    println!("{}", f(false));
+    println!("{}", f(true));
 }
 "#;
 
@@ -704,15 +693,14 @@ fn rc_11_a_return_inside_a_view_argument_releases_the_captured_share() {
 }
 
 const RC12_WHILE_COND: &str = r#"
-fn first(x: &[i64]) -> i64 { return x[0] }
-fn main() -> i64 {
-    let a: Rc<[i64; 2]> = Rc::new([1, 5])
-    let mut i: i64 = 0
+fn first(x: &[i64]) -> i64 { x[0] }
+fn main() {
+    let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+    let mut i: i64 = 0;
     while i < first(Rc::get(a)[0..2]) * 3 {
-        i = i + 1
+        i = i + 1;
     }
-    println(i)
-    return 0
+    println!("{}", i);
 }
 "#;
 
@@ -724,14 +712,13 @@ fn rc_12_a_view_argument_in_a_loop_condition_is_released_each_turn() {
 }
 
 const RC13_SELF_PICK: &str = r#"
-fn pick<T>(c: bool, x: T, y: T) -> T { if c { return x } return y }
-fn main() -> i64 {
-    let base: [i64; 2] = [3, 4]
-    let a: Rc<[i64; 2]> = Rc::new([1, 5])
-    let mut s: &[i64] = base[0..2]
-    s = pick(true, Rc::get(a)[0..2], s)
-    println(s[0])
-    return 0
+fn pick<T>(c: bool, x: T, y: T) -> T { if c { return x; } y }
+fn main() {
+    let base: [i64; 2] = [3, 4];
+    let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+    let mut s: &[i64] = base[0..2];
+    s = pick(true, Rc::get(a)[0..2], s);
+    println!("{}", s[0]);
 }
 "#;
 
@@ -751,17 +738,16 @@ fn rc_13_a_view_that_may_point_into_itself_and_a_new_rc_is_refused() {
 }
 
 const RC14_IF_EXPR: &str = r#"
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
-    let c: bool = true
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
+    let c: bool = true;
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        s = if c { Rc::get(a)[0..2] } else { base[0..2] }
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        s = if c { Rc::get(a)[0..2] } else { base[0..2] };
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -778,20 +764,19 @@ enum K {
     B,
 }
 
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let mut s: &[i64] = base[0..2]
-    let k: K = K::A
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let mut s: &[i64] = base[0..2];
+    let k: K = K::A;
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
         s = match k {
             K::A => Rc::get(a)[0..2],
             K::B => base[0..2],
-        }
+        };
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -804,20 +789,19 @@ fn rc_15_a_view_chosen_by_a_match_expression_keeps_its_payload_alive() {
 
 const RC16_REF_FROM_VIEW: &str = r#"
 fn first<T>(x: &[T]) -> &T {
-    return &x[0]
+    &x[0]
 }
 
-fn main() -> i64 {
-    let z: i64 = 0
-    let mut r: &i64 = &z
+fn main() {
+    let z: i64 = 0;
+    let mut r: &i64 = &z;
     {
-        let a: Rc<[i64; 2]> = Rc::new([1, 5])
-        let s: &[i64] = Rc::get(a)[0..2]
-        r = first(s)
+        let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+        let s: &[i64] = Rc::get(a)[0..2];
+        r = first(s);
     }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(*r * 1000 + Rc::get(p)[0])
-    return 0
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", *r * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -830,23 +814,22 @@ fn rc_16_a_reference_returned_from_a_view_argument_keeps_the_payload_alive() {
 
 const RC17_CONTINUE_IN_ARG: &str = r#"
 fn sum2(x: &[i64], y: &[i64]) -> i64 {
-    return x[0] + y[0]
+    x[0] + y[0]
 }
 
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let a: Rc<[i64; 2]> = Rc::new([1, 5])
-    let mut acc: i64 = 0
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+    let mut acc: i64 = 0;
     for i in 0..4 {
         acc = acc + sum2(Rc::get(a)[0..2], {
             if i >= 2 {
-                continue
+                continue;
             }
             base[0..2]
-        })
+        });
     }
-    println(acc)
-    return 0
+    println!("{}", acc);
 }
 "#;
 
@@ -861,28 +844,27 @@ fn rc_17_a_continue_inside_a_held_argument_releases_the_held_share() {
 const RC18_BREAK_IN_RHS: &str = r#"
 fn pick(c: bool, x: &[i64], y: &[i64]) -> &[i64] {
     if c {
-        return x
+        return x;
     }
-    return y
+    y
 }
 
-fn main() -> i64 {
-    let base: [i64; 2] = [0, 0]
-    let a: Rc<[i64; 2]> = Rc::new([1, 5])
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let base: [i64; 2] = [0, 0];
+    let a: Rc<[i64; 2]> = Rc::new([1, 5]);
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < 4 {
-        i = i + 1
+        i = i + 1;
         let t: &[i64] = pick(true, Rc::get(a)[0..2], {
             if i >= 2 {
-                break
+                break;
             }
             base[0..2]
-        })
-        acc = acc + t[0]
+        });
+        acc = acc + t[0];
     }
-    println(acc)
-    return 0
+    println!("{}", acc);
 }
 "#;
 
@@ -897,26 +879,25 @@ const RC19_BORROWED_TAIL: &str = r#"
 struct W { r: Rc<i64> }
 
 fn get(x: Rc<i64>) -> i64 {
-    return Rc::get(x)
+    Rc::get(x)
 }
 
 fn from_param(p: W) -> i64 {
     let w: W = {
-        let k: i64 = 1
+        let k: i64 = 1;
         p
-    }
-    return Rc::get(w.r)
+    };
+    Rc::get(w.r)
 }
 
 fn rc_param(x: Rc<i64>, c: bool) -> i64 {
-    return get(if c { x } else { x })
+    get(if c { x } else { x })
 }
 
-fn main() -> i64 {
-    let o: W = W { r: Rc::new(5) }
-    println(from_param(o))
-    println(rc_param(o.r, true))
-    return 0
+fn main() {
+    let o: W = W { r: Rc::new(5) };
+    println!("{}", from_param(o));
+    println!("{}", rc_param(o.r, true));
 }
 "#;
 
@@ -928,26 +909,25 @@ fn rc_19_a_carrier_bound_from_a_borrowed_block_tail_takes_its_share() {
 }
 
 const RC20_GENERIC_CARRIER: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 struct B { r: Rc<i64> }
-fn keep<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let b: B = B { r: a }
-    let c: B = keep(b)
-    let k = churn()
-    println("{Rc::get(c.r) + 1}")
-    return 0
+fn keep<T>(x: T) -> T { x }
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let b: B = B { r: a };
+    let c: B = keep(b);
+    let k = churn();
+    println!("{}", Rc::get(c.r) + 1);
 }
 "#;
 
@@ -960,20 +940,19 @@ fn rc_20_a_carrier_through_a_generic_identity_keeps_its_share() {
 
 const RC21_LET_FROM_CALL: &str = r#"
 fn mk(v: i64) -> Rc<i64> {
-    return Rc::new(v)
+    Rc::new(v)
 }
 
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        let a: Rc<i64> = mk(i + 4)
-        n = n + Rc::get(a)
-        i = i + 1
+        let a: Rc<i64> = mk(i + 4);
+        n = n + Rc::get(a);
+        i = i + 1;
     }
-    let b: Rc<i64> = mk(1)
-    println(n + Rc::get(b))
-    return 0
+    let b: Rc<i64> = mk(1);
+    println!("{}", n + Rc::get(b));
 }
 "#;
 
@@ -989,27 +968,26 @@ struct W { r: Rc<i64> }
 enum H { Cell(Rc<i64>) }
 
 fn mkh(v: i64) -> H {
-    return H::Cell(Rc::new(v))
+    H::Cell(Rc::new(v))
 }
 
 fn f(q: W, v: i64) -> i64 {
     let w: W = match mkh(v) {
         H::Cell(r) => q,
-    }
-    return Rc::get(w.r)
+    };
+    Rc::get(w.r)
 }
 
-fn main() -> i64 {
-    let o: W = W { r: Rc::new(7) }
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let o: W = W { r: Rc::new(7) };
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        n = n + f(o, i)
-        i = i + 1
+        n = n + f(o, i);
+        i = i + 1;
     }
-    let p: Rc<i64> = Rc::new(9)
-    println(n * 100 + Rc::get(o.r) + Rc::get(p))
-    return 0
+    let p: Rc<i64> = Rc::new(9);
+    println!("{}", n * 100 + Rc::get(o.r) + Rc::get(p));
 }
 "#;
 
@@ -1021,34 +999,33 @@ fn rc_22_a_match_arm_handing_back_a_borrowed_carrier_shares_it() {
 }
 
 const RC23_TWO_DISCIPLINES: &str = r#"
-struct M { s: string, r: Rc<i64> }
+struct M { s: String, r: Rc<i64> }
 
 fn rm(m: M) -> M {
-    return m
+    m
 }
 
 fn f(m: M) -> i64 {
-    let k: M = rm(m)
-    return Rc::get(k.r) + k.s.len
+    let k: M = rm(m);
+    Rc::get(k.r) + k.s.len()
 }
 
-fn main() -> i64 {
-    let mut t: string = "x"
-    let mut j: i64 = 0
+fn main() {
+    let mut t: String = "x";
+    let mut j: i64 = 0;
     while j < 3 {
-        t = t + "{j}"
-        j = j + 1
+        t = t + format!("{j}");
+        j = j + 1;
     }
-    let om: M = M { s: t, r: Rc::new(1) }
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+    let om: M = M { s: t, r: Rc::new(1) };
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        n = n + f(om)
-        i = i + 1
+        n = n + f(om);
+        i = i + 1;
     }
-    let p: Rc<i64> = Rc::new(9)
-    println(n * 100 + Rc::get(om.r) + om.s.len + Rc::get(p))
-    return 0
+    let p: Rc<i64> = Rc::new(9);
+    println!("{}", n * 100 + Rc::get(om.r) + om.s.len() + Rc::get(p));
 }
 "#;
 
@@ -1062,19 +1039,18 @@ fn rc_23_a_returned_two_discipline_carrier_shares_its_string_and_its_rc() {
 
 const RC24_FRESH_ARG: &str = r#"
 fn use_it(x: Rc<i64>) -> i64 {
-    return Rc::get(x)
+    Rc::get(x)
 }
 
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        n = n + use_it(Rc::new(i + 3))
-        i = i + 1
+        n = n + use_it(Rc::new(i + 3));
+        i = i + 1;
     }
-    let p: Rc<i64> = Rc::new(9)
-    println(n * 100 + Rc::get(p))
-    return 0
+    let p: Rc<i64> = Rc::new(9);
+    println!("{}", n * 100 + Rc::get(p));
 }
 "#;
 
@@ -1087,18 +1063,17 @@ fn rc_24_a_fresh_rc_passed_as_an_argument_is_released_after_the_call() {
 }
 
 const RC25_CLOSURE_ENV: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 5 {
-        let s: string = victim(i)
-        let f = fn () -> i64 { return s.len }
-        n = n + f()
-        i = i + 1
+        let s: String = victim(i);
+        let f = move || -> i64 { s.len() };
+        n = n + f();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -1111,23 +1086,22 @@ fn rc_25_a_closure_environment_is_released() {
 }
 
 const RC26_MODULE: &str = r#"pub fn keep<T>(x: T) -> T {
-    return x
+    x
 }
 "#;
 
-const RC26_IMPORTED_GENERIC_LENDS: &str = r#"needs m
+const RC26_IMPORTED_GENERIC_LENDS: &str = r#"mod m;
 
 fn use_it(x: Rc<i64>) -> i64 {
-    return Rc::get(x)
+    Rc::get(x)
 }
 
-fn main() -> i64 {
-    let o: Rc<i64> = Rc::new(41)
-    println(use_it(m.keep(o)))
-    let a: Rc<i64> = m.keep(o)
-    println(use_it(a))
-    println(Rc::get(o))
-    return 0
+fn main() {
+    let o: Rc<i64> = Rc::new(41);
+    println!("{}", use_it(m::keep(o)));
+    let a: Rc<i64> = m::keep(o);
+    println!("{}", use_it(a));
+    println!("{}", Rc::get(o));
 }
 "#;
 
@@ -1146,20 +1120,19 @@ fn rc_26_an_imported_generic_returning_its_parameter_lends_an_rc() {
 }
 
 const RC27: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn zero() -> i64 { return 0 }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn zero() -> i64 { 0 }
 struct W { f: fn() -> i64 }
 fn clobber(h: Rc<W>, f: fn() -> i64) -> i64 {
-    h.f = zero
-    let t: string = victim(88888)
-    return f() + t.len
+    h.f = zero;
+    let t: String = victim(88888);
+    f() + t.len()
 }
-fn main() -> i64 {
-    let s: string = victim(12345)
-    let a = Rc::new(W { f: fn () -> i64 { return s.len + s.bytes[0] } })
-    let n = clobber(a, Rc::get(a).f)
-    println("{n}")
-    return 0
+fn main() {
+    let s: String = victim(12345);
+    let a = Rc::new(W { f: move || -> i64 { s.len() + s.as_bytes()[0] } });
+    let n = clobber(a, Rc::get(a).f);
+    println!("{n}");
 }
 "#;
 
@@ -1172,19 +1145,18 @@ fn rc_27_a_store_through_an_rc_handle_keeps_a_closure_field_alive_for_a_running_
 }
 
 const RC28: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let n = clobber(a, Rc::get(a).s)
-    println("{n}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let n = clobber(a, Rc::get(a).s);
+    println!("{n}");
 }
 "#;
 
@@ -1197,17 +1169,16 @@ fn rc_28_a_store_through_an_rc_handle_keeps_a_string_argument_alive() {
 }
 
 const RC29: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = a
-    let bs = Rc::get(a).s.bytes
-    b.s = victim(1)
-    let t: string = other(88888)
-    println("{bs[0]}|{bs.len}|{t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = a;
+    let bs = Rc::get(a).s.as_bytes();
+    b.s = victim(1);
+    let t: String = other(88888);
+    println!("{}|{}|{}", bs[0], bs.len(), t.len());
 }
 "#;
 
@@ -1220,20 +1191,19 @@ fn rc_29_a_store_through_an_rc_handle_keeps_a_bytes_view_of_the_field_alive() {
 }
 
 const RC30: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string, k: i64 }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String, k: i64 }
 struct W { i: In }
 fn clobber(h: Rc<W>, x: In) -> i64 {
-    h.i = In { s: victim(1), k: 0 }
-    let t: string = other(88888)
-    return x.s.bytes[0] + x.s.len + t.len + x.k
+    h.i = In { s: victim(1), k: 0 };
+    let t: String = other(88888);
+    x.s.as_bytes()[0] + x.s.len() + t.len() + x.k
 }
-fn main() -> i64 {
-    let a = Rc::new(W { i: In { s: victim(12345), k: 5 } })
-    let n = clobber(a, Rc::get(a).i)
-    println("{n}")
-    return 0
+fn main() {
+    let a = Rc::new(W { i: In { s: victim(12345), k: 5 } });
+    let n = clobber(a, Rc::get(a).i);
+    println!("{n}");
 }
 "#;
 
@@ -1246,19 +1216,18 @@ fn rc_30_a_store_through_an_rc_handle_keeps_a_carrier_argument_alive() {
 }
 
 const RC31: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { a: [string; 2] }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.a[1] = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { a: [String; 2] }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.a[1] = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)] })
-    let n = clobber(a, Rc::get(a).a[1])
-    println("{n}")
-    return 0
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] });
+    let n = clobber(a, Rc::get(a).a[1]);
+    println!("{n}");
 }
 "#;
 
@@ -1285,7 +1254,7 @@ fn refused(id: &str, src: &str, code: &str) {
 fn rc_32_an_array_of_rc_is_refused() {
     refused(
         "rc-32",
-        "fn main() -> i64 {\n    let a: [Rc<i64>; 2] = [Rc::new(1), Rc::new(2)]\n    return Rc::get(a[0])\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let a: [Rc<i64>; 2] = [Rc::new(1), Rc::new(2)];\n    return ExitCode::from(Rc::get(a[0]) as u8);\n}\n",
         "E0410",
     );
 }
@@ -1294,25 +1263,24 @@ fn rc_32_an_array_of_rc_is_refused() {
 fn rc_33_a_vec_as_a_type_argument_is_refused() {
     refused(
         "rc-33",
-        "fn keep<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let v: Vec<i64> = Vec::new()\n    let w: Vec<i64> = keep(v)\n    return Vec::len(w)\n}\n",
+        "use std::process::ExitCode; fn keep<T>(x: T) -> T { x }\nfn main() -> ExitCode {\n    let v: Vec<i64> = Vec::new();\n    let w: Vec<i64> = keep(v);\n    return ExitCode::from(Vec::len(w) as u8);\n}\n",
         "E0412",
     );
 }
 
 const RC34_GENERIC_FRESH_RC: &str = r#"
 fn use_it(x: Rc<i64>) -> i64 {
-    return Rc::get(x)
+    Rc::get(x)
 }
 fn mk() -> Rc<i64> {
-    return Rc::new(7)
+    Rc::new(7)
 }
 fn app<T>(f: fn() -> T) -> T {
-    return f()
+    f()
 }
-fn main() -> i64 {
-    let a: Rc<i64> = app(mk)
-    println(use_it(app(mk)) + Rc::get(a))
-    return 0
+fn main() {
+    let a: Rc<i64> = app(mk);
+    println!("{}", use_it(app(mk)) + Rc::get(a));
 }
 "#;
 
@@ -1327,15 +1295,14 @@ fn rc_34_a_fresh_rc_returned_as_a_bare_type_parameter_is_released() {
 const RC35_LONG_LIST: &str = r#"
 struct N { v: i64, next: Rc<N> }
 struct H { r: Rc<N> }
-fn main() -> i64 {
-    let mut h = H { r: Rc::null() }
-    let mut i: i64 = 0
+fn main() {
+    let mut h = H { r: Rc::null() };
+    let mut i: i64 = 0;
     while i < 1000000 {
-        h = H { r: Rc::new(N { v: i, next: h.r }) }
-        i = i + 1
+        h = H { r: Rc::new(N { v: i, next: h.r }) };
+        i = i + 1;
     }
-    println("{Rc::get(h.r).v}")
-    return 0
+    println!("{}", Rc::get(h.r).v);
 }
 "#;
 
@@ -1376,59 +1343,58 @@ fn rc_35_a_long_list_is_released_in_linear_time_under_the_cycle_collector() {
 }
 
 const RC36_WHOLE_LIBRARY: &str = r#"
-needs std.str
-needs std.vec
-needs std.slice
-needs std.sort
-needs std.math
-needs std.result
-needs std.io
+use std::str;
+use std::vec;
+use std::slice;
+use std::sort;
+use std::math;
+use std::result;
+use std::io;
 
-struct Entry { key: string, score: Rc<i64> }
+struct Entry { key: String, score: Rc<i64> }
 
-fn line_for(i: i64) -> string {
-    return "  id" + str.from_int(i % 37) + " , " + str.from_int((i * 7) % 101) + " , x" + str.from_int(i % 5) + "  "
+fn line_for(i: i64) -> String {
+    "  id" + str::from_int(i % 37) + " , " + str::from_int((i * 7) % 101) + " , x" + str::from_int(i % 5) + "  "
 }
 
 fn score_of(e: Entry) -> i64 {
-    return Rc::get(e.score)
+    Rc::get(e.score)
 }
 
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let raw: string = line_for(i)
-        let clean: string = str.trim(raw)
-        let parts: Vec<string> = str.split(clean, ",")
-        let key: string = str.trim(parts[0])
-        let value: i64 = result.unwrap_or(str.parse_int(str.trim(parts[1])), 0)
-        let tag: string = str.substring(str.trim(parts[2]), 0, 2)
-        let e: Entry = Entry { key: key, score: Rc::new(value) }
-        let mut names: Vec<string> = Vec::new()
-        Vec::push(names, tag)
-        Vec::push(names, e.key)
-        Vec::push(names, "zz")
-        let mut view: &mut [string] = Vec::try_as_unique_mut_slice(names)
-        sort.strings(view)
-        let joined: string = str.join(&names, "|")
-        let mut nums: Vec<i64> = Vec::new()
-        Vec::push(nums, value)
-        Vec::push(nums, math.gcd(value, 12))
-        Vec::push(nums, math.clamp(value - 50, 0, 9))
-        let k: i64 = joined.len
-        let shifted: Vec<i64> = vec.map(&nums, fn (x: i64) -> i64 { return x + k })
-        let kept: Vec<i64> = vec.filter(&shifted, fn (x: i64) -> bool { return x % 2 == 0 })
-        let acc: i64 = vec.fold(&kept, 0, fn (a: i64, b: i64) -> i64 { return a + b })
-        let sorted: Vec<i64> = vec.sorted(&shifted)
-        let first: i64 = result.some_or(slice.first(Vec::as_slice(sorted)), 0)
-        let hit: i64 = if str.contains(joined, "id1") { 1 } else { 0 }
-        let ch: i64 = str.char_count(joined) + str.index_of(joined, "|") + str.compare(tag, "x2")
-        total = total + score_of(e) + acc + first + hit + ch + math.abs(math.sign(value - 50)) + vec.sum(&nums) % 7
-        i = i + 1
+        let raw: String = line_for(i);
+        let clean: String = str::trim(raw);
+        let parts: Vec<String> = str::split(clean, ",");
+        let key: String = str::trim(parts[0]);
+        let value: i64 = result::unwrap_or(str::parse_int(str::trim(parts[1])), 0);
+        let tag: String = str::substring(str::trim(parts[2]), 0, 2);
+        let e: Entry = Entry { key: key, score: Rc::new(value) };
+        let mut names: Vec<String> = Vec::new();
+        Vec::push(names, tag);
+        Vec::push(names, e.key);
+        Vec::push(names, "zz");
+        let mut view: &mut [String] = Vec::try_as_unique_mut_slice(names);
+        sort::strings(view);
+        let joined: String = str::join(&names, "|");
+        let mut nums: Vec<i64> = Vec::new();
+        Vec::push(nums, value);
+        Vec::push(nums, math::gcd(value, 12));
+        Vec::push(nums, math::clamp(value - 50, 0, 9));
+        let k: i64 = joined.len();
+        let shifted: Vec<i64> = vec::map(&nums, move |x: i64| -> i64 { x + k });
+        let kept: Vec<i64> = vec::filter(&shifted, move |x: i64| -> bool { x % 2 == 0 });
+        let acc: i64 = vec::fold(&kept, 0, move |a: i64, b: i64| -> i64 { a + b });
+        let sorted: Vec<i64> = vec::sorted(&shifted);
+        let first: i64 = result::some_or(slice::first(Vec::as_slice(sorted)), 0);
+        let hit: i64 = if str::contains(joined, "id1") { 1 } else { 0 };
+        let ch: i64 = str::char_count(joined) + str::index_of(joined, "|") + str::compare(tag, "x2");
+        total = total + score_of(e) + acc + first + hit + ch + math::abs(math::sign(value - 50)) + vec::sum(&nums) % 7;
+        i = i + 1;
     }
-    io.print_out(str.from_int(total) + "\n")
-    return 0
+    io::print_out(str::from_int(total) + "\n");
 }
 "#;
 

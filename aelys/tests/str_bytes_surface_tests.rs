@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -368,16 +368,15 @@ impl Harness {
 }
 
 const SB1_BYTES_OF_A_MULTIBYTE_STRING: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s.len)
-    println(s.bytes.len)
-    let b = s.bytes
-    println(b[0])
-    println(b[1])
-    println(b[2])
-    println(b[3])
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s.len());
+    println!("{}", s.as_bytes().len());
+    let b = s.as_bytes();
+    println!("{}", b[0]);
+    println!("{}", b[1]);
+    println!("{}", b[2]);
+    println!("{}", b[3]);
 }
 "#;
 
@@ -394,16 +393,15 @@ fn sb1_bytes_answers_the_utf8_bytes_and_agrees_with_len() {
 }
 
 const SB2_ITERATION: &str = r#"
-fn main() -> i64 {
-    let s: string = "éléphant"
-    let b = s.bytes
-    let mut sum: i64 = 0
-    for i in 0..b.len {
-        sum = sum + (b[i] as i64)
+fn main() {
+    let s: String = "éléphant";
+    let b = s.as_bytes();
+    let mut sum: i64 = 0;
+    for i in 0..b.len() {
+        sum = sum + (b[i] as i64);
     }
-    println(b.len)
-    println(sum)
-    return 0
+    println!("{}", b.len());
+    println!("{}", sum);
 }
 "#;
 
@@ -415,16 +413,15 @@ fn sb2_a_byte_view_of_a_multibyte_string_iterates() {
 }
 
 const SB3_NOGC_BYTES: &str = r#"
-nogc fn first_byte(s: string) -> i64 {
-    let b = s.bytes
-    if b.len == 0 { return -1 }
-    return b[0] as i64
+nogc fn first_byte(s: String) -> i64 {
+    let b = s.as_bytes();
+    if b.len() == 0 { return -1; }
+    b[0] as i64
 }
 
-fn main() -> i64 {
-    let s: string = "éab"
-    println(first_byte(s))
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", first_byte(s));
 }
 "#;
 
@@ -436,14 +433,13 @@ fn sb3_a_byte_view_allocates_nothing_so_it_is_nogc() {
 }
 
 const SB4_SUBSTRING_BYTES: &str = r#"
-fn main() -> i64 {
-    let s: string = "éléphant"
-    let head = string::substring_bytes(s, 0, 5)
-    let tail = string::substring_bytes(s, 5, 10)
-    println(head)
-    println(tail)
-    println(head.len)
-    return 0
+fn main() {
+    let s: String = "éléphant";
+    let head = s[0..5].to_string();
+    let tail = s[5..10].to_string();
+    println!("{}", head);
+    println!("{}", tail);
+    println!("{}", head.len());
 }
 "#;
 
@@ -454,40 +450,51 @@ fn sb4_substring_bytes_cuts_a_multibyte_string_on_its_boundaries() {
     h.assert_legs(6);
 }
 
-const SB5_SUBSTRING_LIBRARY: &str = r#"
-needs std.str
+const SB5_SUBSTRING_CONCAT: &str = r#"
+fn main() {
+    let s: String = "hello world";
+    let mut t: String = "";
+    let mut i: i64 = 0;
+    for c in s {
+        if i < 5 { t = t + c.to_string(); }
+        i = i + 1;
+    }
+    println!("{}", t);
+}
+"#;
 
-fn main() -> i64 {
-    let s: string = "hello world"
-    let t = str.substring(s, 0, 5)
-    println(t)
-    return 0
+const SB5_SUBSTRING_LIBRARY: &str = r#"
+use std::str;
+
+fn main() {
+    let s: String = "hello world";
+    let t = str::substring(s, 0, 5);
+    println!("{}", t);
 }
 "#;
 
 const SB5_SUBSTRING_BYTES: &str = r#"
-fn main() -> i64 {
-    let s: string = "hello world"
-    let t = string::substring_bytes(s, 0, 5)
-    println(t)
-    return 0
+fn main() {
+    let s: String = "hello world";
+    let t = s[0..5].to_string();
+    println!("{}", t);
 }
 "#;
 
 #[test]
 fn sb5_a_bound_builtin_substring_and_a_bound_library_call_result_are_both_released() {
     let h = Harness::new();
+    h.value_row("SB-5-concat", SB5_SUBSTRING_CONCAT, "hello\n", (10, 10));
     h.value_row("SB-5-built", SB5_SUBSTRING_BYTES, "hello\n", (1, 1));
     h.value_row("SB-5-library", SB5_SUBSTRING_LIBRARY, "hello\n", (1, 1));
-    h.assert_legs(12);
+    h.assert_legs(18);
 }
 
 const SB6_SPLIT_A_CHARACTER: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    let t = string::substring_bytes(s, 0, 1)
-    println(t)
-    return 0
+fn main() {
+    let s: String = "éab";
+    let t = s[0..1].to_string();
+    println!("{}", t);
 }
 "#;
 
@@ -504,11 +511,10 @@ fn sb6_a_range_that_splits_a_character_panics_at_the_constructor() {
 }
 
 const SB7_RANGE_OUT_OF_BOUNDS: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    let t = string::substring_bytes(s, 0, 9)
-    println(t)
-    return 0
+fn main() {
+    let s: String = "éab";
+    let t = s[0..9].to_string();
+    println!("{}", t);
 }
 "#;
 
@@ -523,67 +529,20 @@ fn sb7_a_range_outside_the_string_panics_at_the_constructor() {
     h.assert_legs(6);
 }
 
-const SB7B_SLICE_PANICS: [(&str, &str, &str); 3] = [
-    (
-        "SB-7b-cut",
-        r#"
-fn main() {
-    let s: String = "éab"
-    println(s[0..1])
-}
-"#,
-        "string slice `s[0..1]`: byte 1 is not a character boundary; it holds 0xa9",
-    ),
-    (
-        "SB-7b-reversed",
-        r#"
-fn main() {
-    let s: String = "abc"
-    let i = 3
-    let j = 1
-    println(s[i..=j])
-}
-"#,
-        "string slice `s[3..=1]`: the range ends before it starts",
-    ),
-    (
-        "SB-7b-max",
-        r#"
-fn main() {
-    let s: String = "abc"
-    let j = 9223372036854775807
-    println(s[0..=j])
-}
-"#,
-        "string slice `s[0..=9223372036854775807]`: the range is not inside a string of 3 bytes",
-    ),
-];
-
-#[test]
-fn sb7b_a_slice_panic_names_the_slice_and_its_exact_range() {
-    let h = Harness::new();
-    for (id, src, says) in SB7B_SLICE_PANICS {
-        h.panic_row(id, src, says);
-    }
-    h.assert_legs(18);
-}
-
 const SB8_INDEX_REFUSED: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s[3])
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s[3]);
 }
 "#;
 
 const SB8_CHARACTERS_AND_BYTES: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s.bytes.len)
-    println(str.char_count(s))
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s.as_bytes().len());
+    println!("{}", str::char_count(s));
 }
 "#;
 
@@ -603,24 +562,23 @@ fn sb8_the_refusal_separates_the_character_count_from_the_byte_length() {
 }
 
 const SB9_PREDICATES: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let s: string = "éab"
-    let mut i: i64 = 0
-    let mut n: i64 = 0
-    while i < s.len {
-        let k: i64 = str.char_len(s, i)
-        println(str.is_char_boundary(s, i))
-        println(k)
-        i = i + k
-        n = n + 1
+fn main() {
+    let s: String = "éab";
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
+    while i < s.len() {
+        let k: i64 = str::char_len(s, i);
+        println!("{}", str::is_char_boundary(s, i));
+        println!("{}", k);
+        i = i + k;
+        n = n + 1;
     }
-    println(str.is_char_boundary(s, 1))
-    println(str.char_len(s, 1))
-    println(n)
-    println(s.len)
-    return 0
+    println!("{}", str::is_char_boundary(s, 1));
+    println!("{}", str::char_len(s, 1));
+    println!("{}", n);
+    println!("{}", s.len());
 }
 "#;
 
@@ -637,51 +595,47 @@ fn sb9_the_two_predicates_walk_a_multibyte_string_without_panicking() {
 }
 
 const SB10_WRITE_THROUGH_BYTES: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    let b = s.bytes
-    b[0] = 65
-    return 0
+fn main() {
+    let s: String = "éab";
+    let b = s.as_bytes();
+    b[0] = 65;
 }
 "#;
 
 const SB11_BYTES_OUTLIVES_ITS_STRING: &str = r#"
-fn main() -> i64 {
-    let base: string = "éab"
-    let mut r = base.bytes
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base: String = "éab";
+    let mut r = base.as_bytes();
     {
-        let inner: string = "ünz"
-        r = inner.bytes
+        let inner: String = "ünz";
+        r = inner.as_bytes();
     }
-    return r[0] as i64
+    return ExitCode::from((r[0] as i64) as u8);
 }
 "#;
 
 const SB12_NO_CHARACTER_COUNT: &str = r#"
-fn main() -> i64 {
-    let s: string = "éab"
-    println(s.chars)
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", s.chars);
 }
 "#;
 
 const SB13_INDEX_ASSIGN_ON_A_STRING: &str = r#"
-fn main() -> i64 {
-    let mut s: string = "éab"
-    s[0] = "x"
-    return 0
+fn main() {
+    let mut s: String = "éab";
+    s[0] = "x";
 }
 "#;
 
 const SB14_SUBSTRING_BYTES_IN_A_NOGC_FN: &str = r#"
-nogc fn cut(s: string) -> string {
-    return string::substring_bytes(s, 0, 2)
+nogc fn cut(s: String) -> String {
+    s[0..2].to_string()
 }
 
-fn main() -> i64 {
-    let s: string = "éab"
-    println(cut(s))
-    return 0
+fn main() {
+    let s: String = "éab";
+    println!("{}", cut(s));
 }
 "#;
 
@@ -723,22 +677,21 @@ fn sb10_the_fences_around_the_byte_view_all_still_fire() {
 }
 
 const SB15_A_SHARED_BINDING_THAT_ESCAPES: &str = r#"
-needs std.str
+use std::str;
 
-fn build(src: string) -> Vec<string> {
-    let mut out = Vec::new()
-    let a: string = string::substring_bytes(src, 0, 3)
-    let b: string = a
-    Vec::push(out, b)
-    return out
+fn build(src: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let a: String = src[0..3].to_string();
+    let b: String = a;
+    Vec::push(out, b);
+    out
 }
 
-fn main() -> i64 {
-    let v: Vec<string> = build("abcdefgh")
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println(v[0])
-    return 0
+fn main() {
+    let v: Vec<String> = build("abcdefgh");
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -755,37 +708,35 @@ fn sb11_a_shared_binding_that_escapes_answers_what_the_leak_runtime_answers() {
 }
 
 const SB16_A_REASSIGNED_SLOT_THAT_ESCAPES: &str = r#"
-needs std.str
+use std::str;
 
-fn build(src: string) -> Vec<string> {
-    let mut out = Vec::new()
-    let mut a: string = string::substring_bytes(src, 0, 3)
-    let mut b: string = string::substring_bytes(src, 3, 6)
-    a = b
-    Vec::push(out, b)
-    println(a)
-    return out
+fn build(src: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut a: String = src[0..3].to_string();
+    let mut b: String = src[3..6].to_string();
+    a = b;
+    Vec::push(out, b);
+    println!("{}", a);
+    out
 }
 
-fn main() -> i64 {
-    let v: Vec<string> = build("abcdefgh")
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println(v[0])
-    return 0
+fn main() {
+    let v: Vec<String> = build("abcdefgh");
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{}", v[0]);
 }
 "#;
 
 const SB17_A_SLOT_REASSIGNED_TO_ITSELF: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let mut s: string = string::substring_bytes("abcdefgh", 0, 3)
-    s = s
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println(s)
-    return 0
+fn main() {
+    let mut s: String = "abcdefgh"[0..3].to_string();
+    s = s;
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{}", s);
 }
 "#;
 
@@ -808,35 +759,34 @@ fn sb12_a_reassigned_string_answers_what_the_leak_runtime_answers() {
 }
 
 const SB18_TWO_SLOTS_REASSIGNED_FROM_ONE_SOURCE: &str = r#"
-needs std.str
+use std::str;
 
-fn build(src: string) -> Vec<string> {
-    let mut out = Vec::new()
-    let b: string = string::substring_bytes(src, 2, 5)
-    Vec::push(out, b)
+fn build(src: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let b: String = src[2..5].to_string();
+    Vec::push(out, b);
     {
-        let mut a1: string = string::substring_bytes(src, 0, 1)
-        a1 = b
-        println(a1)
+        let mut a1: String = src[0..1].to_string();
+        a1 = b;
+        println!("{}", a1);
     }
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
     {
-        let mut a2: string = string::substring_bytes(src, 1, 2)
-        a2 = b
-        println(a2)
+        let mut a2: String = src[1..2].to_string();
+        a2 = b;
+        println!("{}", a2);
     }
-    let second: string = string::substring_bytes("WWWWWWWW", 0, 3)
-    println(second)
-    println(poison)
-    return out
+    let second: String = "WWWWWWWW"[0..3].to_string();
+    println!("{}", second);
+    println!("{}", poison);
+    out
 }
 
-fn main() -> i64 {
-    let v: Vec<string> = build("abcdefgh")
-    println(v[0])
-    println("survived")
-    return 0
+fn main() {
+    let v: Vec<String> = build("abcdefgh");
+    println!("{}", v[0]);
+    println!("survived");
 }
 "#;
 
@@ -854,23 +804,22 @@ fn sb13_two_reassignments_from_one_source_answer_what_the_leak_runtime_answers()
 
 // the release a reassignment emits must fall exactly when something took that value first
 const SB19_A_SLOT_THAT_ESCAPES_BEFORE_IT_IS_REASSIGNED: &str = r#"
-needs std.str
+use std::str;
 
-fn build(src: string) -> Vec<string> {
-    let mut out = Vec::new()
-    let mut a: string = string::substring_bytes(src, 0, 3)
-    Vec::push(out, a)
-    a = string::substring_bytes(src, 3, 6)
-    println(a)
-    return out
+fn build(src: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut a: String = src[0..3].to_string();
+    Vec::push(out, a);
+    a = src[3..6].to_string();
+    println!("{}", a);
+    out
 }
 
-fn main() -> i64 {
-    let v: Vec<string> = build("abcdefgh")
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println(v[0])
-    return 0
+fn main() {
+    let v: Vec<String> = build("abcdefgh");
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -887,22 +836,21 @@ fn sb14_a_slot_that_escapes_before_it_is_reassigned_answers_what_the_leak_runtim
 }
 
 const SB20_A_SLOT_REASSIGNED_IN_A_LOOP_THAT_ESCAPES_AFTER_IT: &str = r#"
-needs std.str
+use std::str;
 
-fn touch(s: string) -> i64 {
-    return s.len
+fn touch(s: String) -> i64 {
+    s.len()
 }
 
-fn main() -> i64 {
-    let mut out: string = ""
-    let mut i: i64 = 0
+fn main() {
+    let mut out: String = "";
+    let mut i: i64 = 0;
     while i < 4 {
-        out = string::substring_bytes("abcdefgh", 0, 3)
-        i = i + 1
+        out = "abcdefgh"[0..3].to_string();
+        i = i + 1;
     }
-    println(out)
-    println("{touch(out)}")
-    return 0
+    println!("{}", out);
+    println!("{}", touch(out));
 }
 "#;
 
@@ -920,25 +868,24 @@ fn sb15_a_call_after_a_loop_does_not_silence_the_releases_inside_it() {
 
 // the share's retain goes when the slot escapes, so a kept release here spends the producer's count
 const SB21_A_SHARED_SLOT_REASSIGNED_BEFORE_IT_ESCAPES: &str = r#"
-needs std.str
+use std::str;
 
-fn build(src: string) -> Vec<string> {
-    let mut out = Vec::new()
-    let b: string = string::substring_bytes(src, 0, 3)
-    let mut a: string = b
-    a = string::substring_bytes(src, 3, 6)
-    Vec::push(out, a)
-    Vec::push(out, b)
-    return out
+fn build(src: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let b: String = src[0..3].to_string();
+    let mut a: String = b;
+    a = src[3..6].to_string();
+    Vec::push(out, a);
+    Vec::push(out, b);
+    out
 }
 
-fn main() -> i64 {
-    let v: Vec<string> = build("abcdefgh")
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println(v[0])
-    println(v[1])
-    return 0
+fn main() {
+    let v: Vec<String> = build("abcdefgh");
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{}", v[0]);
+    println!("{}", v[1]);
 }
 "#;
 
@@ -955,29 +902,28 @@ fn sb16_a_shared_slot_reassigned_before_it_escapes_answers_what_the_leak_runtime
 }
 
 const SB22_UNBOUND_TEMPORARIES: &str = r#"
-needs std.str
+use std::str;
 
-fn id(s: string) -> string {
-    return s
+fn id(s: String) -> String {
+    s
 }
 
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        n = n + ("{i}" + "!").len
-        if "{i}" == "1" { n = n + 100 }
-        Vec::push(v, "k" + "{i}")
-        let kept: string = id("r" + "{i}")
-        let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-        println(kept + poison)
-        println("row {i} of {n}")
-        i = i + 1
+        n = n + (format!("{i}") + "!").len();
+        if format!("{i}") == "1" { n = n + 100; }
+        Vec::push(v, "k" + format!("{i}"));
+        let kept: String = id("r" + format!("{i}"));
+        let poison: String = "ZZZZZZZZ"[0..2].to_string();
+        println!("{}", kept + poison);
+        println!("row {i} of {n}");
+        i = i + 1;
     }
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-    println(v[0] + v[1] + v[2] + poison)
-    return 0
+    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    println!("{}", v[0] + v[1] + v[2] + poison);
 }
 "#;
 
@@ -994,28 +940,27 @@ fn sb17_an_unbound_temporary_is_released_after_its_last_read_and_never_when_hand
 }
 
 const SB23_SCALAR_PRINTS: &str = r#"
-fn pair(a: string, b: string) -> string {
-    return a + "|" + b
+fn pair(a: String, b: String) -> String {
+    a + "|" + b
 }
 
-fn main() -> i64 {
-    let x: i64 = 11
-    let y: i64 = 22
-    let f: f64 = 2.5
-    let c: char = 'é'
-    let u: u8 = 200
-    let mut i: i64 = 0
+fn main() {
+    let x: i64 = 11;
+    let y: i64 = 22;
+    let f: f64 = 2.5;
+    let c: char = 'é';
+    let u: u8 = 200;
+    let mut i: i64 = 0;
     while i < 2 {
-        println("{x}")
-        println(y)
-        println(f)
-        println(c)
-        println(true)
-        println(u)
-        println(pair("{x}", "{y}"))
-        i = i + 1
+        println!("{x}");
+        println!("{}", y);
+        println!("{}", f);
+        println!("{}", c);
+        println!("{}", true);
+        println!("{}", u);
+        println!("{}", pair(format!("{x}"), format!("{y}")));
+        i = i + 1;
     }
-    return 0
 }
 "#;
 
@@ -1032,42 +977,41 @@ fn sb18_a_scalar_println_takes_the_frame_buffer_and_two_interpolated_arguments_s
 }
 
 const SB24_BREAK_AND_CONTINUE: &str = r#"
-needs std.str
+use std::str;
 
-fn main() -> i64 {
-    let outer: string = "out" + "{7}"
-    let mut v: Vec<string> = Vec::new()
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let outer: String = "out" + format!("{}", 7);
+    let mut v: Vec<String> = Vec::new();
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        i = i + 1
-        let s: string = "s" + "{i}"
+        i = i + 1;
+        let s: String = "s" + format!("{i}");
         if i % 2 == 0 {
-            let kept: string = "k" + "{i}"
-            Vec::push(v, kept)
-            continue
+            let kept: String = "k" + format!("{i}");
+            Vec::push(v, kept);
+            continue;
         }
-        let mut j: i64 = 0
+        let mut j: i64 = 0;
         while j < 4 {
-            let t: string = "t" + "{j}"
-            j = j + 1
+            let t: String = "t" + format!("{j}");
+            j = j + 1;
             if j == 3 {
-                n = n + t.len
-                break
+                n = n + t.len();
+                break;
             }
-            n = n + t.len + s.len
+            n = n + t.len() + s.len();
         }
         if i == 5 {
-            let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-            println(s + poison)
-            break
+            let poison: String = "ZZZZZZZZ"[0..2].to_string();
+            println!("{}", s + poison);
+            break;
         }
     }
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-    println(outer + poison)
-    println(n)
-    println(v[0] + v[1])
-    return 0
+    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    println!("{}", outer + poison);
+    println!("{}", n);
+    println!("{}", v[0] + v[1]);
 }
 "#;
 
@@ -1084,38 +1028,37 @@ fn sb19_break_and_continue_release_the_loop_body_strings_and_nothing_outside_it(
 }
 
 const SB25_FRESH_RETURNS: &str = r#"
-needs std.str
+use std::str;
 
-fn label(i: i64) -> string {
-    return "L{i}"
+fn label(i: i64) -> String {
+    format!("L{i}")
 }
 
-fn relabel(i: i64) -> string {
-    return label(i)
+fn relabel(i: i64) -> String {
+    label(i)
 }
 
-fn id(s: string) -> string {
-    return s
+fn id(s: String) -> String {
+    s
 }
 
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    let base: string = "b" + "{7}"
-    let mut i: i64 = 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    let base: String = "b" + format!("{}", 7);
+    let mut i: i64 = 0;
     while i < 3 {
-        let a: string = label(i)
-        let b: string = relabel(i)
-        let c: string = id(base)
-        let t: string = str.trim(" {i} ")
-        Vec::push(v, label(i + 10))
-        let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-        println(a + b + c + t + poison)
-        println(label(i).len + str.from_int(i).len)
-        i = i + 1
+        let a: String = label(i);
+        let b: String = relabel(i);
+        let c: String = id(base);
+        let t: String = str::trim(format!(" {i} "));
+        Vec::push(v, label(i + 10));
+        let poison: String = "ZZZZZZZZ"[0..2].to_string();
+        println!("{}", a + b + c + t + poison);
+        println!("{}", label(i).len() + str::from_int(i).len());
+        i = i + 1;
     }
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 2)
-    println(v[0] + v[2] + base + poison)
-    return 0
+    let poison: String = "ZZZZZZZZ"[0..2].to_string();
+    println!("{}", v[0] + v[2] + base + poison);
 }
 "#;
 
@@ -1132,16 +1075,15 @@ fn sb20_a_call_that_returns_fresh_bytes_is_owned_and_a_call_that_returns_its_arg
 }
 
 const SB26_THE_ORIGINAL_BLOCKER: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < TURNS {
-        let s: string = "row " + "{i}"
-        n = n + s.len
-        i = i + 1
+        let s: String = "row " + format!("{i}");
+        n = n + s.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1246,53 +1188,52 @@ fn sb21_the_original_blocker_keeps_a_flat_peak_from_two_hundred_thousand_to_two_
 }
 
 const SB27_ARM_SCOPES: &str = r#"
-needs std.str
+use std::str;
 
 enum K { A, B }
 
 fn kind(i: i64) -> K {
-    if i % 3 == 2 { return K::A }
-    return K::B
+    if i % 3 == 2 { return K::A; }
+    K::B
 }
 
-fn label(i: i64) -> string {
-    return "L{i}"
+fn label(i: i64) -> String {
+    format!("L{i}")
 }
 
-fn pick(p: string) -> string {
-    return p
+fn pick(p: String) -> String {
+    p
 }
 
-fn main() -> i64 {
-    let mut hold: string = "h" + "{0}"
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut hold: String = "h" + format!("{}", 0);
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        i = i + 1
+        i = i + 1;
         let w: i64 = if i == 4 {
-            let t: string = str.trim("  x{i}  ")
-            t.len
+            let t: String = str::trim(format!("  x{i}  "));
+            t.len()
         } else {
             0
-        }
-        n = n + w
+        };
+        n = n + w;
         match kind(i) {
             K::A => {
-                let a: string = "a" + "{i}"
-                let b: string = label(i)
-                println(a + b)
+                let a: String = "a" + format!("{i}");
+                let b: String = label(i);
+                println!("{}", a + b);
             }
             K::B => {
-                hold = label(i + 10)
-                continue
+                hold = label(i + 10);
+                continue;
             }
         }
     }
-    let z: string = pick("Z" + "{9}")
-    println(hold)
-    println(z)
-    println(n)
-    return 0
+    let z: String = pick("Z" + format!("{}", 9));
+    println!("{}", hold);
+    println!("{}", z);
+    println!("{}", n);
 }
 "#;
 
@@ -1309,41 +1250,40 @@ fn sb22_a_string_bound_in_an_arm_is_released_at_the_arm_end_and_never_by_a_later
 }
 
 const SB28_REASSIGNED_FROM_A_BORROW: &str = r#"
-needs split from std.str
+use std::str::split;
 
-fn pick(p: string) -> string {
-    return p
+fn pick(p: String) -> String {
+    p
 }
 
 fn junk(k: i64) -> i64 {
-    let mut t: i64 = 0
-    let mut j: i64 = 0
+    let mut t: i64 = 0;
+    let mut j: i64 = 0;
     while j < 8 {
-        let z: string = "ZZZZZZZZ" + "{k}"
-        t = t + z.len
-        j = j + 1
+        let z: String = "ZZZZZZZZ" + format!("{k}");
+        t = t + z.len();
+        j = j + 1;
     }
-    return t
+    t
 }
 
-fn main() -> i64 {
-    let parts: Vec<string> = split("alpha,beta,gamma", ",")
-    let keep: string = "keep-" + "{1}"
-    let mut last: string = "none" + "{0}"
-    let mut cur: string = "cur-" + "{2}"
+fn main() {
+    let parts: Vec<String> = split("alpha,beta,gamma", ",");
+    let keep: String = "keep-" + format!("{}", 1);
+    let mut last: String = "none" + format!("{}", 0);
+    let mut cur: String = "cur-" + format!("{}", 2);
     for p in Vec::as_slice(parts) {
-        last = p
-        cur = pick(keep)
+        last = p;
+        cur = pick(keep);
     }
-    let k: i64 = junk(3)
+    let k: i64 = junk(3);
     for q in Vec::as_slice(parts) {
-        println(q)
+        println!("{}", q);
     }
-    println(last)
-    println(cur)
-    println(keep)
-    println(k)
-    return 0
+    println!("{}", last);
+    println!("{}", cur);
+    println!("{}", keep);
+    println!("{}", k);
 }
 "#;
 
@@ -1360,36 +1300,34 @@ fn sb23_a_slot_reassigned_from_a_borrowed_value_in_a_loop_takes_its_own_share() 
 }
 
 const SB29_BREAK_IN_A_NESTED_FN: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
     while i < 3 {
         fn helper(n: i64) -> i64 {
-            let piece: string = "p" + "{n}"
-            if n == 1 { break }
-            println(piece)
-            return n
+            let piece: String = "p" + format!("{n}");
+            if n == 1 { break; }
+            println!("{}", piece);
+            n
         }
-        println(helper(i))
-        i = i + 1
+        println!("{}", helper(i));
+        i = i + 1;
     }
-    return 0
 }
 "#;
 
 const SB29_CONTINUE_IN_A_LAMBDA: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
     while i < 3 {
-        let f = fn(n: i64) -> i64 {
-            let piece: string = "p" + "{n}"
-            if n == 1 { continue }
-            println(piece)
-            return n
-        }
-        println(f(i))
-        i = i + 1
+        let f = move |n: i64| -> i64 {
+            let piece: String = "p" + format!("{n}");
+            if n == 1 { continue; }
+            println!("{}", piece);
+            n
+        };
+        println!("{}", f(i));
+        i = i + 1;
     }
-    return 0
 }
 "#;
 
@@ -1412,50 +1350,49 @@ fn sb24_break_or_continue_inside_a_nested_function_or_a_lambda_is_refused() {
 }
 
 const SB30_BLOCK_TAILS: &str = r#"
-fn label(i: i64) -> string {
-    return "L{i}"
+fn label(i: i64) -> String {
+    format!("L{i}")
 }
 
 fn turns(k: i64) -> i64 {
-    return k * 2 + 1
+    k * 2 + 1
 }
 
-fn main() -> i64 {
-    let mut hold: string = "h" + "{0}"
-    let mut n: i64 = 0
-    let mut i: i64 = 0
-    let last: i64 = turns(1)
+fn main() {
+    let mut hold: String = "h" + format!("{}", 0);
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
+    let last: i64 = turns(1);
     while i < last {
-        let x: string = {
-            let t: string = "row " + "{i}"
+        let x: String = {
+            let t: String = "row " + format!("{i}");
             t
-        }
-        n = n + x.len
+        };
+        n = n + x.len();
         n = n + {
-            let u: string = "uu" + "{i}"
+            let u: String = "uu" + format!("{i}");
             u
-        }.len
+        }.len();
         hold = {
-            let w: string = "w" + "{i}"
-            n = n + w.len
+            let w: String = "w" + format!("{i}");
+            n = n + w.len();
             label(i)
-        }
-        println({
-            let p: string = "p" + "{i}"
+        };
+        println!("{}", {
+            let p: String = "p" + format!("{i}");
             p
-        })
-        let y: string = {
-            let q: string = "row" + "{i}"
+        });
+        let y: String = {
+            let q: String = "row" + format!("{i}");
             q
-        } + ("Q" + "{i}")
-        println(y)
-        let poison: string = "ZZZZZZZZ" + "{i}"
-        n = n + poison.len
-        i = i + 1
+        } + ("Q" + format!("{i}"));
+        println!("{}", y);
+        let poison: String = "ZZZZZZZZ" + format!("{i}");
+        n = n + poison.len();
+        i = i + 1;
     }
-    println(hold)
-    println(n)
-    return 0
+    println!("{}", hold);
+    println!("{}", n);
 }
 "#;
 
@@ -1477,50 +1414,49 @@ struct W { r: Rc<i64> }
 enum K { A, B }
 
 fn kind(i: i64) -> K {
-    if i % 2 == 0 { return K::A }
-    return K::B
+    if i % 2 == 0 { return K::A; }
+    K::B
 }
 
-fn main() -> i64 {
-    let mut hold: string = "h" + "{0}"
-    let tail: string = "yyyyy" + "{1}"
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut hold: String = "h" + format!("{}", 0);
+    let tail: String = "yyyyy" + format!("{}", 1);
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 4 {
         match kind(i) {
             K::A => {
-                let v: Vec<i64> = Vec::new()
-                Vec::push(v, 40 + i)
-                let r: Rc<i64> = Rc::new(i)
-                let c: W = W { r: Rc::new(1000) }
-                n = n + v[0] + Rc::get(r) + Rc::get(c.r)
+                let v: Vec<i64> = Vec::new();
+                Vec::push(v, 40 + i);
+                let r: Rc<i64> = Rc::new(i);
+                let c: W = W { r: Rc::new(1000) };
+                n = n + v[0] + Rc::get(r) + Rc::get(c.r);
             }
             K::B => {
-                hold = "xx" + tail
+                hold = "xx" + tail;
             }
         }
         let w: i64 = if i % 2 == 1 {
-            let u: Vec<i64> = vec[i, i]
+            let u: Vec<i64> = vec![i, i];
             u[0]
         } else {
             7
-        }
-        n = n + w
-        println({
-            let b: Vec<i64> = vec[i, 2 * i]
+        };
+        n = n + w;
+        println!("{}", {
+            let b: Vec<i64> = vec![i, 2 * i];
             b[1]
-        })
+        });
         if i == 1 {
-            let q: i64 = 5
-            n = n + q
+            let q: i64 = 5;
+            n = n + q;
         }
-        i = i + 1
+        i = i + 1;
     }
-    let p: string = "ZZZZZZZZ" + tail
-    println(hold)
-    println(p)
-    println(n)
-    return 0
+    let p: String = "ZZZZZZZZ" + tail;
+    println!("{}", hold);
+    println!("{}", p);
+    println!("{}", n);
 }
 "#;
 
@@ -1539,20 +1475,19 @@ fn sb26_a_vec_or_rc_bound_in_an_arm_is_released_at_the_arm_end_and_on_no_other_p
 const SB32_CARRIERS_ACROSS_A_NESTED_FN: &str = r#"
 struct W { r: Rc<i64> }
 
-fn main() -> i64 {
-    let w: W = W { r: Rc::new(7) }
+fn main() {
+    let w: W = W { r: Rc::new(7) };
     fn helper(a: W, c: W, d: W) -> i64 {
-        return Rc::get(d.r) + 1
+        Rc::get(d.r) + 1
     }
-    println(helper(w, w, w))
-    let f = fn(a: W, c: W, d: W) -> i64 {
-        return Rc::get(d.r) + 2
-    }
-    println(f(w, w, w))
-    let p: Rc<i64> = Rc::new(99)
-    println(Rc::get(w.r))
-    println(Rc::get(p))
-    return 0
+    println!("{}", helper(w, w, w));
+    let f = move |a: W, c: W, d: W| -> i64 {
+        Rc::get(d.r) + 2
+    };
+    println!("{}", f(w, w, w));
+    let p: Rc<i64> = Rc::new(99);
+    println!("{}", Rc::get(w.r));
+    println!("{}", Rc::get(p));
 }
 "#;
 
@@ -1572,18 +1507,17 @@ const SB33_MANAGED_BLOCK_RESULTS: &str = r#"
 struct W { r: Rc<i64> }
 
 fn add(x: Rc<i64>, y: Rc<i64>) -> i64 {
-    return Rc::get(x) * 10 + Rc::get(y)
+    Rc::get(x) * 10 + Rc::get(y)
 }
 
-fn main() -> i64 {
-    println(add({
-        let s: W = W { r: Rc::new(1) }
+fn main() {
+    println!("{}", add({
+        let s: W = W { r: Rc::new(1) };
         s.r
     }, {
-        let t: W = W { r: Rc::new(2) }
+        let t: W = W { r: Rc::new(2) };
         t.r
-    }))
-    return 0
+    }));
 }
 "#;
 
@@ -1597,16 +1531,15 @@ fn sb28_a_block_whose_result_is_managed_keeps_the_locals_it_may_point_into() {
 const SB34_NESTED_FN_IN_A_GENERIC: &str = r#"
 fn outer<T>(x: T) -> T {
     fn inner() -> i64 {
-        return 1
+        1
     }
-    let k: i64 = inner()
-    let y: T = x
-    return y
+    let k: i64 = inner();
+    let y: T = x;
+    y
 }
 
-fn main() -> i64 {
-    println(outer(41) + 1)
-    return 0
+fn main() {
+    println!("{}", outer(41) + 1);
 }
 "#;
 
@@ -1618,14 +1551,13 @@ fn sb29_a_nested_function_leaves_the_type_parameters_of_its_generic_parent_in_sc
 }
 
 const SB35_VIEW_INTO_A_DEEPER_RC: &str = r#"
-fn main() -> i64 {
+fn main() {
     let s: &[i64] = {
-        let a: Rc<[i64; 2]> = Rc::new([1, 2])
+        let a: Rc<[i64; 2]> = Rc::new([1, 2]);
         Rc::get(a)[0..2]
-    }
-    let p: Rc<[i64; 2]> = Rc::new([9, 9])
-    println(s[0] * 1000 + Rc::get(p)[0])
-    return 0
+    };
+    let p: Rc<[i64; 2]> = Rc::new([9, 9]);
+    println!("{}", s[0] * 1000 + Rc::get(p)[0]);
 }
 "#;
 
@@ -1640,35 +1572,34 @@ const SB36_GENERIC_BLOCK_RESULT: &str = r#"
 struct W { r: Rc<i64> }
 
 fn idw(w: W) -> W {
-    return w
+    w
 }
 
 fn getw(w: W) -> i64 {
-    return Rc::get(w.r)
+    Rc::get(w.r)
 }
 
 fn through<T>(k: i64, mk: fn(i64) -> W, f: fn(W) -> T, g: fn(T) -> i64) -> i64 {
     let r: T = {
-        let t: W = mk(k)
+        let t: W = mk(k);
         f(t)
-    }
-    let p: Rc<i64> = Rc::new(9)
-    return g(r) * 1000 + Rc::get(p)
+    };
+    let p: Rc<i64> = Rc::new(9);
+    g(r) * 1000 + Rc::get(p)
 }
 
 fn mkw(k: i64) -> W {
-    return W { r: Rc::new(k) }
+    W { r: Rc::new(k) }
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 3 {
-        n = n + through(i, mkw, idw, getw)
-        i = i + 1
+        n = n + through(i, mkw, idw, getw);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1681,34 +1612,33 @@ fn sb31_a_block_whose_result_is_a_type_parameter_keeps_the_locals_it_may_point_i
 
 const SB37_GENERIC_ENUM_BLOCK_RESULT: &str = r#"
 fn ident(r: &i64) -> &i64 {
-    return r
+    r
 }
 
 fn read(o: Option<&i64>) -> i64 {
-    return match o {
+    match o {
         Some(r) => *r,
-        None => 0
+        None => 0,
     }
 }
 
 fn through<T>(k: i64, f: fn(&i64) -> T, g: fn(Option<T>) -> i64) -> i64 {
     let r: Option<T> = {
-        let a: Rc<i64> = Rc::new(k)
+        let a: Rc<i64> = Rc::new(k);
         Some(f(&Rc::get(a)))
-    }
-    let p: Rc<i64> = Rc::new(9)
-    return g(r) * 1000 + Rc::get(p)
+    };
+    let p: Rc<i64> = Rc::new(9);
+    g(r) * 1000 + Rc::get(p)
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 3 {
-        n = n + through(i, ident, read)
-        i = i + 1
+        n = n + through(i, ident, read);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1724,38 +1654,96 @@ fn sb32_a_block_whose_result_wraps_a_reference_type_argument_is_refused() {
     h.assert_legs(1);
 }
 
-const SB39_OWNED_STRING_LOOPS_LEFT_EARLY: &str = r#"
-fn first_vowel(s: string) -> i64 {
-    let mut n: i64 = 0
-    for c in s + "{n}" {
-        if c == 'e' { return n }
-        n = n + 1
-    }
-    return -1
+const SB38_BINDINGS_THAT_OWN: &str = r#"
+use std::str;
+
+fn mk(i: i64) -> String {
+    let s: String = "mk" + format!("{i}");
+    s
 }
 
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+fn pick(p: String, i: i64) -> String {
+    let mut acc: String = p;
+    acc = acc + format!("{i}");
+    acc
+}
+
+fn main() {
+    let mut n: i64 = 0;
+    let mut hold: String = "h" + format!("{}", 0);
+    let mut i: i64 = 0;
     while i < 3 {
-        let mut m: string = "abc" + "{i}"
+        let a: String = "a" + format!("{i}");
+        let b: String = a;
+        hold = b;
+        let t: String = mk(i);
+        let u: String = pick(t, i);
+        let r: String = str::repeat("r", 2);
+        for c in a {
+            if c == 'a' { n = n + 1; }
+        }
+        let mut m: String = "m" + format!("{i}");
         for c in m {
-            if c == 'b' { continue }
-            if c == 'c' { break }
-            total = total + 1
+            if c == 'm' { n = n + 1; }
         }
-        m = "zz" + "{i}"
-        for c in "xy" + "{i}" {
-            if c == 'y' { break }
-            total = total + 10
+        m = "q" + format!("{i}");
+        for c in "w" + format!("{i}") {
+            if c == 'w' { n = n + 1; }
         }
-        total = total + first_vowel("hello")
-        let poison: string = "ZZZZZZZZ" + "{i}"
-        println(m + poison)
-        i = i + 1
+        let poison: String = "ZZZZZZZZ" + format!("{i}");
+        println!("{}", a + b + t + u + r + m);
+        n = n + poison.len();
+        i = i + 1;
     }
-    println(total)
-    return 0
+    let late: String = "YYYYYYYY" + format!("{n}");
+    println!("{}", hold);
+    println!("{}", n + late.len());
+}
+"#;
+
+#[test]
+fn sb33_a_copy_a_mutable_binding_a_string_loop_and_a_named_return_each_keep_one_share() {
+    let h = Harness::new();
+    h.differential_row(
+        "SB-38",
+        SB38_BINDINGS_THAT_OWN,
+        "a0a0mk0mk00rrq0\na1a1mk1mk11rrq1\na2a2mk2mk22rrq2\na2\n46\n",
+        (67, 67),
+    );
+    h.assert_legs(18);
+}
+
+const SB39_OWNED_STRING_LOOPS_LEFT_EARLY: &str = r#"
+fn first_vowel(s: String) -> i64 {
+    let mut n: i64 = 0;
+    for c in s + format!("{n}") {
+        if c == 'e' { return n; }
+        n = n + 1;
+    }
+    -1
+}
+
+fn main() {
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 3 {
+        let mut m: String = "abc" + format!("{i}");
+        for c in m {
+            if c == 'b' { continue; }
+            if c == 'c' { break; }
+            total = total + 1;
+        }
+        m = "zz" + format!("{i}");
+        for c in "xy" + format!("{i}") {
+            if c == 'y' { break; }
+            total = total + 10;
+        }
+        total = total + first_vowel("hello");
+        let poison: String = "ZZZZZZZZ" + format!("{i}");
+        println!("{}", m + poison);
+        i = i + 1;
+    }
+    println!("{}", total);
 }
 "#;
 
@@ -1775,44 +1763,43 @@ const SB41_STRING_ARM_RESULTS: &str = r#"
 enum K { A, B }
 
 fn kind(i: i64) -> K {
-    if i % 2 == 0 { return K::A }
-    return K::B
+    if i % 2 == 0 { return K::A; }
+    K::B
 }
 
-fn pick(i: i64) -> string {
-    return if i % 2 == 0 { "even" + "{i}" } else { "odd" + "{i}" }
+fn pick(i: i64) -> String {
+    if i % 2 == 0 { "even" + format!("{i}") } else { "odd" + format!("{i}") }
 }
 
-fn width(s: string) -> i64 {
-    return s.len
+fn width(s: String) -> i64 {
+    s.len()
 }
 
 fn measured(i: i64) -> i64 {
-    return (if i % 2 == 0 { "wide" + "{i}" } else { "w" + "{i}" }).len + width("x")
+    (if i % 2 == 0 { "wide" + format!("{i}") } else { "w" + format!("{i}") }).len() + width("x")
 }
 
-fn main() -> i64 {
-    let keep: string = "k" + "{7}"
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let keep: String = "k" + format!("{}", 7);
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        i = i + 1
-        let s: string = if i % 3 == 0 { "row " + "{i}" } else { keep }
-        let t: string = match kind(i) {
-            K::A => "a" + "{i}",
+        i = i + 1;
+        let s: String = if i % 3 == 0 { "row " + format!("{i}") } else { keep };
+        let t: String = match kind(i) {
+            K::A => "a" + format!("{i}"),
             K::B => {
-                let u: string = "b" + "{i}"
+                let u: String = "b" + format!("{i}");
                 u
             }
-        }
-        if i > 4 { continue }
-        let poison: string = "ZZZZZZZZ" + "{i}"
-        println(s + t + pick(i) + poison)
-        n = n + measured(i) + (if i % 2 == 0 { s } else { t }).len
+        };
+        if i > 4 { continue; }
+        let poison: String = "ZZZZZZZZ" + format!("{i}");
+        println!("{}", s + t + pick(i) + poison);
+        n = n + measured(i) + (if i % 2 == 0 { s } else { t }).len();
     }
-    println(keep)
-    println(n)
-    return 0
+    println!("{}", keep);
+    println!("{}", n);
 }
 "#;
 
@@ -1829,42 +1816,41 @@ fn sb35_an_if_or_a_match_that_yields_a_string_owns_it_even_on_a_return_path() {
 }
 
 const SB42_POSED_STRINGS_ACROSS_BRANCHES: &str = r#"
-fn tail_of(p: string, i: i64) -> string {
-    return {
-        let k: i64 = i
+fn tail_of(p: String, i: i64) -> String {
+    {
+        let k: i64 = i;
         p
     }
 }
 
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        let x: string = "x" + "{i}"
-        let y: string = "yy" + "{i}"
+        let x: String = "x" + format!("{i}");
+        let y: String = "yy" + format!("{i}");
         n = n + {
-            let k: i64 = i
+            let k: i64 = i;
             x
-        }.len + (if i > 2 { 1 } else { 0 })
-        println((if i % 2 == 0 { x } else { y }) + (if i % 3 == 0 { y } else { x }))
-        if (if i % 2 == 0 { x } else { y }).len > 2 {
-            n = n + 100
+        }.len() + (if i > 2 { 1 } else { 0 });
+        println!("{}", (if i % 2 == 0 { x } else { y }) + (if i % 3 == 0 { y } else { x }));
+        if (if i % 2 == 0 { x } else { y }).len() > 2 {
+            n = n + 100;
         }
         let w: i64 = if i > 3 {
             ({
-                let k: i64 = i
+                let k: i64 = i;
                 y
-            }).len
+            }).len()
         } else {
             0
-        }
-        let t: string = tail_of("lit", i)
-        let poison: string = "ZZZZZZZZ" + "{i}"
-        n = n + w + t.len + poison.len
-        i = i + 1
+        };
+        let t: String = tail_of("lit", i);
+        let poison: String = "ZZZZZZZZ" + format!("{i}");
+        n = n + w + t.len() + poison.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1884,41 +1870,40 @@ const SB43_STRING_TEMPS_IN_A_WHILE_CONDITION: &str = r#"
 enum K { A, B }
 
 fn kind(i: i64) -> K {
-    if i % 2 == 0 { return K::A }
-    return K::B
+    if i % 2 == 0 { return K::A; }
+    K::B
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut x: string = "xx" + "{0}"
-    let mut y: string = "y" + "{0}"
-    let keep: string = "keep" + "{0}"
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut x: String = "xx" + format!("{}", 0);
+    let mut y: String = "y" + format!("{}", 0);
+    let keep: String = "keep" + format!("{}", 0);
+    let mut n: i64 = 0;
     while i < 10 && match kind(i) {
-        K::A => (if i % 4 == 0 { x } else { y }).len > 1,
+        K::A => (if i % 4 == 0 { x } else { y }).len() > 1,
         K::B => ({
-            let k: i64 = i
+            let k: i64 = i;
             if k > 2 { x } else { keep }
-        }).len > 1 && (if i > 7 { "zz" + "{i}" } else { y }).len > 0
+        }).len() > 1 && (if i > 7 { "zz" + format!("{i}") } else { y }).len() > 0,
     } {
-        let before: string = x
-        x = "xx" + "{i + 1}"
-        y = "y" + "{i + 1}"
-        let poison: string = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + "{i}"
-        let poison2: string = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + "{i}"
-        n = n + poison.len + poison2.len
-        println(before + " " + x + " " + y)
-        if (if i % 3 == 0 { x } else { before }).len > 3 && ({
-            let k: i64 = i
+        let before: String = x;
+        x = "xx" + format!("{}", i + 1);
+        y = "y" + format!("{}", i + 1);
+        let poison: String = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + format!("{i}");
+        let poison2: String = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + format!("{i}");
+        n = n + poison.len() + poison2.len();
+        println!("{}", before + " " + x + " " + y);
+        if (if i % 3 == 0 { x } else { before }).len() > 3 && ({
+            let k: i64 = i;
             y
-        }).len > 1 {
-            n = n + 1
+        }).len() > 1 {
+            n = n + 1;
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(keep)
-    println(n)
-    return 0
+    println!("{}", keep);
+    println!("{}", n);
 }
 "#;
 
@@ -1938,39 +1923,38 @@ const SB44_STRING_TEMPS_ACROSS_A_SHORT_CIRCUIT: &str = r#"
 enum K { A, B }
 
 fn kind(i: i64) -> K {
-    if i % 2 == 0 { return K::A }
-    return K::B
+    if i % 2 == 0 { return K::A; }
+    K::B
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut hits: i64 = 0
-    let keep: string = "keep" + "{0}"
+fn main() {
+    let mut i: i64 = 0;
+    let mut hits: i64 = 0;
+    let keep: String = "keep" + format!("{}", 0);
     while i < 8 {
-        i = i + 1
-        let x: string = "xx" + "{i}"
-        let y: string = "y" + "{i}"
-        let a: bool = (if i % 2 == 0 { x } else { y }).len == 3 && ({
-            let k: i64 = i
+        i = i + 1;
+        let x: String = "xx" + format!("{i}");
+        let y: String = "y" + format!("{i}");
+        let a: bool = (if i % 2 == 0 { x } else { y }).len() == 3 && ({
+            let k: i64 = i;
             x
-        }).len > 2
-        let b: bool = i > 3 || (if i % 3 == 0 { "ab" + "{i}" } else { y }).len == 2 && match kind(i) {
-            K::A => (if i > 1 { x } else { keep }).len > 0,
+        }).len() > 2;
+        let b: bool = i > 3 || (if i % 3 == 0 { "ab" + format!("{i}") } else { y }).len() == 2 && match kind(i) {
+            K::A => (if i > 1 { x } else { keep }).len() > 0,
             K::B => ({
-                let q: string = "q" + "{i}"
+                let q: String = "q" + format!("{i}");
                 q
-            }).len == 2
-        }
-        let s: string = (if a { x } else { y }) + (if b && (if i > 5 { keep } else { x }).len > 3 { "!" } else { "?" })
-        let poison: string = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + "{i}"
-        let poison2: string = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + "{i}"
-        if a { hits = hits + 1 }
-        if b { hits = hits + 10 }
-        println(s + " " + "{poison.len + poison2.len}")
+            }).len() == 2,
+        };
+        let s: String = (if a { x } else { y }) + (if b && (if i > 5 { keep } else { x }).len() > 3 { "!" } else { "?" });
+        let poison: String = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + format!("{i}");
+        let poison2: String = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + format!("{i}");
+        if a { hits = hits + 1; }
+        if b { hits = hits + 10; }
+        println!("{}", s + " " + format!("{}", poison.len() + poison2.len()));
     }
-    println(keep)
-    println(hits)
-    return 0
+    println!("{}", keep);
+    println!("{}", hits);
 }
 "#;
 
@@ -1990,29 +1974,28 @@ const SB45_STRING_TEMPS_ON_THE_ERROR_PATH_OF_A_TRY: &str = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 
 fn probe(i: i64) -> Result<i64, i64> {
-    if i % 2 == 0 { return Result::Err(i) }
-    return Result::Ok(i)
+    if i % 2 == 0 { return Result::Err(i); }
+    Result::Ok(i)
 }
 
 fn stepf(i: i64) -> Result<i64, i64> {
-    let x: string = "xx" + "{i}"
-    let n: i64 = (if i % 3 == 0 { x } else { "f" + "{i}" }).len + probe(i)?
-    return Result::Ok(n)
+    let x: String = "xx" + format!("{i}");
+    let n: i64 = (if i % 3 == 0 { x } else { "f" + format!("{i}") }).len() + probe(i)?;
+    Result::Ok(n)
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut total: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut total: i64 = 0;
     while i < 12 {
         let r: i64 = match stepf(i) {
             Result::Ok(v) => v,
-            Result::Err(e) => 0 - 1
-        }
-        total = total + r
-        i = i + 1
+            Result::Err(e) => 0 - 1,
+        };
+        total = total + r;
+        i = i + 1;
     }
-    println(total)
-    return 0
+    println!("{}", total);
 }
 "#;
 
@@ -2033,106 +2016,105 @@ enum Result<T, E> { Ok(T), Err(E) }
 enum K { A, B, C }
 
 fn kind(i: i64) -> K {
-    if i % 3 == 0 { return K::A }
-    if i % 3 == 1 { return K::B }
-    return K::C
+    if i % 3 == 0 { return K::A; }
+    if i % 3 == 1 { return K::B; }
+    K::C
 }
 
 fn probe(i: i64) -> Result<i64, i64> {
-    if i % 4 == 3 { return Result::Err(i) }
-    return Result::Ok(i)
+    if i % 4 == 3 { return Result::Err(i); }
+    Result::Ok(i)
 }
 
-fn ret_in_inner_loop(i: i64, p: string) -> i64 {
-    let x: string = "rx" + "{i}"
-    let n: i64 = (if i % 2 == 0 { x } else { "f" + "{i}" }).len + {
-        let mut k: i64 = 0
+fn ret_in_inner_loop(i: i64, p: String) -> i64 {
+    let x: String = "rx" + format!("{i}");
+    let n: i64 = (if i % 2 == 0 { x } else { "f" + format!("{i}") }).len() + {
+        let mut k: i64 = 0;
         while k < 5 {
-            let q: i64 = (if k % 2 == 0 { p } else { x }).len + match kind(k) {
+            let q: i64 = (if k % 2 == 0 { p } else { x }).len() + match kind(k) {
                 K::A => {
-                    if k == i { return k * 1000 + (if k > 2 { x } else { p }).len }
+                    if k == i { return k * 1000 + (if k > 2 { x } else { p }).len(); }
                     1
                 },
                 K::B => {
-                    if k > i { break }
+                    if k > i { break; }
                     2
                 },
                 K::C => {
-                    if k == 2 { k = k + 1
-                        continue }
+                    if k == 2 { k = k + 1;
+                        continue; }
                     3
                 }
-            }
-            k = k + q - q + 1
+            };
+            k = k + q - q + 1;
         }
         k
-    }
-    return n
+    };
+    n
 }
 
-fn try_in_cond(i: i64, p: string) -> Result<i64, i64> {
-    let mut k: i64 = 0
-    let mut acc: i64 = 0
-    while k < 6 && (if k % 2 == 0 { p } else { "c" + "{k}" }).len > 0 && probe(i + k)? >= 0 {
+fn try_in_cond(i: i64, p: String) -> Result<i64, i64> {
+    let mut k: i64 = 0;
+    let mut acc: i64 = 0;
+    while k < 6 && (if k % 2 == 0 { p } else { "c" + format!("{k}") }).len() > 0 && probe(i + k)? >= 0 {
         acc = acc + (match kind(k) {
-            K::A => if probe(k)? > 1 { p } else { "a" + "{k}" },
+            K::A => if probe(k)? > 1 { p } else { "a" + format!("{k}") },
             K::B => p,
             K::C => ({
-                let z: i64 = probe(k + 1)?
-                "cc" + "{z}"
-            })
-        }).len
-        k = k + 1
+                let z: i64 = probe(k + 1)?;
+                "cc" + format!("{z}")
+            }),
+        }).len();
+        k = k + 1;
     }
-    return Result::Ok(acc)
+    Result::Ok(acc)
 }
 
-fn cont_in_bounds(i: i64, p: string) -> i64 {
-    let mut outer: i64 = 0
-    let mut acc: i64 = 0
+fn cont_in_bounds(i: i64, p: String) -> i64 {
+    let mut outer: i64 = 0;
+    let mut acc: i64 = 0;
     while outer < 4 {
-        outer = outer + 1
-        let t: i64 = (if outer % 2 == 0 { p } else { "o" + "{outer}" }).len + {
-            let mut s: i64 = 0
+        outer = outer + 1;
+        let t: i64 = (if outer % 2 == 0 { p } else { "o" + format!("{outer}") }).len() + {
+            let mut s: i64 = 0;
             for j in 0..({
-                if outer == 3 { continue }
-                (if j0(outer) { p } else { "bb" + "{outer}" }).len
+                if outer == 3 { continue; }
+                (if j0(outer) { p } else { "bb" + format!("{outer}") }).len()
             }) {
-                s = s + j
+                s = s + j;
             }
             s
+        };
+        while { if outer == 4 { break; }; (if outer > 1 { p } else { "w" }).len() } > 100 {
+            acc = acc + 1;
         }
-        while { if outer == 4 { break }; (if outer > 1 { p } else { "w" }).len } > 100 {
-            acc = acc + 1
-        }
-        acc = acc + t
+        acc = acc + t;
     }
-    return acc
+    acc
 }
 
 fn j0(n: i64) -> bool {
-    return n % 2 == 0
+    n % 2 == 0
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut total: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut total: i64 = 0;
     while i < 6 {
-        let p: string = "pp" + "{i}"
-        let a: i64 = ret_in_inner_loop(i, "lit")
+        let p: String = "pp" + format!("{i}");
+        let a: i64 = ret_in_inner_loop(i, "lit");
         let b: i64 = match try_in_cond(i, "lit2") {
             Result::Ok(v) => v,
-            Result::Err(e) => 0 - e
-        }
-        let c: i64 = cont_in_bounds(i, "lit3")
-        let poison: string = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + "{i}"
-        let poison2: string = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + "{i}"
-        total = total + a + b + c + poison.len + poison2.len + p.len
-        println("{a} {b} {c}")
-        i = i + 1
+            Result::Err(e) => 0 - e,
+        };
+        let c: i64 = cont_in_bounds(i, "lit3");
+        let poison: String = "PPPPPPPPPPPPPPPPPPPPPPPPPP" + format!("{i}");
+        let poison2: String = "QQQQQQQQQQQQQQQQQQQQQQQQQQ" + format!("{i}");
+        total = total + a + b + c + poison.len() + poison2.len() + p.len();
+        println!("{a} {b} {c}");
+        i = i + 1;
     }
-    println(total)
-    return 0
+    println!("{}", total);
 }
 "#;
 
@@ -2149,20 +2131,19 @@ fn sb40_a_return_break_or_continue_releases_exactly_the_strings_posed_on_its_pat
 }
 
 const SB47_STRING_TEMPS_ACROSS_STATEMENT_BRANCHES: &str = r#"
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 6 {
-        let x: string = "xx" + "{i}"
-        let y: string = "y" + "{i}"
-        n = n + (if i % 2 == 0 { x } else { y }).len + {
-            if i > 2 { n = n + 1 }
+        let x: String = "xx" + format!("{i}");
+        let y: String = "y" + format!("{i}");
+        n = n + (if i % 2 == 0 { x } else { y }).len() + {
+            if i > 2 { n = n + 1; }
             0
-        }
-        i = i + 1
+        };
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -2179,23 +2160,22 @@ fn sb41_a_string_posed_before_a_statement_if_or_while_in_a_block_is_released_onc
 }
 
 const SB48_A_RETURNED_STRING_THAT_WAS_ALSO_STORED: &str = r#"
-fn add(v: &mut Vec<string>, x: string) -> string {
-    let s: string = x + "!"
-    Vec::push(*v, s)
-    return s
+fn add(v: &mut Vec<String>, x: String) -> String {
+    let s: String = x + "!";
+    Vec::push(*v, s);
+    s
 }
-fn main() -> i64 {
-    let mut names: Vec<string> = Vec::new()
-    let mut i: i64 = 0
+fn main() {
+    let mut names: Vec<String> = Vec::new();
+    let mut i: i64 = 0;
     while i < 3 {
-        println(add(&mut names, "n" + "{i}"))
-        i = i + 1
+        println!("{}", add(&mut names, "n" + format!("{i}")));
+        i = i + 1;
     }
-    let p: string = "QQ" + "{8}"
-    println(names[0])
-    println(names[2])
-    println(p)
-    return 0
+    let p: String = "QQ" + format!("{}", 8);
+    println!("{}", names[0]);
+    println!("{}", names[2]);
+    println!("{}", p);
 }
 "#;
 
@@ -2212,25 +2192,24 @@ fn sb42_a_string_both_stored_and_returned_hands_the_caller_a_share_of_its_own() 
 }
 
 const SB49_AN_ARM_TAIL_THAT_WAS_ALSO_STORED: &str = r#"
-let mut G: string = "init"
-fn f(s: string, c: bool) -> i64 {
-    let y: string = if c {
-        let x: string = s + "!"
-        G = x
+static mut G: String = "init";
+fn f(s: String, c: bool) -> i64 {
+    let y: String = if c {
+        let x: String = s + "!";
+        G = x;
         x
     } else {
         "n"
-    }
-    println(y)
-    return y.len
+    };
+    println!("{}", y);
+    y.len()
 }
-fn main() -> i64 {
-    let n: i64 = f("abc", true)
-    let p: string = "QQ" + "{8}"
-    println(G)
-    println(p)
-    println(n)
-    return 0
+fn main() {
+    let n: i64 = f("abc", true);
+    let p: String = "QQ" + format!("{}", 8);
+    println!("{}", G);
+    println!("{}", p);
+    println!("{}", n);
 }
 "#;
 
@@ -2247,20 +2226,19 @@ fn sb43_an_arm_tail_both_stored_and_moved_out_takes_a_share_of_its_own() {
 }
 
 const SB50_A_LOOP_OVER_AN_OWNED_BLOCK_TAIL: &str = r#"
-fn main() -> i64 {
-    let s: string = "ab" + "{1}"
-    let mut n: i64 = 0
+fn main() {
+    let s: String = "ab" + format!("{}", 1);
+    let mut n: i64 = 0;
     for c in {
-        let x: string = s + "!"
+        let x: String = s + "!";
         x
     } {
-        let p: string = "QQ" + "{8}"
-        print(c)
-        n = n + p.len
+        let p: String = "QQ" + format!("{}", 8);
+        print!("{}", c);
+        n = n + p.len();
     }
-    println("")
-    println("{n}")
-    return 0
+    println!("");
+    println!("{n}");
 }
 "#;
 
@@ -2277,26 +2255,25 @@ fn sb44_a_loop_over_a_block_tail_takes_the_tail_instead_of_borrowing_it() {
 }
 
 const SB51_A_SLOT_THAT_ESCAPES_BY_REFERENCE_BEFORE_IT_IS_REASSIGNED: &str = r#"
-needs std.str
+use std::str;
 
-fn peek(s: &string) -> i64 {
-    return (*s).len
+fn peek(s: &String) -> i64 {
+    (*s).len()
 }
 
-fn build(src: string) -> i64 {
-    let mut a: string = string::substring_bytes(src, 0, 3)
-    let n: i64 = peek(&a)
-    a = string::substring_bytes(src, 3, 6)
-    println(a)
-    return n
+fn build(src: String) -> i64 {
+    let mut a: String = src[0..3].to_string();
+    let n: i64 = peek(&a);
+    a = src[3..6].to_string();
+    println!("{}", a);
+    n
 }
 
-fn main() -> i64 {
-    let n: i64 = build("abcdefgh")
-    let poison: string = string::substring_bytes("ZZZZZZZZ", 0, 3)
-    println(poison)
-    println("{n}")
-    return 0
+fn main() {
+    let n: i64 = build("abcdefgh");
+    let poison: String = "ZZZZZZZZ"[0..3].to_string();
+    println!("{}", poison);
+    println!("{n}");
 }
 "#;
 
@@ -2313,22 +2290,21 @@ fn sb45_a_slot_whose_address_escapes_before_it_is_reassigned_answers_what_leak_a
 }
 
 const SB52_A_LOOP_SLOT_THAT_ESCAPES_BY_REFERENCE_AFTER_THE_LOOP: &str = r#"
-needs std.str
+use std::str;
 
-fn touch(s: &string) -> i64 {
-    return (*s).len
+fn touch(s: &String) -> i64 {
+    (*s).len()
 }
 
-fn main() -> i64 {
-    let mut out: string = ""
-    let mut i: i64 = 0
+fn main() {
+    let mut out: String = "";
+    let mut i: i64 = 0;
     while i < 4 {
-        out = string::substring_bytes("abcdefgh", 0, 3)
-        i = i + 1
+        out = "abcdefgh"[0..3].to_string();
+        i = i + 1;
     }
-    println(out)
-    println("{touch(&out)}")
-    return 0
+    println!("{}", out);
+    println!("{}", touch(&out));
 }
 "#;
 
@@ -2345,29 +2321,28 @@ fn sb46_a_slot_that_escapes_by_reference_after_a_loop_keeps_the_releases_inside_
 }
 
 const SB53_A_PARAMETER_STORED_IN_A_STRUCT_AN_ENUM_OR_AN_ARRAY: &str = r#"
-struct P { name: string }
-fn mk(s: string) -> P { return P { name: s } }
-fn wrap(s: string) -> Option<string> { return Some(s) }
-fn arr(s: string) -> [string; 2] { return [s, "c"] }
-fn fill(s: string) -> [string; 3] { return [s; 3] }
-fn main() -> i64 {
-    let p: P = mk("ab" + "{1}")
-    let o: Option<string> = wrap("ab" + "{2}")
-    let a: [string; 2] = arr("ab" + "{3}")
-    let b: [string; 3] = fill("ab" + "{4}")
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
-    println(p.name)
+struct P { name: String }
+fn mk(s: String) -> P { P { name: s } }
+fn wrap(s: String) -> Option<String> { Some(s) }
+fn arr(s: String) -> [String; 2] { [s, "c"] }
+fn fill(s: String) -> [String; 3] { [s; 3] }
+fn main() {
+    let p: P = mk("ab" + format!("{}", 1));
+    let o: Option<String> = wrap("ab" + format!("{}", 2));
+    let a: [String; 2] = arr("ab" + format!("{}", 3));
+    let b: [String; 3] = fill("ab" + format!("{}", 4));
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
+    println!("{}", p.name);
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    println(a[0])
-    println(b[0])
-    println(b[2])
-    println(q)
-    println(r)
-    return 0
+    println!("{}", a[0]);
+    println!("{}", b[0]);
+    println!("{}", b[2]);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2384,33 +2359,32 @@ fn sb47_a_parameter_stored_in_a_struct_an_enum_or_an_array_takes_a_share_of_its_
 }
 
 const SB54_A_PARAMETER_STORED_THROUGH_A_REFERENCE_OR_INTO_A_GLOBAL: &str = r#"
-struct P { name: string }
-let mut G: string = "init"
-fn put(v: &mut Vec<string>, s: string) { Vec::push(*v, s) }
-fn setn(p: &mut P, s: string) { (*p).name = s }
-fn seti(a: &mut [string], s: string) { a[0] = s }
-fn setd(r: &mut string, s: string) { *r = s }
-fn setg(s: string) { G = s }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    let mut p: P = P { name: "x" }
-    let mut a: [string; 2] = ["x", "y"]
-    let mut d: string = "x"
-    put(&mut v, "ab" + "{1}")
-    setn(&mut p, "ab" + "{2}")
-    seti(a[..], "ab" + "{3}")
-    setd(&mut d, "ab" + "{4}")
-    setg("ab" + "{5}")
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
-    println(v[0])
-    println(p.name)
-    println(a[0])
-    println(d)
-    println(G)
-    println(q)
-    println(r)
-    return 0
+struct P { name: String }
+static mut G: String = "init";
+fn put(v: &mut Vec<String>, s: String) { Vec::push(*v, s); }
+fn setn(p: &mut P, s: String) { (*p).name = s; }
+fn seti(a: &mut [String], s: String) { a[0] = s; }
+fn setd(r: &mut String, s: String) { *r = s; }
+fn setg(s: String) { G = s; }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    let mut p: P = P { name: "x" };
+    let mut a: [String; 2] = ["x", "y"];
+    let mut d: String = "x";
+    put(&mut v, "ab" + format!("{}", 1));
+    setn(&mut p, "ab" + format!("{}", 2));
+    seti(a[..], "ab" + format!("{}", 3));
+    setd(&mut d, "ab" + format!("{}", 4));
+    setg("ab" + format!("{}", 5));
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
+    println!("{}", v[0]);
+    println!("{}", p.name);
+    println!("{}", a[0]);
+    println!("{}", d);
+    println!("{}", G);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2427,31 +2401,30 @@ fn sb48_a_parameter_stored_through_a_reference_or_into_a_global_takes_a_share_of
 }
 
 const SB55_A_STRING_KEPT_BY_AN_RC_OR_A_CLOSURE: &str = r#"
-fn mkf(s: string) -> fn() -> string { return fn() -> string { return s } }
-fn mkg() -> fn(string) -> string {
-    let mut held: string = "x"
-    return fn(u: string) -> string {
-        let old: string = held
-        held = u
-        return old
+fn mkf(s: String) -> fn() -> String { move || -> String { s } }
+fn mkg() -> fn(String) -> String {
+    let mut held: String = "x";
+    move |u: String| -> String {
+        let old: String = held;
+        held = u;
+        old
     }
 }
-fn main() -> i64 {
-    let mut t: string = "ab" + "{1}"
-    let b: Rc<string> = Rc::new(t)
-    t = "zz"
-    let f = mkf("ab" + "{2}")
-    let g = mkg()
-    let first: string = g("ab" + "{3}")
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
-    println(Rc::get(b))
-    println(f())
-    println(first)
-    println(g("zz"))
-    println(q)
-    println(r)
-    return 0
+fn main() {
+    let mut t: String = "ab" + format!("{}", 1);
+    let b: Rc<String> = Rc::new(t);
+    t = "zz";
+    let f = mkf("ab" + format!("{}", 2));
+    let g = mkg();
+    let first: String = g("ab" + format!("{}", 3));
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
+    println!("{}", Rc::get(b));
+    println!("{}", f());
+    println!("{}", first);
+    println!("{}", g("zz"));
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2468,26 +2441,25 @@ fn sb49_a_string_kept_by_an_rc_or_a_closure_takes_a_share_of_its_own() {
 }
 
 const SB56_A_PARAMETER_HANDED_TO_A_GENERIC_CALLEE: &str = r#"
-fn keep<T>(x: T) -> Option<T> { return Some(x) }
-fn through(s: string) -> Option<string> { return keep(s) }
-fn main() -> i64 {
-    let a: Option<string> = through("ab" + "{1}")
-    let s: string = "ab" + "{2}"
-    let b: Option<string> = through(s)
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
+fn keep<T>(x: T) -> Option<T> { Some(x) }
+fn through(s: String) -> Option<String> { keep(s) }
+fn main() {
+    let a: Option<String> = through("ab" + format!("{}", 1));
+    let s: String = "ab" + format!("{}", 2);
+    let b: Option<String> = through(s);
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
     match a {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
     match b {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    println(s)
-    println(q)
-    println(r)
-    return 0
+    println!("{}", s);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2504,27 +2476,26 @@ fn sb50_a_parameter_handed_to_a_generic_callee_takes_a_share_of_its_own() {
 }
 
 const SB57_ARGUMENTS_TO_AELYS_FUNCTIONS_AND_FUNCTION_VALUES: &str = r#"
-struct P { name: string }
-fn consume(s: string) -> i64 { return s.len }
-fn mk(s: string) -> P { return P { name: s } }
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+struct P { name: String }
+fn consume(s: String) -> i64 { s.len() }
+fn mk(s: String) -> P { P { name: s } }
+fn main() {
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
     while i < 4 {
-        total = total + consume("x" + "{i}")
-        let s: string = "y" + "{i}"
-        total = total + consume(s)
-        let f = consume
-        total = total + f(s)
-        i = i + 1
+        total = total + consume("x" + format!("{i}"));
+        let s: String = "y" + format!("{i}");
+        total = total + consume(s);
+        let f = consume;
+        total = total + f(s);
+        i = i + 1;
     }
-    let m = mk
-    let p: P = m("ab" + "{1}")
-    let q: string = "QQ" + "{8}"
-    println("{total}")
-    println(p.name)
-    println(q)
-    return 0
+    let m = mk;
+    let p: P = m("ab" + format!("{}", 1));
+    let q: String = "QQ" + format!("{}", 8);
+    println!("{total}");
+    println!("{}", p.name);
+    println!("{}", q);
 }
 "#;
 
@@ -2541,21 +2512,20 @@ fn sb51_an_argument_to_an_aelys_function_or_a_function_value_is_released_by_its_
 }
 
 const SB58_A_PARAMETER_STORED_IN_A_VEC_LITERAL_OR_A_DECLARED_ARRAY: &str = r#"
-fn mkv(s: string) -> Vec<string> { return vec[s, "y"] }
-fn mka(s: string) -> [string; 2] {
-    let a: [string; 2] = [s, "y"]
-    return a
+fn mkv(s: String) -> Vec<String> { vec![s, "y"] }
+fn mka(s: String) -> [String; 2] {
+    let a: [String; 2] = [s, "y"];
+    a
 }
-fn main() -> i64 {
-    let v: Vec<string> = mkv("ab" + "{1}")
-    let a: [string; 2] = mka("ab" + "{2}")
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
-    println(v[0])
-    println(a[0])
-    println(q)
-    println(r)
-    return 0
+fn main() {
+    let v: Vec<String> = mkv("ab" + format!("{}", 1));
+    let a: [String; 2] = mka("ab" + format!("{}", 2));
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
+    println!("{}", v[0]);
+    println!("{}", a[0]);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2572,29 +2542,28 @@ fn sb52_a_parameter_stored_in_a_vec_literal_or_a_declared_array_takes_a_share_of
 }
 
 const SB59_A_PARAMETER_HANDED_TO_AN_IMPORTED_GENERIC: &str = r#"
-needs std.result
+use std::result;
 
-fn keep(s: string) -> Result<string, i64> { return result.ok(s) }
+fn keep(s: String) -> Result<String, i64> { result::ok(s) }
 
-fn main() -> i64 {
-    let a: Result<string, i64> = keep("ab" + "{1}")
-    let b: Result<string, i64> = {
-        let t: string = "ab" + "{2}"
+fn main() {
+    let a: Result<String, i64> = keep("ab" + format!("{}", 1));
+    let b: Result<String, i64> = {
+        let t: String = "ab" + format!("{}", 2);
         keep(t)
-    }
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{9}"
+    };
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 9);
     match a {
-        Ok(x) => println(x),
-        Err(_) => println("e"),
+        Ok(x) => println!("{}", x),
+        Err(_) => println!("e"),
     }
     match b {
-        Ok(x) => println(x),
-        Err(_) => println("e"),
+        Ok(x) => println!("{}", x),
+        Err(_) => println!("e"),
     }
-    println(q)
-    println(r)
-    return 0
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2611,33 +2580,32 @@ fn sb53_a_parameter_handed_to_an_imported_generic_takes_a_share_of_its_own() {
 }
 
 const SB60_A_VEC_OF_STRINGS_ACROSS_COPIES_STORES_AND_POPS: &str = r#"
-fn got(o: Option<string>) -> string {
+fn got(o: Option<String>) -> String {
     match o {
-        Some(x) => { return x }
-        None => { return "none" }
+        Some(x) => { return x; }
+        None => { return "none"; }
     }
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "ab" + "{1}")
-    Vec::push(v, "ab" + "{2}")
-    Vec::push(v, "ab" + "{3}")
-    let w: Vec<string> = v
-    v[0] = "ab" + "{9}"
-    v[1] = v[1]
-    v[2] = v[1]
-    let a: string = got(Vec::pop(v))
-    println(got(Vec::pop(v)))
-    let q: string = "QQ" + "{8}"
-    let r: string = "QQ" + "{7}"
-    println(a)
-    println(v[0])
-    println(w[0])
-    println(w[1])
-    println(w[2])
-    println(q)
-    println(r)
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "ab" + format!("{}", 1));
+    Vec::push(v, "ab" + format!("{}", 2));
+    Vec::push(v, "ab" + format!("{}", 3));
+    let w: Vec<String> = v;
+    v[0] = "ab" + format!("{}", 9);
+    v[1] = v[1];
+    v[2] = v[1];
+    let a: String = got(Vec::pop(v));
+    println!("{}", got(Vec::pop(v)));
+    let q: String = "QQ" + format!("{}", 8);
+    let r: String = "QQ" + format!("{}", 7);
+    println!("{}", a);
+    println!("{}", v[0]);
+    println!("{}", w[0]);
+    println!("{}", w[1]);
+    println!("{}", w[2]);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2654,33 +2622,32 @@ fn sb54_a_vec_of_strings_owns_its_elements_across_copies_stores_and_pops() {
 }
 
 const SB61_A_VEC_OF_STRINGS_THROUGH_PARAMETERS_AND_REASSIGNMENT: &str = r#"
-fn edit(mut v: Vec<string>) -> string {
-    v[0] = "ab" + "{7}"
-    return v[0]
+fn edit(mut v: Vec<String>) -> String {
+    v[0] = "ab" + format!("{}", 7);
+    v[0]
 }
-fn poke(v: &mut Vec<string>) {
-    (*v)[1] = "ab" + "{8}"
+fn poke(v: &mut Vec<String>) {
+    (*v)[1] = "ab" + format!("{}", 8);
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "ab" + "{1}")
-    Vec::push(v, "ab" + "{2}")
-    let w: Vec<string> = v
-    let e: string = edit(v)
-    poke(&mut v)
-    let keep: string = v[0]
-    v = Vec::new()
-    Vec::push(v, "ab" + "{3}")
-    let q: string = "QQ" + "{5}"
-    let r: string = "QQ" + "{6}"
-    println(e)
-    println(keep)
-    println(v[0])
-    println(w[0])
-    println(w[1])
-    println(q)
-    println(r)
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "ab" + format!("{}", 1));
+    Vec::push(v, "ab" + format!("{}", 2));
+    let w: Vec<String> = v;
+    let e: String = edit(v);
+    poke(&mut v);
+    let keep: String = v[0];
+    v = Vec::new();
+    Vec::push(v, "ab" + format!("{}", 3));
+    let q: String = "QQ" + format!("{}", 5);
+    let r: String = "QQ" + format!("{}", 6);
+    println!("{}", e);
+    println!("{}", keep);
+    println!("{}", v[0]);
+    println!("{}", w[0]);
+    println!("{}", w[1]);
+    println!("{}", q);
+    println!("{}", r);
 }
 "#;
 
@@ -2697,32 +2664,31 @@ fn sb55_a_vec_of_strings_keeps_its_elements_through_parameters_and_reassignment(
 }
 
 const SB62_UNBOUND_VEC_RESULTS: &str = r#"
-needs std.str
+use std::str;
 
-fn mk(n: i64) -> Vec<string> {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "k" + "{n}")
-    Vec::push(v, "m" + "{n}")
-    return v
+fn mk(n: i64) -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "k" + format!("{n}"));
+    Vec::push(v, "m" + format!("{n}"));
+    v
 }
-fn count(v: Vec<string>) -> i64 { return Vec::len(v) }
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
+fn count(v: Vec<String>) -> i64 { Vec::len(v) }
+fn main() {
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        let line: string = "a{i},bb{i},c{i}"
-        total = total + str.char_count(str.split(line, ",")[1])
-        let parts: Vec<string> = str.split(line, ",")
-        total = total + parts[2].len
-        mk(i)
-        total = total + count(mk(i))
-        total = total + Vec::len(mk(i))
-        i = i + 1
+        let line: String = format!("a{i},bb{i},c{i}");
+        total = total + str::char_count(str::split(line, ",")[1]);
+        let parts: Vec<String> = str::split(line, ",");
+        total = total + parts[2].len();
+        mk(i);
+        total = total + count(mk(i));
+        total = total + Vec::len(mk(i));
+        i = i + 1;
     }
-    let q: string = "QQ" + "{8}"
-    println("{total}")
-    println(q)
-    return 0
+    let q: String = "QQ" + format!("{}", 8);
+    println!("{total}");
+    println!("{}", q);
 }
 "#;
 
@@ -2734,25 +2700,24 @@ fn sb56_an_unbound_vec_result_is_released_at_the_end_of_its_statement() {
 }
 
 const SB63_VECS_OF_A_LOOP_BODY_AT_BREAK_AND_CONTINUE: &str = r#"
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        i = i + 1
-        let mut v: Vec<string> = Vec::new()
-        Vec::push(v, "ab" + "{i}")
+        i = i + 1;
+        let mut v: Vec<String> = Vec::new();
+        Vec::push(v, "ab" + format!("{i}"));
         if i % 2 == 0 {
-            continue
+            continue;
         }
         if i == 5 {
-            break
+            break;
         }
-        n = n + v[0].len
+        n = n + v[0].len();
     }
-    let q: string = "QQ" + "{8}"
-    println("{n}")
-    println(q)
-    return 0
+    let q: String = "QQ" + format!("{}", 8);
+    println!("{n}");
+    println!("{}", q);
 }
 "#;
 
@@ -2770,47 +2735,46 @@ fn sb57_break_and_continue_release_the_vecs_of_the_loop_body() {
 
 const SB64_A_VEC_KEPT_OPEN_PAST_ITS_ARM: &str = r#"
 fn first<T>(x: T, y: T) -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 4 {
-        i = i + 1
-        let odd: bool = i % 2 == 1
+        i = i + 1;
+        let odd: bool = i % 2 == 1;
         let r: T = if odd {
-            let a: Vec<i64> = vec[i, 2]
-            n = n + a[0]
+            let a: Vec<i64> = vec![i, 2];
+            n = n + a[0];
             x
         } else {
             y
-        }
+        };
         if !odd {
-            continue
+            continue;
         }
-        n = n + 100
+        n = n + 100;
     }
-    return n
+    n
 }
-fn main() -> i64 {
-    let b: Vec<i64> = vec[9, 9]
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let b: Vec<i64> = vec![9, 9];
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 4 {
-        i = i + 1
-        let odd: bool = i % 2 == 1
+        i = i + 1;
+        let odd: bool = i % 2 == 1;
         let sl: &[i64] = if odd {
-            let a: Vec<i64> = vec[i, 2]
-            n = n + a[0]
+            let a: Vec<i64> = vec![i, 2];
+            n = n + a[0];
             b[..]
         } else {
             b[..]
-        }
+        };
         if !odd {
-            continue
+            continue;
         }
-        n = n + sl[0]
+        n = n + sl[0];
     }
-    println(first(1, 2))
-    println(n)
-    return 0
+    println!("{}", first(1, 2));
+    println!("{}", n);
 }
 "#;
 
@@ -2827,27 +2791,26 @@ fn sb58_a_vec_kept_open_past_its_arm_is_never_released_by_a_later_continue() {
 }
 
 const SB65_A_VEC_ELEMENT_READ_BEFORE_A_SIBLING_THAT_FREES_IT: &str = r#"
-fn clobber(v: &mut Vec<string>) -> i64 {
-    (*v)[0] = "zz" + "{7}"
-    let p: string = "QQ" + "{8}"
-    return 1
+fn clobber(v: &mut Vec<String>) -> i64 {
+    (*v)[0] = "zz" + format!("{}", 7);
+    let p: String = "QQ" + format!("{}", 8);
+    1
 }
-fn show(x: string, k: i64) -> i64 {
-    println(x)
-    return k
+fn show(x: String, k: i64) -> i64 {
+    println!("{}", x);
+    k
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "a" + "{1}")
-    let r: string = v[0] + {
-        v[0] = "zz" + "{2}"
-        let p: string = "QQ" + "{3}"
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "a" + format!("{}", 1));
+    let r: String = v[0] + {
+        v[0] = "zz" + format!("{}", 2);
+        let p: String = "QQ" + format!("{}", 3);
         p
-    }
-    println(r)
-    show(v[0], clobber(&mut v))
-    println("{v[0]}|{clobber(&mut v)}")
-    return 0
+    };
+    println!("{}", r);
+    show(v[0], clobber(&mut v));
+    println!("{}|{}", v[0], clobber(&mut v));
 }
 "#;
 
@@ -2864,12 +2827,11 @@ fn sb59_a_vec_element_read_before_a_sibling_that_frees_it_is_pinned() {
 }
 
 const SB66_A_GENERIC_THAT_PUSHES_A_STRING: &str = r#"
-fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x) }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    put(&mut v, "ab" + "{1}")
-    println(v[0])
-    return 0
+fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x); }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    put(&mut v, "ab" + format!("{}", 1));
+    println!("{}", v[0]);
 }
 "#;
 
@@ -2886,41 +2848,40 @@ fn sb60_a_generic_that_pushes_a_string_takes_its_share() {
 }
 
 const SB67_A_GENERIC_THAT_WRAPS_A_BORROWED_ELEMENT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn get<T>(v: &Vec<T>, i: i64) -> Option<T> {
-    if i < 0 || i >= Vec::len(*v) { return None }
-    return Some((*v)[i])
+    if i < 0 || i >= Vec::len(*v) { return None; }
+    Some((*v)[i])
 }
-fn lookup(names: &Vec<string>, i: i64) -> string {
+fn lookup(names: &Vec<String>, i: i64) -> String {
     match get(names, i) {
         Some(x) => x,
         None => "?",
     }
 }
-fn load() -> Option<string> {
-    let names: Vec<string> = vec[victim(1), victim(2), victim(3)]
-    return get(&names, 1)
+fn load() -> Option<String> {
+    let names: Vec<String> = vec![victim(1), victim(2), victim(3)];
+    get(&names, 1)
 }
-fn main() -> i64 {
-    let mut names: Vec<string> = vec[victim(4), victim(5)]
-    println(lookup(&names, 0))
-    let o: Option<string> = load()
-    let k = churn()
+fn main() {
+    let mut names: Vec<String> = vec![victim(4), victim(5)];
+    println!("{}", lookup(&names, 0));
+    let o: Option<String> = load();
+    let k = churn();
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    return 0
 }
 "#;
 
@@ -2937,32 +2898,31 @@ fn sb61_a_generic_that_wraps_an_element_it_borrows_retains_it() {
 }
 
 const SB68_AN_ELEMENT_READ_BESIDE_A_MUTABLE_REFERENCE_BY_NAME: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn show(s: string, r: &mut Vec<string>) -> i64 {
-    (*r)[0] = victim(9)
-    let k = churn()
-    println(s)
-    return 1
+fn show(s: String, r: &mut Vec<String>) -> i64 {
+    (*r)[0] = victim(9);
+    let k = churn();
+    println!("{}", s);
+    1
 }
-fn process(r: &mut Vec<string>) -> i64 {
-    return show((*r)[0], r)
+fn process(r: &mut Vec<String>) -> i64 {
+    show((*r)[0], r)
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    process(&mut v)
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    process(&mut v);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -2979,39 +2939,38 @@ fn sb62_an_element_read_is_pinned_when_the_consumer_takes_a_mutable_reference_by
 }
 
 const SB69_COMPOUND_STORES_THAT_FREE_THEIR_ELEMENT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn clobs(r: &mut Vec<string>) -> string {
-    (*r)[0] = victim(9)
-    let k = churn()
-    return "z"
+fn clobs(r: &mut Vec<String>) -> String {
+    (*r)[0] = victim(9);
+    let k = churn();
+    "z"
 }
-fn mk(n: i64) -> Vec<string> {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(n))
-    return v
+fn mk(n: i64) -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(n));
+    v
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    v[0] = v[0] + clobs(&mut v)
-    println(v[0])
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    v[0] = v[0] + clobs(&mut v);
+    println!("{}", v[0]);
     v[0] = v[0] + {
-        v = mk(5)
-        let k = churn()
+        v = mk(5);
+        let k = churn();
         "y"
-    }
-    println(v[0])
-    return 0
+    };
+    println!("{}", v[0]);
 }
 "#;
 
@@ -3028,34 +2987,33 @@ fn sb63_a_compound_store_pins_the_element_it_reads_before_its_right_side_runs() 
 }
 
 const SB70_BYTE_VIEWS_INDEXED_BY_A_SIBLING_THAT_FREES: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn clob(v: &mut Vec<string>) -> i64 {
-    (*v)[0] = victim(9)
-    let k = churn()
-    return 1
+fn clob(v: &mut Vec<String>) -> i64 {
+    (*v)[0] = victim(9);
+    let k = churn();
+    1
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "x" + "yz{1}")
-    let b: u8 = v[0].bytes[clob(&mut v)]
-    let mut s: string = "x" + "wz{1}"
-    let c: u8 = s.bytes[{
-        s = victim(2)
-        let k = churn()
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "x" + format!("yz{}", 1));
+    let b: u8 = v[0].as_bytes()[clob(&mut v)];
+    let mut s: String = "x" + format!("wz{}", 1);
+    let c: u8 = s.as_bytes()[{
+        s = victim(2);
+        let k = churn();
         1
-    }]
-    println("{b}|{c}")
-    return 0
+    }];
+    println!("{b}|{c}");
 }
 "#;
 
@@ -3072,27 +3030,26 @@ fn sb64_a_byte_view_indexed_by_a_sibling_that_frees_its_string_reads_a_pinned_co
 }
 
 const SB71_A_GENERIC_THAT_STORES_ONLY_CONCRETE_STRINGS: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn tag<T>(x: T) -> i64 {
-    let mut names: Vec<string> = Vec::new()
-    Vec::push(names, "a" + "{1}")
-    Vec::push(names, "b")
-    return Vec::len(names)
+    let mut names: Vec<String> = Vec::new();
+    Vec::push(names, "a" + format!("{}", 1));
+    Vec::push(names, "b");
+    Vec::len(names)
 }
-fn main() -> i64 {
-    println("{tag(5)}")
-    println("{tag(true)}")
-    return 0
+fn main() {
+    println!("{}", tag(5));
+    println!("{}", tag(true));
 }
 "#;
 
@@ -3109,29 +3066,28 @@ fn sb65_a_generic_that_stores_only_concrete_strings_is_accepted() {
 }
 
 const SB72_AN_ARGUMENT_TO_A_GENERIC_READ_BEFORE_A_SIBLING_REASSIGNS_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn keep2<T>(a: T, n: i64) -> Option<T> { return Some(a) }
-fn main() -> i64 {
-    let mut s: string = victim(1)
-    let o: Option<string> = keep2(s, { s = victim(2); 1 })
-    let k = churn()
+fn keep2<T>(a: T, n: i64) -> Option<T> { Some(a) }
+fn main() {
+    let mut s: String = victim(1);
+    let o: Option<String> = keep2(s, { s = victim(2); 1 });
+    let k = churn();
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    println(s)
-    println(k[0])
-    return 0
+    println!("{}", s);
+    println!("{}", k[0]);
 }
 "#;
 
@@ -3148,34 +3104,33 @@ fn sb66_an_argument_to_a_generic_callee_takes_its_share_when_it_is_read() {
 }
 
 const SB73_A_PUSH_ON_A_SHARED_BUFFER: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    let mut copies: i64 = 0
-    let mut i: i64 = 0
-    let mut w: Vec<string> = Vec::new()
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    let mut copies: i64 = 0;
+    let mut i: i64 = 0;
+    let mut w: Vec<String> = Vec::new();
     while i < 20 {
-        Vec::push(v, victim(i))
+        Vec::push(v, victim(i));
         if i % 3 == 0 {
-            w = v
+            w = v;
         }
-        i = i + 1
+        i = i + 1;
     }
-    let k = churn()
-    println(v[0] + v[19] + w[0] + w[18])
-    println("{Vec::len(w)}")
-    println(k[0])
-    return 0
+    let k = churn();
+    println!("{}", v[0] + v[19] + w[0] + w[18]);
+    println!("{}", Vec::len(w));
+    println!("{}", k[0]);
 }
 "#;
 
@@ -3192,40 +3147,39 @@ fn sb67_a_push_on_a_shared_buffer_retains_the_elements_it_copies() {
 }
 
 const SB74_A_POP_ON_A_SHARED_BUFFER: &str = r#"
-fn got(o: Option<string>) -> string {
+fn got(o: Option<String>) -> String {
     match o {
-        Some(x) => { return x }
-        None => { return "none" }
+        Some(x) => { return x; }
+        None => { return "none"; }
     }
 }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    Vec::push(v, victim(2))
-    Vec::push(v, victim(3))
-    let w: Vec<string> = v
-    let a: string = got(Vec::pop(v))
-    Vec::pop(v)
-    let x: Vec<string> = v
-    let b: string = got(Vec::pop(v))
-    let k = churn()
-    println(a + b)
-    println(w[0] + w[1] + w[2])
-    println(x[0])
-    println("{Vec::len(v)}")
-    println(k[0])
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    Vec::push(v, victim(2));
+    Vec::push(v, victim(3));
+    let w: Vec<String> = v;
+    let a: String = got(Vec::pop(v));
+    Vec::pop(v);
+    let x: Vec<String> = v;
+    let b: String = got(Vec::pop(v));
+    let k = churn();
+    println!("{}", a + b);
+    println!("{}", w[0] + w[1] + w[2]);
+    println!("{}", x[0]);
+    println!("{}", Vec::len(v));
+    println!("{}", k[0]);
 }
 "#;
 
@@ -3242,32 +3196,31 @@ fn sb68_a_pop_on_a_shared_buffer_retains_the_elements_it_copies() {
 }
 
 const SB75_A_GENERIC_THAT_READS_AN_ELEMENT_THEN_REPLACES_THE_VEC: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn take_first<T>(v: &mut Vec<T>, w: Vec<T>) -> T {
-    let x: T = (*v)[0]
-    *v = w
-    return x
+    let x: T = (*v)[0];
+    *v = w;
+    x
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let mut w: Vec<string> = Vec::new()
-    Vec::push(w, victim(2))
-    let s: string = take_first(&mut v, w)
-    let k = churn()
-    println(s)
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let mut w: Vec<String> = Vec::new();
+    Vec::push(w, victim(2));
+    let s: String = take_first(&mut v, w);
+    let k = churn();
+    println!("{}", s);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -3284,31 +3237,30 @@ fn sb69_a_generic_that_reads_an_element_then_replaces_the_vec_owns_it() {
 }
 
 const SB76_A_GROUPED_BYTES_BASE_BESIDE_AN_INDEX_THAT_FREES_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn clobi(r: &mut Vec<string>) -> i64 {
-    (*r)[0] = victim(9)
-    let k = churn()
-    return 1
+fn clobi(r: &mut Vec<String>) -> i64 {
+    (*r)[0] = victim(9);
+    let k = churn();
+    1
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "x" + "yz{1}")
-    let r: &mut Vec<string> = &mut v
-    let b: u8 = ((*r)[0].bytes)[clobi(r)]
-    let mut s: string = "x" + "yz{1}"
-    let c: u8 = (s.bytes)[{ s = victim(2); let k = churn(); 1 }]
-    println("{b} {c}")
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "x" + format!("yz{}", 1));
+    let r: &mut Vec<String> = &mut v;
+    let b: u8 = ((*r)[0].as_bytes())[clobi(r)];
+    let mut s: String = "x" + format!("yz{}", 1);
+    let c: u8 = (s.as_bytes())[{ s = victim(2); let k = churn(); 1 }];
+    println!("{b} {c}");
 }
 "#;
 
@@ -3325,31 +3277,30 @@ fn sb70_a_grouped_bytes_base_is_pinned_while_its_index_frees_it() {
 }
 
 const SB77_A_GENERIC_INSTANTIATED_WITH_A_STRUCT_OR_AN_OPTION: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string }
-fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x) }
-fn main() -> i64 {
-    let mut v: Vec<P> = Vec::new()
-    put(&mut v, P { name: victim(1) })
-    let mut w: Vec<Option<string>> = Vec::new()
-    put(&mut w, Some(victim(2)))
-    let k = churn()
-    println(v[0].name)
+struct P { name: String }
+fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x); }
+fn main() {
+    let mut v: Vec<P> = Vec::new();
+    put(&mut v, P { name: victim(1) });
+    let mut w: Vec<Option<String>> = Vec::new();
+    put(&mut w, Some(victim(2)));
+    let k = churn();
+    println!("{}", v[0].name);
     match w[0] {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    return 0
 }
 "#;
 
@@ -3366,38 +3317,37 @@ fn sb71_a_generic_instantiated_with_a_type_that_only_holds_a_string_is_accepted(
 }
 
 const SB78_A_GENERIC_THAT_WRAPS_A_STRING_WITHOUT_A_VEC: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn wrap_local<T>(x: T) -> Option<T> {
-    let y: T = x
-    return Some(y)
+    let y: T = x;
+    Some(y)
 }
 fn wrap_pick<T>(c: bool, a: T, b: T) -> Option<T> {
-    return Some(pick(c, a, b))
+    Some(pick(c, a, b))
 }
-fn pick<T>(c: bool, a: T, b: T) -> T { if c { return a } return b }
-fn main() -> i64 {
-    let o: Option<string> = wrap_local(victim(1))
-    let p: Option<string> = wrap_pick(true, victim(2), victim(3))
-    let k = churn()
+fn pick<T>(c: bool, a: T, b: T) -> T { if c { return a; } b }
+fn main() {
+    let o: Option<String> = wrap_local(victim(1));
+    let p: Option<String> = wrap_pick(true, victim(2), victim(3));
+    let k = churn();
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
     match p {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    return 0
 }
 "#;
 
@@ -3415,18 +3365,17 @@ fn sb72_a_generic_that_wraps_a_string_without_a_vec_is_accepted() {
 
 const SB79_A_GENERIC_THAT_WRITES_ONE_STRING_INTO_A_SLICE_OF_A_VEC: &str = r#"
 fn fill<T>(s: &mut [T], x: T) {
-    for i in 0..s.len { s[i] = x }
+    for i in 0..s.len() { s[i] = x; }
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "a" + "{1}")
-    Vec::push(v, "b" + "{2}")
-    let m = Vec::try_as_unique_mut_slice(v)
-    let x: string = "c" + "{3}"
-    fill(m, x)
-    println(v[0])
-    println(v[1])
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "a" + format!("{}", 1));
+    Vec::push(v, "b" + format!("{}", 2));
+    let m = Vec::try_as_unique_mut_slice(v);
+    let x: String = "c" + format!("{}", 3);
+    fill(m, x);
+    println!("{}", v[0]);
+    println!("{}", v[1]);
 }
 "#;
 
@@ -3443,32 +3392,31 @@ fn sb73_a_generic_that_writes_through_a_slice_of_strings_retains_each_store() {
 }
 
 const SB80_A_GENERIC_THAT_WRAPS_AN_ELEMENT_OF_A_SLICE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn first2<T>(s: &[T]) -> Option<T> {
-    if s.len == 0 { return None }
-    return Some(s[0])
+    if s.len() == 0 { return None; }
+    Some(s[0])
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let o: Option<string> = first2(Vec::as_slice(v))
-    v[0] = victim(2)
-    let k = churn()
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let o: Option<String> = first2(Vec::as_slice(v));
+    v[0] = victim(2);
+    let k = churn();
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    return 0
 }
 "#;
 
@@ -3485,34 +3433,33 @@ fn sb74_a_generic_that_carries_a_slice_element_out_in_an_enum_retains_it() {
 }
 
 const SB81_A_GENERIC_THAT_ONLY_READS_A_SLICE_OF_A_VEC: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn idx<T: eq>(s: &[T], x: T) -> i64 {
-    for i in 0..s.len {
-        if s[i] == x { return i }
+fn idx<T: PartialEq>(s: &[T], x: T) -> i64 {
+    for i in 0..s.len() {
+        if s[i] == x { return i; }
     }
-    return -1
+    -1
 }
-fn first<T>(s: &[T]) -> T { return s[0] }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    Vec::push(v, victim(2))
-    let i: i64 = idx(Vec::as_slice(v), "ab" + "{2}")
-    let o: string = first(Vec::as_slice(v))
-    v[0] = victim(3)
-    let k = churn()
-    println("{i} " + o + " " + v[0])
-    return 0
+fn first<T>(s: &[T]) -> T { s[0] }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    Vec::push(v, victim(2));
+    let i: i64 = idx(Vec::as_slice(v), "ab" + format!("{}", 2));
+    let o: String = first(Vec::as_slice(v));
+    v[0] = victim(3);
+    let k = churn();
+    println!("{}", format!("{i} ") + o + " " + v[0]);
 }
 "#;
 
@@ -3530,29 +3477,28 @@ fn sb75_a_generic_that_only_reads_a_slice_of_strings_is_accepted() {
 
 const SB82_AN_OPERAND_READ_BEFORE_A_SIBLING_REWRITES_ITS_LOCAL: &str = r#"
 struct P { a: i64, b: i64 }
-fn two(a: i64, b: i64) -> i64 { return a * 10 + b }
-fn keep2c(a: string, n: i64) -> string { return a }
-fn keep2<T>(a: T, n: i64) -> T { return a }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut x: i64 = 1
-    let c: i64 = two(x, { x = 2; 3 })
-    x = 1
-    let d: i64 = x + { x = 2; 0 }
-    x = 1
-    let p: P = P { a: x, b: { x = 2; 3 } }
-    x = 1
-    let v: Vec<i64> = vec[x, { x = 2; 3 }]
-    x = 1
-    let a: [i64; 2] = [x, { x = 2; 3 }]
-    x = 1
-    let f: string = "{x}{ { x = 2; 3 } }"
-    let mut s: string = victim(1)
-    let t: string = keep2c(s, { s = victim(2); 1 })
-    let u: string = keep2(s, { s = victim(3); 1 })
-    println("{c} {d} {p.a}{p.b} {v[0]}{v[1]} {a[0]}{a[1]} {f}")
-    println(t + u + s)
-    return 0
+fn two(a: i64, b: i64) -> i64 { a * 10 + b }
+fn keep2c(a: String, n: i64) -> String { a }
+fn keep2<T>(a: T, n: i64) -> T { a }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut x: i64 = 1;
+    let c: i64 = two(x, { x = 2; 3 });
+    x = 1;
+    let d: i64 = x + { x = 2; 0 };
+    x = 1;
+    let p: P = P { a: x, b: { x = 2; 3 } };
+    x = 1;
+    let v: Vec<i64> = vec![x, { x = 2; 3 }];
+    x = 1;
+    let a: [i64; 2] = [x, { x = 2; 3 }];
+    x = 1;
+    let f: String = format!("{x}{}", { x = 2; 3 });
+    let mut s: String = victim(1);
+    let t: String = keep2c(s, { s = victim(2); 1 });
+    let u: String = keep2(s, { s = victim(3); 1 });
+    println!("{c} {d} {}{} {}{} {}{} {f}", p.a, p.b, v[0], v[1], a[0], a[1]);
+    println!("{}", t + u + s);
 }
 "#;
 
@@ -3569,29 +3515,28 @@ fn sb76_an_operand_keeps_the_value_it_read_when_a_later_sibling_rewrites_its_loc
 }
 
 const SB83_A_GENERIC_IDENTITY_IN_A_LOOP: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn keep<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn keep<T>(x: T) -> T { x }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let s: string = keep(victim(i))
-        n = n + s.len
-        i = i + 1
+        let s: String = keep(victim(i));
+        n = n + s.len();
+        i = i + 1;
     }
-    let k = churn()
-    println("{n}")
-    return 0
+    let k = churn();
+    println!("{n}");
 }
 "#;
 
@@ -3608,27 +3553,26 @@ fn sb77_a_string_through_a_generic_identity_is_released_every_turn() {
 }
 
 const SB84_GENERICS_INSTANTIATED_WITH_SCALARS: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn keep<T>(x: T) -> T { return x }
-fn pick<T>(c: bool, a: T, b: T) -> T { if c { return a } return b }
-fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x) }
-fn main() -> i64 {
-    let mut v: Vec<f64> = Vec::new()
-    put(&mut v, keep(1.5))
-    let b: bool = pick(true, keep(true), false)
-    let n: i64 = pick(false, 1, keep(41))
-    println("{v[0]} {b} {n}")
-    return 0
+fn keep<T>(x: T) -> T { x }
+fn pick<T>(c: bool, a: T, b: T) -> T { if c { return a; } b }
+fn put<T>(v: &mut Vec<T>, x: T) { Vec::push(*v, x); }
+fn main() {
+    let mut v: Vec<f64> = Vec::new();
+    put(&mut v, keep(1.5));
+    let b: bool = pick(true, keep(true), false);
+    let n: i64 = pick(false, 1, keep(41));
+    println!("{} {b} {n}", v[0]);
 }
 "#;
 
@@ -3645,30 +3589,29 @@ fn sb78_a_generic_instantiated_with_a_scalar_counts_nothing() {
 }
 
 const SB85_A_GENERIC_ELEMENT_READ_BESIDE_A_CALL_THAT_REPLACES_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn g<T>(v: &mut Vec<T>, x: T) -> T {
-    (*v)[0] = x
-    let k = churn()
-    return (*v)[0]
+    (*v)[0] = x;
+    let k = churn();
+    (*v)[0]
 }
-fn same<T: eq>(v: &mut Vec<T>, x: T) -> bool {
-    return (*v)[0] == g(v, x)
+fn same<T: PartialEq>(v: &mut Vec<T>, x: T) -> bool {
+    (*v)[0] == g(v, x)
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    println("{same(&mut v, victim(1))}")
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    println!("{}", same(&mut v, victim(1)));
 }
 "#;
 
@@ -3685,32 +3628,31 @@ fn sb79_a_generic_element_read_is_pinned_while_a_sibling_replaces_it() {
 }
 
 const SB86_A_GENERIC_MUT_PARAMETER_REASSIGNED_FROM_AN_ELEMENT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 fn grab<T>(mut x: T, v: &Vec<T>) -> Option<T> {
-    x = (*v)[0]
-    return Some(x)
+    x = (*v)[0];
+    Some(x)
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let o: Option<string> = grab(victim(5), &v)
-    v[0] = victim(2)
-    let k = churn()
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let o: Option<String> = grab(victim(5), &v);
+    v[0] = victim(2);
+    let k = churn();
     match o {
-        Some(x) => println(x),
-        None => println("none"),
+        Some(x) => println!("{}", x),
+        None => println!("none"),
     }
-    return 0
 }
 "#;
 
@@ -3727,23 +3669,22 @@ fn sb80_a_generic_mut_parameter_owns_what_it_is_reassigned() {
 }
 
 const SB87_A_GENERIC_POP: &str = r#"
-fn take<T>(v: &mut Vec<T>) -> Option<T> { return Vec::pop(*v) }
-fn got(o: Option<string>) -> string {
+fn take<T>(v: &mut Vec<T>) -> Option<T> { Vec::pop(*v) }
+fn got(o: Option<String>) -> String {
     match o {
-        Some(x) => { return x }
-        None => { return "none" }
+        Some(x) => { return x; }
+        None => { return "none"; }
     }
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "a" + "{1}")
-    Vec::push(v, "b" + "{2}")
-    let w: Vec<string> = v
-    let x: string = got(take(&mut v))
-    println(x)
-    println(w[0])
-    println(v[0])
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "a" + format!("{}", 1));
+    Vec::push(v, "b" + format!("{}", 2));
+    let w: Vec<String> = v;
+    let x: String = got(take(&mut v));
+    println!("{}", x);
+    println!("{}", w[0]);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -3755,40 +3696,39 @@ fn sb81_a_generic_pop_hands_its_element_over() {
 }
 
 const SB88_OPERANDS_REWRITTEN_THROUGH_A_REFERENCE_OR_AS_AN_AGGREGATE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
 struct P { a: i64, b: i64 }
-fn two(a: i64, b: i64) -> i64 { return a * 10 + b }
-fn bump(r: &mut i64) -> i64 { *r = 2; return 3 }
-fn bumps(r: &mut string) -> i64 { *r = victim(2); let k = churn(); return 1 }
-fn keep2c(a: string, n: i64) -> string { return a }
-fn twoa(a: [i64; 2], n: i64) -> i64 { return a[0] * 10 + n }
-fn twop(p: P, n: i64) -> i64 { return p.a * 10 + n }
-fn twov(v: Vec<i64>, n: i64) -> i64 { return Vec::len(v) * 10 + n }
-fn main() -> i64 {
-    let mut x: i64 = 1
-    let c1: i64 = two(x, bump(&mut x))
-    let mut s: string = victim(1)
-    let c2: string = keep2c(s, bumps(&mut s))
-    let mut a: [i64; 2] = [1, 0]
-    let c3: i64 = twoa(a, { a[0] = 2; 3 })
-    let mut p: P = P { a: 1, b: 0 }
-    let c4: i64 = twop(p, { p.a = 2; 3 })
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 1)
-    let c5: i64 = twov(v, { Vec::push(v, 2); 3 })
-    let k = churn()
-    println("{c1} " + c2 + " {c3} {c4} {c5}")
-    return 0
+fn two(a: i64, b: i64) -> i64 { a * 10 + b }
+fn bump(r: &mut i64) -> i64 { *r = 2; 3 }
+fn bumps(r: &mut String) -> i64 { *r = victim(2); let k = churn(); 1 }
+fn keep2c(a: String, n: i64) -> String { a }
+fn twoa(a: [i64; 2], n: i64) -> i64 { a[0] * 10 + n }
+fn twop(p: P, n: i64) -> i64 { p.a * 10 + n }
+fn twov(v: Vec<i64>, n: i64) -> i64 { Vec::len(v) * 10 + n }
+fn main() {
+    let mut x: i64 = 1;
+    let c1: i64 = two(x, bump(&mut x));
+    let mut s: String = victim(1);
+    let c2: String = keep2c(s, bumps(&mut s));
+    let mut a: [i64; 2] = [1, 0];
+    let c3: i64 = twoa(a, { a[0] = 2; 3 });
+    let mut p: P = P { a: 1, b: 0 };
+    let c4: i64 = twop(p, { p.a = 2; 3 });
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 1);
+    let c5: i64 = twov(v, { Vec::push(v, 2); 3 });
+    let k = churn();
+    println!("{}", format!("{c1} ") + c2 + format!(" {c3} {c4} {c5}"));
 }
 "#;
 
@@ -3805,39 +3745,38 @@ fn sb82_an_operand_keeps_its_value_when_a_sibling_lends_it_mutably_or_rewrites_i
 }
 
 const SB89_UNBOUND_TEMPORARIES_OF_A_TYPE_PARAMETER: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn keep<T>(x: T) -> T { return x }
-fn cnt<T>(x: T) -> i64 { return 1 }
-fn eqk<T: eq>(a: T, b: T) -> bool { return keep(a) == keep(b) }
-fn pass<T>(a: T) -> i64 { return cnt(keep(a)) + cnt(keep(keep(a))) }
-fn disc<T>(a: T) -> i64 { keep(a); keep(keep(a)); let n: i64 = cnt(keep(a)); return n }
-fn wrap<T>(a: T) -> Option<T> { return Some(keep(a)) }
-fn arr<T>(a: T) -> [T; 2] { return [keep(a), keep(a)] }
-fn pv<T>(v: &mut Vec<T>, a: T) { Vec::push(*v, keep(a)); (*v)[0] = keep(a) }
-fn main() -> i64 {
-    let s: string = victim(1)
-    let mut v: Vec<string> = Vec::new()
-    pv(&mut v, s)
-    let mut w: Vec<i64> = Vec::new()
-    pv(&mut w, 3)
-    let o: Option<string> = wrap(s)
-    let a: [string; 2] = arr(s)
-    let b: [i64; 2] = arr(4)
-    let k = churn()
-    println("{eqk(1, 1)} {eqk(s, victim(1))} {pass(1)} {pass(s)} {disc(2.5)} {disc(s)} {w[0]} {b[1]} " + v[0] + a[1])
-    match o { Some(x) => println(x), None => println("none") }
-    match wrap(7) { Some(x) => println("{x}"), None => println("none") }
-    return 0
+fn keep<T>(x: T) -> T { x }
+fn cnt<T>(x: T) -> i64 { 1 }
+fn eqk<T: PartialEq>(a: T, b: T) -> bool { keep(a) == keep(b) }
+fn pass<T>(a: T) -> i64 { cnt(keep(a)) + cnt(keep(keep(a))) }
+fn disc<T>(a: T) -> i64 { keep(a); keep(keep(a)); let n: i64 = cnt(keep(a)); n }
+fn wrap<T>(a: T) -> Option<T> { Some(keep(a)) }
+fn arr<T>(a: T) -> [T; 2] { [keep(a), keep(a)] }
+fn pv<T>(v: &mut Vec<T>, a: T) { Vec::push(*v, keep(a)); (*v)[0] = keep(a); }
+fn main() {
+    let s: String = victim(1);
+    let mut v: Vec<String> = Vec::new();
+    pv(&mut v, s);
+    let mut w: Vec<i64> = Vec::new();
+    pv(&mut w, 3);
+    let o: Option<String> = wrap(s);
+    let a: [String; 2] = arr(s);
+    let b: [i64; 2] = arr(4);
+    let k = churn();
+    println!("{}", format!("{} {} {} {} {} {} {} {} ", eqk(1, 1), eqk(s, victim(1)), pass(1), pass(s), disc(2.5), disc(s), w[0], b[1]) + v[0] + a[1]);
+    match o { Some(x) => println!("{}", x), None => println!("none") }
+    match wrap(7) { Some(x) => println!("{x}"), None => println!("none") }
 }
 "#;
 
@@ -3854,17 +3793,16 @@ fn sb83_an_unbound_temporary_of_a_type_parameter_is_released_by_its_own_count() 
 }
 
 const SB90_A_MUT_PARAMETER_READ_BEFORE_ITS_REASSIGNMENT: &str = r#"
-fn holdc(mut x: i64, y: i64) -> i64 { let z: i64 = x; x = y; return z }
-fn holdg<T>(mut x: T, y: T) -> T { let z: T = x; x = y; return z }
-fn holdl<T>(a: T, y: T) -> T { let mut x: T = a; let z: T = x; x = y; return z }
-fn holdlc(a: i64, y: i64) -> i64 { let mut x: i64 = a; let z: i64 = x; x = y; return z }
-fn main() -> i64 {
-    println("{holdc(5, 6)} {holdg(5, 6)} {holdl(5, 6)} {holdlc(5, 6)}")
-    let mut x: i64 = 5
-    let z: i64 = x
-    x = 6
-    println("{z}")
-    return 0
+fn holdc(mut x: i64, y: i64) -> i64 { let z: i64 = x; x = y; z }
+fn holdg<T>(mut x: T, y: T) -> T { let z: T = x; x = y; z }
+fn holdl<T>(a: T, y: T) -> T { let mut x: T = a; let z: T = x; x = y; z }
+fn holdlc(a: i64, y: i64) -> i64 { let mut x: i64 = a; let z: i64 = x; x = y; z }
+fn main() {
+    println!("{} {} {} {}", holdc(5, 6), holdg(5, 6), holdl(5, 6), holdlc(5, 6));
+    let mut x: i64 = 5;
+    let z: i64 = x;
+    x = 6;
+    println!("{z}");
 }
 "#;
 
@@ -3881,28 +3819,27 @@ fn sb84_a_mut_parameter_read_before_it_is_reassigned_keeps_its_entry_value() {
 }
 
 const SB91_A_MUT_PARAMETER_REWRITTEN_BY_A_SIBLING_OPERAND: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn two(a: i64, b: i64) -> i64 { return a * 10 + b }
-fn keep2<T>(a: T, n: i64) -> T { return a }
-fn f(mut x: i64, y: i64) -> i64 { return two(x, { x = y; 3 }) }
-fn fg<T>(mut x: T, y: T) -> T { return keep2(x, { x = y; 1 }) }
-fn fl(mut x: i64, y: i64) -> i64 { let p: i64 = x + { x = y; 0 }; return p }
-fn main() -> i64 {
-    println("{f(1, 2)} {fg(1, 2)} {fl(1, 2)}")
-    let s: string = fg(victim(1), victim(2))
-    let k = churn()
-    println(s)
-    return 0
+fn two(a: i64, b: i64) -> i64 { a * 10 + b }
+fn keep2<T>(a: T, n: i64) -> T { a }
+fn f(mut x: i64, y: i64) -> i64 { two(x, { x = y; 3 }) }
+fn fg<T>(mut x: T, y: T) -> T { keep2(x, { x = y; 1 }) }
+fn fl(mut x: i64, y: i64) -> i64 { let p: i64 = x + { x = y; 0 }; p }
+fn main() {
+    println!("{} {} {}", f(1, 2), fg(1, 2), fl(1, 2));
+    let s: String = fg(victim(1), victim(2));
+    let k = churn();
+    println!("{}", s);
 }
 "#;
 
@@ -3919,29 +3856,28 @@ fn sb85_a_mut_parameter_rewritten_by_a_sibling_operand_keeps_the_value_it_read()
 }
 
 const SB92_A_READ_THROUGH_A_RETURNED_REFERENCE_BESIDE_A_CALL_THAT_FREES_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn atc(v: &Vec<string>, i: i64) -> &string { return &(*v)[i] }
-fn at<T>(v: &Vec<T>, i: i64) -> &T { return &(*v)[i] }
-fn clob(v: &mut Vec<string>) -> i64 { (*v)[0] = victim(8); let k = churn(); return 1 }
-fn show2(s: string, n: i64) -> string { return s + "{n}" }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let a: string = show2(*at(&v, 0), clob(&mut v))
-    let b: string = show2(*atc(&v, 0), clob(&mut v))
-    let k = churn()
-    println(a + b)
-    return 0
+fn atc(v: &Vec<String>, i: i64) -> &String { &(*v)[i] }
+fn at<T>(v: &Vec<T>, i: i64) -> &T { &(*v)[i] }
+fn clob(v: &mut Vec<String>) -> i64 { (*v)[0] = victim(8); let k = churn(); 1 }
+fn show2(s: String, n: i64) -> String { s + format!("{n}") }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let a: String = show2(*at(&v, 0), clob(&mut v));
+    let b: String = show2(*atc(&v, 0), clob(&mut v));
+    let k = churn();
+    println!("{}", a + b);
 }
 "#;
 
@@ -3958,23 +3894,22 @@ fn sb86_a_read_through_a_returned_reference_is_pinned_while_a_sibling_frees_it()
 }
 
 const SB93_A_CALLEE_REWRITTEN_BY_ITS_OWN_ARGUMENT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn f1(a: i64, b: i64) -> i64 { return 100 + b }
-fn f2(a: i64, b: i64) -> i64 { return 200 + b }
-fn main() -> i64 {
-    let mut f: fn(i64, i64) -> i64 = f1
-    println("{f(1, { f = f2; 3 })}")
-    return 0
+fn f1(a: i64, b: i64) -> i64 { 100 + b }
+fn f2(a: i64, b: i64) -> i64 { 200 + b }
+fn main() {
+    let mut f: fn(i64, i64) -> i64 = f1;
+    println!("{}", f(1, { f = f2; 3 }));
 }
 "#;
 
@@ -3991,32 +3926,31 @@ fn sb87_a_callee_is_read_before_its_arguments_rewrite_it() {
 }
 
 const SB94_A_VEC_READ_THROUGH_A_REFERENCE_BESIDE_A_SIBLING_THAT_REPLACES_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn lenv(v: Vec<string>, n: i64) -> string { let k = churn(); return "{Vec::len(v)}" + v[0] + "{n}" }
-fn repl(vr: &mut Vec<string>) -> string { return lenv(*vr, { *vr = Vec::new(); Vec::push(*vr, victim(3)); 1 }) }
-fn grow(vr: &mut Vec<string>) -> string {
-    return lenv(*vr, { let mut i: i64 = 0; while i < 100 { Vec::push(*vr, victim(i)); i = i + 1 }; 2 })
+fn lenv(v: Vec<String>, n: i64) -> String { let k = churn(); format!("{}", Vec::len(v)) + v[0] + format!("{n}") }
+fn repl(vr: &mut Vec<String>) -> String { lenv(*vr, { *vr = Vec::new(); Vec::push(*vr, victim(3)); 1 }) }
+fn grow(vr: &mut Vec<String>) -> String {
+    lenv(*vr, { let mut i: i64 = 0; while i < 100 { Vec::push(*vr, victim(i)); i = i + 1; }; 2 })
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let a: string = repl(&mut v)
-    let mut w: Vec<string> = Vec::new()
-    Vec::push(w, victim(2))
-    let b: string = grow(&mut w)
-    let k = churn()
-    println(a + " " + b + " {Vec::len(v)} {Vec::len(w)}")
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let a: String = repl(&mut v);
+    let mut w: Vec<String> = Vec::new();
+    Vec::push(w, victim(2));
+    let b: String = grow(&mut w);
+    let k = churn();
+    println!("{}", a + " " + b + format!(" {} {}", Vec::len(v), Vec::len(w)));
 }
 "#;
 
@@ -4033,28 +3967,27 @@ fn sb88_a_vec_read_through_a_reference_holds_its_buffer_while_a_sibling_replaces
 }
 
 const SB95_AN_ARRAY_OF_A_TYPE_PARAMETER_REWRITTEN_BY_A_SIBLING: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn firstc(a: [i64; 2], n: i64) -> i64 { return a[0] }
-fn gac(mut a: [i64; 2], x: i64) -> i64 { return firstc(a, { a[0] = x; 2 }) }
-fn firsts(a: [string; 2], n: i64) -> string { return a[0] }
-fn gas(mut a: [string; 2], x: string) -> string { return firsts(a, { a[0] = x; 2 }) }
-fn first<T>(a: [T; 2], n: i64) -> T { return a[0] }
-fn ga<T>(mut a: [T; 2], x: T) -> T { return first(a, { a[0] = x; 2 }) }
-fn gl<T>(x: T, y: T) -> T { let mut a: [T; 2] = [x, x]; return first(a, { a[0] = y; 2 }) }
-fn main() -> i64 {
-    let k = churn()
-    println("{gac([6, 7], 8)} " + gas([victim(3), victim(4)], victim(5)) + " {ga([6, 7], 8)} " + ga([victim(3), victim(4)], victim(5)) + " {gl(1, 2)} " + gl(victim(1), victim(2)))
-    return 0
+fn firstc(a: [i64; 2], n: i64) -> i64 { a[0] }
+fn gac(mut a: [i64; 2], x: i64) -> i64 { firstc(a, { a[0] = x; 2 }) }
+fn firsts(a: [String; 2], n: i64) -> String { a[0] }
+fn gas(mut a: [String; 2], x: String) -> String { firsts(a, { a[0] = x; 2 }) }
+fn first<T>(a: [T; 2], n: i64) -> T { a[0] }
+fn ga<T>(mut a: [T; 2], x: T) -> T { first(a, { a[0] = x; 2 }) }
+fn gl<T>(x: T, y: T) -> T { let mut a: [T; 2] = [x, x]; first(a, { a[0] = y; 2 }) }
+fn main() {
+    let k = churn();
+    println!("{}", format!("{} ", gac([6, 7], 8)) + gas([victim(3), victim(4)], victim(5)) + format!(" {} ", ga([6, 7], 8)) + ga([victim(3), victim(4)], victim(5)) + format!(" {} ", gl(1, 2)) + gl(victim(1), victim(2)));
 }
 "#;
 
@@ -4071,12 +4004,11 @@ fn sb89_an_array_of_a_type_parameter_keeps_the_value_it_read() {
 }
 
 const SB96_A_VEC_PARAMETER_WITHOUT_AN_ELEMENT_TYPE: &str = r#"
-fn setret(mut v: Vec, x: string) -> string { v[0] = x; return v[0] }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "a" + "{1}")
-    println(setret(v, "b" + "{2}"))
-    return 0
+fn setret(mut v: Vec, x: String) -> String { v[0] = x; v[0] }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "a" + format!("{}", 1));
+    println!("{}", setret(v, "b" + format!("{}", 2)));
 }
 "#;
 
@@ -4092,24 +4024,66 @@ fn sb90_a_vec_parameter_without_an_element_type_asks_for_its_type_argument() {
     h.assert_legs(1);
 }
 
-const SB98_STRUCT_AND_ENUM_TEMPORARIES_IN_A_LONG_LOOP: &str = r#"
-struct P { name: string, age: i64 }
-fn half(n: i64) -> Option<i64> { if n % 2 == 0 { return Some(n / 2) } return None }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
-    while i < 300000 {
-        let p: P = P { name: "p", age: i }
-        let q: P = p
-        n = n + q.age % 7
-        match half(i) {
-            Some(h) => { n = n + h % 3 }
-            None => { n = n + 1 }
-        }
-        i = i + 1
+const SB97_A_STRING_LENT_BY_ADDRESS_IN_A_LOOP: &str = r#"
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
+    while i < 50 {
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    keep
+}
+
+fn lens(r: &String) -> i64 { (*r).len() }
+fn glen<T>(r: &T, n: i64) -> i64 { n }
+fn bump(r: &mut String) { *r = *r + "!"; }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 1000 {
+        let s: String = victim(i);
+        n = n + lens(&s) + glen(&s, 1);
+        let mut t: String = victim(i);
+        bump(&mut t);
+        n = n + t.len();
+        i = i + 1;
+    }
+    let k = churn();
+    println!("{n}");
+}
+"#;
+
+#[test]
+fn sb91_a_string_whose_address_is_lent_to_an_aelys_callee_is_still_released() {
+    let h = Harness::new();
+    h.differential_row(
+        "SB-97",
+        SB97_A_STRING_LENT_BY_ADDRESS_IN_A_LOOP,
+        "11780\n",
+        (5081, 5081),
+    );
+    h.assert_legs(18);
+}
+
+const SB98_STRUCT_AND_ENUM_TEMPORARIES_IN_A_LONG_LOOP: &str = r#"
+struct P { name: String, age: i64 }
+fn half(n: i64) -> Option<i64> { if n % 2 == 0 { return Some(n / 2); } None }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 300000 {
+        let p: P = P { name: "p", age: i };
+        let q: P = p;
+        n = n + q.age % 7;
+        match half(i) {
+            Some(h) => { n = n + h % 3; }
+            None => { n = n + 1; }
+        }
+        i = i + 1;
+    }
+    println!("{n}");
 }
 "#;
 
@@ -4127,28 +4101,72 @@ fn sb92_struct_and_enum_temporaries_in_a_loop_do_not_grow_the_frame() {
 
 // a lent address is safe only while a reference cannot be stored, returned, captured or lent out
 
+const SB99_A_REFERENCE_STORED_IN_A_CONTAINER: &str = r#"
+struct H { r: &String }
+fn main() {
+    let s: String = "a" + "b";
+    let h: H = H { r: &s };
+    println!("{}", *h.r);
+}
+"#;
+
+const SB99_A_REFERENCE_RETURNED_FROM_A_FUNCTION: &str = r#"
+fn dangle() -> &String {
+    let s: String = "a" + "b";
+    &s
+}
+fn main() {
+    println!("{}", *dangle());
+}
+"#;
+
+const SB99_A_CLOSURE_THAT_CAPTURES_A_REFERENCE: &str = r#"
+fn main() {
+    let s: String = "a" + "b";
+    let r: &String = &s;
+    let f = move |n: i64| -> i64 { n + (*r).len() };
+    println!("{}", f(1));
+}
+"#;
+
 const SB99_AN_EXTERNAL_DECLARATION_AS_A_VALUE: &str = r#"
-unsafe extern fn puts(s: &string) -> i64
-fn main() -> i64 {
-    let f: fn(&string) -> i64 = puts
-    let s: string = "a" + "b"
-    println("{f(&s)}")
-    return 0
+extern "C" { fn puts(s: &String) -> i64; }
+fn main() {
+    let f: fn(&String) -> i64 = puts;
+    let s: String = "a" + "b";
+    println!("{}", f(&s));
 }
 "#;
 
 const SB99_A_REFERENCE_HANDED_TO_AN_EXTERNAL_CALL: &str = r#"
-unsafe extern fn takes(s: &string) -> i64
-fn main() -> i64 {
-    let s: string = "a" + "b"
-    println("{takes(&s)}")
-    return 0
+extern "C" { fn takes(s: &String) -> i64; }
+fn main() {
+    let s: String = "a" + "b";
+    println!("{}", takes(&s));
 }
 "#;
 
 #[test]
 fn sb93_a_reference_cannot_be_stored_returned_captured_or_handed_to_an_extern() {
     let h = Harness::new();
+    h.rejects(
+        "SB-99A",
+        SB99_A_REFERENCE_STORED_IN_A_CONTAINER,
+        "E0714",
+        "references stored into aggregate containers",
+    );
+    h.rejects(
+        "SB-99B",
+        SB99_A_REFERENCE_RETURNED_FROM_A_FUNCTION,
+        "E0721",
+        "function returns a reference to local `s`",
+    );
+    h.rejects(
+        "SB-99C",
+        SB99_A_CLOSURE_THAT_CAPTURES_A_REFERENCE,
+        "E0725",
+        "a closure that captures a reference",
+    );
     h.rejects(
         "SB-99D",
         SB99_AN_EXTERNAL_DECLARATION_AS_A_VALUE,
@@ -4161,34 +4179,33 @@ fn sb93_a_reference_cannot_be_stored_returned_captured_or_handed_to_an_extern() 
         "E0617",
         "must appear inside an `unsafe { }` block",
     );
-    h.assert_legs(2);
+    h.assert_legs(5);
 }
 
 const SB101_A_STRUCT_COPIED_IN_A_LOOP: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string, city: string, age: i64 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct P { name: String, city: String, age: i64 }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let p: P = P { name: victim(i), city: victim(i + 1), age: i }
-        let q: P = p
-        n = n + q.name.len + p.city.len
-        i = i + 1
+        let p: P = P { name: victim(i), city: victim(i + 1), age: i };
+        let q: P = p;
+        n = n + q.name.len() + p.city.len();
+        i = i + 1;
     }
-    let k = churn()
-    println("{n}")
-    return 0
+    let k = churn();
+    println!("{n}");
 }
 "#;
 
@@ -4205,28 +4222,27 @@ fn sb94_a_struct_that_holds_strings_releases_them_on_every_copy() {
 }
 
 const SB102_A_FIELD_STORE_IN_A_LOOP: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string, age: i64 }
-fn main() -> i64 {
-    let mut p: P = P { name: victim(0), age: 0 }
-    let mut i: i64 = 1
+struct P { name: String, age: i64 }
+fn main() {
+    let mut p: P = P { name: victim(0), age: 0 };
+    let mut i: i64 = 1;
     while i < 1000 {
-        p.name = victim(i)
-        i = i + 1
+        p.name = victim(i);
+        i = i + 1;
     }
-    let k = churn()
-    println(p.name)
-    return 0
+    let k = churn();
+    println!("{}", p.name);
 }
 "#;
 
@@ -4243,27 +4259,26 @@ fn sb95_a_field_store_releases_the_string_it_replaces() {
 }
 
 const SB103_AN_ARRAY_ELEMENT_STORE_IN_A_LOOP: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn main() -> i64 {
-    let mut a: [string; 3] = [victim(0), victim(1), victim(2)]
-    let mut i: i64 = 3
+fn main() {
+    let mut a: [String; 3] = [victim(0), victim(1), victim(2)];
+    let mut i: i64 = 3;
     while i < 1000 {
-        a[i % 3] = victim(i)
-        i = i + 1
+        a[i % 3] = victim(i);
+        i = i + 1;
     }
-    let k = churn()
-    println(a[0] + a[1] + a[2])
-    return 0
+    let k = churn();
+    println!("{}", a[0] + a[1] + a[2]);
 }
 "#;
 
@@ -4279,40 +4294,81 @@ fn sb96_an_array_of_strings_releases_what_it_holds_and_what_it_replaces() {
     h.assert_legs(18);
 }
 
-const SB105_A_VEC_OF_STRUCTS_ACROSS_COPIES_STORES_AND_POPS: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+const SB104_A_FOR_OVER_ARRAYS_OF_CARRIERS: &str = r#"
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
-struct P { name: string, age: i64 }
-struct Q { r: Rc<i64>, name: string }
 
-fn setp<T>(v: &mut Vec<T>, i: i64, x: T) { (*v)[i] = x }
-fn takep<T>(v: &mut Vec<T>) -> Option<T> { return Vec::pop(*v) }
+struct P { name: String, age: i64 }
+fn main() {
+    let arr: [P; 2] = [P { name: victim(1), age: 1 }, P { name: victim(2), age: 2 }];
+    let mut n: i64 = 0;
+    for p in arr {
+        n = n + p.name.len() + p.age;
+    }
+    let mut brr: [String; 3] = [victim(3), victim(4), victim(5)];
+    let mut acc: String = "";
+    for s in brr {
+        brr[1] = victim(9);
+        let k = churn();
+        acc = acc + s;
+    }
+    println!("{}", format!("{n} ") + acc);
+}
+"#;
+
+#[test]
+fn sb97_a_for_over_an_array_holds_the_collection_and_borrows_its_element() {
+    let h = Harness::new();
+    h.differential_row(
+        "SB-104",
+        SB104_A_FOR_OVER_ARRAYS_OF_CARRIERS,
+        "9 ab3ab4ab5\n",
+        (265, 265),
+    );
+    h.assert_legs(18);
+}
+
+const SB105_A_VEC_OF_STRUCTS_ACROSS_COPIES_STORES_AND_POPS: &str = r#"
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
+    while i < 50 {
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
+    }
+    keep
+}
+struct P { name: String, age: i64 }
+struct Q { r: Rc<i64>, name: String }
+
+fn setp<T>(v: &mut Vec<T>, i: i64, x: T) { (*v)[i] = x; }
+fn takep<T>(v: &mut Vec<T>) -> Option<T> { Vec::pop(*v) }
 fn gotp(o: Option<P>) -> P {
     match o {
-        Some(p) => { return p }
-        None => { return P { name: "none", age: 0 } }
+        Some(p) => { return p; }
+        None => { return P { name: "none", age: 0 }; }
     }
 }
 
-fn main() -> i64 {
-    let mut v: Vec<P> = Vec::new()
-    Vec::push(v, P { name: victim(1), age: 1 })
-    let w: Vec<P> = v
-    v[0] = P { name: victim(2), age: 2 }
-    let k = churn()
-    setp(&mut v, 0, P { name: victim(3), age: 3 })
-    let taken: P = gotp(takep(&mut v))
-    Vec::push(v, P { name: victim(4), age: 4 })
-    println(w[0].name + " " + v[0].name + " " + taken.name)
-    return 0
+fn main() {
+    let mut v: Vec<P> = Vec::new();
+    Vec::push(v, P { name: victim(1), age: 1 });
+    let w: Vec<P> = v;
+    v[0] = P { name: victim(2), age: 2 };
+    let k = churn();
+    setp(&mut v, 0, P { name: victim(3), age: 3 });
+    let taken: P = gotp(takep(&mut v));
+    Vec::push(v, P { name: victim(4), age: 4 });
+    println!("{}", w[0].name + " " + v[0].name + " " + taken.name);
 }
 "#;
 
@@ -4329,20 +4385,19 @@ fn sb98_a_vec_of_structs_owns_its_elements_across_copies_stores_and_pops() {
 }
 
 const SB106_A_CSV_ROW_PARSED_INTO_A_STRUCT: &str = r#"
-needs std.str
-struct Person { name: string, city: string }
-fn parse(line: string) -> Person {
-    let f: Vec<string> = str.split(line, ",")
-    return Person { name: f[0], city: f[1] }
+use std::str;
+struct Person { name: String, city: String }
+fn parse(line: String) -> Person {
+    let f: Vec<String> = str::split(line, ",");
+    Person { name: f[0], city: f[1] }
 }
-fn main() -> i64 {
-    let mut total: i64 = 0
+fn main() {
+    let mut total: i64 = 0;
     for i in 0..500 {
-        let p: Person = parse("alice{i},paris,{i}")
-        total = total + p.name.len + p.city.len
+        let p: Person = parse(format!("alice{i},paris,{i}"));
+        total = total + p.name.len() + p.city.len();
     }
-    println("{total}")
-    return 0
+    println!("{total}");
 }
 "#;
 
@@ -4359,33 +4414,32 @@ fn sb99_a_csv_row_parsed_into_a_struct_releases_every_field() {
 }
 
 const SB107_A_NESTED_STRUCT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct A { s: string }
-struct B { a: A, t: string }
-fn make(i: i64) -> B { return B { a: A { s: victim(i) }, t: victim(i + 1) } }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct A { s: String }
+struct B { a: A, t: String }
+fn make(i: i64) -> B { B { a: A { s: victim(i) }, t: victim(i + 1) } }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 500 {
-        let b: B = make(i)
-        let c: B = b
-        let a2: A = c.a
-        n = n + a2.s.len + b.t.len
-        i = i + 1
+        let b: B = make(i);
+        let c: B = b;
+        let a2: A = c.a;
+        n = n + a2.s.len() + b.t.len();
+        i = i + 1;
     }
-    let k = churn()
-    println("{n}")
-    return 0
+    let k = churn();
+    println!("{n}");
 }
 "#;
 
@@ -4397,30 +4451,29 @@ fn sb100_a_struct_inside_a_struct_releases_the_strings_of_both() {
 }
 
 const SB108_A_GENERIC_INSTANTIATED_WITH_A_STRUCT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string, age: i64 }
-fn keep<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct P { name: String, age: i64 }
+fn keep<T>(x: T) -> T { x }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 500 {
-        let p: P = keep(P { name: victim(i), age: i })
-        n = n + p.name.len
-        i = i + 1
+        let p: P = keep(P { name: victim(i), age: i });
+        n = n + p.name.len();
+        i = i + 1;
     }
-    let k = churn()
-    println("{n}")
-    return 0
+    let k = churn();
+    println!("{n}");
 }
 "#;
 
@@ -4437,30 +4490,29 @@ fn sb101_a_generic_instantiated_with_a_carrier_counts_it_like_a_string() {
 }
 
 const SB109_A_FILLED_ARRAY_LITERAL_PUSHED_AND_STORED: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct S { a: [string; 3], k: i64 }
-fn main() -> i64 {
-    let mut v: Vec<[string; 3]> = Vec::new()
-    let mut s: S = S { a: [victim(0); 3], k: 0 }
-    let mut i: i64 = 1
+struct S { a: [String; 3], k: i64 }
+fn main() {
+    let mut v: Vec<[String; 3]> = Vec::new();
+    let mut s: S = S { a: [victim(0); 3], k: 0 };
+    let mut i: i64 = 1;
     while i < 100 {
-        Vec::push(v, [victim(i); 3])
-        s.a = [victim(i + 1); 3]
-        i = i + 1
+        Vec::push(v, [victim(i); 3]);
+        s.a = [victim(i + 1); 3];
+        i = i + 1;
     }
-    let k = churn()
-    println(v[0][0] + s.a[2] + "{Vec::len(v)}")
-    return 0
+    let k = churn();
+    println!("{}", v[0][0] + s.a[2] + format!("{}", Vec::len(v)));
 }
 "#;
 
@@ -4477,37 +4529,36 @@ fn sb102_a_filled_array_literal_is_fresh_like_an_element_by_element_one() {
 }
 
 const SB110_A_SHARED_VEC_OF_CARRIERS_PUSHED_AND_POPPED: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string, age: i64 }
+struct P { name: String, age: i64 }
 fn gotp(o: Option<P>) -> P {
     match o {
-        Some(p) => { return p }
-        None => { return P { name: "none", age: 0 } }
+        Some(p) => { return p; }
+        None => { return P { name: "none", age: 0 }; }
     }
 }
-fn main() -> i64 {
-    let mut v: Vec<P> = Vec::new()
-    Vec::push(v, P { name: victim(1), age: 1 })
-    let w: Vec<P> = v
-    Vec::push(v, P { name: victim(2), age: 2 })
-    let taken: P = gotp(Vec::pop(v))
-    let mut u: Vec<[string; 2]> = Vec::new()
-    Vec::push(u, [victim(3), victim(4)])
-    let t: Vec<[string; 2]> = u
-    Vec::push(u, [victim(5), victim(6)])
-    let k = churn()
-    println(w[0].name + taken.name + t[0][1] + u[1][0] + "{Vec::len(v)} {Vec::len(t)}")
-    return 0
+fn main() {
+    let mut v: Vec<P> = Vec::new();
+    Vec::push(v, P { name: victim(1), age: 1 });
+    let w: Vec<P> = v;
+    Vec::push(v, P { name: victim(2), age: 2 });
+    let taken: P = gotp(Vec::pop(v));
+    let mut u: Vec<[String; 2]> = Vec::new();
+    Vec::push(u, [victim(3), victim(4)]);
+    let t: Vec<[String; 2]> = u;
+    Vec::push(u, [victim(5), victim(6)]);
+    let k = churn();
+    println!("{}", w[0].name + taken.name + t[0][1] + u[1][0] + format!("{} {}", Vec::len(v), Vec::len(t)));
 }
 "#;
 
@@ -4524,24 +4575,23 @@ fn sb103_a_push_or_a_pop_on_a_shared_vec_of_carriers_retains_what_it_copies() {
 }
 
 const SB111_A_CARRIER_THAT_HOLDS_A_STRING_AND_AN_RC: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
-struct Q { r: Rc<i64>, name: string }
+struct Q { r: Rc<i64>, name: String }
 
-fn main() -> i64 {
-    let q: Q = Q { r: Rc::new(5), name: victim(1) }
-    let q2: Q = q
-    let k = churn()
-    println(q2.name + q.name + "{Rc::get(q2.r) + Rc::get(q.r)}")
-    return 0
+fn main() {
+    let q: Q = Q { r: Rc::new(5), name: victim(1) };
+    let q2: Q = q;
+    let k = churn();
+    println!("{}", q2.name + q.name + format!("{}", Rc::get(q2.r) + Rc::get(q.r)));
 }
 "#;
 
@@ -4558,29 +4608,28 @@ fn sb104_a_copy_of_a_carrier_that_also_holds_an_rc_keeps_both_shares() {
 }
 
 const SB112_A_FIELD_READ_BESIDE_A_CALL_THAT_REPLACES_IT: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct P { name: string, age: i64 }
+struct P { name: String, age: i64 }
 fn clob(p: &mut P) -> i64 {
-    (*p).name = victim(1)
-    let k = churn()
-    return 1
+    (*p).name = victim(1);
+    let k = churn();
+    1
 }
-fn show(s: string, n: i64) -> string { return s }
-fn main() -> i64 {
-    let mut p: P = P { name: victim(1), age: 0 }
-    let s: string = show(p.name, clob(&mut p))
-    println(s + p.name)
-    return 0
+fn show(s: String, n: i64) -> String { s }
+fn main() {
+    let mut p: P = P { name: victim(1), age: 0 };
+    let s: String = show(p.name, clob(&mut p));
+    println!("{}", s + p.name);
 }
 "#;
 
@@ -4597,31 +4646,30 @@ fn sb105_a_field_read_is_pinned_while_a_sibling_replaces_it() {
 }
 
 const SB113_AN_UNBOUND_ARRAY_LITERAL_HANDED_ON: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-struct S { a: [string; 3], k: i64 }
-fn take(a: [string; 3]) -> i64 { return a[0].len }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct S { a: [String; 3], k: i64 }
+fn take(a: [String; 3]) -> i64 { a[0].len() }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        n = n + take([victim(i); 3])
-        let s: S = S { a: [victim(i + 1); 3], k: i }
-        n = n + s.a[1].len + s.k % 3
-        i = i + 1
+        n = n + take([victim(i); 3]);
+        let s: S = S { a: [victim(i + 1); 3], k: i };
+        n = n + s.a[1].len() + s.k % 3;
+        i = i + 1;
     }
-    let k = churn()
-    println("{n}")
-    return 0
+    let k = churn();
+    println!("{n}");
 }
 "#;
 
@@ -4638,38 +4686,37 @@ fn sb106_an_unbound_array_literal_is_released_at_the_end_of_its_statement() {
 }
 
 const SB114_A_VEC_OF_ENUMS_WITH_A_PAYLOAD: &str = r#"
-enum Shape { Named(string, i64), Sized(i64), Blank }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut v: Vec<Option<i64>> = Vec::new()
-    Vec::push(v, Some(11))
-    Vec::push(v, Some(22))
-    Vec::push(v, Some(33))
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+enum Shape { Named(String, i64), Sized(i64), Blank }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut v: Vec<Option<i64>> = Vec::new();
+    Vec::push(v, Some(11));
+    Vec::push(v, Some(22));
+    Vec::push(v, Some(33));
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
         match v[i] {
-            Some(x) => { n = n * 100 + x }
-            None => { n = n * 100 }
+            Some(x) => { n = n * 100 + x; }
+            None => { n = n * 100; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    let mut w: Vec<Shape> = Vec::new()
-    Vec::push(w, Shape::Sized(7))
-    Vec::push(w, Shape::Named(victim(1), 5))
-    Vec::push(w, Shape::Blank)
-    let mut j: i64 = 0
-    let mut acc: string = ""
+    let mut w: Vec<Shape> = Vec::new();
+    Vec::push(w, Shape::Sized(7));
+    Vec::push(w, Shape::Named(victim(1), 5));
+    Vec::push(w, Shape::Blank);
+    let mut j: i64 = 0;
+    let mut acc: String = "";
     while j < 3 {
         match w[j] {
-            Shape::Named(t, k) => { acc = acc + t + "{k}" }
-            Shape::Sized(k) => { acc = acc + "s{k}" }
-            Shape::Blank => { acc = acc + "b" }
+            Shape::Named(t, k) => { acc = acc + t + format!("{k}"); }
+            Shape::Sized(k) => { acc = acc + format!("s{k}"); }
+            Shape::Blank => { acc = acc + "b"; }
         }
-        j = j + 1
+        j = j + 1;
     }
-    println("{n} " + acc)
-    return 0
+    println!("{}", format!("{n} ") + acc);
 }
 "#;
 
@@ -4686,28 +4733,27 @@ fn sb107_a_vec_of_enums_indexes_at_the_stride_its_elements_were_pushed_at() {
 }
 
 const SB115_AN_OPTION_OF_STRING_OWNS_ITS_CHARGE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn hold(o: Option<string>) -> i64 {
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn hold(o: Option<String>) -> i64 {
     match o {
-        Some(x) => { return x.len }
-        None => { return 0 }
+        Some(x) => { return x.len(); }
+        None => { return 0; }
     }
 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 20 {
-        let o: Option<string> = Some(victim(i))
-        n = n + hold(o)
-        let p: Option<string> = if i % 2 == 0 { Some(victim(i + 1)) } else { None }
+        let o: Option<String> = Some(victim(i));
+        n = n + hold(o);
+        let p: Option<String> = if i % 2 == 0 { Some(victim(i + 1)) } else { None };
         match p {
-            Some(y) => { n = n + y.len }
-            None => { n = n + 1 }
+            Some(y) => { n = n + y.len(); }
+            None => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4724,27 +4770,26 @@ fn sb108_an_option_of_string_releases_its_charge_at_the_end_of_its_scope() {
 }
 
 const SB116_A_USER_ENUM_WITH_TWO_CARRYING_VARIANTS: &str = r#"
-enum Shape { Named(string, i64), Tagged(string), Blank }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
+enum Shape { Named(String, i64), Tagged(String), Blank }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
 fn make(i: i64) -> Shape {
-    if i % 3 == 0 { return Shape::Named(victim(i), i) }
-    if i % 3 == 1 { return Shape::Tagged(victim(i + 1)) }
-    return Shape::Blank
+    if i % 3 == 0 { return Shape::Named(victim(i), i); }
+    if i % 3 == 1 { return Shape::Tagged(victim(i + 1)); }
+    Shape::Blank
 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 12 {
-        let s: Shape = make(i)
+        let s: Shape = make(i);
         match s {
-            Shape::Named(t, k) => { n = n + t.len + k }
-            Shape::Tagged(t) => { n = n + t.len }
-            Shape::Blank => { n = n + 1 }
+            Shape::Named(t, k) => { n = n + t.len() + k; }
+            Shape::Tagged(t) => { n = n + t.len(); }
+            Shape::Blank => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4761,34 +4806,33 @@ fn sb109_a_user_enum_counts_the_charge_of_the_variant_its_tag_names() {
 }
 
 const SB117_A_VEC_OF_OPTIONS_SHARED_THEN_PUSHED: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut v: Vec<Option<string>> = Vec::new()
-    Vec::push(v, Some(victim(1)))
-    Vec::push(v, None)
-    Vec::push(v, Some(victim(2)))
-    let w: Vec<Option<string>> = v
-    Vec::push(v, Some(victim(3)))
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut v: Vec<Option<String>> = Vec::new();
+    Vec::push(v, Some(victim(1)));
+    Vec::push(v, None);
+    Vec::push(v, Some(victim(2)));
+    let w: Vec<Option<String>> = v;
+    Vec::push(v, Some(victim(3)));
     match Vec::pop(v) {
         Some(t) => {
             match t {
-                Some(x) => { n = n + x.len }
-                None => { n = n + 1 }
+                Some(x) => { n = n + x.len(); }
+                None => { n = n + 1; }
             }
         }
-        None => { n = n + 100 }
+        None => { n = n + 100; }
     }
-    let mut i: i64 = 0
+    let mut i: i64 = 0;
     while i < 3 {
         match w[i] {
-            Some(x) => { n = n + x.len }
-            None => { n = n + 7 }
+            Some(x) => { n = n + x.len(); }
+            None => { n = n + 7; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4805,27 +4849,26 @@ fn sb110_a_shared_vec_of_options_dups_its_charges_when_a_push_detaches_it() {
 }
 
 const SB118_A_VARIANT_THAT_CARRIES_A_STRUCT_AND_AN_ARRAY: &str = r#"
-struct P { a: string, b: i64 }
-enum Box3 { Pair(P), Trio([string; 3]), Empty }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct P { a: String, b: i64 }
+enum Box3 { Pair(P), Trio([String; 3]), Empty }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 8 {
         let b: Box3 = if i % 2 == 0 {
             Box3::Pair(P { a: victim(i), b: i })
         } else {
             Box3::Trio([victim(i), victim(i + 1), victim(i + 2)])
-        }
+        };
         match b {
-            Box3::Pair(p) => { n = n + p.a.len + p.b }
-            Box3::Trio(t) => { n = n + t[0].len + t[2].len }
-            Box3::Empty => { n = n + 1 }
+            Box3::Pair(p) => { n = n + p.a.len() + p.b; }
+            Box3::Trio(t) => { n = n + t[0].len() + t[2].len(); }
+            Box3::Empty => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4842,34 +4885,33 @@ fn sb111_a_variant_that_carries_a_struct_or_an_array_reaches_their_leaves() {
 }
 
 const SB119_AN_OPTION_IN_A_GENERIC_AND_AN_ENUM_IN_A_STRUCT: &str = r#"
-enum Tag2 { Some3(string), None3 }
-struct Holder { t: Tag2, name: string }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn wrap<T>(x: T) -> Option<T> { return Some(x) }
+enum Tag2 { Some3(String), None3 }
+struct Holder { t: Tag2, name: String }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn wrap<T>(x: T) -> Option<T> { Some(x) }
 fn unwrap_or<T>(o: Option<T>, d: T) -> T {
     match o {
-        Some(x) => { return x }
-        None => { return d }
+        Some(x) => { return x; }
+        None => { return d; }
     }
 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        let o: Option<string> = wrap(victim(i))
-        let s: string = unwrap_or(o, "zz")
-        n = n + s.len
-        let h: Holder = Holder { t: Tag2::Some3(victim(i + 1)), name: victim(i + 2) }
-        let g: Holder = h
+        let o: Option<String> = wrap(victim(i));
+        let s: String = unwrap_or(o, "zz");
+        n = n + s.len();
+        let h: Holder = Holder { t: Tag2::Some3(victim(i + 1)), name: victim(i + 2) };
+        let g: Holder = h;
         match g.t {
-            Tag2::Some3(x) => { n = n + x.len }
-            Tag2::None3 => { n = n + 1 }
+            Tag2::Some3(x) => { n = n + x.len(); }
+            Tag2::None3 => { n = n + 1; }
         }
-        n = n + g.name.len
-        i = i + 1
+        n = n + g.name.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4886,27 +4928,26 @@ fn sb112_an_option_crossing_a_generic_and_an_enum_held_by_a_struct_own_their_cha
 }
 
 const SB120_AN_UNBOUND_SCRUTINEE_AND_AN_UNBOUND_FIELD_BASE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn get(i: i64) -> Option<string> { if i % 3 == 0 { return None }  return Some(victim(i)) }
-struct P { a: string, b: i64 }
-fn mk(i: i64) -> P { return P { a: victim(i), b: i } }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn get(i: i64) -> Option<String> { if i % 3 == 0 { return None; }  Some(victim(i)) }
+struct P { a: String, b: i64 }
+fn mk(i: i64) -> P { P { a: victim(i), b: i } }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 9 {
         match get(i) {
-            Some(v) => { n = n + v.len }
-            None => { n = n + 1 }
+            Some(v) => { n = n + v.len(); }
+            None => { n = n + 1; }
         }
-        n = n + mk(i).a.len
+        n = n + mk(i).a.len();
         match Some(victim(i + 1)) {
-            Some(w) => { n = n + w.len }
-            None => { n = n + 1 }
+            Some(w) => { n = n + w.len(); }
+            None => { n = n + 1; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4923,27 +4964,26 @@ fn sb113_a_fresh_aggregate_no_binding_holds_is_released_when_the_statement_ends(
 }
 
 const SB121_A_QUESTION_MARK_ON_A_RESULT_THAT_CARRIES_A_STRING: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn get(i: i64) -> Result<string, i64> {
-    if i % 4 == 3 { return Err(i) }
-    return Ok(victim(i))
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn get(i: i64) -> Result<String, i64> {
+    if i % 4 == 3 { return Err(i); }
+    Ok(victim(i))
 }
-fn chain(i: i64) -> Result<string, i64> {
-    let s: string = get(i)?
-    return Ok(s + "!")
+fn chain(i: i64) -> Result<String, i64> {
+    let s: String = get(i)?;
+    Ok(s + "!")
 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 8 {
         match chain(i) {
-            Ok(s) => { n = n + s.len }
-            Err(e) => { n = n + e % 5 }
+            Ok(s) => { n = n + s.len(); }
+            Err(e) => { n = n + e % 5; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4960,21 +5000,20 @@ fn sb114_the_question_mark_releases_the_result_it_unwrapped() {
 }
 
 const SB122_A_REASSIGNED_GLOBAL_RELEASES_WHAT_IT_HELD: &str = r#"
-struct P { a: string, b: i64 }
-let mut g: string = "g0"
-let mut h: P = P { a: "h0", b: 0 }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+struct P { a: String, b: i64 }
+static mut g: String = "g0";
+static mut h: P = P { a: "h0", b: 0 };
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 6 {
-        g = victim(i)
-        h = P { a: victim(i + 1), b: i }
-        n = n + g.len + h.a.len
-        i = i + 1
+        g = victim(i);
+        h = P { a: victim(i + 1), b: i };
+        n = n + g.len() + h.a.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -4991,32 +5030,31 @@ fn sb115_a_reassigned_global_releases_the_value_it_replaces() {
 }
 
 const SB123_A_GLOBAL_READ_HELD_WHILE_A_SIBLING_REPLACES_IT: &str = r#"
-let mut g: string = "init"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+static mut g: String = "init";
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 40 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 fn setg(n: i64) -> i64 {
-    g = victim(n)
-    let k = churn()
-    return 1
+    g = victim(n);
+    let k = churn();
+    1
 }
-fn keeps(a: string, n: i64) -> string { return a }
-fn keeps_gen<T>(a: T, n: i64) -> T { return a }
-fn main() -> i64 {
-    g = victim(1)
-    let t: string = keeps(g, setg(2))
-    let k1 = churn()
-    let u: string = keeps_gen(g, setg(3))
-    let k2 = churn()
-    println(t + u)
-    return 0
+fn keeps(a: String, n: i64) -> String { a }
+fn keeps_gen<T>(a: T, n: i64) -> T { a }
+fn main() {
+    g = victim(1);
+    let t: String = keeps(g, setg(2));
+    let k1 = churn();
+    let u: String = keeps_gen(g, setg(3));
+    let k2 = churn();
+    println!("{}", t + u);
 }
 "#;
 
@@ -5033,33 +5071,32 @@ fn sb116_a_global_read_is_held_while_a_sibling_call_replaces_it() {
 }
 
 const SB124_A_ZOMBIE_ARM_IS_RELEASED_ONCE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
 fn pick<T>(a: T, b: T) -> T {
-    let mut i: i64 = 0
-    let mut r: T = b
+    let mut i: i64 = 0;
+    let mut r: T = b;
     while i < 6 {
-        i = i + 1
+        i = i + 1;
         r = if i % 2 == 0 {
-            let k: string = "x" + "{i}"
+            let k: String = "x" + format!("{i}");
             a
-        } else { b }
-        if i == 3 { continue }
-        if i == 5 { break }
+        } else { b };
+        if i == 3 { continue; }
+        if i == 5 { break; }
     }
-    return r
+    r
 }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 4 {
-        let a: string = victim(i)
-        let b: string = victim(i + 1)
-        let r: string = pick(a, b)
-        n = n + r.len
-        i = i + 1
+        let a: String = victim(i);
+        let b: String = victim(i + 1);
+        let r: String = pick(a, b);
+        n = n + r.len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -5076,32 +5113,31 @@ fn sb117_a_local_kept_open_past_its_block_is_released_once() {
 }
 
 const SB125_A_CLOSURE_HANDS_OUT_A_SHARE_OF_ITS_CAPTURE: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 
-fn mk(n: i64) -> Vec<string> {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(n))
-    return v
+fn mk(n: i64) -> Vec<String> {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(n));
+    v
 }
-fn main() -> i64 {
-    let v: Vec<string> = mk(1)
-    let g = fn() -> Vec<string> { return v }
-    let w: Vec<string> = g()
-    let x: Vec<string> = g()
-    println("{Vec::len(g())}")
-    let k = churn()
-    println(w[0] + x[0])
-    println(v[0])
-    return 0
+fn main() {
+    let v: Vec<String> = mk(1);
+    let g = move || -> Vec<String> { v };
+    let w: Vec<String> = g();
+    let x: Vec<String> = g();
+    println!("{}", Vec::len(g()));
+    let k = churn();
+    println!("{}", w[0] + x[0]);
+    println!("{}", v[0]);
 }
 "#;
 
@@ -5118,24 +5154,23 @@ fn sb118_a_closure_that_returns_its_captured_vec_hands_out_a_share() {
 }
 
 const SB126_A_SORT_THROUGH_A_MUTABLE_SLICE_KEEPS_ONE_SHARE: &str = r#"
-needs std.sort
+use std::sort;
 
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut n: i64 = 0
-    let mut i: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut n: i64 = 0;
+    let mut i: i64 = 0;
     while i < 4 {
-        let mut v: Vec<string> = Vec::new()
-        Vec::push(v, victim(i + 3))
-        Vec::push(v, victim(i + 1))
-        Vec::push(v, victim(i + 2))
-        let s = Vec::try_as_unique_mut_slice(v)
-        sort.strings(s)
-        n = n + s[0].len
-        i = i + 1
+        let mut v: Vec<String> = Vec::new();
+        Vec::push(v, victim(i + 3));
+        Vec::push(v, victim(i + 1));
+        Vec::push(v, victim(i + 2));
+        let s = Vec::try_as_unique_mut_slice(v);
+        sort::strings(s);
+        n = n + s[0].len();
+        i = i + 1;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 

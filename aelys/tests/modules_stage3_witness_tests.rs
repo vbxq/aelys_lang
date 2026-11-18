@@ -199,10 +199,10 @@ fn reject_row(id: &str, files: Files, says: &[&str], points_at: &[&str], absent:
 }
 
 
-const CLEAN: &str = "pub nogc fn clean(n: i64) -> i64 {\n    return n + 1\n}\n";
-const PLAIN: &str = "pub fn plain(n: i64) -> i64 {\n    return n + 1\n}\n";
+const CLEAN: &str = "pub nogc fn clean(n: i64) -> i64 {\n    n + 1\n}\n";
+const PLAIN: &str = "pub fn plain(n: i64) -> i64 {\n    n + 1\n}\n";
 const ALLOCATES: &str =
-    "pub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n";
+    "pub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n";
 
 #[test]
 fn group_mod_e1_nogc_reaches_an_imported_nogc_function() {
@@ -211,7 +211,7 @@ fn group_mod_e1_nogc_reaches_an_imported_nogc_function() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.clean(6)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::clean(6)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             ("m.aelys", CLEAN),
         ],
@@ -226,7 +226,7 @@ fn group_mod_e2_nogc_reaches_an_imported_effect_free_function() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.plain(7)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::plain(7)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             ("m.aelys", PLAIN),
         ],
@@ -241,9 +241,9 @@ fn group_mod_e6_nogc_reaches_the_trivial_spelling() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    m.tick()\n    return 0\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::tick();\n    0\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
-            ("m.aelys", "pub nogc fn tick() -> i64 {\n    return 0\n}\n"),
+            ("m.aelys", "pub nogc fn tick() -> i64 {\n    0\n}\n"),
         ],
         0,
     );
@@ -256,11 +256,11 @@ fn group_mod_e9_an_unreached_allocator_does_not_taint_its_module() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.plain(4)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::plain(4)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn plain(n: i64) -> i64 {\n    return n + 1\n}\n\npub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+                "pub fn plain(n: i64) -> i64 {\n    n + 1\n}\n\npub fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n",
             ),
         ],
         5,
@@ -274,7 +274,7 @@ fn group_mod_e3_a_reached_allocator_is_named_in_the_chain() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.allocates()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::allocates()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             ("m.aelys", ALLOCATES),
         ],
@@ -291,11 +291,11 @@ fn group_mod_e4_a_two_hop_chain_names_its_first_hop() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.middle()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::middle()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "needs deep\n\npub fn middle() -> i64 {\n    return deep.allocates()\n}\n",
+                "mod deep;\n\npub fn middle() -> i64 {\n    deep::allocates()\n}\n",
             ),
             ("deep.aelys", ALLOCATES),
         ],
@@ -312,11 +312,11 @@ fn group_mod_e5_a_lying_nogc_is_caught_in_its_own_module() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.leaky()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::leaky() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub nogc fn leaky() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+                "pub nogc fn leaky() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n",
             ),
         ],
         &["[E0727]", "leaky -> Vec::new"],
@@ -330,11 +330,11 @@ fn group_mod_e7_an_elided_allocation_still_carries_its_effect() {
     let files: Files = &[
         (
             "root.aelys",
-            "needs m\n\nnogc fn pure() -> i64 {\n    return m.dead()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::dead()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
         ),
         (
             "m.aelys",
-            "pub fn dead() -> i64 {\n    if false {\n        let v: vec<i64> = Vec::new()\n        return 1\n    }\n    return 0\n}\n",
+            "pub fn dead() -> i64 {\n    if false {\n        let v: vec<i64> = Vec::new();\n        return 1;\n    }\n    0\n}\n",
         ),
     ];
     for (level, opt) in LEVELS {
@@ -353,11 +353,11 @@ fn group_mod_e8_a_lambda_inside_the_imported_module_still_taints_it() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.outer()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::outer()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn outer() -> i64 {\n    let f = fn() -> i64 {\n        let v: vec<i64> = Vec::new()\n        return 0\n    }\n    return f()\n}\n",
+                "pub fn outer() -> i64 {\n    let f = move || -> i64 {\n        let v: vec<i64> = Vec::new();\n        0\n    };\n    f()\n}\n",
             ),
         ],
         &["[E0727]", "pure -> m.outer"],
@@ -373,9 +373,9 @@ fn group_mod_e10_an_imported_nogc_function_is_a_nogc_value() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn call(f: nogc fn() -> i64) -> i64 {\n    return f()\n}\n\nfn main() -> i64 {\n    return call(m.clean)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn call(f: nogc fn() -> i64) -> i64 {\n    f()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(call(m::clean) as u8);\n}\n",
             ),
-            ("m.aelys", "pub nogc fn clean() -> i64 {\n    return 5\n}\n"),
+            ("m.aelys", "pub nogc fn clean() -> i64 {\n    5\n}\n"),
         ],
         5,
     );
@@ -389,7 +389,7 @@ fn group_mod_e11_an_imported_allocator_is_not_a_nogc_value() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn call(f: nogc fn() -> i64) -> i64 {\n    return f()\n}\n\nfn main() -> i64 {\n    return call(m.allocates)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn call(f: nogc fn() -> i64) -> i64 {\n    f()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(call(m::allocates) as u8);\n}\n",
             ),
             ("m.aelys", ALLOCATES),
         ],
@@ -406,11 +406,11 @@ fn group_mod_e12_an_effect_that_is_not_managed_does_not_close_the_boundary() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.div(6, 2)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::div(6, 2)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn div(a: i64, b: i64) -> i64 {\n    return a / b\n}\n",
+                "pub fn div(a: i64, b: i64) -> i64 {\n    a / b\n}\n",
             ),
         ],
         3,
@@ -424,11 +424,11 @@ fn group_mod_e13_an_allocation_spelt_rc_is_still_an_allocation() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.boxed()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::boxed()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn boxed() -> i64 {\n    let r = Rc::new(1)\n    return 0\n}\n",
+                "pub fn boxed() -> i64 {\n    let r = Rc::new(1);\n    0\n}\n",
             ),
         ],
         &["[E0727]", "pure -> m.boxed -> Rc::new"],
@@ -444,11 +444,11 @@ fn group_mod_e14_an_allocation_deeper_inside_the_module_still_taints_it() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.feed()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::feed()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "fn inner() -> i64 {\n    let xs: vec<i64> = Vec::new()\n    return 0\n}\n\npub fn feed() -> i64 {\n    return inner()\n}\n",
+                "fn inner() -> i64 {\n    let xs: vec<i64> = Vec::new();\n    0\n}\n\npub fn feed() -> i64 {\n    inner()\n}\n",
             ),
         ],
         &["[E0727]", "pure -> m.feed"],
@@ -464,9 +464,9 @@ fn group_mod_e15_an_imported_generic_is_reachable_from_nogc() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.ident(4)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::ident(4)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn ident<T>(v: T) -> T {\n    return v\n}\n"),
+            ("m.aelys", "pub fn ident<T>(v: T) -> T {\n    v\n}\n"),
         ],
         4,
     );
@@ -480,11 +480,11 @@ fn group_mod_e16_a_homonym_in_the_root_does_not_clear_the_imported_one() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn helper() -> i64 {\n    return 0\n}\n\nnogc fn pure() -> i64 {\n    return m.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn helper() -> i64 {\n    0\n}\n\nnogc fn pure() -> i64 {\n    m::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n",
+                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n",
             ),
         ],
         &["[E0727]", "pure -> m.helper"],
@@ -500,9 +500,9 @@ fn group_mod_e17_the_imported_homonym_is_the_one_that_runs() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 1\n}\n\nnogc fn pure() -> i64 {\n    return m.helper()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    1\n}\n\nnogc fn pure() -> i64 {\n    m::helper()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn helper() -> i64 {\n    return 6\n}\n"),
+            ("m.aelys", "pub fn helper() -> i64 {\n    6\n}\n"),
         ],
         6,
     );
@@ -513,7 +513,7 @@ fn group_mod_e17_the_imported_homonym_is_the_one_that_runs() {
 fn group_mod_e7b_a_single_file_elided_allocation_still_carries_its_effect() {
     let files: Files = &[(
         "root.aelys",
-        "fn dead() -> i64 {\n    if false {\n        let v: vec<i64> = Vec::new()\n        return 1\n    }\n    return 0\n}\n\nnogc fn pure() -> i64 {\n    return dead()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+        "use std::process::ExitCode; fn dead() -> i64 {\n    if false {\n        let v: vec<i64> = Vec::new();\n        return 1;\n    }\n    0\n}\n\nnogc fn pure() -> i64 {\n    dead()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
     )];
     for (level, opt) in LEVELS {
         let dir = stage(files);
@@ -525,7 +525,7 @@ fn group_mod_e7b_a_single_file_elided_allocation_still_carries_its_effect() {
 }
 
 
-const RESOURCE_MODULE: &str = "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    return Resource { id: n }\n}\n";
+const RESOURCE_MODULE: &str = "pub struct Resource { pub id: i64 }\n\npub fn make(n: i64) -> Resource {\n    Resource { id: n }\n}\n";
 
 #[test]
 fn group_mod_a1_an_imported_affine_type_keeps_its_affineness() {
@@ -534,7 +534,7 @@ fn group_mod_a1_an_imported_affine_type_keeps_its_affineness() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn leak() -> i64 {\n    let a = m.make(1)\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn leak() -> i64 {\n    let a = m::make(1);\n    let b = a;\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(leak() as u8);\n}\n",
             ),
             ("m.aelys", RESOURCE_MODULE),
         ],
@@ -551,11 +551,11 @@ fn group_mod_a2_the_move_is_caught_inside_the_defining_module() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.leak()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::leak() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct Resource { id: i64 }\n\npub fn leak() -> i64 {\n    let a = Resource { id: 1 }\n    let b = a\n    return a.id\n}\n",
+                "struct Resource { id: i64 }\n\npub fn leak() -> i64 {\n    let a = Resource { id: 1 };\n    let b = a;\n    a.id\n}\n",
             ),
         ],
         &["[E0701]"],
@@ -570,7 +570,7 @@ fn group_mod_a3_the_single_file_move_is_still_caught() {
         "A-3",
         &[(
             "root.aelys",
-            "struct Resource { id: i64 }\n\nfn leak() -> i64 {\n    let a = Resource { id: 1 }\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+            "use std::process::ExitCode; struct Resource { id: i64 }\n\nfn leak() -> i64 {\n    let a = Resource { id: 1 };\n    let b = a;\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(leak() as u8);\n}\n",
         )],
         &["[E0701]"],
         &[],
@@ -585,7 +585,7 @@ fn group_mod_a4_one_move_of_an_imported_affine_type_is_kept() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let a = m.make(9)\n    let b = a\n    return b.id\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let a = m::make(9);\n    let b = a;\n    return ExitCode::from(b.id as u8);\n}\n",
             ),
             ("m.aelys", RESOURCE_MODULE),
         ],
@@ -600,11 +600,11 @@ fn group_mod_a5_affineness_survives_two_module_hops() {
         &[
             (
                 "root.aelys",
-                "needs mid\n\nfn main() -> i64 {\n    return mid.leak()\n}\n",
+                "use std::process::ExitCode; mod mid;\n\nfn main() -> ExitCode {\n    return ExitCode::from(mid::leak() as u8);\n}\n",
             ),
             (
                 "mid.aelys",
-                "needs deep\n\npub fn leak() -> i64 {\n    let a = deep.make(1)\n    let b = a\n    return a.id\n}\n",
+                "mod deep;\n\npub fn leak() -> i64 {\n    let a = deep::make(1);\n    let b = a;\n    a.id\n}\n",
             ),
             ("deep.aelys", RESOURCE_MODULE),
         ],
@@ -622,11 +622,11 @@ fn group_mod_a6_a_plain_imported_struct_moves_freely() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let a = m.make(3)\n    let b = a\n    let c = b\n    return c.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let a = m::make(3);\n    let b = a;\n    let c = b;\n    return ExitCode::from(c.v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct Plain { pub v: i64 }\n\npub fn make(n: i64) -> Plain {\n    return Plain { v: n }\n}\n",
+                "pub struct Plain { pub v: i64 }\n\npub fn make(n: i64) -> Plain {\n    Plain { v: n }\n}\n",
             ),
         ],
         3,
@@ -641,11 +641,11 @@ fn group_mod_b1_a_returned_reference_to_a_dead_local_still_rejects() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn make_dangle() -> &i64 {\n    let x: i64 = 7\n    return m.pick(&x)\n}\n\nfn main() -> i64 {\n    return *make_dangle()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn make_dangle() -> &i64 {\n    let x: i64 = 7;\n    m::pick(&x)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from((*make_dangle()) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn pick(p: &i64) -> &i64 {\n    return p\n}\n",
+                "pub fn pick(p: &i64) -> &i64 {\n    p\n}\n",
             ),
         ],
         &["[E0723]"],
@@ -661,11 +661,11 @@ fn group_mod_b2_a_shared_borrow_under_a_live_mutable_one_still_rejects() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let mut x: i64 = 7\n    let r = &mut x\n    let v = m.read(&x)\n    *r = 1\n    return v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let mut x: i64 = 7;\n    let r = &mut x;\n    let v = m::read(&x);\n    *r = 1;\n    return ExitCode::from(v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn read(p: &i64) -> i64 {\n    return *p\n}\n",
+                "pub fn read(p: &i64) -> i64 {\n    *p\n}\n",
             ),
         ],
         &["[E0713]"],
@@ -681,11 +681,11 @@ fn group_mod_b3_references_cross_and_are_used() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let mut x: i64 = 7\n    m.bump(&mut x)\n    return m.read(&x)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let mut x: i64 = 7;\n    m::bump(&mut x);\n    return ExitCode::from(m::read(&x) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn read(p: &i64) -> i64 {\n    return *p\n}\n\npub fn bump(p: &mut i64) -> i64 {\n    *p = *p + 1\n    return 0\n}\n",
+                "pub fn read(p: &i64) -> i64 {\n    *p\n}\n\npub fn bump(p: &mut i64) -> i64 {\n    *p = *p + 1;\n    0\n}\n",
             ),
         ],
         8,
@@ -699,7 +699,7 @@ fn group_mod_n2_a_single_file_nogc_call_is_still_accepted() {
         "N-2",
         &[(
             "root.aelys",
-            "fn plain(n: i64) -> i64 {\n    return n + 1\n}\n\nnogc fn pure() -> i64 {\n    return plain(2)\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            "use std::process::ExitCode; fn plain(n: i64) -> i64 {\n    n + 1\n}\n\nnogc fn pure() -> i64 {\n    plain(2)\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
         )],
         3,
     );
@@ -711,7 +711,7 @@ fn group_mod_n3_the_single_file_chain_does_not_degrade() {
         "N-3",
         &[(
             "root.aelys",
-            "fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 0\n}\n\nnogc fn pure() -> i64 {\n    return allocates()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+            "use std::process::ExitCode; fn allocates() -> i64 {\n    let v: vec<i64> = Vec::new();\n    0\n}\n\nnogc fn pure() -> i64 {\n    allocates()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
         )],
         &["[E0727]", "pure -> allocates -> Vec::new"],
         &[],
@@ -728,7 +728,7 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
             &[
                 (
                     "root.aelys",
-                    "needs m\n\nfn main() -> i64 {\n    let b: vec<m.Holder> = Vec::new()\n    return 0\n}\n",
+                    "mod m;\n\nfn main() {\n    let b: vec<m::Holder> = Vec::new();\n}\n",
                 ),
                 ("m.aelys", "pub struct Holder { r: Rc<i64> }\n"),
             ],
@@ -738,7 +738,7 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
             &[
                 (
                     "root.aelys",
-                    "needs m\n\nfn leak() -> i64 {\n    let a = m.make(1)\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+                    "use std::process::ExitCode; mod m;\n\nfn leak() -> i64 {\n    let a = m::make(1);\n    let b = a;\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(leak() as u8);\n}\n",
                 ),
                 ("m.aelys", RESOURCE_MODULE),
             ],
@@ -748,7 +748,7 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
             &[
                 (
                     "root.aelys",
-                    "needs m\n\nnogc fn pure() -> i64 {\n    return m.allocates()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                    "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::allocates()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
                 ),
                 ("m.aelys", ALLOCATES),
             ],
@@ -758,7 +758,7 @@ fn group_mod_q4_no_stage3_rejection_shows_the_qualification_head() {
             &[
                 (
                     "root.aelys",
-                    "needs m\n\nfn main() -> i64 {\n    let q: i64 = m.make(1)\n    return q\n}\n",
+                    "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let q: i64 = m::make(1);\n    return ExitCode::from(q as u8);\n}\n",
                 ),
                 ("m.aelys", RESOURCE_MODULE),
             ],
@@ -781,15 +781,15 @@ const NESTED_COLLIDING: Files = &[
     ),
     (
         "util.aelys",
-        "pub nogc fn helper() -> i64 {\n    return 1\n}\n",
+        "pub nogc fn helper() -> i64 {\n    1\n}\n",
     ),
     (
         "app.aelys",
-        "needs util\n\npub fn go() -> i64 {\n    return util.helper()\n}\n",
+        "mod util;\n\npub fn go() -> i64 {\n    util::helper()\n}\n",
     ),
     (
         "app/util.aelys",
-        "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 42\n}\n",
+        "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    42\n}\n",
     ),
 ];
 
@@ -815,15 +815,15 @@ fn group_mod_k2_the_nested_module_answers_for_itself() {
             ),
             (
                 "util.aelys",
-                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 1\n}\n",
+                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    1\n}\n",
             ),
             (
                 "app.aelys",
-                "needs util\n\npub fn go() -> i64 {\n    return util.helper()\n}\n",
+                "mod util;\n\npub fn go() -> i64 {\n    util::helper()\n}\n",
             ),
             (
                 "app/util.aelys",
-                "pub nogc fn helper() -> i64 {\n    return 40\n}\n",
+                "pub nogc fn helper() -> i64 {\n    40\n}\n",
             ),
         ],
         40,
@@ -842,12 +842,12 @@ fn group_mod_k3_a_module_that_imports_nothing_republishes_nothing() {
             ),
             (
                 "util.aelys",
-                "pub nogc fn helper() -> i64 {\n    return 1\n}\n",
+                "pub nogc fn helper() -> i64 {\n    1\n}\n",
             ),
-            ("app.aelys", "pub fn go() -> i64 {\n    return 0\n}\n"),
+            ("app.aelys", "pub fn go() -> i64 {\n    0\n}\n"),
             (
                 "app/util.aelys",
-                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new()\n    return 42\n}\n",
+                "pub fn helper() -> i64 {\n    let v: vec<i64> = Vec::new();\n    42\n}\n",
             ),
         ],
         &["[E0727]", "pure -> app.util.helper"],
@@ -857,7 +857,7 @@ fn group_mod_k3_a_module_that_imports_nothing_republishes_nothing() {
 }
 
 
-const RC_RESOURCE: &str = "pub struct Resource { pub id: i64, pub r: Rc<i64> }\n\npub fn make(v: i64) -> Resource {\n    return Resource { id: v, r: Rc::new(1) }\n}\n";
+const RC_RESOURCE: &str = "pub struct Resource { pub id: i64, pub r: Rc<i64> }\n\npub fn make(v: i64) -> Resource {\n    Resource { id: v, r: Rc::new(1) }\n}\n";
 
 #[test]
 fn group_mod_m1_an_imported_affine_name_carrying_an_rc_is_managed() {
@@ -866,7 +866,7 @@ fn group_mod_m1_an_imported_affine_name_carrying_an_rc_is_managed() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure(x: m.Resource) -> i64 {\n    return x.id\n}\n\nfn main() -> i64 {\n    let v = m.make(7)\n    return pure(v)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure(x: m::Resource) -> i64 {\n    x.id\n}\n\nfn main() -> ExitCode {\n    let v = m::make(7);\n    return ExitCode::from(pure(v) as u8);\n}\n",
             ),
             ("m.aelys", RC_RESOURCE),
         ],
@@ -882,7 +882,7 @@ fn group_mod_m2_the_single_file_twin_is_rejected_alike() {
         "M-2",
         &[(
             "root.aelys",
-            "struct Resource { id: i64, r: Rc<i64> }\n\nfn make(v: i64) -> Resource {\n    return Resource { id: v, r: Rc::new(1) }\n}\n\nnogc fn pure(x: Resource) -> i64 {\n    return x.id\n}\n\nfn main() -> i64 {\n    let v = make(7)\n    return pure(v)\n}\n",
+            "use std::process::ExitCode; struct Resource { id: i64, r: Rc<i64> }\n\nfn make(v: i64) -> Resource {\n    Resource { id: v, r: Rc::new(1) }\n}\n\nnogc fn pure(x: Resource) -> i64 {\n    x.id\n}\n\nfn main() -> ExitCode {\n    let v = make(7);\n    return ExitCode::from(pure(v) as u8);\n}\n",
         )],
         &["[E0727]", "the managed parameter"],
         &[],
@@ -897,7 +897,7 @@ fn group_mod_m3_a_plain_affine_name_is_still_affine() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn leak() -> i64 {\n    let a = m.make(1)\n    let b = a\n    return a.id\n}\n\nfn main() -> i64 {\n    return leak()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn leak() -> i64 {\n    let a = m::make(1);\n    let b = a;\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(leak() as u8);\n}\n",
             ),
             ("m.aelys", RESOURCE_MODULE),
         ],
@@ -913,7 +913,7 @@ fn group_mod_m4_an_affine_name_carrying_an_rc_is_still_affine() {
         "M-4",
         &[(
             "root.aelys",
-            "struct Resource { id: i64, r: Rc<i64> }\n\nfn main() -> i64 {\n    let a = Resource { id: 3, r: Rc::new(1) }\n    let b = a\n    return a.id\n}\n",
+            "use std::process::ExitCode; struct Resource { id: i64, r: Rc<i64> }\n\nfn main() -> ExitCode {\n    let a = Resource { id: 3, r: Rc::new(1) };\n    let b = a;\n    return ExitCode::from(a.id as u8);\n}\n",
         )],
         &["[E0701]"],
         &[],
@@ -927,7 +927,7 @@ fn group_mod_m5_the_affine_drop_of_such_a_type_still_runs() {
         "M-5",
         &[(
             "root.aelys",
-            "struct Resource { id: i64, r: Rc<i64> }\n\nfn use1() -> i64 {\n    let a = Resource { id: 77, r: Rc::new(1) }\n    return a.id\n}\n\nfn main() -> i64 {\n    return use1()\n}\n",
+            "use std::process::ExitCode; struct Resource { id: i64, r: Rc<i64> }\n\nfn use1() -> i64 {\n    let a = Resource { id: 77, r: Rc::new(1) };\n    a.id\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(use1() as u8);\n}\n",
         )],
         77,
         "77",
@@ -942,7 +942,7 @@ fn group_mod_m6_the_imported_twin_keeps_both_axes() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let a = m.make(3)\n    let b = a\n    return a.id\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let a = m::make(3);\n    let b = a;\n    return ExitCode::from(a.id as u8);\n}\n",
             ),
             ("m.aelys", RC_RESOURCE),
         ],
@@ -960,15 +960,15 @@ fn group_mod_w1_the_chain_is_woven_across_three_modules() {
         &[
             (
                 "root.aelys",
-                "needs mid1\n\nnogc fn pure() -> i64 {\n    return mid1.mid1()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod mid1;\n\nnogc fn pure() -> i64 {\n    mid1::mid1()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "mid1.aelys",
-                "needs mid2\n\npub fn mid1() -> i64 {\n    return mid2.mid2()\n}\n",
+                "mod mid2;\n\npub fn mid1() -> i64 {\n    mid2::mid2()\n}\n",
             ),
             (
                 "mid2.aelys",
-                "needs deep\n\npub fn mid2() -> i64 {\n    return deep.allocates()\n}\n",
+                "mod deep;\n\npub fn mid2() -> i64 {\n    deep::allocates()\n}\n",
             ),
             ("deep.aelys", ALLOCATES),
         ],
@@ -988,11 +988,11 @@ fn group_mod_w2_a_real_indirect_call_is_still_named_indirect() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nnogc fn pure() -> i64 {\n    return m.outer()\n}\n\nfn main() -> i64 {\n    return pure()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nnogc fn pure() -> i64 {\n    m::outer()\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(pure() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn outer() -> i64 {\n    let f = fn() -> i64 {\n        let v: vec<i64> = Vec::new()\n        return 0\n    }\n    return f()\n}\n",
+                "pub fn outer() -> i64 {\n    let f = move || -> i64 {\n        let v: vec<i64> = Vec::new();\n        0\n    };\n    f()\n}\n",
             ),
         ],
         &["[E0727]", "pure -> m.outer -> <indirect call>"],
@@ -1008,11 +1008,11 @@ fn group_mod_w3_a_post_merge_diagnostic_names_the_declaring_file() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.make()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::make() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct Node { next: Node }\n\npub fn make() -> i64 {\n    return 1\n}\n",
+                "pub struct Node { next: Node }\n\npub fn make() -> i64 {\n    1\n}\n",
             ),
         ],
         &["[E0904]", "struct `m.Node` has infinite size"],
@@ -1028,15 +1028,15 @@ fn group_mod_w4_a_joined_message_anchors_on_its_first_error() {
         &[
             (
                 "root.aelys",
-                "needs a\nneeds bb\n\nfn main() -> i64 {\n    return a.f() + bb.g()\n}\n",
+                "use std::process::ExitCode; mod a;\nmod bb;\n\nfn main() -> ExitCode {\n    return ExitCode::from((a::f() + bb::g()) as u8);\n}\n",
             ),
             (
                 "a.aelys",
-                "pub struct Node { next: Node }\n\npub fn f() -> i64 {\n    return 1\n}\n",
+                "pub struct Node { next: Node }\n\npub fn f() -> i64 {\n    1\n}\n",
             ),
             (
                 "bb.aelys",
-                "pub struct Deep { next: Deep }\n\npub fn g() -> i64 {\n    return 2\n}\n",
+                "pub struct Deep { next: Deep }\n\npub fn g() -> i64 {\n    2\n}\n",
             ),
         ],
         &["[E0904]", "struct `a.Node` has infinite size"],

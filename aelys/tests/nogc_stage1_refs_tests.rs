@@ -67,8 +67,8 @@ fn find_core_archive(file: &str) -> Option<PathBuf> {
 fn p1_ref_read_through_shared() {
     let Some(code) = compile_and_run(
         r#"
-fn read(r: &i64) -> i64 { return *r }
-fn main() -> i64 { let x = 41; return read(&x) + 1 }
+use std::process::ExitCode; fn read(r: &i64) -> i64 { *r }
+fn main() -> ExitCode { let x = 41; return ExitCode::from((read(&x) + 1) as u8); }
 "#,
     ) else {
         return;
@@ -80,8 +80,8 @@ fn main() -> i64 { let x = 41; return read(&x) + 1 }
 fn p2_ref_write_through_mut() {
     let Some(code) = compile_and_run(
         r#"
-fn bump(r: &mut i64) { *r = *r + 1 }
-fn main() -> i64 { let mut x = 41; bump(&mut x); return x }
+use std::process::ExitCode; fn bump(r: &mut i64) { *r = *r + 1; }
+fn main() -> ExitCode { let mut x = 41; bump(&mut x); return ExitCode::from(x as u8); }
 "#,
     ) else {
         return;
@@ -93,7 +93,7 @@ fn main() -> i64 { let mut x = 41; bump(&mut x); return x }
 fn p3_slice_array_index_read() {
     let Some(code) = compile_and_run(
         r#"
-fn main() -> i64 { let a = [10, 20, 12]; let s = a[..]; return s[0] + s[2] }
+use std::process::ExitCode; fn main() -> ExitCode { let a = [10, 20, 12]; let s = a[..]; return ExitCode::from((s[0] + s[2]) as u8); }
 "#,
     ) else {
         return;
@@ -106,8 +106,8 @@ fn main() -> i64 { let a = [10, 20, 12]; let s = a[..]; return s[0] + s[2] }
 fn p4_pass_slice_to_fn() {
     let Some(code) = compile_and_run(
         r#"
-fn sum3(s: &[i64]) -> i64 { return s[0] + s[1] + s[2] }
-fn main() -> i64 { let a = [40, 1, 1]; return sum3(a[..]) }
+use std::process::ExitCode; fn sum3(s: &[i64]) -> i64 { s[0] + s[1] + s[2] }
+fn main() -> ExitCode { let a = [40, 1, 1]; return ExitCode::from(sum3(a[..]) as u8); }
 "#,
     ) else {
         return;
@@ -119,8 +119,8 @@ fn main() -> i64 { let a = [40, 1, 1]; return sum3(a[..]) }
 fn p5_write_through_mut_slice() {
     let Some(code) = compile_and_run(
         r#"
-fn set0(s: &mut [i64]) { s[0] = 42 }
-fn main() -> i64 { let mut a = [0, 7, 7]; set0(a[..]); return a[0] }
+use std::process::ExitCode; fn set0(s: &mut [i64]) { s[0] = 42; }
+fn main() -> ExitCode { let mut a = [0, 7, 7]; set0(a[..]); return ExitCode::from(a[0] as u8); }
 "#,
     ) else {
         return;
@@ -129,12 +129,12 @@ fn main() -> i64 { let mut a = [0, 7, 7]; set0(a[..]); return a[0] }
 }
 
 const P6_SRC: &str = r#"
-fn fill(r: &mut i64, s: &[i64]) { *r = s[0] + s[1] }
-fn main() -> i64 {
-    let buf = [7, 8, 9]
-    let mut out = 0
-    fill(&mut out, buf[..])
-    return out
+use std::process::ExitCode; fn fill(r: &mut i64, s: &[i64]) { *r = s[0] + s[1]; }
+fn main() -> ExitCode {
+    let buf = [7, 8, 9];
+    let mut out = 0;
+    fill(&mut out, buf[..]);
+    return ExitCode::from(out as u8);
 }
 "#;
 
@@ -222,17 +222,17 @@ fn p6_asan_clean_probe() {
 
 // regression: a &mut borrow of a mutable local in a loop must invalidate local
 const LOOP_BORROW_SRC: &str = r#"
-fn main() -> i64 {
-    let mut x = 41
-    let mut i = 0
-    let mut acc = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 41;
+    let mut i = 0;
+    let mut acc = 0;
     while i < 2 {
-        acc = acc + x
-        let r = &mut x
-        *r = 100
-        i = i + 1
+        acc = acc + x;
+        let r = &mut x;
+        *r = 100;
+        i = i + 1;
     }
-    return acc
+    return ExitCode::from(acc as u8);
 }
 "#;
 

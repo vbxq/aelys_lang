@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -434,19 +434,18 @@ fn calls_in(src: &str, function: &str, callee: &str) -> usize {
 }
 
 const RC2_1: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String }
 struct W { next: Rc<V> }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.next = Rc::new(V { s: victim(1) })
-    let t: Rc<V> = Rc::new(V { s: other(88888) })
-    return s.bytes[0] + s.len + Rc::get(t).s.len
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.next = Rc::new(V { s: victim(1) });
+    let t: Rc<V> = Rc::new(V { s: other(88888) });
+    s.as_bytes()[0] + s.len() + Rc::get(t).s.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { next: Rc::new(V { s: victim(12345) }) })
-    println("{clobber(a, Rc::get(Rc::get(a).next).s)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { next: Rc::new(V { s: victim(12345) }) });
+    println!("{}", clobber(a, Rc::get(Rc::get(a).next).s));
 }
 "#;
 
@@ -459,19 +458,18 @@ fn rc2_1_a_string_read_through_an_inner_rc_stays_alive_while_the_callee_replaces
 }
 
 const RC2_2: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    let r = &mut Rc::get(h)
-    (*r).s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    let r = &mut Rc::get(h);
+    (*r).s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{clobber(a, Rc::get(a).s)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", clobber(a, Rc::get(a).s));
 }
 "#;
 
@@ -484,18 +482,17 @@ fn rc2_2_a_payload_string_argument_survives_a_callee_writing_through_a_mutable_r
 }
 
 const RC2_3: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = a
-    let bs = Rc::get(a).s.bytes
-    let r = &mut Rc::get(b)
-    (*r).s = victim(1)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = a;
+    let bs = Rc::get(a).s.as_bytes();
+    let r = &mut Rc::get(b);
+    (*r).s = victim(1);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len());
 }
 "#;
 
@@ -508,21 +505,20 @@ fn rc2_3_a_bytes_view_of_a_payload_string_survives_a_write_through_a_mutable_ref
 }
 
 const RC2_4: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string, a: [string; 2] }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String, a: [String; 2] }
 struct W { next: Rc<V> }
 fn clobber(h: Rc<W>) -> i64 {
-    h.next = Rc::new(V { s: victim(1), a: [victim(1), victim(2)] })
-    return 0
+    h.next = Rc::new(V { s: victim(1), a: [victim(1), victim(2)] });
+    0
 }
-fn main() -> i64 {
-    let a = Rc::new(W { next: Rc::new(V { s: victim(12345), a: [victim(1), victim(2)] }) })
-    let bs = a.next.s.bytes
-    let z = clobber(a)
-    let t: Rc<V> = Rc::new(V { s: other(88888), a: [victim(1), victim(2)] })
-    println("{bs[0] + bs.len + z + t.s.len}")
-    return 0
+fn main() {
+    let a = Rc::new(W { next: Rc::new(V { s: victim(12345), a: [victim(1), victim(2)] }) });
+    let bs = a.next.s.as_bytes();
+    let z = clobber(a);
+    let t: Rc<V> = Rc::new(V { s: other(88888), a: [victim(1), victim(2)] });
+    println!("{}", bs[0] + bs.len() + z + t.s.len());
 }
 "#;
 
@@ -535,23 +531,22 @@ fn rc2_4_a_bytes_view_through_an_implicit_inner_rc_survives_that_rc_being_replac
 }
 
 const RC2_5: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string, a: [string; 2] }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String, a: [String; 2] }
 struct W { next: Rc<V> }
 fn clobber(h: Rc<W>) -> i64 {
-    h.next = Rc::new(V { s: victim(1), a: [victim(1), victim(2)] })
-    return 0
+    h.next = Rc::new(V { s: victim(1), a: [victim(1), victim(2)] });
+    0
 }
 fn clob2(h: Rc<W>, n: Rc<V>) -> i64 {
-    let z = clobber(h)
-    let t: Rc<V> = Rc::new(V { s: other(88888), a: [victim(1), victim(2)] })
-    return n.s.bytes[0] + n.s.len + z + t.s.len
+    let z = clobber(h);
+    let t: Rc<V> = Rc::new(V { s: other(88888), a: [victim(1), victim(2)] });
+    n.s.as_bytes()[0] + n.s.len() + z + t.s.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { next: Rc::new(V { s: victim(12345), a: [victim(1), victim(2)] }) })
-    println("{clob2(a, a.next)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { next: Rc::new(V { s: victim(12345), a: [victim(1), victim(2)] }) });
+    println!("{}", clob2(a, a.next));
 }
 "#;
 
@@ -564,19 +559,18 @@ fn rc2_5_an_inner_rc_argument_read_by_implicit_deref_stays_alive_for_the_call() 
 }
 
 const RC2_6: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String }
 struct W { next: Rc<V> }
 fn clobber(h: Rc<W>, n: Rc<V>) -> i64 {
-    h.next = Rc::new(V { s: victim(1) })
-    let t: Rc<V> = Rc::new(V { s: other(88888) })
-    return Rc::get(n).s.bytes[0] + Rc::get(n).s.len + Rc::get(t).s.len
+    h.next = Rc::new(V { s: victim(1) });
+    let t: Rc<V> = Rc::new(V { s: other(88888) });
+    Rc::get(n).s.as_bytes()[0] + Rc::get(n).s.len() + Rc::get(t).s.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { next: Rc::new(V { s: victim(12345) }) })
-    println("{clobber(a, Rc::get(a).next)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { next: Rc::new(V { s: victim(12345) }) });
+    println!("{}", clobber(a, Rc::get(a).next));
 }
 "#;
 
@@ -589,19 +583,18 @@ fn rc2_6_an_inner_rc_argument_read_through_rc_get_stays_alive_for_the_call() {
 }
 
 const RC2_7: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    let r = &mut Rc::get(h)
-    *r = W { s: victim(1) }
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    let r = &mut Rc::get(h);
+    *r = W { s: victim(1) };
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{clobber(a, Rc::get(a).s)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", clobber(a, Rc::get(a).s));
 }
 "#;
 
@@ -614,21 +607,20 @@ fn rc2_7_a_payload_string_argument_survives_the_whole_payload_being_overwritten(
 }
 
 const RC2_8: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-let mut G: string = "seed"
-nogc fn w() { G = "q" }
-nogc fn k(s: string) -> i64 {
-    w()
-    return s.bytes[0] + s.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+static mut G: String = "seed";
+nogc fn w() { G = "q"; }
+nogc fn k(s: String) -> i64 {
+    w();
+    s.as_bytes()[0] + s.len()
 }
-nogc fn f() -> i64 { return k(G) }
-fn main() -> i64 {
-    G = victim(12345)
-    let n = f()
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+nogc fn f() -> i64 { k(G) }
+fn main() {
+    G = victim(12345);
+    let n = f();
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -642,20 +634,19 @@ fn rc2_8_a_nogc_body_keeps_its_share_of_a_global_argument() {
 }
 
 const RC2_9: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct P { s: string, t: string }
-nogc fn k(p: &mut P, x: string) -> i64 {
-    (*p).s = (*p).t
-    return x.bytes[0] + x.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct P { s: String, t: String }
+nogc fn k(p: &mut P, x: String) -> i64 {
+    (*p).s = (*p).t;
+    x.as_bytes()[0] + x.len()
 }
-nogc fn f(p: &mut P) -> i64 { return k(p, (*p).s) }
-fn main() -> i64 {
-    let mut p = P { s: victim(12345), t: victim(1) }
-    let n = f(&mut p)
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+nogc fn f(p: &mut P) -> i64 { k(p, (*p).s) }
+fn main() {
+    let mut p = P { s: victim(12345), t: victim(1) };
+    let n = f(&mut p);
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -669,14 +660,13 @@ fn rc2_9_a_nogc_body_keeps_its_snapshot_of_an_argument_beside_a_mutable_referenc
 }
 
 const RC2_10: &str = r#"
-struct P { s: string }
-nogc fn k(x: string) -> i64 { return x.len }
-nogc fn f(p: &P) -> i64 { return k((*p).s) }
-fn g(p: &P) -> i64 { return k((*p).s) }
-fn main() -> i64 {
-    let p = P { s: "ab" }
-    println("{f(&p) + g(&p)}")
-    return 0
+struct P { s: String }
+nogc fn k(x: String) -> i64 { x.len() }
+nogc fn f(p: &P) -> i64 { k((*p).s) }
+fn g(p: &P) -> i64 { k((*p).s) }
+fn main() {
+    let p = P { s: "ab" };
+    println!("{}", f(&p) + g(&p));
 }
 "#;
 
@@ -687,25 +677,24 @@ fn rc2_10_a_nogc_body_takes_no_new_share_for_an_argument_read_through_a_referenc
 }
 
 const RC2_11: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
 fn clob(h: Rc<W>, n: i64) -> i64 {
-    let r = &mut Rc::get(h)
-    (*r).s = victim(n)
-    return 0
+    let r = &mut Rc::get(h);
+    (*r).s = victim(n);
+    0
 }
 fn by(w: &W, h: Rc<W>) -> &[u8] {
-    let z = clob(h, 1)
-    return (*w).s.bytes
+    let z = clob(h, 1);
+    (*w).s.as_bytes()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let bs = by(&Rc::get(a), a)
-    let z = clob(a, 777777)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len + z}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let bs = by(&Rc::get(a), a);
+    let z = clob(a, 777777);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len() + z);
 }
 "#;
 
@@ -718,27 +707,26 @@ fn rc2_11_a_bound_byte_view_holds_the_string_the_callee_installed_before_returni
 }
 
 const RC2_12: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
 fn clob(h: Rc<W>, n: i64) -> i64 {
-    let r = &mut Rc::get(h)
-    (*r).s = victim(n)
-    return 0
+    let r = &mut Rc::get(h);
+    (*r).s = victim(n);
+    0
 }
 fn by(w: &W, h: Rc<W>) -> &[u8] {
-    let z = clob(h, 1)
-    return (*w).s.bytes
+    let z = clob(h, 1);
+    (*w).s.as_bytes()
 }
-fn use(h: Rc<W>, v: &[u8]) -> i64 {
-    let z = clob(h, 777777)
-    let t: string = other(88888)
-    return v[0] + v.len + t.len + z
+fn r#use(h: Rc<W>, v: &[u8]) -> i64 {
+    let z = clob(h, 777777);
+    let t: String = other(88888);
+    v[0] + v.len() + t.len() + z
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{use(a, by(&Rc::get(a), a))}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", r#use(a, by(&Rc::get(a), a)));
 }
 "#;
 
@@ -751,28 +739,27 @@ fn rc2_12_a_byte_view_argument_holds_the_string_the_callee_installed_before_retu
 }
 
 const RC2_13: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
 fn clob(h: Rc<W>, n: i64) -> i64 {
-    let r = &mut Rc::get(h)
-    (*r).s = victim(n)
-    return 0
+    let r = &mut Rc::get(h);
+    (*r).s = victim(n);
+    0
 }
 fn by(w: &W, h: Rc<W>) -> &[u8] {
-    let z = clob(h, 1)
-    return (*w).s.bytes
+    let z = clob(h, 1);
+    (*w).s.as_bytes()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let mut n: i64 = 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let mut n: i64 = 0;
     for b in by(&Rc::get(a), a) {
-        let z = clob(a, 777777)
-        let t: string = other(88888)
-        n = n + b + z
+        let z = clob(a, 777777);
+        let t: String = other(88888);
+        n = n + b + z;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -785,21 +772,20 @@ fn rc2_13_a_for_over_a_byte_view_holds_the_string_the_callee_installed_before_re
 }
 
 const RC2_14: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-let mut G: string = "seed"
-nogc fn w() { G = "q" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+static mut G: String = "seed";
+nogc fn w() { G = "q"; }
 nogc fn f() -> i64 {
-    let bs = G.bytes
-    w()
-    return bs[0] + bs.len
+    let bs = G.as_bytes();
+    w();
+    bs[0] + bs.len()
 }
-fn main() -> i64 {
-    G = victim(12345)
-    let n = f()
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+fn main() {
+    G = victim(12345);
+    let n = f();
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -812,24 +798,23 @@ fn rc2_14_a_nogc_bytes_view_of_a_global_survives_the_global_being_replaced() {
 }
 
 const RC2_15: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-let mut G: string = "seed"
-nogc fn w() { G = "q" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+static mut G: String = "seed";
+nogc fn w() { G = "q"; }
 nogc fn f() -> i64 {
-    let mut n: i64 = 0
-    for b in G.bytes {
-        w()
-        n = n + b
+    let mut n: i64 = 0;
+    for b in G.as_bytes() {
+        w();
+        n = n + b;
     }
-    return n
+    n
 }
-fn main() -> i64 {
-    G = victim(12345)
-    let n = f()
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+fn main() {
+    G = victim(12345);
+    let n = f();
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -842,18 +827,17 @@ fn rc2_15_a_nogc_for_over_the_bytes_of_a_global_survives_the_global_being_replac
 }
 
 const RC2_16: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-enum Tag { Named(string), Anon }
-struct Item { name: string, tag: Tag }
-fn name_bytes(it: &Item) -> &[u8] { return (*it).name.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+enum Tag { Named(String), Anon }
+struct Item { name: String, tag: Tag }
+fn name_bytes(it: &Item) -> &[u8] { (*it).name.as_bytes() }
 fn count(it: &Item) -> i64 {
-    let bs = name_bytes(it)
-    return bs.len
+    let bs = name_bytes(it);
+    bs.len()
 }
-fn main() -> i64 {
-    let it = Item { name: victim(12345), tag: Tag::Named(victim(1)) }
-    println("{count(&it)}")
-    return 0
+fn main() {
+    let it = Item { name: victim(12345), tag: Tag::Named(victim(1)) };
+    println!("{}", count(&it));
 }
 "#;
 
@@ -866,18 +850,17 @@ fn rc2_16_a_byte_view_from_a_reference_to_a_struct_holding_an_enum_is_accepted()
 }
 
 const RC2_17: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-struct Rec { a: string, b: string, c: string, d: string, e: string, f: string, g: string, h: string, i: string }
-fn first(r: &Rec) -> &[u8] { return (*r).a.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+struct Rec { a: String, b: String, c: String, d: String, e: String, f: String, g: String, h: String, i: String }
+fn first(r: &Rec) -> &[u8] { (*r).a.as_bytes() }
 fn count(r: &Rec) -> i64 {
-    let mut n: i64 = 0
-    for b in first(r) { n = n + 1 }
-    return n
+    let mut n: i64 = 0;
+    for b in first(r) { n = n + 1; }
+    n
 }
-fn main() -> i64 {
-    let r = Rec { a: victim(1), b: victim(2), c: victim(3), d: victim(4), e: victim(5), f: victim(6), g: victim(7), h: victim(8), i: victim(9) }
-    println("{count(&r)}")
-    return 0
+fn main() {
+    let r = Rec { a: victim(1), b: victim(2), c: victim(3), d: victim(4), e: victim(5), f: victim(6), g: victim(7), h: victim(8), i: victim(9) };
+    println!("{}", count(&r));
 }
 "#;
 
@@ -890,17 +873,16 @@ fn rc2_17_a_byte_view_from_a_reference_to_a_struct_of_nine_strings_is_accepted()
 }
 
 const RC2_18: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-enum Tag { Named(string), Anon }
-fn idr<T>(x: &T) -> &T { return x }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+enum Tag { Named(String), Anon }
+fn idr<T>(x: &T) -> &T { x }
 fn count(t: &Tag) -> i64 {
-    let r = idr(t)
-    return match *r { Tag::Named(s) => s.len, Tag::Anon => 0 }
+    let r = idr(t);
+    match *r { Tag::Named(s) => s.len(), Tag::Anon => 0 }
 }
-fn main() -> i64 {
-    let t = Tag::Named(victim(12345))
-    println("{count(&t)}")
-    return 0
+fn main() {
+    let t = Tag::Named(victim(12345));
+    println!("{}", count(&t));
 }
 "#;
 
@@ -913,18 +895,17 @@ fn rc2_18_a_reference_returned_through_a_generic_identity_is_accepted() {
 }
 
 const RC2_19: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, e: E }
-fn first(w: &W) -> &[u8] { return (*w).s.bytes }
-fn main() -> i64 {
-    let w = W { s: victim(12345), e: E::A(victim(2)) }
-    let p = &w
-    let bs = first(p)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, e: E }
+fn first(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn main() {
+    let w = W { s: victim(12345), e: E::A(victim(2)) };
+    let p = &w;
+    let bs = first(p);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len());
 }
 "#;
 
@@ -937,16 +918,15 @@ fn rc2_19_a_byte_view_through_a_local_reference_to_an_enum_carrier_is_accepted()
 }
 
 const RC2_20: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn head(xs: &[string]) -> &[u8] { return xs[0].bytes }
-fn count(xs: &[string]) -> i64 {
-    let bs = head(xs)
-    return bs.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn head(xs: &[String]) -> &[u8] { xs[0].as_bytes() }
+fn count(xs: &[String]) -> i64 {
+    let bs = head(xs);
+    bs.len()
 }
-fn main() -> i64 {
-    let arr: [string; 2] = [victim(12345), victim(2)]
-    println("{count(arr[0..2])}")
-    return 0
+fn main() {
+    let arr: [String; 2] = [victim(12345), victim(2)];
+    println!("{}", count(arr[0..2]));
 }
 "#;
 
@@ -967,21 +947,20 @@ fn rc2_20_a_byte_view_from_a_slice_of_strings_the_function_does_not_own_is_refus
 }
 
 const RC2_21: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clob(h: Rc<W>) -> string {
-    let r = &mut Rc::get(h)
-    (*r).s = victim(1)
-    let t: string = other(88888)
-    return ""
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clob(h: Rc<W>) -> String {
+    let r = &mut Rc::get(h);
+    (*r).s = victim(1);
+    let t: String = other(88888);
+    ""
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    a.s += clob(a)
-    let t: string = other(77777)
-    println("{a.s.bytes[0] + a.s.len + t.len}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    a.s += clob(a);
+    let t: String = other(77777);
+    println!("{}", a.s.as_bytes()[0] + a.s.len() + t.len());
 }
 "#;
 
@@ -994,21 +973,20 @@ fn rc2_21_a_compound_field_append_keeps_the_old_value_while_the_right_side_repla
 }
 
 const RC2_22: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { a: [string; 2] }
-fn clob(h: Rc<W>) -> string {
-    let r = &mut Rc::get(h)
-    (*r).a[1] = victim(1)
-    let t: string = other(88888)
-    return ""
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { a: [String; 2] }
+fn clob(h: Rc<W>) -> String {
+    let r = &mut Rc::get(h);
+    (*r).a[1] = victim(1);
+    let t: String = other(88888);
+    ""
 }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)] })
-    a.a[1] += clob(a)
-    let t: string = other(77777)
-    println("{a.a[1].bytes[0] + a.a[1].len + t.len}")
-    return 0
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] });
+    a.a[1] += clob(a);
+    let t: String = other(77777);
+    println!("{}", a.a[1].as_bytes()[0] + a.a[1].len() + t.len());
 }
 "#;
 
@@ -1021,20 +999,19 @@ fn rc2_22_a_compound_element_append_keeps_the_old_value_while_the_right_side_rep
 }
 
 const RC2_23: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-let mut G: string = "seed"
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+static mut G: String = "seed";
 fn setg() -> i64 {
-    G = victim(1)
-    return 0
+    G = victim(1);
+    0
 }
-fn main() -> i64 {
-    G = victim(12345)
-    let bs = G.bytes
-    let z = setg()
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len + z}")
-    return 0
+fn main() {
+    G = victim(12345);
+    let bs = G.as_bytes();
+    let z = setg();
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len() + z);
 }
 "#;
 
@@ -1047,21 +1024,20 @@ fn rc2_23_a_bytes_view_of_a_global_survives_a_call_that_replaces_the_global() {
 }
 
 const RC2_24: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn hb(v: &Vec<string>) -> &[u8] { return (*v)[0].bytes }
-fn count(v: &Vec<string>) -> i64 {
-    let bs = hb(v)
-    return bs.len + bs[0]
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn hb(v: &Vec<String>) -> &[u8] { (*v)[0].as_bytes() }
+fn count(v: &Vec<String>) -> i64 {
+    let bs = hb(v);
+    bs.len() + bs[0]
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(12345))
-    let n = count(&v)
-    Vec::push(v, victim(7))
-    let w = v
-    Vec::push(w, victim(8))
-    println("{n} {hb(&v).len} {v.len} {w.len} {v[1]} {w[2]}")
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(12345));
+    let n = count(&v);
+    Vec::push(v, victim(7));
+    let w = v;
+    Vec::push(w, victim(8));
+    println!("{n} {} {} {} {} {}", hb(&v).len(), v.len(), w.len(), v[1], w[2]);
 }
 "#;
 
@@ -1078,19 +1054,18 @@ fn rc2_24_a_byte_view_from_a_vector_of_strings_holds_the_buffer_and_leaves_copy_
 }
 
 const RC2_25: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
 struct W { i: In }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.i.s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.i.s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { i: In { s: victim(12345) } })
-    println("{clobber(a, Rc::get(a).i.s)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { i: In { s: victim(12345) } });
+    println!("{}", clobber(a, Rc::get(a).i.s));
 }
 "#;
 
@@ -1103,18 +1078,17 @@ fn rc2_25_a_nested_field_argument_read_through_rc_get_survives_the_callee_replac
 }
 
 const RC2_26: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{clobber(a, a.s)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", clobber(a, a.s));
 }
 "#;
 
@@ -1127,17 +1101,16 @@ fn rc2_26_a_field_argument_read_through_the_handle_survives_the_callee_replacing
 }
 
 const RC2_27: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = a
-    let bs = a.s.bytes
-    b.s = victim(1)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = a;
+    let bs = a.s.as_bytes();
+    b.s = victim(1);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len());
 }
 "#;
 
@@ -1150,20 +1123,19 @@ fn rc2_27_a_bytes_view_of_a_field_read_through_the_handle_survives_a_store_throu
 }
 
 const RC2_28: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
 struct W { i: In }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.i = In { s: victim(1) }
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.i = In { s: victim(1) };
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn mid(h: Rc<W>) -> i64 { return clobber(h, h.i.s) }
-fn main() -> i64 {
-    let a = Rc::new(W { i: In { s: victim(12345) } })
-    println("{mid(a)}")
-    return 0
+fn mid(h: Rc<W>) -> i64 { clobber(h, h.i.s) }
+fn main() {
+    let a = Rc::new(W { i: In { s: victim(12345) } });
+    println!("{}", mid(a));
 }
 "#;
 
@@ -1176,20 +1148,19 @@ fn rc2_28_a_nested_field_argument_through_a_parameter_handle_survives_its_owner_
 }
 
 const RC2_29: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-fn zero(h: Rc<W>) -> i64 { return 0 }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+fn zero(h: Rc<W>) -> i64 { 0 }
 struct W { f: fn(Rc<W>) -> i64 }
-fn run(h: Rc<W>, f: fn(Rc<W>) -> i64) -> i64 { return f(h) }
-fn main() -> i64 {
-    let s: string = victim(12345)
-    let a = Rc::new(W { f: fn (h: Rc<W>) -> i64 {
-        h.f = zero
-        let t: string = other(88888)
-        return s.len + s.bytes[0] + t.len
-    } })
-    println("{run(a, a.f)}")
-    return 0
+fn run(h: Rc<W>, f: fn(Rc<W>) -> i64) -> i64 { f(h) }
+fn main() {
+    let s: String = victim(12345);
+    let a = Rc::new(W { f: move |h: Rc<W>| -> i64 {
+        h.f = zero;
+        let t: String = other(88888);
+        s.len() + s.as_bytes()[0] + t.len()
+    } });
+    println!("{}", run(a, a.f));
 }
 "#;
 
@@ -1202,28 +1173,27 @@ fn rc2_29_a_closure_field_passed_as_argument_survives_replacing_itself_through_t
 }
 
 const RC2_30: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
-struct W { s: string, a: [string; 2], i: In }
-fn clob(h: Rc<W>) -> string {
-    h.s = victim(1)
-    h.a[1] = victim(1)
-    h.i.s = victim(1)
-    let t: string = other(88888)
-    return ""
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
+struct W { s: String, a: [String; 2], i: In }
+fn clob(h: Rc<W>) -> String {
+    h.s = victim(1);
+    h.a[1] = victim(1);
+    h.i.s = victim(1);
+    let t: String = other(88888);
+    ""
 }
 fn mk() -> Rc<W> {
-    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+    Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
 }
-fn main() -> i64 {
-    let a = mk()
-    a.s += clob(a)
-    let b = mk()
-    b.s = b.s + clob(b)
-    let t: string = other(77777)
-    println("{a.s.bytes[0] + a.s.len + t.len} {b.s.bytes[0] + b.s.len + t.len}")
-    return 0
+fn main() {
+    let a = mk();
+    a.s += clob(a);
+    let b = mk();
+    b.s = b.s + clob(b);
+    let t: String = other(77777);
+    println!("{} {}", a.s.as_bytes()[0] + a.s.len() + t.len(), b.s.as_bytes()[0] + b.s.len() + t.len());
 }
 "#;
 
@@ -1236,28 +1206,27 @@ fn rc2_30_a_compound_field_append_keeps_the_old_value_while_the_callee_writes_th
 }
 
 const RC2_31: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
-struct W { s: string, a: [string; 2], i: In }
-fn clob(h: Rc<W>) -> string {
-    h.s = victim(1)
-    h.a[1] = victim(1)
-    h.i.s = victim(1)
-    let t: string = other(88888)
-    return ""
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
+struct W { s: String, a: [String; 2], i: In }
+fn clob(h: Rc<W>) -> String {
+    h.s = victim(1);
+    h.a[1] = victim(1);
+    h.i.s = victim(1);
+    let t: String = other(88888);
+    ""
 }
 fn mk() -> Rc<W> {
-    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+    Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
 }
-fn main() -> i64 {
-    let a = mk()
-    a.a[1] += clob(a)
-    let b = mk()
-    b.a[1] = b.a[1] + clob(b)
-    let t: string = other(77777)
-    println("{a.a[1].bytes[0] + a.a[1].len + t.len} {b.a[1].bytes[0] + b.a[1].len + t.len}")
-    return 0
+fn main() {
+    let a = mk();
+    a.a[1] += clob(a);
+    let b = mk();
+    b.a[1] = b.a[1] + clob(b);
+    let t: String = other(77777);
+    println!("{} {}", a.a[1].as_bytes()[0] + a.a[1].len() + t.len(), b.a[1].as_bytes()[0] + b.a[1].len() + t.len());
 }
 "#;
 
@@ -1270,28 +1239,27 @@ fn rc2_31_a_compound_element_append_keeps_the_old_value_while_the_callee_writes_
 }
 
 const RC2_32: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
-struct W { s: string, a: [string; 2], i: In }
-fn clob(h: Rc<W>) -> string {
-    h.s = victim(1)
-    h.a[1] = victim(1)
-    h.i.s = victim(1)
-    let t: string = other(88888)
-    return ""
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
+struct W { s: String, a: [String; 2], i: In }
+fn clob(h: Rc<W>) -> String {
+    h.s = victim(1);
+    h.a[1] = victim(1);
+    h.i.s = victim(1);
+    let t: String = other(88888);
+    ""
 }
 fn mk() -> Rc<W> {
-    return Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
+    Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) } })
 }
-fn main() -> i64 {
-    let a = mk()
-    a.i.s += clob(a)
-    let b = mk()
-    b.i.s = b.i.s + clob(b)
-    let t: string = other(77777)
-    println("{a.i.s.bytes[0] + a.i.s.len + t.len} {b.i.s.bytes[0] + b.i.s.len + t.len}")
-    return 0
+fn main() {
+    let a = mk();
+    a.i.s += clob(a);
+    let b = mk();
+    b.i.s = b.i.s + clob(b);
+    let t: String = other(77777);
+    println!("{} {}", a.i.s.as_bytes()[0] + a.i.s.len() + t.len(), b.i.s.as_bytes()[0] + b.i.s.len() + t.len());
 }
 "#;
 
@@ -1304,18 +1272,17 @@ fn rc2_32_a_compound_nested_append_keeps_the_old_value_while_the_callee_writes_t
 }
 
 const RC2_33: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
 fn clobber(h: Rc<W>, bs: &[u8]) -> i64 {
-    h.s = victim(1)
-    let t: string = other(88888)
-    return bs[0] + bs.len + t.len
+    h.s = victim(1);
+    let t: String = other(88888);
+    bs[0] + bs.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{clobber(a, Rc::get(a).s.bytes)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", clobber(a, Rc::get(a).s.as_bytes()));
 }
 "#;
 
@@ -1328,23 +1295,22 @@ fn rc2_33_a_bytes_view_argument_of_a_payload_field_survives_the_callee_replacing
 }
 
 const RC2_34: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
 fn w(h: Rc<W>) -> i64 {
-    h.s = victim(1)
-    return 0
+    h.s = victim(1);
+    0
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let mut n: i64 = 0
-    for b in Rc::get(a).s.bytes {
-        let z = w(a)
-        let t: string = other(88888)
-        n = n + b + z
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let mut n: i64 = 0;
+    for b in Rc::get(a).s.as_bytes() {
+        let z = w(a);
+        let t: String = other(88888);
+        n = n + b + z;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -1357,24 +1323,23 @@ fn rc2_34_a_for_over_the_bytes_of_a_payload_field_survives_the_body_replacing_th
 }
 
 const RC2_35: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 fn w(h: Rc<W>) -> i64 {
-    h.s = victim(1)
-    return 0
+    h.s = victim(1);
+    0
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = a
-    let bs = bytes_of(&Rc::get(a))
-    b.s = victim(1)
-    let cs = bytes_of(&Rc::get(a))
-    let z = w(a)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len} {cs[0] + cs.len + z}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = a;
+    let bs = bytes_of(&Rc::get(a));
+    b.s = victim(1);
+    let cs = bytes_of(&Rc::get(a));
+    let z = w(a);
+    let t: String = other(88888);
+    println!("{} {}", bs[0] + bs.len() + t.len(), cs[0] + cs.len() + z);
 }
 "#;
 
@@ -1387,19 +1352,18 @@ fn rc2_35_a_bound_view_returned_by_a_call_survives_a_store_through_the_handle() 
 }
 
 const RC2_36: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn g(k: i64) -> i64 { return k }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = a
-    let k: string = other(5)
-    let bs = if g(1) == 1 { Rc::get(a).s.bytes } else { k.bytes }
-    b.s = victim(1)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn g(k: i64) -> i64 { k }
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = a;
+    let k: String = other(5);
+    let bs = if g(1) == 1 { Rc::get(a).s.as_bytes() } else { k.as_bytes() };
+    b.s = victim(1);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len());
 }
 "#;
 
@@ -1412,19 +1376,18 @@ fn rc2_36_a_view_chosen_by_an_if_survives_a_store_through_an_alias() {
 }
 
 const RC2_37: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { a: [string; 2] }
-fn clobber(h: Rc<W>, s: string) -> i64 {
-    h.a[1] = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { a: [String; 2] }
+fn clobber(h: Rc<W>, s: String) -> i64 {
+    h.a[1] = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)] })
-    let v = Rc::get(a).a[0..2]
-    println("{clobber(a, v[1])}")
-    return 0
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] });
+    let v = Rc::get(a).a[0..2];
+    println!("{}", clobber(a, v[1]));
 }
 "#;
 
@@ -1437,18 +1400,17 @@ fn rc2_37_a_slice_element_into_a_payload_passed_as_argument_survives_the_callee_
 }
 
 const RC2_38: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { a: [string; 2] }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)] })
-    let b = a
-    let v = Rc::get(a).a[0..2]
-    let bs = v[1].bytes
-    b.a[1] = victim(1)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { a: [String; 2] }
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] });
+    let b = a;
+    let v = Rc::get(a).a[0..2];
+    let bs = v[1].as_bytes();
+    b.a[1] = victim(1);
+    let t: String = other(88888);
+    println!("{}", bs[0] + bs.len() + t.len());
 }
 "#;
 
@@ -1461,19 +1423,18 @@ fn rc2_38_a_bytes_view_of_a_slice_element_into_a_payload_survives_a_store_throug
 }
 
 const RC2_39: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn clobber(h: Rc<W>, e: string) -> i64 {
-    h.s = victim(1)
-    let t: string = other(88888)
-    return e.bytes[0] + e.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn clobber(h: Rc<W>, e: String) -> i64 {
+    h.s = victim(1);
+    let t: String = other(88888);
+    e.as_bytes()[0] + e.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let b = Rc::new(W { s: victim(12345) })
-    println("{clobber(a, "{a.s}")} {clobber(b, "{Rc::get(b).s}")}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let b = Rc::new(W { s: victim(12345) });
+    println!("{} {}", clobber(a, format!("{}", a.s)), clobber(b, format!("{}", Rc::get(b).s)));
 }
 "#;
 
@@ -1486,19 +1447,18 @@ fn rc2_39_a_single_part_interpolation_argument_survives_the_callee_replacing_the
 }
 
 const RC2_40: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
 struct W { e: E }
 fn clobber(h: Rc<W>, e: E) -> i64 {
-    h.e = E::A(victim(1))
-    let t: string = other(88888)
-    return match e { E::A(x) => x.bytes[0] + x.len + t.len, E::B => 0 }
+    h.e = E::A(victim(1));
+    let t: String = other(88888);
+    match e { E::A(x) => x.as_bytes()[0] + x.len() + t.len(), E::B => 0 }
 }
-fn main() -> i64 {
-    let a = Rc::new(W { e: E::A(victim(12345)) })
-    println("{clobber(a, a.e)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { e: E::A(victim(12345)) });
+    println!("{}", clobber(a, a.e));
 }
 "#;
 
@@ -1511,18 +1471,17 @@ fn rc2_40_an_enum_field_argument_survives_the_callee_replacing_the_field() {
 }
 
 const RC2_41: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { a: [string; 2] }
-fn clobber(h: Rc<W>, e: [string; 2]) -> i64 {
-    h.a = [victim(1), victim(2)]
-    let t: string = other(88888)
-    return e[1].bytes[0] + e[1].len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { a: [String; 2] }
+fn clobber(h: Rc<W>, e: [String; 2]) -> i64 {
+    h.a = [victim(1), victim(2)];
+    let t: String = other(88888);
+    e[1].as_bytes()[0] + e[1].len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)] })
-    println("{clobber(a, a.a)}")
-    return 0
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)] });
+    println!("{}", clobber(a, a.a));
 }
 "#;
 
@@ -1535,24 +1494,23 @@ fn rc2_41_an_array_field_argument_survives_the_callee_replacing_the_field() {
 }
 
 const RC2_42: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 fn w(h: Rc<W>) -> i64 {
-    h.s = victim(1)
-    return 0
+    h.s = victim(1);
+    0
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    let mut n: i64 = 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    let mut n: i64 = 0;
     for b in bytes_of(&Rc::get(a)) {
-        let z = w(a)
-        let t: string = other(88888)
-        n = n + b + z
+        let z = w(a);
+        let t: String = other(88888);
+        n = n + b + z;
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -1565,23 +1523,22 @@ fn rc2_42_a_for_over_a_view_returned_by_a_call_survives_the_body_replacing_the_f
 }
 
 const RC2_43: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 fn w(h: Rc<W>) -> i64 {
-    h.s = victim(1)
-    return 0
+    h.s = victim(1);
+    0
 }
 fn clob(h: Rc<W>, bs: &[u8]) -> i64 {
-    let z = w(h)
-    let t: string = other(88888)
-    return bs[0] + bs.len + t.len + z
+    let z = w(h);
+    let t: String = other(88888);
+    bs[0] + bs.len() + t.len() + z
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345) })
-    println("{clob(a, bytes_of(&Rc::get(a)))}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345) });
+    println!("{}", clob(a, bytes_of(&Rc::get(a))));
 }
 "#;
 
@@ -1594,37 +1551,36 @@ fn rc2_43_a_view_argument_returned_by_a_call_survives_the_callee_replacing_the_f
 }
 
 const RC2_44: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct In { s: string }
-struct W { s: string, a: [string; 2], i: In, e: E }
-fn len_of(e: E) -> i64 { return match e { E::A(x) => x.bytes[0] + x.len, E::B => 0 } }
-fn cs(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h).s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct In { s: String }
+struct W { s: String, a: [String; 2], i: In, e: E }
+fn len_of(e: E) -> i64 { match e { E::A(x) => x.as_bytes()[0] + x.len(), E::B => 0 } }
+fn cs(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h).s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn ci(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h).i.s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn ci(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h).i.s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn ca(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h).a[1] = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn ca(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h).a[1] = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
 fn ce(h: Rc<W>, e: E) -> i64 {
-    Rc::get(h).e = E::A(victim(1))
-    let t: string = other(88888)
-    return len_of(e) + t.len
+    Rc::get(h).e = E::A(victim(1));
+    let t: String = other(88888);
+    len_of(e) + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) }, e: E::A(victim(12345)) })
-    println("{cs(a, a.s)} {ci(a, a.i.s)} {ca(a, Rc::get(a).a[1])} {ce(a, a.e)}")
-    println("{a.s} {a.i.s} {a.a[1]}")
-    return 0
+fn main() {
+    let a = Rc::new(W { s: victim(12345), a: [victim(1), victim(12345)], i: In { s: victim(12345) }, e: E::A(victim(12345)) });
+    println!("{} {} {} {}", cs(a, a.s), ci(a, a.i.s), ca(a, Rc::get(a).a[1]), ce(a, a.e));
+    println!("{} {} {}", a.s, a.i.s, a.a[1]);
 }
 "#;
 
@@ -1643,36 +1599,35 @@ fn rc2_44_a_field_written_through_rc_get_is_released_while_its_argument_reader_h
 }
 
 const RC2_45: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string }
-struct In { s: string }
-struct W { a: [string; 2], i: In, nx: Rc<V> }
-fn cw(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h).a = [victim(1), victim(2)]
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String }
+struct In { s: String }
+struct W { a: [String; 2], i: In, nx: Rc<V> }
+fn cw(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h).a = [victim(1), victim(2)];
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn ci(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h).i = In { s: victim(1) }
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn ci(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h).i = In { s: victim(1) };
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn cn(h: Rc<W>, s: string) -> i64 {
-    Rc::get(h.nx).s = victim(1)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn cn(h: Rc<W>, s: String) -> i64 {
+    Rc::get(h.nx).s = victim(1);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn cm(h: Rc<W>, s: string) -> i64 {
-    Rc::get(Rc::get(h).nx).s = victim(12)
-    let t: string = other(88888)
-    return s.bytes[0] + s.len + t.len
+fn cm(h: Rc<W>, s: String) -> i64 {
+    Rc::get(Rc::get(h).nx).s = victim(12);
+    let t: String = other(88888);
+    s.as_bytes()[0] + s.len() + t.len()
 }
-fn main() -> i64 {
-    let a = Rc::new(W { a: [victim(1), victim(12345)], i: In { s: victim(12345) }, nx: Rc::new(V { s: victim(12345) }) })
-    println("{cw(a, a.a[1])} {ci(a, a.i.s)} {cn(a, a.nx.s)} {cm(a, Rc::get(a.nx).s)}")
-    println("{a.a[1]} {a.i.s} {a.nx.s}")
-    return 0
+fn main() {
+    let a = Rc::new(W { a: [victim(1), victim(12345)], i: In { s: victim(12345) }, nx: Rc::new(V { s: victim(12345) }) });
+    println!("{} {} {} {}", cw(a, a.a[1]), ci(a, a.i.s), cn(a, a.nx.s), cm(a, Rc::get(a.nx).s));
+    println!("{} {} {}", a.a[1], a.i.s, a.nx.s);
 }
 "#;
 
@@ -1691,20 +1646,19 @@ fn rc2_45_a_whole_field_or_inner_rc_written_through_rc_get_is_released_after_its
 }
 
 const RC2_46: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
-struct W { s: string, i: In }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(12345), i: In { s: victim(12345) } })
-    let b = a
-    let bs = a.s.bytes
-    Rc::get(b).s = victim(1)
-    let cs = Rc::get(a).i.s.bytes
-    Rc::get(b).i.s += victim(7)
-    let t: string = other(88888)
-    println("{bs[0] + bs.len + t.len} {cs[0] + cs.len} {a.s} {a.i.s}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
+struct W { s: String, i: In }
+fn main() {
+    let a = Rc::new(W { s: victim(12345), i: In { s: victim(12345) } });
+    let b = a;
+    let bs = a.s.as_bytes();
+    Rc::get(b).s = victim(1);
+    let cs = Rc::get(a).i.s.as_bytes();
+    Rc::get(b).i.s += victim(7);
+    let t: String = other(88888);
+    println!("{} {} {} {}", bs[0] + bs.len() + t.len(), cs[0] + cs.len(), a.s, a.i.s);
 }
 "#;
 
@@ -1717,20 +1671,19 @@ fn rc2_46_a_field_written_through_rc_get_is_released_while_a_bound_view_holds_it
 }
 
 const RC2_47: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct In { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct In { s: String }
 struct W { i: In }
-fn main() -> i64 {
-    let a = Rc::new(W { i: In { s: victim(12345) } })
-    let mut n: i64 = 0
-    for b in Rc::get(a).i.s.bytes {
-        Rc::get(a).i.s = victim(n)
-        let t: string = other(88888)
-        n = n + b
+fn main() {
+    let a = Rc::new(W { i: In { s: victim(12345) } });
+    let mut n: i64 = 0;
+    for b in Rc::get(a).i.s.as_bytes() {
+        Rc::get(a).i.s = victim(n);
+        let t: String = other(88888);
+        n = n + b;
     }
-    println("{n} {a.i.s}")
-    return 0
+    println!("{n} {}", a.i.s);
 }
 "#;
 
@@ -1743,23 +1696,22 @@ fn rc2_47_a_field_written_through_rc_get_in_a_for_body_is_released_after_the_loo
 }
 
 const RC2_48: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string }
-struct W { s: string, nx: Rc<V> }
-fn main() -> i64 {
-    let a = Rc::new(W { s: victim(1), nx: Rc::new(V { s: victim(4) }) })
-    let w = W { s: victim(9), nx: Rc::new(V { s: victim(12345) }) }
-    let mut n: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String }
+struct W { s: String, nx: Rc<V> }
+fn main() {
+    let a = Rc::new(W { s: victim(1), nx: Rc::new(V { s: victim(4) }) });
+    let w = W { s: victim(9), nx: Rc::new(V { s: victim(12345) }) };
+    let mut n: i64 = 0;
     while n < 3 {
-        let r = &mut Rc::get(a)
-        *r = W { s: victim(n), nx: Rc::new(V { s: victim(n) }) }
-        let q = &mut Rc::get(a)
-        *q = w
-        n = n + 1
+        let r = &mut Rc::get(a);
+        *r = W { s: victim(n), nx: Rc::new(V { s: victim(n) }) };
+        let q = &mut Rc::get(a);
+        *q = w;
+        n = n + 1;
     }
-    println("{a.s} {a.nx.s} {w.s} {w.nx.s}")
-    return 0
+    println!("{} {} {} {}", a.s, a.nx.s, w.s, w.nx.s);
 }
 "#;
 
@@ -1772,23 +1724,22 @@ fn rc2_48_a_whole_payload_written_through_a_mutable_reference_releases_its_old_r
 }
 
 const RC2_49: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct V { s: string }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct V { s: String }
 struct W { nx: Rc<V> }
-fn main() -> i64 {
-    let a = Rc::new(W { nx: Rc::new(V { s: victim(4) }) })
-    let w = W { nx: Rc::new(V { s: victim(12345) }) }
-    let mut n: i64 = 0
+fn main() {
+    let a = Rc::new(W { nx: Rc::new(V { s: victim(4) }) });
+    let w = W { nx: Rc::new(V { s: victim(12345) }) };
+    let mut n: i64 = 0;
     while n < 3 {
-        let r = &mut Rc::get(a)
-        *r = w
-        let q = &mut Rc::get(a)
-        *q = W { nx: Rc::new(V { s: victim(n) }) }
-        n = n + 1
+        let r = &mut Rc::get(a);
+        *r = w;
+        let q = &mut Rc::get(a);
+        *q = W { nx: Rc::new(V { s: victim(n) }) };
+        n = n + 1;
     }
-    println("{a.nx.s} {w.nx.s}")
-    return 0
+    println!("{} {}", a.nx.s, w.nx.s);
 }
 "#;
 
@@ -1837,15 +1788,14 @@ fn refusal_row_full(
 
 const RC2_50: &str = r#"
 fn boxit<T>(x: T) -> i64 {
-    let r: Rc<T> = Rc::new(x)
-    return 1
+    let r: Rc<T> = Rc::new(x);
+    1
 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let n: i64 = boxit(a)
-    let b: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(a) + n}")
-    return 0
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let n: i64 = boxit(a);
+    let b: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(a) + n);
 }
 "#;
 
@@ -1858,13 +1808,12 @@ fn rc2_50_an_rc_boxed_by_a_generic_takes_its_share_for_the_new_payload() {
 }
 
 const RC2_51: &str = r#"
-fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let r: Rc<Rc<i64>> = wrap(a)
-    let b: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(a)}")
-    return 0
+fn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let r: Rc<Rc<i64>> = wrap(a);
+    let b: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(a));
 }
 "#;
 
@@ -1878,18 +1827,17 @@ fn rc2_51_an_rc_wrapped_and_returned_by_a_generic_is_released_once() {
 
 const RC2_52: &str = r#"
 fn boxit<T>(mut x: T, y: T) -> i64 {
-    let z: T = y
-    x = z
-    let r: Rc<T> = Rc::new(x)
-    return 1
+    let z: T = y;
+    x = z;
+    let r: Rc<T> = Rc::new(x);
+    1
 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let c: Rc<i64> = Rc::new(5)
-    let n: i64 = boxit(c, a)
-    let b: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(a) + Rc::get(c) + n}")
-    return 0
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let c: Rc<i64> = Rc::new(5);
+    let n: i64 = boxit(c, a);
+    let b: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(a) + Rc::get(c) + n);
 }
 "#;
 
@@ -1905,15 +1853,14 @@ const RC2_53: &str = r#"
 enum One<T> { It(T) }
 struct W { r: Rc<i64> }
 fn boxone<T>(x: T) -> i64 {
-    let r: Rc<One<T>> = Rc::new(One::It(x))
-    return 1
+    let r: Rc<One<T>> = Rc::new(One::It(x));
+    1
 }
-fn main() -> i64 {
-    let w: W = W { r: Rc::new(41) }
-    let n: i64 = boxone(w)
-    let b: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(w.r) + n}")
-    return 0
+fn main() {
+    let w: W = W { r: Rc::new(41) };
+    let n: i64 = boxone(w);
+    let b: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(w.r) + n);
 }
 "#;
 
@@ -1928,15 +1875,14 @@ fn rc2_53_an_rc_leaf_under_a_generic_enum_payload_is_released_with_the_payload()
 const RC2_54: &str = r#"
 enum One<T> { It(T) }
 fn f_match<T>(x: T) -> T {
-    let o: One<T> = One::It(x)
-    return match o { One::It(p) => p }
+    let o: One<T> = One::It(x);
+    match o { One::It(p) => p }
 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let v: Rc<i64> = f_match(a)
-    let z: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(v) + Rc::get(a)}")
-    return 0
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let v: Rc<i64> = f_match(a);
+    let z: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(v) + Rc::get(a));
 }
 "#;
 
@@ -1950,19 +1896,18 @@ fn rc2_54_an_rc_through_a_single_variant_generic_enum_comes_back_with_its_share(
 
 const RC2_55_LIB: &str = r#"
 pub fn boxit<T>(x: T) -> i64 {
-    let r: Rc<T> = Rc::new(x)
-    return 1
+    let r: Rc<T> = Rc::new(x);
+    1
 }
 "#;
 
 const RC2_55: &str = r#"
-needs lib1
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(41)
-    let n: i64 = lib1.boxit(a)
-    let b: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(a) + n}")
-    return 0
+mod lib1;
+fn main() {
+    let a: Rc<i64> = Rc::new(41);
+    let n: i64 = lib1::boxit(a);
+    let b: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(a) + n);
 }
 "#;
 
@@ -1979,9 +1924,9 @@ fn rc2_55_an_imported_generic_boxing_an_rc_takes_its_share() {
 fn rc2_56_a_reference_boxed_by_a_generic_is_refused_at_the_call() {
     refusal_row(
         "rc2-56",
-        "fn boxit<T>(x: T) -> i64 {\n    let r: Rc<T> = Rc::new(x)\n    return 1\n}\n\
-         fn main() -> i64 {\n    let a: [i64; 3] = [7, 0, 41]\n    let n: i64 = boxit(&a[2])\n\
-         \x20   println(\"{a[0]} {a[2] + n}\")\n    return 0\n}\n",
+        "fn boxit<T>(x: T) -> i64 {\n    let r: Rc<T> = Rc::new(x);\n    1\n}\n\
+         fn main() {\n    let a: [i64; 3] = [7, 0, 41];\n    let n: i64 = boxit(&a[2]);\n\
+         \x20   println!(\"{} {}\", a[0], a[2] + n);\n}\n",
         &[],
         "E0714",
         "the call to `boxit` in `main` instantiates it with `&i64`, which makes a `Rc<&i64>`",
@@ -1992,10 +1937,10 @@ fn rc2_56_a_reference_boxed_by_a_generic_is_refused_at_the_call() {
 fn rc2_57_a_reference_wrapped_in_an_rc_by_a_generic_in_a_loop_is_refused() {
     refusal_row(
         "rc2-57",
-        "fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\nfn main() -> i64 {\n\
-         \x20   let s: [i64; 3] = [1, 0, 41]\n    let mut i: i64 = 0\n    while i < 2 {\n\
-         \x20       let r: Rc<&i64> = wrap(&s[2])\n        i = i + 1\n    }\n\
-         \x20   println(\"{s[0]}\")\n    return 0\n}\n",
+        "fn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }\nfn main() {\n\
+         \x20   let s: [i64; 3] = [1, 0, 41];\n    let mut i: i64 = 0;\n    while i < 2 {\n\
+         \x20       let r: Rc<&i64> = wrap(&s[2]);\n        i = i + 1;\n    }\n\
+         \x20   println!(\"{}\", s[0]);\n}\n",
         &[],
         "E0714",
         "the call to `wrap` in `main`",
@@ -2006,10 +1951,10 @@ fn rc2_57_a_reference_wrapped_in_an_rc_by_a_generic_in_a_loop_is_refused() {
 fn rc2_58_a_stack_reference_escaping_in_a_generic_enum_is_refused() {
     refusal_row(
         "rc2-58",
-        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> One<T> { return One::It(x) }\n\
-         fn mk() -> One<&i64> {\n    let v: [i64; 3] = [7, 8, 9]\n    return wrapone(&v[1])\n}\n\
-         fn main() -> i64 {\n    let o: One<&i64> = mk()\n\
-         \x20   let n: i64 = match o { One::It(p) => *p }\n    println(\"{n}\")\n    return 0\n}\n",
+        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> One<T> { One::It(x) }\n\
+         fn mk() -> One<&i64> {\n    let v: [i64; 3] = [7, 8, 9];\n    wrapone(&v[1])\n}\n\
+         fn main() {\n    let o: One<&i64> = mk();\n\
+         \x20   let n: i64 = match o { One::It(p) => *p };\n    println!(\"{n}\");\n}\n",
         &[],
         "E0714",
         "the call to `wrapone` in `mk` instantiates it with `&i64`, which makes a `One<&i64>`",
@@ -2020,9 +1965,9 @@ fn rc2_58_a_stack_reference_escaping_in_a_generic_enum_is_refused() {
 fn rc2_59_a_stack_reference_escaping_in_an_rc_of_a_generic_enum_is_refused() {
     refusal_row(
         "rc2-59",
-        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> Rc<One<T>> { return Rc::new(One::It(x)) }\n\
-         fn mk() -> Rc<One<&i64>> {\n    let v: [i64; 3] = [7, 8, 9]\n    return wrapone(&v[1])\n}\n\
-         fn main() -> i64 {\n    let r: Rc<One<&i64>> = mk()\n    return 0\n}\n",
+        "enum One<T> { It(T) }\nfn wrapone<T>(x: T) -> Rc<One<T>> { Rc::new(One::It(x)) }\n\
+         fn mk() -> Rc<One<&i64>> {\n    let v: [i64; 3] = [7, 8, 9];\n    wrapone(&v[1])\n}\n\
+         fn main() {\n    let r: Rc<One<&i64>> = mk();\n}\n",
         &[],
         "E0714",
         "which makes a `Rc<One<&i64>>`",
@@ -2033,10 +1978,9 @@ fn rc2_59_a_stack_reference_escaping_in_an_rc_of_a_generic_enum_is_refused() {
 fn rc2_60_an_rc_placed_in_an_array_by_a_generic_is_refused() {
     refusal_row(
         "rc2-60",
-        "fn f_arr<T>(a: T, b: T) -> T {\n    let arr: [T; 2] = [a, b]\n    return arr[0]\n}\n\
-         fn main() -> i64 {\n    let a: Rc<i64> = Rc::new(41)\n    let b: Rc<i64> = Rc::new(2)\n\
-         \x20   let v: Rc<i64> = f_arr(a, b)\n    println(\"{Rc::get(v) + Rc::get(a)}\")\n\
-         \x20   return 0\n}\n",
+        "fn f_arr<T>(a: T, b: T) -> T {\n    let arr: [T; 2] = [a, b];\n    arr[0]\n}\n\
+         fn main() {\n    let a: Rc<i64> = Rc::new(41);\n    let b: Rc<i64> = Rc::new(2);\n\
+         \x20   let v: Rc<i64> = f_arr(a, b);\n    println!(\"{}\", Rc::get(v) + Rc::get(a));\n}\n",
         &[],
         "E0410",
         "the call to `f_arr` in `main` instantiates it with `Rc<i64>`, which makes a `[Rc<i64>; 2]`",
@@ -2048,9 +1992,9 @@ fn rc2_61_an_rc_carrier_placed_in_an_array_inside_an_rc_by_a_generic_is_refused(
     refusal_row(
         "rc2-61",
         "struct W { r: Rc<i64> }\nfn boxarr<T>(x: T) -> i64 {\n\
-         \x20   let r: Rc<[T; 2]> = Rc::new([x, x])\n    return 1\n}\n\
-         fn main() -> i64 {\n    let w: W = W { r: Rc::new(41) }\n    let n: i64 = boxarr(w)\n\
-         \x20   println(\"{Rc::get(w.r) + n}\")\n    return 0\n}\n",
+         \x20   let r: Rc<[T; 2]> = Rc::new([x, x]);\n    1\n}\n\
+         fn main() {\n    let w: W = W { r: Rc::new(41) };\n    let n: i64 = boxarr(w);\n\
+         \x20   println!(\"{}\", Rc::get(w.r) + n);\n}\n",
         &[],
         "E0410",
         "which makes a `[W; 2]`",
@@ -2061,8 +2005,8 @@ fn rc2_61_an_rc_carrier_placed_in_an_array_inside_an_rc_by_a_generic_is_refused(
 fn rc2_62_an_imported_generic_boxing_a_reference_is_refused() {
     refusal_row(
         "rc2-62",
-        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
-         \x20   let n: i64 = lib1.boxit(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        "mod lib1;\nfn main() {\n    let s: [i64; 3] = [7, 0, 41];\n\
+         \x20   let n: i64 = lib1::boxit(&s[2]);\n    println!(\"{} {n}\", s[0]);\n}\n",
         &[("lib1.aelys", RC2_55_LIB)],
         "E0714",
         "the call to `lib1.boxit` in `main`",
@@ -2070,20 +2014,19 @@ fn rc2_62_an_imported_generic_boxing_a_reference_is_refused() {
 }
 
 const RC2_63: &str = r#"
-struct N { s: string }
+struct N { s: String }
 struct W { r: Rc<N>, k: i64 }
 enum May<T> { Yes(T), No }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn wrap<T>(x: T) -> May<T> { return May::Yes(x) }
-fn main() -> i64 {
-    let mut i = 0
-    let mut t = 0
-    while i < 1000 { let r = Rc::new(N { s: victim(i) })
-      let m = wrap(W { r: r, k: i })
-      match m { May::Yes(w) => { t = t + w.k } May::No => { t = t } }
-      i = i + 1 }
-    println("{t}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn wrap<T>(x: T) -> May<T> { May::Yes(x) }
+fn main() {
+    let mut i = 0;
+    let mut t = 0;
+    while i < 1000 { let r = Rc::new(N { s: victim(i) });
+      let m = wrap(W { r: r, k: i });
+      match m { May::Yes(w) => { t = t + w.k; } May::No => { t = t; } }
+      i = i + 1; }
+    println!("{t}");
 }
 "#;
 
@@ -2096,10 +2039,10 @@ fn rc2_63_an_rc_carrier_in_a_multi_variant_generic_enum_is_refused() {
 fn rc2_64_an_rc_through_a_single_variant_enum_in_a_multi_variant_enum_is_refused() {
     refusal_row(
         "rc2-64",
-        "struct N { s: string }\nenum One { It(Rc<N>) }\nenum L { A(One), B(i64) }\n\
-         fn go(l: L) -> i64 { match l { L::A(o) => { match o { One::It(r) => { return Rc::get(r).s.len } } } L::B(k) => { return k } } }\n\
-         fn main() -> i64 {\n    let r = Rc::new(N { s: \"ab\" })\n\
-         \x20   println(\"{go(L::A(One::It(r)))}\")\n    return 0\n}\n",
+        "struct N { s: String }\nenum One { It(Rc<N>) }\nenum L { A(One), B(i64) }\n\
+         fn go(l: L) -> i64 { match l { L::A(o) => { match o { One::It(r) => { return Rc::get(r).s.len(); } } } L::B(k) => { return k; } } }\n\
+         fn main() {\n    let r = Rc::new(N { s: \"ab\" });\n\
+         \x20   println!(\"{}\", go(L::A(One::It(r))));\n}\n",
         &[],
         "E0410",
         "variant `L::A` has a payload of type `One`, which holds an `Rc` inside it: an enum with \
@@ -2110,18 +2053,17 @@ fn rc2_64_an_rc_through_a_single_variant_enum_in_a_multi_variant_enum_is_refused
 const RC2_65: &str = r#"
 struct N { v: i64 }
 enum One<T> { It(T) }
-fn mk1<T>(x: T) -> One<T> { return One::It(x) }
-fn use1<T>(o: One<T>) -> i64 { return 1 }
-fn main() -> i64 {
-    let mut s: i64 = 0
-    let mut i: i64 = 0
+fn mk1<T>(x: T) -> One<T> { One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { 1 }
+fn main() {
+    let mut s: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let p: Rc<N> = Rc::new(N { v: i })
-        s = s + use1(mk1(p))
-        i = i + 1
+        let p: Rc<N> = Rc::new(N { v: i });
+        s = s + use1(mk1(p));
+        i = i + 1;
     }
-    println("{s}")
-    return 0
+    println!("{s}");
 }
 "#;
 
@@ -2136,22 +2078,21 @@ fn rc2_65_a_generic_enum_instance_passed_as_an_argument_releases_its_rc() {
 const RC2_66: &str = r#"
 struct N { v: i64 }
 enum One<T> { It(T) }
-fn mk1<T>(x: T) -> One<T> { return One::It(x) }
+fn mk1<T>(x: T) -> One<T> { One::It(x) }
 fn get1<T>(o: One<T>) -> T {
-    return match o {
-        One::It(v) => v
+    match o {
+        One::It(v) => v,
     }
 }
-fn main() -> i64 {
-    let mut s: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut s: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let q: Rc<N> = get1(mk1(Rc::new(N { v: i })))
-        s = s + Rc::get(q).v
-        i = i + 1
+        let q: Rc<N> = get1(mk1(Rc::new(N { v: i })));
+        s = s + Rc::get(q).v;
+        i = i + 1;
     }
-    println("{s}")
-    return 0
+    println!("{s}");
 }
 "#;
 
@@ -2166,19 +2107,18 @@ fn rc2_66_a_generic_enum_instance_unwrapped_by_a_generic_releases_its_rc() {
 const RC2_67: &str = r#"
 struct N { v: i64 }
 enum One<T> { It(T) }
-fn mk1<T>(x: T) -> One<T> { return One::It(x) }
-fn use1<T>(o: One<T>) -> i64 { return 1 }
-fn main() -> i64 {
-    let mut s: i64 = 0
-    let mut i: i64 = 0
+fn mk1<T>(x: T) -> One<T> { One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { 1 }
+fn main() {
+    let mut s: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let p: Rc<N> = Rc::new(N { v: i })
-        let o = mk1(p)
-        s = s + use1(o)
-        i = i + 1
+        let p: Rc<N> = Rc::new(N { v: i });
+        let o = mk1(p);
+        s = s + use1(o);
+        i = i + 1;
     }
-    println("{s}")
-    return 0
+    println!("{s}");
 }
 "#;
 
@@ -2193,19 +2133,18 @@ fn rc2_67_a_generic_enum_instance_bound_by_let_releases_its_rc() {
 const RC2_68: &str = r#"
 struct N { v: i64 }
 enum One<T> { It(T) }
-fn mk1<T>(x: T) -> One<T> { return One::It(x) }
-fn use1<T>(o: One<T>) -> i64 { return 1 }
-fn go<T>(x: T) -> i64 { return use1(mk1(x)) }
-fn main() -> i64 {
-    let mut s: i64 = 0
-    let mut i: i64 = 0
+fn mk1<T>(x: T) -> One<T> { One::It(x) }
+fn use1<T>(o: One<T>) -> i64 { 1 }
+fn go<T>(x: T) -> i64 { use1(mk1(x)) }
+fn main() {
+    let mut s: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let p: Rc<N> = Rc::new(N { v: i })
-        s = s + go(p)
-        i = i + 1
+        let p: Rc<N> = Rc::new(N { v: i });
+        s = s + go(p);
+        i = i + 1;
     }
-    println("{s}")
-    return 0
+    println!("{s}");
 }
 "#;
 
@@ -2221,24 +2160,23 @@ const RC2_69: &str = r#"
 struct N { v: i64 }
 enum One<T> { It(T) }
 struct H { o: One<Rc<N>>, k: i64 }
-fn mk1<T>(x: T) -> One<T> { return One::It(x) }
-fn get1<T>(o: One<T>) -> T { return match o { One::It(v) => v } }
-fn main() -> i64 {
-    let mut s: i64 = 0
-    let mut i: i64 = 0
+fn mk1<T>(x: T) -> One<T> { One::It(x) }
+fn get1<T>(o: One<T>) -> T { match o { One::It(v) => v } }
+fn main() {
+    let mut s: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let p: Rc<N> = Rc::new(N { v: i })
-        mk1(p)
-        let k: i64 = match mk1(p) { One::It(q) => { let qq: Rc<N> = q
-            Rc::get(qq).v } }
-        let o = mk1(p)
-        let h: H = H { o: o, k: 2 }
-        let r: Rc<N> = get1(h.o)
-        s = s + k + h.k + Rc::get(r).v
-        i = i + 1
+        let p: Rc<N> = Rc::new(N { v: i });
+        mk1(p);
+        let k: i64 = match mk1(p) { One::It(q) => { let qq: Rc<N> = q;
+            Rc::get(qq).v } };
+        let o = mk1(p);
+        let h: H = H { o: o, k: 2 };
+        let r: Rc<N> = get1(h.o);
+        s = s + k + h.k + Rc::get(r).v;
+        i = i + 1;
     }
-    println("{s}")
-    return 0
+    println!("{s}");
 }
 "#;
 
@@ -2254,10 +2192,10 @@ fn rc2_69_a_generic_enum_instance_discarded_matched_or_stored_in_a_field_release
 fn rc2_70_an_rc_pushed_into_a_vec_by_a_generic_is_refused() {
     refusal_row(
         "rc2-70",
-        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
-         \x20   Vec::push(v, x)\n    Vec::push(v, x)\n    return Vec::len(v)\n}\n\
-         fn main() -> i64 {\n    let p: Rc<N> = Rc::new(N { v: 9 })\n    let n: i64 = mkv(p)\n\
-         \x20   println(\"{n} {Rc::get(p).v}\")\n    return 0\n}\n",
+        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new();\n\
+         \x20   Vec::push(v, x);\n    Vec::push(v, x);\n    Vec::len(v)\n}\n\
+         fn main() {\n    let p: Rc<N> = Rc::new(N { v: 9 });\n    let n: i64 = mkv(p);\n\
+         \x20   println!(\"{n} {}\", Rc::get(p).v);\n}\n",
         &[],
         "E0410",
         "the call to `mkv` in `main` instantiates it with `Rc<N>`, which makes a `Vec<Rc<N>>`: a \
@@ -2269,11 +2207,11 @@ fn rc2_70_an_rc_pushed_into_a_vec_by_a_generic_is_refused() {
 fn rc2_71_an_rc_pushed_into_a_vec_by_a_generic_in_a_loop_is_refused() {
     refusal_row(
         "rc2-71",
-        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
-         \x20   Vec::push(v, x)\n    return Vec::len(v)\n}\nfn main() -> i64 {\n\
-         \x20   let mut s: i64 = 0\n    let mut i: i64 = 0\n    while i < 1000 {\n\
-         \x20       let p: Rc<N> = Rc::new(N { v: i })\n        s = s + mkv(p)\n        i = i + 1\n\
-         \x20   }\n    println(\"{s}\")\n    return 0\n}\n",
+        "struct N { v: i64 }\nfn mkv<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new();\n\
+         \x20   Vec::push(v, x);\n    Vec::len(v)\n}\nfn main() {\n\
+         \x20   let mut s: i64 = 0;\n    let mut i: i64 = 0;\n    while i < 1000 {\n\
+         \x20       let p: Rc<N> = Rc::new(N { v: i });\n        s = s + mkv(p);\n        i = i + 1;\n\
+         \x20   }\n    println!(\"{s}\");\n}\n",
         &[],
         "E0410",
         "which makes a `Vec<Rc<N>>`",
@@ -2284,11 +2222,11 @@ fn rc2_71_an_rc_pushed_into_a_vec_by_a_generic_in_a_loop_is_refused() {
 fn rc2_72_an_rc_in_a_vec_copied_by_a_generic_is_refused() {
     refusal_row(
         "rc2-72",
-        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new()\n\
-         \x20   Vec::push(v, x)\n    let w: Vec<T> = v\n    Vec::push(w, x)\n\
-         \x20   return Vec::len(v) + Vec::len(w)\n}\nfn main() -> i64 {\n\
-         \x20   let p: Rc<N> = Rc::new(N { v: 9 })\n    let n: i64 = two(p)\n\
-         \x20   println(\"{n} {Rc::get(p).v}\")\n    return 0\n}\n",
+        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 {\n    let mut v: Vec<T> = Vec::new();\n\
+         \x20   Vec::push(v, x);\n    let w: Vec<T> = v;\n    Vec::push(w, x);\n\
+         \x20   Vec::len(v) + Vec::len(w)\n}\nfn main() {\n\
+         \x20   let p: Rc<N> = Rc::new(N { v: 9 });\n    let n: i64 = two(p);\n\
+         \x20   println!(\"{n} {}\", Rc::get(p).v);\n}\n",
         &[],
         "E0410",
         "the call to `two` in `main` instantiates it with `Rc<N>`, which makes a `Vec<Rc<N>>`",
@@ -2299,11 +2237,10 @@ fn rc2_72_an_rc_in_a_vec_copied_by_a_generic_is_refused() {
 fn rc2_73_a_byte_view_put_in_a_generic_enum_is_refused() {
     refusal_row(
         "rc2-73",
-        "enum One<T> { It(T) }\nfn mk1<T>(x: T) -> One<T> { return One::It(x) }\n\
-         fn first(o: One<&[u8]>) -> u8 {\n    return match o {\n        One::It(b) => b[0]\n    }\n}\n\
-         fn main() -> i64 {\n    let mut s: string = \"ab\" + \"cd\"\n    let o = mk1(s.bytes)\n\
-         \x20   s = \"zz\" + \"yy\"\n    let c: u8 = first(o)\n    println(\"{c} {s}\")\n\
-         \x20   return 0\n}\n",
+        "enum One<T> { It(T) }\nfn mk1<T>(x: T) -> One<T> { One::It(x) }\n\
+         fn first(o: One<&[u8]>) -> u8 {\n    match o {\n        One::It(b) => b[0],\n    }\n}\n\
+         fn main() {\n    let mut s: String = \"ab\" + \"cd\";\n    let o = mk1(s.as_bytes());\n\
+         \x20   s = \"zz\" + \"yy\";\n    let c: u8 = first(o);\n    println!(\"{c} {s}\");\n}\n",
         &[],
         "E0711",
         "cannot write to `s` while it is borrowed",
@@ -2314,12 +2251,11 @@ fn rc2_73_a_byte_view_put_in_a_generic_enum_is_refused() {
 fn rc2_74_a_byte_view_put_in_an_rc_by_a_generic_is_refused() {
     refusal_row(
         "rc2-74",
-        "fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\n\
-         fn first<T>(r: Rc<T>) -> T { return Rc::get(r) }\n\
-         fn byte0(b: &[u8]) -> u8 { return b[0] }\nfn main() -> i64 {\n\
-         \x20   let mut s: string = \"ab\" + \"cd\"\n    let r = wrap(s.bytes)\n\
-         \x20   s = \"zz\" + \"yy\"\n    let c: u8 = byte0(first(r))\n    println(\"{c} {s}\")\n\
-         \x20   return 0\n}\n",
+        "fn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }\n\
+         fn first<T>(r: Rc<T>) -> T { Rc::get(r) }\n\
+         fn byte0(b: &[u8]) -> u8 { b[0] }\nfn main() {\n\
+         \x20   let mut s: String = \"ab\" + \"cd\";\n    let r = wrap(s.as_bytes());\n\
+         \x20   s = \"zz\" + \"yy\";\n    let c: u8 = byte0(first(r));\n    println!(\"{c} {s}\");\n}\n",
         &[],
         "E0711",
         "cannot write to `s` while it is borrowed",
@@ -2327,16 +2263,15 @@ fn rc2_74_a_byte_view_put_in_an_rc_by_a_generic_is_refused() {
 }
 
 const RC2_75_BURN: &str = "fn burn() -> i64 {\n\
-    \x20   let z: [i64; 16] = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]\n    return z[3]\n}\n\
-    fn main() -> i64 {\n    let v = esc(1)\n    let b: i64 = burn()\n    println(\"{*v[0]} {b}\")\n\
-    \x20   return 0\n}\n";
+    \x20   let z: [i64; 16] = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];\n    z[3]\n}\n\
+    fn main() {\n    let v = esc(1);\n    let b: i64 = burn();\n    println!(\"{} {b}\", *v[0]);\n}\n";
 
 #[test]
 fn rc2_75_a_reference_escaping_in_a_vec_made_by_a_generic_is_refused() {
     let src = format!(
-        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new()\n    Vec::push(v, x)\n\
-         \x20   return v\n}}\nfn esc<T>(x: T) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41]\n\
-         \x20   return mkv(&a[2])\n}}\n{}",
+        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new();\n    Vec::push(v, x);\n\
+         \x20   v\n}}\nfn esc<T>(x: T) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41];\n\
+         \x20   mkv(&a[2])\n}}\n{};",
         RC2_75_BURN
     );
     refusal_row("rc2-75", &src, &[], "E0714", "which makes a `Vec<&i64>`");
@@ -2345,9 +2280,9 @@ fn rc2_75_a_reference_escaping_in_a_vec_made_by_a_generic_is_refused() {
 #[test]
 fn rc2_76_a_reference_escaping_in_a_vec_made_by_a_generic_from_a_plain_function_is_refused() {
     let src = format!(
-        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new()\n    Vec::push(v, x)\n\
-         \x20   return v\n}}\nfn esc(x: i64) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41]\n\
-         \x20   return mkv(&a[2])\n}}\n{}",
+        "fn mkv<T>(x: T) -> Vec<T> {{\n    let mut v: Vec<T> = Vec::new();\n    Vec::push(v, x);\n\
+         \x20   v\n}}\nfn esc(x: i64) -> Vec<&i64> {{\n    let a: [i64; 3] = [7, 8, 41];\n\
+         \x20   mkv(&a[2])\n}}\n{};",
         RC2_75_BURN
     );
     refusal_row(
@@ -2363,9 +2298,9 @@ fn rc2_76_a_reference_escaping_in_a_vec_made_by_a_generic_from_a_plain_function_
 fn rc2_77_an_rc_in_an_array_made_by_a_dead_local_is_refused_at_every_level() {
     refusal_row(
         "rc2-77",
-        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 { let a: [T; 2] = [x, x]; return 2 }\n\
-         fn main() -> i64 {\n    let p: Rc<N> = Rc::new(N { v: 9 })\n\
-         \x20   println(\"{two(p)} {Rc::get(p).v}\")\n    return 0\n}\n",
+        "struct N { v: i64 }\nfn two<T>(x: T) -> i64 { let a: [T; 2] = [x, x]; 2 }\n\
+         fn main() {\n    let p: Rc<N> = Rc::new(N { v: 9 });\n\
+         \x20   println!(\"{} {}\", two(p), Rc::get(p).v);\n}\n",
         &[],
         "E0410",
         "the call to `two` in `main` instantiates it with `Rc<N>`, which makes a `[Rc<N>; 2]`",
@@ -2374,16 +2309,16 @@ fn rc2_77_an_rc_in_an_array_made_by_a_dead_local_is_refused_at_every_level() {
 
 const RC2_78_LIB: &str = r#"
 pub fn boxit<T>(x: T) -> i64 {
-    let r: Rc<T> = Rc::new(x)
-    return 1
+    let r: Rc<T> = Rc::new(x);
+    1
 }
 
 
 
 pub fn outer<T>(x: T) -> i64 {
-    let k: i64 = 5
-    let n: i64 = boxit(x)
-    return n + k
+    let k: i64 = 5;
+    let n: i64 = boxit(x);
+    n + k
 }
 "#;
 
@@ -2391,8 +2326,8 @@ pub fn outer<T>(x: T) -> i64 {
 fn rc2_78_a_refused_instance_from_a_module_points_at_the_call_in_the_root_file() {
     refusal_row(
         "rc2-78",
-        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
-         \x20   let n: i64 = lib1.outer(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        "mod lib1;\nfn main() {\n    let s: [i64; 3] = [7, 0, 41];\n\
+         \x20   let n: i64 = lib1::outer(&s[2]);\n    println!(\"{} {n}\", s[0]);\n}\n",
         &[("lib1.aelys", RC2_78_LIB)],
         "E0714",
         "the call to `lib1.outer` in `main` instantiates it with `&i64`, which through \
@@ -2402,8 +2337,8 @@ fn rc2_78_a_refused_instance_from_a_module_points_at_the_call_in_the_root_file()
     let root = h.stage(
         "rc2-78",
         "span",
-        "needs lib1\nfn main() -> i64 {\n    let s: [i64; 3] = [7, 0, 41]\n\
-         \x20   let n: i64 = lib1.outer(&s[2])\n    println(\"{s[0]} {n}\")\n    return 0\n}\n",
+        "mod lib1;\nfn main() {\n    let s: [i64; 3] = [7, 0, 41];\n\
+         \x20   let n: i64 = lib1::outer(&s[2]);\n    println!(\"{} {n}\", s[0]);\n}\n",
         &[("lib1.aelys", RC2_78_LIB)],
     );
     let text =
@@ -2417,11 +2352,10 @@ fn rc2_78_a_refused_instance_from_a_module_points_at_the_call_in_the_root_file()
 fn rc2_79_an_rc_read_out_of_an_rc_by_a_generic_is_refused() {
     refusal_row(
         "rc2-79",
-        "struct N { v: i64 }\nfn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }\n\
-         fn unwrap<T>(r: Rc<T>) -> T { return Rc::get(r) }\nfn main() -> i64 {\n\
-         \x20   let p: Rc<N> = Rc::new(N { v: 9 })\n    let rr: Rc<Rc<N>> = wrap(p)\n\
-         \x20   let q: Rc<N> = unwrap(rr)\n    println(\"{Rc::get(q).v} {Rc::get(p).v}\")\n\
-         \x20   return 0\n}\n",
+        "struct N { v: i64 }\nfn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }\n\
+         fn unwrap<T>(r: Rc<T>) -> T { Rc::get(r) }\nfn main() {\n\
+         \x20   let p: Rc<N> = Rc::new(N { v: 9 });\n    let rr: Rc<Rc<N>> = wrap(p);\n\
+         \x20   let q: Rc<N> = unwrap(rr);\n    println!(\"{} {}\", Rc::get(q).v, Rc::get(p).v);\n}\n",
         &[],
         "E0410",
         "the call to `unwrap` in `main` instantiates it with `Rc<N>`, which reads an `Rc<N>` out of \
@@ -2434,9 +2368,8 @@ fn rc2_80_an_rc_put_straight_into_a_generic_enum_names_what_is_unsupported() {
     refusal_row(
         "rc2-80",
         "struct N { v: i64 }\nenum One<T> { It(T) }\nfn get1<T>(o: One<T>) -> T {\n\
-         \x20   return match o {\n        One::It(v) => v\n    }\n}\nfn main() -> i64 {\n\
-         \x20   let q: Rc<N> = get1(One::It(Rc::new(N { v: 4 })))\n    println(\"{Rc::get(q).v}\")\n\
-         \x20   return 0\n}\n",
+         \x20   match o {\n        One::It(v) => v,\n    }\n}\nfn main() {\n\
+         \x20   let q: Rc<N> = get1(One::It(Rc::new(N { v: 4 })));\n    println!(\"{}\", Rc::get(q).v);\n}\n",
         &[],
         "E0410",
         "carrying an `Rc<T>` straight into a generic enum, which is not supported yet",
@@ -2444,22 +2377,21 @@ fn rc2_80_an_rc_put_straight_into_a_generic_enum_names_what_is_unsupported() {
 }
 
 const RC2_81: &str = r#"
-struct N { s: string }
+struct N { s: String }
 struct W { r: Rc<N> }
 struct H { w: W }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
 fn f(w: W, k: i64) -> i64 {
-    let b: i64 = Rc::get(w.r).s.bytes[0]
-    return b * 1000 + Rc::get(w.r).s.len + k
+    let b: i64 = Rc::get(w.r).s.as_bytes()[0];
+    b * 1000 + Rc::get(w.r).s.len() + k
 }
-fn main() -> i64 {
-    let mut h = H { w: W { r: Rc::new(N { s: victim(12345) }) } }
-    let v = f(h.w, { h = H { w: W { r: Rc::new(N { s: other(9) }) } }
-        let y = Rc::new(N { s: other(88888) })
-        Rc::get(y).s.len * 0 })
-    println("{v}")
-    return 0
+fn main() {
+    let mut h = H { w: W { r: Rc::new(N { s: victim(12345) }) } };
+    let v = f(h.w, { h = H { w: W { r: Rc::new(N { s: other(9) }) } };
+        let y = Rc::new(N { s: other(88888) });
+        Rc::get(y).s.len() * 0 });
+    println!("{v}");
 }
 "#;
 
@@ -2472,21 +2404,20 @@ fn rc2_81_a_carrier_field_argument_survives_a_sibling_reassigning_its_owner() {
 }
 
 const RC2_82: &str = r#"
-struct N { s: string }
+struct N { s: String }
 struct H { r: Rc<N> }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
 fn f(r: Rc<N>, k: i64) -> i64 {
-    let b: i64 = Rc::get(r).s.bytes[0]
-    return b * 1000 + Rc::get(r).s.len + k
+    let b: i64 = Rc::get(r).s.as_bytes()[0];
+    b * 1000 + Rc::get(r).s.len() + k
 }
-fn main() -> i64 {
-    let mut h = H { r: Rc::new(N { s: victim(12345) }) }
-    let v = f(h.r, { h = H { r: Rc::new(N { s: other(9) }) }
-        let y = Rc::new(N { s: other(88888) })
-        Rc::get(y).s.len * 0 })
-    println("{v}")
-    return 0
+fn main() {
+    let mut h = H { r: Rc::new(N { s: victim(12345) }) };
+    let v = f(h.r, { h = H { r: Rc::new(N { s: other(9) }) };
+        let y = Rc::new(N { s: other(88888) });
+        Rc::get(y).s.len() * 0 });
+    println!("{v}");
 }
 "#;
 
@@ -2501,13 +2432,12 @@ fn rc2_82_an_rc_field_argument_survives_a_sibling_reassigning_its_owner() {
 const RC2_83: &str = r#"
 struct N { k: i64 }
 struct W { r: Rc<N> }
-fn f(w: W, k: i64) -> i64 { return Rc::get(w.r).k * 100 + k }
-fn main() -> i64 {
-    let mut w = W { r: Rc::new(N { k: 1 }) }
-    let v = f(w, { w = W { r: Rc::new(N { k: 5 }) }
-        0 })
-    println("{v} {Rc::get(w.r).k}")
-    return 0
+fn f(w: W, k: i64) -> i64 { Rc::get(w.r).k * 100 + k }
+fn main() {
+    let mut w = W { r: Rc::new(N { k: 1 }) };
+    let v = f(w, { w = W { r: Rc::new(N { k: 5 }) };
+        0 });
+    println!("{v} {}", Rc::get(w.r).k);
 }
 "#;
 
@@ -2522,13 +2452,12 @@ fn rc2_83_a_carrier_argument_keeps_its_value_when_a_sibling_reassigns_the_local(
 const RC2_84: &str = r#"
 struct N { k: i64 }
 struct W { r: Rc<N>, j: i64 }
-fn f(w: W, k: i64) -> i64 { return Rc::get(w.r).k * 100 + w.j * 10 + k }
-fn main() -> i64 {
-    let mut w = W { r: Rc::new(N { k: 1 }), j: 1 }
-    let v = f(w, { w.j = 7
-        0 })
-    println("{v} {w.j}")
-    return 0
+fn f(w: W, k: i64) -> i64 { Rc::get(w.r).k * 100 + w.j * 10 + k }
+fn main() {
+    let mut w = W { r: Rc::new(N { k: 1 }), j: 1 };
+    let v = f(w, { w.j = 7;
+        0 });
+    println!("{v} {}", w.j);
 }
 "#;
 
@@ -2542,20 +2471,19 @@ fn rc2_84_a_carrier_argument_keeps_its_value_when_a_sibling_writes_one_of_its_fi
 
 const RC2_85: &str = r#"
 struct N { k: i64 }
-struct M { s: string, r: Rc<N> }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
+struct M { s: String, r: Rc<N> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
 fn f(a: M, k: i64) -> i64 {
-    let b: i64 = a.s.bytes[0]
-    return b * 1000 + Rc::get(a.r).k * 10 + k
+    let b: i64 = a.s.as_bytes()[0];
+    b * 1000 + Rc::get(a.r).k * 10 + k
 }
-fn main() -> i64 {
-    let mut x = M { s: victim(12345), r: Rc::new(N { k: 1 }) }
-    let v = f(x, { x = M { s: other(9), r: Rc::new(N { k: 5 }) }
-        let y = other(88888)
-        y.len * 0 })
-    println("{v}")
-    return 0
+fn main() {
+    let mut x = M { s: victim(12345), r: Rc::new(N { k: 1 }) };
+    let v = f(x, { x = M { s: other(9), r: Rc::new(N { k: 5 }) };
+        let y = other(88888);
+        y.len() * 0 });
+    println!("{v}");
 }
 "#;
 
@@ -2575,11 +2503,11 @@ fn rc2_86_a_linked_list_enum_carrying_an_rc_runs() {
     let src: &str =
         "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
          fn sum(l: Link) -> i64 {\n    match l {\n\
-         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
-         \x20       Link::Nil => { return 0 }\n    }\n}\nfn main() -> i64 {\n\
-         \x20   let c = Rc::new(Node { val: 3, next: Link::Nil })\n\
-         \x20   let b = Rc::new(Node { val: 2, next: Link::Cons(c) })\n\
-         \x20   println(\"sum={sum(Link::Cons(b))}\")\n    return 0\n}\n";
+         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next); }\n\
+         \x20       Link::Nil => { return 0; }\n    }\n}\nfn main() {\n\
+         \x20   let c = Rc::new(Node { val: 3, next: Link::Nil });\n\
+         \x20   let b = Rc::new(Node { val: 2, next: Link::Cons(c) });\n\
+         \x20   println!(\"sum={}\", sum(Link::Cons(b)));\n}\n";
     let h = Harness::new();
     h.differential_row("rc2-86", src, &[], "sum=5\n", (4, 4));
     h.lsan_row("rc2-86", src, &[], "sum=5\n");
@@ -2590,14 +2518,14 @@ fn rc2_86_a_linked_list_enum_carrying_an_rc_runs() {
 fn rc2_87_a_linked_list_built_through_a_generic_identity_runs() {
     let src: &str =
         "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
-         fn id<T>(x: T) -> T { return x }\nfn sum(l: Link) -> i64 {\n    match l {\n\
-         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
-         \x20       Link::Nil => { return 0 }\n    }\n}\nfn once() -> i64 {\n\
-         \x20   let c = id(Rc::new(Node { val: 3, next: Link::Nil }))\n\
-         \x20   let b = id(Rc::new(Node { val: 2, next: Link::Cons(c) }))\n\
-         \x20   return sum(Link::Cons(b))\n}\nfn main() -> i64 {\n    let mut t: i64 = 0\n\
-         \x20   let mut i: i64 = 0\n    while i < 1000 { t = t + once()\n        i = i + 1 }\n\
-         \x20   println(\"{t}\")\n    return 0\n}\n";
+         fn id<T>(x: T) -> T { x }\nfn sum(l: Link) -> i64 {\n    match l {\n\
+         \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next); }\n\
+         \x20       Link::Nil => { return 0; }\n    }\n}\nfn once() -> i64 {\n\
+         \x20   let c = id(Rc::new(Node { val: 3, next: Link::Nil }));\n\
+         \x20   let b = id(Rc::new(Node { val: 2, next: Link::Cons(c) }));\n\
+         \x20   sum(Link::Cons(b))\n}\nfn main() {\n    let mut t: i64 = 0;\n\
+         \x20   let mut i: i64 = 0;\n    while i < 1000 { t = t + once();\n        i = i + 1; }\n\
+         \x20   println!(\"{t}\");\n}\n";
     let h = Harness::new();
     h.differential_row("rc2-87", src, &[], "5000\n", (2000, 2000));
     h.lsan_row("rc2-87", src, &[], "5000\n");
@@ -2607,12 +2535,11 @@ fn rc2_87_a_linked_list_built_through_a_generic_identity_runs() {
 #[test]
 fn rc2_88_an_rc_handed_to_a_multi_variant_enum_through_a_generic_binding_runs() {
     let src: &str =
-        "struct N { v: i64 }\nenum L { Num(i64), R(Rc<N>) }\nfn id<T>(x: T) -> T { return x }\n\
-         fn val(l: L) -> i64 { match l { L::Num(x) => { return x } L::R(n) => { return Rc::get(n).v } } }\n\
-         fn main() -> i64 {\n    let mut t: i64 = 0\n    let mut i: i64 = 0\n\
-         \x20   while i < 1000 { let r = Rc::new(N { v: 1 })\n        let r2 = id(r)\n\
-         \x20       t = t + val(L::R(r2))\n        i = i + 1 }\n    println(\"{t}\")\n\
-         \x20   return 0\n}\n";
+        "struct N { v: i64 }\nenum L { Num(i64), R(Rc<N>) }\nfn id<T>(x: T) -> T { x }\n\
+         fn val(l: L) -> i64 { match l { L::Num(x) => { return x; } L::R(n) => { return Rc::get(n).v; } } }\n\
+         fn main() {\n    let mut t: i64 = 0;\n    let mut i: i64 = 0;\n\
+         \x20   while i < 1000 { let r = Rc::new(N { v: 1 });\n        let r2 = id(r);\n\
+         \x20       t = t + val(L::R(r2));\n        i = i + 1; }\n    println!(\"{t}\");\n}\n";
     let h = Harness::new();
     h.differential_row("rc2-88", src, &[], "1000\n", (1000, 1000));
     h.lsan_row("rc2-88", src, &[], "1000\n");
@@ -2624,12 +2551,11 @@ fn rc2_89_an_rc_carrier_handed_to_a_multi_variant_enum_through_a_generic_binding
     refusal_row_full(
         "rc2-89",
         "struct N { v: i64 }\nstruct W { r: Rc<N> }\nenum L { Num(i64), R(W) }\n\
-         fn id<T>(x: T) -> T { return x }\n\
-         fn val(l: L) -> i64 { match l { L::Num(x) => { return x } L::R(w) => { return Rc::get(w.r).v } } }\n\
-         fn main() -> i64 {\n    let mut t: i64 = 0\n    let mut i: i64 = 0\n\
-         \x20   while i < 1000 { let w = W { r: Rc::new(N { v: 1 }) }\n        let w2 = id(w)\n\
-         \x20       t = t + val(L::R(w2))\n        i = i + 1 }\n    println(\"{t}\")\n\
-         \x20   return 0\n}\n",
+         fn id<T>(x: T) -> T { x }\n\
+         fn val(l: L) -> i64 { match l { L::Num(x) => { return x; } L::R(w) => { return Rc::get(w.r).v; } } }\n\
+         fn main() {\n    let mut t: i64 = 0;\n    let mut i: i64 = 0;\n\
+         \x20   while i < 1000 { let w = W { r: Rc::new(N { v: 1 }) };\n        let w2 = id(w);\n\
+         \x20       t = t + val(L::R(w2));\n        i = i + 1; }\n    println!(\"{t}\");\n}\n",
         &[],
         "E0410",
         &["variant `L::R` has a payload of type `W`", MULTI_VARIANT_RC],
@@ -2641,7 +2567,7 @@ fn rc2_89_an_rc_carrier_handed_to_a_multi_variant_enum_through_a_generic_binding
 fn rc2_90_a_multi_variant_enum_carrying_an_imported_rc_carrier_is_refused() {
     refusal_row_full(
         "rc2-90",
-        "needs m\nenum L { Nil, V(m.W) }\nfn main() -> i64 { println(\"ok\"); return 0 }\n",
+        "mod m;\nenum L { Nil, V(m::W) }\nfn main() { println!(\"ok\"); }\n",
         &[("m.aelys", "pub struct W { pub r: Rc<i64> }\n")],
         "E0410",
         &[
@@ -2656,7 +2582,7 @@ fn rc2_90_a_multi_variant_enum_carrying_an_imported_rc_carrier_is_refused() {
 fn rc2_91_a_generic_multi_variant_enum_with_a_concrete_rc_payload_runs() {
     let src: &str =
         "struct N { v: i64 }\nenum L<T> { Nil, V(T), R(Rc<N>) }\n\
-         fn main() -> i64 { println(\"ok\"); return 0 }\n";
+         fn main() { println!(\"ok\"); }\n";
     let h = Harness::new();
     h.differential_row("rc2-91", src, &[], "ok\n", (0, 0));
     h.assert_legs(18);
@@ -2667,7 +2593,7 @@ fn rc2_92_an_rc_through_a_single_variant_enum_of_a_carrier_is_refused_at_the_out
     refusal_row_full(
         "rc2-92",
         "struct W { k: i64, r: Rc<i64> }\nenum One { It(W) }\nenum L { Nil, V(One) }\n\
-         fn main() -> i64 { println(\"ok\"); return 0 }\n",
+         fn main() { println!(\"ok\"); }\n",
         &[],
         "E0410",
         &[
@@ -2683,7 +2609,7 @@ fn rc2_93_a_generic_struct_declared_and_unused_compiles() {
     let h = Harness::new();
     h.differential_row(
         "rc2-93",
-        "struct Box<T> { v: T }\nfn main() -> i64 { println(\"ok\"); return 0 }\n",
+        "struct Box<T> { v: T }\nfn main() { println!(\"ok\"); }\n",
         &[],
         "ok\n",
         (0, 0),
@@ -2696,8 +2622,8 @@ fn rc2_94_a_generic_struct_literal_compiles() {
     let h = Harness::new();
     h.differential_row(
         "rc2-94",
-        "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
-         \x20println(\"ok\"); return 0 }\n",
+        "struct Box<T> { v: T }\nfn main() { let b: Box<i64> = Box { v: 5 };\n\
+         \x20println!(\"ok\"); }\n",
         &[],
         "ok\n",
         (0, 0),
@@ -2710,8 +2636,8 @@ fn rc2_95_a_generic_struct_field_read_answers_its_value() {
     let h = Harness::new();
     h.differential_row(
         "rc2-95",
-        "struct Box<T> { v: T }\nfn main() -> i64 { let b: Box<i64> = Box { v: 5 }\n\
-         \x20println(\"{b.v}\"); return 0 }\n",
+        "struct Box<T> { v: T }\nfn main() { let b: Box<i64> = Box { v: 5 };\n\
+         \x20println!(\"{}\", b.v); }\n",
         &[],
         "5\n",
         (0, 0),
@@ -2724,8 +2650,8 @@ fn rc2_96_a_generic_struct_with_an_inferred_literal_answers_its_value() {
     let h = Harness::new();
     h.differential_row(
         "rc2-96",
-        "struct Pair<A, B> { a: A, b: B }\nfn main() -> i64 { let p = Pair { a: 5, b: 6 }\n\
-         \x20println(\"{p.a + 1}\"); return 0 }\n",
+        "struct Pair<A, B> { a: A, b: B }\nfn main() { let p = Pair { a: 5, b: 6 };\n\
+         \x20println!(\"{}\", p.a + 1); }\n",
         &[],
         "6\n",
         (0, 0),
@@ -2744,7 +2670,7 @@ fn rc2_97_a_global_initialized_by_a_call_is_unsupported_at_its_let() {
             "[E0902]: file-scope let 'G' requires a compile-time constant initializer",
             "let G = mk()",
         ],
-        &["E0904", "[air-lowering]"],
+        &["E0904", "[air-lowering];"],
     );
 }
 
@@ -2752,55 +2678,48 @@ fn rc2_97_a_global_initialized_by_a_call_is_unsupported_at_its_let() {
 fn rc2_98_a_lowering_refusal_names_its_site_without_a_numbered_prefix() {
     refusal_row_full(
         "rc2-98",
-        "fn size() -> i64 { return 3 }\nfn main() -> i64 {\n    let n: i64 = size()\n\
-         \x20   let a = [0; n]\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        "fn size() -> i64 { 3 }\nfn main() {\n    let n: i64 = size();\n\
+         \x20   let a = [0; n];\n    println!(\"{}\", a[0]);\n}\n",
         &[],
         "E0902",
         &[
             "[E0902]: unsupported non-constant array size",
             "let a = [0; n]",
         ],
-        &["[air-lowering]", "fn size() -> i64 { return 3 }"],
+        &["[air-lowering]", "fn size() -> i64 { 3 }"],
     );
 }
 
-const RC2_99: &str = r#"
-struct Name { first: string, last: string }
-fn parse(full: string) -> Name {
-    let mut i: i64 = 0
-    while i < full.len && full.bytes[i] != 32 as u8 { i = i + 1 }
-    return Name { first: full[0..i], last: full[i + 1..full.len] }
-}
-fn main() -> i64 {
-    let n = parse("ada lovelace")
-    println("{n.last}, {n.first}")
-    return 0
-}
-"#;
-
 #[test]
-fn rc2_99_a_slice_of_a_string_is_a_byte_substring() {
-    let h = Harness::new();
-    h.differential_row("rc2-99", RC2_99, &[], "lovelace, ada\n", (4, 4));
-    h.lsan_row("rc2-99", RC2_99, &[], "lovelace, ada\n");
-    h.assert_legs(24);
+fn rc2_99_a_slice_of_a_string_names_substring() {
+    refusal_row_full(
+        "rc2-99",
+        "struct Name { first: String, last: String }\nfn parse(full: String) -> Name {\n\
+         \x20   let mut i: i64 = 0;\n    while i < full.len() && full.as_bytes()[i] != 32 as u8 { i = i + 1; }\n\
+         \x20   Name { first: full[0..i], last: full[i + 1..full.len()] }\n}\n\
+         fn main() {\n    let n = parse(\"ada lovelace\");\n\
+         \x20   println!(\"{}, {}\", n.last, n.first);\n}\n",
+        &[],
+        "E0425",
+        &["a `string` has no slices", "str.substring;"],
+        &["&[dynamic]"],
+    );
 }
 
 const RC2_100: &str = r#"
 struct Bag { items: Vec<i64> }
 fn mk(i: i64) -> i64 {
-    let b = Bag { items: vec[i, i + 1] }
-    return b.items[1]
+    let b = Bag { items: vec![i, i + 1] };
+    b.items[1]
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 10 {
-        t = t + mk(i)
-        i = i + 1
+        t = t + mk(i);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -2817,9 +2736,8 @@ fn rc2_101_a_tuple_type_compiles() {
     let h = Harness::new();
     h.differential_row(
         "rc2-101",
-        "fn divmod(a: i64, b: i64) -> (i64, i64) { return (a / b, a % b) }\n\
-         fn main() -> i64 {\n    let t = divmod(17, 5)\n    println(t.0)\n    println(t.1)\n\
-         \x20   return 0\n}\n",
+        "fn divmod(a: i64, b: i64) -> (i64, i64) { (a / b, a % b) }\n\
+         fn main() {\n    let t = divmod(17, 5);\n    println!(\"{}\", t.0);\n    println!(\"{}\", t.1);\n}\n",
         &[],
         "3\n2\n",
         (0, 0),
@@ -2832,7 +2750,7 @@ fn rc2_102_a_tuple_expression_compiles() {
     let h = Harness::new();
     h.differential_row(
         "rc2-102",
-        "fn main() -> i64 {\n    let t = (1, 2)\n    println(t.0 * 10 + t.1)\n    return 0\n}\n",
+        "fn main() {\n    let t = (1, 2);\n    println!(\"{}\", t.0 * 10 + t.1);\n}\n",
         &[],
         "12\n",
         (0, 0),
@@ -2846,11 +2764,10 @@ const LATE_HELP: &str = "no implicit conversion applies to a value that crosses 
 const RC2_103: &str = r#"
 struct In { b: i64 }
 struct Out { a: In }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let o = id(Out { a: In { b: 7 } })
-    println("{o.a.b}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let o = id(Out { a: In { b: 7 } });
+    println!("{}", o.a.b);
 }
 "#;
 
@@ -2862,11 +2779,10 @@ fn rc2_103_a_field_chain_through_a_generic_result_reads_the_inner_field() {
 }
 
 const RC2_104: &str = r#"
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let s = id("abc")
-    if s.len > 2 { println("{s.len}") } else { println("small") }
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let s = id("abc");
+    if s.len() > 2 { println!("{}", s.len()); } else { println!("small"); }
 }
 "#;
 
@@ -2878,13 +2794,12 @@ fn rc2_104_the_length_of_a_string_returned_by_a_generic_is_its_byte_count() {
 }
 
 const RC2_105: &str = r#"
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let v: i64 = 41
-    let p = id(&v)
-    let y: i64 = *p + 1
-    println("{y}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let v: i64 = 41;
+    let p = id(&v);
+    let y: i64 = *p + 1;
+    println!("{y}");
 }
 "#;
 
@@ -2897,13 +2812,12 @@ fn rc2_105_a_reference_returned_by_a_generic_dereferences_to_its_referent() {
 
 const RC2_106: &str = r#"
 struct P { a: i32, b: i32 }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut p = id(P { a: 3, b: 4 })
-    let v: i32 = -9
-    p.a = v
-    println("{p.a} {p.b}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let mut p = id(P { a: 3, b: 4 });
+    let v: i32 = -9;
+    p.a = v;
+    println!("{} {}", p.a, p.b);
 }
 "#;
 
@@ -2915,14 +2829,13 @@ fn rc2_106_a_field_write_into_a_generic_result_keeps_its_neighbour() {
 }
 
 const RC2_107: &str = r#"
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let b: [i32; 2] = [1, 2]
-    let mut a = id(b)
-    let v: i32 = -7
-    a[0] = v
-    println("{a[0]} {a[1]}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let b: [i32; 2] = [1, 2];
+    let mut a = id(b);
+    let v: i32 = -7;
+    a[0] = v;
+    println!("{} {}", a[0], a[1]);
 }
 "#;
 
@@ -2935,14 +2848,13 @@ fn rc2_107_an_element_write_into_a_generic_result_keeps_its_neighbour() {
 
 const RC2_108: &str = r#"
 struct P { a: i64, b: i64 }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut p = id(P { a: 3, b: 4 })
-    p.a += 10
-    let mut a = id([1, 2])
-    a[1] *= 21
-    println("{p.a} {p.b} {a[1]}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let mut p = id(P { a: 3, b: 4 });
+    p.a += 10;
+    let mut a = id([1, 2]);
+    a[1] *= 21;
+    println!("{} {} {}", p.a, p.b, a[1]);
 }
 "#;
 
@@ -2956,13 +2868,12 @@ fn rc2_108_a_compound_assignment_into_a_generic_result_reads_and_writes_the_same
 const RC2_109: &str = r#"
 struct P { a: i32, b: i32 }
 enum May<T> { Yes(T), No }
-fn main() -> i64 {
-    let m = May::Yes(P { a: -1, b: 1 })
+fn main() {
+    let m = May::Yes(P { a: -1, b: 1 });
     match m {
-        May::Yes(p) => { println("{p.a}") }
-        May::No => { println("no") }
+        May::Yes(p) => { println!("{}", p.a); }
+        May::No => { println!("no"); }
     }
-    return 0
 }
 "#;
 
@@ -2975,11 +2886,10 @@ fn rc2_109_a_field_of_a_generic_enum_payload_keeps_its_sign() {
 
 const RC2_110: &str = r#"
 struct O { arr: [i64; 3] }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let o = id(O { arr: [1, 2, 3] })
-    println("{o.arr[1]}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let o = id(O { arr: [1, 2, 3] });
+    println!("{}", o.arr[1]);
 }
 "#;
 
@@ -2994,9 +2904,9 @@ fn rc2_110_an_element_of_a_field_of_a_generic_result_is_read_at_its_type() {
 fn rc2_111_a_narrow_field_stored_into_a_wide_local_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-111",
-        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn main() -> i64 {\n    let p = id(P { a: -1, b: 100 })\n    let mut y: i64 = 7777777777\n\
-         \x20   y = p.a\n    println(\"{y}\")\n    return 0\n}\n",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { x }\n\
+         fn main() {\n    let p = id(P { a: -1, b: 100 });\n    let mut y: i64 = 7777777777;\n\
+         \x20   y = p.a;\n    println!(\"{y}\");\n}\n",
         &[],
         "E0301",
         &["expected `i64`, found `i32`", LATE_HELP],
@@ -3008,9 +2918,9 @@ fn rc2_111_a_narrow_field_stored_into_a_wide_local_after_a_generic_is_refused() 
 fn rc2_112_a_narrow_field_bound_to_a_wide_annotation_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-112",
-        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn main() -> i64 {\n    let p = id(P { a: -1, b: 100 })\n    let y: i64 = p.a\n\
-         \x20   println(\"{y}\")\n    return 0\n}\n",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { x }\n\
+         fn main() {\n    let p = id(P { a: -1, b: 100 });\n    let y: i64 = p.a;\n\
+         \x20   println!(\"{y}\");\n}\n",
         &[],
         "E0301",
         &["expected `i64`, found `i32`", LATE_HELP],
@@ -3023,9 +2933,9 @@ fn rc2_113_a_narrow_field_of_a_generic_enum_payload_stored_wide_is_refused() {
     refusal_row_full(
         "rc2-113",
         "struct P { a: i32, b: i32 }\nenum May<T> { Yes(T), No }\n\
-         fn main() -> i64 {\n    let m = May::Yes(P { a: -1, b: 1 })\n    let mut y: i64 = 0\n\
-         \x20   match m { May::Yes(p) => { y = p.a } May::No => { y = 0 } }\n\
-         \x20   println(\"{y}\")\n    return 0\n}\n",
+         fn main() {\n    let m = May::Yes(P { a: -1, b: 1 });\n    let mut y: i64 = 0;\n\
+         \x20   match m { May::Yes(p) => { y = p.a; } May::No => { y = 0; } }\n\
+         \x20   println!(\"{y}\");\n}\n",
         &[],
         "E0301",
         &["expected `i64`, found `i32`", LATE_HELP],
@@ -3037,9 +2947,9 @@ fn rc2_113_a_narrow_field_of_a_generic_enum_payload_stored_wide_is_refused() {
 fn rc2_114_an_integer_field_bound_as_a_string_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-114",
-        "struct P { a: i64 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn main() -> i64 {\n    let p = id(P { a: 123456 })\n    let s: string = p.a\n\
-         \x20   println(\"{s.len}\")\n    return 0\n}\n",
+        "struct P { a: i64 }\nfn id<T>(x: T) -> T { x }\n\
+         fn main() {\n    let p = id(P { a: 123456 });\n    let s: String = p.a;\n\
+         \x20   println!(\"{}\", s.len());\n}\n",
         &[],
         "E0301",
         &["expected `string`, found `i64`"],
@@ -3051,9 +2961,9 @@ fn rc2_114_an_integer_field_bound_as_a_string_after_a_generic_is_refused() {
 fn rc2_115_an_integer_element_bound_as_a_string_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-115",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
-         \x20   let a: [i64; 2] = [123456, 7]\n    let b = id(a)\n    let s: string = b[0]\n\
-         \x20   println(\"{s.len}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n\
+         \x20   let a: [i64; 2] = [123456, 7];\n    let b = id(a);\n    let s: String = b[0];\n\
+         \x20   println!(\"{}\", s.len());\n}\n",
         &[],
         "E0301",
         &["expected `string`, found `i64`"],
@@ -3065,10 +2975,10 @@ fn rc2_115_an_integer_element_bound_as_a_string_after_a_generic_is_refused() {
 fn rc2_116_an_integer_loop_element_bound_as_a_string_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-116",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
-         \x20   let a: [i64; 2] = [123456, 7]\n    let b = id(a)\n    let mut t: i64 = 0\n\
-         \x20   for s in b {\n        let q: string = s\n        t = t + q.len\n    }\n\
-         \x20   println(\"{t}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n\
+         \x20   let a: [i64; 2] = [123456, 7];\n    let b = id(a);\n    let mut t: i64 = 0;\n\
+         \x20   for s in b {\n        let q: String = s;\n        t = t + q.len();\n    }\n\
+         \x20   println!(\"{t}\");\n}\n",
         &[],
         "E0301",
         &["expected `string`, found `i64`"],
@@ -3080,9 +2990,9 @@ fn rc2_116_an_integer_loop_element_bound_as_a_string_after_a_generic_is_refused(
 fn rc2_117_a_narrow_field_of_an_unannotated_lambda_parameter_stored_wide_is_refused() {
     refusal_row_full(
         "rc2-117",
-        "struct P { a: i32, b: i32 }\nfn main() -> i64 {\n\
-         \x20   let f = fn(p) -> i64 {\n        let y: i64 = p.a\n        return y\n    }\n\
-         \x20   println(\"{f(P { a: -1, b: 1 })}\")\n    return 0\n}\n",
+        "struct P { a: i32, b: i32 }\nfn main() {\n\
+         \x20   let f = move |p| -> i64 {\n        let y: i64 = p.a;\n        y\n    };\n\
+         \x20   println!(\"{}\", f(P { a: -1, b: 1 }));\n}\n",
         &[],
         "E0301",
         &[
@@ -3098,14 +3008,14 @@ fn rc2_117_a_narrow_field_of_an_unannotated_lambda_parameter_stored_wide_is_refu
 fn rc2_118_a_string_stored_into_an_integer_field_of_a_generic_result_is_refused() {
     refusal_row_full(
         "rc2-118",
-        "struct P { a: i64, b: i64 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn get(p: P) -> i64 { return p.a }\nfn main() -> i64 {\n\
-         \x20   let mut p = id(P { a: 3, b: 4 })\n    p.a = \"hello\"\n\
-         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        "struct P { a: i64, b: i64 }\nfn id<T>(x: T) -> T { x }\n\
+         fn get(p: P) -> i64 { p.a }\nfn main() {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 });\n    p.a = \"hello\";\n\
+         \x20   println!(\"{}\", get(p));\n}\n",
         &[],
         "E0301",
         &[
-            "expected `i64`, found `&str`",
+            "expected `i64`, found `string`",
             "assignment to field `a` of a value whose type is only inferred after this use",
         ],
         &["E0901"],
@@ -3116,10 +3026,10 @@ fn rc2_118_a_string_stored_into_an_integer_field_of_a_generic_result_is_refused(
 fn rc2_119_a_wide_value_stored_into_a_narrow_field_of_a_generic_result_is_refused() {
     refusal_row_full(
         "rc2-119",
-        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn get(p: P) -> i32 { return p.b }\nfn main() -> i64 {\n\
-         \x20   let mut p = id(P { a: 3, b: 4 })\n    let big: i64 = 77777777777\n    p.a = big\n\
-         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { x }\n\
+         fn get(p: P) -> i32 { p.b }\nfn main() {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 });\n    let big: i64 = 77777777777;\n    p.a = big;\n\
+         \x20   println!(\"{}\", get(p));\n}\n",
         &[],
         "E0301",
         &["expected `i32`, found `i64`", LATE_HELP],
@@ -3131,12 +3041,12 @@ fn rc2_119_a_wide_value_stored_into_a_narrow_field_of_a_generic_result_is_refuse
 fn rc2_120_a_string_stored_into_an_integer_element_of_a_generic_result_is_refused() {
     refusal_row_full(
         "rc2-120",
-        "fn id<T>(x: T) -> T { return x }\nfn get(a: [i64; 2]) -> i64 { return a[0] + a[1] }\n\
-         fn main() -> i64 {\n    let mut a = id([1, 2])\n    a[0] = \"hello\"\n\
-         \x20   println(\"{get(a)}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn get(a: [i64; 2]) -> i64 { a[0] + a[1] }\n\
+         fn main() {\n    let mut a = id([1, 2]);\n    a[0] = \"hello\";\n\
+         \x20   println!(\"{}\", get(a));\n}\n",
         &[],
         "E0301",
-        &["expected `i64`, found `&str`", "element assignment"],
+        &["expected `i64`, found `string`", "element assignment"],
         &["E0901"],
     );
 }
@@ -3145,10 +3055,9 @@ fn rc2_120_a_string_stored_into_an_integer_element_of_a_generic_result_is_refuse
 fn rc2_121_a_wide_value_stored_into_a_narrow_element_of_a_generic_result_is_refused() {
     refusal_row_full(
         "rc2-121",
-        "fn id<T>(x: T) -> T { return x }\nfn get(a: [i32; 2]) -> i32 { return a[1] }\n\
-         fn main() -> i64 {\n    let b: [i32; 2] = [1, 2]\n    let mut a = id(b)\n\
-         \x20   let big: i64 = 77777777777\n    a[0] = big\n    println(\"{get(a)}\")\n\
-         \x20   return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn get(a: [i32; 2]) -> i32 { a[1] }\n\
+         fn main() {\n    let b: [i32; 2] = [1, 2];\n    let mut a = id(b);\n\
+         \x20   let big: i64 = 77777777777;\n    a[0] = big;\n    println!(\"{}\", get(a));\n}\n",
         &[],
         "E0301",
         &["expected `i32`, found `i64`", LATE_HELP],
@@ -3157,23 +3066,22 @@ fn rc2_121_a_wide_value_stored_into_a_narrow_element_of_a_generic_result_is_refu
 }
 
 const RC2_122: &str = r#"
-struct N { s: string }
+struct N { s: String }
 struct H { r: Rc<N>, k: i64 }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut t: i64 = 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let mut i: i64 = 0;
+    let mut t: i64 = 0;
     while i < 1000 {
-        let mut h = id(H { r: Rc::new(N { s: victim(i) }), k: 1 })
-        let q = Rc::new(N { s: victim(i + 7) })
-        h.r = q
-        let w: H = h
-        t = t + w.k + Rc::get(w.r).s.len
-        i = i + 1
+        let mut h = id(H { r: Rc::new(N { s: victim(i) }), k: 1 });
+        let q = Rc::new(N { s: victim(i + 7) });
+        h.r = q;
+        let w: H = h;
+        t = t + w.k + Rc::get(w.r).s.len();
+        i = i + 1;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -3189,9 +3097,9 @@ fn rc2_122_an_rc_field_write_into_a_generic_result_releases_the_old_value() {
 fn rc2_123_a_wide_value_written_through_a_reference_from_a_generic_is_refused() {
     refusal_row_full(
         "rc2-123",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let mut x: i32 = 5\n\
-         \x20   let p = id(&mut x)\n    let big: i64 = 77777777777\n    *p = big\n\
-         \x20   println(\"{x}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n    let mut x: i32 = 5;\n\
+         \x20   let p = id(&mut x);\n    let big: i64 = 77777777777;\n    *p = big;\n\
+         \x20   println!(\"{x}\");\n}\n",
         &[],
         "E0301",
         &[
@@ -3206,9 +3114,9 @@ fn rc2_123_a_wide_value_written_through_a_reference_from_a_generic_is_refused() 
 fn rc2_124_a_narrow_slice_element_stored_wide_after_a_generic_is_refused() {
     refusal_row_full(
         "rc2-124",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
-         \x20   let a: [i32; 3] = [-1, 2, 3]\n    let b = id(a)\n    let s = b[0..2]\n\
-         \x20   let y: i64 = s[0]\n    println(\"{y}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n\
+         \x20   let a: [i32; 3] = [-1, 2, 3];\n    let b = id(a);\n    let s = b[0..2];\n\
+         \x20   let y: i64 = s[0];\n    println!(\"{y}\");\n}\n",
         &[],
         "E0301",
         &["expected `i64`, found `i32`"],
@@ -3220,14 +3128,13 @@ fn rc2_124_a_narrow_slice_element_stored_wide_after_a_generic_is_refused() {
 fn rc2_125_a_field_of_a_value_whose_type_is_never_inferred_asks_for_an_annotation() {
     refusal_row_full(
         "rc2-125",
-        "fn main() -> i64 {\n    let f = fn(p) -> i64 { return p.a }\n    println(\"ok\")\n\
-         \x20   return 0\n}\n",
+        "fn main() {\n    let f = move |p| -> i64 { p.a };\n    println!(\"ok\");\n}\n",
         &[],
         "E0304",
         &[
             "type annotations needed: the type of this value is never inferred, so its field \
              `a` cannot be resolved; annotate the binding it comes from",
-            "return p.a",
+            "return p.a;",
         ],
         &["E0412", "survived lowering", "E0301"],
     );
@@ -3237,12 +3144,12 @@ fn rc2_125_a_field_of_a_value_whose_type_is_never_inferred_asks_for_an_annotatio
 fn rc2_126_a_private_field_write_into_a_generic_result_is_refused() {
     refusal_row_full(
         "rc2-126",
-        "needs m\nfn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
-         \x20   let mut p = id(m.mk())\n    p.b = 5\n    println(\"{m.getb(p)}\")\n    return 0\n}\n",
+        "mod m;\nfn id<T>(x: T) -> T { x }\nfn main() {\n\
+         \x20   let mut p = id(m::mk());\n    p.b = 5;\n    println!(\"{}\", m::getb(p));\n}\n",
         &[(
             "m.aelys",
-            "pub struct P { pub a: i64, b: i64 }\npub fn mk() -> P { return P { a: 1, b: 2 } }\n\
-             pub fn getb(p: P) -> i64 { return p.b }\n",
+            "pub struct P { pub a: i64, b: i64 }\npub fn mk() -> P { P { a: 1, b: 2 } }\n\
+             pub fn getb(p: P) -> i64 { p.b }\n",
         )],
         "E0610",
         &["field `b` of `m.P` is not public"],
@@ -3254,16 +3161,15 @@ fn rc2_126_a_private_field_write_into_a_generic_result_is_refused() {
 fn rc2_127_rc_get_of_a_value_typed_only_later_asks_for_an_annotation() {
     refusal_row_full(
         "rc2-127",
-        "struct N { k: i64 }\nfn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n\
-         \x20   let r = Rc::new(N { k: 4 })\n    let q = id(r)\n    println(\"{Rc::get(q).k}\")\n\
-         \x20   return 0\n}\n",
+        "struct N { k: i64 }\nfn id<T>(x: T) -> T { x }\nfn main() {\n\
+         \x20   let r = Rc::new(N { k: 4 });\n    let q = id(r);\n    println!(\"{}\", Rc::get(q).k);\n}\n",
         &[],
         "E0301",
         &[
             "the argument of `Rc::get` has a type that is only inferred after this use; annotate \
              the binding it comes from as `Rc<T>`",
         ],
-        &["E0901", "τ"],
+        &["E0901", "τ;"],
     );
 }
 
@@ -3271,12 +3177,12 @@ fn rc2_127_rc_get_of_a_value_typed_only_later_asks_for_an_annotation() {
 fn rc2_128_a_constant_index_past_an_array_returned_by_a_generic_is_refused() {
     refusal_row_full(
         "rc2-128",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let a = id([1, 2, 3])\n\
-         \x20   println(\"{a[5]}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n    let a = id([1, 2, 3]);\n\
+         \x20   println!(\"{}\", a[5]);\n}\n",
         &[],
         "E0433",
         &["index 5 is outside `[_; 3]`"],
-        &["E0412", "E0901"],
+        &["E0412", "E0901;"],
     );
 }
 
@@ -3284,12 +3190,12 @@ fn rc2_128_a_constant_index_past_an_array_returned_by_a_generic_is_refused() {
 fn rc2_129_an_integer_index_into_a_string_returned_by_a_generic_is_refused() {
     refusal_row_full(
         "rc2-129",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let s = id(\"abc\")\n\
-         \x20   println(\"{s[0]}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n    let s = id(\"abc\");\n\
+         \x20   println!(\"{}\", s[0]);\n}\n",
         &[],
         "E0304",
         &["a `string` cannot be indexed by integer"],
-        &["E0412", "E0901"],
+        &["E0412", "E0901;"],
     );
 }
 
@@ -3297,10 +3203,10 @@ fn rc2_129_an_integer_index_into_a_string_returned_by_a_generic_is_refused() {
 fn rc2_130_a_compound_assignment_of_a_wide_value_into_a_narrow_generic_field_is_refused() {
     refusal_row_full(
         "rc2-130",
-        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { return x }\n\
-         fn get(p: P) -> i32 { return p.b }\nfn main() -> i64 {\n\
-         \x20   let mut p = id(P { a: 3, b: 4 })\n    let big: i64 = 77777777777\n    p.a += big\n\
-         \x20   println(\"{get(p)}\")\n    return 0\n}\n",
+        "struct P { a: i32, b: i32 }\nfn id<T>(x: T) -> T { x }\n\
+         fn get(p: P) -> i32 { p.b }\nfn main() {\n\
+         \x20   let mut p = id(P { a: 3, b: 4 });\n    let big: i64 = 77777777777;\n    p.a += big;\n\
+         \x20   println!(\"{}\", get(p));\n}\n",
         &[],
         "E0301",
         &["expected `i32`, found `i64`"],
@@ -3310,16 +3216,15 @@ fn rc2_130_a_compound_assignment_of_a_wide_value_into_a_narrow_generic_field_is_
 
 const RC2_131: &str = r#"
 struct P { a: i32, b: i32 }
-fn main() -> i64 {
-    let mut p = P { a: -1, b: 100 }
-    let y: i64 = p.a
-    p.a = 5
-    let z = p.a * 2
-    let mut arr: [i32; 2] = [1, 2]
-    arr[0] = 3
-    let w: i64 = arr[0]
-    println("{y} {z} {p.b} {w}")
-    return 0
+fn main() {
+    let mut p = P { a: -1, b: 100 };
+    let y: i64 = p.a;
+    p.a = 5;
+    let z = p.a * 2;
+    let mut arr: [i32; 2] = [1, 2];
+    arr[0] = 3;
+    let w: i64 = arr[0];
+    println!("{y} {z} {} {w}", p.b);
 }
 "#;
 
@@ -3331,15 +3236,14 @@ fn rc2_131_concrete_field_and_element_accesses_still_widen_and_narrow() {
 }
 
 const RC2_132: &str = r#"
-struct N { s: string }
+struct N { s: String }
 struct H { r: Rc<N>, k: i64 }
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut h = H { r: Rc::new(N { s: victim(1) }), k: 1 }
-    let q = Rc::new(N { s: victim(8) })
-    h.r = q
-    println("{Rc::get(h.r).s} {Rc::get(q).s}")
-    return 0
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut h = H { r: Rc::new(N { s: victim(1) }), k: 1 };
+    let q = Rc::new(N { s: victim(8) });
+    h.r = q;
+    println!("{} {}", Rc::get(h.r).s, Rc::get(q).s);
 }
 "#;
 
@@ -3357,9 +3261,9 @@ const SHARED_RESLICE: &str = "[shared-mut] a mutable slice writes through a shar
 fn rc2_133_a_mutable_reslice_of_string_bytes_from_a_generic_is_refused() {
     refusal_row_full(
         "rc2-133",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let s: string = \"hello\"\n\
-         \x20   let mut t = id(s.bytes)\n    let u = t[0..2]\n    let h: u8 = 72\n    u[0] = h\n\
-         \x20   println(\"{s}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n    let s: String = \"hello\";\n\
+         \x20   let mut t = id(s.as_bytes());\n    let u = t[0..2];\n    let h: u8 = 72;\n    u[0] = h;\n\
+         \x20   println!(\"{s}\");\n}\n",
         &[],
         "E0422",
         &[SHARED_RESLICE, "`&[u8]`"],
@@ -3371,10 +3275,9 @@ fn rc2_133_a_mutable_reslice_of_string_bytes_from_a_generic_is_refused() {
 fn rc2_134_a_mutable_reslice_of_heap_string_bytes_from_a_generic_is_refused() {
     refusal_row_full(
         "rc2-134",
-        "fn id<T>(x: T) -> T { return x }\nfn mk(n: i64) -> string { return \"ab\" + \"{n}\" }\n\
-         fn main() -> i64 {\n    let s: string = mk(5)\n    let k = s\n    let mut t = id(s.bytes)\n\
-         \x20   let u = t[0..2]\n    let h: u8 = 90\n    u[0] = h\n    println(\"{k} {s}\")\n\
-         \x20   return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn mk(n: i64) -> String { \"ab\" + format!(\"{n}\") }\n\
+         fn main() {\n    let s: String = mk(5);\n    let k = s;\n    let mut t = id(s.as_bytes());\n\
+         \x20   let u = t[0..2];\n    let h: u8 = 90;\n    u[0] = h;\n    println!(\"{k} {s}\");\n}\n",
         &[],
         "E0422",
         &[SHARED_RESLICE, "`&[u8]`"],
@@ -3386,9 +3289,9 @@ fn rc2_134_a_mutable_reslice_of_heap_string_bytes_from_a_generic_is_refused() {
 fn rc2_135_a_mutable_reslice_of_a_shared_slice_from_a_generic_is_refused() {
     refusal_row_full(
         "rc2-135",
-        "fn id<T>(x: T) -> T { return x }\nfn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n\
-         \x20   let s = a[0..3]\n    let mut t = id(s)\n    let u = t[0..2]\n    u[0] = 9\n\
-         \x20   println(\"{a[0]}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn main() {\n    let a: [i64; 3] = [1, 2, 3];\n\
+         \x20   let s = a[0..3];\n    let mut t = id(s);\n    let u = t[0..2];\n    u[0] = 9;\n\
+         \x20   println!(\"{}\", a[0]);\n}\n",
         &[],
         "E0422",
         &[SHARED_RESLICE, "`&[i64]`"],
@@ -3400,9 +3303,9 @@ fn rc2_135_a_mutable_reslice_of_a_shared_slice_from_a_generic_is_refused() {
 fn rc2_136_a_shared_slice_from_a_generic_resliced_into_a_mutable_parameter_is_refused() {
     refusal_row_full(
         "rc2-136",
-        "fn id<T>(x: T) -> T { return x }\nfn poke(s: &mut [i64]) -> i64 { s[0] = 9\n return 0 }\n\
-         fn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n    let mut t = id(a[0..3])\n\
-         \x20   poke(t[0..3])\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        "fn id<T>(x: T) -> T { x }\nfn poke(s: &mut [i64]) -> i64 { s[0] = 9;\n 0 }\n\
+         fn main() {\n    let a: [i64; 3] = [1, 2, 3];\n    let mut t = id(a[0..3]);\n\
+         \x20   poke(t[0..3]);\n    println!(\"{}\", a[0]);\n}\n",
         &[],
         "E0422",
         &[SHARED_RESLICE, "`&[i64]`"],
@@ -3414,9 +3317,9 @@ fn rc2_136_a_shared_slice_from_a_generic_resliced_into_a_mutable_parameter_is_re
 fn rc2_137_a_mutable_reslice_of_a_shared_slice_through_a_lambda_parameter_is_refused() {
     refusal_row_full(
         "rc2-137",
-        "fn main() -> i64 {\n    let a: [i64; 3] = [1, 2, 3]\n    let f = fn(mut t) -> i64 {\n\
-         \x20       let u = t[0..2]\n        u[0] = 9\n        return 0\n    }\n\
-         \x20   let s = a[0..3]\n    f(s)\n    println(\"{a[0]}\")\n    return 0\n}\n",
+        "fn main() {\n    let a: [i64; 3] = [1, 2, 3];\n    let f = move |mut t| -> i64 {\n\
+         \x20       let u = t[0..2];\n        u[0] = 9;\n        0\n    };\n\
+         \x20   let s = a[0..3];\n    f(s);\n    println!(\"{}\", a[0]);\n}\n",
         &[],
         "E0422",
         &[SHARED_RESLICE, "`&[i64]`"],
@@ -3425,15 +3328,14 @@ fn rc2_137_a_mutable_reslice_of_a_shared_slice_through_a_lambda_parameter_is_ref
 }
 
 const RC2_138: &str = r#"
-fn id<T>(x: T) -> T { return x }
-fn poke(s: &mut [i64]) -> i64 { s[0] = 9
- return 0 }
-fn main() -> i64 {
-    let mut a: [i64; 3] = [1, 2, 3]
-    let mut t = id(a[0..3])
-    poke(t[0..3])
-    println("{a[0]}")
-    return 0
+fn id<T>(x: T) -> T { x }
+fn poke(s: &mut [i64]) -> i64 { s[0] = 9;
+ 0 }
+fn main() {
+    let mut a: [i64; 3] = [1, 2, 3];
+    let mut t = id(a[0..3]);
+    poke(t[0..3]);
+    println!("{}", a[0]);
 }
 "#;
 
@@ -3444,8 +3346,8 @@ fn rc2_138_a_mutable_slice_from_a_generic_still_reslices_into_a_mutable_paramete
     h.assert_legs(18);
 }
 
-const RC2_LATE_CARRIER: &str = "struct N { s: string }\nstruct H { r: Rc<N>, k: i64 }\n\
-     fn victim(n: i64) -> string { return \"ab\" + \"{n}\" }\nfn id<T>(x: T) -> T { return x }\n\
+const RC2_LATE_CARRIER: &str = "struct N { s: String }\nstruct H { r: Rc<N>, k: i64 }\n\
+     fn victim(n: i64) -> String { \"ab\" + format!(\"{n}\") }\nfn id<T>(x: T) -> T { x }\n\
      enum May<T> { Yes(T), No }\n";
 
 const GENERIC_ENUM_RC: &str = "payload 0 of enum variant `May::Yes` stores a value of type \
@@ -3530,15 +3432,14 @@ fn rc2_143_an_rc_field_of_a_generic_result_pushed_into_a_vec_runs() {
 }
 
 const RC2_144: &str = r#"
-fn id<T>(x: T) -> T { return x }
+fn id<T>(x: T) -> T { x }
 enum May<T> { Yes(T), No }
-fn main() -> i64 {
-    let m = May::Yes(id(5))
+fn main() {
+    let m = May::Yes(id(5));
     match m {
-        May::Yes(x) => { println("{x}") }
-        May::No => { println("no") }
+        May::Yes(x) => { println!("{x}"); }
+        May::No => { println!("no"); }
     }
-    return 0
 }
 "#;
 
@@ -3553,14 +3454,13 @@ fn rc2_144_a_plain_value_returned_by_a_generic_still_fills_a_generic_enum() {
 fn rc2_145_a_slice_of_a_value_whose_type_is_never_inferred_asks_for_an_annotation() {
     refusal_row_full(
         "rc2-145",
-        "fn main() -> i64 {\n    let s = fn(t) -> i64 { let x = t[0..1]\n return 0 }\n\
-         \x20   return 0\n}\n",
+        "fn main() {\n    let s = move |t| -> i64 { let x = t[0..1];\n 0 };\n}\n",
         &[],
         "E0304",
         &[
             "type annotations needed: the type of this value is never inferred, so it cannot be sliced",
         ],
-        &["E0425", "τ", "E0901"],
+        &["E0425", "τ;", "E0901"],
     );
 }
 
@@ -3568,19 +3468,18 @@ const RC2_146: &str = r#"
 struct N { k: i64 }
 struct W { n: Rc<N> }
 struct O { w: W }
-fn mk(k: i64) -> Rc<N> { return Rc::new(N { k: k }) }
-fn mkw(k: i64) -> W { return W { n: mk(k) } }
-fn main() -> i64 {
-    let mut t = 0
-    let mut i = 0
+fn mk(k: i64) -> Rc<N> { Rc::new(N { k: k }) }
+fn mkw(k: i64) -> W { W { n: mk(k) } }
+fn main() {
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        let o = O { w: mkw(7) }
-        let w = W { n: mk(5) }
-        t = t + Rc::get(o.w.n).k + Rc::get(w.n).k
-        i = i + 1
+        let o = O { w: mkw(7) };
+        let w = W { n: mk(5) };
+        t = t + Rc::get(o.w.n).k + Rc::get(w.n).k;
+        i = i + 1;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -3595,15 +3494,14 @@ fn rc2_146_a_carrier_field_filled_by_a_call_takes_the_returned_share() {
 const RC2_147: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn build(n: i64) -> Rc<Node> {
-    if n == 0 { return Rc::null() }
-    return Rc::new(Node { val: n, next: build(n - 1) })
+    if n == 0 { return Rc::null(); }
+    Rc::new(Node { val: n, next: build(n - 1) })
 }
-fn main() -> i64 {
-    let h = build(100)
-    let mut t = 0
-    t = t + Rc::get(h).val + Rc::get(Rc::get(h).next).val
-    println("{t}")
-    return 0
+fn main() {
+    let h = build(100);
+    let mut t = 0;
+    t = t + Rc::get(h).val + Rc::get(Rc::get(h).next).val;
+    println!("{t}");
 }
 "#;
 
@@ -3619,17 +3517,16 @@ const RC2_148: &str = r#"
 struct N { k: i64 }
 struct W { n: Rc<N> }
 struct O { w: W }
-fn mk(k: i64) -> Rc<N> { return Rc::new(N { k: k }) }
-fn mkw(k: i64) -> W { return W { n: mk(k) } }
+fn mk(k: i64) -> Rc<N> { Rc::new(N { k: k }) }
+fn mkw(k: i64) -> W { W { n: mk(k) } }
 fn pick(c: bool) -> i64 {
-    let o = O { w: if c { mkw(1) } else { mkw(2) } }
-    let p = O { w: { let z = 3; mkw(z) } }
-    let q = W { n: if c { mk(4) } else { Rc::new(N { k: 6 }) } }
-    return Rc::get(o.w.n).k + Rc::get(p.w.n).k + Rc::get(q.n).k
+    let o = O { w: if c { mkw(1) } else { mkw(2) } };
+    let p = O { w: { let z = 3; mkw(z) } };
+    let q = W { n: if c { mk(4) } else { Rc::new(N { k: 6 }) } };
+    Rc::get(o.w.n).k + Rc::get(p.w.n).k + Rc::get(q.n).k
 }
-fn main() -> i64 {
-    println("{pick(true) + pick(false)}")
-    return 0
+fn main() {
+    println!("{}", pick(true) + pick(false));
 }
 "#;
 
@@ -3646,24 +3543,23 @@ struct N { k: i64 }
 struct W { n: Rc<N> }
 struct O { w: W }
 enum One { It(W) }
-fn id<T>(x: T) -> T { return x }
-fn getw(o: &O) -> W { return (*o).w }
-fn getn(w: W) -> Rc<N> { return w.n }
-fn mkw(k: i64) -> W { return W { n: Rc::new(N { k: k }) } }
-fn unone(o: One) -> i64 { return match o { One::It(w) => Rc::get(w.n).k } }
-fn main() -> i64 {
-    let mut t = 0
-    let mut i = 0
+fn id<T>(x: T) -> T { x }
+fn getw(o: &O) -> W { (*o).w }
+fn getn(w: W) -> Rc<N> { w.n }
+fn mkw(k: i64) -> W { W { n: Rc::new(N { k: k }) } }
+fn unone(o: One) -> i64 { match o { One::It(w) => Rc::get(w.n).k } }
+fn main() {
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        let w = mkw(3)
-        let o1 = O { w: id(w) }
-        let o2 = O { w: getw(&o1) }
-        let w2 = W { n: getn(w) }
-        t = t + Rc::get(o1.w.n).k + Rc::get(o2.w.n).k + Rc::get(w2.n).k + unone(One::It(mkw(1)))
-        i = i + 1
+        let w = mkw(3);
+        let o1 = O { w: id(w) };
+        let o2 = O { w: getw(&o1) };
+        let w2 = W { n: getn(w) };
+        t = t + Rc::get(o1.w.n).k + Rc::get(o2.w.n).k + Rc::get(w2.n).k + unone(One::It(mkw(1)));
+        i = i + 1;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -3677,24 +3573,23 @@ fn rc2_149_a_carrier_field_filled_by_a_generic_or_a_field_returning_call() {
 
 const RC2_150: &str = r#"
 struct N { k: i64 }
-fn main() -> i64 {
-    let mut t = 0
-    let mut i = 0
+fn main() {
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        let h: Rc<N> = Rc::null()
-        let a = Rc::new(N { k: 1 })
-        let b = a
-        if Rc::new("abc") == Rc::new("abc") { t = t + 100 }
-        if h == Rc::null() { t = t + 1 }
-        if a == b { t = t + 1 }
-        if a != h { t = t + 1 }
-        if Rc::is_null(h) { t = t + 1 }
-        if !Rc::is_null(a) { t = t + 1 }
-        if Rc::is_null(Rc::new(N { k: 2 })) { t = t + 100 }
-        i = i + 1
+        let h: Rc<N> = Rc::null();
+        let a = Rc::new(N { k: 1 });
+        let b = a;
+        if Rc::new("abc") == Rc::new("abc") { t = t + 100; }
+        if h == Rc::null() { t = t + 1; }
+        if a == b { t = t + 1; }
+        if a != h { t = t + 1; }
+        if Rc::is_null(h) { t = t + 1; }
+        if !Rc::is_null(a) { t = t + 1; }
+        if Rc::is_null(Rc::new(N { k: 2 })) { t = t + 100; }
+        i = i + 1;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -3707,7 +3602,7 @@ fn rc2_150_rc_is_null_and_rc_equality_compare_handles_without_a_share() {
 }
 
 const RC2_151: &str = r#"
-fn main() -> i64 { let a = [1, 2]; let b = [1, 2]; println("{a == b}"); return 0 }
+fn main() { let a = [1, 2]; let b = [1, 2]; println!("{}", a == b); }
 "#;
 
 #[test]
@@ -3723,7 +3618,7 @@ fn rc2_151_equality_on_arrays_is_refused_by_name() {
 }
 
 const RC2_152: &str = r#"
-fn main() -> i64 { let x = 1; let y = 1; println("{&x == &y}"); return 0 }
+fn main() { let x = 1; let y = 1; println!("{}", &x == &y); }
 "#;
 
 #[test]
@@ -3739,8 +3634,8 @@ fn rc2_152_equality_on_references_is_refused_by_name() {
 }
 
 const RC2_153: &str = r#"
-fn g() -> i64 { return 1 }
-fn main() -> i64 { let a = g; let b = g; println("{a == b}"); return 0 }
+fn g() -> i64 { 1 }
+fn main() { let a = g; let b = g; println!("{}", a == b); }
 "#;
 
 #[test]
@@ -3756,7 +3651,7 @@ fn rc2_153_equality_on_functions_is_refused_by_name() {
 }
 
 const RC2_154: &str = r#"
-fn main() -> i64 { let a: Vec<i64> = Vec::new(); let b: Vec<i64> = Vec::new(); println("{a == b}"); return 0 }
+fn main() { let a: Vec<i64> = Vec::new(); let b: Vec<i64> = Vec::new(); println!("{}", a == b); }
 "#;
 
 #[test]
@@ -3773,8 +3668,8 @@ fn rc2_154_equality_on_vecs_is_refused_by_name() {
 
 const RC2_155: &str = r#"
 struct P { a: i64 }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 { let a = id(P { a: 1 }); let b = id([1, 2]); println("{a == a} {b != b}"); return 0 }
+fn id<T>(x: T) -> T { x }
+fn main() { let a = id(P { a: 1 }); let b = id([1, 2]); println!("{} {}", a == a, b != b); }
 "#;
 
 #[test]
@@ -3794,8 +3689,8 @@ fn rc2_155_equality_on_late_typed_structs_and_arrays_is_refused_by_name() {
 
 const RC2_156: &str = r#"
 struct N { k: i64 }
-fn same<T: eq>(a: T, b: T) -> bool { return a == b }
-fn main() -> i64 { let a = Rc::new(N { k: 1 }); println("{same(a, a)}"); return 0 }
+fn same<T: PartialEq>(a: T, b: T) -> bool { a == b }
+fn main() { let a = Rc::new(N { k: 1 }); println!("{}", same(a, a)); }
 "#;
 
 #[test]
@@ -3812,21 +3707,20 @@ fn rc2_156_an_eq_bound_instantiated_with_an_rc_names_the_identity_asymmetry() {
 
 const RC2_157: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let mut head: Rc<Node> = Rc::null()
-    let mut i = 0
+fn main() {
+    let mut head: Rc<Node> = Rc::null();
+    let mut i = 0;
     while i < 1000 {
-        head = Rc::new(Node { val: i, next: head })
-        i = i + 1
+        head = Rc::new(Node { val: i, next: head });
+        i = i + 1;
     }
-    let mut cur = head
-    let mut t = 0
+    let mut cur = head;
+    let mut t = 0;
     while !Rc::is_null(cur) {
-        t = t + Rc::get(cur).val
-        cur = Rc::get(cur).next
+        t = t + Rc::get(cur).val;
+        cur = Rc::get(cur).next;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -3840,12 +3734,11 @@ fn rc2_157_a_mutable_rc_binding_builds_and_walks_a_list() {
 
 const RC2_158: &str = r#"
 struct N { k: i64 }
-fn f(a: Rc<N>, z: i64) -> i64 { return Rc::get(a).k * 100 + z }
-fn main() -> i64 {
-    let mut cur = Rc::new(N { k: 1 })
-    let r = f(cur, { cur = Rc::new(N { k: 5 }); 0 })
-    println("{r} {Rc::get(cur).k}")
-    return 0
+fn f(a: Rc<N>, z: i64) -> i64 { Rc::get(a).k * 100 + z }
+fn main() {
+    let mut cur = Rc::new(N { k: 1 });
+    let r = f(cur, { cur = Rc::new(N { k: 5 }); 0 });
+    println!("{r} {}", Rc::get(cur).k);
 }
 "#;
 
@@ -3858,15 +3751,14 @@ fn rc2_158_a_sibling_that_reassigns_a_mutable_rc_leaves_the_argument_its_old_val
 }
 
 const RC2_159: &str = r#"
-struct N { k: i64, s: string }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut cur = Rc::new(N { k: 42, s: mk(1) })
-    let r = &Rc::get(cur).k
-    cur = Rc::new(N { k: 7, s: mk(2) })
-    let z = Rc::new(N { k: 9, s: mk(3) })
-    println("{*r} {Rc::get(z).k}")
-    return 0
+struct N { k: i64, s: String }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut cur = Rc::new(N { k: 42, s: mk(1) });
+    let r = &Rc::get(cur).k;
+    cur = Rc::new(N { k: 7, s: mk(2) });
+    let z = Rc::new(N { k: 9, s: mk(3) });
+    println!("{} {}", *r, Rc::get(z).k);
 }
 "#;
 
@@ -3879,15 +3771,14 @@ fn rc2_159_a_reference_into_the_payload_of_a_mutable_rc_survives_its_reassignmen
 }
 
 const RC2_160: &str = r#"
-struct N { s: string }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut cur = Rc::new(N { s: mk(12345) })
-    let b = Rc::get(cur).s.bytes
-    cur = Rc::new(N { s: mk(99999) })
-    let z = Rc::new(N { s: mk(77777) })
-    println("{b[0]} {b[2]} {b.len} {Rc::get(z).s.len}")
-    return 0
+struct N { s: String }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut cur = Rc::new(N { s: mk(12345) });
+    let b = Rc::get(cur).s.as_bytes();
+    cur = Rc::new(N { s: mk(99999) });
+    let z = Rc::new(N { s: mk(77777) });
+    println!("{} {} {} {}", b[0], b[2], b.len(), Rc::get(z).s.len());
 }
 "#;
 
@@ -4019,27 +3910,26 @@ const RC2_165: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
 struct O { l: List, k: i64 }
-fn f(a: Rc<Node>, z: i64) -> i64 { if Rc::is_null(a) { return z } return Rc::get(a).val * 100 + z }
-fn main() -> i64 {
-    let mut l = List { head: Rc::new(Node { val: 1, next: Rc::new(Node { val: 2, next: Rc::null() }) }), len: 2 }
-    let mut t = 0
-    l.head = l.head
-    t = t + f(l.head, { l.head = Rc::get(l.head).next; 0 })
-    t = t + f(l.head, 0)
-    let mut o = O { l: List { head: Rc::null(), len: 0 }, k: 0 }
-    o.l.head = Rc::new(Node { val: 5, next: o.l.head })
-    o.l.head = Rc::new(Node { val: 6, next: o.l.head })
-    t = t + Rc::get(o.l.head).val + Rc::get(Rc::get(o.l.head).next).val
-    let h = Rc::new(O { l: List { head: Rc::null(), len: 0 }, k: 0 })
-    h.l.head = Rc::new(Node { val: 7, next: h.l.head })
-    Rc::get(h).l.head = Rc::new(Node { val: 8, next: Rc::get(h).l.head })
-    t = t + Rc::get(h.l.head).val
-    let n = Rc::new(Node { val: 9, next: Rc::null() })
-    Rc::get(n).next = Rc::new(Node { val: 10, next: Rc::null() })
-    Rc::get(n).next = Rc::new(Node { val: 11, next: Rc::get(n).next })
-    t = t + Rc::get(Rc::get(Rc::get(n).next).next).val
-    println("{t}")
-    return 0
+fn f(a: Rc<Node>, z: i64) -> i64 { if Rc::is_null(a) { return z; } Rc::get(a).val * 100 + z }
+fn main() {
+    let mut l = List { head: Rc::new(Node { val: 1, next: Rc::new(Node { val: 2, next: Rc::null() }) }), len: 2 };
+    let mut t = 0;
+    l.head = l.head;
+    t = t + f(l.head, { l.head = Rc::get(l.head).next; 0 });
+    t = t + f(l.head, 0);
+    let mut o = O { l: List { head: Rc::null(), len: 0 }, k: 0 };
+    o.l.head = Rc::new(Node { val: 5, next: o.l.head });
+    o.l.head = Rc::new(Node { val: 6, next: o.l.head });
+    t = t + Rc::get(o.l.head).val + Rc::get(Rc::get(o.l.head).next).val;
+    let h = Rc::new(O { l: List { head: Rc::null(), len: 0 }, k: 0 });
+    h.l.head = Rc::new(Node { val: 7, next: h.l.head });
+    Rc::get(h).l.head = Rc::new(Node { val: 8, next: Rc::get(h).l.head });
+    t = t + Rc::get(h.l.head).val;
+    let n = Rc::new(Node { val: 9, next: Rc::null() });
+    Rc::get(n).next = Rc::new(Node { val: 10, next: Rc::null() });
+    Rc::get(n).next = Rc::new(Node { val: 11, next: Rc::get(n).next });
+    t = t + Rc::get(Rc::get(Rc::get(n).next).next).val;
+    println!("{t}");
 }
 "#;
 
@@ -4052,17 +3942,16 @@ fn rc2_165_rc_field_writes_on_nested_local_handle_and_rc_get_roots() {
 }
 
 const RC2_166: &str = r#"
-struct Node { val: i64, s: string, next: Rc<Node> }
+struct Node { val: i64, s: String, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut l = List { head: Rc::new(Node { val: 42, s: mk(12345), next: Rc::null() }), len: 1 }
-    let r = &Rc::get(l.head).val
-    let b = Rc::get(l.head).s.bytes
-    l.head = Rc::new(Node { val: 7, s: mk(99999), next: Rc::null() })
-    let z = Rc::new(Node { val: 9, s: mk(77777), next: Rc::null() })
-    println("{*r} {b[2]} {b.len} {Rc::get(z).val}")
-    return 0
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut l = List { head: Rc::new(Node { val: 42, s: mk(12345), next: Rc::null() }), len: 1 };
+    let r = &Rc::get(l.head).val;
+    let b = Rc::get(l.head).s.as_bytes();
+    l.head = Rc::new(Node { val: 7, s: mk(99999), next: Rc::null() });
+    let z = Rc::new(Node { val: 9, s: mk(77777), next: Rc::null() });
+    println!("{} {} {} {}", *r, b[2], b.len(), Rc::get(z).val);
 }
 "#;
 
@@ -4076,23 +3965,22 @@ fn rc2_166_views_into_the_old_node_survive_an_rc_field_write_on_a_local() {
 
 const RC2_167: &str = r#"
 fn mkv<T>(x: T) -> Vec<T> {
-    let mut v: Vec<T> = Vec::new()
-    Vec::push(v, x)
-    return v
+    let mut v: Vec<T> = Vec::new();
+    Vec::push(v, x);
+    v
 }
 fn esc<T>(x: T) -> Vec<&i64> {
-    let a: [i64; 3] = [7, 8, 41]
-    return mkv(&a[2])
+    let a: [i64; 3] = [7, 8, 41];
+    mkv(&a[2])
 }
 fn burn() -> i64 {
-    let z: [i64; 16] = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]
-    return z[3]
+    let z: [i64; 16] = [5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5];
+    z[3]
 }
-fn main() -> i64 {
-    let v = esc(1)
-    let b: i64 = burn()
-    println("{*v[0]} {b}")
-    return 0
+fn main() {
+    let v = esc(1);
+    let b: i64 = burn();
+    println!("{} {b}", *v[0]);
 }
 "#;
 
@@ -4110,12 +3998,11 @@ fn rc2_167_a_reference_vec_made_inside_a_generic_body_names_the_inner_call() {
 
 const RC2_168: &str = r#"
 struct N { v: i64 }
-fn rd<T>(x: &T) -> T { return *x }
-fn main() -> i64 {
-    let p: Rc<N> = Rc::new(N { v: 9 })
-    let q: Rc<N> = rd(&p)
-    println("{Rc::get(q).v}  {Rc::get(p).v}")
-    return 0
+fn rd<T>(x: &T) -> T { *x }
+fn main() {
+    let p: Rc<N> = Rc::new(N { v: 9 });
+    let q: Rc<N> = rd(&p);
+    println!("{}  {}", Rc::get(q).v, Rc::get(p).v);
 }
 "#;
 
@@ -4136,12 +4023,11 @@ fn rc2_168_a_generic_deref_that_yields_an_rc_is_refused_by_name() {
 
 const RC2_169: &str = r#"
 struct N { v: i64 }
-fn rd(x: &Rc<N>) -> Rc<N> { return *x }
-fn main() -> i64 {
-    let p: Rc<N> = Rc::new(N { v: 9 })
-    let q: Rc<N> = rd(&p)
-    println("{Rc::get(q).v}  {Rc::get(p).v}")
-    return 0
+fn rd(x: &Rc<N>) -> Rc<N> { *x }
+fn main() {
+    let p: Rc<N> = Rc::new(N { v: 9 });
+    let q: Rc<N> = rd(&p);
+    println!("{}  {}", Rc::get(q).v, Rc::get(p).v);
 }
 "#;
 
@@ -4154,10 +4040,10 @@ fn rc2_169_a_concrete_deref_that_yields_an_rc_takes_its_own_share() {
 }
 
 const RC2_170: &str = r#"
-struct P { x: i64, s: string }
-struct Q { a: i64, t: string }
-fn f(r: &P) -> Q { return Q { a: (*r).x, t: (*r).s } }
-fn main() -> i64 { let p = P { x: 4, s: "zz" }; let q = f(&p); println("{q.a} {q.t}"); return 0 }
+struct P { x: i64, s: String }
+struct Q { a: i64, t: String }
+fn f(r: &P) -> Q { Q { a: (*r).x, t: (*r).s } }
+fn main() { let p = P { x: 4, s: "zz" }; let q = f(&p); println!("{} {}", q.a, q.t); }
 "#;
 
 #[test]
@@ -4231,24 +4117,23 @@ fn rc2_171_the_linked_list_of_the_first_hour() {
 const RC2_172: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn find(h: Rc<Node>, v: i64) -> i64 {
-    let mut cur = h
+    let mut cur = h;
     while !Rc::is_null(cur) {
-        if Rc::get(cur).val == v { return Rc::get(cur).val * 10 }
-        cur = Rc::get(cur).next
+        if Rc::get(cur).val == v { return Rc::get(cur).val * 10; }
+        cur = Rc::get(cur).next;
     }
-    return -1
+    -1
 }
-fn main() -> i64 {
-    let mut head: Rc<Node> = Rc::null()
-    let mut i = 0
-    while i < 100 { head = Rc::new(Node { val: i, next: head }); i = i + 1 }
-    let mut t = 0
-    let mut j = 0
-    while j < 100 { t = t + find(head, j); j = j + 1 }
-    let mut cur = head
-    while true { if Rc::is_null(cur) { break } cur = Rc::get(cur).next }
-    println("{t} {find(head, 500)}")
-    return 0
+fn main() {
+    let mut head: Rc<Node> = Rc::null();
+    let mut i = 0;
+    while i < 100 { head = Rc::new(Node { val: i, next: head }); i = i + 1; }
+    let mut t = 0;
+    let mut j = 0;
+    while j < 100 { t = t + find(head, j); j = j + 1; }
+    let mut cur = head;
+    while true { if Rc::is_null(cur) { break; } cur = Rc::get(cur).next; }
+    println!("{t} {}", find(head, 500));
 }
 "#;
 
@@ -4261,8 +4146,8 @@ fn rc2_172_a_mutable_rc_cursor_left_by_return_or_break() {
 }
 
 const RC2_173: &str = r#"
-nogc fn take(x: &Rc<i64>) -> Rc<i64> { return *x }
-fn main() -> i64 { return 0 }
+nogc fn take(x: &Rc<i64>) -> Rc<i64> { *x }
+fn main() { }
 "#;
 
 #[test]
@@ -4280,10 +4165,9 @@ fn rc2_173_a_nogc_deref_of_an_rc_is_still_left_to_the_effect_rule() {
 const RC2_174: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
-fn main() -> i64 {
-    let mut l = List { head: Rc::null(), len: 0 }
-    l.head = if true { Rc::new(Node { val: 1, next: Rc::null() }) } else { Rc::null() }
-    return 0
+fn main() {
+    let mut l = List { head: Rc::null(), len: 0 };
+    l.head = if true { Rc::new(Node { val: 1, next: Rc::null() }) } else { Rc::null() };
 }
 "#;
 
@@ -4303,23 +4187,22 @@ const RC2_175: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct List { head: Rc<Node>, len: i64 }
 fn f(mut l: List) -> i64 {
-    l.head = Rc::new(Node { val: 3, next: Rc::null() })
-    return Rc::get(l.head).val
+    l.head = Rc::new(Node { val: 3, next: Rc::null() });
+    Rc::get(l.head).val
 }
 fn g(mut h: Rc<Node>) -> i64 {
-    h = Rc::new(Node { val: 4, next: Rc::null() })
-    return Rc::get(h).val
+    h = Rc::new(Node { val: 4, next: Rc::null() });
+    Rc::get(h).val
 }
-fn main() -> i64 {
-    let l = List { head: Rc::new(Node { val: 1, next: Rc::null() }), len: 1 }
-    let a = f(l)
-    let b = f(l)
-    let h = Rc::new(Node { val: 2, next: Rc::null() })
-    let c = g(h)
-    let d = g(h)
-    let z = Rc::new(Node { val: 9, next: Rc::null() })
-    println("{a} {b} {c} {d} {Rc::get(l.head).val} {Rc::get(h).val} {Rc::get(z).val}")
-    return 0
+fn main() {
+    let l = List { head: Rc::new(Node { val: 1, next: Rc::null() }), len: 1 };
+    let a = f(l);
+    let b = f(l);
+    let h = Rc::new(Node { val: 2, next: Rc::null() });
+    let c = g(h);
+    let d = g(h);
+    let z = Rc::new(Node { val: 9, next: Rc::null() });
+    println!("{a} {b} {c} {d} {} {} {}", Rc::get(l.head).val, Rc::get(h).val, Rc::get(z).val);
 }
 "#;
 
@@ -4333,12 +4216,11 @@ fn rc2_175_a_mutable_parameter_rewritten_leaves_the_caller_its_value() {
 
 const RC2_176: &str = r#"
 struct N { val: i64 }
-fn adv(r: &mut Rc<N>) { *r = Rc::new(N { val: 77 }) }
-fn main() -> i64 {
-    let mut cur = Rc::new(N { val: 1 })
-    adv(&mut cur)
-    println("{Rc::get(cur).val}")
-    return 0
+fn adv(r: &mut Rc<N>) { *r = Rc::new(N { val: 77 }); }
+fn main() {
+    let mut cur = Rc::new(N { val: 1 });
+    adv(&mut cur);
+    println!("{}", Rc::get(cur).val);
 }
 "#;
 
@@ -4352,13 +4234,12 @@ fn rc2_176_an_rc_written_through_a_mutable_reference_takes_its_share() {
 
 const RC2_177: &str = r#"
 struct N { val: i64 }
-fn adv(r: &mut Rc<N>) { *r = Rc::new(N { val: 77 }) }
-fn g(mut h: Rc<N>) -> i64 { adv(&mut h)
-  return Rc::get(h).val }
-fn main() -> i64 {
-    let a = Rc::new(N { val: 1 })
-    println("{g(a)} {Rc::get(a).val}")
-    return 0
+fn adv(r: &mut Rc<N>) { *r = Rc::new(N { val: 77 }); }
+fn g(mut h: Rc<N>) -> i64 { adv(&mut h);
+  Rc::get(h).val }
+fn main() {
+    let a = Rc::new(N { val: 1 });
+    println!("{} {}", g(a), Rc::get(a).val);
 }
 "#;
 
@@ -4372,13 +4253,13 @@ fn rc2_177_an_rc_written_through_a_reference_to_a_mutable_parameter_takes_its_sh
 
 const RC2_178: &str = r#"
 struct N { val: i64 }
-fn set(r: &mut Rc<N>, v: Rc<N>) { *r = v }
-fn main() -> i64 {
- let mut cur = Rc::new(N { val: 1 })
- let b = Rc::new(N { val: 2 })
- set(&mut cur, b)
- println("{Rc::get(cur).val} {Rc::get(b).val}")
- return 0 }
+fn set(r: &mut Rc<N>, v: Rc<N>) { *r = v; }
+fn main() {
+ let mut cur = Rc::new(N { val: 1 });
+ let b = Rc::new(N { val: 2 });
+ set(&mut cur, b);
+ println!("{} {}", Rc::get(cur).val, Rc::get(b).val);
+ }
 "#;
 
 #[test]
@@ -4390,22 +4271,21 @@ fn rc2_178_an_rc_argument_written_through_a_mutable_reference_takes_its_share() 
 }
 
 const RC2_179: &str = r#"
-struct Node { val: i64, s: string, next: Rc<Node> }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn nd(v: i64, nx: Rc<Node>) -> Rc<Node> { return Rc::new(Node { val: v, s: mk(v), next: nx }) }
+struct Node { val: i64, s: String, next: Rc<Node> }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn nd(v: i64, nx: Rc<Node>) -> Rc<Node> { Rc::new(Node { val: v, s: mk(v), next: nx }) }
 
-fn adv(r: &mut Rc<Node>) { *r = nd(77, Rc::null()) }
-fn main() -> i64 {
-    let mut t = 0
-    let mut i = 0
+fn adv(r: &mut Rc<Node>) { *r = nd(77, Rc::null()); }
+fn main() {
+    let mut t = 0;
+    let mut i = 0;
     while i < 1000 {
-        let mut cur = nd(1, nd(2, Rc::null()))
-        adv(&mut cur)
-        t = t + Rc::get(cur).val + Rc::get(cur).s.len
-        i = i + 1
+        let mut cur = nd(1, nd(2, Rc::null()));
+        adv(&mut cur);
+        t = t + Rc::get(cur).val + Rc::get(cur).s.len();
+        i = i + 1;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -4419,13 +4299,13 @@ fn rc2_179_a_list_cursor_advanced_through_a_mutable_reference_takes_its_share() 
 
 const RC2_180: &str = r#"
 struct N { val: i64 }
-fn set<T>(r: &mut T, v: T) { *r = v }
-fn main() -> i64 {
- let mut cur = Rc::new(N { val: 1 })
- let b = Rc::new(N { val: 2 })
- set(&mut cur, b)
- println("{Rc::get(cur).val} {Rc::get(b).val}")
- return 0 }
+fn set<T>(r: &mut T, v: T) { *r = v; }
+fn main() {
+ let mut cur = Rc::new(N { val: 1 });
+ let b = Rc::new(N { val: 2 });
+ set(&mut cur, b);
+ println!("{} {}", Rc::get(cur).val, Rc::get(b).val);
+ }
 "#;
 
 #[test]
@@ -4447,10 +4327,10 @@ const RC2_181: &str = r#"
 struct N { k: i64 }
 struct W { n: Rc<N> }
 struct O { w: W, k: i64 }
-fn main() -> i64 { let mut o = O { w: W { n: Rc::new(N{k:1}) }, k: 0 }
- o.w = W { n: Rc::new(N{k:2}) }
- println("{Rc::get(o.w.n).k}")
- return 0 }
+fn main() { let mut o = O { w: W { n: Rc::new(N{k:1}) }, k: 0 };
+ o.w = W { n: Rc::new(N{k:2}) };
+ println!("{}", Rc::get(o.w.n).k);
+ }
 "#;
 
 #[test]
@@ -4468,11 +4348,11 @@ fn rc2_181_a_nominal_carrier_field_written_in_place_is_still_refused() {
 const RC2_182: &str = r#"
 struct N { k: i64 }
 struct L { head: Rc<N>, k: i64 }
-nogc fn f(mut l: L) -> i64 { l.head = Rc::null()
-  return l.k }
-fn main() -> i64 { let l = L { head: Rc::new(N{k:1}), k: 4 }
-  println("{f(l)} {Rc::get(l.head).k}")
-  return 0 }
+nogc fn f(mut l: L) -> i64 { l.head = Rc::null();
+  l.k }
+fn main() { let l = L { head: Rc::new(N{k:1}), k: 4 };
+  println!("{} {}", f(l), Rc::get(l.head).k);
+ }
 "#;
 
 #[test]
@@ -4489,18 +4369,17 @@ fn rc2_182_an_rc_field_written_in_a_nogc_function_is_still_refused() {
 
 const RC2_183: &str = r#"
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let s = Vec::as_slice(v)
-        for i in 0..1000 { Vec::push(v, i) }
-        return s[0]
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let s = Vec::as_slice(v);
+        for i in 0..1000 { Vec::push(v, i); }
+        s[0]
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4518,19 +4397,18 @@ fn rc2_183_a_view_of_a_captured_vec_held_across_a_push_in_the_closure_is_refused
 
 const RC2_184: &str = r#"
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let s = Vec::as_slice(v)
-        v = Vec::new()
-        for i in 0..1000 { Vec::push(v, i) }
-        return s[0]
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let s = Vec::as_slice(v);
+        v = Vec::new();
+        for i in 0..1000 { Vec::push(v, i); }
+        s[0]
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4547,16 +4425,15 @@ fn rc2_184_a_view_of_a_captured_vec_held_across_its_reassignment_in_the_closure_
 }
 
 const RC2_185: &str = r#"
-fn main() -> i64 {
-    let f = fn() -> i64 {
-        let mut v: Vec<i64> = Vec::new()
-        Vec::push(v, 41)
-        let s = Vec::as_slice(v)
-        for i in 0..1000 { Vec::push(v, i) }
-        return s[0]
-    }
-    println("{f()}")
-    return 0
+fn main() {
+    let f = move || -> i64 {
+        let mut v: Vec<i64> = Vec::new();
+        Vec::push(v, 41);
+        let s = Vec::as_slice(v);
+        for i in 0..1000 { Vec::push(v, i); }
+        s[0]
+    };
+    println!("{}", f());
 }
 "#;
 
@@ -4573,17 +4450,16 @@ fn rc2_185_a_view_of_a_vec_local_to_a_closure_held_across_a_push_is_refused() {
 }
 
 const RC2_186: &str = r#"
-fn main() -> i64 {
-    let mut w: Vec<i64> = Vec::new()
-    Vec::push(w, 41)
-    let f = fn(mut v: Vec<i64>) -> i64 {
-        let s = Vec::as_slice(v)
-        v = Vec::new()
-        for i in 0..1000 { Vec::push(v, i) }
-        return s[0]
-    }
-    println("{f(w)}")
-    return 0
+fn main() {
+    let mut w: Vec<i64> = Vec::new();
+    Vec::push(w, 41);
+    let f = move |mut v: Vec<i64>| -> i64 {
+        let s = Vec::as_slice(v);
+        v = Vec::new();
+        for i in 0..1000 { Vec::push(v, i); }
+        s[0]
+    };
+    println!("{}", f(w));
 }
 "#;
 
@@ -4601,21 +4477,20 @@ fn rc2_186_a_view_of_a_closure_parameter_vec_held_across_its_reassignment_is_ref
 
 const RC2_187: &str = r#"
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let g = fn() -> i64 {
-            let s = Vec::as_slice(v)
-            for i in 0..1000 { Vec::push(v, i) }
-            return s[0]
-        }
-        return g()
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let g = move || -> i64 {
+            let s = Vec::as_slice(v);
+            for i in 0..1000 { Vec::push(v, i); }
+            s[0]
+        };
+        g()
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4633,21 +4508,20 @@ fn rc2_187_a_view_of_a_captured_vec_in_a_nested_closure_held_across_a_push_is_re
 
 const RC2_188: &str = r#"
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let mut t = 0
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let mut t = 0;
         for x in Vec::as_slice(v) {
-            for i in 0..1000 { Vec::push(v, i) }
-            t = t + x
+            for i in 0..1000 { Vec::push(v, i); }
+            t = t + x;
         }
-        return t
+        t
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4665,18 +4539,17 @@ fn rc2_188_a_loop_over_a_captured_vec_slice_that_pushes_is_refused() {
 
 const RC2_189: &str = r#"
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let s: &mut [i64] = Vec::try_as_unique_mut_slice(v)
-        for i in 0..1000 { Vec::push(v, i) }
-        return s[0]
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let s: &mut [i64] = Vec::try_as_unique_mut_slice(v);
+        for i in 0..1000 { Vec::push(v, i); }
+        s[0]
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4693,19 +4566,18 @@ fn rc2_189_a_mutable_view_of_a_captured_vec_held_across_a_push_is_refused() {
 }
 
 const RC2_190: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
 fn mkf() -> fn() -> i64 {
-    let mut s = mk(1)
-    return fn() -> i64 {
-        let b = s.bytes
-        s = mk(2)
-        return b[0] as i64
+    let mut s = mk(1);
+    move || -> i64 {
+        let b = s.as_bytes();
+        s = mk(2);
+        b[0] as i64
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4722,20 +4594,19 @@ fn rc2_190_the_bytes_of_a_captured_string_held_across_its_reassignment_are_refus
 }
 
 const RC2_191: &str = r#"
-struct B { s: string, k: i64 }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
+struct B { s: String, k: i64 }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
 fn mkf() -> fn() -> i64 {
-    let mut bb = B { s: mk(1), k: 0 }
-    return fn() -> i64 {
-        let b = bb.s.bytes
-        bb.s = mk(2)
-        return b[0] as i64
+    let mut bb = B { s: mk(1), k: 0 };
+    move || -> i64 {
+        let b = bb.s.as_bytes();
+        bb.s = mk(2);
+        b[0] as i64
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4752,20 +4623,19 @@ fn rc2_191_the_bytes_of_a_captured_struct_field_held_across_a_field_store_are_re
 }
 
 const RC2_192: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, mk(1))
-    return fn() -> i64 {
-        let b = v[0].bytes
-        v[0] = mk(2)
-        return b[0] as i64
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, mk(1));
+    move || -> i64 {
+        let b = v[0].as_bytes();
+        v[0] = mk(2);
+        b[0] as i64
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    println("{f()}")
-    return 0
+fn main() {
+    let f = mkf();
+    println!("{}", f());
 }
 "#;
 
@@ -4782,34 +4652,33 @@ fn rc2_192_the_bytes_of_a_captured_vec_element_held_across_an_element_store_are_
 }
 
 const RC2_193: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    return fn() -> i64 {
-        let s = Vec::as_slice(v)
-        let g = fn() -> i64 {
-            for i in 0..1000 { Vec::push(v, i) }
-            return v.len
-        }
-        let n = g()
-        return s[0] + n
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    move || -> i64 {
+        let s = Vec::as_slice(v);
+        let g = move || -> i64 {
+            for i in 0..1000 { Vec::push(v, i); }
+            v.len()
+        };
+        let n = g();
+        s[0] + n
     }
 }
-fn main() -> i64 {
-    let f = mkf()
-    let a = f()
-    let b = f()
-    let mut w: Vec<string> = Vec::new()
-    Vec::push(w, mk(1))
-    let s = Vec::as_slice(w)
-    let h = fn() -> i64 {
-        for i in 0..100 { Vec::push(w, mk(i)) }
-        return w.len
-    }
-    let n = h()
-    println("{a} {b} {s[0]} {n}")
-    return 0
+fn main() {
+    let f = mkf();
+    let a = f();
+    let b = f();
+    let mut w: Vec<String> = Vec::new();
+    Vec::push(w, mk(1));
+    let s = Vec::as_slice(w);
+    let h = move || -> i64 {
+        for i in 0..100 { Vec::push(w, mk(i)); }
+        w.len()
+    };
+    let n = h();
+    println!("{a} {b} {} {n}", s[0]);
 }
 "#;
 
@@ -4822,18 +4691,17 @@ fn rc2_193_a_captured_vec_viewed_without_a_conflicting_write_stays_accepted() {
 }
 
 const RC2_194: &str = r#"
-fn mk(n: i64) -> string { return "s" + "{n}" }
+fn mk(n: i64) -> String { "s" + format!("{n}") }
 fn mkf() -> fn() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    for i in 0..3 { Vec::push(v, mk(i)) }
-    return fn() -> i64 { return v.len }
+    let mut v: Vec<String> = Vec::new();
+    for i in 0..3 { Vec::push(v, mk(i)); }
+    move || -> i64 { v.len() }
 }
-fn main() -> i64 {
-    let mut t = 0
-    for i in 0..1000 { let f = mkf()
-        t = t + f() }
-    println("{t}")
-    return 0
+fn main() {
+    let mut t = 0;
+    for i in 0..1000 { let f = mkf();
+        t = t + f(); }
+    println!("{t}");
 }
 "#;
 
@@ -4846,23 +4714,22 @@ fn rc2_194_closures_returning_a_captured_vec_length_stay_balanced() {
 }
 
 const RC2_195: &str = r#"
-fn mk(n: i64) -> string { return "s" + "{n}" }
-fn main() -> i64 {
-    let mut t = 0
+fn mk(n: i64) -> String { "s" + format!("{n}") }
+fn main() {
+    let mut t = 0;
     for k in 0..1000 {
-        let mut v: Vec<string> = Vec::new()
-        Vec::push(v, mk(1))
-        let f = fn() -> i64 { Vec::push(v, mk(2))
-            return v.len }
-        let a = f()
-        Vec::push(v, mk(3))
-        let b = f()
-        let g = f
-        let c = g()
-        t = t + a * 100 + b * 10 + c + v.len * 1000
+        let mut v: Vec<String> = Vec::new();
+        Vec::push(v, mk(1));
+        let f = move || -> i64 { Vec::push(v, mk(2));
+            v.len() };
+        let a = f();
+        Vec::push(v, mk(3));
+        let b = f();
+        let g = f;
+        let c = g();
+        t = t + a * 100 + b * 10 + c + v.len() * 1000;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -4875,23 +4742,22 @@ fn rc2_195_a_closure_pushing_into_its_captured_vec_stays_balanced() {
 }
 
 const RC2_196: &str = r#"
-fn mk(n: i64) -> string { return "item" + "{n}" }
-fn add(items: &mut Vec<string>, total: &mut i64, x: string) {
-    Vec::push(*items, x)
-    *total = *total + 1
+fn mk(n: i64) -> String { "item" + format!("{n}") }
+fn add(items: &mut Vec<String>, total: &mut i64, x: String) {
+    Vec::push(*items, x);
+    *total = *total + 1;
 }
-fn main() -> i64 {
-    let mut t = 0
+fn main() {
+    let mut t = 0;
     for k in 0..1000 {
-        let mut items: Vec<string> = Vec::new()
-        let mut total = 0
-        for i in 0..3 { add(&mut items, &mut total, mk(i)) }
-        let snap = items
-        add(&mut items, &mut total, mk(9))
-        t = t + items.len + snap.len + total
+        let mut items: Vec<String> = Vec::new();
+        let mut total = 0;
+        for i in 0..3 { add(&mut items, &mut total, mk(i)); }
+        let snap = items;
+        add(&mut items, &mut total, mk(9));
+        t = t + items.len() + snap.len() + total;
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -4904,23 +4770,22 @@ fn rc2_196_two_vec_locals_passed_by_mutable_reference_replace_a_vec_field() {
 }
 
 const RC2_197: &str = r#"
-struct Bag { items: [string; 8], n: i64 }
-fn mk(n: i64) -> string { return "item" + "{n}" }
-fn add(b: &mut Bag, x: string) {
-    (*b).items[(*b).n] = x
-    (*b).n = (*b).n + 1
+struct Bag { items: [String; 8], n: i64 }
+fn mk(n: i64) -> String { "item" + format!("{n}") }
+fn add(b: &mut Bag, x: String) {
+    (*b).items[(*b).n] = x;
+    (*b).n = (*b).n + 1;
 }
-fn main() -> i64 {
-    let mut t = 0
+fn main() {
+    let mut t = 0;
     for k in 0..1000 {
-        let mut b = Bag { items: ["", "", "", "", "", "", "", ""], n: 0 }
-        for i in 0..3 { add(&mut b, mk(i)) }
-        let c = b
-        add(&mut b, mk(9))
-        t = t + b.n + c.n + b.items[3].len + c.items[3].len
+        let mut b = Bag { items: ["", "", "", "", "", "", "", ""], n: 0 };
+        for i in 0..3 { add(&mut b, mk(i)); }
+        let c = b;
+        add(&mut b, mk(9));
+        t = t + b.n + c.n + b.items[3].len() + c.items[3].len();
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -4933,15 +4798,14 @@ fn rc2_197_a_fixed_size_array_field_replaces_a_vec_field() {
 }
 
 const RC2_198: &str = r#"
-enum E { A(Vec<string>), B }
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, mk(1))
-    let e = E::A(v)
-    Vec::push(v, mk(2))
-    match e { E::A(w) => { println("{w.len} {v.len} {w[0]}") } E::B => { println(0) } }
-    return 0
+enum E { A(Vec<String>), B }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, mk(1));
+    let e = E::A(v);
+    Vec::push(v, mk(2));
+    match e { E::A(w) => { println!("{} {} {}", w.len(), v.len(), w[0]); } E::B => { println!("{}", 0); } }
 }
 "#;
 
@@ -4954,20 +4818,19 @@ fn rc2_198_a_vec_enum_payload_keeps_its_share_while_the_source_grows() {
 }
 
 const RC2_199: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
-fn id(x: i64) -> i64 { return x }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i); } }
+fn id(x: i64) -> i64 { x }
 fn getf(v: &mut Vec<i64>) -> fn(i64) -> i64 {
-    for i in 0..1000 { Vec::push(*v, i) }
-    return fn(x: i64) -> i64 { return x }
+    for i in 0..1000 { Vec::push(*v, i); }
+    move |x: i64| -> i64 { x }
 }
-fn main() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    let r = Vec::as_slice(v)
-    let z = getf(&mut v)(0)
-    println("{r[0]} {z}")
-    return 0
+fn main() {
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    let r = Vec::as_slice(v);
+    let z = getf(&mut v)(0);
+    println!("{} {z}", r[0]);
 }
 "#;
 
@@ -4984,17 +4847,16 @@ fn rc2_199_a_callee_expression_that_borrows_mutably_while_a_view_lives_is_refuse
 }
 
 const RC2_200: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
-fn id(x: i64) -> i64 { return x }
-fn main() -> i64 {
-    let mut s = mk(1)
-    let r = s.bytes
-    let f = fn(x: i64) -> i64 { return x }
-    let z = (if true { s = mk(2) + mk(3)
-        f } else { f })(0)
-    println("{r[0]} {z}")
-    return 0
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i); } }
+fn id(x: i64) -> i64 { x }
+fn main() {
+    let mut s = mk(1);
+    let r = s.as_bytes();
+    let f = move |x: i64| -> i64 { x };
+    let z = (if true { s = mk(2) + mk(3);
+        f } else { f })(0);
+    println!("{} {z}", r[0]);
 }
 "#;
 
@@ -5011,18 +4873,17 @@ fn rc2_200_a_callee_if_expression_that_reassigns_a_viewed_string_is_refused() {
 }
 
 const RC2_201: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
-fn id(x: i64) -> i64 { return x }
-fn main() -> i64 {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 41)
-    let r = Vec::as_slice(v)
-    let f = fn(x: i64) -> i64 { return x }
-    let z = { for i in 0..1000 { Vec::push(v, i) }
-        f }(0)
-    println("{r[0]} {z}")
-    return 0
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i); } }
+fn id(x: i64) -> i64 { x }
+fn main() {
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 41);
+    let r = Vec::as_slice(v);
+    let f = move |x: i64| -> i64 { x };
+    let z = { for i in 0..1000 { Vec::push(v, i); }
+        f }(0);
+    println!("{} {z}", r[0]);
 }
 "#;
 
@@ -5039,19 +4900,18 @@ fn rc2_201_a_callee_block_that_pushes_into_a_viewed_vec_is_refused() {
 }
 
 const RC2_202: &str = r#"
-fn id(x: i64) -> i64 { return x }
-fn main() -> i64 {
-    let k = fn() -> i64 {
-        let mut v: Vec<i64> = Vec::new()
-        Vec::push(v, 41)
-        let r = Vec::as_slice(v)
-        let f = fn(x: i64) -> i64 { return x }
-        let z = { for i in 0..1000 { Vec::push(v, i) }
-            f }(0)
-        return r[0] + z
-    }
-    println("{k()}")
-    return 0
+fn id(x: i64) -> i64 { x }
+fn main() {
+    let k = move || -> i64 {
+        let mut v: Vec<i64> = Vec::new();
+        Vec::push(v, 41);
+        let r = Vec::as_slice(v);
+        let f = move |x: i64| -> i64 { x };
+        let z = { for i in 0..1000 { Vec::push(v, i); }
+            f }(0);
+        r[0] + z
+    };
+    println!("{}", k());
 }
 "#;
 
@@ -5068,27 +4928,26 @@ fn rc2_202_a_callee_block_that_pushes_into_a_viewed_vec_inside_a_closure_is_refu
 }
 
 const RC2_203: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
 fn pick(b: bool) -> fn(i64) -> i64 {
-    if b { return fn(x: i64) -> i64 { return x + 1 } }
-    return fn(x: i64) -> i64 { return x * 2 }
+    if b { return move |x: i64| -> i64 { x + 1 }; }
+    move |x: i64| -> i64 { x * 2 }
 }
-fn main() -> i64 {
-    let mut t = 0
+fn main() {
+    let mut t = 0;
     for k in 0..100 {
-        let mut v: Vec<string> = Vec::new()
-        Vec::push(v, mk(k))
-        let mut w: Vec<i64> = Vec::new()
-        let r = Vec::as_slice(v)
-        let f = fn(x: i64) -> i64 { return x + 10 }
-        let a = pick(true)(r[0].len)
-        let b = (if r[0].len > 3 { f } else { pick(false) })(3)
-        let c = { Vec::push(w, 5)
-            f }(w.len)
-        t = t + a + b + c + r[0].len
+        let mut v: Vec<String> = Vec::new();
+        Vec::push(v, mk(k));
+        let mut w: Vec<i64> = Vec::new();
+        let r = Vec::as_slice(v);
+        let f = move |x: i64| -> i64 { x + 10 };
+        let a = pick(true)(r[0].len());
+        let b = (if r[0].len() > 3 { f } else { pick(false) })(3);
+        let c = { Vec::push(w, 5);
+            f }(w.len());
+        t = t + a + b + c + r[0].len();
     }
-    println("{t}")
-    return 0
+    println!("{t}");
 }
 "#;
 
@@ -5130,25 +4989,24 @@ fn rc2_204_a_view_in_a_closure_bound_at_file_level_held_across_a_push_is_refused
 }
 
 const RC2_205: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i) } }
-fn id(x: i64) -> i64 { return x }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn grow(v: &mut Vec<i64>) { for i in 0..1000 { Vec::push(*v, i); } }
+fn id(x: i64) -> i64 { x }
 fn outer() -> i64 {
     fn inner() -> i64 {
-        let f = fn() -> i64 {
-            let mut v: Vec<i64> = Vec::new()
-            Vec::push(v, 41)
-            let r = Vec::as_slice(v)
-            for i in 0..1000 { Vec::push(v, i) }
-            return r[0]
-        }
-        return f()
+        let f = move || -> i64 {
+            let mut v: Vec<i64> = Vec::new();
+            Vec::push(v, 41);
+            let r = Vec::as_slice(v);
+            for i in 0..1000 { Vec::push(v, i); }
+            r[0]
+        };
+        f()
     }
-    return inner()
+    inner()
 }
-fn main() -> i64 {
-    println("{outer()}")
-    return 0
+fn main() {
+    println!("{}", outer());
 }
 "#;
 
@@ -5165,23 +5023,22 @@ fn rc2_205_a_view_in_a_closure_inside_a_nested_function_held_across_a_push_is_re
 }
 
 const RC2_206: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn take(s: string) -> i64 { return s.len }
-struct B { s: string, k: i64 }
-fn main() -> i64 {
-    let f = fn(a: &[i64]) -> fn() -> i64 {
-        return fn() -> i64 { return a[0] }
-    }
-    let mut g = fn() -> i64 { return 0 }
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn take(s: String) -> i64 { s.len() }
+struct B { s: String, k: i64 }
+fn main() {
+    let f = move |a: &[i64]| -> fn() -> i64 {
+        move || -> i64 { a[0] }
+    };
+    let mut g = move || -> i64 { 0 };
     if true {
-        let mut v: Vec<i64> = Vec::new()
-        Vec::push(v, 41)
-        g = f(Vec::as_slice(v))
+        let mut v: Vec<i64> = Vec::new();
+        Vec::push(v, 41);
+        g = f(Vec::as_slice(v));
     }
-    let mut w: Vec<i64> = Vec::new()
-    for i in 0..1000 { Vec::push(w, 7) }
-    println("{g()}")
-    return 0
+    let mut w: Vec<i64> = Vec::new();
+    for i in 0..1000 { Vec::push(w, 7); }
+    println!("{}", g());
 }
 "#;
 
@@ -5200,18 +5057,17 @@ fn rc2_206_a_closure_capturing_a_slice_parameter_of_another_closure_is_refused()
 const RC2_207: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn run() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    let v = vec[10, 20, 30]
-    let w = v
-    Vec::push(w, 40)
-    __aelys_collect()
-    return Rc::get(a).val + Rc::get(Rc::get(a).next).val + w[3] + v[0]
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    let v = vec![10, 20, 30];
+    let w = v;
+    Vec::push(w, 40);
+    __aelys_collect();
+    Rc::get(a).val + Rc::get(Rc::get(a).next).val + w[3] + v[0]
 }
-fn main() -> i64 {
-    println("{run()}")
-    return 0
+fn main() {
+    println!("{}", run());
 }
 "#;
 
@@ -5351,22 +5207,21 @@ fn main() -> i64 {
 #[test]
 fn rc2_208_an_ordinary_program_over_the_whole_library_and_the_rc_list_surface_is_balanced() {
     let h = Harness::new();
-    h.differential_row("rc2-208", RC2_208, &[], "96823 11\n", (9607, 9607));
+    h.differential_row("rc2-208", RC2_208, &[], "96823 11\n", (10807, 10807));
     h.lsan_row("rc2-208", RC2_208, &[], "96823 11\n");
     h.assert_legs(24);
 }
 
 const RC2_209: &str = r#"
-struct W { k: i64, s: string }
-fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let mut t = 0
+struct W { k: i64, s: String }
+fn mk<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let mut t = 0;
     for i in 0..100 {
-        let rw = mk(W { k: i, s: "w{i}" })
-        t = t + rw.k + rw.s.len
+        let rw = mk(W { k: i, s: format!("w{i}") });
+        t = t + rw.k + rw.s.len();
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -5380,20 +5235,19 @@ fn rc2_209_a_field_read_through_an_rc_made_by_a_generic_call_resolves_through_th
 
 const RC2_210: &str = r#"
 struct N { k: i64 }
-struct W { k: i64, s: string, r: Rc<N> }
-fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let mut t = 0
+struct W { k: i64, s: String, r: Rc<N> }
+fn mk<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let mut t = 0;
     for i in 0..100 {
-        let rw = mk(W { k: i, s: "w{i}", r: Rc::new(N { k: 1 }) })
-        rw.k = rw.k + 1
-        rw.s = rw.s + "!"
-        rw.r = Rc::new(N { k: i })
-        rw.r.k = rw.r.k * 2
-        t = t + rw.k + rw.s.len + rw.r.k
+        let rw = mk(W { k: i, s: format!("w{i}"), r: Rc::new(N { k: 1 }) });
+        rw.k = rw.k + 1;
+        rw.s = rw.s + "!";
+        rw.r = Rc::new(N { k: i });
+        rw.r.k = rw.r.k * 2;
+        t = t + rw.k + rw.s.len() + rw.r.k;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -5406,22 +5260,21 @@ fn rc2_210_field_writes_through_an_rc_made_by_a_generic_call_need_no_let_mut() {
 }
 
 const RC2_211_LIB: &str = r#"
-pub struct P { pub x: i64, pub name: string }
-pub fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
+pub struct P { pub x: i64, pub name: String }
+pub fn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }
 "#;
 
 const RC2_211: &str = r#"
-needs m
-fn main() -> i64 {
-    let mut t = 0
+mod m;
+fn main() {
+    let mut t = 0;
     for i in 0..100 {
-        let w = m.wrap(m.P { x: i, name: "p{i}" })
-        w.x = w.x + 1
-        w.name = w.name + "?"
-        t = t + w.x + w.name.len
+        let w = m::wrap(m::P { x: i, name: format!("p{i}") });
+        w.x = w.x + 1;
+        w.name = w.name + "?";
+        t = t + w.x + w.name.len();
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -5440,18 +5293,17 @@ fn rc2_211_an_rc_made_by_an_imported_generic_reads_and_writes_its_fields() {
 }
 
 const RC2_212: &str = r#"
-struct N { k: i64, s: string }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let mut t = 0
+struct N { k: i64, s: String }
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let mut t = 0;
     for i in 0..100 {
-        let r = id(Rc::new(N { k: i, s: "a{i}" }))
-        r.k = r.k + 41
-        r.s = r.s + "b"
-        t = t + r.k + r.s.len
+        let r = id(Rc::new(N { k: i, s: format!("a{i}") }));
+        r.k = r.k + 41;
+        r.s = r.s + "b";
+        t = t + r.k + r.s.len();
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -5465,12 +5317,11 @@ fn rc2_212_a_variable_typed_rc_late_writes_its_fields_without_let_mut() {
 
 const RC2_213: &str = r#"
 struct W { k: i64 }
-fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let rw = mk(W { k: 1 })
-    rw.k = "s"
-    println(rw.k)
-    return 0
+fn mk<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let rw = mk(W { k: 1 });
+    rw.k = "s";
+    println!("{}", rw.k);
 }
 "#;
 
@@ -5481,22 +5332,21 @@ fn rc2_213_a_mistyped_write_through_a_late_rc_is_refused() {
         RC2_213,
         &[],
         "E0301",
-        "expected `i64`, found `&str`",
+        "expected `i64`, found `string`",
     );
 }
 
 const RC2_214_LIB: &str = r#"
 pub struct P { pub x: i64, y: i64 }
-pub fn mkp() -> P { return P { x: 1, y: 2 } }
-pub fn wrap<T>(x: T) -> Rc<T> { return Rc::new(x) }
+pub fn mkp() -> P { P { x: 1, y: 2 } }
+pub fn wrap<T>(x: T) -> Rc<T> { Rc::new(x) }
 "#;
 
 const RC2_214: &str = r#"
-needs pm
-fn main() -> i64 {
-    let rw = pm.wrap(pm.mkp())
-    rw.y = 3
-    return 0
+mod pm;
+fn main() {
+    let rw = pm::wrap(pm::mkp());
+    rw.y = 3;
 }
 "#;
 
@@ -5514,14 +5364,13 @@ fn rc2_214_a_private_field_write_through_a_late_rc_is_refused() {
 const RC2_215: &str = r#"
 struct N { k: i64 }
 struct W { k: i64, r: Rc<N> }
-fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let c = 1
-    let rw = mk(W { k: 1, r: Rc::new(N { k: 2 }) })
-    let a = Rc::new(N { k: 5 })
-    rw.r = if c == 1 { a } else { rw.r }
-    println(rw.r.k)
-    return 0
+fn mk<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let c = 1;
+    let rw = mk(W { k: 1, r: Rc::new(N { k: 2 }) });
+    let a = Rc::new(N { k: 5 });
+    rw.r = if c == 1 { a } else { rw.r };
+    println!("{}", rw.r.k);
 }
 "#;
 
@@ -5540,12 +5389,11 @@ const RC2_216: &str = r#"
 struct N { k: i64 }
 struct In { r: Rc<N> }
 struct W { k: i64, i: In }
-fn mk<T>(x: T) -> Rc<T> { return Rc::new(x) }
-fn main() -> i64 {
-    let rw = mk(W { k: 1, i: In { r: Rc::null() } })
-    rw.i = In { r: Rc::new(N { k: 3 }) }
-    println(rw.i.r.k)
-    return 0
+fn mk<T>(x: T) -> Rc<T> { Rc::new(x) }
+fn main() {
+    let rw = mk(W { k: 1, i: In { r: Rc::null() } });
+    rw.i = In { r: Rc::new(N { k: 3 }) };
+    println!("{}", rw.i.r.k);
 }
 "#;
 
@@ -5561,15 +5409,14 @@ fn rc2_216_a_carrier_field_write_through_a_late_rc_is_refused() {
 }
 
 const RC2_217: &str = r#"
-fn f(n: i64, acc: string) -> string {
-    if n > 0 { return f(n - 1, acc) }
-    return acc
+fn f(n: i64, acc: String) -> String {
+    if n > 0 { return f(n - 1, acc); }
+    acc
 }
-fn main() -> i64 {
-    let mut t = 0
-    for i in 0..100 { t = t + f(3, "x{i}").len }
-    println(t)
-    return 0
+fn main() {
+    let mut t = 0;
+    for i in 0..100 { t = t + f(3, format!("x{i}")).len(); }
+    println!("{}", t);
 }
 "#;
 
@@ -5582,15 +5429,14 @@ fn rc2_217_a_self_recursive_string_return_is_fresh() {
 }
 
 const RC2_218: &str = r#"
-fn f(n: i64, acc: string) -> string {
-    if n > 0 { return f(n - 1, acc + "a") }
-    return acc
+fn f(n: i64, acc: String) -> String {
+    if n > 0 { return f(n - 1, acc + "a"); }
+    acc
 }
-fn main() -> i64 {
-    let mut t = 0
-    for i in 0..100 { t = t + f(3, "x{i}").len }
-    println(t)
-    return 0
+fn main() {
+    let mut t = 0;
+    for i in 0..100 { t = t + f(3, format!("x{i}")).len(); }
+    println!("{}", t);
 }
 "#;
 
@@ -5603,19 +5449,18 @@ fn rc2_218_a_self_recursive_return_of_a_concatenation_is_fresh() {
 }
 
 const RC2_219: &str = r#"
-fn f(n: i64, acc: string) -> string {
-    if n > 0 { return g(n - 1, acc) }
-    return acc
+fn f(n: i64, acc: String) -> String {
+    if n > 0 { return g(n - 1, acc); }
+    acc
 }
-fn g(n: i64, acc: string) -> string {
-    if n > 0 { return f(n - 1, acc) }
-    return acc
+fn g(n: i64, acc: String) -> String {
+    if n > 0 { return f(n - 1, acc); }
+    acc
 }
-fn main() -> i64 {
-    let mut t = 0
-    for i in 0..100 { t = t + f(3, "x{i}").len }
-    println(t)
-    return 0
+fn main() {
+    let mut t = 0;
+    for i in 0..100 { t = t + f(3, format!("x{i}")).len(); }
+    println!("{}", t);
 }
 "#;
 
@@ -5628,16 +5473,15 @@ fn rc2_219_a_mutually_recursive_string_return_is_fresh() {
 }
 
 const RC2_220: &str = r#"
-struct W { s: string, k: i64 }
+struct W { s: String, k: i64 }
 fn f(n: i64, w: W) -> W {
-    if n > 0 { return f(n - 1, w) }
-    return w
+    if n > 0 { return f(n - 1, w); }
+    w
 }
-fn main() -> i64 {
-    let mut t = 0
-    for i in 0..100 { t = t + f(3, W { s: "x{i}", k: i }).s.len }
-    println(t)
-    return 0
+fn main() {
+    let mut t = 0;
+    for i in 0..100 { t = t + f(3, W { s: format!("x{i}"), k: i }).s.len(); }
+    println!("{}", t);
 }
 "#;
 
@@ -5650,24 +5494,23 @@ fn rc2_220_a_self_recursive_carrier_return_is_fresh() {
 }
 
 const RC2_221: &str = r#"
-struct Node { val: i64, s: string, next: Rc<Node> }
+struct Node { val: i64, s: String, next: Rc<Node> }
 
 fn build(n: i64) -> Rc<Node> {
-    let mut h: Rc<Node> = Rc::null()
-    for i in 0..n { h = Rc::new(Node { val: i, s: "s{i}", next: h }) }
-    return h
+    let mut h: Rc<Node> = Rc::null();
+    for i in 0..n { h = Rc::new(Node { val: i, s: format!("s{i}"), next: h }); }
+    h
 }
 
 fn fold<T>(h: Rc<Node>, acc: T, f: fn(T, i64) -> T) -> T {
-    if Rc::is_null(h) { return acc }
-    return fold(h.next, f(acc, h.val), f)
+    if Rc::is_null(h) { return acc; }
+    fold(h.next, f(acc, h.val), f)
 }
-fn main() -> i64 {
-    let h = build(8)
-    let s = fold(h, 0, fn (a: i64, v: i64) -> i64 { return a + v })
-    let t = fold(h, "", fn (a: string, v: i64) -> string { return a + "{v}" })
-    println("{s} {t}")
-    return 0
+fn main() {
+    let h = build(8);
+    let s = fold(h, 0, move |a: i64, v: i64| -> i64 { a + v });
+    let t = fold(h, "", move |a: String, v: i64| -> String { a + format!("{v}") });
+    println!("{s} {t}");
 }
 "#;
 
@@ -5681,19 +5524,18 @@ fn rc2_221_a_generic_recursive_return_is_fresh() {
 
 const RC2_222: &str = r#"
 struct N { k: i64 }
-struct W { k: i64, s: string, r: Rc<N> }
-fn main() -> i64 {
-    let mut t = 0
+struct W { k: i64, s: String, r: Rc<N> }
+fn main() {
+    let mut t = 0;
     for i in 0..100 {
-        let rw = Rc::new(W { k: i, s: "w{i}", r: Rc::new(N { k: 1 }) })
-        rw.k = rw.k + 1
-        rw.s = rw.s + "!"
-        rw.r = Rc::new(N { k: i })
-        rw.r.k = rw.r.k * 2
-        t = t + rw.k + rw.s.len + rw.r.k
+        let rw = Rc::new(W { k: i, s: format!("w{i}"), r: Rc::new(N { k: 1 }) });
+        rw.k = rw.k + 1;
+        rw.s = rw.s + "!";
+        rw.r = Rc::new(N { k: i });
+        rw.r.k = rw.r.k * 2;
+        t = t + rw.k + rw.s.len() + rw.r.k;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
@@ -5706,20 +5548,19 @@ fn rc2_222_field_writes_through_a_concrete_rc_match_the_late_rc_counts() {
 }
 
 const RC2_223: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn g(n: i64, s: string) -> string {
-    if n > 0 { return g(n - 1, s) }
-    return s
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn g(n: i64, s: String) -> String {
+    if n > 0 { return g(n - 1, s); }
+    s
 }
-fn main() -> i64 {
-    let s = mk(7)
-    let mut t = 0
+fn main() {
+    let s = mk(7);
+    let mut t = 0;
     for i in 0..100 {
-        let r = g(3, s)
-        t = t + r.len
+        let r = g(3, s);
+        t = t + r.len();
     }
-    println("{t} {s}")
-    return 0
+    println!("{t} {s}");
 }
 "#;
 
@@ -5732,22 +5573,21 @@ fn rc2_223_a_recursive_function_returning_a_borrowed_parameter_retains_it() {
 }
 
 const RC2_224: &str = r#"
-fn mk(n: i64) -> string { return "ab" + "{n}" }
-fn pick(n: i64, a: string, b: string) -> string {
-    if n == 0 { return a }
-    if n % 2 == 0 { return pick(n - 1, b, a) }
-    return pick(n - 1, a + "", b)
+fn mk(n: i64) -> String { "ab" + format!("{n}") }
+fn pick(n: i64, a: String, b: String) -> String {
+    if n == 0 { return a; }
+    if n % 2 == 0 { return pick(n - 1, b, a); }
+    pick(n - 1, a + "", b)
 }
-fn main() -> i64 {
-    let a = mk(1)
-    let b = mk(22)
-    let mut t = 0
+fn main() {
+    let a = mk(1);
+    let b = mk(22);
+    let mut t = 0;
     for i in 0..100 {
-        let r = pick(i % 5, a, b)
-        t = t + r.len
+        let r = pick(i % 5, a, b);
+        t = t + r.len();
     }
-    println("{t} {a} {b}")
-    return 0
+    println!("{t} {a} {b}");
 }
 "#;
 
@@ -5761,12 +5601,11 @@ fn rc2_224_a_recursive_function_swapping_borrowed_parameters_retains_its_return(
 
 const RC2_225: &str = r#"
 struct W { k: i64 }
-fn id<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    let w = id(W { k: 1 })
-    w.k = 5
-    println(w.k)
-    return 0
+fn id<T>(x: T) -> T { x }
+fn main() {
+    let w = id(W { k: 1 });
+    w.k = 5;
+    println!("{}", w.k);
 }
 "#;
 

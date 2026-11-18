@@ -114,7 +114,7 @@ fn reject_row(id: &str, files: Files, code: &str, needle: &str) {
     }
 }
 
-const SEVEN: &str = "pub fn seven() -> i64 {\n    return 7\n}\n";
+const SEVEN: &str = "pub fn seven() -> i64 {\n    7\n}\n";
 
 #[test]
 fn group_mod_d1_diamond_compiles_its_shared_dependency_once() {
@@ -123,17 +123,17 @@ fn group_mod_d1_diamond_compiles_its_shared_dependency_once() {
         &[
             (
                 "root.aelys",
-                "needs l\nneeds r\n\nfn main() -> i64 {\n    return l.viaL() + r.viaR()\n}\n",
+                "use std::process::ExitCode; mod l;\nmod r;\n\nfn main() -> ExitCode {\n    return ExitCode::from((l::viaL() + r::viaR()) as u8);\n}\n",
             ),
             (
                 "l.aelys",
-                "needs base\n\npub fn viaL() -> i64 {\n    return base.seed() * 2\n}\n",
+                "mod base;\n\npub fn viaL() -> i64 {\n    base::seed() * 2\n}\n",
             ),
             (
                 "r.aelys",
-                "needs base\n\npub fn viaR() -> i64 {\n    return base.seed() * 3\n}\n",
+                "mod base;\n\npub fn viaR() -> i64 {\n    base::seed() * 3\n}\n",
             ),
-            ("base.aelys", "pub fn seed() -> i64 {\n    return 7\n}\n"),
+            ("base.aelys", "pub fn seed() -> i64 {\n    7\n}\n"),
         ],
         35,
         "",
@@ -147,11 +147,11 @@ fn group_mod_d2_a_module_main_is_an_ordinary_function() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.pick()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::pick() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "fn main() -> i64 {\n    return 99\n}\n\npub fn pick() -> i64 {\n    return 5\n}\n",
+                "use std::process::ExitCode; fn main() -> ExitCode {\n    return ExitCode::from(99);\n}\n\npub fn pick() -> i64 {\n    5\n}\n",
             ),
         ],
         5,
@@ -166,9 +166,9 @@ fn group_mod_d3_one_module_bound_under_two_names() {
         &[
             (
                 "root.aelys",
-                "needs m\nneeds m as k\n\nfn main() -> i64 {\n    return m.one() + k.one()\n}\n",
+                "use std::process::ExitCode; mod m;\nuse m as k;\n\nfn main() -> ExitCode {\n    return ExitCode::from((m::one() + k::one()) as u8);\n}\n",
             ),
-            ("m.aelys", "pub fn one() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "pub fn one() -> i64 {\n    1\n}\n"),
         ],
         2,
         "",
@@ -184,7 +184,7 @@ fn group_mod_d4_a_path_three_segments_deep() {
                 "root.aelys",
                 "needs a.b.c\n\nfn main() -> i64 {\n    return c.deep()\n}\n",
             ),
-            ("a/b/c.aelys", "pub fn deep() -> i64 {\n    return 42\n}\n"),
+            ("a/b/c.aelys", "pub fn deep() -> i64 {\n    42\n}\n"),
         ],
         42,
         "",
@@ -198,15 +198,15 @@ fn group_mod_o1_two_modules_define_the_same_struct() {
         &[
             (
                 "root.aelys",
-                "needs x\nneeds y\n\nfn main() -> i64 {\n    return x.make() + y.make()\n}\n",
+                "use std::process::ExitCode; mod x;\nmod y;\n\nfn main() -> ExitCode {\n    return ExitCode::from((x::make() + y::make()) as u8);\n}\n",
             ),
             (
                 "x.aelys",
-                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 10 }\n    return h.v\n}\n",
+                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 10 };\n    h.v\n}\n",
             ),
             (
                 "y.aelys",
-                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 20 }\n    return h.v\n}\n",
+                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 20 };\n    h.v\n}\n",
             ),
         ],
         30,
@@ -221,15 +221,15 @@ fn group_mod_o2_two_modules_define_the_same_data_enum() {
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.pick() + q.pick()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    return ExitCode::from((p::pick() + q::pick()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "enum Tag { None, Some(i64) }\n\npub fn pick() -> i64 {\n    return match Tag::Some(6) {\n        Tag::Some(n) => n\n        Tag::None => 0\n    }\n}\n",
+                "enum Tag { None, Some(i64) }\n\npub fn pick() -> i64 {\n    match Tag::Some(6) {\n        Tag::Some(n) => n,\n        Tag::None => 0,\n    }\n}\n",
             ),
             (
                 "q.aelys",
-                "enum Tag { None, Some(i64) }\n\npub fn pick() -> i64 {\n    return match Tag::None {\n        Tag::Some(n) => n\n        Tag::None => 50\n    }\n}\n",
+                "enum Tag { None, Some(i64) }\n\npub fn pick() -> i64 {\n    match Tag::None {\n        Tag::Some(n) => n,\n        Tag::None => 50,\n    }\n}\n",
             ),
         ],
         56,
@@ -244,15 +244,15 @@ fn group_mod_o3_two_modules_define_the_same_global() {
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.read() + q.read()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    return ExitCode::from((p::read() + q::read()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "let shared: i64 = 4\n\npub fn read() -> i64 {\n    return shared\n}\n",
+                "static shared: i64 = 4;\n\npub fn read() -> i64 {\n    shared\n}\n",
             ),
             (
                 "q.aelys",
-                "let shared: i64 = 9\n\npub fn read() -> i64 {\n    return shared\n}\n",
+                "static shared: i64 = 9;\n\npub fn read() -> i64 {\n    shared\n}\n",
             ),
         ],
         13,
@@ -267,15 +267,15 @@ fn group_mod_o4_two_modules_instantiate_the_same_generic() {
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.run() + q.run()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    return ExitCode::from((p::run() + q::run()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "fn ident<T>(v: T) -> T {\n    return v\n}\n\npub fn run() -> i64 {\n    return ident(3)\n}\n",
+                "fn ident<T>(v: T) -> T {\n    v\n}\n\npub fn run() -> i64 {\n    ident(3)\n}\n",
             ),
             (
                 "q.aelys",
-                "fn ident<T>(v: T) -> T {\n    return v\n}\n\npub fn run() -> i64 {\n    return ident(4)\n}\n",
+                "fn ident<T>(v: T) -> T {\n    v\n}\n\npub fn run() -> i64 {\n    ident(4)\n}\n",
             ),
         ],
         7,
@@ -290,15 +290,15 @@ fn group_mod_lb1_two_modules_each_hold_a_lambda() {
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    return p.run() + q.run()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    return ExitCode::from((p::run() + q::run()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "pub fn run() -> i64 {\n    let f = fn(a: i64) -> i64 { return a + 1 }\n    return f(1)\n}\n",
+                "pub fn run() -> i64 {\n    let f = move |a: i64| -> i64 { a + 1 };\n    f(1)\n}\n",
             ),
             (
                 "q.aelys",
-                "pub fn run() -> i64 {\n    let g = fn(a: i64) -> i64 { return a + 10 }\n    return g(1)\n}\n",
+                "pub fn run() -> i64 {\n    let g = move |a: i64| -> i64 { a + 10 };\n    g(1)\n}\n",
             ),
         ],
         13,
@@ -313,15 +313,15 @@ fn group_mod_cl1_two_modules_each_hold_a_capturing_lambda() {
         &[
             (
                 "root.aelys",
-                "needs p\nneeds q\n\nfn main() -> i64 {\n    println(\"go\")\n    return p.run() + q.run()\n}\n",
+                "use std::process::ExitCode; mod p;\nmod q;\n\nfn main() -> ExitCode {\n    println!(\"go\");\n    return ExitCode::from((p::run() + q::run()) as u8);\n}\n",
             ),
             (
                 "p.aelys",
-                "pub fn run() -> i64 {\n    let base: i64 = 10\n    let f = fn(a: i64) -> i64 { return a + base }\n    return f(1)\n}\n",
+                "pub fn run() -> i64 {\n    let base: i64 = 10;\n    let f = move |a: i64| -> i64 { a + base };\n    f(1)\n}\n",
             ),
             (
                 "q.aelys",
-                "pub fn run() -> i64 {\n    let base: i64 = 20\n    let g = fn(a: i64) -> i64 { return a + base }\n    return g(1)\n}\n",
+                "pub fn run() -> i64 {\n    let base: i64 = 20;\n    let g = move |a: i64| -> i64 { a + base };\n    g(1)\n}\n",
             ),
         ],
         32,
@@ -336,11 +336,11 @@ fn group_mod_p1_a_module_path_spelt_like_a_mono_prefix() {
         &[
             (
                 "root.aelys",
-                "needs vec_x\n\nfn main() -> i64 {\n    return vec_x.make()\n}\n",
+                "use std::process::ExitCode; mod vec_x;\n\nfn main() -> ExitCode {\n    return ExitCode::from(vec_x::make() as u8);\n}\n",
             ),
             (
                 "vec_x.aelys",
-                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 8 }\n    return h.v\n}\n",
+                "struct Holder { v: i64 }\n\npub fn make() -> i64 {\n    let h = Holder { v: 8 };\n    h.v\n}\n",
             ),
         ],
         8,
@@ -348,7 +348,7 @@ fn group_mod_p1_a_module_path_spelt_like_a_mono_prefix() {
     );
 }
 
-const STRUCT_MODULE: &str = "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n\npub fn take(p: P) -> i64 {\n    return p.v\n}\n";
+const STRUCT_MODULE: &str = "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n\npub fn take(p: P) -> i64 {\n    p.v\n}\n";
 
 #[test]
 fn group_mod_y1_an_imported_struct_returned_across() {
@@ -357,7 +357,7 @@ fn group_mod_y1_an_imported_struct_returned_across() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(6)\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::make(6);\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -373,7 +373,7 @@ fn group_mod_y2_an_imported_struct_named_in_an_annotation() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p: m.P = m.make(7)\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p: m::P = m::make(7);\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -389,7 +389,7 @@ fn group_mod_y3_an_imported_struct_built_by_the_importer() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.P { v: 8 }\n    return m.take(p)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::P { v: 8 };\n    return ExitCode::from(m::take(p) as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -405,7 +405,7 @@ fn group_mod_y4_an_imported_struct_passed_back_across() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.take(m.make(11))\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::take(m::make(11)) as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -421,7 +421,7 @@ fn group_mod_y5_a_from_imported_struct_binds_a_bare_name() {
         &[
             (
                 "root.aelys",
-                "needs P, make from m\n\nfn main() -> i64 {\n    let p: P = make(12)\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m; use m::{P, make};\n\nfn main() -> ExitCode {\n    let p: P = make(12);\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -437,7 +437,7 @@ fn group_mod_y6_a_from_imported_struct_is_built_by_its_bare_name() {
         &[
             (
                 "root.aelys",
-                "needs P from m\n\nfn main() -> i64 {\n    let p = P { v: 13 }\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m; use m::P;\n\nfn main() -> ExitCode {\n    let p = P { v: 13 };\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             ("m.aelys", STRUCT_MODULE),
         ],
@@ -446,7 +446,7 @@ fn group_mod_y6_a_from_imported_struct_is_built_by_its_bare_name() {
     );
 }
 
-const ENUM_MODULE: &str = "pub enum T { None, Some(i64) }\n\npub fn pick() -> T {\n    return T::Some(9)\n}\n\npub fn unwrap(t: T) -> i64 {\n    return match t {\n        T::Some(n) => n\n        T::None => 0\n    }\n}\n";
+const ENUM_MODULE: &str = "pub enum T { None, Some(i64) }\n\npub fn pick() -> T {\n    T::Some(9)\n}\n\npub fn unwrap(t: T) -> i64 {\n    match t {\n        T::Some(n) => n,\n        T::None => 0,\n    }\n}\n";
 
 #[test]
 fn group_mod_y7_an_imported_enum_crosses_in_both_directions() {
@@ -455,7 +455,7 @@ fn group_mod_y7_an_imported_enum_crosses_in_both_directions() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.unwrap(m.pick())\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::unwrap(m::pick()) as u8);\n}\n",
             ),
             ("m.aelys", ENUM_MODULE),
         ],
@@ -471,7 +471,7 @@ fn group_mod_y8_a_from_imported_enum_is_built_and_matched() {
         &[
             (
                 "root.aelys",
-                "needs T from m\n\nfn main() -> i64 {\n    return match T::Some(14) {\n        T::Some(n) => n\n        T::None => 0\n    }\n}\n",
+                "use std::process::ExitCode; mod m; use m::T;\n\nfn main() -> ExitCode {\n    return ExitCode::from((match T::Some(14) {\n        T::Some(n) => n,\n        T::None => 0,\n    }) as u8);\n}\n",
             ),
             ("m.aelys", ENUM_MODULE),
         ],
@@ -487,7 +487,7 @@ fn group_mod_y9_a_qualified_enum_is_built_and_matched() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return match m.T::Some(15) {\n        m.T::Some(n) => n\n        m.T::None => 0\n    }\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from((match m::T::Some(15) {\n        m::T::Some(n) => n,\n        m::T::None => 0,\n    }) as u8);\n}\n",
             ),
             ("m.aelys", ENUM_MODULE),
         ],
@@ -507,11 +507,11 @@ fn group_mod_v1_a_managed_value_crosses_under_every_runtime() {
     let files: Files = &[
         (
             "root.aelys",
-            "needs m\n\nfn main() -> i64 {\n    let s = m.greet()\n    println(s)\n    return s.len\n}\n",
+            "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let s = m::greet();\n    println!(\"{}\", s);\n    return ExitCode::from(s.len() as u8);\n}\n",
         ),
         (
             "m.aelys",
-            "pub fn greet() -> string {\n    return \"hello\"\n}\n",
+            "pub fn greet() -> String {\n    \"hello\"\n}\n",
         ),
     ];
     for (level, opt) in LEVELS {
@@ -545,7 +545,7 @@ fn group_mod_r1_a_missing_module_names_the_file_it_looked_for() {
         "R-1",
         &[(
             "root.aelys",
-            "needs nope\n\nfn main() -> i64 {\n    return 0\n}\n",
+            "mod nope;\n\nfn main() {\n}\n",
         )],
         "[E0601]",
         "nope.aelys",
@@ -559,10 +559,10 @@ fn group_mod_r3_two_imports_may_not_introduce_one_name() {
         &[
             (
                 "root.aelys",
-                "needs m\nneeds n as m\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m;\nmod n; use n as m;\n\nfn main() {\n}\n",
             ),
             ("m.aelys", SEVEN),
-            ("n.aelys", "pub fn eight() -> i64 {\n    return 8\n}\n"),
+            ("n.aelys", "pub fn eight() -> i64 {\n    8\n}\n"),
         ],
         "[E0603]",
         "'m'",
@@ -576,7 +576,7 @@ fn group_mod_r3b_an_import_may_not_take_a_name_the_module_defines() {
         &[
             (
                 "root.aelys",
-                "needs seven from m\n\nfn seven() -> i64 {\n    return 1\n}\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m; use m::seven;\n\nfn seven() -> i64 {\n    1\n}\n\nfn main() {\n}\n",
             ),
             ("m.aelys", SEVEN),
         ],
@@ -585,16 +585,16 @@ fn group_mod_r3b_an_import_may_not_take_a_name_the_module_defines() {
     );
 }
 
-const DUP_FN_A: &str = "fn P() -> i64 {\n    return 1\n}\n";
-const DUP_FN_B: &str = "fn P() -> i64 {\n    return 2\n}\n";
-const DUP_FN_SIG: &str = "fn P(a: i64) -> i64 {\n    return a\n}\n";
-const DUP_LET_A: &str = "pub let P: i64 = 1\n";
-const DUP_LET_B: &str = "pub let P: i64 = 2\n";
+const DUP_FN_A: &str = "fn P() -> i64 {\n    1\n}\n";
+const DUP_FN_B: &str = "fn P() -> i64 {\n    2\n}\n";
+const DUP_FN_SIG: &str = "fn P(a: i64) -> i64 {\n    a\n}\n";
+const DUP_LET_A: &str = "pub static P: i64 = 1;\n";
+const DUP_LET_B: &str = "pub static P: i64 = 2;\n";
 const DUP_STRUCT_A: &str = "struct P {\n    x: i64,\n}\n";
 const DUP_STRUCT_B: &str = "struct P {\n    y: i64,\n}\n";
 const DUP_ENUM_A: &str = "enum P {\n    A,\n    B,\n}\n";
 const DUP_ENUM_B: &str = "enum P {\n    C,\n    D,\n}\n";
-const DUP_MAIN: &str = "\nfn main() -> i64 {\n    return 0\n}\n";
+const DUP_MAIN: &str = "\nfn main() {\n}\n";
 
 const DUPLICATE_FORMS: &[(&str, &str, &str, &str)] = &[
     ("DUP-1", DUP_FN_A, DUP_FN_B, "twice as a function"),
@@ -708,7 +708,7 @@ fn group_mod_r4_a_reserved_path_segment_is_rejected() {
         "R-4",
         &[(
             "root.aelys",
-            "needs __hidden\n\nfn main() -> i64 {\n    return 0\n}\n",
+            "mod __hidden;\n\nfn main() {\n}\n",
         )],
         "[E0604]",
         "__hidden",
@@ -722,9 +722,9 @@ fn group_mod_r5_a_private_item_is_not_reachable_through_a_namespace() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.secret()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::secret() as u8);\n}\n",
             ),
-            ("m.aelys", "fn secret() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "fn secret() -> i64 {\n    1\n}\n"),
         ],
         "[E0605]",
         "secret",
@@ -738,9 +738,9 @@ fn group_mod_r5b_a_private_item_is_not_reachable_through_from() {
         &[
             (
                 "root.aelys",
-                "needs secret from m\n\nfn main() -> i64 {\n    return secret()\n}\n",
+                "use std::process::ExitCode; mod m; use m::secret;\n\nfn main() -> ExitCode {\n    return ExitCode::from(secret() as u8);\n}\n",
             ),
-            ("m.aelys", "fn secret() -> i64 {\n    return 1\n}\n"),
+            ("m.aelys", "fn secret() -> i64 {\n    1\n}\n"),
         ],
         "[E0605]",
         "secret",
@@ -754,11 +754,11 @@ fn group_mod_r5c_a_private_type_is_not_reachable() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p: m.P = m.make(1)\n    return p\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p: m::P = m::make(1);\n    return ExitCode::from(p as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct P { v: i64 }\n\npub fn make(n: i64) -> i64 {\n    let p = P { v: n }\n    return p.v\n}\n",
+                "struct P { v: i64 }\n\npub fn make(n: i64) -> i64 {\n    let p = P { v: n };\n    p.v\n}\n",
             ),
         ],
         "[E0605]",
@@ -773,7 +773,7 @@ fn group_mod_r6_an_absent_item_is_named_as_absent_not_as_private() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.absent()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::absent() as u8);\n}\n",
             ),
             ("m.aelys", SEVEN),
         ],
@@ -789,7 +789,7 @@ fn group_mod_r6b_an_absent_item_is_absent_through_from_too() {
         &[
             (
                 "root.aelys",
-                "needs absent from m\n\nfn main() -> i64 {\n    return absent()\n}\n",
+                "use std::process::ExitCode; mod m; use m::absent;\n\nfn main() -> ExitCode {\n    return ExitCode::from(absent() as u8);\n}\n",
             ),
             ("m.aelys", SEVEN),
         ],
@@ -863,7 +863,7 @@ fn group_mod_r9_a_wildcard_import_is_rejected() {
         &[
             (
                 "root.aelys",
-                "needs m.*\n\nfn main() -> i64 {\n    return 0\n}\n",
+                "mod m; use m::*;\n\nfn main() {\n}\n",
             ),
             ("m.aelys", SEVEN),
         ],
@@ -881,11 +881,11 @@ fn group_mod_g1_a_generic_enum_is_usable_inside_its_own_module() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.make()\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::make() as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub enum Opt<T> { Some(T), None }\n\npub fn make() -> i64 {\n    let o = Opt::Some(5)\n    return match o {\n        Opt::Some(v) => v\n        Opt::None => 0\n    }\n}\n",
+                "pub enum Opt<T> { Some(T), None }\n\npub fn make() -> i64 {\n    let o = Opt::Some(5);\n    match o {\n        Opt::Some(v) => v,\n        Opt::None => 0,\n    }\n}\n",
             ),
         ],
         5,
@@ -900,11 +900,11 @@ fn group_mod_g2_a_module_holds_a_whole_result_pipeline() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.plain(20)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::plain(20) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "enum Result<T, E> { Ok(T), Err(E) }\n\nfn might(n: i64) -> Result<i64, i64> {\n    if n > 0 {\n        return Result::Ok(n * 2)\n    }\n    return Result::Err(1)\n}\n\nfn run(n: i64) -> Result<i64, i64> {\n    let v = might(n)?\n    return Result::Ok(v + 1)\n}\n\npub fn plain(n: i64) -> i64 {\n    return run(n).unwrap()\n}\n",
+                "enum Result<T, E> { Ok(T), Err(E) }\n\nfn might(n: i64) -> Result<i64, i64> {\n    if n > 0 {\n        return Result::Ok(n * 2);\n    }\n    Result::Err(1)\n}\n\nfn run(n: i64) -> Result<i64, i64> {\n    let v = might(n)?;\n    Result::Ok(v + 1)\n}\n\npub fn plain(n: i64) -> i64 {\n    run(n).unwrap()\n}\n",
             ),
         ],
         41,
@@ -919,11 +919,11 @@ fn group_mod_g3_a_capturing_lambda_under_a_generic_keeps_its_env() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.gen(7, 41)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::gen(7, 41) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub fn gen<T>(x: T, k: i64) -> i64 {\n    let f = fn() -> i64 { return k + 1 }\n    return f()\n}\n",
+                "pub fn gen<T>(x: T, k: i64) -> i64 {\n    let f = move || -> i64 { k + 1 };\n    f()\n}\n",
             ),
         ],
         42,
@@ -938,7 +938,7 @@ fn group_mod_g4_a_member_condition_over_an_empty_block_still_parses() {
         "G-4",
         &[(
             "root.aelys",
-            "struct S { X: bool }\n\nfn main() -> i64 {\n    let s = S { X: true }\n    if s.X { }\n    return 3\n}\n",
+            "use std::process::ExitCode; struct S { X: bool }\n\nfn main() -> ExitCode {\n    let s = S { X: true };\n    if s.X { }\n    return ExitCode::from(3);\n}\n",
         )],
         3,
         "",
@@ -946,8 +946,8 @@ fn group_mod_g4_a_member_condition_over_an_empty_block_still_parses() {
 }
 
 
-const DEEP_STRUCT: &str = "pub struct P { pub hi: i64, pub lo: i64 }\n\npub fn make(x: i64, y: i64) -> P {\n    return P { hi: x, lo: y }\n}\n\npub fn read(p: P) -> i64 {\n    return p.hi\n}\n";
-const DEEP_MID: &str = "needs a\n\npub fn pass(x: i64, y: i64) -> a.P {\n    return a.make(x, y)\n}\n\npub fn take(p: a.P) -> i64 {\n    return a.read(p)\n}\n";
+const DEEP_STRUCT: &str = "pub struct P { pub hi: i64, pub lo: i64 }\n\npub fn make(x: i64, y: i64) -> P {\n    P { hi: x, lo: y }\n}\n\npub fn read(p: P) -> i64 {\n    p.hi\n}\n";
+const DEEP_MID: &str = "mod a;\n\npub fn pass(x: i64, y: i64) -> a::P {\n    a::make(x, y)\n}\n\npub fn take(p: a::P) -> i64 {\n    a::read(p)\n}\n";
 
 #[test]
 fn group_mod_t1_a_type_survives_two_module_hops() {
@@ -956,7 +956,7 @@ fn group_mod_t1_a_type_survives_two_module_hops() {
         &[
             (
                 "root.aelys",
-                "needs mid\n\nfn main() -> i64 {\n    let p = mid.pass(41, 99)\n    return mid.take(p)\n}\n",
+                "use std::process::ExitCode; mod mid;\n\nfn main() -> ExitCode {\n    let p = mid::pass(41, 99);\n    return ExitCode::from(mid::take(p) as u8);\n}\n",
             ),
             ("mid.aelys", DEEP_MID),
             ("a.aelys", DEEP_STRUCT),
@@ -974,7 +974,7 @@ fn group_mod_t2_a_transitive_type_is_not_a_free_variable() {
         &[
             (
                 "root.aelys",
-                "needs mid\n\nfn show(s: string) -> i64 {\n    println(s)\n    return 0\n}\n\nfn main() -> i64 {\n    let p = mid.pass(41, 99)\n    return show(p)\n}\n",
+                "use std::process::ExitCode; mod mid;\n\nfn show(s: String) -> i64 {\n    println!(\"{}\", s);\n    0\n}\n\nfn main() -> ExitCode {\n    let p = mid::pass(41, 99);\n    return ExitCode::from(show(p) as u8);\n}\n",
             ),
             ("mid.aelys", DEEP_MID),
             ("a.aelys", DEEP_STRUCT),
@@ -991,15 +991,15 @@ fn group_mod_t3_a_module_may_stand_on_another_module() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let x = m.get()\n    return x.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let x = m::get();\n    return ExitCode::from(x.v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "needs dep\n\npub fn get() -> dep.X {\n    return dep.mk(6)\n}\n",
+                "mod dep;\n\npub fn get() -> dep::X {\n    dep::mk(6)\n}\n",
             ),
             (
                 "dep.aelys",
-                "pub struct X { pub v: i64 }\n\npub fn mk(n: i64) -> X {\n    return X { v: n }\n}\n",
+                "pub struct X { pub v: i64 }\n\npub fn mk(n: i64) -> X {\n    X { v: n }\n}\n",
             ),
         ],
         6,
@@ -1008,7 +1008,7 @@ fn group_mod_t3_a_module_may_stand_on_another_module() {
 }
 
 
-const PRIVATE_FIELD: &str = "pub struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n\npub fn read(p: P) -> i64 {\n    return p.v\n}\n";
+const PRIVATE_FIELD: &str = "pub struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n\npub fn read(p: P) -> i64 {\n    p.v\n}\n";
 
 #[test]
 fn group_mod_f1_a_private_field_cannot_be_read_across() {
@@ -1017,7 +1017,7 @@ fn group_mod_f1_a_private_field_cannot_be_read_across() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(3)\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::make(3);\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             ("m.aelys", PRIVATE_FIELD),
         ],
@@ -1033,7 +1033,7 @@ fn group_mod_f2_a_private_field_cannot_be_written_across() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let mut p = m.make(3)\n    p.v = 9\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n    let mut p = m::make(3);\n    p.v = 9;\n}\n",
             ),
             ("m.aelys", PRIVATE_FIELD),
         ],
@@ -1049,7 +1049,7 @@ fn group_mod_f3_a_private_field_cannot_be_supplied_across() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.P { v: 8 }\n    return m.read(p)\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::P { v: 8 };\n    return ExitCode::from(m::read(p) as u8);\n}\n",
             ),
             ("m.aelys", PRIVATE_FIELD),
         ],
@@ -1065,11 +1065,11 @@ fn group_mod_f4_an_exported_field_crosses() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let mut p = m.make(1)\n    p.v = 3\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let mut p = m::make(1);\n    p.v = 3;\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
         3,
@@ -1084,7 +1084,7 @@ fn group_mod_f5_a_module_reads_its_own_private_field() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.read(m.make(5))\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::read(m::make(5)) as u8);\n}\n",
             ),
             ("m.aelys", PRIVATE_FIELD),
         ],
@@ -1101,11 +1101,11 @@ fn group_mod_v2_a_public_function_may_not_return_a_private_type() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(1)\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n    let p = m::make(1);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "struct P { v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
         "[E0611]",
@@ -1121,11 +1121,11 @@ fn group_mod_v3_a_public_enum_may_not_carry_a_private_type() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let e = m.pick()\n    return 0\n}\n",
+                "mod m;\n\nfn main() {\n    let e = m::pick();\n}\n",
             ),
             (
                 "m.aelys",
-                "struct P { v: i64 }\n\npub enum E { None, Some(P) }\n\npub fn pick() -> E {\n    return E::Some(P { v: 5 })\n}\n",
+                "struct P { v: i64 }\n\npub enum E { None, Some(P) }\n\npub fn pick() -> E {\n    E::Some(P { v: 5 })\n}\n",
             ),
         ],
         "[E0611]",
@@ -1140,11 +1140,11 @@ fn group_mod_v4_a_public_signature_over_public_types_is_kept() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    let p = m.make(4)\n    return p.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    let p = m::make(4);\n    return ExitCode::from(p.v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n",
+                "pub struct P { pub v: i64 }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n",
             ),
         ],
         4,
@@ -1161,11 +1161,11 @@ fn group_mod_p2_a_generic_enum_carries_its_own_struct_across() {
         &[
             (
                 "root.aelys",
-                "needs vec_x\n\nfn main() -> i64 {\n    return vec_x.run()\n}\n",
+                "use std::process::ExitCode; mod vec_x;\n\nfn main() -> ExitCode {\n    return ExitCode::from(vec_x::run() as u8);\n}\n",
             ),
             (
                 "vec_x.aelys",
-                "pub struct Holder { pub a: i64, pub b: i64 }\n\nenum Opt<T> { Some(T), None }\n\npub fn run() -> i64 {\n    let h = Holder { a: 10, b: 7 }\n    let o = Opt::Some(h)\n    return match o {\n        Opt::Some(v) => v.a + v.b\n        Opt::None => 0\n    }\n}\n",
+                "pub struct Holder { pub a: i64, pub b: i64 }\n\nenum Opt<T> { Some(T), None }\n\npub fn run() -> i64 {\n    let h = Holder { a: 10, b: 7 };\n    let o = Opt::Some(h);\n    match o {\n        Opt::Some(v) => v.a + v.b,\n        Opt::None => 0,\n    }\n}\n",
             ),
         ],
         17,
@@ -1180,11 +1180,11 @@ fn group_mod_p3_a_root_generic_instantiates_over_an_imported_struct() {
         &[
             (
                 "root.aelys",
-                "needs vec_x\n\nfn keep<T>(v: T) -> T {\n    return v\n}\n\nfn main() -> i64 {\n    let h = keep(vec_x.make(10, 7))\n    return h.a + h.b\n}\n",
+                "use std::process::ExitCode; mod vec_x;\n\nfn keep<T>(v: T) -> T {\n    v\n}\n\nfn main() -> ExitCode {\n    let h = keep(vec_x::make(10, 7));\n    return ExitCode::from((h.a + h.b) as u8);\n}\n",
             ),
             (
                 "vec_x.aelys",
-                "pub struct Holder { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> Holder {\n    return Holder { a: x, b: y }\n}\n",
+                "pub struct Holder { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> Holder {\n    Holder { a: x, b: y }\n}\n",
             ),
         ],
         17,
@@ -1196,13 +1196,13 @@ fn group_mod_p3_a_root_generic_instantiates_over_an_imported_struct() {
 // `keep<holder>` from a module named `ptr_x` and `keep<&holder>` from a module named `x` mangle
 #[test]
 fn group_mod_p4_a_module_path_may_not_be_read_as_a_type_prefix() {
-    const HOLDER: &str = "pub struct Holder { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> Holder {\n    return Holder { a: x, b: y }\n}\n";
+    const HOLDER: &str = "pub struct Holder { pub a: i64, pub b: i64 }\n\npub fn make(x: i64, y: i64) -> Holder {\n    Holder { a: x, b: y }\n}\n";
     run_row(
         "P-4",
         &[
             (
                 "root.aelys",
-                "needs ptr_x\nneeds x\n\nfn keep<T>(v: T) -> T {\n    return v\n}\n\nfn main() -> i64 {\n    let h = keep(ptr_x.make(10, 7))\n    let q = x.make(1, 2)\n    let r = &q\n    let s = keep(r)\n    return h.a + h.b + q.a + q.b\n}\n",
+                "use std::process::ExitCode; mod ptr_x;\nmod x;\n\nfn keep<T>(v: T) -> T {\n    v\n}\n\nfn main() -> ExitCode {\n    let h = keep(ptr_x::make(10, 7));\n    let q = x::make(1, 2);\n    let r = &q;\n    let s = keep(r);\n    return ExitCode::from((h.a + h.b + q.a + q.b) as u8);\n}\n",
             ),
             ("ptr_x.aelys", HOLDER),
             ("x.aelys", HOLDER),
@@ -1220,11 +1220,11 @@ fn group_mod_w1_a_private_field_may_hold_a_private_type() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.read(m.open(7))\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::read(m::open(7)) as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct Raw { v: i64 }\n\npub struct Handle { raw: Raw }\n\npub fn open(n: i64) -> Handle {\n    return Handle { raw: Raw { v: n } }\n}\n\npub fn read(h: Handle) -> i64 {\n    return h.raw.v\n}\n",
+                "struct Raw { v: i64 }\n\npub struct Handle { raw: Raw }\n\npub fn open(n: i64) -> Handle {\n    Handle { raw: Raw { v: n } }\n}\n\npub fn read(h: Handle) -> i64 {\n    h.raw.v\n}\n",
             ),
         ],
         7,
@@ -1239,11 +1239,11 @@ fn group_mod_w2_an_exported_field_may_not_hold_a_private_type() {
         &[
             (
                 "root.aelys",
-                "needs m\n\nfn main() -> i64 {\n    return m.open(7).raw.v\n}\n",
+                "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::open(7).raw.v as u8);\n}\n",
             ),
             (
                 "m.aelys",
-                "struct Raw { v: i64 }\n\npub struct Handle { pub raw: Raw }\n\npub fn open(n: i64) -> Handle {\n    return Handle { raw: Raw { v: n } }\n}\n",
+                "struct Raw { v: i64 }\n\npub struct Handle { pub raw: Raw }\n\npub fn open(n: i64) -> Handle {\n    Handle { raw: Raw { v: n } }\n}\n",
             ),
         ],
         "[E0611]",
@@ -1257,7 +1257,7 @@ fn group_mod_w3_the_root_may_name_its_own_private_types() {
         "W-3",
         &[(
             "root.aelys",
-            "struct P { v: i64 }\n\npub fn mk(n: i64) -> P {\n    return P { v: n }\n}\n\nfn main() -> i64 {\n    return mk(1).v\n}\n",
+            "use std::process::ExitCode; struct P { v: i64 }\n\npub fn mk(n: i64) -> P {\n    P { v: n }\n}\n\nfn main() -> ExitCode {\n    return ExitCode::from(mk(1).v as u8);\n}\n",
         )],
         1,
         "",
@@ -1269,44 +1269,44 @@ fn group_mod_w3_the_root_may_name_its_own_private_types() {
 const LEAK_CONVERTERS: &[(&str, &str, &str)] = &[
     (
         "vec-surface",
-        "pub struct Holder { pub v: i64 }\n\npub enum Opt<T> { None, Some(T) }\n\npub fn go() -> i64 {\n    let o: Opt<[vec<Holder>; 1]> = Opt::None\n    return match o {\n        Opt::Some(h) => h[0][0].v\n        Opt::None => 0\n    }\n}\n",
-        "return m.go()",
+        "pub struct Holder { pub v: i64 }\n\npub enum Opt<T> { None, Some(T) }\n\npub fn go() -> i64 {\n    let o: Opt<[vec<Holder>; 1]> = Opt::None;\n    match o {\n        Opt::Some(h) => h[0][0].v,\n        Opt::None => 0,\n    }\n}\n",
+        "return m.go();",
     ),
     (
         "air-layout",
-        "pub struct Node { next: Node }\n\npub fn make() -> i64 {\n    return 1\n}\n",
-        "return m.make()",
+        "pub struct Node { next: Node }\n\npub fn make() -> i64 {\n    1\n}\n",
+        "return m.make();",
     ),
     (
         "rc-surface",
-        "pub struct Holder { r: Rc<i64> }\n\npub fn make() -> i64 {\n    return 0\n}\n",
-        "let b: vec<m.Holder> = Vec::new()\n    return 0",
+        "pub struct Holder { r: Rc<i64> }\n\npub fn make() -> i64 {\n    0\n}\n",
+        "static b: vec<m.Holder> = Vec::new();\n    return 0;",
     ),
 ];
 
-const LEAK_MODULE: &str = "pub struct P { pub v: i64 }\n\npub enum E { None, Some(i64) }\n\npub fn make(n: i64) -> P {\n    return P { v: n }\n}\n\npub fn pick() -> E {\n    return E::Some(1)\n}\n";
+const LEAK_MODULE: &str = "pub struct P { pub v: i64 }\n\npub enum E { None, Some(i64) }\n\npub fn make(n: i64) -> P {\n    P { v: n }\n}\n\npub fn pick() -> E {\n    E::Some(1)\n}\n";
 
 const LEAK_BODIES: &[(&str, &str)] = &[
     (
         "unknown-field-write",
         "let mut p = m.make(1)\n    p.zzz = 2\n    return 0",
     ),
-    ("unknown-field-read", "return m.make(1).zzz"),
+    ("unknown-field-read", "return m.make(1).zzz;"),
     (
         "unknown-field-literal",
-        "let p = m.P { zzz: 1 }\n    return 0",
+        "static p: m::P = m.P { zzz: 1 };\n    return 0;",
     ),
     ("unknown-variant", "let e = m.E::Zzz\n    return 0"),
     (
         "unknown-variant-pattern",
-        "return match m.pick() {\n        m.E::Zzz(n) => n\n        m.E::None => 0\n    }",
+        "return match m.pick() {\n        m.E::Zzz(n) => n,\n        m.E::None => 0,\n    };",
     ),
     (
         "non-exhaustive-match",
-        "return match m.pick() {\n        m.E::Some(n) => n\n    }",
+        "return match m.pick() {\n        m.E::Some(n) => n,\n    };",
     ),
-    ("struct-mismatch", "let q: i64 = m.make(1)\n    return q"),
-    ("enum-mismatch", "let q: i64 = m.pick()\n    return q"),
+    ("struct-mismatch", "static q: i64 = m.make(1);\n    return q;"),
+    ("enum-mismatch", "static q: i64 = m.pick();\n    return q;"),
 ];
 
 #[test]

@@ -79,124 +79,121 @@ void aelys_dirty_stack(void) {
 "#;
 
 // every operand the optimizer could fold is seeded from aelys_opaque, or -o1 replaces a
-const READER: &str = r#"unsafe extern fn aelys_hdr_refcount(p: &u8) -> i64
-unsafe extern fn aelys_hdr_flags(p: &u8) -> i64
-unsafe extern fn aelys_hdr_type_id(p: &u8) -> i64
-unsafe extern fn aelys_hdr_reserved(p: &u8) -> i64
-unsafe extern fn aelys_dirty_heap(bytes: i64)
-unsafe extern fn aelys_opaque(x: i64) -> i64
+const READER: &str = r#"extern "C" { fn aelys_hdr_refcount(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_flags(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_type_id(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_reserved(p: &u8) -> i64; }
+extern "C" { fn aelys_dirty_heap(bytes: i64); }
+extern "C" { fn aelys_opaque(x: i64) -> i64; }
 
-let G: string = "a global"
+static G: String = "a global";
 
-fn show(tag: string, s: string) {
-    let b: &[u8] = s.bytes
+fn show(tag: String, s: String) {
+    let b: &[u8] = s.as_bytes();
     unsafe {
-        print(tag)
-        print("|")
-        print(aelys_hdr_refcount(&b[0]))
-        print("|")
-        print(aelys_hdr_flags(&b[0]))
-        print("|")
-        print(aelys_hdr_type_id(&b[0]))
-        print("|")
-        println(aelys_hdr_reserved(&b[0]))
+        print!("{}", tag);
+        print!("|");
+        print!("{}", aelys_hdr_refcount(&b[0]));
+        print!("|");
+        print!("{}", aelys_hdr_flags(&b[0]));
+        print!("|");
+        print!("{}", aelys_hdr_type_id(&b[0]));
+        print!("|");
+        println!("{}", aelys_hdr_reserved(&b[0]));
     }
 }
 
-fn borrow_once(s: string) {
-    show("P5-borrow", s)
+fn borrow_once(s: String) {
+    show("P5-borrow", s);
 }
 
-fn main() -> i64 {
-    let mut k: i64 = 0
+fn main() {
+    let mut k: i64 = 0;
     unsafe {
-        k = aelys_opaque(7)
-        aelys_dirty_heap(20)
-        aelys_dirty_heap(24)
-        aelys_dirty_heap(32)
+        k = aelys_opaque(7);
+        aelys_dirty_heap(20);
+        aelys_dirty_heap(24);
+        aelys_dirty_heap(32);
     }
 
-    let heap_concat: string = "row " + "{k}"
-    let heap_char: string = string::from_char('A')
-    let heap_sub: string = string::substring_bytes(G, k - 5, k - 1)
-    let lit: string = "a literal"
-    let b: bool = true
-    let boolstr: string = "{b}"
-    let f: f64 = 1.5
-    let c: char = 'A'
-    let from_i64: string = "{k}"
-    let from_f64: string = "{f}"
-    let from_char: string = "{c}"
+    let heap_concat: String = "row " + format!("{k}");
+    let heap_char: String = 'A'.to_string();
+    let heap_sub: String = G[k - 5..k - 1].to_string();
+    let lit: String = "a literal";
+    let b: bool = true;
+    let boolstr: String = format!("{b}");
+    let f: f64 = 1.5;
+    let c: char = 'A';
+    let from_i64: String = format!("{k}");
+    let from_f64: String = format!("{f}");
+    let from_char: String = format!("{c}");
 
-    show("P1-concat", heap_concat)
-    show("P1-from-char", heap_char)
-    show("P1-substring", heap_sub)
-    show("P2-literal", lit)
-    show("P2-global", G)
-    show("P3-bool", boolstr)
-    show("P4-i64", from_i64)
-    show("P4-f64", from_f64)
-    show("P4-char", from_char)
-    borrow_once(lit)
-    return 0
+    show("P1-concat", heap_concat);
+    show("P1-from-char", heap_char);
+    show("P1-substring", heap_sub);
+    show("P2-literal", lit);
+    show("P2-global", G);
+    show("P3-bool", boolstr);
+    show("P4-i64", from_i64);
+    show("P4-f64", from_f64);
+    show("P4-char", from_char);
+    borrow_once(lit);
 }
 "#;
 
 // a `let` binding of an interpolation takes the non-elided family, which is the one that mallocs
-const MALLOC_READER: &str = r#"unsafe extern fn aelys_hdr_refcount(p: &u8) -> i64
-unsafe extern fn aelys_hdr_flags(p: &u8) -> i64
-unsafe extern fn aelys_hdr_type_id(p: &u8) -> i64
-unsafe extern fn aelys_hdr_reserved(p: &u8) -> i64
-unsafe extern fn aelys_dirty_heap(bytes: i64)
-unsafe extern fn aelys_opaque(x: i64) -> i64
+const MALLOC_READER: &str = r#"extern "C" { fn aelys_hdr_refcount(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_flags(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_type_id(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_reserved(p: &u8) -> i64; }
+extern "C" { fn aelys_dirty_heap(bytes: i64); }
+extern "C" { fn aelys_opaque(x: i64) -> i64; }
 
-fn show(tag: string, s: string) {
-    let b: &[u8] = s.bytes
+fn show(tag: String, s: String) {
+    let b: &[u8] = s.as_bytes();
     unsafe {
-        print(tag)
-        print("|")
-        print(aelys_hdr_refcount(&b[0]))
-        print("|")
-        print(aelys_hdr_flags(&b[0]))
-        print("|")
-        print(aelys_hdr_type_id(&b[0]))
-        print("|")
-        println(aelys_hdr_reserved(&b[0]))
+        print!("{}", tag);
+        print!("|");
+        print!("{}", aelys_hdr_refcount(&b[0]));
+        print!("|");
+        print!("{}", aelys_hdr_flags(&b[0]));
+        print!("|");
+        print!("{}", aelys_hdr_type_id(&b[0]));
+        print!("|");
+        println!("{}", aelys_hdr_reserved(&b[0]));
     }
 }
 
-fn main() -> i64 {
-    let mut k: i64 = 0
+fn main() {
+    let mut k: i64 = 0;
     unsafe {
-        k = aelys_opaque(7)
-        aelys_dirty_heap(37)
-        aelys_dirty_heap(80)
-        aelys_dirty_heap(20)
+        k = aelys_opaque(7);
+        aelys_dirty_heap(37);
+        aelys_dirty_heap(80);
+        aelys_dirty_heap(20);
     }
-    let f: f64 = 1.5
-    let c: char = 'A'
+    let f: f64 = 1.5;
+    let c: char = 'A';
 
-    let from_i64: string = "{k}"
-    let from_f64: string = "{f}"
-    let from_char: string = "{c}"
+    let from_i64: String = format!("{k}");
+    let from_f64: String = format!("{f}");
+    let from_char: String = format!("{c}");
 
-    show("M1-i64", from_i64)
-    show("M2-f64", from_f64)
-    show("M3-char", from_char)
-    return 0
+    show("M1-i64", from_i64);
+    show("M2-f64", from_f64);
+    show("M3-char", from_char);
 }
 "#;
 
-const DIRTY_FRAME: &str = r#"unsafe extern fn aelys_dirty_stack()
+const DIRTY_FRAME: &str = r#"extern "C" { fn aelys_dirty_stack(); }
 
 fn emit(i: i64) {
-    println("{i}")
+    println!("{i}");
 }
 
-fn main() -> i64 {
-    unsafe { aelys_dirty_stack() }
-    emit(42)
-    return 0
+fn main() {
+    unsafe { aelys_dirty_stack(); }
+    emit(42);
 }
 "#;
 
@@ -483,7 +480,7 @@ fn the_interpolation_frame_slot_is_headered_and_both_sides_still_agree_on_its_si
     let lib = probe_archive();
     let dir = tempdir().expect("tempdir");
     for (level, opt) in LEVELS {
-        let ir = ir_for("fn main() -> i64 {\n    let i: i64 = 42\n    println(\"{i}\")\n    return 0\n}\n", opt);
+        let ir = ir_for("fn main() {\n    let i: i64 = 42;\n    println!(\"{i}\");\n}\n", opt);
         assert!(
             ir.contains(&format!("alloca {slot}, align 16")),
             "{level}: the frame slot must reserve the rc header ahead of {f64_buf} bytes, aligned \
@@ -521,7 +518,7 @@ fn the_interpolation_frame_slot_is_headered_and_both_sides_still_agree_on_its_si
 #[test]
 fn a_string_literal_is_emitted_behind_a_pinned_header() {
     for (level, opt) in LEVELS {
-        let ir = ir_for("fn main() -> i64 {\n    println(\"hello world\")\n    return 0\n}\n", opt);
+        let ir = ir_for("fn main() {\n    println!(\"hello world\");\n}\n", opt);
         assert!(
             ir.contains("{ i32, i8, i8, i8, i8, i32, i32, [12 x i8] } { i32 -1, i8 2, i8 0, i8 0, i8 0, i32 0, i32 0, [12 x i8] c\"hello world\\00\" }, align 16"),
             "{level}: a literal must be emitted behind a pinned, untraced rc header, aligned so \
@@ -540,7 +537,7 @@ fn the_interior_view_producer_is_still_unreachable_from_the_compiler() {
     let path = dir.path().join("index.aelys");
     fs::write(
         &path,
-        "fn main() -> i64 {\n    let s: string = \"abc\"\n    let mut i: i64 = 0\n    i = i + 1\n    let c: char = s[i]\n    return 0\n}\n",
+        "fn main() {\n    let s: String = \"abc\";\n    let mut i: i64 = 0;\n    i = i + 1;\n    let c: char = s[i];\n}\n",
     )
     .expect("write source");
     let err = compile_file_with_llvm(&path, OptimizationLevel::None, false)
@@ -775,7 +772,7 @@ fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other
     let imports: String = modules.iter().map(|m| format!("needs std.{m}\n")).collect();
     fs::write(
         &root,
-        format!("{imports}\nfn main() -> i64 {{\n    return 0\n}}\n"),
+        format!("{imports};\nfn main() {{\n}}\n"),
     )
     .expect("write census root");
     let air = aelys_driver::lower_file_to_air(&root, OptimizationLevel::None)
@@ -849,32 +846,31 @@ fn a36_w1_a_std_nogc_function_calls_only_string_counts_readers_externs_and_other
 }
 
 const A36_W1B_ROOT: &str = r#"
-needs std.slice
-needs std.sort
+use std::slice;
+use std::sort;
 
-fn down(a: i64, b: i64) -> i64 { return b - a }
+fn down(a: i64, b: i64) -> i64 { b - a }
 
-fn main() -> i64 {
-    let mut a: [i64;4] = [3, 1, 2, 5]
-    let b: [i64;4] = [1, 2, 3, 5]
-    let f = slice.first(a[..])
-    let l = slice.last(a[..])
-    let mx = slice.max(a[..])
-    let mn = slice.min(a[..])
-    let i = slice.index_of(a[..], 2)
-    let fd = slice.find(a[..], 2)
-    let c = slice.contains(a[..], 2)
-    let e = slice.eq(a[..], b[..])
-    let s = slice.is_sorted(b[..])
-    slice.swap(a[..], 0, 1)
-    slice.reverse(a[..])
-    sort.insertion_sort(a[..])
-    let k = sort.binary_search(a[..], 3)
-    slice.fill(a[..], 7)
-    sort.heap_sort(a[..])
-    sort.sort_by(a[..], down)
-    sort.merge_sort(a[..])
-    return 0
+fn main() {
+    let mut a: [i64;4] = [3, 1, 2, 5];
+    let b: [i64;4] = [1, 2, 3, 5];
+    let f = slice::first(a[..]);
+    let l = slice::last(a[..]);
+    let mx = slice::max(a[..]);
+    let mn = slice::min(a[..]);
+    let i = slice::index_of(a[..], 2);
+    let fd = slice::find(a[..], 2);
+    let c = slice::contains(a[..], 2);
+    let e = slice::eq(a[..], b[..]);
+    let s = slice::is_sorted(b[..]);
+    slice::swap(a[..], 0, 1);
+    slice::reverse(a[..]);
+    sort::insertion_sort(a[..]);
+    let k = sort::binary_search(a[..], 3);
+    slice::fill(a[..], 7);
+    sort::heap_sort(a[..]);
+    sort::sort_by(a[..], down);
+    sort::merge_sort(a[..]);
 }
 "#;
 
@@ -1025,31 +1021,29 @@ fn a36_w2_a_string_retained_then_released_under_the_cycle_runtime_never_becomes_
 }
 
 const A3_TWO_OWNED_STRINGS: &str = r#"
-fn main() -> i64 {
-    let a: string = "ab" + "{1}"
-    let b: string = "cd" + "{2}"
-    println(a)
-    println(b)
-    return 0
+fn main() {
+    let a: String = "ab" + format!("{}", 1);
+    let b: String = "cd" + format!("{}", 2);
+    println!("{}", a);
+    println!("{}", b);
 }
 "#;
 
 const A3_ONE_BIG_STRING: &str = r#"
-fn big() -> string {
-    let mut s: string = "x"
-    let mut i: i64 = 0
+fn big() -> String {
+    let mut s: String = "x";
+    let mut i: i64 = 0;
     while i < 18 {
-        s = s + s
-        i = i + 1
+        s = s + s;
+        i = i + 1;
     }
-    return s
+    s
 }
-fn main() -> i64 {
-    let a: string = big()
-    let b: string = "cd" + "{2}"
-    println(a.len)
-    println(b)
-    return 0
+fn main() {
+    let a: String = big();
+    let b: String = "cd" + format!("{}", 2);
+    println!("{}", a.len());
+    println!("{}", b);
 }
 "#;
 
@@ -1257,32 +1251,31 @@ fn a3_a_broken_count_in_generated_code_is_caught_inline_and_out_of_line() {
     assert_eq!((small, big), (48, 12), "A3: every leg must run");
 }
 
-const A3_ONE_BELOW_DEAD: &str = r#"unsafe extern fn aelys_hdr_refcount(p: &u8) -> i64
-unsafe extern fn aelys_hdr_set_refcount(p: &u8, v: i64)
-unsafe extern fn aelys_opaque(x: i64) -> i64
+const A3_ONE_BELOW_DEAD: &str = r#"extern "C" { fn aelys_hdr_refcount(p: &u8) -> i64; }
+extern "C" { fn aelys_hdr_set_refcount(p: &u8, v: i64); }
+extern "C" { fn aelys_opaque(x: i64) -> i64; }
 
-fn count(s: string) -> i64 {
-    let b: &[u8] = s.bytes
-    let mut n: i64 = 0
+fn count(s: String) -> i64 {
+    let b: &[u8] = s.as_bytes();
+    let mut n: i64 = 0;
     unsafe {
-        n = aelys_hdr_refcount(&b[0])
+        n = aelys_hdr_refcount(&b[0]);
     }
-    return n
+    n
 }
 
-fn main() -> i64 {
-    let mut k: i64 = 0
+fn main() {
+    let mut k: i64 = 0;
     unsafe {
-        k = aelys_opaque(7)
+        k = aelys_opaque(7);
     }
-    let s: string = "row " + "{k}"
-    let b: &[u8] = s.bytes
+    let s: String = "row " + format!("{k}");
+    let b: &[u8] = s.as_bytes();
     unsafe {
-        aelys_hdr_set_refcount(&b[0], 2920406700)
+        aelys_hdr_set_refcount(&b[0], 2920406700);
     }
-    let t: string = s
-    println(count(t))
-    return 0
+    let t: String = s;
+    println!("{}", count(t));
 }
 "#;
 

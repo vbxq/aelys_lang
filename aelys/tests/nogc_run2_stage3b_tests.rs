@@ -32,9 +32,8 @@ fn compile_nogc_to_general_let() {
     accepts(
         "\
 nogc fn my_nogc_fn() { }
-fn main() -> i64 {
-    let g: fn() = my_nogc_fn
-    return 0
+fn main() {
+    let g: fn() = my_nogc_fn;
 }
 ",
     );
@@ -45,11 +44,10 @@ fn compile_higher_order_apply() {
     accepts(
         "\
 nogc fn my_nogc_fn(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(my_nogc_fn, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(my_nogc_fn, &n);
 }
 ",
     );
@@ -60,12 +58,11 @@ fn compile_forward_nogc_param() {
     accepts(
         "\
 nogc fn my_nogc_fn(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-nogc fn outer(g: nogc fn(&i32), y: &i32) { apply(g, y) }
-fn main() -> i64 {
-    let n: i32 = 5
-    outer(my_nogc_fn, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+nogc fn outer(g: nogc fn(&i32), y: &i32) { apply(g, y); }
+fn main() {
+    let n: i32 = 5;
+    outer(my_nogc_fn, &n);
 }
 ",
     );
@@ -76,11 +73,10 @@ fn reject_general_fn_arg() {
     let err = reject(
         "\
 fn bad(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(bad, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(bad, &n);
 }
 ",
     );
@@ -91,11 +87,10 @@ fn main() -> i64 {
 fn reject_lambda_arg() {
     let err = reject(
         "\
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(fn(p: &i32) { }, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(move |p: &i32| { }, &n);
 }
 ",
     );
@@ -109,12 +104,11 @@ fn reject_let_var_arg_shadowing() {
         "\
 nogc fn ok(p: &i32) { }
 fn leaky(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    let ok = leaky
-    apply(ok, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    let ok = leaky;
+    apply(ok, &n);
 }
 ",
     );
@@ -131,16 +125,16 @@ fn reject_let_shadows_nogc_param() {
         "\
 nogc fn ok(p: &i32) { }
 fn leaky(p: &i32) {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
+    let mut v = Vec::new();
+    Vec::push(v, 1);
 }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
 nogc fn outer(f: nogc fn(&i32), x: &i32) {
-    let mut f = ok
-    f = leaky
-    apply(f, x)
+    let mut f = ok;
+    f = leaky;
+    apply(f, x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -152,17 +146,17 @@ fn reject_let_shadows_nogc_param_two_hop() {
         "\
 nogc fn ok(p: &i32) { }
 fn leaky(p: &i32) {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
+    let mut v = Vec::new();
+    Vec::push(v, 1);
 }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-nogc fn mid(f: nogc fn(&i32), x: &i32) { apply(f, x) }
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+nogc fn mid(f: nogc fn(&i32), x: &i32) { apply(f, x); }
 nogc fn outer(f: nogc fn(&i32), x: &i32) {
-    let mut f = ok
-    f = leaky
-    mid(f, x)
+    let mut f = ok;
+    f = leaky;
+    mid(f, x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -175,10 +169,10 @@ fn reject_fcrit_mut_nogc_param() {
         "\
 fn leaky(p: &i32) { }
 nogc fn apply(mut f: nogc fn(&i32), x: &i32) {
-    f = leaky
-    f(x)
+    f = leaky;
+    f(x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -190,12 +184,12 @@ fn reject_fcrit_mut_forwarding() {
     let err = reject(
         "\
 fn leaky(p: &i32) { }
-nogc fn apply2(g: nogc fn(&i32), y: &i32) { g(y) }
+nogc fn apply2(g: nogc fn(&i32), y: &i32) { g(y); }
 nogc fn apply(mut f: nogc fn(&i32), x: &i32) {
-    f = leaky
-    apply2(f, x)
+    f = leaky;
+    apply2(f, x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -207,9 +201,8 @@ fn reject_nogc_in_let_annotation() {
     let err = reject(
         "\
 nogc fn my_nogc_fn() { }
-fn main() -> i64 {
-    let g: nogc fn() = my_nogc_fn
-    return 0
+fn main() {
+    let g: nogc fn() = my_nogc_fn;
 }
 ",
     );
@@ -222,8 +215,8 @@ fn reject_nogc_in_return_type() {
     let err = reject(
         "\
 nogc fn my_nogc_fn() { }
-fn get() -> nogc fn() { return my_nogc_fn }
-fn main() -> i64 { return 0 }
+fn get() -> nogc fn() { my_nogc_fn }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -235,7 +228,7 @@ fn reject_nogc_in_aggregate() {
     let err = reject(
         "\
 fn take(xs: [nogc fn(); 2]) { }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -247,7 +240,7 @@ fn reject_nogc_nested_fn_type() {
     let err = reject(
         "\
 nogc fn apply(f: nogc fn(nogc fn())) { }
-fn main() -> i64 { return 0 }
+fn main() { }
 ",
     );
     assert_code(&err, "E0728");
@@ -259,14 +252,14 @@ fn main() -> i64 { return 0 }
 fn reject_inferred_aggregate_index_call() {
     let err = reject(
         "\
-nogc fn ok() { }
+use std::process::ExitCode; nogc fn ok() { }
 fn bad() { }
 nogc fn f() -> i64 {
-    let arr = [ok, bad]
-    arr[1]()
-    return 0
+    let arr = [ok, bad];
+    arr[1]();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     // an inferred aggregate cannot carry the nogc marker, so the indirect call is not tightened
@@ -277,15 +270,15 @@ fn main() -> i64 { return f() }
 fn reject_if_merge_indirect_call() {
     let err = reject(
         "\
-nogc fn ok() { }
+use std::process::ExitCode; nogc fn ok() { }
 fn bad() { }
 nogc fn f() -> i64 {
-    let c = true
-    let h = if c { ok } else { bad }
-    h()
-    return 0
+    let c = true;
+    let h = if c { ok } else { bad };
+    h();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 ",
     );
     assert_code(&err, "E0727");

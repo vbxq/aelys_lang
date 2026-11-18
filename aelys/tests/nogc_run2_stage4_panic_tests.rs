@@ -12,15 +12,15 @@ use common::{exe_path_for, linker_unavailable};
 
 // the index is a runtime argument, so the bounds check survives constant folding.
 const SLICE_INDEX_SRC: &str = r#"
-nogc fn get(a: &[i64], i: i64) -> i64 { return a[i] }
-fn main() -> i64 { let arr = [10, 20, 30]; return get(arr[..], INDEX) }
+use std::process::ExitCode; nogc fn get(a: &[i64], i: i64) -> i64 { a[i] }
+fn main() -> ExitCode { let arr = [10, 20, 30]; return ExitCode::from(get(arr[..], INDEX) as u8); }
 "#;
 
 const UNWRAP_SRC: &str = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
-nogc fn take(r: Result<i64, E>) -> i64 { return r.unwrap() }
-fn main() -> i64 { return take(PAYLOAD) }
+nogc fn take(r: Result<i64, E>) -> i64 { r.unwrap() }
+fn main() -> ExitCode { return ExitCode::from(take(PAYLOAD) as u8); }
 "#;
 
 fn slice_index_src(index: i64) -> String {
@@ -124,15 +124,15 @@ fn nogc_fn_with_bounds_checked_index_compiles() {
     accepts(
         "fixed array local",
         r#"
-nogc fn pick(i: i64) -> i64 { let arr = [10, 20, 30]; return arr[i] }
-fn main() -> i64 { return pick(1) }
+use std::process::ExitCode; nogc fn pick(i: i64) -> i64 { let arr = [10, 20, 30]; arr[i] }
+fn main() -> ExitCode { return ExitCode::from(pick(1) as u8); }
 "#,
     );
     accepts(
         "index assign",
         r#"
-nogc fn poke(a: &mut [i64], i: i64) { a[i] = 7 }
-fn main() -> i64 { let mut arr = [1, 2, 3]; poke(arr[..], 0); return arr[0] }
+use std::process::ExitCode; nogc fn poke(a: &mut [i64], i: i64) { a[i] = 7; }
+fn main() -> ExitCode { let mut arr = [1, 2, 3]; poke(arr[..], 0); return ExitCode::from(arr[0] as u8); }
 "#,
     );
 }
@@ -143,10 +143,10 @@ fn nogc_fn_with_result_assert_compiles() {
     accepts(
         "expect",
         r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
-nogc fn take(r: Result<i64, E>) -> i64 { return r.expect("boom") }
-fn main() -> i64 { return take(Result::Ok(7)) }
+nogc fn take(r: Result<i64, E>) -> i64 { r.expect("boom") }
+fn main() -> ExitCode { return ExitCode::from(take(Result::Ok(7)) as u8); }
 "#,
     );
 }
@@ -154,12 +154,12 @@ fn main() -> i64 { return take(Result::Ok(7)) }
 #[test]
 fn panicking_nogc_effects_carry_panic_without_managed() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
-nogc fn get(a: &[i64], i: i64) -> i64 { return a[i] }
-nogc fn take(r: Result<i64, E>) -> i64 { return r.unwrap() }
-fn managed_witness() -> Rc<i64> { return Rc::new(1) }
-fn main() -> i64 { let arr = [1, 2]; return get(arr[..], 0) }
+nogc fn get(a: &[i64], i: i64) -> i64 { a[i] }
+nogc fn take(r: Result<i64, E>) -> i64 { r.unwrap() }
+fn managed_witness() -> Rc<i64> { Rc::new(1) }
+fn main() -> ExitCode { let arr = [1, 2]; return ExitCode::from(get(arr[..], 0) as u8); }
 "#;
     let summaries = summaries_of(src);
     for name in ["get", "take"] {

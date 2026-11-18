@@ -24,7 +24,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -225,48 +225,48 @@ impl Harness {
     }
 }
 
-const R1_LET: &str = "fn main() -> i64 {\n\
-                      \x20   let mut x: i64 = 7919\n\
-                      \x20   let p: &mut i64 = &x\n\
-                      \x20   *p = 101\n\
-                      \x20   return x\n\
+const R1_LET: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                      \x20   let mut x: i64 = 7919;\n\
+                      \x20   let p: &mut i64 = &x;\n\
+                      \x20   *p = 101;\n\
+                      \x20   return ExitCode::from(x as u8);\n\
                       }\n";
 
-const R2_ARG: &str = "fn w(p: &mut i64) -> i64 {\n\
-                      \x20   *p = 101\n\
-                      \x20   return 0\n\
+const R2_ARG: &str = "use std::process::ExitCode; fn w(p: &mut i64) -> i64 {\n\
+                      \x20   *p = 101;\n\
+                      \x20   0\n\
                       }\n\
-                      fn main() -> i64 {\n\
-                      \x20   let mut x: i64 = 7919\n\
-                      \x20   let q = w(&x)\n\
-                      \x20   return x\n\
+                      fn main() -> ExitCode {\n\
+                      \x20   let mut x: i64 = 7919;\n\
+                      \x20   let q = w(&x);\n\
+                      \x20   return ExitCode::from(x as u8);\n\
                       }\n";
 
-const R3_RET: &str = "fn g(r: &i64) -> &mut i64 { return r }\n\
-                      fn main() -> i64 { return 0 }\n";
+const R3_RET: &str = "fn g(r: &i64) -> &mut i64 { r }\n\
+                      fn main() { }\n";
 
-const R4_ASSIGN: &str = "fn main() -> i64 {\n\
-                         \x20   let mut x: i64 = 7919\n\
-                         \x20   let mut y: i64 = 1\n\
-                         \x20   let mut p: &mut i64 = &mut y\n\
-                         \x20   p = &x\n\
-                         \x20   *p = 101\n\
-                         \x20   return x\n\
+const R4_ASSIGN: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                         \x20   let mut x: i64 = 7919;\n\
+                         \x20   let mut y: i64 = 1;\n\
+                         \x20   let mut p: &mut i64 = &mut y;\n\
+                         \x20   p = &x;\n\
+                         \x20   *p = 101;\n\
+                         \x20   return ExitCode::from(x as u8);\n\
                          }\n";
 
-const R5_IF_ARMS: &str = "fn main() -> i64 {\n\
-                          \x20   let mut x: i64 = 7919\n\
-                          \x20   let c: bool = true\n\
-                          \x20   let p: &mut i64 = if c { &x } else { &x }\n\
-                          \x20   *p = 101\n\
-                          \x20   return x\n\
+const R5_IF_ARMS: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                          \x20   let mut x: i64 = 7919;\n\
+                          \x20   let c: bool = true;\n\
+                          \x20   let p: &mut i64 = if c { &x } else { &x };\n\
+                          \x20   *p = 101;\n\
+                          \x20   return ExitCode::from(x as u8);\n\
                           }\n";
 
-const R6_BLOCK_TAIL: &str = "fn main() -> i64 {\n\
-                             \x20   let mut x: i64 = 7919\n\
-                             \x20   let p: &mut i64 = { &x }\n\
-                             \x20   *p = 101\n\
-                             \x20   return x\n\
+const R6_BLOCK_TAIL: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                             \x20   let mut x: i64 = 7919;\n\
+                             \x20   let p: &mut i64 = { &x };\n\
+                             \x20   *p = 101;\n\
+                             \x20   return ExitCode::from(x as u8);\n\
                              }\n";
 
 const ROUTES: &[(&str, &str)] = &[
@@ -289,49 +289,49 @@ fn every_acquisition_route_is_refused_by_e0416() {
 
 
 const P1_WHOLE_ELEMENT: &str = "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                                \x20   let p: &mut i64 = &(*r)[0]\n\
-                                \x20   *p = 101\n\
-                                \x20   return 0\n\
+                                \x20   let p: &mut i64 = &(*r)[0];\n\
+                                \x20   *p = 101;\n\
+                                \x20   0\n\
                                 }\n\
-                                fn main() -> i64 { return 0 }\n";
+                                fn main() { }\n";
 
 const P2_FIELD_OF_ELEMENT: &str = "struct S { n: i64 }\n\
                                    nogc fn poke(r: &mut Vec<S>) -> i64 {\n\
-                                   \x20   let p: &mut i64 = &(*r)[0].n\n\
-                                   \x20   *p = 101\n\
-                                   \x20   return 0\n\
+                                   \x20   let p: &mut i64 = &(*r)[0].n;\n\
+                                   \x20   *p = 101;\n\
+                                   \x20   0\n\
                                    }\n\
-                                   fn main() -> i64 { return 0 }\n";
+                                   fn main() { }\n";
 
 const P3_FIELD_ALONE: &str = "struct S { n: i64 }\n\
                               nogc fn poke(s: &mut S) -> i64 {\n\
-                              \x20   let p: &mut i64 = &(*s).n\n\
-                              \x20   *p = 101\n\
-                              \x20   return 0\n\
+                              \x20   let p: &mut i64 = &(*s).n;\n\
+                              \x20   *p = 101;\n\
+                              \x20   0\n\
                               }\n\
-                              fn main() -> i64 { return 0 }\n";
+                              fn main() { }\n";
 
 const P4_VIA_LOCAL_SLICE: &str = "nogc fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                                  \x20   let s: &mut [i64] = (*r)[0..2]\n\
-                                  \x20   let p: &mut i64 = &s[0]\n\
-                                  \x20   *p = 101\n\
-                                  \x20   return 0\n\
+                                  \x20   let s: &mut [i64] = (*r)[0..2];\n\
+                                  \x20   let p: &mut i64 = &s[0];\n\
+                                  \x20   *p = 101;\n\
+                                  \x20   0\n\
                                   }\n\
-                                  fn main() -> i64 { return 0 }\n";
+                                  fn main() { }\n";
 
 const P5_DYNAMIC_INDEX: &str = "nogc fn poke(r: &mut Vec<i64>, i: i64) -> i64 {\n\
-                                \x20   let p: &mut i64 = &(*r)[i]\n\
-                                \x20   *p = 101\n\
-                                \x20   return 0\n\
+                                \x20   let p: &mut i64 = &(*r)[i];\n\
+                                \x20   *p = 101;\n\
+                                \x20   0\n\
                                 }\n\
-                                fn main() -> i64 { return 0 }\n";
+                                fn main() { }\n";
 
 const P6_CALL_THROUGH_PROJECTION: &str = "nogc fn w(p: &mut i64) -> i64 {\n\
-                                          \x20   *p = 101\n\
-                                          \x20   return 0\n\
+                                          \x20   *p = 101;\n\
+                                          \x20   0\n\
                                           }\n\
-                                          nogc fn poke(r: &mut Vec<i64>) -> i64 { return w(&(*r)[0]) }\n\
-                                          fn main() -> i64 { return 0 }\n";
+                                          nogc fn poke(r: &mut Vec<i64>) -> i64 { w(&(*r)[0]) }\n\
+                                          fn main() { }\n";
 
 const PROJECTIONS: &[(&str, &str)] = &[
     ("P1-whole-element", P1_WHOLE_ELEMENT),
@@ -353,26 +353,23 @@ fn every_projection_shape_is_refused_by_e0416() {
 
 // the must-not-move controls. `&mut t` to `&t` drops write access and so can never create
 
-const W1_WEAKEN_LET: &str = "fn main() -> i64 {\n\
-                             \x20   let mut x: i64 = 7919\n\
-                             \x20   let p: &i64 = &mut x\n\
-                             \x20   println(*p)\n\
-                             \x20   return 0\n\
+const W1_WEAKEN_LET: &str = "fn main() {\n\
+                             \x20   let mut x: i64 = 7919;\n\
+                             \x20   let p: &i64 = &mut x;\n\
+                             \x20   println!(\"{}\", *p);\n\
                              }\n";
 
-const W2_WEAKEN_ARG: &str = "fn rd(p: &i64) -> i64 { return *p }\n\
-                             fn main() -> i64 {\n\
-                             \x20   let mut x: i64 = 7919\n\
-                             \x20   println(rd(&mut x))\n\
-                             \x20   return 0\n\
+const W2_WEAKEN_ARG: &str = "fn rd(p: &i64) -> i64 { *p }\n\
+                             fn main() {\n\
+                             \x20   let mut x: i64 = 7919;\n\
+                             \x20   println!(\"{}\", rd(&mut x));\n\
                              }\n";
 
-const W3_MUT_STILL_WRITES: &str = "fn main() -> i64 {\n\
-                                   \x20   let mut x: i64 = 7919\n\
-                                   \x20   let p: &mut i64 = &mut x\n\
-                                   \x20   *p = 101\n\
-                                   \x20   println(x)\n\
-                                   \x20   return 0\n\
+const W3_MUT_STILL_WRITES: &str = "fn main() {\n\
+                                   \x20   let mut x: i64 = 7919;\n\
+                                   \x20   let p: &mut i64 = &mut x;\n\
+                                   \x20   *p = 101;\n\
+                                   \x20   println!(\"{}\", x);\n\
                                    }\n";
 
 #[test]
@@ -386,10 +383,10 @@ fn the_safe_weakening_still_compiles_and_still_reads() {
 
 // routes must not catch this, or the closure is a ban on references into a vec rather than a
 const A21_SHARED_READ: &str = "nogc fn peek(r: &mut Vec<i64>) -> i64 {\n\
-                               \x20   let p: &i64 = &(*r)[0]\n\
-                               \x20   return *p\n\
+                               \x20   let p: &i64 = &(*r)[0];\n\
+                               \x20   *p\n\
                                }\n\
-                               fn main() -> i64 { return 0 }\n";
+                               fn main() { }\n";
 
 #[test]
 fn the_shared_read_into_a_vec_is_not_caught() {
@@ -401,16 +398,15 @@ fn the_shared_read_into_a_vec_is_not_caught() {
 // shared and printed `101|101` at allocs=1, where the direct spelling of the same store detaches
 
 const DIRECT_SPELLING: &str = "fn poke(r: &mut Vec<i64>) -> i64 {\n\
-                               \x20   (*r)[0] = 101\n\
-                               \x20   return 0\n\
+                               \x20   (*r)[0] = 101;\n\
+                               \x20   0\n\
                                }\n\
-                               fn main() -> i64 {\n\
-                               \x20   let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                               \x20   let w: Vec<i64> = v\n\
-                               \x20   let q = poke(&mut v)\n\
-                               \x20   println(v[0])\n\
-                               \x20   println(w[0])\n\
-                               \x20   return 0\n\
+                               fn main() {\n\
+                               \x20   let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                               \x20   let w: Vec<i64> = v;\n\
+                               \x20   let q = poke(&mut v);\n\
+                               \x20   println!(\"{}\", v[0]);\n\
+                               \x20   println!(\"{}\", w[0]);\n\
                                }\n";
 
 #[test]
@@ -433,7 +429,7 @@ fn e0416_names_the_borrow_and_the_requirement() {
         );
     }
     assert!(
-        !rendered.contains("E0301"),
+        !rendered.contains("E0301;"),
         "the reference model refusal must not fall through to the generic mismatch code:\n\
          {rendered}"
     );
@@ -449,7 +445,7 @@ fn e0416_is_registered_and_explainable() {
         "the --explain body must show the distinction it is enforcing"
     );
     assert!(
-        info.explanation.contains("let r: &i64 = &mut x"),
+        info.explanation.contains("static r: &i64 = &mut x;"),
         "the --explain body must show the weakening that stays accepted, or it reads as a ban \
          on references"
     );

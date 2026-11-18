@@ -69,9 +69,9 @@ fn block_ids_coherent_in_if_statement() {
         r#"
 fn test(n: i32) -> i32 {
     if n > 0 {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#,
     );
@@ -92,13 +92,13 @@ fn block_ids_coherent_in_while_loop() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i32 {
-    let mut total: i32 = 0
-    let mut i: i32 = 0
+    let mut total: i32 = 0;
+    let mut i: i32 = 0;
     while i < n {
-        total = total + i
-        i = i + 1
+        total = total + i;
+        i = i + 1;
     }
-    return total
+    total
 }
 "#,
     );
@@ -120,9 +120,9 @@ fn block_ids_coherent_in_if_else() {
         r#"
 fn abs(n: i32) -> i32 {
     if n < 0 {
-        return 0 - n
+        0 - n
     } else {
-        return n
+        n
     }
 }
 "#,
@@ -144,19 +144,19 @@ fn block_ids_coherent_in_nested_control_flow() {
     let air = lower_source(
         r#"
 fn classify(n: i32) -> i32 {
-    let mut result: i32 = 0
+    let mut result: i32 = 0;
     if n > 0 {
-        let mut i: i32 = 0
+        let mut i: i32 = 0;
         while i < n {
             if i > 5 {
-                result = result + 2
+                result = result + 2;
             } else {
-                result = result + 1
+                result = result + 1;
             }
-            i = i + 1
+            i = i + 1;
         }
     }
-    return result
+    result
 }
 "#,
     );
@@ -179,7 +179,7 @@ fn binop_operands_have_consistent_types_i32() {
     let air = lower_source(
         r#"
 fn test(n: i32) -> bool {
-    return n <= 1
+    n <= 1
 }
 "#,
     );
@@ -196,7 +196,7 @@ fn binop_sub_narrowed_to_i32() {
     let air = lower_source(
         r#"
 fn test(n: i32) -> i32 {
-    return n - 1
+    n - 1
 }
 "#,
     );
@@ -214,9 +214,9 @@ fn fibonacci_types_consistent() {
         r#"
 fn fibonacci(n: i32) -> i64 {
     if n <= 1 {
-        return n as i64
+        return n as i64;
     }
-    return fibonacci(n - 1) + fibonacci(n - 2)
+    fibonacci(n - 1) + fibonacci(n - 2)
 }
 "#,
     );
@@ -238,8 +238,8 @@ fn const_fold_preserves_i32_type() {
     let air = lower_optimized(
         r#"
 fn test(n: i32) -> i32 {
-    let x: i32 = n + 1
-    return x + 2
+    let x: i32 = n + 1;
+    x + 2
 }
 "#,
     );
@@ -261,13 +261,13 @@ fn const_prop_does_not_substitute_in_while_condition() {
     let air = lower_optimized(
         r#"
 fn sum(n: i32) -> i32 {
-    let mut total: i32 = 0
-    let mut i: i32 = 0
+    let mut total: i32 = 0;
+    let mut i: i32 = 0;
     while i < n {
-        total = total + i
-        i = i + 1
+        total = total + i;
+        i = i + 1;
     }
-    return total
+    total
 }
 "#,
     );
@@ -308,8 +308,8 @@ fn parse_function_type_in_return_position() {
         "<test>",
         r#"
 fn make_adder(x: i32) -> fn(i32) -> i32 {
-    let add = fn(y: i32) -> i32 { return x + y }
-    return add
+    let add = move |y: i32| -> i32 { x + y };
+    add
 }
 "#,
     );
@@ -328,9 +328,9 @@ fn parse_function_type_no_params() {
         "<test>",
         r#"
 fn get_counter() -> fn() -> i32 {
-    let count: i32 = 0
-    let f = fn() -> i32 { return count }
-    return f
+    let count: i32 = 0;
+    let f = move || -> i32 { count };
+    f
 }
 "#,
     );
@@ -349,7 +349,7 @@ fn parse_function_type_in_parameter() {
         "<test>",
         r#"
 fn apply(f: fn(i32) -> i32, x: i32) -> i32 {
-    return f(x)
+    f(x)
 }
 "#,
     );
@@ -370,7 +370,7 @@ fn generic_cast_from_unconstrained_type_param_is_rejected() {
         "<test>",
         r#"
 fn to_float<T>(x: T) -> f64 {
-    return x as f64
+    x as f64
 }
 "#,
     );
@@ -391,11 +391,11 @@ fn generic_identity_still_monomorphizes() {
     let air = lower_source(
         r#"
 fn id<T>(x: T) -> T {
-    return x
+    x
 }
 fn caller() -> i32 {
-    let v: i32 = 42
-    return id(v)
+    let v: i32 = 42;
+    id(v)
 }
 "#,
     );
@@ -428,7 +428,7 @@ struct Vec2 {
 }
 
 fn vec2_length(v: Vec2) -> f64 {
-    return v.x * v.x + v.y * v.y
+    v.x * v.x + v.y * v.y
 }
 "#,
     );
@@ -457,13 +457,13 @@ fn sum_loop_block_ids_valid() {
     let air = lower_source(
         r#"
 fn sum(n: i32) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i32 = 0
+    let mut acc: i64 = 0;
+    let mut i: i32 = 0;
     while i < n {
-        acc = acc + i as i64
-        i = i + 1
+        acc = acc + i as i64;
+        i = i + 1;
     }
-    return acc
+    acc
 }
 "#,
     );
@@ -483,15 +483,15 @@ fn sum(n: i32) -> i64 {
 fn inliner_does_not_duplicate_effectful_argument() {
     let air = lower_optimized(
         r#"
-fn side() -> i64 {
-    let x: i64 = 2
-    return x
+use std::process::ExitCode; fn side() -> i64 {
+    let x: i64 = 2;
+    x
 }
 fn twice(v: i64) -> i64 {
-    return v + v
+    v + v
 }
-fn main() -> i64 {
-    return twice(side())
+fn main() -> ExitCode {
+    return ExitCode::from(twice(side()) as u8);
 }
 "#,
     );

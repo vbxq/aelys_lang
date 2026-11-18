@@ -25,7 +25,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -190,68 +190,64 @@ impl Harness {
 }
 
 const S4D_ARM_SHADOWS_OUTER: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
-    let t: i64 = 5
+
+fn main() {
+    let o: Option<i64> = Some(7);
+    let t: i64 = 5;
     match o {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
 const S4D_SIBLING_ARM: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let o: Option<i64> = None
-    let t: i64 = 5
+
+fn main() {
+    let o: Option<i64> = None;
+    let t: i64 = 5;
     match o {
-        Some(t) => println(t),
-        None => println(t),
+        Some(t) => println!("{}", t),
+        None => println!("{}", t),
     }
-    return 0
 }
 "#;
 
 const S4D_ARM_SHADOWS_PARAM: &str = r#"
-needs Option from std.result
+
 
 fn f(t: i64, o: Option<i64>) -> i64 {
     match o {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
-    return t
+    t
 }
 
-fn main() -> i64 {
-    println(f(5, Some(7)))
-    return 0
+fn main() {
+    println!("{}", f(5, Some(7)));
 }
 "#;
 
 const S4D_NESTED_MATCH: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let a: Option<i64> = Some(1)
-    let b: Option<i64> = Some(2)
+
+fn main() {
+    let a: Option<i64> = Some(1);
+    let b: Option<i64> = Some(2);
     match a {
         Some(t) => {
             match b {
-                Some(t) => println(t),
-                None => println(0),
+                Some(t) => println!("{}", t),
+                None => println!("{}", 0),
             }
-            println(t)
+            println!("{}", t);
         }
-        None => println(9),
+        None => println!("{}", 9),
     }
-    return 0
 }
 "#;
 
@@ -259,198 +255,185 @@ const S4D_CATCH_BINDER: &str = r#"
 enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn get_err() -> Result<i64, E> { return Result::Err(E::X) }
+fn get_err() -> Result<i64, E> { Result::Err(E::X) }
 
-fn main() -> i64 {
-    let e: i64 = 5
-    let v: i64 = get_err() catch |e| 100
-    println(v)
-    println(e)
-    return 0
+fn main() {
+    let e: i64 = 5;
+    let v: i64 = match get_err() { Ok(v) => v, Err(e) => 100 };
+    println!("{}", v);
+    println!("{}", e);
 }
 "#;
 
 const S4D_MATCH_IN_A_LOOP: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let t: i64 = 5
+
+fn main() {
+    let t: i64 = 5;
     for i in 0..2 {
-        let o: Option<i64> = Some(i + 1)
+        let o: Option<i64> = Some(i + 1);
         match o {
-            Some(t) => println(t),
-            None => println(0),
+            Some(t) => println!("{}", t),
+            None => println!("{}", 0),
         }
-        println(t)
+        println!("{}", t);
     }
-    return 0
 }
 "#;
 
 // the outer value comes from a call, so no level can constant-fold the read back to 5
 const S4D_OUTER_IS_NOT_A_CONSTANT: &str = r#"
-needs Option from std.result
 
-fn five() -> i64 { return 5 }
 
-fn main() -> i64 {
-    let o: Option<i64> = Some(7)
-    let t: i64 = five()
+fn five() -> i64 { 5 }
+
+fn main() {
+    let o: Option<i64> = Some(7);
+    let t: i64 = five();
     match o {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
 const S4D_CAPTURED_AFTER_THE_ARM: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let t: i64 = 5
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let t: i64 = 5;
+    let o: Option<i64> = Some(7);
     match o {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
-    let f = fn() -> i64 { return t }
-    println(f())
-    return 0
+    let f = move || -> i64 { t };
+    println!("{}", f());
 }
 "#;
 
 const S4D_MATCH_INSIDE_A_LAMBDA: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let f = fn(t: i64, o: Option<i64>) -> i64 {
+
+fn main() {
+    let f = move |t: i64, o: Option<i64>| -> i64 {
         match o {
-            Some(t) => println(t),
-            None => println(0),
+            Some(t) => println!("{}", t),
+            None => println!("{}", 0),
         }
-        return t
-    }
-    println(f(5, Some(7)))
-    return 0
+        t
+    };
+    println!("{}", f(5, Some(7)));
 }
 "#;
 
 const S4D_TWO_MATCHES_IN_A_ROW: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let t: i64 = 5
-    let a: Option<i64> = Some(7)
-    let b: Option<i64> = None
+
+fn main() {
+    let t: i64 = 5;
+    let a: Option<i64> = Some(7);
+    let b: Option<i64> = None;
     match a {
-        Some(t) => println(t),
-        None => println(0),
+        Some(t) => println!("{}", t),
+        None => println!("{}", 0),
     }
     match b {
-        Some(u) => println(u),
-        None => println(t),
+        Some(u) => println!("{}", u),
+        None => println!("{}", t),
     }
-    return 0
 }
 "#;
 
 // an enclosing block truncated this one anyway, so it is a control and not a witness
 const S4D_ARM_INSIDE_AN_IF_CONTROL: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let t: i64 = 5
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let t: i64 = 5;
+    let o: Option<i64> = Some(7);
     if t > 0 {
         match o {
-            Some(t) => println(t),
-            None => println(0),
+            Some(t) => println!("{}", t),
+            None => println!("{}", 0),
         }
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
 const S4D_LET_INSIDE_THE_ARM_CONTROL: &str = r#"
-needs Option from std.result
 
-fn main() -> i64 {
-    let t: i64 = 5
-    let o: Option<i64> = Some(7)
+
+fn main() {
+    let t: i64 = 5;
+    let o: Option<i64> = Some(7);
     match o {
         Some(u) => {
-            let t: i64 = u + 1
-            println(t)
+            let t: i64 = u + 1;
+            println!("{}", t);
         }
-        None => println(0),
+        None => println!("{}", 0),
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 
 const S4D_LAMBDA_PARAM_CONTROL: &str = r#"
-fn main() -> i64 {
-    let t: i64 = 5
-    let f = fn(t: i64) -> i64 { return t + 1 }
-    println(f(9))
-    println(t)
-    return 0
+fn main() {
+    let t: i64 = 5;
+    let f = move |t: i64| -> i64 { t + 1 };
+    println!("{}", f(9));
+    println!("{}", t);
 }
 "#;
 
 const S4D_BLOCK_LET_CONTROL: &str = r#"
 fn g(t: i64) -> i64 {
     {
-        let t: i64 = 9
-        println(t)
+        let t: i64 = 9;
+        println!("{}", t);
     }
-    return t
+    t
 }
 
-fn main() -> i64 {
-    println(g(5))
-    return 0
+fn main() {
+    println!("{}", g(5));
 }
 "#;
 
 const S4D_FOR_ITERATOR_CONTROL: &str = r#"
-fn main() -> i64 {
-    let i: i64 = 5
+fn main() {
+    let i: i64 = 5;
     for i in 0..2 {
-        println(i)
+        println!("{}", i);
     }
-    println(i)
-    return 0
+    println!("{}", i);
 }
 "#;
 
 const S4D_FOREACH_CONTROL: &str = r#"
-fn main() -> i64 {
-    let x: i64 = 5
-    let v: [i64; 2] = [7, 8]
+fn main() {
+    let x: i64 = 5;
+    let v: [i64; 2] = [7, 8];
     for x in v {
-        println(x)
+        println!("{}", x);
     }
-    println(x)
-    return 0
+    println!("{}", x);
 }
 "#;
 
 const S4D_WHILE_BODY_CONTROL: &str = r#"
-fn main() -> i64 {
-    let t: i64 = 5
-    let mut n: i64 = 0
+fn main() {
+    let t: i64 = 5;
+    let mut n: i64 = 0;
     while n < 2 {
-        let t: i64 = 9
-        println(t)
-        n = n + 1
+        let t: i64 = 9;
+        println!("{}", t);
+        n = n + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
 "#;
 

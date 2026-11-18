@@ -19,7 +19,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -156,14 +156,13 @@ fn concrete_return_with_match_on_a_generic_enum_runs() {
         "enum Opt<T> { Some(T), None }\n\
          fn is_ok<T>(o: Opt<T>) -> i64 {\n\
          \x20   match o {\n\
-         \x20       Opt::Some(x) => { return 1 }\n\
-         \x20       Opt::None => { return 0 }\n\
+         \x20       Opt::Some(x) => { return 1; }\n\
+         \x20       Opt::None => { return 0; }\n\
          \x20   }\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Opt<i64> = Opt::Some(5)\n\
-         \x20   println(is_ok(a))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: Opt<i64> = Opt::Some(5);\n\
+         \x20   println!(\"{}\", is_ok(a));\n\
          }\n",
         "1\n",
     );
@@ -174,11 +173,10 @@ fn concrete_return_without_a_match_runs() {
     Harness::new().value_row(
         "h4",
         "enum Opt<T> { Some(T), None }\n\
-         fn tag<T>(o: Opt<T>) -> i64 { return 4 }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Opt<i64> = Opt::Some(5)\n\
-         \x20   println(tag(a))\n\
-         \x20   return 0\n\
+         fn tag<T>(o: Opt<T>) -> i64 { 4 }\n\
+         fn main() {\n\
+         \x20   let a: Opt<i64> = Opt::Some(5);\n\
+         \x20   println!(\"{}\", tag(a));\n\
          }\n",
         "4\n",
     );
@@ -191,18 +189,17 @@ fn two_instantiations_of_one_concrete_return_generic_both_answer() {
         "enum Opt<T> { Some(T), None }\n\
          fn is_ok<T>(o: Opt<T>) -> i64 {\n\
          \x20   match o {\n\
-         \x20       Opt::Some(x) => { return 1 }\n\
-         \x20       Opt::None => { return 0 }\n\
+         \x20       Opt::Some(x) => { return 1; }\n\
+         \x20       Opt::None => { return 0; }\n\
          \x20   }\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Opt<i64> = Opt::Some(5)\n\
-         \x20   let b: Opt<bool> = Opt::Some(true)\n\
-         \x20   let c: Opt<i64> = Opt::None\n\
-         \x20   println(is_ok(a))\n\
-         \x20   println(is_ok(b))\n\
-         \x20   println(is_ok(c))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: Opt<i64> = Opt::Some(5);\n\
+         \x20   let b: Opt<bool> = Opt::Some(true);\n\
+         \x20   let c: Opt<i64> = Opt::None;\n\
+         \x20   println!(\"{}\", is_ok(a));\n\
+         \x20   println!(\"{}\", is_ok(b));\n\
+         \x20   println!(\"{}\", is_ok(c));\n\
          }\n",
         "1\n1\n0\n",
     );
@@ -213,14 +210,13 @@ fn two_type_parameters_with_a_concrete_return_run() {
     Harness::new().value_row(
         "two_type_params",
         "fn pair<A, B>(a: A, b: B) -> i64 {\n\
-         \x20   let x: A = a\n\
-         \x20   let y: B = b\n\
-         \x20   return 12\n\
+         \x20   let x: A = a;\n\
+         \x20   let y: B = b;\n\
+         \x20   12\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   println(pair(1, true))\n\
-         \x20   println(pair(true, 2))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", pair(1, true));\n\
+         \x20   println!(\"{}\", pair(true, 2));\n\
          }\n",
         "12\n12\n",
     );
@@ -231,10 +227,9 @@ fn a_generic_that_is_never_called_emits_no_dangling_symbol() {
     Harness::new().value_row(
         "never_called",
         "enum Opt<T> { Some(T), None }\n\
-         fn unused<T>(o: Opt<T>) -> i64 { return 1 }\n\
-         fn main() -> i64 {\n\
-         \x20   println(7)\n\
-         \x20   return 0\n\
+         fn unused<T>(o: Opt<T>) -> i64 { 1 }\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", 7);\n\
          }\n",
         "7\n",
     );
@@ -246,13 +241,12 @@ fn a_void_generic_with_a_concrete_signature_runs() {
         "void_return",
         "enum Opt<T> { Some(T), None }\n\
          fn ignore<T>(o: Opt<T>) {\n\
-         \x20   let z: i64 = 1\n\
+         \x20   let z: i64 = 1;\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Opt<i64> = Opt::Some(5)\n\
-         \x20   ignore(a)\n\
-         \x20   println(8)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: Opt<i64> = Opt::Some(5);\n\
+         \x20   ignore(a);\n\
+         \x20   println!(\"{}\", 8);\n\
          }\n",
         "8\n",
     );
@@ -260,14 +254,13 @@ fn a_void_generic_with_a_concrete_signature_runs() {
 
 const MANGLING_COLLISION: &str = "struct A_B { v: i64 }\n\
      struct B { v: i64 }\n\
-     fn g<T>(x: T) -> i64 { return 1 }\n\
-     fn g_A<T>(x: T) -> i64 { return 2 }\n\
-     fn main() -> i64 {\n\
-     \x20   let p: A_B = A_B { v: 1 }\n\
-     \x20   let q: B = B { v: 2 }\n\
-     \x20   println(g(p))\n\
-     \x20   println(g_A(q))\n\
-     \x20   return 0\n\
+     fn g<T>(x: T) -> i64 { 1 }\n\
+     fn g_A<T>(x: T) -> i64 { 2 }\n\
+     fn main() {\n\
+     \x20   let p: A_B = A_B { v: 1 };\n\
+     \x20   let q: B = B { v: 2 };\n\
+     \x20   println!(\"{}\", g(p));\n\
+     \x20   println!(\"{}\", g_A(q));\n\
      }\n";
 
 #[test]
@@ -290,15 +283,15 @@ fn a_generic_instance_symbol_carries_its_arity() {
 fn two_nested_functions_of_one_name_are_still_e0427() {
     refuse(
         "nested_duplicate_symbol",
-        "fn outer() -> i64 {\n\
-         \x20   fn dup() -> i64 { return 1 }\n\
-         \x20   return dup()\n\
+        "use std::process::ExitCode; fn outer() -> i64 {\n\
+         \x20   fn dup() -> i64 { 1 }\n\
+         \x20   dup()\n\
          }\n\
          fn other() -> i64 {\n\
-         \x20   fn dup() -> i64 { return 2 }\n\
-         \x20   return dup()\n\
+         \x20   fn dup() -> i64 { 2 }\n\
+         \x20   dup()\n\
          }\n\
-         fn main() -> i64 { return outer() + other() }\n",
+         fn main() -> ExitCode { return ExitCode::from((outer() + other()) as u8); }\n",
         &["E0427", "`dup`"],
     );
 }
@@ -308,19 +301,18 @@ fn a_non_generic_struct_crossing_a_generic_keeps_its_own_name() {
     Harness::new().value_row(
         "plain_struct_through_a_generic",
         "struct P { a: i64 }\n\
-         fn pick<T>(p: P, x: T) -> T { return x }\n\
-         fn mk<T>(x: T) -> P { return P { a: 1 } }\n\
+         fn pick<T>(p: P, x: T) -> T { x }\n\
+         fn mk<T>(x: T) -> P { P { a: 1 } }\n\
          fn hold<T>(x: T) -> i64 {\n\
-         \x20   let q: P = P { a: 5 }\n\
-         \x20   return q.a\n\
+         \x20   let q: P = P { a: 5 };\n\
+         \x20   q.a\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let p: P = P { a: 3 }\n\
-         \x20   println(pick(p, 42))\n\
-         \x20   let r: P = mk(7)\n\
-         \x20   println(r.a)\n\
-         \x20   println(hold(1))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let p: P = P { a: 3 };\n\
+         \x20   println!(\"{}\", pick(p, 42));\n\
+         \x20   let r: P = mk(7);\n\
+         \x20   println!(\"{}\", r.a);\n\
+         \x20   println!(\"{}\", hold(1));\n\
          }\n",
         "42\n1\n5\n",
     );
@@ -332,12 +324,11 @@ fn a_generic_enum_name_that_prefixes_another_never_draws_a_variant_tag() {
         "prefixing_generic_enum_names",
         "enum Q<T> { A(T) }\n\
          enum Q_ptr<T> { B(T), C(i64) }\n\
-         fn main() -> i64 {\n\
-         \x20   let x: Q_ptr<i64> = Q_ptr::C(99)\n\
-         \x20   let y: Q<i64> = Q::A(4)\n\
-         \x20   println(match x { Q_ptr::B(v) => { v } Q_ptr::C(w) => { w } })\n\
-         \x20   println(match y { Q::A(v) => { v } })\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let x: Q_ptr<i64> = Q_ptr::C(99);\n\
+         \x20   let y: Q<i64> = Q::A(4);\n\
+         \x20   println!(\"{}\", match x { Q_ptr::B(v) => { v } Q_ptr::C(w) => { w } });\n\
+         \x20   println!(\"{}\", match y { Q::A(v) => { v } });\n\
          }\n",
         "99\n4\n",
     );
@@ -349,12 +340,11 @@ fn two_generic_enums_that_do_not_prefix_each_other_both_run() {
         "distinct_generic_enums",
         "enum Alpha<T> { A(T) }\n\
          enum Beta<T> { B(T), C(i64) }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Alpha<i64> = Alpha::A(7)\n\
-         \x20   let b: Beta<i64> = Beta::C(35)\n\
-         \x20   match a { Alpha::A(v) => { println(v) } }\n\
-         \x20   match b { Beta::B(v) => { println(v) } Beta::C(w) => { println(w) } }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: Alpha<i64> = Alpha::A(7);\n\
+         \x20   let b: Beta<i64> = Beta::C(35);\n\
+         \x20   match a { Alpha::A(v) => { println!(\"{}\", v); } }\n\
+         \x20   match b { Beta::B(v) => { println!(\"{}\", v); } Beta::C(w) => { println!(\"{}\", w); } }\n\
          }\n",
         "7\n35\n",
     );
@@ -365,11 +355,10 @@ fn a_type_parameter_only_inside_a_generic_enum_is_inferred() {
     Harness::new().value_row(
         "type_param_inside_a_generic_enum",
         "enum Opt<T> { Some(T), None }\n\
-         fn f<T, U>(o: Opt<T>, y: U) -> i64 { return 11 }\n\
-         fn main() -> i64 {\n\
-         \x20   let a: Opt<i64> = Opt::Some(7)\n\
-         \x20   println(f(a, 8))\n\
-         \x20   return 0\n\
+         fn f<T, U>(o: Opt<T>, y: U) -> i64 { 11 }\n\
+         fn main() {\n\
+         \x20   let a: Opt<i64> = Opt::Some(7);\n\
+         \x20   println!(\"{}\", f(a, 8));\n\
          }\n",
         "11\n",
     );
@@ -379,9 +368,9 @@ fn a_type_parameter_only_inside_a_generic_enum_is_inferred() {
 fn a_type_parameter_in_no_argument_position_is_a_diagnostic_and_not_a_link_error() {
     refuse(
         "uninferable_generic",
-        "fn g<T>(x: i64) -> i64 { return 3 }\n\
-         fn main() -> i64 {\n\
-         \x20   return g(1)\n\
+        "use std::process::ExitCode; fn g<T>(x: i64) -> i64 { 3 }\n\
+         fn main() -> ExitCode {\n\
+         \x20   return ExitCode::from(g(1) as u8);\n\
          }\n",
         &[
             "[monomorphization]",
@@ -394,15 +383,15 @@ fn a_type_parameter_in_no_argument_position_is_a_diagnostic_and_not_a_link_error
 fn a_scalar_read_through_a_reference_is_accepted_and_its_ref_typed_twin_is_not() {
     lower(
         "enum Opt<T> { Some(T), None }\n\
-         nogc fn first(s: &[i64]) -> Opt<i64> { return Opt::Some(s[0]) }\n\
-         fn main() -> i64 { return 0 }\n",
+         nogc fn first(s: &[i64]) -> Opt<i64> { Opt::Some(s[0]) }\n\
+         fn main() { }\n",
     )
     .expect("slice_read_into_enum: an i64 copied out of a slice stores no reference");
     refuse(
         "slice_ref_read_into_enum",
         "enum Opt<T> { Some(T), None }\n\
-         nogc fn first(s: &[&i64]) -> Opt<&i64> { return Opt::Some(s[0]) }\n\
-         fn main() -> i64 { return 0 }\n",
+         nogc fn first(s: &[&i64]) -> Opt<&i64> { Opt::Some(s[0]) }\n\
+         fn main() { }\n",
         &[
             "E0714",
             "[borrow] references stored into aggregate containers are not supported yet",
@@ -414,12 +403,11 @@ fn a_scalar_read_through_a_reference_is_accepted_and_its_ref_typed_twin_is_not()
 fn a_generic_calling_a_generic_runs() {
     Harness::new().value_row(
         "transitive_mono",
-        "fn sink<U>(u: U) -> i64 { return 5 }\n\
-         fn forward<T>(x: T) -> i64 { return sink(x) }\n\
-         fn main() -> i64 {\n\
-         \x20   println(forward(1))\n\
-         \x20   println(forward(true))\n\
-         \x20   return 0\n\
+        "fn sink<U>(u: U) -> i64 { 5 }\n\
+         fn forward<T>(x: T) -> i64 { sink(x) }\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", forward(1));\n\
+         \x20   println!(\"{}\", forward(true));\n\
          }\n",
         "5\n5\n",
     );
@@ -430,8 +418,8 @@ fn a_reference_stored_into_an_enum_payload_still_fires_e0714() {
     refuse(
         "ref_in_enum_payload",
         "enum Opt<T> { Some(T), None }\n\
-         nogc fn keep(r: &i64) -> Opt<&i64> { return Opt::Some(r) }\n\
-         fn main() -> i64 { return 0 }\n",
+         nogc fn keep(r: &i64) -> Opt<&i64> { Opt::Some(r) }\n\
+         fn main() { }\n",
         &["E0714", "references stored into aggregate containers"],
     );
 }
@@ -441,8 +429,8 @@ fn a_reference_reached_through_a_projection_still_fires_e0714() {
     refuse(
         "ref_through_projection_in_enum_payload",
         "enum Opt<T> { Some(T), None }\n\
-         nogc fn f(a: &[&i64]) -> Opt<&i64> { return Opt::Some(a[0]) }\n\
-         fn main() -> i64 { return 0 }\n",
+         nogc fn f(a: &[&i64]) -> Opt<&i64> { Opt::Some(a[0]) }\n\
+         fn main() { }\n",
         &["E0714", "references stored into aggregate containers"],
     );
 }
@@ -452,10 +440,10 @@ fn a_reference_stored_into_an_array_still_fires_e0714() {
     refuse(
         "ref_in_array",
         "nogc fn f(x: &i64, y: &i64) -> i64 {\n\
-         \x20   let a: [&i64; 2] = [x, y]\n\
-         \x20   return 0\n\
+         \x20   let a: [&i64; 2] = [x, y];\n\
+         \x20   0\n\
          }\n\
-         fn main() -> i64 { return 0 }\n",
+         fn main() { }\n",
         &["E0714", "references stored into aggregate containers"],
     );
 }
@@ -466,10 +454,10 @@ fn a_reference_stored_into_a_struct_still_fires_e0714() {
         "ref_in_struct",
         "struct S { p: &i64 }\n\
          nogc fn f(x: &i64) -> i64 {\n\
-         \x20   let s: S = S { p: x }\n\
-         \x20   return 0\n\
+         \x20   let s: S = S { p: x };\n\
+         \x20   0\n\
          }\n\
-         fn main() -> i64 { return 0 }\n",
+         fn main() { }\n",
         &["E0714", "references stored into aggregate containers"],
     );
 }
@@ -480,12 +468,11 @@ fn a_partly_concrete_generic_enum_parameter_is_inferred() {
         "partly_concrete_result",
         "enum Result<T, E> { Ok(T), Err(E) }\n\
          fn is_ok_partial<T>(r: Result<T, i64>) -> i64 {\n\
-         \x20   return match r { Result::Ok(v) => { 1 } Result::Err(e) => { 0 } }\n\
+         \x20   match r { Result::Ok(v) => { 1 } Result::Err(e) => { 0 } }\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let r: Result<i64, i64> = Result::Ok(7)\n\
-         \x20   println(is_ok_partial(r))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let r: Result<i64, i64> = Result::Ok(7);\n\
+         \x20   println!(\"{}\", is_ok_partial(r));\n\
          }\n",
         "1\n",
     );
@@ -498,13 +485,12 @@ fn two_generic_enums_in_one_signature_are_inferred() {
         "enum Option<T> { Some(T), None }\n\
          enum Result<T, E> { Ok(T), Err(E) }\n\
          fn ok_or<T, E>(o: Option<T>, e: E) -> Result<T, E> {\n\
-         \x20   return match o { Option::Some(v) => { Result::Ok(v) } Option::None => { Result::Err(e) } }\n\
+         \x20   match o { Option::Some(v) => { Result::Ok(v) } Option::None => { Result::Err(e) } }\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let o: Option<i64> = Option::Some(5)\n\
-         \x20   let r: Result<i64, i64> = ok_or(o, 9)\n\
-         \x20   println(match r { Result::Ok(v) => { v } Result::Err(e) => { e } })\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let o: Option<i64> = Option::Some(5);\n\
+         \x20   let r: Result<i64, i64> = ok_or(o, 9);\n\
+         \x20   println!(\"{}\", match r { Result::Ok(v) => { v } Result::Err(e) => { e } });\n\
          }\n",
         "5\n",
     );
@@ -517,13 +503,12 @@ fn a_two_argument_enum_narrowing_to_a_one_argument_enum_is_inferred() {
         "enum Option<T> { Some(T), None }\n\
          enum Result<T, E> { Ok(T), Err(E) }\n\
          fn ok<T, E>(r: Result<T, E>) -> Option<T> {\n\
-         \x20   return match r { Result::Ok(v) => { Option::Some(v) } Result::Err(e) => { Option::None } }\n\
+         \x20   match r { Result::Ok(v) => { Option::Some(v) } Result::Err(e) => { Option::None } }\n\
          }\n\
-         fn main() -> i64 {\n\
-         \x20   let r: Result<i64, i64> = Result::Ok(11)\n\
-         \x20   let o: Option<i64> = ok(r)\n\
-         \x20   println(match o { Option::Some(v) => { v } Option::None => { 0 } })\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let r: Result<i64, i64> = Result::Ok(11);\n\
+         \x20   let o: Option<i64> = ok(r);\n\
+         \x20   println!(\"{}\", match o { Option::Some(v) => { v } Option::None => { 0 } });\n\
          }\n",
         "11\n",
     );
@@ -535,11 +520,10 @@ fn a_generic_enum_nested_in_another_enums_payload_runs() {
         "enum_nested_in_a_payload",
         "enum Inner<T> { Wrap(T) }\n\
          enum Big<A, B, K> { W(Inner<K>, B), Z(A) }\n\
-         fn main() -> i64 {\n\
-         \x20   let i: Inner<i64> = Inner::Wrap(21)\n\
-         \x20   let b: Big<bool, i64, i64> = Big::W(i, 2)\n\
-         \x20   println(match b { Big::W(x, y) => { match x { Inner::Wrap(v) => { v * y } } } Big::Z(a) => { 0 } })\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let i: Inner<i64> = Inner::Wrap(21);\n\
+         \x20   let b: Big<bool, i64, i64> = Big::W(i, 2);\n\
+         \x20   println!(\"{}\", match b { Big::W(x, y) => { match x { Inner::Wrap(v) => { v * y } } } Big::Z(a) => { 0 } });\n\
          }\n",
         "42\n",
     );
@@ -553,7 +537,7 @@ fn a_generic_enum_crossing_a_module_boundary_runs() {
         "pub enum Box<T> { Hold(T), Empty }\n\
          \n\
          pub fn peek(b: Box<i64>) -> i64 {\n\
-         \x20   return match b { Box::Hold(v) => { v } Box::Empty => { 0 } }\n\
+         \x20   match b { Box::Hold(v) => { v } Box::Empty => { 0 } }\n\
          }\n",
     );
     harness.value_row(
@@ -574,11 +558,10 @@ fn a_generic_enum_crossing_a_module_boundary_runs() {
 fn a_char_type_argument_does_not_share_a_symbol_with_u32() {
     let names = air_function_names(
         "enum Opt<T> { None, Some(T) }\n\
-         fn hold<T>(x: T) -> Opt<T> { return Opt::Some(x) }\n\
-         fn main() -> i64 {\n\
-         \x20   let a = hold('a')\n\
-         \x20   let b = hold(97 as u32)\n\
-         \x20   return 0\n\
+         fn hold<T>(x: T) -> Opt<T> { Opt::Some(x) }\n\
+         fn main() {\n\
+         \x20   let a = hold('a');\n\
+         \x20   let b = hold(97 as u32);\n\
          }\n",
     );
     let char_syms: Vec<&String> = names.iter().filter(|n| n.ends_with("$char")).collect();

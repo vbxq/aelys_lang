@@ -127,15 +127,15 @@ fn assert_balanced_run(src: &str, opt: OptimizationLevel, oracle: i32, ctx: &str
 }
 
 const T1_CYCLE_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let alias: Rc<Node> = a
-    __aelys_collect()
-    return alias.val
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let alias: Rc<Node> = a;
+    __aelys_collect();
+    return ExitCode::from(alias.val as u8);
 }
 "#;
 
@@ -166,13 +166,13 @@ fn t2_two_adjacent_retains_lift_never_touched() {
 }
 
 const D1_STRUCT_LITERAL_SRC: &str = r#"
-struct Box { inner: Rc<i64> }
-fn main() -> i64 {
-    let p: Rc<i64> = Rc::new(42)
-    let bx: Box = Box { inner: p }
-    let q: Rc<i64> = bx.inner
-    __aelys_collect()
-    return Rc::get(q)
+use std::process::ExitCode; struct Box { inner: Rc<i64> }
+fn main() -> ExitCode {
+    let p: Rc<i64> = Rc::new(42);
+    let bx: Box = Box { inner: p };
+    let q: Rc<i64> = bx.inner;
+    __aelys_collect();
+    return ExitCode::from(Rc::get(q) as u8);
 }
 "#;
 
@@ -193,23 +193,23 @@ fn d1_struct_literal_store_balanced() {
 }
 
 const SEAM4_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
 fn use_vec(v: Vec<i64>) -> i64 {
-    return v[0] + v[1]
+    v[0] + v[1]
 }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(5)
-    let r2: Rc<i64> = r
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let v = vec[10, 20, 30]
-    let w = v
-    Vec::push(w, 40)
-    let s = use_vec(v)
-    __aelys_collect()
-    return Rc::get(r2) + v[0] + w[3] + s
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(5);
+    let r2: Rc<i64> = r;
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let v = vec![10, 20, 30];
+    let w = v;
+    Vec::push(w, 40);
+    let s = use_vec(v);
+    __aelys_collect();
+    return ExitCode::from((Rc::get(r2) + v[0] + w[3] + s) as u8);
 }
 "#;
 
@@ -232,12 +232,12 @@ fn positive_seam4_let_r2_r_elided() {
 }
 
 const DENSE_CHAIN_SRC: &str = r#"
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    let c: Rc<i64> = b
-    let d: Rc<i64> = c
-    return Rc::get(d)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    let c: Rc<i64> = b;
+    let d: Rc<i64> = c;
+    return ExitCode::from(Rc::get(d) as u8);
 }
 "#;
 
@@ -261,16 +261,16 @@ fn positive_dense_chain_all_intermediates_elided() {
 }
 
 const LOOP_LIVE_SRC: &str = r#"
-fn main() -> i64 {
-    let base: Rc<i64> = Rc::new(9)
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+use std::process::ExitCode; fn main() -> ExitCode {
+    let base: Rc<i64> = Rc::new(9);
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        let b: Rc<i64> = base
-        acc = acc + Rc::get(b)
-        i = i + 1
+        let b: Rc<i64> = base;
+        acc = acc + Rc::get(b);
+        i = i + 1;
     }
-    return acc + Rc::get(base)
+    return ExitCode::from((acc + Rc::get(base)) as u8);
 }
 "#;
 
@@ -291,15 +291,15 @@ fn negative_loop_live_across_backedge_kept() {
 }
 
 const CALL_ARG_ESCAPE_SRC: &str = r#"
-fn sink(x: Rc<i64>) -> i64 {
-    return Rc::get(x)
+use std::process::ExitCode; fn sink(x: Rc<i64>) -> i64 {
+    Rc::get(x)
 }
-fn main() -> i64 {
-    let p: Rc<i64> = Rc::new(11)
-    let q: Rc<i64> = p
-    let n: i64 = sink(q)
-    __aelys_collect()
-    return n + Rc::get(p)
+fn main() -> ExitCode {
+    let p: Rc<i64> = Rc::new(11);
+    let q: Rc<i64> = p;
+    let n: i64 = sink(q);
+    __aelys_collect();
+    return ExitCode::from((n + Rc::get(p)) as u8);
 }
 "#;
 
@@ -320,13 +320,13 @@ fn negative_call_arg_escape_kept() {
 }
 
 const DIVERGENT_RELEASE_SRC: &str = r#"
-fn main() -> i64 {
-    let x: Rc<i64> = Rc::new(13)
-    let y: Rc<i64> = x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: Rc<i64> = Rc::new(13);
+    let y: Rc<i64> = x;
     if Rc::get(y) > 0 {
-        return Rc::get(y)
+        return ExitCode::from(Rc::get(y) as u8);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -347,13 +347,13 @@ fn divergent_release_soundly_elided() {
 }
 
 const MEMBER_INIT_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let leaf: Rc<Node> = Rc::new(Node { val: 7, next: Rc::null() })
-    let head: Rc<Node> = Rc::new(Node { val: 1, next: leaf })
-    let n: Rc<Node> = head.next
-    __aelys_collect()
-    return n.val
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
+fn main() -> ExitCode {
+    let leaf: Rc<Node> = Rc::new(Node { val: 7, next: Rc::null() });
+    let head: Rc<Node> = Rc::new(Node { val: 1, next: leaf });
+    let n: Rc<Node> = head.next;
+    __aelys_collect();
+    return ExitCode::from(n.val as u8);
 }
 "#;
 

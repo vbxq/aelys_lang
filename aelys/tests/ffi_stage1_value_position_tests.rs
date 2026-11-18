@@ -12,7 +12,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O3", OptimizationLevel::Aggressive),
 ];
 
-const LABS: &str = "unsafe extern fn labs(x: i64) -> i64\n";
+const LABS: &str = "extern \"C\" { fn labs(x: i64) -> i64; }\n";
 
 fn message_only(rendered: &str) -> String {
     rendered
@@ -70,7 +70,7 @@ fn rejects_as_a_value_n(id: &str, body: &str, hits: usize) {
 fn f3_23_an_unannotated_let_is_a_value_use() {
     rejects_as_a_value(
         "F3-23",
-        "fn main() -> i64 {\n    let g = labs\n    return g(-37)\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let g = labs;\n    return ExitCode::from(g(-37) as u8);\n}\n",
     );
 }
 
@@ -112,14 +112,14 @@ fn f3_24_bis_the_old_spelling_of_the_direct_call_is_now_e0617() {
 
 #[test]
 fn f3_25_a_parenthesised_callee_is_a_value_use() {
-    rejects_as_a_value("F3-25", "fn main() -> i64 {\n    return (labs)(-37)\n}\n");
+    rejects_as_a_value("F3-25", "use std::process::ExitCode; fn main() -> ExitCode {\n    return ExitCode::from((labs)(-37) as u8);\n}\n");
 }
 
 #[test]
 fn f3_26_an_annotated_let_is_a_value_use() {
     rejects_as_a_value(
         "F3-26",
-        "fn main() -> i64 {\n    let g: fn(i64) -> i64 = labs\n    return g(-37)\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let g: fn(i64) -> i64 = labs;\n    return ExitCode::from(g(-37) as u8);\n}\n",
     );
 }
 
@@ -127,8 +127,8 @@ fn f3_26_an_annotated_let_is_a_value_use() {
 fn f3_27_an_argument_is_a_value_use() {
     rejects_as_a_value(
         "F3-27",
-        "fn apply(f: fn(i64) -> i64) -> i64 {\n    return f(-37)\n}\n\nfn main() -> i64 {\n    \
-         return apply(labs)\n}\n",
+        "use std::process::ExitCode; fn apply(f: fn(i64) -> i64) -> i64 {\n    f(-37)\n}\n\nfn main() -> ExitCode {\n    \
+         return ExitCode::from(apply(labs) as u8);\n}\n",
     );
 }
 
@@ -136,8 +136,8 @@ fn f3_27_an_argument_is_a_value_use() {
 fn f3_28_a_returned_name_is_a_value_use() {
     rejects_as_a_value(
         "F3-28",
-        "fn pick() -> fn(i64) -> i64 {\n    return labs\n}\n\nfn main() -> i64 {\n    return \
-         pick()(-37)\n}\n",
+        "use std::process::ExitCode; fn pick() -> fn(i64) -> i64 {\n    labs\n}\n\nfn main() -> ExitCode {\n    return \
+         ExitCode::from(pick()(-37) as u8);\n}\n",
     );
 }
 
@@ -145,8 +145,8 @@ fn f3_28_a_returned_name_is_a_value_use() {
 fn f3_29_a_struct_field_is_a_value_use() {
     rejects_as_a_value(
         "F3-29",
-        "struct Box {\n    cb: fn(i64) -> i64,\n}\n\nfn main() -> i64 {\n    let b = Box { cb: \
-         labs }\n    return b.cb(-37)\n}\n",
+        "use std::process::ExitCode; struct Box {\n    cb: fn(i64) -> i64,\n}\n\nfn main() -> ExitCode {\n    let b = Box { cb: \
+         labs };\n    return ExitCode::from(b.cb(-37) as u8);\n}\n",
     );
 }
 
@@ -154,7 +154,7 @@ fn f3_29_a_struct_field_is_a_value_use() {
 fn f3_30_an_array_element_is_a_value_use() {
     rejects_as_a_value_n(
         "F3-30",
-        "fn main() -> i64 {\n    let a = [labs, labs]\n    return a[0](-37)\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let a = [labs, labs];\n    return ExitCode::from(a[0](-37) as u8);\n}\n",
         2,
     );
 }
@@ -163,8 +163,8 @@ fn f3_30_an_array_element_is_a_value_use() {
 fn f3_31_a_lambda_body_is_a_value_use() {
     rejects_as_a_value(
         "F3-31",
-        "fn main() -> i64 {\n    let mk = fn() -> fn(i64) -> i64 { return labs }\n    return \
-         mk()(-37)\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let mk = move || -> fn(i64) -> i64 { labs };\n    return \
+         ExitCode::from(mk()(-37) as u8);\n}\n",
     );
 }
 
@@ -172,8 +172,8 @@ fn f3_31_a_lambda_body_is_a_value_use() {
 fn f3_32_an_assignment_is_a_value_use() {
     rejects_as_a_value(
         "F3-32",
-        "fn other(x: i64) -> i64 {\n    return x\n}\n\nfn main() -> i64 {\n    let mut g = \
-         other\n    g = labs\n    return g(-37)\n}\n",
+        "use std::process::ExitCode; fn other(x: i64) -> i64 {\n    x\n}\n\nfn main() -> ExitCode {\n    let mut g = \
+         other;\n    g = labs;\n    return ExitCode::from(g(-37) as u8);\n}\n",
     );
 }
 
@@ -181,7 +181,7 @@ fn f3_32_an_assignment_is_a_value_use() {
 fn f3_33_an_unsafe_block_hides_nothing() {
     rejects_as_a_value(
         "F3-33",
-        "fn main() -> i64 {\n    unsafe {\n        let g = labs\n    }\n    return 0\n}\n",
+        "fn main() {\n    unsafe {\n        let g = labs;\n    }\n}\n",
     );
 }
 
@@ -199,8 +199,8 @@ fn f3_34_the_library_route_rejects_it_too() {
 
 #[test]
 fn f3_35_a_nogc_generic_still_answers_with_its_own_code() {
-    let source = "nogc fn keep<T: nogc>(t: T) -> T {\n    return t\n}\n\nfn main() -> i64 {\n    \
-                  let g = keep\n    return 0\n}\n";
+    let source = "nogc fn keep<T: nogc>(t: T) -> T {\n    t\n}\n\nfn main() {\n    \
+                  let g = keep;\n}\n";
     let dir = tempdir().expect("tempdir");
     let root = dir.path().join("root.aelys");
     fs::write(&root, source).expect("write fixture");

@@ -23,11 +23,11 @@ fn toplevel_fn_not_overwritten_by_same_name_in_if() {
     assert!(
         sema_ok(
             r#"
-fn compute(x: i64) -> i64 { return x + 1 }
+fn compute(x: i64) -> i64 { x + 1 }
 if true {
-    fn compute(x: i64) -> i64 { return x + 2 }
+    fn compute(x: i64) -> i64 { x + 2 }
 }
-let result: i64 = compute(10)
+static result: i64 = compute(10);
 "#
         ),
         "top-level compute() should be preserved after if block with same-name fn"
@@ -39,11 +39,11 @@ fn toplevel_fn_not_overwritten_by_same_name_in_while() {
     assert!(
         sema_ok(
             r#"
-fn compute(x: i64) -> i64 { return x + 1 }
+fn compute(x: i64) -> i64 { x + 1 }
 while false {
-    fn compute(x: i64) -> i64 { return x + 2 }
+    fn compute(x: i64) -> i64 { x + 2 }
 }
-let result: i64 = compute(10)
+static result: i64 = compute(10);
 "#
         ),
         "top-level compute() should be preserved after while block with same-name fn"
@@ -55,11 +55,11 @@ fn toplevel_fn_not_overwritten_by_same_name_in_for() {
     assert!(
         sema_ok(
             r#"
-fn compute(x: i64) -> i64 { return x + 1 }
+fn compute(x: i64) -> i64 { x + 1 }
 for i in 0..0 {
-    fn compute(x: i64) -> i64 { return x + 2 }
+    fn compute(x: i64) -> i64 { x + 2 }
 }
-let result: i64 = compute(10)
+static result: i64 = compute(10);
 "#
         ),
         "top-level compute() should be preserved after for block with same-name fn"
@@ -71,11 +71,11 @@ fn fn_in_unreachable_if_does_not_leak_to_outer_scope() {
     assert!(
         sema_ok(
             r#"
-fn greet() -> i64 { return 42 }
+fn greet() -> i64 { 42 }
 if false {
-    fn unreachable_fn() -> string { return "never runs" }
+    fn unreachable_fn() -> String { "never runs" }
 }
-let x: i64 = greet()
+static x: i64 = greet();
 "#
         ),
         "unreachable fn inside if-false should not affect type checking"
@@ -88,9 +88,9 @@ fn if_then_var_not_visible_after_if() {
         sema_ok(
             r#"
 if true {
-    let x: i64 = 42
+    let x: i64 = 42;
 }
-let x: string = "hello"
+static x: String = "hello";
 "#
         ),
         "variable x defined in then-branch should not conflict with x after the if"
@@ -103,11 +103,11 @@ fn if_else_var_not_visible_after_if() {
         sema_ok(
             r#"
 if true {
-    let a: i64 = 1
+    let a: i64 = 1;
 } else {
-    let b: string = "hi"
+    let b: String = "hi";
 }
-let b: i64 = 99
+static b: i64 = 99;
 "#
         ),
         "variable b defined in else-branch should not conflict with b after the if"
@@ -120,9 +120,9 @@ fn if_then_var_not_visible_in_else() {
         sema_ok(
             r#"
 if true {
-    let val: i64 = 10
+    let val: i64 = 10;
 } else {
-    let val: string = "ten"
+    let val: String = "ten";
 }
 "#
         ),
@@ -137,14 +137,14 @@ fn if_branch_scope_with_implicit_return() {
             r#"
 fn pick(flag: bool) -> i64 {
     if flag {
-        let temp: string = "computing"
+        let temp: String = "computing";
         42
     } else {
-        let temp: i64 = 0
+        let temp: i64 = 0;
         temp
     }
 }
-let result: i64 = pick(true)
+static result: i64 = pick(true);
 "#
         ),
         "implicit return through if/else should have scoped branches"
@@ -157,11 +157,11 @@ fn literal_tracking_does_not_leak_between_functions() {
         sema_ok(
             r#"
 fn f() {
-    let x = 200
+    let x = 200;
 }
 
 fn g(x: i8) -> i8 {
-    return x
+    x
 }
 "#
         ),
@@ -176,9 +176,9 @@ fn literal_tracking_respects_inner_scope_shadowing() {
             r#"
 fn g(x: i8) -> i8 {
     {
-        let x = 200
+        let x = 200;
     }
-    return x
+    x
 }
 "#
         ),
@@ -192,11 +192,11 @@ fn mutable_shadow_must_not_make_outer_binding_assignable() {
         sema_err(
             r#"
 fn bug() {
-    let x = 1
+    let x = 1;
     {
-        let mut x = 2
+        let mut x = 2;
     }
-    x = 3
+    x = 3;
 }
 "#
         ),
@@ -210,10 +210,10 @@ fn function_decl_inside_block_must_not_leak_outside_block_scope() {
         sema_err(
             r#"
 {
-    fn hidden() -> i64 { return 7 }
+    fn hidden() -> i64 { 7 }
 }
 fn use_it() -> i64 {
-    return hidden()
+    hidden()
 }
 "#
         ),
@@ -226,12 +226,12 @@ fn block_local_function_can_shadow_outer_same_name() {
     assert!(
         sema_ok(
             r#"
-fn f() -> i64 { return 1 }
+fn f() -> i64 { 1 }
 {
-    fn f() -> i64 { return 2 }
-    let y: i64 = f()
+    fn f() -> i64 { 2 }
+    let y: i64 = f();
 }
-let x: i64 = f()
+static x: i64 = f();
 "#
         ),
         "block-local function should be allowed to shadow outer function name"

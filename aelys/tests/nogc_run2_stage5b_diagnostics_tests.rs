@@ -41,12 +41,12 @@ fn assert_anchor(err: &str, anchor: &str) {
 fn e0727_direct_intrinsic_renders_chain_and_declaration_caret() {
     let err = reject(
         r#"
-nogc fn f() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
-    return 0
+use std::process::ExitCode; nogc fn f() -> i64 {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 "#,
     );
     assert_nogc_code(&err, "E0727");
@@ -73,15 +73,15 @@ fn main() -> i64 { return f() }
 fn e0727_through_a_callee_names_the_hop() {
     let err = reject(
         r#"
-fn helper() {
-    let mut v = Vec::new()
-    Vec::push(v, 1)
+use std::process::ExitCode; fn helper() {
+    let mut v = Vec::new();
+    Vec::push(v, 1);
 }
 nogc fn f() -> i64 {
-    helper()
-    return 0
+    helper();
+    0
 }
-fn main() -> i64 { return f() }
+fn main() -> ExitCode { return ExitCode::from(f() as u8); }
 "#,
     );
     assert_nogc_code(&err, "E0727");
@@ -101,8 +101,8 @@ fn e0728_out_of_position_renders_type_caret_and_help() {
     let err = reject(
         r#"
 nogc fn my_nogc_fn() { }
-fn get() -> nogc fn() { return my_nogc_fn }
-fn main() -> i64 { return 0 }
+fn get() -> nogc fn() { my_nogc_fn }
+fn main() { }
 "#,
     );
     assert_nogc_code(&err, "E0728");
@@ -127,10 +127,10 @@ fn e0728_mut_param_renders_its_own_caret_and_help() {
         r#"
 fn leaky(p: &i32) { }
 nogc fn apply(mut f: nogc fn(&i32), x: &i32) {
-    f = leaky
-    f(x)
+    f = leaky;
+    f(x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert_nogc_code(&err, "E0728");
@@ -163,11 +163,10 @@ fn e0728_mut_help_advice_actually_compiles() {
     accepts(
         r#"
 nogc fn ok(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(ok, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(ok, &n);
 }
 "#,
     );
@@ -175,10 +174,10 @@ fn main() -> i64 {
         r#"
 fn leaky(p: &i32) { }
 nogc fn apply(mut f: fn(&i32), x: &i32) {
-    f = leaky
-    f(x)
+    f = leaky;
+    f(x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert!(
@@ -193,13 +192,13 @@ fn e0728_param_shadow_renders_its_own_caret_and_help() {
         r#"
 nogc fn ok(p: &i32) { }
 fn leaky(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
 nogc fn outer(f: nogc fn(&i32), x: &i32) {
-    let mut f = ok
-    f = leaky
-    apply(f, x)
+    let mut f = ok;
+    f = leaky;
+    apply(f, x);
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
     );
     assert_nogc_code(&err, "E0728");
@@ -227,11 +226,10 @@ fn e0729_general_fn_argument_anchors_on_the_argument() {
     let err = reject(
         r#"
 fn bad(p: &i32) { }
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(bad, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(bad, &n);
 }
 "#,
     );
@@ -255,11 +253,10 @@ fn main() -> i64 {
 fn e0729_lambda_argument_anchors_on_the_lambda() {
     let err = reject(
         r#"
-nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x) }
-fn main() -> i64 {
-    let n: i32 = 5
-    apply(fn(p: &i32) { }, &n)
-    return 0
+nogc fn apply(f: nogc fn(&i32), x: &i32) { f(x); }
+fn main() {
+    let n: i32 = 5;
+    apply(move |p: &i32| { }, &n);
 }
 "#,
     );
@@ -275,10 +272,10 @@ fn main() -> i64 {
 fn e0730_anchors_on_the_argument_not_the_callee() {
     let err = reject(
         r#"
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 {
-    let v = vec[1, 2]
-    return keep(v)
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode {
+    let v = vec![1, 2];
+    return ExitCode::from(keep(v) as u8);
 }
 "#,
     );
@@ -306,10 +303,10 @@ fn main() -> i64 {
 fn e0730_anchors_on_the_second_argument_when_it_is_the_culprit() {
     let err = reject(
         r#"
-nogc fn pair<A: nogc, B: nogc>(a: A, b: B) -> i64 { return 0 }
-fn main() -> i64 {
-    let v = vec[1, 2]
-    return pair(7, v)
+use std::process::ExitCode; nogc fn pair<A: nogc, B: nogc>(a: A, b: B) -> i64 { 0 }
+fn main() -> ExitCode {
+    let v = vec![1, 2];
+    return ExitCode::from(pair(7, v) as u8);
 }
 "#,
     );
@@ -329,21 +326,21 @@ fn main() -> i64 {
 fn generic_struct_argument_to_a_nogc_bound_anchors_at_the_offending_argument() {
     accepts(
         r#"
-struct Holder<T> { v: T }
-nogc fn keep<U>(x: Holder<U>) -> i64 { return 0 }
-fn main() -> i64 {
-    let b = Holder { v: 1 }
-    return keep(b)
+use std::process::ExitCode; struct Holder<T> { v: T }
+nogc fn keep<U>(x: Holder<U>) -> i64 { 0 }
+fn main() -> ExitCode {
+    let b = Holder { v: 1 };
+    return ExitCode::from(keep(b) as u8);
 }
 "#,
     );
     let err = reject(
         r#"
-struct Holder<T> { v: T }
-nogc fn keep<U>(x: Holder<U>) -> i64 { return 0 }
-fn main() -> i64 {
-    let b = Holder { v: "s" + "t" }
-    return keep(b)
+use std::process::ExitCode; struct Holder<T> { v: T }
+nogc fn keep<U>(x: Holder<U>) -> i64 { 0 }
+fn main() -> ExitCode {
+    let b = Holder { v: "s" + "t" };
+    return ExitCode::from(keep(b) as u8);
 }
 "#,
     );
@@ -359,25 +356,25 @@ fn main() -> i64 {
 fn generic_structs_bound_per_type_param_bind_each_type_argument() {
     accepts(
         r#"
-struct Bag<T> { v: T }
+use std::process::ExitCode; struct Bag<T> { v: T }
 struct Holder<T> { v: T }
-nogc fn f<A: nogc, B: nogc>(a: Bag<A>, b: Holder<B>) -> i64 { return 0 }
-fn main() -> i64 {
-    let x = Bag { v: 1 }
-    let y = Holder { v: 2 }
-    return f(x, y)
+nogc fn f<A: nogc, B: nogc>(a: Bag<A>, b: Holder<B>) -> i64 { 0 }
+fn main() -> ExitCode {
+    let x = Bag { v: 1 };
+    let y = Holder { v: 2 };
+    return ExitCode::from(f(x, y) as u8);
 }
 "#,
     );
     let err = reject(
         r#"
-struct Bag<T> { v: T }
+use std::process::ExitCode; struct Bag<T> { v: T }
 struct Holder<T> { v: T }
-nogc fn f<A: nogc, B: nogc>(a: Bag<A>, b: Holder<B>) -> i64 { return 0 }
-fn main() -> i64 {
-    let x = Bag { v: 1 }
-    let y = Holder { v: "s" + "t" }
-    return f(x, y)
+nogc fn f<A: nogc, B: nogc>(a: Bag<A>, b: Holder<B>) -> i64 { 0 }
+fn main() -> ExitCode {
+    let x = Bag { v: 1 };
+    let y = Holder { v: "s" + "t" };
+    return ExitCode::from(f(x, y) as u8);
 }
 "#,
     );
@@ -393,13 +390,13 @@ fn main() -> i64 {
 fn e0730_unbound_type_param_falls_back_to_the_callee() {
     let err = reject(
         r#"
-struct Bag { v: i64 }
+use std::process::ExitCode; struct Bag { v: i64 }
 struct Holder { v: i64 }
-nogc fn f<A: nogc, B: nogc>(a: Bag, b: Holder) -> i64 { return 0 }
-fn main() -> i64 {
-    let x = Bag { v: 1 }
-    let y = Holder { v: 2 }
-    return f(x, y)
+nogc fn f<A: nogc, B: nogc>(a: Bag, b: Holder) -> i64 { 0 }
+fn main() -> ExitCode {
+    let x = Bag { v: 1 };
+    let y = Holder { v: 2 };
+    return ExitCode::from(f(x, y) as u8);
 }
 "#,
     );
@@ -425,8 +422,8 @@ fn main() -> i64 {
 fn e0730_unresolved_keeps_the_callee_as_the_primary() {
     let err = reject(
         r#"
-nogc fn make<U: nogc>() -> i64 { return 0 }
-fn main() -> i64 { return make() }
+use std::process::ExitCode; nogc fn make<U: nogc>() -> i64 { 0 }
+fn main() -> ExitCode { return ExitCode::from(make() as u8); }
 "#,
     );
     assert_nogc_code(&err, "E0730");
@@ -458,10 +455,9 @@ fn main() -> i64 { return make() }
 fn e0731_anchors_on_the_value_reference() {
     let err = reject(
         r#"
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 {
-    let g: fn(i64) -> i64 = keep
-    return 0
+nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() {
+    let g: fn(i64) -> i64 = keep;
 }
 "#,
     );
@@ -485,10 +481,10 @@ fn main() -> i64 {
 fn e0731_argument_position_anchors_on_the_argument() {
     let err = reject(
         r#"
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn take(f: fn(i64) -> i64) -> i64 { return 0 }
-fn main() -> i64 {
-    return take(keep)
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn take(f: fn(i64) -> i64) -> i64 { 0 }
+fn main() -> ExitCode {
+    return ExitCode::from(take(keep) as u8);
 }
 "#,
     );
@@ -504,12 +500,12 @@ fn main() -> i64 {
 fn e0730_multi_line_argument_prints_one_caret() {
     let err = reject(
         r#"
-nogc fn keep<T>(x: T) -> i64 { let y = x; return 0 }
-fn main() -> i64 {
-    return keep(vec[
+use std::process::ExitCode; nogc fn keep<T>(x: T) -> i64 { let y = x; 0 }
+fn main() -> ExitCode {
+    return ExitCode::from(keep(vec![
         1,
         2
-    ])
+    ]) as u8);
 }
 "#,
     );

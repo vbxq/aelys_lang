@@ -24,7 +24,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -236,66 +236,61 @@ const NO_PLACE_SAYS: &str = "[no-place] the receiver of `.bytes` denotes no stor
                              address. bind it to a name first and use that binding";
 
 const S11_VIEW_OF_A_TEMPORARY: &str = r#"
-fn mkheap(n: i64) -> string {
-    return string::substring_bytes("ABCDEFGH", 0, n)
+fn mkheap(n: i64) -> String {
+    "ABCDEFGH"[0..n].to_string()
 }
 
 fn churn(n: i64) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        let t: string = string::substring_bytes("0123456789abcdef", 0, (i % 9) + 2)
-        acc = acc + t.len
-        i = i + 1
+        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        acc = acc + t.len();
+        i = i + 1;
     }
-    return acc
+    acc
 }
 
-fn main() -> i64 {
-    let s: &[u8] = mkheap(4).bytes
-    println(churn(200))
-    println(s[0] as i64)
-    return 0
+fn main() {
+    let s: &[u8] = mkheap(4).as_bytes();
+    println!("{}", churn(200));
+    println!("{}", s[0] as i64);
 }
 "#;
 
 const S11_VIEW_OF_A_TEMPORARY_IN_AN_ARGUMENT: &str = r#"
-nogc fn first(b: &[u8]) -> i64 { return b[0] as i64 }
+nogc fn first(b: &[u8]) -> i64 { b[0] as i64 }
 
-fn mkheap() -> string {
-    return string::substring_bytes("ABCDEFGH", 0, 4)
+fn mkheap() -> String {
+    "ABCDEFGH"[0..4].to_string()
 }
 
-fn main() -> i64 {
-    println(first(mkheap().bytes))
-    return 0
+fn main() {
+    println!("{}", first(mkheap().as_bytes()));
 }
 "#;
 
 const S11_VIEW_OF_AN_INTERPOLATION: &str = r#"
-fn main() -> i64 {
-    let n: i64 = 7
-    let b: &[u8] = "v{n}".bytes
-    println(b.len)
-    return 0
+fn main() {
+    let n: i64 = 7;
+    let b: &[u8] = format!("v{n}").as_bytes();
+    println!("{}", b.len());
 }
 "#;
 
 const S11_ADDRESS_OF_A_BYTE: &str = r#"
-fn main() -> i64 {
-    let s: string = "abc"
-    let b = &s.bytes[0]
-    println("{*b}")
-    return 0
+fn main() {
+    let s: String = "abc";
+    let b = &s.as_bytes()[0];
+    println!("{}", *b);
 }
 "#;
 
 const S11_SLICE_OF_THE_BYTES: &str = r#"
-fn main() -> i64 {
-    let s: string = "abc"
-    let b = s.bytes[0..2]
-    println("{b.len}")
-    return 0
+fn main() {
+    let s: String = "abc";
+    let b = s.as_bytes()[0..2];
+    println!("{}", b.len());
 }
 "#;
 
@@ -328,25 +323,24 @@ fn s11_1_a_byte_view_of_a_receiver_with_no_storage_is_refused_at_every_level() {
 
 const S11_LITERAL_RECEIVER: &str = r#"
 fn churn(n: i64) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        let t: string = string::substring_bytes("0123456789abcdef", 0, (i % 9) + 2)
-        acc = acc + t.len
-        i = i + 1
+        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        acc = acc + t.len();
+        i = i + 1;
     }
-    return acc
+    acc
 }
 
-fn main() -> i64 {
-    let lb: &[u8] = "hi".bytes
-    println(churn(300))
-    println(lb[0] as i64)
-    println(lb[1] as i64)
-    println(lb.len)
-    println(("hi").bytes[0] as i64)
-    println("hi".bytes.len)
-    return 0
+fn main() {
+    let lb: &[u8] = "hi".as_bytes();
+    println!("{}", churn(300));
+    println!("{}", lb[0] as i64);
+    println!("{}", lb[1] as i64);
+    println!("{}", lb.len());
+    println!("{}", ("hi").as_bytes()[0] as i64);
+    println!("{}", "hi".as_bytes().len());
 }
 "#;
 
@@ -362,52 +356,51 @@ fn s11_2_a_literal_receiver_is_static_storage_so_it_still_compiles_and_runs() {
 }
 
 const S11_STD_BYTES_SHAPES: &str = r#"
-needs std.str
-needs std.io
+use std::str;
+use std::io;
 
-struct Box { s: string }
+struct Box { s: String }
 
 fn churn(n: i64) -> i64 {
-    let mut acc: i64 = 0
-    let mut i: i64 = 0
+    let mut acc: i64 = 0;
+    let mut i: i64 = 0;
     while i < n {
-        let t: string = string::substring_bytes("0123456789abcdef", 0, (i % 9) + 2)
-        acc = acc + t.len
-        i = i + 1
+        let t: String = "0123456789abcdef"[0..(i % 9) + 2].to_string();
+        acc = acc + t.len();
+        i = i + 1;
     }
-    return acc
+    acc
 }
 
-fn main() -> i64 {
-    let s: string = "éléphant sur la route"
-    println(str.char_count(s))
-    println(str.is_char_boundary(s, 1))
-    println(str.char_len(s, 0))
-    println(str.compare("abc", "abd"))
-    println(str.starts_with(s, "élé"))
-    println(str.ends_with(s, "route"))
-    println(str.index_of(s, "sur"))
-    println(str.contains(s, "la"))
-    println(str.trim("  padded  "))
-    println(str.substring(s, 0, 3))
-    let parts = str.split("a,b,c", ",")
-    println(parts.len)
-    println(str.join(&parts, "-"))
-    println(str.repeat("ab", 3))
-    match str.parse_int("-4321") {
-        Ok(v) => println(v)
-        Err(e) => println(e)
+fn main() {
+    let s: String = "éléphant sur la route";
+    println!("{}", str::char_count(s));
+    println!("{}", str::is_char_boundary(s, 1));
+    println!("{}", str::char_len(s, 0));
+    println!("{}", str::compare("abc", "abd"));
+    println!("{}", str::starts_with(s, "élé"));
+    println!("{}", str::ends_with(s, "route"));
+    println!("{}", str::index_of(s, "sur"));
+    println!("{}", str::contains(s, "la"));
+    println!("{}", str::trim("  padded  "));
+    println!("{}", str::substring(s, 0, 3));
+    let parts = str::split("a,b,c", ",");
+    println!("{}", parts.len());
+    println!("{}", str::join(&parts, "-"));
+    println!("{}", str::repeat("ab", 3));
+    match str::parse_int("-4321") {
+        Ok(v) => println!("{}", v),
+        Err(e) => println!("{}", e),
     }
-    let b = Box{s: "field"}
-    let fv: &[u8] = b.s.bytes
-    let sv: &[u8] = s.bytes
-    println(churn(300))
-    println(fv[0] as i64)
-    println(sv[0] as i64)
-    io.write_str(1, "io\n")
-    io.write_out("out\n".bytes)
-    io.print_out("print\n")
-    return 0
+    let b = Box{s: "field"};
+    let fv: &[u8] = b.s.as_bytes();
+    let sv: &[u8] = s.as_bytes();
+    println!("{}", churn(300));
+    println!("{}", fv[0] as i64);
+    println!("{}", sv[0] as i64);
+    io::write_str(1, "io\n");
+    io::write_out("out\n".as_bytes());
+    io::print_out("print\n");
 }
 "#;
 
@@ -425,15 +418,14 @@ fn s11_3_every_legitimate_bytes_shape_in_std_still_compiles_and_runs() {
 
 const S11_AS_SLICE_OF_A_TEMPORARY: &str = r#"
 fn mkvec() -> Vec<i64> {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 7)
-    return v
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 7);
+    v
 }
 
-fn main() -> i64 {
-    let s: &[i64] = Vec::as_slice(mkvec())
-    println(s[0])
-    return 0
+fn main() {
+    let s: &[i64] = Vec::as_slice(mkvec());
+    println!("{}", s[0]);
 }
 "#;
 
@@ -450,13 +442,12 @@ fn s11_4_the_vec_as_slice_control_stays_refused() {
 }
 
 const S11_LENGTH_OF_A_VIEW_OF_A_TEMPORARY: &str = r#"
-fn mkheap(n: i64) -> string {
-    return string::substring_bytes("ABCDEFGH", 0, n)
+fn mkheap(n: i64) -> String {
+    "ABCDEFGH"[0..n].to_string()
 }
 
-fn main() -> i64 {
-    println(mkheap(4).bytes.len)
-    return 0
+fn main() {
+    println!("{}", mkheap(4).as_bytes().len());
 }
 "#;
 

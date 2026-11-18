@@ -96,7 +96,7 @@ const E0101: &str = "E0101";
 
 #[test]
 fn row_01_a_bare_declaration_is_accepted() {
-    let func = foreign_row("F1-1", "unsafe extern fn f()\n");
+    let func = foreign_row("F1-1", "extern \"C\" { fn f(); }\n");
     assert_eq!(func.name, "f");
     assert!(func.params.is_empty());
     assert!(func.return_type.is_none());
@@ -104,38 +104,38 @@ fn row_01_a_bare_declaration_is_accepted() {
 
 #[test]
 fn row_02_a_return_type_is_accepted() {
-    let func = foreign_row("F1-2", "unsafe extern fn f() -> i64\n");
+    let func = foreign_row("F1-2", "extern \"C\" { fn f() -> i64; }\n");
     assert!(func.return_type.is_some());
 }
 
 #[test]
 fn row_03_one_parameter_is_accepted() {
-    let func = foreign_row("F1-3", "unsafe extern fn f(x: i64)\n");
+    let func = foreign_row("F1-3", "extern \"C\" { fn f(x: i64); }\n");
     assert_eq!(func.params.len(), 1);
 }
 
 #[test]
 fn row_04_the_nominal_form_is_accepted() {
-    let func = foreign_row("F1-4", "unsafe extern fn f(x: i64) -> i64\n");
+    let func = foreign_row("F1-4", "extern \"C\" { fn f(x: i64) -> i64; }\n");
     assert_eq!(func.params.len(), 1);
     assert!(func.return_type.is_some());
 }
 
 #[test]
 fn row_05_two_parameters_are_accepted() {
-    let func = foreign_row("F1-5", "unsafe extern fn f(x: i64, y: f64) -> bool\n");
+    let func = foreign_row("F1-5", "extern \"C\" { fn f(x: i64, y: f64) -> bool; }\n");
     assert_eq!(func.params.len(), 2);
 }
 
 #[test]
 fn row_06_the_nogc_claim_is_accepted() {
-    let func = foreign_row("F1-6", "unsafe extern nogc fn f(x: i64) -> i64\n");
+    let func = foreign_row("F1-6", "extern \"C\" { nogc fn f(x: i64) -> i64; }\n");
     assert!(func.is_nogc, "F1-6: the `nogc` claim MUST reach the ast");
 }
 
 #[test]
 fn row_07_a_trailing_comma_is_accepted() {
-    let func = foreign_row("F1-7", "unsafe extern fn f(x: i64,)\n");
+    let func = foreign_row("F1-7", "extern \"C\" { fn f(x: i64,); }\n");
     assert_eq!(func.params.len(), 1);
 }
 
@@ -306,13 +306,13 @@ fn row_26_unsafe_fn_keeps_the_message_it_had() {
 
 #[test]
 fn row_27_a_reserved_prefix_reaches_the_surface() {
-    let func = foreign_row("F1-27", "unsafe extern fn __aelys_x()\n");
+    let func = foreign_row("F1-27", "extern \"C\" { fn __aelys_x(); }\n");
     assert_eq!(func.name, "__aelys_x");
 }
 
 #[test]
 fn row_28_the_name_main_reaches_the_surface() {
-    let func = foreign_row("F1-28", "unsafe extern fn main()\n");
+    let func = foreign_row("F1-28", "extern \"C\" { fn main(); }\n");
     assert_eq!(func.name, "main");
 }
 
@@ -320,20 +320,20 @@ fn row_28_the_name_main_reaches_the_surface() {
 fn row_29_a_runtime_symbol_reaches_the_surface() {
     let func = foreign_row(
         "F1-29",
-        "unsafe extern fn aelys_immix_alloc(n: i64) -> i64\n",
+        "extern \"C\" { fn aelys_immix_alloc(n: i64) -> i64; }\n",
     );
     assert_eq!(func.name, "aelys_immix_alloc");
 }
 
 #[test]
 fn row_30_a_builtin_name_reaches_the_surface() {
-    let func = foreign_row("F1-30", "unsafe extern fn println(x: i64)\n");
+    let func = foreign_row("F1-30", "extern \"C\" { fn println(x: i64); }\n");
     assert_eq!(func.name, "println");
 }
 
 #[test]
 fn row_31_a_libc_symbol_reaches_the_surface() {
-    let func = foreign_row("F1-31", "unsafe extern fn malloc(n: i64) -> i64\n");
+    let func = foreign_row("F1-31", "extern \"C\" { fn malloc(n: i64) -> i64; }\n");
     assert_eq!(func.name, "malloc");
     let decl = func.foreign.expect("the foreign marker");
     assert_eq!(decl.symbol, "malloc");
@@ -381,7 +381,7 @@ fn runs_to(id: &str, source: &str, exit: i32) {
 fn row_33_an_unsafe_block_in_a_body_still_runs() {
     runs_to(
         "F1-33",
-        "fn main() -> i64 {\n    unsafe { }\n    return 7\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    unsafe { }\n    return ExitCode::from(7);\n}\n",
         7,
     );
 }
@@ -390,7 +390,7 @@ fn row_33_an_unsafe_block_in_a_body_still_runs() {
 fn row_34_an_unsafe_block_at_the_top_level_still_runs() {
     runs_to(
         "F1-34",
-        "unsafe { }\n\nfn main() -> i64 {\n    return 8\n}\n",
+        "use std::process::ExitCode; unsafe { }\n\nfn main() -> ExitCode {\n    return ExitCode::from(8);\n}\n",
         8,
     );
 }
@@ -577,7 +577,7 @@ fn typed_functions(program: &aelys_sema::TypedProgram) -> Vec<aelys_sema::TypedF
 fn the_foreign_marker_reaches_the_typed_ast() {
     let program = typed(
         "F1-35",
-        "unsafe extern fn f(x: i64) -> i64\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "extern \"C\" { fn f(x: i64) -> i64; }\n\nfn main() {\n}\n",
     );
     let funcs = typed_functions(&program);
     let f = funcs
@@ -602,7 +602,7 @@ fn the_foreign_marker_reaches_the_typed_ast() {
 fn every_foreign_declaration_reaches_the_typed_ast_without_a_body() {
     let program = typed(
         "F1-35a",
-        "unsafe extern fn a()\nunsafe extern fn b() -> i64\nunsafe extern nogc fn c(x: f64) -> bool\n\nfn main() -> i64 {\n    return 0\n}\n",
+        "extern \"C\" { fn a(); }\nextern \"C\" { fn b() -> i64; }\nextern \"C\" { nogc fn c(x: f64) -> bool; }\n\nfn main() {\n}\n",
     );
     for func in typed_functions(&program) {
         if func.foreign.is_some() {
@@ -621,7 +621,7 @@ fn every_foreign_declaration_reaches_the_typed_ast_without_a_body() {
 
 #[test]
 fn an_unannotated_foreign_return_is_void_and_silent() {
-    let source = "unsafe extern fn f()\n\nfn main() -> i64 {\n    return 0\n}\n";
+    let source = "extern \"C\" { fn f(); }\n\nfn main() {\n}\n";
     let program = typed("F1-35b", source);
     let funcs = typed_functions(&program);
     let f = funcs.iter().find(|func| func.name == "f").unwrap();

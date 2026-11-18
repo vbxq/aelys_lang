@@ -4,9 +4,9 @@ use std::process::{Command, Output};
 
 mod common;
 
-const MAIN: &str = "fn main() {\n    println(\"ran\")\n}\n";
-const NO_MAIN: &str = "pub fn f() -> i64 {\n    return 1\n}\n";
-const WRONG: &str = "fn main() {\n    let x: string = 3\n}\n";
+const MAIN: &str = "fn main() {\n    println!(\"ran\");\n}\n";
+const NO_MAIN: &str = "pub fn f() -> i64 {\n    1\n}\n";
+const WRONG: &str = "fn main() {\n    let x: String = 3;\n}\n";
 
 fn cli_bin() -> PathBuf {
     let _ = common::Cli::located();

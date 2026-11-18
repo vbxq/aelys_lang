@@ -25,7 +25,7 @@ const LEVELS: [(&str, OptimizationLevel); 4] = [
     ("-O3", OptimizationLevel::Aggressive),
 ];
 
-const MAIN: &str = "\nfn main() -> i64 { return 0 }\n";
+const MAIN: &str = "\nfn main() { }\n";
 
 fn lower(source: &str) -> Result<(), String> {
     let dir = tempdir().expect("tempdir");
@@ -56,37 +56,37 @@ fn accepted(id: &str, decl: &str) {
 
 #[test]
 fn a_reference_in_return_position_is_refused_whatever_it_points_at() {
-    rejected_e0615("T1", "unsafe extern fn probe() -> &i64");
-    rejected_e0615("T2", "unsafe extern fn probe() -> &u8");
+    rejected_e0615("T1", "extern \"C\" { fn probe() -> &i64; }");
+    rejected_e0615("T2", "extern \"C\" { fn probe() -> &u8; }");
     rejected_e0615(
         "T8",
-        "struct Opaque {\n    a: i64,\n}\n\nunsafe extern fn probe() -> &Opaque",
+        "struct Opaque {\n    a: i64,\n}\n\nextern \"C\" { fn probe() -> &Opaque; }",
     );
-    rejected_e0615("T14", "unsafe extern fn probe() -> & &i64");
+    rejected_e0615("T14", "extern \"C\" { fn probe() -> & &i64; }");
 }
 
 #[test]
 fn the_parameter_position_and_the_void_return_do_not_move() {
-    accepted("T3", "unsafe extern fn probe(p: &i64)");
-    accepted("T11", "unsafe extern fn probe(p: i64)");
+    accepted("T3", "extern \"C\" { fn probe(p: &i64); }");
+    accepted("T11", "extern \"C\" { fn probe(p: i64); }");
     // a declaration with no argument spelling, so it pins the surface and never an actual call
-    accepted("T13", "unsafe extern fn probe(p: & &i64) -> i64");
+    accepted("T13", "extern \"C\" { fn probe(p: & &i64) -> i64; }");
 }
 
 #[test]
 fn the_pre_existing_rejections_are_unchanged() {
     rejected_e0615(
         "T6",
-        "struct S {\n    a: i64,\n}\n\nunsafe extern fn probe() -> S",
+        "struct S {\n    a: i64,\n}\n\nextern \"C\" { fn probe() -> S; }",
     );
     rejected_e0615(
         "T7",
-        "struct S {\n    a: i64,\n}\n\nunsafe extern fn probe(s: S) -> i64",
+        "struct S {\n    a: i64,\n}\n\nextern \"C\" { fn probe(s: S) -> i64; }",
     );
-    rejected_e0615("T9", "unsafe extern fn probe(p: &[i64])");
-    rejected_e0615("T10", "unsafe extern fn probe(s: string)");
-    rejected_e0615("T10", "unsafe extern fn probe(s: &string)");
-    rejected_e0615("T12", "unsafe extern fn probe(p: void)");
+    rejected_e0615("T9", "extern \"C\" { fn probe(p: &[i64]); }");
+    rejected_e0615("T10", "extern \"C\" { fn probe(s: String); }");
+    rejected_e0615("T10", "extern \"C\" { fn probe(s: &String); }");
+    rejected_e0615("T12", "extern \"C\" { fn probe(p: void); }");
 }
 
 // t15: the spelling that never existed
@@ -100,8 +100,8 @@ fn the_glued_ampersand_is_still_a_syntax_error() {
 #[test]
 fn a_type_alias_naming_a_reference_meets_the_same_external_refusal() {
     for (id, source, named) in [
-        ("T16", "type H = &i64\nunsafe extern fn probe() -> H", "'&i64' for the return type"),
-        ("T16s", "type S = &[i64]\nunsafe extern fn probe(p: S)", "'&[i64]' for parameter `p`"),
+        ("T16", "type H = &i64;\nextern \"C\" { fn probe() -> H; }", "'&i64' for the return type"),
+        ("T16s", "type S = &[i64];\nextern \"C\" { fn probe(p: S); }", "'&[i64]' for parameter `p`"),
     ] {
         let rendered = lower(&format!("{source}{MAIN}")).expect_err(id);
         assert!(rendered.contains("E0615"), "{id}: {rendered}");
@@ -118,12 +118,12 @@ fn a_generic_external_declaration_is_still_malformed() {
 
 #[test]
 fn the_malloc_free_dereference_program_is_now_rejected() {
-    let source = "unsafe extern fn malloc(n: i64) -> &i64\n\
-                  unsafe extern fn free(p: &i64)\n\
-                  fn main() -> i64 {\n\
-                  \u{20}   let p = unsafe { malloc(8) }\n\
-                  \u{20}   unsafe { free(p) }\n\
-                  \u{20}   return *p\n\
+    let source = "use std::process::ExitCode; extern \"C\" { fn malloc(n: i64) -> &i64; }\n\
+                  extern \"C\" { fn free(p: &i64); }\n\
+                  fn main() -> ExitCode {\n\
+                  \u{20}   let p = unsafe { malloc(8) };\n\
+                  \u{20}   unsafe { free(p); }\n\
+                  \u{20}   return ExitCode::from((*p) as u8);\n\
                   }\n";
     let dir = tempdir().expect("tempdir");
     let path = dir.path().join("fa.aelys");
@@ -169,14 +169,14 @@ fn a_callee_that_keeps_a_pointer_to_a_caller_local_is_accepted_at_every_level() 
         libraries: vec!["stash".to_string()],
         args: Vec::new(),
     };
-    let source = "unsafe extern fn aelys_stash(p: &u8)\n\
-                  unsafe extern fn aelys_peek() -> i64\n\
-                  unsafe extern fn aelys_held() -> i64\n\
-                  fn stash() -> i64 { let mut buf: [u8; 4] = [100, 24, 0, 0]\n\
-                  \u{20}                   unsafe { aelys_stash(&buf[0]) }\n\
-                  \u{20}                   unsafe { return aelys_peek() } }\n\
-                  fn main() -> i64 { let seen = stash()\n\
-                  \u{20}                 unsafe { return seen + aelys_held() } }\n";
+    let source = "use std::process::ExitCode; extern \"C\" { fn aelys_stash(p: &u8); }\n\
+                  extern \"C\" { fn aelys_peek() -> i64; }\n\
+                  extern \"C\" { fn aelys_held() -> i64; }\n\
+                  fn stash() -> i64 { let mut buf: [u8; 4] = [100, 24, 0, 0];\n\
+                  \u{20}                   unsafe { aelys_stash(&buf[0]); }\n\
+                  \u{20}                   unsafe { return aelys_peek(); } }\n\
+                  fn main() -> ExitCode { let seen = stash();\n\
+                  \u{20}                 unsafe { return ExitCode::from((seen + aelys_held()) as u8); } }\n";
     let path = root.join("t19.aelys");
     fs::write(&path, source).expect("write");
     let mut answers = Vec::new();
@@ -404,13 +404,13 @@ fn caller_of(callee: Callee, ret_ty: AirType, globals: Vec<AirGlobal>) -> AirPro
 
 #[test]
 fn a_vec_program_still_compiles_and_runs_at_every_level() {
-    let source = "fn main() -> i64 {\n\
-                  \u{20}   let mut v = Vec::new()\n\
-                  \u{20}   Vec::push(v, 7)\n\
-                  \u{20}   Vec::push(v, 9)\n\
-                  \u{20}   let mut total = 0\n\
-                  \u{20}   for i in 0..2 { total = total + 1 }\n\
-                  \u{20}   return Vec::len(v) + total\n\
+    let source = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                  \u{20}   let mut v = Vec::new();\n\
+                  \u{20}   Vec::push(v, 7);\n\
+                  \u{20}   Vec::push(v, 9);\n\
+                  \u{20}   let mut total = 0;\n\
+                  \u{20}   for i in 0..2 { total = total + 1; }\n\
+                  \u{20}   return ExitCode::from((Vec::len(v) + total) as u8);\n\
                   }\n";
     let dir = tempdir().expect("tempdir");
     let path = dir.path().join("e1.aelys");
@@ -490,12 +490,12 @@ fn a_source_declaration_of_a_spliced_name_is_still_e0428() {
 
 #[test]
 fn a_collecting_program_still_compiles_and_runs_under_rc_cycles() {
-    let source = "fn main() -> i64 {\n\
-                  \u{20}   let mut v = Vec::new()\n\
-                  \u{20}   Vec::push(v, 7)\n\
-                  \u{20}   Vec::push(v, 9)\n\
-                  \u{20}   __aelys_collect()\n\
-                  \u{20}   return Vec::len(v)\n\
+    let source = "use std::process::ExitCode; fn main() -> ExitCode {\n\
+                  \u{20}   let mut v = Vec::new();\n\
+                  \u{20}   Vec::push(v, 7);\n\
+                  \u{20}   Vec::push(v, 9);\n\
+                  \u{20}   __aelys_collect();\n\
+                  \u{20}   return ExitCode::from(Vec::len(v) as u8);\n\
                   }\n";
     let dir = tempdir().expect("tempdir");
     let path = dir.path().join("e6.aelys");
@@ -713,7 +713,7 @@ fn the_admitted_runtime_set_is_pinned_and_its_linked_half_is_what_nm_defines() {
 
 #[test]
 fn an_extern_main_over_a_source_main_answers_e0204_and_the_registry_says_so() {
-    let rendered = lower("unsafe extern fn main(x: i64) -> i64\n\nfn main() -> i64 { return 0 }\n")
+    let rendered = lower("extern \"C\" { fn main(x: i64) -> i64; }\n\nfn main() { }\n")
         .expect_err("E9");
     assert!(
         rendered.contains("E0204") && !rendered.contains("E0613"),

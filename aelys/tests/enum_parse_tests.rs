@@ -102,9 +102,9 @@ enum Direction { Up, Down, Left, Right }
 
 fn choose(flag: bool) -> Direction {
     if flag {
-        return Direction::Up
+        return Direction::Up;
     }
-    return Direction::Down
+    Direction::Down
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -122,7 +122,7 @@ enum Color { Red, Green }
 enum Shape { Circle, Square }
 
 fn bad() -> Color {
-    return Shape::Circle
+    Shape::Circle
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -275,14 +275,14 @@ fn data_variant_return_type_unifies() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
 
 fn make_msg(flag: bool) -> Message {
     if flag {
-        return Message::Quit
+        return Message::Quit;
     }
-    return Message::Write("hello")
+    Message::Write("hello")
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -299,10 +299,10 @@ fn data_variant_air_lowering() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
 fn use_write() -> Message {
-    return Message::Write("hello")
+    Message::Write("hello")
 }
 "#;
     let air = lower_source(src);
@@ -445,7 +445,7 @@ fn match_simple_enum_exhaustive() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         Color::Green => 2,
         Color::Blue => 3,
@@ -466,7 +466,7 @@ fn match_with_wildcard() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         _ => 0,
     }
@@ -486,7 +486,7 @@ fn match_wildcard_must_be_last() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         _ => 0,
         Color::Red => 1,
     }
@@ -507,7 +507,7 @@ fn match_non_exhaustive_error() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         Color::Green => 2,
     }
@@ -526,7 +526,7 @@ fn match_duplicate_variant_error() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         Color::Red => 2,
         Color::Green => 3,
@@ -548,7 +548,7 @@ enum Color { Red, Green, Blue }
 enum Shape { Circle, Square }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Shape::Circle => 1,
         _ => 0,
     }
@@ -567,7 +567,7 @@ fn match_unknown_variant_error() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Yellow => 1,
         _ => 0,
     }
@@ -586,11 +586,11 @@ fn match_data_variant_with_bindings() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
 
 fn handle(m: Message) -> i64 {
-    return match m {
+    match m {
         Message::Quit => 0,
         Message::Move(x, y) => x,
         Message::Write(text) => 1,
@@ -614,7 +614,7 @@ enum Message {
 }
 
 fn handle(m: Message) -> i64 {
-    return match m {
+    match m {
         Message::Quit => 0,
         Message::Move(x) => x,
     }
@@ -637,8 +637,8 @@ fn test(c: Color) -> i64 {
         Color::Red => 10,
         Color::Green => 20,
         Color::Blue => 30,
-    }
-    return x
+    };
+    x
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -655,7 +655,7 @@ fn match_arms_type_mismatch() {
 enum Color { Red, Green, Blue }
 
 fn test(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         Color::Green => "hello",
         Color::Blue => 3,
@@ -675,7 +675,7 @@ fn match_simple_enum_air_lowering() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         Color::Green => 2,
         Color::Blue => 3,
@@ -703,11 +703,11 @@ fn match_data_variant_air_lowering() {
 enum Message {
     Quit,
     Move(i64, i64),
-    Write(string),
+    Write(String),
 }
 
 fn handle(m: Message) -> i64 {
-    return match m {
+    match m {
         Message::Quit => 0,
         Message::Move(x, y) => x,
         Message::Write(text) => 1,
@@ -740,7 +740,7 @@ fn match_with_wildcard_air_lowering() {
 enum Color { Red, Green, Blue }
 
 fn name(c: Color) -> i64 {
-    return match c {
+    match c {
         Color::Red => 1,
         _ => 0,
     }
@@ -768,7 +768,7 @@ fn match_all_unit_variants_exhaustive_no_default() {
 enum Dir { Up, Down }
 
 fn check(d: Dir) -> i64 {
-    return match d {
+    match d {
         Dir::Up => 1,
         Dir::Down => 2,
     }
@@ -799,7 +799,7 @@ enum Message {
 }
 
 fn get_x(m: Message) -> i64 {
-    return match m {
+    match m {
         Message::Quit => 0,
         Message::Move(x, y) => x,
     }
@@ -824,9 +824,9 @@ fn test(c: Color, flag: bool) -> i64 {
             Color::Red => 1,
             Color::Green => 2,
             Color::Blue => 3,
-        }
+        };
     }
-    return 0
+    0
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -866,10 +866,10 @@ fn match_with_semicolons_between_arms() {
 enum Color { Red, Green, Blue }
 
 fn test(c: Color) -> i64 {
-    return match c {
-        Color::Red => 1
-        Color::Green => 2
-        Color::Blue => 3
+    match c {
+        Color::Red => 1,
+        Color::Green => 2,
+        Color::Blue => 3,
     }
 }
 "#;
@@ -887,7 +887,7 @@ fn match_single_arm_wildcard() {
 enum Color { Red, Green, Blue }
 
 fn test(c: Color) -> i64 {
-    return match c {
+    match c {
         _ => 42,
     }
 }
@@ -909,7 +909,7 @@ enum Wrapper {
 }
 
 fn extract(w: Wrapper) -> i64 {
-    return match w {
+    match w {
         Wrapper::Val(x) => x,
         Wrapper::None => 0,
     }
@@ -956,7 +956,7 @@ enum Option<T> {
     Some(T),
     None,
 }
-let x: Option<i64> = Option::None
+static x: Option<i64> = Option::None;
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1025,7 +1025,7 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-fn check(r: Result<i64, string>) -> i64 {
+fn check(r: Result<i64, String>) -> i64 {
     match r {
         Result::Ok(val) => val,
         Result::Err(msg) => -1,
@@ -1048,7 +1048,7 @@ enum Option<T> {
     None,
 }
 fn make_some() -> Option<i64> {
-    return Option::Some(42)
+    Option::Some(42)
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -1067,7 +1067,7 @@ enum Option<T> {
     None,
 }
 fn is_some(opt: Option<i64>) -> i64 {
-    return match opt {
+    match opt {
         Option::Some(val) => 1,
         Option::None => 0,
     }
@@ -1114,9 +1114,9 @@ enum Option<T> {
 }
 fn test(flag: bool) -> Option<i64> {
     if flag {
-        return Option::Some(42)
+        return Option::Some(42);
     }
-    return Option::None
+    Option::None
 }
 "#;
     let result = compile_to_typed_ast(src);
@@ -1134,7 +1134,7 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-let r: Result<i64, string> = Result::Ok(42)
+static r: Result<i64, String> = Result::Ok(42);
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1151,7 +1151,7 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-let r: Result<i64, string> = Result::Err("something failed")
+static r: Result<i64, String> = Result::Err("something failed");
 "#;
     let result = compile_to_typed_ast(src);
     assert!(
@@ -1188,7 +1188,7 @@ enum Option<T> {
     None,
 }
 fn unwrap_or(opt: Option<i64>, default: i64) -> i64 {
-    return match opt {
+    match opt {
         Option::Some(val) => val,
         Option::None => default,
     }
@@ -1240,7 +1240,7 @@ enum Option<T> {
     None,
 }
 fn test(opt: Option<i64>) -> i64 {
-    return match opt {
+    match opt {
         Option::Some(v) => v,
         Option::None => 0,
     }
@@ -1262,7 +1262,7 @@ enum Option<T> {
     None,
 }
 fn test(opt: Option<i64>) -> i64 {
-    return match opt {
+    match opt {
         Option::Some(v) => v,
     }
 }
@@ -1282,7 +1282,7 @@ enum Option<T> {
     None,
 }
 fn test(opt: Option<i64>) -> i64 {
-    return match opt {
+    match opt {
         Option::Some(v) => v,
         _ => -1,
     }
@@ -1303,8 +1303,8 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-fn handle(r: Result<i64, string>) -> i64 {
-    return match r {
+fn handle(r: Result<i64, String>) -> i64 {
+    match r {
         Result::Ok(val) => val,
         Result::Err(msg) => -1,
     }
@@ -1331,12 +1331,12 @@ enum Boxed<T> {
     Empty,
 }
 
-fn get_empty() -> Boxed<Pair<i64, string>> {
-    return Boxed::Empty
+fn get_empty() -> Boxed<Pair<i64, String>> {
+    Boxed::Empty
 }
 
 fn main() {
-    let e = get_empty()
+    let e = get_empty();
 }
 "#;
     let air = lower_and_monomorphize(src);
@@ -1375,7 +1375,7 @@ enum Holder<T> {
 }
 
 fn apply_default() -> Holder<fn(i64) -> i64> {
-    return Holder::Empty
+    Holder::Empty
 }
 "#;
     let air = lower_and_monomorphize(src);
@@ -1402,19 +1402,19 @@ enum Holder<T> {
 }
 
 fn inc(x: i64) -> i64 {
-    return x + 1
+    x + 1
 }
 
 fn call_holder(h: Holder<fn(i64) -> i64>) -> i64 {
-    return match h {
-        Holder::Value(f) => f(41)
-        Holder::Empty => 0
+    match h {
+        Holder::Value(f) => f(41),
+        Holder::Empty => 0,
     }
 }
 
 fn main() {
-    let h: Holder<fn(i64) -> i64> = Holder::Value(inc)
-    call_holder(h)
+    let h: Holder<fn(i64) -> i64> = Holder::Value(inc);
+    call_holder(h);
 }
 "#;
     let air = lower_and_monomorphize(src);
@@ -1437,8 +1437,8 @@ enum Result<T, E> {
     Ok(T),
     Err(E),
 }
-fn handle(r: Result<i64, string>) -> i64 {
-    return match r {
+fn handle(r: Result<i64, String>) -> i64 {
+    match r {
         Result::Ok(val) => val,
         Result::Err(msg) => -1,
     }
@@ -1487,13 +1487,13 @@ enum Option<T> {
     None,
 }
 fn make_int() -> Option<i64> {
-    return Option::Some(42)
+    Option::Some(42)
 }
-fn make_str() -> Option<string> {
-    return Option::Some("hello")
+fn make_str() -> Option<String> {
+    Option::Some("hello")
 }
 fn make_none_int() -> Option<i64> {
-    return Option::None
+    Option::None
 }
 "#;
     let air = lower_source(src);

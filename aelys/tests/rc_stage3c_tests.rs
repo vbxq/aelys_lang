@@ -150,13 +150,12 @@ fn asan_run_cycles(src: &str) -> Option<(i32, String)> {
 
 const CYCLE_SRC: &str = r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    a.next = b
-    b.next = a
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    __aelys_collect();
 }
 "#;
 
@@ -228,17 +227,17 @@ fn c2_asan_clean_on_collected_cycle() {
 }
 
 const C3_SRC: &str = r#"
-struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 10, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 20, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let keep: Rc<Node> = a
-    __aelys_collect()
-    let n: Rc<Node> = keep.next
-    let v: i64 = n.val
-    return v
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 10, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 20, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let keep: Rc<Node> = a;
+    __aelys_collect();
+    let n: Rc<Node> = keep.next;
+    let v: i64 = n.val;
+    return ExitCode::from(v as u8);
 }
 "#;
 
@@ -277,17 +276,17 @@ fn c3_asan_clean_with_live_root_and_postcollect_deref() {
 #[test]
 fn c9bis_member_clone_binding_is_balanced() {
     let src = r#"
-struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    b.next = a
-    let keep: Rc<Node> = a
-    let n: Rc<Node> = keep.next
-    let v: i64 = n.val
-    __aelys_collect()
-    return v
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node> }
+fn main() -> ExitCode {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
+    b.next = a;
+    let keep: Rc<Node> = a;
+    let n: Rc<Node> = keep.next;
+    let v: i64 = n.val;
+    __aelys_collect();
+    return ExitCode::from(v as u8);
 }
 "#;
     let Some((code, stderr)) = asan_run_cycles(src) else {
@@ -313,15 +312,14 @@ fn main() -> i64 {
 fn c9_multiple_reassign_releases_the_old_target() {
     let src = r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let c: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    a.next = b
-    a.next = c
-    c.next = a
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let c: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    a.next = b;
+    a.next = c;
+    c.next = a;
+    __aelys_collect();
 }
 "#;
     let Some((code, stderr)) = asan_run_cycles(src) else {
@@ -343,11 +341,10 @@ fn main() -> i64 {
 fn c9_self_cycle_is_balanced() {
     let src = r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    a.next = a
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    a.next = a;
+    __aelys_collect();
 }
 "#;
     let Some((code, stderr)) = asan_run_cycles(src) else {
@@ -370,13 +367,12 @@ fn main() -> i64 {
 fn c9_reassign_to_null_releases_old() {
     let src = r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    a.next = b
-    a.next = Rc::null()
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    a.next = b;
+    a.next = Rc::null();
+    __aelys_collect();
 }
 "#;
     let Some((code, stderr)) = asan_run_cycles(src) else {
@@ -402,17 +398,16 @@ fn main() -> i64 {
 fn c9_reassign_in_loop_is_balanced() {
     let src = r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let mut i: i64 = 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let mut i: i64 = 0;
     while i < 3 {
-        let b: Rc<Node> = Rc::new(Node { next: Rc::null() })
-        a.next = b
-        i = i + 1
+        let b: Rc<Node> = Rc::new(Node { next: Rc::null() });
+        a.next = b;
+        i = i + 1;
     }
-    a.next = Rc::null()
-    __aelys_collect()
-    return 0
+    a.next = Rc::null();
+    __aelys_collect();
 }
 "#;
     let Some((code, stderr)) = asan_run_cycles(src) else {
@@ -435,12 +430,11 @@ fn f1_field_reassign_fresh_rhs_is_balanced() {
     let src = r#"
 struct Inner { v: i64 }
 struct Holder { r: Rc<Inner> }
-fn main() -> i64 {
-    let a: Rc<Holder> = Rc::new(Holder { r: Rc::null() })
-    a.r = Rc::new(Inner { v: 5 })
-    a.r = Rc::null()
-    __aelys_collect()
-    return 0
+fn main() {
+    let a: Rc<Holder> = Rc::new(Holder { r: Rc::null() });
+    a.r = Rc::new(Inner { v: 5 });
+    a.r = Rc::null();
+    __aelys_collect();
 }
 "#;
     for variant in [RuntimeVariant::Rc, RuntimeVariant::RcCycles] {
@@ -473,19 +467,19 @@ fn main() -> i64 {
 #[test]
 fn f2_garbage_cycle_holding_live_survivor_is_balanced() {
     let src = r#"
-struct Node { val: i64, next: Rc<Node>, link: Rc<Node> }
-fn main() -> i64 {
-    let keep: Rc<Node> = Rc::new(Node { val: 99, next: Rc::null(), link: Rc::null() })
+use std::process::ExitCode; struct Node { val: i64, next: Rc<Node>, link: Rc<Node> }
+fn main() -> ExitCode {
+    let keep: Rc<Node> = Rc::new(Node { val: 99, next: Rc::null(), link: Rc::null() });
     {
-        let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null(), link: Rc::null() })
-        let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null(), link: Rc::null() })
-        a.next = b
-        b.next = a
-        a.link = keep
+        let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null(), link: Rc::null() });
+        let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null(), link: Rc::null() });
+        a.next = b;
+        b.next = a;
+        a.link = keep;
     }
-    __aelys_collect()
-    let v: i64 = keep.val
-    return v
+    __aelys_collect();
+    let v: i64 = keep.val;
+    return ExitCode::from(v as u8);
 }
 "#;
     let Some((code, stderr)) = run_with_stats(src, RuntimeVariant::RcCycles) else {
@@ -516,12 +510,12 @@ fn main() -> i64 {
 #[test]
 fn c4_acyclic_program_idempotent_under_rc_cycles() {
     let src = r#"
-fn touch(a: Rc<i64>) -> i64 { return 1 }
-fn main() -> i64 {
-    let a: Rc<i64> = Rc::new(7)
-    let b: Rc<i64> = a
-    let _t: i64 = touch(b)
-    return Rc::get(a)
+use std::process::ExitCode; fn touch(a: Rc<i64>) -> i64 { 1 }
+fn main() -> ExitCode {
+    let a: Rc<i64> = Rc::new(7);
+    let b: Rc<i64> = a;
+    let _t: i64 = touch(b);
+    return ExitCode::from(Rc::get(a) as u8);
 }
 "#;
     let Some((code_cyc, stderr_cyc)) = run_with_stats(src, RuntimeVariant::RcCycles) else {
@@ -549,11 +543,11 @@ fn main() -> i64 {
 #[test]
 fn c5_rc_null_allocates_nothing() {
     let src = r#"
-struct Node { next: Rc<Node> }
-fn use_n(n: Rc<Node>) -> i64 { return 0 }
-fn main() -> i64 {
-    let z: Rc<Node> = Rc::null()
-    return use_n(z)
+use std::process::ExitCode; struct Node { next: Rc<Node> }
+fn use_n(n: Rc<Node>) -> i64 { 0 }
+fn main() -> ExitCode {
+    let z: Rc<Node> = Rc::null();
+    return ExitCode::from(use_n(z) as u8);
 }
 "#;
     let Some((code, stderr)) = run_with_stats(src, RuntimeVariant::RcCycles) else {
@@ -572,13 +566,13 @@ fn main() -> i64 {
 fn c5_rc_null_emits_no_alloc_in_ir() {
     let ir = rc_ir(
         r#"
-struct Node { next: Rc<Node> }
-fn use_n(n: Rc<Node>) -> i64 { return 0 }
+use std::process::ExitCode; struct Node { next: Rc<Node> }
+fn use_n(n: Rc<Node>) -> i64 { 0 }
 fn mk() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    return use_n(a)
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    use_n(a)
 }
-fn main() -> i64 { return mk() }
+fn main() -> ExitCode { return ExitCode::from(mk() as u8); }
 "#,
     );
     let header_inits = ir.matches("store i32 1, ptr %rc_alloc_raw").count();
@@ -593,11 +587,10 @@ fn c6_field_reassign_emits_the_balanced_lift() {
     let ir = rc_ir(
         r#"
 struct Node { next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { next: Rc::null() })
-    a.next = b
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { next: Rc::null() });
+    a.next = b;
 }
 "#,
     );
@@ -616,11 +609,10 @@ fn c6_nominal_carrier_field_reassign_through_handle_is_rejected() {
     let src = r#"
 struct Inner { r: Rc<i64> }
 struct Outer { b: Inner }
-fn main() -> i64 {
-    let o: Rc<Outer> = Rc::new(Outer { b: Inner { r: Rc::new(1) } })
-    let other: Inner = Inner { r: Rc::new(2) }
-    o.b = other
-    return 0
+fn main() {
+    let o: Rc<Outer> = Rc::new(Outer { b: Inner { r: Rc::new(1) } });
+    let other: Inner = Inner { r: Rc::new(2) };
+    o.b = other;
 }
 "#;
     let dir = tempdir().expect("tempdir");
@@ -650,9 +642,9 @@ fn c8_default_runtime_is_still_rc() {
     fs::write(
         &source_path,
         r#"
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    return Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(7);
+    return ExitCode::from(Rc::get(r) as u8);
 }
 "#,
     )

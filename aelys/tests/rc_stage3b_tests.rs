@@ -219,15 +219,15 @@ fn unit_missing_field_offset_is_a_hard_error() {
 }
 
 const PAIR_CARRIER: &str = r#"
-struct Pair { a: Rc<i64>, b: Rc<i64> }
-fn use_pair(p: Rc<Pair>) -> i64 { return 0 }
+use std::process::ExitCode; struct Pair { a: Rc<i64>, b: Rc<i64> }
+fn use_pair(p: Rc<Pair>) -> i64 { 0 }
 fn mk() -> i64 {
-    let x: Rc<i64> = Rc::new(1)
-    let y: Rc<i64> = Rc::new(2)
-    let p: Rc<Pair> = Rc::new(Pair { a: x, b: y })
-    return use_pair(p)
+    let x: Rc<i64> = Rc::new(1);
+    let y: Rc<i64> = Rc::new(2);
+    let p: Rc<Pair> = Rc::new(Pair { a: x, b: y });
+    use_pair(p)
 }
-fn main() -> i64 { return mk() }
+fn main() -> ExitCode { return ExitCode::from(mk() as u8); }
 "#;
 
 #[test]
@@ -248,12 +248,12 @@ fn b1_carrier_writes_distinct_nonzero_type_id() {
 fn b4_scalar_count_zero_and_value_type_absent() {
     let ir = rc_ir(
         r#"
-struct Point { x: i64, y: i64 }
-fn use_point(p: Point) -> i64 { return p.x }
-fn main() -> i64 {
-    let r: Rc<i64> = Rc::new(7)
-    let pt: Point = Point { x: 1, y: 2 }
-    return Rc::get(r) + use_point(pt)
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn use_point(p: Point) -> i64 { p.x }
+fn main() -> ExitCode {
+    let r: Rc<i64> = Rc::new(7);
+    let pt: Point = Point { x: 1, y: 2 };
+    return ExitCode::from((Rc::get(r) + use_point(pt)) as u8);
 }
 "#,
     );
@@ -275,11 +275,11 @@ fn main() -> i64 {
 fn b4_pure_value_program_has_empty_table_and_no_rc_calls() {
     let ir = rc_ir(
         r#"
-struct Point { x: i64, y: i64 }
-fn use_point(p: Point) -> i64 { return p.x + p.y }
-fn main() -> i64 {
-    let pt: Point = Point { x: 1, y: 2 }
-    return use_point(pt)
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn use_point(p: Point) -> i64 { p.x + p.y }
+fn main() -> ExitCode {
+    let pt: Point = Point { x: 1, y: 2 };
+    return ExitCode::from(use_point(pt) as u8);
 }
 "#,
     );
@@ -335,14 +335,14 @@ fn b2_table_symbol_is_external_in_object() {
 }
 
 const ENUM_CARRIER: &str = r#"
-enum Holder { Cell(Rc<i64>) }
-fn use_h(h: Rc<Holder>) -> i64 { return 0 }
+use std::process::ExitCode; enum Holder { Cell(Rc<i64>) }
+fn use_h(h: Rc<Holder>) -> i64 { 0 }
 fn mk() -> i64 {
-    let x: Rc<i64> = Rc::new(7)
-    let h: Rc<Holder> = Rc::new(Holder::Cell(x))
-    return use_h(h)
+    let x: Rc<i64> = Rc::new(7);
+    let h: Rc<Holder> = Rc::new(Holder::Cell(x));
+    use_h(h)
 }
-fn main() -> i64 { return mk() }
+fn main() -> ExitCode { return ExitCode::from(mk() as u8); }
 "#;
 
 const RUNTIME_PROBE_C: &str = r#"
@@ -392,15 +392,15 @@ fn b3_enum_offset_dereferences_to_the_real_field() {
     );
     let mixed_ir = rc_ir(
         r#"
-enum Holder { Cell(Rc<i64>) }
+use std::process::ExitCode; enum Holder { Cell(Rc<i64>) }
 struct Wrap { tag: i64, h: Holder }
-fn use_w(w: Rc<Wrap>) -> i64 { return 0 }
+fn use_w(w: Rc<Wrap>) -> i64 { 0 }
 fn mk() -> i64 {
-    let x: Rc<i64> = Rc::new(7)
-    let w: Rc<Wrap> = Rc::new(Wrap { tag: 99, h: Holder::Cell(x) })
-    return use_w(w)
+    let x: Rc<i64> = Rc::new(7);
+    let w: Rc<Wrap> = Rc::new(Wrap { tag: 99, h: Holder::Cell(x) });
+    use_w(w)
 }
-fn main() -> i64 { return mk() }
+fn main() -> ExitCode { return ExitCode::from(mk() as u8); }
 "#,
     );
     let mixed_entries = decode_table(&table_words(&mixed_ir));
@@ -540,12 +540,12 @@ fn b_extra_collect_dedups_and_orders_by_appearance() {
 
 const NODE_CARRIER: &str = r#"
 struct Node { next: Rc<Node> }
-fn use_node(n: Rc<Node>) -> i64 { return 0 }
+fn use_node(n: Rc<Node>) -> i64 { 0 }
 fn mk(leaf: Rc<Node>) -> i64 {
-    let n: Rc<Node> = Rc::new(Node { next: leaf })
-    return use_node(n)
+    let n: Rc<Node> = Rc::new(Node { next: leaf });
+    use_node(n)
 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 #[test]

@@ -61,11 +61,11 @@ fn run_exit(body: &str) -> Option<i32> {
 fn shared_then_mutate_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -84,11 +84,11 @@ fn main() -> i64 {
 fn shared_then_mutate_copy_twin_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = x
-    x = 5
-    return r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = x;
+    x = 5;
+    return ExitCode::from(r as u8);
 }
 "#,
     );
@@ -99,13 +99,13 @@ fn main() -> i64 {
 fn two_overlapping_mut_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &mut x
-    *r1 = 5
-    *r2 = 6
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &mut x;
+    *r1 = 5;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 "#,
     );
@@ -123,13 +123,13 @@ fn main() -> i64 {
 fn two_sequential_mut_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    *r1 = 5
-    let r2 = &mut x
-    *r2 = 6
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    *r1 = 5;
+    let r2 = &mut x;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 "#,
     );
@@ -142,12 +142,11 @@ fn move_while_borrowed_is_rejected() {
         r#"
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    let b = a;
+    touch(r);
 }
 "#,
     );
@@ -168,12 +167,11 @@ fn move_after_borrow_dead_compiles() {
         r#"
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    touch(r)
-    let b = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    touch(r);
+    let b = a;
 }
 "#,
     );
@@ -184,11 +182,11 @@ fn main() -> i64 {
 fn push_while_element_borrowed_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    Vec::push(v, 40)
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    Vec::push(v, 40);
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -207,11 +205,10 @@ fn main() -> i64 {
 fn ref_in_array_literal_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let a = &v[0]
-    let arr = [a]
-    return 0
+fn main() {
+    let v = vec![10, 20, 30];
+    let a = &v[0];
+    let arr = [a];
 }
 "#,
     );
@@ -229,11 +226,10 @@ fn main() -> i64 {
 fn value_array_literal_compiles() {
     accepts(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let a = v[0]
-    let arr = [a]
-    return 0
+fn main() {
+    let v = vec![10, 20, 30];
+    let a = v[0];
+    let arr = [a];
 }
 "#,
     );
@@ -245,10 +241,9 @@ fn ref_in_enum_payload_is_rejected() {
     let err = reject(
         r#"
 enum Box { Of(&i64), Empty }
-fn main() -> i64 {
-    let mut x = 5
-    let o = Box::Of(&x)
-    return 0
+fn main() {
+    let mut x = 5;
+    let o = Box::Of(&x);
 }
 "#,
     );
@@ -267,10 +262,9 @@ fn value_enum_payload_compiles() {
     accepts(
         r#"
 enum Box { Of(i64), Empty }
-fn main() -> i64 {
-    let mut x = 5
-    let o = Box::Of(x)
-    return 0
+fn main() {
+    let mut x = 5;
+    let o = Box::Of(x);
 }
 "#,
     );
@@ -281,15 +275,15 @@ fn main() -> i64 {
 fn reborrow_then_use_base_is_rejected() {
     let err = reject(
         r#"
-fn f(r: &mut i64) {
-    let r2 = &mut *r
-    *r = 6
-    *r2 = 5
+use std::process::ExitCode; fn f(r: &mut i64) {
+    let r2 = &mut *r;
+    *r = 6;
+    *r2 = 5;
 }
-fn main() -> i64 {
-    let mut x = 0
-    f(&mut x)
-    return x
+fn main() -> ExitCode {
+    let mut x = 0;
+    f(&mut x);
+    return ExitCode::from(x as u8);
 }
 "#,
     );
@@ -303,12 +297,12 @@ fn main() -> i64 {
 #[test]
 fn nll_borrow_dead_before_push_compiles_and_runs() {
     let src = r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    let y = *r
-    Vec::push(v, 40)
-    return y
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    let y = *r;
+    Vec::push(v, 40);
+    return ExitCode::from(y as u8);
 }
 "#;
     accepts(src);
@@ -326,12 +320,12 @@ fn main() -> i64 {
 fn disjoint_field_places_do_not_conflict() {
     let Some(code) = run_exit(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let mut p = Point{x: 1, y: 2}
-    let a = &p.x
-    p.y = 20
-    return *a + p.y
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let mut p = Point{x: 1, y: 2};
+    let a = &p.x;
+    p.y = 20;
+    return ExitCode::from((*a + p.y) as u8);
 }
 "#,
     ) else {
@@ -348,12 +342,12 @@ fn main() -> i64 {
 fn same_field_place_write_while_borrowed_is_rejected() {
     let err = reject(
         r#"
-struct Point { x: i64, y: i64 }
-fn main() -> i64 {
-    let mut p = Point{x: 1, y: 2}
-    let a = &p.x
-    p.x = 20
-    return *a
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
+fn main() -> ExitCode {
+    let mut p = Point{x: 1, y: 2};
+    let a = &p.x;
+    p.x = 20;
+    return ExitCode::from((*a) as u8);
 }
 "#,
     );
@@ -368,14 +362,14 @@ fn main() -> i64 {
 fn reborrow_mut_compiles() {
     accepts(
         r#"
-fn f(r: &mut i64) {
-    let r2 = &mut *r
-    *r2 = 5
+use std::process::ExitCode; fn f(r: &mut i64) {
+    let r2 = &mut *r;
+    *r2 = 5;
 }
-fn main() -> i64 {
-    let mut x = 0
-    f(&mut x)
-    return x
+fn main() -> ExitCode {
+    let mut x = 0;
+    f(&mut x);
+    return ExitCode::from(x as u8);
 }
 "#,
     );

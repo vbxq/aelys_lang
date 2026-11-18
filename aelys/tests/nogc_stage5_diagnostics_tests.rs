@@ -19,11 +19,10 @@ fn reject(body: &str) -> String {
 fn use_after_move_renders_moved_here_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    println(a.id)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    println!("{}", a.id);
 }
 "#,
     );
@@ -47,11 +46,10 @@ fn main() -> i64 {
 fn double_move_renders_first_moved_here_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    let c = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    let c = a;
 }
 "#,
     );
@@ -75,14 +73,13 @@ fn main() -> i64 {
 fn use_of_maybe_moved_renders_branch_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let cond = true
-    let a = Resource{id: 1}
+fn main() {
+    let cond = true;
+    let a = Resource{id: 1};
     if cond {
-        let b = a
+        let b = a;
     }
-    println(a.id)
-    return 0
+    println!("{}", a.id);
 }
 "#,
     );
@@ -107,14 +104,13 @@ fn maybe_move_at_scope_end_renders_declared_here_caret() {
     let err = reject(
         r#"
 fn f(c: bool) {
-    let a = Resource{id: 1}
+    let a = Resource{id: 1};
     if c {
-        let b = a
+        let b = a;
     }
 }
-fn main() -> i64 {
-    f(true)
-    return 0
+fn main() {
+    f(true);
 }
 "#,
     );
@@ -135,15 +131,14 @@ fn maybe_move_at_reassignment_renders_declared_here_caret() {
     let err = reject(
         r#"
 fn f(c: bool) {
-    let mut a = Resource{id: 1}
+    let mut a = Resource{id: 1};
     if c {
-        let b = a
+        let b = a;
     }
-    a = Resource{id: 2}
+    a = Resource{id: 2};
 }
-fn main() -> i64 {
-    f(true)
-    return 0
+fn main() {
+    f(true);
 }
 "#,
     );
@@ -169,11 +164,11 @@ fn main() -> i64 {
 fn write_while_borrowed_renders_three_point() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &x
-    x = 5
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &x;
+    x = 5;
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -204,11 +199,11 @@ fn main() -> i64 {
 fn push_while_element_borrowed_renders_three_point() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let r = &v[0]
-    Vec::push(v, 40)
-    return *r
+use std::process::ExitCode; fn main() -> ExitCode {
+    let v = vec![10, 20, 30];
+    let r = &v[0];
+    Vec::push(v, 40);
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -241,12 +236,11 @@ fn move_while_borrowed_renders_three_point() {
         r#"
 fn touch(r: &Resource) {
 }
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let r = &a
-    let b = a
-    touch(r)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let r = &a;
+    let b = a;
+    touch(r);
 }
 "#,
     );
@@ -277,13 +271,13 @@ fn main() -> i64 {
 fn two_overlapping_mut_renders_as_mutable_code() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &mut x
-    *r1 = 5
-    *r2 = 6
-    return x
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &mut x;
+    *r1 = 5;
+    *r2 = 6;
+    return ExitCode::from(x as u8);
 }
 "#,
     );
@@ -310,12 +304,12 @@ fn main() -> i64 {
 fn shared_while_mut_renders_as_shared_code() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r1 = &mut x
-    let r2 = &x
-    *r1 = 5
-    return *r2
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r1 = &mut x;
+    let r2 = &x;
+    *r1 = 5;
+    return ExitCode::from((*r2) as u8);
 }
 "#,
     );
@@ -342,12 +336,12 @@ fn main() -> i64 {
 fn read_while_mut_renders_cannot_use_code() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut x = 3
-    let r = &mut x
-    let y = x
-    *r = 5
-    return y
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut x = 3;
+    let r = &mut x;
+    let y = x;
+    *r = 5;
+    return ExitCode::from(y as u8);
 }
 "#,
     );
@@ -374,11 +368,10 @@ fn main() -> i64 {
 fn ref_in_array_literal_renders_this_reference_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let v = vec[10, 20, 30]
-    let a = &v[0]
-    let arr = [a]
-    return 0
+fn main() {
+    let v = vec![10, 20, 30];
+    let a = &v[0];
+    let arr = [a];
 }
 "#,
     );
@@ -408,11 +401,10 @@ fn return_ref_to_local_renders_destroyed_on_return_caret() {
     let err = reject(
         r#"
 fn get() -> &i64 {
-    let x = 5
-    return &x
+    let x = 5;
+    &x
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -439,15 +431,15 @@ fn main() -> i64 {
 fn scope_death_renders_owner_decl_and_scope_end_carets() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let mut r = &a
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a = 10;
+    let mut r = &a;
     {
-        let x = 5
-        let tmp = &x
-        r = tmp
+        let x = 5;
+        let tmp = &x;
+        r = tmp;
     }
-    return *r
+    return ExitCode::from((*r) as u8);
 }
 "#,
     );
@@ -475,13 +467,12 @@ fn origin_floor_renders_escape_caret() {
     let err = reject(
         r#"
 fn id(r: &i64) -> &i64 {
-    return r
+    r
 }
 fn via(r: &i64) -> &i64 {
-    return id(r)
+    id(r)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#,
     );
@@ -504,11 +495,10 @@ fn main() -> i64 {
 fn projected_ref_store_renders_escape_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let mut arr = []
-    let x = 5
-    arr[0] = &x
-    return 0
+fn main() {
+    let mut arr = [];
+    let x = 5;
+    arr[0] = &x;
 }
 "#,
     );
@@ -531,13 +521,12 @@ fn main() -> i64 {
 fn closure_capturing_reference_renders_escape_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = 10
-    let r = &a
-    let f = fn() -> i64 {
-        return *r
-    }
-    return 0
+fn main() {
+    let a = 10;
+    let r = &a;
+    let f = move || -> i64 {
+        *r
+    };
 }
 "#,
     );
@@ -560,11 +549,10 @@ fn main() -> i64 {
 fn nested_ref_renders_escape_caret() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let x = 5
-    let r = &x
-    let pp = &r
-    return 0
+fn main() {
+    let x = 5;
+    let r = &x;
+    let pp = &r;
 }
 "#,
     );
@@ -587,19 +575,18 @@ fn main() -> i64 {
 fn a_mut_handed_on_by_name_reborrows_what_it_points_at() {
     let err = reject(
         r#"
-fn peek<T>(s: &[T], out: &mut Vec<string>) -> i64 {
-    *out = Vec::new()
-    println(s[0])
-    return 1
+fn peek<T>(s: &[T], out: &mut Vec<String>) -> i64 {
+    *out = Vec::new();
+    println!("{}", s[0]);
+    1
 }
-fn g(r: &mut Vec<string>) -> i64 {
-    return peek(Vec::as_slice(*r), r)
+fn g(r: &mut Vec<String>) -> i64 {
+    peek(Vec::as_slice(*r), r)
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, "ab" + "1")
-    g(&mut v)
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, "ab" + "1");
+    g(&mut v);
 }
 "#,
     );

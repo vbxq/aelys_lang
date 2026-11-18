@@ -43,9 +43,9 @@ fn generic_id_wrong_return_type() {
     // id<T> returns T, but caller expects string while passing i64
     assert!(should_fail(
         r#"
-fn id<T>(x: T) -> T { return x }
-fn test() -> string {
-    return id(42)
+fn id<T>(x: T) -> T { x }
+fn test() -> String {
+    id(42)
 }
 "#
     ));
@@ -55,9 +55,9 @@ fn test() -> string {
 fn generic_id_correct_return_type() {
     should_pass(
         r#"
-fn id<T>(x: T) -> T { return x }
+fn id<T>(x: T) -> T { x }
 fn test() -> i64 {
-    return id(42)
+    id(42)
 }
 "#,
     );
@@ -68,9 +68,9 @@ fn generic_two_params_swap_return_wrong() {
     // swap<A,B> returns B. Passing (string, i64) returns i64, but we expect string
     assert!(should_fail(
         r#"
-fn swap<A, B>(a: A, b: B) -> B { return b }
-fn test() -> string {
-    return swap("hello", 42)
+fn swap<A, B>(a: A, b: B) -> B { b }
+fn test() -> String {
+    swap("hello", 42)
 }
 "#
     ));
@@ -80,9 +80,9 @@ fn test() -> string {
 fn generic_two_params_swap_return_correct() {
     should_pass(
         r#"
-fn swap<A, B>(a: A, b: B) -> B { return b }
+fn swap<A, B>(a: A, b: B) -> B { b }
 fn test() -> i64 {
-    return swap("hello", 42)
+    swap("hello", 42)
 }
 "#,
     );
@@ -93,10 +93,10 @@ fn generic_called_twice_with_different_types() {
     // Each call site should get its own instantiation
     should_pass(
         r#"
-fn id<T>(x: T) -> T { return x }
+fn id<T>(x: T) -> T { x }
 fn test() {
-    let a: i64 = id(42)
-    let b: string = id("hello")
+    let a: i64 = id(42);
+    let b: String = id("hello");
 }
 "#,
     );
@@ -107,10 +107,10 @@ fn generic_called_twice_one_wrong() {
     // Second call returns i64 but expects string
     assert!(should_fail(
         r#"
-fn id<T>(x: T) -> T { return x }
+fn id<T>(x: T) -> T { x }
 fn test() {
-    let a: i64 = id(42)
-    let b: string = id(99)
+    let a: i64 = id(42);
+    let b: String = id(99);
 }
 "#
     ));
@@ -121,9 +121,9 @@ fn generic_same_type_param_used_twice_in_params() {
     // first<T>(a: T, b: T) -> T: both args must have the same type
     assert!(should_fail(
         r#"
-fn first<T>(a: T, b: T) -> T { return a }
+fn first<T>(a: T, b: T) -> T { a }
 fn test() -> i64 {
-    return first(42, "hello")
+    first(42, "hello")
 }
 "#
     ));
@@ -133,9 +133,9 @@ fn test() -> i64 {
 fn generic_same_type_param_both_correct() {
     should_pass(
         r#"
-fn first<T>(a: T, b: T) -> T { return a }
+fn first<T>(a: T, b: T) -> T { a }
 fn test() -> i64 {
-    return first(42, 99)
+    first(42, 99)
 }
 "#,
     );
@@ -180,7 +180,7 @@ fn let_annotation_mismatch_with_string() {
     assert!(should_fail(
         r#"
 fn test() {
-    let x: i64 = "hello"
+    let x: i64 = "hello";
 }
 "#
     ));
@@ -191,7 +191,7 @@ fn let_annotation_mismatch_with_bool() {
     assert!(should_fail(
         r#"
 fn test() {
-    let x: i64 = true
+    let x: i64 = true;
 }
 "#
     ));
@@ -202,7 +202,7 @@ fn let_annotation_correct() {
     should_pass(
         r#"
 fn test() {
-    let x: i64 = 42
+    let x: i64 = 42;
 }
 "#,
     );
@@ -213,8 +213,8 @@ fn assign_wrong_type_to_variable() {
     assert!(should_fail(
         r#"
 fn test() {
-    let mut x: i64 = 42
-    x = "hello"
+    let mut x: i64 = 42;
+    x = "hello";
 }
 "#
     ));
@@ -225,8 +225,8 @@ fn assign_bool_to_i64_variable() {
     assert!(should_fail(
         r#"
 fn test() {
-    let mut x: i64 = 0
-    x = true
+    let mut x: i64 = 0;
+    x = true;
 }
 "#
     ));
@@ -236,9 +236,9 @@ fn test() {
 fn wrong_number_of_args_extra() {
     assert!(should_fail(
         r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn add(a: i64, b: i64) -> i64 { a + b }
 fn test() -> i64 {
-    return add(1, 2, 3)
+    add(1, 2, 3)
 }
 "#
     ));
@@ -248,9 +248,9 @@ fn test() -> i64 {
 fn wrong_number_of_args_fewer() {
     assert!(should_fail(
         r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
+fn add(a: i64, b: i64) -> i64 { a + b }
 fn test() -> i64 {
-    return add(1)
+    add(1)
 }
 "#
     ));
@@ -261,11 +261,11 @@ fn constraint_chain_through_variables() {
     // x = 42 (i64), y = x (i64), then y used as string → error
     assert!(should_fail(
         r#"
-fn consume_string(s: string) {}
+fn consume_string(s: String) {}
 fn test() {
-    let x = 42
-    let y = x
-    consume_string(y)
+    let x = 42;
+    let y = x;
+    consume_string(y);
 }
 "#
     ));
@@ -275,11 +275,11 @@ fn test() {
 fn constraint_chain_correct() {
     should_pass(
         r#"
-fn double(n: i64) -> i64 { return n + n }
+fn double(n: i64) -> i64 { n + n }
 fn test() {
-    let x = 42
-    let y = double(x)
-    let z = double(y)
+    let x = 42;
+    let y = double(x);
+    let z = double(y);
 }
 "#,
     );
@@ -316,7 +316,7 @@ fn comparison_between_incompatible_types() {
     assert!(should_fail(
         r#"
 fn test() -> bool {
-    return 42 > "hello"
+    42 > "hello"
 }
 "#
     ));
@@ -327,7 +327,7 @@ fn comparison_bool_with_integer() {
     assert!(should_fail(
         r#"
 fn test() -> bool {
-    return true > 5
+    true > 5
 }
 "#
     ));
@@ -338,7 +338,7 @@ fn addition_string_and_bool() {
     assert!(should_fail(
         r#"
 fn test() {
-    let x = "hello" + true
+    let x = "hello" + true;
 }
 "#
     ));
@@ -349,7 +349,7 @@ fn subtraction_on_booleans() {
     assert!(should_fail(
         r#"
 fn test() {
-    let x = true - false
+    let x = true - false;
 }
 "#
     ));
@@ -361,7 +361,7 @@ fn struct_field_wrong_type_in_init() {
         r#"
 struct Point { x: i64, y: i64 }
 fn test() {
-    let p = Point { x: "hello", y: 0 }
+    let p = Point { x: "hello", y: 0 };
 }
 "#
     ));
@@ -372,10 +372,10 @@ fn struct_field_access_used_as_wrong_type() {
     assert!(should_fail(
         r#"
 struct Point { x: i64, y: i64 }
-fn consume_string(s: string) {}
+fn consume_string(s: String) {}
 fn test() {
-    let p = Point { x: 1, y: 2 }
-    consume_string(p.x)
+    let p = Point { x: 1, y: 2 };
+    consume_string(p.x);
 }
 "#
     ));
@@ -385,10 +385,10 @@ fn test() {
 fn array_used_where_i64_expected() {
     assert!(should_fail(
         r#"
-fn double(n: i64) -> i64 { return n + n }
+fn double(n: i64) -> i64 { n + n }
 fn test() {
-    let arr = [1, 2, 3]
-    double(arr)
+    let arr = [1, 2, 3];
+    double(arr);
 }
 "#
     ));
@@ -398,10 +398,10 @@ fn test() {
 fn array_element_used_correctly() {
     should_pass(
         r#"
-fn double(n: i64) -> i64 { return n + n }
+fn double(n: i64) -> i64 { n + n }
 fn test() {
-    let arr = [1, 2, 3]
-    double(arr[0])
+    let arr = [1, 2, 3];
+    double(arr[0]);
 }
 "#,
     );
@@ -413,8 +413,8 @@ fn multiple_independent_errors() {
     assert!(should_fail(
         r#"
 fn test() {
-    let x: i64 = "hello"
-    let y: string = 42
+    let x: i64 = "hello";
+    let y: String = 42;
 }
 "#
     ));
@@ -425,9 +425,9 @@ fn function_result_plus_number_rejected() {
     // can't add a function call result that is string to a number
     assert!(should_fail(
         r#"
-fn greet() -> string { return "hi" }
+fn greet() -> String { "hi" }
 fn test() -> i64 {
-    return greet() + 10
+    greet() + 10
 }
 "#
     ));
@@ -437,9 +437,9 @@ fn test() -> i64 {
 fn function_result_used_correctly() {
     should_pass(
         r#"
-fn double(n: i64) -> i64 { return n + n }
+fn double(n: i64) -> i64 { n + n }
 fn test() -> i64 {
-    return double(5) + 10
+    double(5) + 10
 }
 "#,
     );
@@ -451,7 +451,7 @@ fn void_function_result_used_as_value() {
         r#"
 fn do_nothing() {}
 fn test() -> i64 {
-    return do_nothing()
+    do_nothing()
 }
 "#
     ));
@@ -463,7 +463,7 @@ fn void_function_called_correctly() {
         r#"
 fn do_nothing() {}
 fn test() {
-    do_nothing()
+    do_nothing();
 }
 "#,
     );
@@ -475,9 +475,9 @@ fn recursive_function_returns_wrong_type_in_base() {
         r#"
 fn countdown(n: i64) -> i64 {
     if n == 0 {
-        return "done"
+        return "done";
     }
-    return countdown(n - 1)
+    countdown(n - 1)
 }
 "#
     ));
@@ -489,9 +489,9 @@ fn recursive_function_correct() {
         r#"
 fn factorial(n: i64) -> i64 {
     if n <= 1 {
-        return 1
+        return 1;
     }
-    return n * factorial(n - 1)
+    n * factorial(n - 1)
 }
 "#,
     );
@@ -504,7 +504,7 @@ fn vec_literal_element_type_is_substituted() {
     let program = infer_ok(
         r#"
 fn test() {
-    let v = vec<i32>[1, 2, 3]
+    let v: Vec<i32> = vec![1, 2, 3];
 }
 "#,
     );

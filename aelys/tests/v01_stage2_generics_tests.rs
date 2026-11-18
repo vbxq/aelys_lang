@@ -24,7 +24,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -217,36 +217,35 @@ impl Harness {
 }
 
 const LIBRARY_ON_I64: &str = r#"
-needs std.result
-needs std.slice
-needs std.sort
+use std::result;
+use std::slice;
+use std::sort;
 
-fn main() -> i64 {
-    let a: [i64;5] = [3, 1, 4, 1, 5]
-    println(slice.sum(a[..]))
-    println(result.some_or(slice.first(a[..]), -777))
-    println(result.some_or(slice.last(a[..]), -777))
-    println(result.some_or(slice.max(a[..]), -777))
-    println(result.some_or(slice.min(a[..]), -777))
-    println(slice.index_of(a[..], 4))
-    println(slice.index_of(a[..], 9))
-    println(result.some_or(slice.find(a[..], 5), -777))
-    if result.is_none(slice.find(a[..], 9)) { println(1) } else { println(0) }
-    if slice.contains(a[..], 1) { println(1) } else { println(0) }
-    if slice.eq(a[..], a[..]) { println(1) } else { println(0) }
-    if slice.is_sorted(a[..]) { println(1) } else { println(0) }
-    let mut b: [i64;5] = [3, 1, 4, 1, 5]
-    sort.insertion_sort(b[..])
-    if slice.is_sorted(b[..]) { println(1) } else { println(0) }
-    println(sort.binary_search(b[..], 4))
-    println(sort.binary_search(b[..], 9))
-    slice.reverse(b[..])
-    println(result.some_or(slice.first(b[..]), -777))
-    slice.swap(b[..], 0, 4)
-    println(result.some_or(slice.first(b[..]), -777))
-    slice.fill(b[..], 7)
-    println(slice.sum(b[..]))
-    return 0
+fn main() {
+    let a: [i64;5] = [3, 1, 4, 1, 5];
+    println!("{}", slice::sum(a[..]));
+    println!("{}", result::some_or(slice::first(a[..]), -777));
+    println!("{}", result::some_or(slice::last(a[..]), -777));
+    println!("{}", result::some_or(slice::max(a[..]), -777));
+    println!("{}", result::some_or(slice::min(a[..]), -777));
+    println!("{}", slice::index_of(a[..], 4));
+    println!("{}", slice::index_of(a[..], 9));
+    println!("{}", result::some_or(slice::find(a[..], 5), -777));
+    if result::is_none(slice::find(a[..], 9)) { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::contains(a[..], 1) { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::eq(a[..], a[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::is_sorted(a[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    let mut b: [i64;5] = [3, 1, 4, 1, 5];
+    sort::insertion_sort(b[..]);
+    if slice::is_sorted(b[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", sort::binary_search(b[..], 4));
+    println!("{}", sort::binary_search(b[..], 9));
+    slice::reverse(b[..]);
+    println!("{}", result::some_or(slice::first(b[..]), -777));
+    slice::swap(b[..], 0, 4);
+    println!("{}", result::some_or(slice::first(b[..]), -777));
+    slice::fill(b[..], 7);
+    println!("{}", slice::sum(b[..]));
 }
 "#;
 
@@ -263,35 +262,34 @@ fn s2_the_generic_library_answers_on_i64_at_every_level() {
 
 // the same entry points, on a second element type the old library could not name at all
 const LIBRARY_ON_CHAR: &str = r#"
-needs std.result
-needs std.slice
-needs std.sort
+use std::result;
+use std::slice;
+use std::sort;
 
-fn main() -> i64 {
-    let c: [char;5] = ['d', 'a', 'e', 'a', 'c']
-    println(result.some_or(slice.first(c[..]), 'z'))
-    println(result.some_or(slice.last(c[..]), 'z'))
-    println(result.some_or(slice.max(c[..]), 'z'))
-    println(result.some_or(slice.min(c[..]), 'z'))
-    println(slice.index_of(c[..], 'e'))
-    println(slice.index_of(c[..], 'q'))
-    println(result.some_or(slice.find(c[..], 'c'), -777))
-    if result.is_none(slice.find(c[..], 'q')) { println(1) } else { println(0) }
-    if slice.contains(c[..], 'a') { println(1) } else { println(0) }
-    if slice.eq(c[..], c[..]) { println(1) } else { println(0) }
-    if slice.is_sorted(c[..]) { println(1) } else { println(0) }
-    let mut d: [char;5] = ['d', 'a', 'e', 'a', 'c']
-    sort.insertion_sort(d[..])
-    if slice.is_sorted(d[..]) { println(1) } else { println(0) }
-    println(sort.binary_search(d[..], 'd'))
-    println(sort.binary_search(d[..], 'q'))
-    slice.reverse(d[..])
-    println(result.some_or(slice.first(d[..]), 'z'))
-    slice.swap(d[..], 0, 4)
-    println(result.some_or(slice.first(d[..]), 'z'))
-    slice.fill(d[..], 'q')
-    println(result.some_or(slice.last(d[..]), 'z'))
-    return 0
+fn main() {
+    let c: [char;5] = ['d', 'a', 'e', 'a', 'c'];
+    println!("{}", result::some_or(slice::first(c[..]), 'z'));
+    println!("{}", result::some_or(slice::last(c[..]), 'z'));
+    println!("{}", result::some_or(slice::max(c[..]), 'z'));
+    println!("{}", result::some_or(slice::min(c[..]), 'z'));
+    println!("{}", slice::index_of(c[..], 'e'));
+    println!("{}", slice::index_of(c[..], 'q'));
+    println!("{}", result::some_or(slice::find(c[..], 'c'), -777));
+    if result::is_none(slice::find(c[..], 'q')) { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::contains(c[..], 'a') { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::eq(c[..], c[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    if slice::is_sorted(c[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    let mut d: [char;5] = ['d', 'a', 'e', 'a', 'c'];
+    sort::insertion_sort(d[..]);
+    if slice::is_sorted(d[..]) { println!("{}", 1); } else { println!("{}", 0); }
+    println!("{}", sort::binary_search(d[..], 'd'));
+    println!("{}", sort::binary_search(d[..], 'q'));
+    slice::reverse(d[..]);
+    println!("{}", result::some_or(slice::first(d[..]), 'z'));
+    slice::swap(d[..], 0, 4);
+    println!("{}", result::some_or(slice::first(d[..]), 'z'));
+    slice::fill(d[..], 'q');
+    println!("{}", result::some_or(slice::last(d[..]), 'z'));
 }
 "#;
 
@@ -308,22 +306,21 @@ fn s2_the_generic_library_answers_on_char_at_every_level() {
 
 // two element types in one program: the monomorphiser has to keep the two bodies apart
 const TWO_ELEMENT_TYPES_IN_ONE_PROGRAM: &str = r#"
-needs std.result
-needs std.slice
-needs std.sort
+use std::result;
+use std::slice;
+use std::sort;
 
-fn main() -> i64 {
-    let mut a: [i64;4] = [4, 2, 3, 1]
-    let mut c: [char;4] = ['d', 'b', 'c', 'a']
-    sort.insertion_sort(a[..])
-    sort.insertion_sort(c[..])
-    println(result.some_or(slice.first(a[..]), -777))
-    println(result.some_or(slice.first(c[..]), 'z'))
-    println(sort.binary_search(a[..], 3))
-    println(sort.binary_search(c[..], 'c'))
-    println(slice.index_of(a[..], 2))
-    println(slice.index_of(c[..], 'b'))
-    return 0
+fn main() {
+    let mut a: [i64;4] = [4, 2, 3, 1];
+    let mut c: [char;4] = ['d', 'b', 'c', 'a'];
+    sort::insertion_sort(a[..]);
+    sort::insertion_sort(c[..]);
+    println!("{}", result::some_or(slice::first(a[..]), -777));
+    println!("{}", result::some_or(slice::first(c[..]), 'z'));
+    println!("{}", sort::binary_search(a[..], 3));
+    println!("{}", sort::binary_search(c[..], 'c'));
+    println!("{}", slice::index_of(a[..], 2));
+    println!("{}", slice::index_of(c[..], 'b'));
 }
 "#;
 
@@ -340,46 +337,45 @@ fn s2_two_element_types_in_one_program_keep_their_own_answers() {
 
 // the witness is the compile-time fence, the rc counter is not level-invariant on this repo
 const NOGC_FENCE_ON_BOTH_ELEMENTS: &str = r#"
-needs std.result
-needs std.slice
-needs std.sort
+use std::result;
+use std::slice;
+use std::sort;
 
 nogc fn every_entry_point(r: &[i64], w: &mut [i64], c: &[char], d: &mut [char]) -> i64 {
-    let mut acc: i64 = 0
-    acc = acc + slice.sum(r)
-    acc = acc + result.some_or(slice.first(r), 0)
-    acc = acc + result.some_or(slice.last(r), 0)
-    acc = acc + result.some_or(slice.max(r), 0)
-    acc = acc + result.some_or(slice.min(r), 0)
-    acc = acc + slice.index_of(r, 3)
-    acc = acc + result.some_or(slice.find(r, 3), 0)
-    if slice.contains(r, 3) { acc = acc + 1 }
-    if slice.eq(r, r) { acc = acc + 1 }
-    if slice.is_sorted(r) { acc = acc + 1 }
-    slice.fill(w, 2)
-    slice.swap(w, 0, 3)
-    slice.reverse(w)
-    sort.insertion_sort(w)
-    acc = acc + sort.binary_search(w, 2)
-    acc = acc + slice.index_of(c, 'c')
-    if slice.contains(c, 'a') { acc = acc + 1 }
-    if slice.eq(c, c) { acc = acc + 1 }
-    if slice.is_sorted(c) { acc = acc + 1 }
-    slice.fill(d, 'q')
-    slice.swap(d, 0, 2)
-    slice.reverse(d)
-    sort.insertion_sort(d)
-    if result.is_some(slice.max(d)) { acc = acc + 1 }
-    return acc
+    let mut acc: i64 = 0;
+    acc = acc + slice::sum(r);
+    acc = acc + result::some_or(slice::first(r), 0);
+    acc = acc + result::some_or(slice::last(r), 0);
+    acc = acc + result::some_or(slice::max(r), 0);
+    acc = acc + result::some_or(slice::min(r), 0);
+    acc = acc + slice::index_of(r, 3);
+    acc = acc + result::some_or(slice::find(r, 3), 0);
+    if slice::contains(r, 3) { acc = acc + 1; }
+    if slice::eq(r, r) { acc = acc + 1; }
+    if slice::is_sorted(r) { acc = acc + 1; }
+    slice::fill(w, 2);
+    slice::swap(w, 0, 3);
+    slice::reverse(w);
+    sort::insertion_sort(w);
+    acc = acc + sort::binary_search(w, 2);
+    acc = acc + slice::index_of(c, 'c');
+    if slice::contains(c, 'a') { acc = acc + 1; }
+    if slice::eq(c, c) { acc = acc + 1; }
+    if slice::is_sorted(c) { acc = acc + 1; }
+    slice::fill(d, 'q');
+    slice::swap(d, 0, 2);
+    slice::reverse(d);
+    sort::insertion_sort(d);
+    if result::is_some(slice::max(d)) { acc = acc + 1; }
+    acc
 }
 
-fn main() -> i64 {
-    let a: [i64;5] = [1, 2, 3, 4, 5]
-    let mut b: [i64;4] = [0, 0, 0, 0]
-    let c: [char;3] = ['a', 'b', 'c']
-    let mut d: [char;3] = ['x', 'y', 'z']
-    println(every_entry_point(a[..], b[..], c[..], d[..]))
-    return 0
+fn main() {
+    let a: [i64;5] = [1, 2, 3, 4, 5];
+    let mut b: [i64;4] = [0, 0, 0, 0];
+    let c: [char;3] = ['a', 'b', 'c'];
+    let mut d: [char;3] = ['x', 'y', 'z'];
+    println!("{}", every_entry_point(a[..], b[..], c[..], d[..]));
 }
 "#;
 
@@ -391,16 +387,15 @@ fn s2_the_whole_generic_library_stays_callable_from_nogc() {
 }
 
 const SORT_STRINGS_SURVIVES: &str = r#"
-needs std.sort
+use std::sort;
 
-fn main() -> i64 {
-    let mut s: [string;4] = ["pear", "apple", "fig", "date"]
-    sort.strings(s[..])
-    println(s[0])
-    println(s[1])
-    println(s[2])
-    println(s[3])
-    return 0
+fn main() {
+    let mut s: [String;4] = ["pear", "apple", "fig", "date"];
+    sort::strings(s[..]);
+    println!("{}", s[0]);
+    println!("{}", s[1]);
+    println!("{}", s[2]);
+    println!("{}", s[3]);
 }
 "#;
 
@@ -416,13 +411,12 @@ fn s2_sort_strings_survives_as_the_generic_sort_on_strings() {
 }
 
 const INSERTION_SORT_ON_STRINGS: &str = r#"
-needs std.sort
+use std::sort;
 
-fn main() -> i64 {
-    let mut s: [string;3] = ["b", "c", "a"]
-    sort.insertion_sort(s[..])
-    println("{s[0]}{s[1]}{s[2]}")
-    return 0
+fn main() {
+    let mut s: [String;3] = ["b", "c", "a"];
+    sort::insertion_sort(s[..]);
+    println!("{}{}{}", s[0], s[1], s[2]);
 }
 "#;
 
@@ -434,13 +428,12 @@ fn s2_the_generic_sort_takes_a_string_slice() {
 }
 
 const ORDER_ON_A_STRING: &str = r#"
-fn below<T: ord>(a: T, b: T) -> bool { return a < b }
+fn below<T: Ord>(a: T, b: T) -> bool { a < b }
 
-fn main() -> i64 {
-    println(below("a", "b"))
-    println(below("ab", "a"))
-    println(below("é", "ê"))
-    return 0
+fn main() {
+    println!("{}", below("a", "b"));
+    println!("{}", below("ab", "a"));
+    println!("{}", below("é", "ê"));
 }
 "#;
 
@@ -451,14 +444,13 @@ fn s2_the_ord_bound_accepts_string_and_orders_by_bytes() {
 }
 
 const SLICE_ELEMENT_BINDS_THE_TYPE_PARAMETER: &str = r#"
-fn first<T>(s: &[T]) -> T { return s[0] }
+fn first<T>(s: &[T]) -> T { s[0] }
 
-fn main() -> i64 {
-    let a: [i64;3] = [7, 8, 9]
-    println(first(a[..]))
-    let c: [char;3] = ['p', 'q', 'r']
-    println(first(c[..]))
-    return 0
+fn main() {
+    let a: [i64;3] = [7, 8, 9];
+    println!("{}", first(a[..]));
+    let c: [char;3] = ['p', 'q', 'r'];
+    println!("{}", first(c[..]));
 }
 "#;
 
@@ -475,12 +467,11 @@ fn s2_unification_descends_into_the_element_of_a_slice() {
 
 // descending into the element must not unify the mutability away
 const SHARED_SLICE_INTO_A_MUT_PARAMETER: &str = r#"
-fn zap<T>(s: &mut [T]) { s[0] = s[1] }
+fn zap<T>(s: &mut [T]) { s[0] = s[1]; }
 
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    zap(a[..])
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    zap(a[..]);
 }
 "#;
 
@@ -496,13 +487,12 @@ fn s2_a_shared_slice_still_cannot_reach_a_mut_slice_parameter() {
 }
 
 const MUT_SLICE_STILL_REACHES_A_MUT_PARAMETER: &str = r#"
-fn zap<T>(s: &mut [T]) { s[0] = s[1] }
+fn zap<T>(s: &mut [T]) { s[0] = s[1]; }
 
-fn main() -> i64 {
-    let mut a: [i64;3] = [1, 2, 3]
-    zap(a[..])
-    println(a[0])
-    return 0
+fn main() {
+    let mut a: [i64;3] = [1, 2, 3];
+    zap(a[..]);
+    println!("{}", a[0]);
 }
 "#;
 
@@ -518,11 +508,11 @@ fn s2_a_mut_slice_still_reaches_a_mut_slice_parameter() {
 }
 
 const EQUALITY_ON_AN_UNBOUNDED_TYPE_PARAMETER: &str = r#"
-fn same<T>(a: T, b: T) -> bool { return a == b }
+use std::process::ExitCode; fn same<T>(a: T, b: T) -> bool { a == b }
 
-fn main() -> i64 {
-    if same(1, 1) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    if same(1, 1) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -541,11 +531,11 @@ fn s2_equality_on_an_unbounded_type_parameter_names_the_missing_bound() {
 }
 
 const ORDER_ON_AN_UNBOUNDED_TYPE_PARAMETER: &str = r#"
-fn below<T>(a: T, b: T) -> bool { return a < b }
+use std::process::ExitCode; fn below<T>(a: T, b: T) -> bool { a < b }
 
-fn main() -> i64 {
-    if below(1, 2) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    if below(1, 2) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -593,15 +583,14 @@ fn s2_the_old_wrong_refusals_are_gone() {
 }
 
 const EQ_BOUND_IS_ENOUGH_FOR_EQUALITY: &str = r#"
-fn same<T: eq>(a: T, b: T) -> bool { return a == b }
+fn same<T: PartialEq>(a: T, b: T) -> bool { a == b }
 
-fn main() -> i64 {
-    if same(1, 1) { println(1) }
-    if same('a', 'a') { println(2) }
-    if same("x", "x") { println(3) }
-    if same(true, true) { println(4) }
-    if same(1.5, 1.5) { println(5) }
-    return 0
+fn main() {
+    if same(1, 1) { println!("{}", 1); }
+    if same('a', 'a') { println!("{}", 2); }
+    if same("x", "x") { println!("{}", 3); }
+    if same(true, true) { println!("{}", 4); }
+    if same(1.5, 1.5) { println!("{}", 5); }
 }
 "#;
 
@@ -617,15 +606,14 @@ fn s2_the_eq_bound_answers_on_everything_the_language_compares() {
 }
 
 const ORD_BOUND_IS_ENOUGH_FOR_ORDER: &str = r#"
-fn below<T: ord>(a: T, b: T) -> bool { return a < b }
-fn same_or_below<T: ord>(a: T, b: T) -> bool { return a <= b and a == b or true }
+fn below<T: Ord>(a: T, b: T) -> bool { a < b }
+fn same_or_below<T: Ord>(a: T, b: T) -> bool { a <= b && a == b || true }
 
-fn main() -> i64 {
-    if below(1, 2) { println(1) }
-    if below('a', 'b') { println(2) }
-    if below(1.5, 2.5) { println(3) }
-    if same_or_below(1, 1) { println(4) }
-    return 0
+fn main() {
+    if below(1, 2) { println!("{}", 1); }
+    if below('a', 'b') { println!("{}", 2); }
+    if below(1.5, 2.5) { println!("{}", 3); }
+    if same_or_below(1, 1) { println!("{}", 4); }
 }
 "#;
 
@@ -641,29 +629,28 @@ fn s2_the_ord_bound_implies_eq() {
 }
 
 const COMBINED_BOUNDS: &str = r#"
-nogc fn ranked<T: nogc + ord>(s: &mut [T]) -> i64 {
-    let mut i: i64 = 1
-    while i < s.len {
-        let x: T = s[i]
-        let mut j: i64 = i - 1
-        while j >= 0 and s[j] > x {
-            s[j + 1] = s[j]
-            j = j - 1
+nogc fn ranked<T: nogc + Ord>(s: &mut [T]) -> i64 {
+    let mut i: i64 = 1;
+    while i < s.len() {
+        let x: T = s[i];
+        let mut j: i64 = i - 1;
+        while j >= 0 && s[j] > x {
+            s[j + 1] = s[j];
+            j = j - 1;
         }
-        s[j + 1] = x
-        i = i + 1
+        s[j + 1] = x;
+        i = i + 1;
     }
-    return s.len
+    s.len()
 }
 
-fn main() -> i64 {
-    let mut a: [i64;3] = [3, 1, 2]
-    println(ranked(a[..]))
-    println(a[0])
-    let mut c: [char;3] = ['c', 'a', 'b']
-    println(ranked(c[..]))
-    println(c[0])
-    return 0
+fn main() {
+    let mut a: [i64;3] = [3, 1, 2];
+    println!("{}", ranked(a[..]));
+    println!("{}", a[0]);
+    let mut c: [char;3] = ['c', 'a', 'b'];
+    println!("{}", ranked(c[..]));
+    println!("{}", c[0]);
 }
 "#;
 
@@ -675,9 +662,9 @@ fn s2_bounds_combine_with_a_plus() {
 }
 
 const AN_INVENTED_BOUND: &str = r#"
-fn f<T: hash>(a: T) -> bool { return true }
+fn f<T: hash>(a: T) -> bool { true }
 
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 #[test]
@@ -692,16 +679,15 @@ fn s2_an_invented_bound_is_refused_by_naming_the_three_that_exist() {
 }
 
 const EQ_AND_ORD_ARE_STILL_ORDINARY_NAMES: &str = r#"
-nogc fn eq(a: i64, b: i64) -> bool { return a == b }
-nogc fn ord(c: char) -> bool { return c > 'a' }
+nogc fn eq(a: i64, b: i64) -> bool { a == b }
+nogc fn ord(c: char) -> bool { c > 'a' }
 
-fn main() -> i64 {
-    let eq2: i64 = 3
-    let ord2: i64 = 4
-    if eq(eq2, 3) { println(1) }
-    if ord('b') { println(2) }
-    println(eq2 + ord2)
-    return 0
+fn main() {
+    let eq2: i64 = 3;
+    let ord2: i64 = 4;
+    if eq(eq2, 3) { println!("{}", 1); }
+    if ord('b') { println!("{}", 2); }
+    println!("{}", eq2 + ord2);
 }
 "#;
 
@@ -717,15 +703,15 @@ fn s2_eq_and_ord_did_not_become_keywords() {
 }
 
 const A_STRUCT_SATISFIES_NEITHER: &str = r#"
-struct P { x: i64 }
+use std::process::ExitCode; struct P { x: i64 }
 
-fn same<T: eq>(a: T, b: T) -> bool { return a == b }
+fn same<T: PartialEq>(a: T, b: T) -> bool { a == b }
 
-fn main() -> i64 {
-    let p: P = P { x: 1 }
-    let q: P = P { x: 1 }
-    if same(p, q) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    let p: P = P { x: 1 };
+    let q: P = P { x: 1 };
+    if same(p, q) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -741,13 +727,13 @@ fn s2_a_struct_satisfies_no_bound() {
 }
 
 const A_VEC_SATISFIES_NEITHER: &str = r#"
-fn same<T: eq>(a: T, b: T) -> bool { return a == b }
+use std::process::ExitCode; fn same<T: PartialEq>(a: T, b: T) -> bool { a == b }
 
-fn main() -> i64 {
-    let v: Vec<i64> = Vec::new()
-    let w: Vec<i64> = Vec::new()
-    if same(v, w) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    let v: Vec<i64> = Vec::new();
+    let w: Vec<i64> = Vec::new();
+    if same(v, w) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -764,21 +750,20 @@ fn s2_a_vec_satisfies_no_bound() {
 
 // a bounded generic may hand its own parameter to another one carrying the same bound
 const A_BOUND_PROPAGATES_BETWEEN_GENERICS: &str = r#"
-nogc fn idx<T: eq>(s: &[T], x: T) -> i64 {
-    for i in 0..s.len {
-        if s[i] == x { return i }
+nogc fn idx<T: PartialEq>(s: &[T], x: T) -> i64 {
+    for i in 0..s.len() {
+        if s[i] == x { return i; }
     }
-    return -1
+    -1
 }
 
-nogc fn has<T: eq>(s: &[T], x: T) -> bool { return idx(s, x) >= 0 }
+nogc fn has<T: PartialEq>(s: &[T], x: T) -> bool { idx(s, x) >= 0 }
 
-fn main() -> i64 {
-    let a: [i64;3] = [1, 2, 3]
-    if has(a[..], 2) { println(1) }
-    let c: [char;3] = ['a', 'b', 'c']
-    if has(c[..], 'b') { println(2) }
-    return 0
+fn main() {
+    let a: [i64;3] = [1, 2, 3];
+    if has(a[..], 2) { println!("{}", 1); }
+    let c: [char;3] = ['a', 'b', 'c'];
+    if has(c[..], 'b') { println!("{}", 2); }
 }
 "#;
 
@@ -794,13 +779,13 @@ fn s2_a_bound_propagates_from_one_generic_to_the_next() {
 }
 
 const A_WEAKER_BOUND_DOES_NOT_REACH_A_STRONGER_ONE: &str = r#"
-nogc fn below<T: ord>(a: T, b: T) -> bool { return a < b }
+use std::process::ExitCode; nogc fn below<T: Ord>(a: T, b: T) -> bool { a < b }
 
-nogc fn same<T: eq>(a: T, b: T) -> bool { return below(a, b) }
+nogc fn same<T: PartialEq>(a: T, b: T) -> bool { below(a, b) }
 
-fn main() -> i64 {
-    if same(1, 2) { return 1 }
-    return 0
+fn main() -> ExitCode {
+    if same(1, 2) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS;
 }
 "#;
 
@@ -839,16 +824,16 @@ fn s2_the_eq_bound_holds_of_exactly_what_the_equality_operator_answers() {
         let direct = h.accepts_once(
             &format!("S2-DERIVE-EQ-DIRECT-{ty}"),
             &format!(
-                "fn main() -> i64 {{\n    let a: {ty} = {lo}\n    let b: {ty} = {hi}\n    \
-                 if a == b {{ return 1 }}\n    return 0\n}}\n"
+                "use std::process::ExitCode; fn main() -> ExitCode {{\n    let a: {ty} = {lo};\n    let b: {ty} = {hi};\n    \
+                 if a == b {{ return ExitCode::from(1); }}\n    return ExitCode::SUCCESS;\n}}\n"
             ),
         );
         let bounded = h.accepts_once(
             &format!("S2-DERIVE-EQ-BOUND-{ty}"),
             &format!(
-                "fn same<T: eq>(a: T, b: T) -> bool {{ return a == b }}\n\
-                 fn main() -> i64 {{\n    let a: {ty} = {lo}\n    let b: {ty} = {hi}\n    \
-                 if same(a, b) {{ return 1 }}\n    return 0\n}}\n"
+                "use std::process::ExitCode; fn same<T: PartialEq>(a: T, b: T) -> bool {{ a == b }}\n\
+                 fn main() -> ExitCode {{\n    let a: {ty} = {lo};\n    let b: {ty} = {hi};\n    \
+                 if same(a, b) {{ return ExitCode::from(1); }}\n    return ExitCode::SUCCESS;\n}}\n"
             ),
         );
         if direct != bounded {
@@ -874,16 +859,16 @@ fn s2_the_ord_bound_holds_of_exactly_what_the_order_operator_answers() {
         let direct = h.accepts_once(
             &format!("S2-DERIVE-ORD-DIRECT-{ty}"),
             &format!(
-                "fn main() -> i64 {{\n    let a: {ty} = {lo}\n    let b: {ty} = {hi}\n    \
-                 if a < b {{ return 1 }}\n    return 0\n}}\n"
+                "use std::process::ExitCode; fn main() -> ExitCode {{\n    let a: {ty} = {lo};\n    let b: {ty} = {hi};\n    \
+                 if a < b {{ return ExitCode::from(1); }}\n    return ExitCode::SUCCESS;\n}}\n"
             ),
         );
         let bounded = h.accepts_once(
             &format!("S2-DERIVE-ORD-BOUND-{ty}"),
             &format!(
-                "fn below<T: ord>(a: T, b: T) -> bool {{ return a < b }}\n\
-                 fn main() -> i64 {{\n    let a: {ty} = {lo}\n    let b: {ty} = {hi}\n    \
-                 if below(a, b) {{ return 1 }}\n    return 0\n}}\n"
+                "use std::process::ExitCode; fn below<T: Ord>(a: T, b: T) -> bool {{ a < b }}\n\
+                 fn main() -> ExitCode {{\n    let a: {ty} = {lo};\n    let b: {ty} = {hi};\n    \
+                 if below(a, b) {{ return ExitCode::from(1); }}\n    return ExitCode::SUCCESS;\n}}\n"
             ),
         );
         if direct != bounded {
@@ -910,13 +895,12 @@ fn s2_the_ord_bound_holds_of_exactly_what_the_order_operator_answers() {
 }
 
 const A_MANAGED_ELEMENT_IN_THE_GENERIC_LIBRARY: &str = r#"
-needs std.slice
+use std::slice;
 
-fn main() -> i64 {
-    let s: [string;2] = ["a", "b"]
-    println(slice.contains(s[..], "b"))
-    println(slice.contains(s[..], "c"))
-    return 0
+fn main() {
+    let s: [String;2] = ["a", "b"];
+    println!("{}", slice::contains(s[..], "b"));
+    println!("{}", slice::contains(s[..], "c"));
 }
 "#;
 
@@ -933,17 +917,16 @@ fn s2_a_string_element_reaches_the_generic_library() {
 
 // a generic that is not `nogc` takes a managed element, so the bound is what excludes it
 const A_MANAGED_ELEMENT_OUTSIDE_NOGC: &str = r#"
-fn idx<T: eq>(s: &[T], x: T) -> i64 {
-    for i in 0..s.len {
-        if s[i] == x { return i }
+fn idx<T: PartialEq>(s: &[T], x: T) -> i64 {
+    for i in 0..s.len() {
+        if s[i] == x { return i; }
     }
-    return -1
+    -1
 }
 
-fn main() -> i64 {
-    let s: [string;3] = ["a", "b", "c"]
-    println(idx(s[..], "b"))
-    return 0
+fn main() {
+    let s: [String;3] = ["a", "b", "c"];
+    println!("{}", idx(s[..], "b"));
 }
 "#;
 
@@ -1038,7 +1021,7 @@ fn s2_the_bound_refusal_explains_itself() {
             "E0732",
             vec![
                 "`==` and `!=` on a type parameter need `eq`",
-                "fn lt<T: ord>(a: T, b: T) -> bool { return a < b }",
+                "fn lt<T: Ord>(a: T, b: T) -> bool { a < b }",
                 "floats, `char` and `string`, which orders by its bytes like `str.compare`",
             ],
         ),

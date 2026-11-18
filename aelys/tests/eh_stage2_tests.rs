@@ -84,13 +84,12 @@ enum Result<T, E> {
 }
 fn risky(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(1)
+        return Result::Err(1);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
-fn main() -> i64 {
-    risky(5)
-    return 0
+fn main() {
+    risky(5);
 }
 "#;
 
@@ -101,13 +100,12 @@ enum Result<T, E> {
 }
 fn risky(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(1)
+        return Result::Err(1);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
-fn main() -> i64 {
-    discard risky(5)
-    return 0
+fn main() {
+    let _ = risky(5);
 }
 "#;
 
@@ -118,13 +116,12 @@ enum Result<T, E> {
 }
 fn risky(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(1)
+        return Result::Err(1);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
-fn main() -> i64 {
-    let r: Result<i64, i64> = risky(5)
-    return 0
+fn main() {
+    let r: Result<i64, i64> = risky(5);
 }
 "#;
 
@@ -135,16 +132,15 @@ enum Result<T, E> {
 }
 fn risky(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(1)
+        return Result::Err(1);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
 fn caller() -> Result<i64, i64> {
-    let v: i64 = risky(5)?
-    return Result::Ok(v)
+    let v: i64 = risky(5)?;
+    Result::Ok(v)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -179,15 +175,14 @@ enum Result<T, E> {
 }
 fn risky(x: i64) -> Result<i64, i64> {
     if x == 0 {
-        return Result::Err(1)
+        return Result::Err(1);
     }
-    return Result::Ok(x)
+    Result::Ok(x)
 }
 fn f() -> Result<i64, i64> {
     risky(5)
 }
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 "#;
 
@@ -216,11 +211,10 @@ enum Result<T, E> {
     Err(E),
 }
 fn make() -> Rc<i64> {
-    return Rc::new(42)
+    Rc::new(42)
 }
-fn main() -> i64 {
-    discard make()
-    return 0
+fn main() {
+    let _ = make();
 }
 "#;
 

@@ -258,10 +258,9 @@ fn group_surface_two_generic_enums_that_prefix_one_another_answer_the_same_way_f
     let src = "enum Q<T> { A(T) }\n\
                enum Q_ptr<T> { B(T), C(i64) }\n\
                \n\
-               fn main() -> i64 {\n\
-               \x20   let x: Q_ptr<i64> = Q_ptr::C(99)\n\
-               \x20   match x { Q_ptr::B(v) => { println(v) } Q_ptr::C(w) => { println(w) } }\n\
-               \x20   return 0\n\
+               fn main() {\n\
+               \x20   let x: Q_ptr<i64> = Q_ptr::C(99);\n\
+               \x20   match x { Q_ptr::B(v) => { println!(\"{}\", v); } Q_ptr::C(w) => { println!(\"{}\", w); } }\n\
                }\n";
     for (tag, opt) in LEVELS {
         let mut seen: Vec<String> = Vec::with_capacity(REPEATS);
@@ -372,12 +371,11 @@ fn group_surface_a_duplicated_global_is_refused_at_both_optimization_levels() {
     // the two levels read different values out of it, so one level alone cannot see the defect
     h.refuses(
         "dup_global",
-        "let g: i64 = 1\n\
-         let g: i64 = 2\n\
+        "static g: i64 = 1;\n\
+         static g: i64 = 2;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   println(g)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", g);\n\
          }\n",
         "E0204",
         "the name `g` is defined twice as a global",
@@ -390,10 +388,9 @@ fn group_surface_an_interpolation_that_goes_nowhere_allocates_nothing() {
     let _pin = pin_legs("interpolation counters", LEVELS.len() * 2);
     h.counted_row(
         "interp_alone",
-        "fn main() -> i64 {\n\
-         \x20   let n: i64 = 7\n\
-         \x20   println(\"{n}\")\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let n: i64 = 7;\n\
+         \x20   println!(\"{n}\");\n\
          }\n",
         "7\n",
         Some((0, 0)),
@@ -401,10 +398,9 @@ fn group_surface_an_interpolation_that_goes_nowhere_allocates_nothing() {
     );
     h.counted_row(
         "interp_joined",
-        "fn main() -> i64 {\n\
-         \x20   let n: i64 = 7\n\
-         \x20   println(\"é{n}\")\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let n: i64 = 7;\n\
+         \x20   println!(\"é{n}\");\n\
          }\n",
         "é7\n",
         Some((2, 2)),
@@ -418,9 +414,8 @@ fn group_surface_a_vec_temporary_read_for_its_length_is_freed() {
     let _pin = pin_legs("vec length temporary", LEVELS.len());
     h.counted_row(
         "vec_len_temp",
-        "fn main() -> i64 {\n\
-         \x20   println(Vec::len(vec[1, 2]))\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   println!(\"{}\", Vec::len(vec![1, 2]));\n\
          }\n",
         "2\n",
         Some((1, 1)),
@@ -449,11 +444,10 @@ fn group_surface_ends_with_does_not_abort_on_a_multi_byte_haystack() {
     let _pin = pin_legs("ends_with abort", LEVELS.len());
     h.value_row(
         "ends_with_abort",
-        "needs std.str\n\
+        "use std::str;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   if str.ends_with(\"éab\", \"b\") { println(1) } else { println(0) }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   if str::ends_with(\"éab\", \"b\") { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
          }\n",
         "1\n",
     );
@@ -465,11 +459,10 @@ fn group_surface_ends_with_answers_true_on_a_multi_byte_haystack() {
     let _pin = pin_legs("ends_with answer", LEVELS.len());
     h.value_row(
         "ends_with_answer",
-        "needs std.str\n\
+        "use std::str;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   if str.ends_with(\"éab\", \"ab\") { println(1) } else { println(0) }\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   if str::ends_with(\"éab\", \"ab\") { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
          }\n",
         "1\n",
     );
@@ -480,15 +473,14 @@ fn group_surface_an_interpolation_of_a_dead_local_is_refused() {
     let h = Harness::new();
     h.refuses(
         "dead_interp",
-        "fn main() -> i64 {\n\
-         \x20   let anchor: i64 = 42\n\
-         \x20   let mut r: &i64 = &anchor\n\
+        "fn main() {\n\
+         \x20   let anchor: i64 = 42;\n\
+         \x20   let mut r: &i64 = &anchor;\n\
          \x20   {\n\
-         \x20       let inner: i64 = 7\n\
-         \x20       r = &inner\n\
+         \x20       let inner: i64 = 7;\n\
+         \x20       r = &inner;\n\
          \x20   }\n\
-         \x20   println(\"{*r}\")\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", *r);\n\
          }\n",
         "E0722",
         "`inner` does not live long enough",
@@ -502,15 +494,14 @@ fn group_surface_a_match_arm_binder_of_a_dead_local_is_refused() {
         "dead_match_binder",
         "enum B { F(i64), G }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let anchor: i64 = 42\n\
-         \x20   let mut r: &i64 = &anchor\n\
+         fn main() {\n\
+         \x20   let anchor: i64 = 42;\n\
+         \x20   let mut r: &i64 = &anchor;\n\
          \x20   {\n\
-         \x20       let o: B = B::F(7)\n\
+         \x20       let o: B = B::F(7);\n\
          \x20       match o { B::F(t) => r = &t, B::G => r = &anchor }\n\
          \x20   }\n\
-         \x20   println(\"{*r}\")\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", *r);\n\
          }\n",
         "E0722",
         "`t` does not live long enough",
@@ -522,12 +513,11 @@ fn group_surface_a_missing_external_symbol_is_not_a_compiler_bug() {
     let h = Harness::new();
     h.refuses(
         "missing_extern",
-        "unsafe extern fn group_surface_no_such_symbol() -> i64\n\
+        "extern \"C\" { fn group_surface_no_such_symbol() -> i64; }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   if false { unsafe { println(group_surface_no_such_symbol()) } }\n\
-         \x20   println(1)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   if false { unsafe { println!(\"{}\", group_surface_no_such_symbol()); } }\n\
+         \x20   println!(\"{}\", 1);\n\
          }\n",
         "E0903",
         "add `-L <dir> -l <name>`",
@@ -541,15 +531,14 @@ fn group_surface_an_array_repeat_of_a_dead_local_is_refused() {
         "dead_array_repeat",
         "struct P { n: i64 }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let anchor: P = P{n: 7}\n\
-         \x20   let mut esc: [&P; 2] = [&anchor; 2]\n\
+         fn main() {\n\
+         \x20   let anchor: P = P{n: 7};\n\
+         \x20   let mut esc: [&P; 2] = [&anchor; 2];\n\
          \x20   {\n\
-         \x20       let inner: P = P{n: 42}\n\
-         \x20       esc = [&inner; 2]\n\
+         \x20       let inner: P = P{n: 42};\n\
+         \x20       esc = [&inner; 2];\n\
          \x20   }\n\
-         \x20   println((*esc[0]).n)\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", (*esc[0]).n);\n\
          }\n",
         "E0714",
         "references stored into aggregate containers",
@@ -561,18 +550,17 @@ fn group_surface_an_if_expression_carrying_a_dead_local_is_refused() {
     let h = Harness::new();
     h.refuses(
         "dead_if_expr",
-        "fn pick() -> bool { return true }\n\
+        "fn pick() -> bool { true }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let anchor: i64 = 7\n\
-         \x20   let c: bool = pick()\n\
-         \x20   let mut r: &i64 = &anchor\n\
+         fn main() {\n\
+         \x20   let anchor: i64 = 7;\n\
+         \x20   let c: bool = pick();\n\
+         \x20   let mut r: &i64 = &anchor;\n\
          \x20   {\n\
-         \x20       let inner: i64 = 42\n\
-         \x20       r = if c { &inner } else { &anchor }\n\
+         \x20       let inner: i64 = 42;\n\
+         \x20       r = if c { &inner } else { &anchor };\n\
          \x20   }\n\
-         \x20   println(\"{*r}\")\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", *r);\n\
          }\n",
         "E0722",
         "`inner` does not live long enough",
@@ -585,16 +573,15 @@ fn group_surface_an_i64_copied_out_of_a_slice_is_not_a_stored_reference() {
     let _pin = pin_legs("slice projection", LEVELS.len());
     h.value_row(
         "slice_projection",
-        "needs std.result\n\
+        "use std::result;\n\
          \n\
-         fn take(s: &[i64]) -> result.Option<i64> {\n\
-         \x20   return result.Option::Some(s[0])\n\
+         fn take(s: &[i64]) -> result::Option<i64> {\n\
+         \x20   result::Option::Some(s[0])\n\
          }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let a: [i64; 3] = [4, 5, 6]\n\
-         \x20   println(result.some_or(take(a[..]), -1))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: [i64; 3] = [4, 5, 6];\n\
+         \x20   println!(\"{}\", result::some_or(take(a[..]), -1));\n\
          }\n",
         "4\n",
     );
@@ -607,17 +594,16 @@ fn group_surface_a_slice_iterates() {
     h.value_row(
         "slice_for_each",
         "fn total(s: &[i64]) -> i64 {\n\
-         \x20   let mut acc: i64 = 0\n\
+         \x20   let mut acc: i64 = 0;\n\
          \x20   for x in s {\n\
-         \x20       acc = acc + x\n\
+         \x20       acc = acc + x;\n\
          \x20   }\n\
-         \x20   return acc\n\
+         \x20   acc\n\
          }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let a: [i64; 3] = [4, 5, 6]\n\
-         \x20   println(total(a[..]))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let a: [i64; 3] = [4, 5, 6];\n\
+         \x20   println!(\"{}\", total(a[..]));\n\
          }\n",
         "15\n",
     );
@@ -666,18 +652,17 @@ fn group_surface_a_module_resolves_through_an_include_root_and_only_through_it()
     fs::write(
         library.join("greet.aelys"),
         format!(
-            "needs std.io\n\
+            "use std::io;\n\
              \n\
-             pub fn hello() -> i64 {{ return io.print_out(\"{MULTI_BYTE}\") }}\n"
+             pub fn hello() -> i64 {{ io::print_out(\"{MULTI_BYTE}\") }}\n"
         ),
     )
     .expect("write library module");
 
-    let src = "needs greet\n\
+    let src = "mod greet;\n\
                \n\
-               fn main() -> i64 {\n\
-               \x20   println(greet.hello())\n\
-               \x20   return 0\n\
+               fn main() {\n\
+               \x20   println!(\"{}\", greet::hello());\n\
                }\n";
 
     for (tag, opt) in LEVELS {
@@ -708,10 +693,9 @@ fn group_surface_option_reaches_a_program_that_imports_nothing() {
     let _pin = pin_legs("prelude Option", LEVELS.len());
     h.value_row(
         "prelude_option",
-        "fn main() -> i64 {\n\
-         \x20   let o: Option<i64> = Some(9)\n\
-         \x20   match o { Some(v) => println(v), None => println(0) }\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let o: Option<i64> = Some(9);\n\
+         \x20   match o { Some(v) => println!(\"{}\", v), None => println!(\"{}\", 0) }\n\
          }\n",
         "9\n",
     );
@@ -723,9 +707,8 @@ fn group_surface_strings_order_with_the_operators_and_through_a_capability() {
     let _pin = pin_legs("string ordering", 2 * LEVELS.len());
     h.counted_row(
         "string_order_operator",
-        "fn main() -> i64 {\n\
-         \x20   if \"é\" < \"ê\" { println(1) } else { println(0) }\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   if \"é\" < \"ê\" { println!(\"{}\", 1); } else { println!(\"{}\", 0); }\n\
          }\n",
         "1\n",
         Some((0, 0)),
@@ -733,17 +716,16 @@ fn group_surface_strings_order_with_the_operators_and_through_a_capability() {
     );
     h.value_row(
         "string_order_capability",
-        "needs std.sort\n\
-         needs std.str\n\
+        "use std::sort;\n\
+         use std::str;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   let mut a: [string; 3] = [\"ê\", \"é\", \"e\"]\n\
-         \x20   sort.strings(a[..])\n\
-         \x20   println(a[0])\n\
-         \x20   println(a[1])\n\
-         \x20   println(a[2])\n\
-         \x20   println(str.compare(\"é\", \"ê\"))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   let mut a: [String; 3] = [\"ê\", \"é\", \"e\"];\n\
+         \x20   sort::strings(a[..]);\n\
+         \x20   println!(\"{}\", a[0]);\n\
+         \x20   println!(\"{}\", a[1]);\n\
+         \x20   println!(\"{}\", a[2]);\n\
+         \x20   println!(\"{}\", str::compare(\"é\", \"ê\"));\n\
          }\n",
         "e\né\nê\n-1\n",
     );
@@ -755,14 +737,13 @@ fn group_surface_a_vec_gives_back_and_a_missing_method_names_what_exists() {
     let _pin = pin_legs("Vec::pop", LEVELS.len());
     h.counted_row(
         "vec_pop",
-        "fn main() -> i64 {\n\
-         \x20   let mut v: Vec<i64> = vec[1, 2, 3]\n\
+        "fn main() {\n\
+         \x20   let mut v: Vec<i64> = vec![1, 2, 3];\n\
          \x20   match Vec::pop(v) {\n\
-         \x20       Some(x) => { println(x) }\n\
-         \x20       None => { println(0) }\n\
+         \x20       Some(x) => { println!(\"{}\", x); }\n\
+         \x20       None => { println!(\"{}\", 0); }\n\
          \x20   }\n\
-         \x20   println(Vec::len(v))\n\
-         \x20   return 0\n\
+         \x20   println!(\"{}\", Vec::len(v));\n\
          }\n",
         "3\n2\n",
         Some((1, 1)),
@@ -770,10 +751,9 @@ fn group_surface_a_vec_gives_back_and_a_missing_method_names_what_exists() {
     );
     h.refuses(
         "vec_unknown_method",
-        "fn main() -> i64 {\n\
-         \x20   let v: Vec<i64> = vec[1, 2]\n\
-         \x20   println(Vec::nope(v))\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let v: Vec<i64> = vec![1, 2];\n\
+         \x20   println!(\"{}\", Vec::nope(v));\n\
          }\n",
         "E0301",
         "unknown method 'nope' on Vec; supported:",
@@ -786,11 +766,10 @@ fn group_surface_the_most_negative_i64_is_a_literal() {
     let _pin = pin_legs("min i64", LEVELS.len());
     h.value_row(
         "min_i64",
-        "fn main() -> i64 {\n\
-         \x20   let x: i64 = -9223372036854775808\n\
-         \x20   println(x)\n\
-         \x20   println(x + 1)\n\
-         \x20   return 0\n\
+        "fn main() {\n\
+         \x20   let x: i64 = -9223372036854775808;\n\
+         \x20   println!(\"{}\", x);\n\
+         \x20   println!(\"{}\", x + 1);\n\
          }\n",
         "-9223372036854775808\n-9223372036854775807\n",
     );
@@ -801,12 +780,11 @@ fn group_surface_a_name_that_is_a_module_under_another_alias_says_so() {
     let h = Harness::new();
     h.refuses(
         "module_alias",
-        "needs std.math as m\n\
+        "use std::math as m;\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   println(m.abs(-5))\n\
-         \x20   println(math.abs(-6))\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", m::abs(-5));\n\
+         \x20   println!(\"{}\", math.abs(-6));\n\
          }\n",
         "E0623",
         "the module `std.math` is imported under the name `m`",
@@ -844,9 +822,8 @@ fn group_surface_a_struct_with_infinite_size_is_not_a_compiler_bug() {
         "infinite_struct",
         "struct Node { next: Node, v: i64 }\n\
          \n\
-         fn main() -> i64 {\n\
-         \x20   println(1)\n\
-         \x20   return 0\n\
+         fn main() {\n\
+         \x20   println!(\"{}\", 1);\n\
          }\n",
         "E0904",
         "struct `Node` has infinite size",
@@ -858,9 +835,8 @@ fn group_surface_a_main_with_a_parameter_is_not_a_compiler_bug() {
     let h = Harness::new();
     h.refuses(
         "main_with_param",
-        "fn main(x: i64) -> i64 {\n\
-         \x20   println(x)\n\
-         \x20   return 0\n\
+        "fn main(x: i64) {\n\
+         \x20   println!(\"{}\", x);\n\
          }\n",
         "E0904",
         "main must have no parameters",
@@ -954,13 +930,13 @@ fn group_surface_one_file_under_two_dotted_names_is_one_unit() {
     let legs = if cfg!(unix) { 2 } else { 1 };
     let _pin = pin_legs("two dotted names", LEVELS.len() * legs);
     let counter = format!(
-        "pub let mut n: i64 = 0\n\
+        "pub static mut n: i64 = 0;\n\
          \n\
-         pub fn bump() {{ n = n + 1 }}\n\
+         pub fn bump() {{ n = n + 1; }}\n\
          \n\
-         pub fn read() -> i64 {{ return n }}\n\
+         pub fn read() -> i64 {{ n }}\n\
          \n\
-         pub fn label() -> string {{ return \"{MULTI_BYTE}\" }}\n"
+         pub fn label() -> String {{ \"{MULTI_BYTE}\" }}\n"
     );
     let expected = format!("3\n3\n{MULTI_BYTE}\n");
 

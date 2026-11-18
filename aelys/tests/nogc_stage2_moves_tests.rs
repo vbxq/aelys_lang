@@ -74,11 +74,10 @@ fn count_lines(stdout: &str, needle: &str) -> usize {
 fn use_after_move_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    println(a.id)
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    println!("{}", a.id);
 }
 "#,
     );
@@ -93,11 +92,10 @@ fn main() -> i64 {
 fn double_move_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 1}
-    let b = a
-    let c = a
-    return 0
+fn main() {
+    let a = Resource{id: 1};
+    let b = a;
+    let c = a;
 }
 "#,
     );
@@ -112,14 +110,13 @@ fn main() -> i64 {
 fn use_of_maybe_moved_is_rejected() {
     let err = reject(
         r#"
-fn main() -> i64 {
-    let cond = true
-    let a = Resource{id: 1}
+fn main() {
+    let cond = true;
+    let a = Resource{id: 1};
     if cond {
-        let b = a
+        let b = a;
     }
-    println(a.id)
-    return 0
+    println!("{}", a.id);
 }
 "#,
     );
@@ -134,19 +131,17 @@ fn main() -> i64 {
 fn affine_deterministic_destruction_no_drop_of_moved_source() {
     accepts(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 3}
-    let b = a
-    return 0
+fn main() {
+    let a = Resource{id: 3};
+    let b = a;
 }
 "#,
     );
     let Some((code, out)) = run_stdout(
         r#"
-fn main() -> i64 {
-    let a = Resource{id: 3}
-    let b = a
-    return 0
+fn main() {
+    let a = Resource{id: 3};
+    let b = a;
 }
 "#,
     ) else {
@@ -164,12 +159,11 @@ fn main() -> i64 {
 fn move_then_reassign_runs() {
     let Some((code, out)) = run_stdout(
         r#"
-fn main() -> i64 {
-    let mut a = Resource{id: 1}
-    let b = a
-    a = Resource{id: 2}
-    println(a.id)
-    return 0
+fn main() {
+    let mut a = Resource{id: 1};
+    let b = a;
+    a = Resource{id: 2};
+    println!("{}", a.id);
 }
 "#,
     ) else {
@@ -195,16 +189,15 @@ fn discriminator_early_return_no_double_drop() {
 fn consume(x: Resource) {
 }
 fn f(c: bool) {
-    let a = Resource{id: 1}
+    let a = Resource{id: 1};
     if c {
-        consume(a)
-        return
+        consume(a);
+        return;
     }
-    println(a.id)
+    println!("{}", a.id);
 }
-fn main() -> i64 {
-    f(true)
-    return 0
+fn main() {
+    f(true);
 }
 "#,
     ) else {
@@ -223,11 +216,10 @@ fn discriminator_reassignment_no_leak() {
     // installs id 2; scope end drops it (prints 2). both values are dropped, none leaked.
     let Some((code, out)) = run_stdout(
         r#"
-fn main() -> i64 {
-    let mut a = Resource{id: 1}
-    a = Resource{id: 2}
-    println(a.id)
-    return 0
+fn main() {
+    let mut a = Resource{id: 1};
+    a = Resource{id: 2};
+    println!("{}", a.id);
 }
 "#,
     ) else {
@@ -250,16 +242,16 @@ fn main() -> i64 {
 fn affine_drop_in_if_expr_branch() {
     let Some((code, out)) = run_stdout(
         r#"
-fn main() -> i64 {
-    let c = true
+use std::process::ExitCode; fn main() -> ExitCode {
+    let c = true;
     let x = if c {
-        let r = Resource{id: 43}
-        println(100 + r.id)
+        let r = Resource{id: 43};
+        println!("{}", 100 + r.id);
         1
     } else {
         2
-    }
-    return x
+    };
+    return ExitCode::from(x as u8);
 }
 "#,
     ) else {
@@ -281,13 +273,12 @@ fn main() -> i64 {
 fn affine_drop_order_is_reverse() {
     let Some((code, out)) = run_stdout(
         r#"
-fn main() -> i64 {
+fn main() {
     {
-        let a = Resource{id: 1}
-        let b = Resource{id: 2}
-        let c = Resource{id: 3}
+        let a = Resource{id: 1};
+        let b = Resource{id: 2};
+        let c = Resource{id: 3};
     }
-    return 0
 }
 "#,
     ) else {

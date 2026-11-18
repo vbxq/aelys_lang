@@ -14,14 +14,14 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
 
 // gates the call site on , so every call below carries its own block
 const LABS: &str =
-    "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return labs(-37) }\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(labs(-37) as u8); }\n}\n";
 const FFSL: &str =
-    "unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    unsafe { return ffsl(1024) }\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn ffsl(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    unsafe { return ExitCode::from(ffsl(1024) as u8); }\n}\n";
 
 const LABS_BARE: &str =
-    "unsafe extern fn labs(x: i64) -> i64\n\nfn main() -> i64 {\n    return labs(-37)\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn labs(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    return ExitCode::from(labs(-37) as u8);\n}\n";
 const FFSL_BARE: &str =
-    "unsafe extern fn ffsl(x: i64) -> i64\n\nfn main() -> i64 {\n    return ffsl(1024)\n}\n";
+    "use std::process::ExitCode; extern \"C\" { fn ffsl(x: i64) -> i64; }\n\nfn main() -> ExitCode {\n    return ExitCode::from(ffsl(1024) as u8);\n}\n";
 
 #[test]
 fn f3_1_bis_the_old_bare_spelling_of_the_libc_call_is_now_e0617() {

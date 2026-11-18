@@ -55,9 +55,9 @@ fn a5_bug001_undefined_assign_no_cascade() {
     let count = sema_error_count(
         r#"
 fn test() {
-    undefined_var = 42
-    let x = undefined_var
-    let y = undefined_var
+    undefined_var = 42;
+    let x = undefined_var;
+    let y = undefined_var;
 }
 "#,
     );
@@ -73,7 +73,7 @@ fn a5_bug001_single_undefined_single_error() {
     let count = sema_error_count(
         r#"
 fn test() {
-    bad = 1
+    bad = 1;
 }
 "#,
     );
@@ -88,9 +88,9 @@ fn a5_bug002_undefined_read_no_cascade() {
     let count = sema_error_count(
         r#"
 fn test() {
-    let x = ghost + 1
-    let y = ghost * 2
-    let z = ghost
+    let x = ghost + 1;
+    let y = ghost * 2;
+    let z = ghost;
 }
 "#,
     );
@@ -107,8 +107,8 @@ fn a3_bug001_narrowing_through_variable_i8() {
         sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 100
-    return x
+    let x = 100;
+    x
 }
 "#
         ),
@@ -122,8 +122,8 @@ fn a3_bug001_narrowing_through_variable_i32() {
         sema_ok(
             r#"
 fn f() -> i32 {
-    let x = 100
-    return x
+    let x = 100;
+    x
 }
 "#
         ),
@@ -137,9 +137,9 @@ fn a3_bug001_narrowing_chain() {
         sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 42
-    let y = x
-    return y
+    let x = 42;
+    let y = x;
+    y
 }
 "#
         ),
@@ -153,8 +153,8 @@ fn a3_bug001_overflow_through_variable() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 200
-    return x
+    let x = 200;
+    x
 }
 "#
         ),
@@ -169,9 +169,9 @@ fn a3_bug001_mutable_not_tracked() {
         sema_ok(
             r#"
 fn f() -> i64 {
-    let mut x = 100
-    x = 999999999
-    return x
+    let mut x = 100;
+    x = 999999999;
+    x
 }
 "#
         ),
@@ -185,8 +185,8 @@ fn a3_bug001_negative_literal_through_variable() {
         sema_ok(
             r#"
 fn f() -> i8 {
-    let x = -1
-    return x
+    let x = -1;
+    x
 }
 "#
         ),
@@ -200,8 +200,8 @@ fn if_else_literal_init_is_not_narrowed_i32() {
         !sema_ok(
             r#"
 fn f() -> i32 {
-    let x = if true { 42 } else { 100 }
-    return x
+    let x = if true { 42 } else { 100 };
+    x
 }
 "#
         ),
@@ -215,8 +215,8 @@ fn if_else_literal_init_is_not_narrowed_i8() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = if true { 10 } else { 20 }
-    return x
+    let x = if true { 10 } else { 20 };
+    x
 }
 "#
         ),
@@ -230,7 +230,7 @@ fn if_else_direct_return_narrowing() {
         sema_ok(
             r#"
 fn f() -> i32 {
-    return if true { 1 } else { 2 }
+    if true { 1 } else { 2 }
 }
 "#
         ),
@@ -244,8 +244,8 @@ fn if_else_literal_init_is_not_narrowed_i16() {
         !sema_ok(
             r#"
 fn f() -> i16 {
-    let x = if true { 300 } else { 500 }
-    return x
+    let x = if true { 300 } else { 500 };
+    x
 }
 "#
         ),
@@ -259,8 +259,8 @@ fn if_else_overflow_detected() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = if true { 10 } else { 200 }
-    return x
+    let x = if true { 10 } else { 200 };
+    x
 }
 "#
         ),
@@ -274,8 +274,8 @@ fn if_else_same_concrete_type_no_fresh_var() {
         sema_ok(
             r#"
 fn f() -> i64 {
-    let x = if true { 42 } else { 100 }
-    return x
+    let x = if true { 42 } else { 100 };
+    x
 }
 "#
         ),
@@ -289,8 +289,8 @@ fn if_else_different_types_rejected() {
         !sema_ok(
             r#"
 fn f() -> i64 {
-    let x = if true { 42 } else { "hello" }
-    return x
+    let x = if true { 42 } else { "hello" };
+    x
 }
 "#
         ),
@@ -304,11 +304,11 @@ fn if_without_else_not_affected() {
         sema_ok(
             r#"
 fn f() -> i64 {
-    let x = 10
+    let x = 10;
     if x > 5 {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#
         ),
@@ -321,14 +321,14 @@ fn normal_code_compiles_through_air_pipeline() {
     assert!(
         air_pipeline_ok(
             r#"
-fn add(a: i64, b: i64) -> i64 {
-    return a + b
+use std::process::ExitCode; fn add(a: i64, b: i64) -> i64 {
+    a + b
 }
 
-fn main() -> i64 {
-    let x = 42
-    let y = add(x, 10)
-    return y
+fn main() -> ExitCode {
+    let x = 42;
+    let y = add(x, 10);
+    return ExitCode::from(y as u8);
 }
 "#
         ),
@@ -342,8 +342,8 @@ fn function_with_if_else_compiles_through_air() {
         air_pipeline_ok(
             r#"
 fn f(x: i64) -> i64 {
-    let result = if x > 0 { x } else { 0 }
-    return result
+    let result = if x > 0 { x } else { 0 };
+    result
 }
 "#
         ),
@@ -356,22 +356,22 @@ fn multi_function_pipeline_no_var_leak() {
     assert!(
         air_pipeline_ok(
             r#"
-fn double(n: i64) -> i64 {
-    return n * 2
+use std::process::ExitCode; fn double(n: i64) -> i64 {
+    n * 2
 }
 
 fn is_positive(n: i64) -> bool {
-    return n > 0
+    n > 0
 }
 
-fn main() -> i64 {
-    let a = 5
-    let b = double(a)
-    let flag = is_positive(b)
+fn main() -> ExitCode {
+    let a = 5;
+    let b = double(a);
+    let flag = is_positive(b);
     if flag {
-        return b
+        return ExitCode::from(b as u8);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 "#
         ),
@@ -385,10 +385,10 @@ fn oneof_no_leak_on_binary_op() {
         sema_ok(
             r#"
 fn f(a: i64, b: i64) -> i64 {
-    let c = a + b
-    let d = c * 2
-    let e = d - a
-    return e
+    let c = a + b;
+    let d = c * 2;
+    let e = d - a;
+    e
 }
 "#
         ),
@@ -400,8 +400,8 @@ fn f(a: i64, b: i64) -> i64 {
 fn oneof_no_corruption_on_type_mismatch() {
     let count = sema_error_count(
         r#"
-fn f(x: string) -> i64 {
-    return x + 1
+fn f(x: String) -> i64 {
+    x + 1
 }
 "#,
     );
@@ -418,9 +418,9 @@ fn oneof_successful_match_preserves_bindings() {
         sema_ok(
             r#"
 fn f(a: i32, b: i32) -> i32 {
-    let x = a + b
-    let y = x * a
-    return y - b
+    let x = a + b;
+    let y = x * a;
+    y - b
 }
 "#
         ),
@@ -434,10 +434,10 @@ fn oneof_multiple_ops_same_function() {
         air_pipeline_ok(
             r#"
 fn compute(a: i64, b: i64) -> i64 {
-    let sum = a + b
-    let diff = a - b
-    let prod = sum * diff
-    return prod
+    let sum = a + b;
+    let diff = a - b;
+    let prod = sum * diff;
+    prod
 }
 "#
         ),
@@ -450,7 +450,7 @@ fn oneof_failed_match_no_pollution() {
     let count = sema_error_count(
         r#"
 fn f(x: bool) -> bool {
-    return x + true
+    x + true
 }
 "#,
     );
@@ -466,11 +466,11 @@ fn generic_function_called_with_different_types() {
     assert!(
         sema_ok(
             r#"
-fn identity<T>(x: T) -> T { return x }
+fn identity<T>(x: T) -> T { x }
 
 fn main() {
-    let a = identity(42)
-    let b = identity("hello")
+    let a = identity(42);
+    let b = identity("hello");
 }
 "#
         ),
@@ -483,11 +483,11 @@ fn generic_function_preserves_return_type_per_call() {
     assert!(
         air_pipeline_ok(
             r#"
-fn identity<T>(x: T) -> T { return x }
+use std::process::ExitCode; fn identity<T>(x: T) -> T { x }
 
-fn main() -> i64 {
-    let a = identity(42)
-    return a
+fn main() -> ExitCode {
+    let a = identity(42);
+    return ExitCode::from(a as u8);
 }
 "#
         ),
@@ -500,10 +500,10 @@ fn unannotated_function_infers_single_type() {
     assert!(
         sema_ok(
             r#"
-fn double(x) -> i64 { return x * 2 }
+use std::process::ExitCode; fn double(x) -> i64 { x * 2 }
 
-fn main() -> i64 {
-    return double(21)
+fn main() -> ExitCode {
+    return ExitCode::from(double(21) as u8);
 }
 "#
         ),
@@ -517,9 +517,9 @@ fn closure_captures_resolved_after_substitution() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    let x: i64 = 100
-    let closure = fn() -> i64 { return x }
-    return closure()
+    let x: i64 = 100;
+    let closure = move || -> i64 { x };
+    closure()
 }
 "#
         ),
@@ -532,10 +532,10 @@ fn closure_capture_with_inferred_type() {
     assert!(
         air_pipeline_ok(
             r#"
-fn main() -> i64 {
-    let x = 42
-    let f = fn() -> i64 { return x }
-    return f()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x = 42;
+    let f = move || -> i64 { x };
+    return ExitCode::from(f() as u8);
 }
 "#
         ),
@@ -548,12 +548,12 @@ fn multiple_functions_independent_inference() {
     assert!(
         sema_ok(
             r#"
-fn add(a: i64, b: i64) -> i64 { return a + b }
-fn greet(name: string) -> string { return name }
+fn add(a: i64, b: i64) -> i64 { a + b }
+fn greet(name: String) -> String { name }
 
 fn main() {
-    let x = add(1, 2)
-    let y = greet("hello")
+    let x = add(1, 2);
+    let y = greet("hello");
 }
 "#
         ),
@@ -567,8 +567,8 @@ fn nested_function_types_resolved() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    fn inner(x: i64) -> i64 { return x + 1 }
-    return inner(41)
+    fn inner(x: i64) -> i64 { x + 1 }
+    inner(41)
 }
 "#
         ),
@@ -582,8 +582,8 @@ fn equal_constraint_failure_does_not_corrupt_subsequent_inference() {
         sema_ok(
             r#"
 fn f(a: i64, b: i64) -> i64 {
-    let x = a + b
-    return x
+    let x = a + b;
+    x
 }
 "#
         ),
@@ -595,10 +595,10 @@ fn f(a: i64, b: i64) -> i64 {
 fn mixed_type_errors_do_not_cascade_through_solver() {
     let count = sema_error_count(
         r#"
-fn f(a: i64, b: string) -> i64 {
-    let x = a + b
-    let y = a + 1
-    return y
+fn f(a: i64, b: String) -> i64 {
+    let x = a + b;
+    let y = a + 1;
+    y
 }
 "#,
     );
@@ -613,13 +613,13 @@ fn f(a: i64, b: string) -> i64 {
 fn function_type_mismatch_on_return_does_not_corrupt_solver() {
     let count = sema_error_count(
         r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
-    return f(x)
+use std::process::ExitCode; fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    f(x)
 }
 
-fn main() -> i64 {
-    let g = fn(n: i64) -> i64 { return n + 1 }
-    return apply(g, 10)
+fn main() -> ExitCode {
+    let g = move |n: i64| -> i64 { n + 1 };
+    return ExitCode::from(apply(g, 10) as u8);
 }
 "#,
     );
@@ -634,9 +634,9 @@ fn function_unification_partial_param_match_rolled_back() {
     let count = sema_error_count(
         r#"
 fn f() -> i64 {
-    let x: i64 = 10
-    let y: string = "hello"
-    return x + 1
+    let x: i64 = 10;
+    let y: String = "hello";
+    x + 1
 }
 "#,
     );
@@ -651,9 +651,9 @@ fn compound_type_unification_failure_isolated() {
     let count = sema_error_count(
         r#"
 fn f(a: i64, b: i64) -> i64 {
-    let sum = a + b
-    let prod = a * b
-    return sum + prod
+    let sum = a + b;
+    let prod = a * b;
+    sum + prod
 }
 "#,
     );
@@ -668,10 +668,10 @@ fn solver_rollback_preserves_valid_bindings_after_error() {
     let count = sema_error_count(
         r#"
 fn f() -> i64 {
-    let a: i64 = 10
-    let b: i64 = 20
-    let c = a + b
-    return c
+    let a: i64 = 10;
+    let b: i64 = 20;
+    let c = a + b;
+    c
 }
 "#,
     );
@@ -684,9 +684,9 @@ fn closure_capture_inferred_var_resolved_through_pipeline() {
         air_pipeline_ok(
             r#"
 fn outer() -> i64 {
-    let x = 100
-    let closure = fn() { return x }
-    return x
+    let x = 100;
+    let closure = move || { x };
+    x
 }
 "#
         ),
@@ -700,10 +700,10 @@ fn closure_capture_multiple_inferred_vars() {
         air_pipeline_ok(
             r#"
 fn outer() -> i64 {
-    let a = 10
-    let b = 20
-    let closure = fn() -> i64 { return a + b }
-    return closure()
+    let a = 10;
+    let b = 20;
+    let closure = move || -> i64 { a + b };
+    closure()
 }
 "#
         ),
@@ -717,12 +717,12 @@ fn nested_closure_captures_propagate() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    let x: i64 = 42
-    let f = fn() -> i64 {
-        let g = fn() -> i64 { return x }
-        return g()
-    }
-    return f()
+    let x: i64 = 42;
+    let f = move || -> i64 {
+        let g = move || -> i64 { x };
+        g()
+    };
+    f()
 }
 "#
         ),
@@ -736,9 +736,9 @@ fn closure_capture_used_in_binary_op() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    let x = 5
-    let f = fn() -> i64 { return x + 1 }
-    return f()
+    let x = 5;
+    let f = move || -> i64 { x + 1 };
+    f()
 }
 "#
         ),
@@ -752,8 +752,8 @@ fn overflow_through_variable_binop_i8() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 100
-    return x + 28
+    let x = 100;
+    x + 28
 }
 "#
         ),
@@ -767,8 +767,8 @@ fn variable_binop_fits_i8() {
         sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 50
-    return x + 20
+    let x = 50;
+    x + 20
 }
 "#
         ),
@@ -782,8 +782,8 @@ fn overflow_variable_on_right_side() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let y = 28
-    return 100 + y
+    let y = 28;
+    100 + y
 }
 "#
         ),
@@ -797,9 +797,9 @@ fn overflow_both_variables_binop() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let a = 100
-    let b = 28
-    return a + b
+    let a = 100;
+    let b = 28;
+    a + b
 }
 "#
         ),
@@ -813,9 +813,9 @@ fn overflow_through_chained_variable_binop() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 100
-    let y = x
-    return y + 28
+    let x = 100;
+    let y = x;
+    y + 28
 }
 "#
         ),
@@ -829,8 +829,8 @@ fn variable_subtraction_overflow_i8() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = -100
-    return x - 29
+    let x = -100;
+    x - 29
 }
 "#
         ),
@@ -844,8 +844,8 @@ fn variable_multiplication_overflow_i8() {
         !sema_ok(
             r#"
 fn f() -> i8 {
-    let x = 20
-    return x * 7
+    let x = 20;
+    x * 7
 }
 "#
         ),
@@ -859,8 +859,8 @@ fn variable_binop_fits_i16() {
         sema_ok(
             r#"
 fn f() -> i16 {
-    let x = 10000
-    return x + 5000
+    let x = 10000;
+    x + 5000
 }
 "#
         ),
@@ -874,8 +874,8 @@ fn variable_binop_overflow_i16() {
         !sema_ok(
             r#"
 fn f() -> i16 {
-    let x = 30000
-    return x + 3000
+    let x = 30000;
+    x + 3000
 }
 "#
         ),
@@ -889,8 +889,8 @@ fn negative_variable_binop_fits_i8() {
         sema_ok(
             r#"
 fn f() -> i8 {
-    let x = -100
-    return x + 10
+    let x = -100;
+    x + 10
 }
 "#
         ),
@@ -904,12 +904,12 @@ fn let_shadowing_function_name_then_call_rejected() {
         !sema_ok(
             r#"
 fn outer() -> i64 {
-    return 42
+    42
 }
 
 fn test() {
-    let outer = 99
-    let x = outer()
+    let outer = 99;
+    let x = outer();
 }
 "#
         ),
@@ -923,11 +923,11 @@ fn let_shadowing_function_name_without_call_is_valid() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    return 42
+    42
 }
 
 fn test() {
-    let outer = 99
+    let outer = 99;
 }
 "#
         ),
@@ -941,13 +941,13 @@ fn nested_fn_same_name_in_different_parents_independent() {
         sema_ok(
             r#"
 fn outer() {
-    fn inner() -> i64 { return 1 }
-    let x = inner()
+    fn inner() -> i64 { 1 }
+    let x = inner();
 }
 
 fn test() {
-    fn inner() -> i64 { return 2 }
-    let x = inner()
+    fn inner() -> i64 { 2 }
+    let x = inner();
 }
 "#
         ),
@@ -961,11 +961,11 @@ fn nested_fn_not_visible_outside_parent() {
         !sema_ok(
             r#"
 fn outer() {
-    fn inner() -> i64 { return 1 }
+    fn inner() -> i64 { 1 }
 }
 
 fn test() {
-    let x = inner()
+    let x = inner();
 }
 "#
         ),
@@ -979,8 +979,8 @@ fn nested_fn_callable_from_within_parent() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    fn helper() -> i64 { return 42 }
-    return helper()
+    fn helper() -> i64 { 42 }
+    helper()
 }
 "#
         ),
@@ -993,9 +993,9 @@ fn multiple_errors_do_not_compound_through_rollback() {
     let count = sema_error_count(
         r#"
 fn f(x: i64) -> i64 {
-    let a = x + "bad"
-    let b = x + true
-    return x
+    let a = x + "bad";
+    let b = x + true;
+    x
 }
 "#,
     );
@@ -1013,7 +1013,7 @@ fn struct_field_unknown_type_rejected() {
             r#"
 struct Foo { x: CompletelyMadeUpType }
 fn main() {
-    let y = 42
+    let y = 42;
 }
 "#
         ),
@@ -1028,7 +1028,7 @@ fn struct_field_valid_primitive_types_accepted() {
             r#"
 struct Point { x: i64, y: i64 }
 fn main() {
-    let p = Point { x: 1, y: 2 }
+    let p = Point { x: 1, y: 2 };
 }
 "#
         ),
@@ -1044,7 +1044,7 @@ fn struct_field_references_other_struct() {
 struct Inner { value: i64 }
 struct Outer { child: Inner }
 fn main() {
-    let i = Inner { value: 1 }
+    let i = Inner { value: 1 };
 }
 "#
         ),
@@ -1060,7 +1060,7 @@ fn struct_field_forward_reference_accepted() {
 struct Outer { child: Inner }
 struct Inner { value: i64 }
 fn main() {
-    let i = Inner { value: 1 }
+    let i = Inner { value: 1 };
 }
 "#
         ),
@@ -1073,11 +1073,11 @@ fn generic_struct_field_type_param_accepted() {
     assert!(
         sema_ok(
             r#"
-struct Wrapper<T> { value: T }
-fn main() -> i64 {
-    let w = Wrapper { value: 42 }
-    let n: i64 = w.value
-    return n
+use std::process::ExitCode; struct Wrapper<T> { value: T }
+fn main() -> ExitCode {
+    let w = Wrapper { value: 42 };
+    let n: i64 = w.value;
+    return ExitCode::from(n as u8);
 }
 "#
         ),
@@ -1087,10 +1087,9 @@ fn main() -> i64 {
         sema_error_count(
             r#"
 struct Wrapper<T> { value: T }
-fn main() -> i64 {
-    let w = Wrapper { value: 42 }
-    let s: string = w.value
-    return 0
+fn main() {
+    let w = Wrapper { value: 42 };
+    let s: String = w.value;
 }
 "#
         ),
@@ -1105,7 +1104,7 @@ fn struct_multiple_invalid_fields_all_reported() {
         r#"
 struct Bad { a: FakeTypeA, b: FakeTypeB }
 fn main() {
-    let y = 42
+    let y = 42;
 }
 "#,
     );
@@ -1121,10 +1120,10 @@ fn struct_name_collides_with_type_param_mismatch_detected() {
     assert!(
         !sema_ok(
             r#"
-fn unrelated<T>(x: T) -> T { return x }
+fn unrelated<T>(x: T) -> T { x }
 struct T { value: i64 }
 fn main() {
-    let x: T = 42
+    let x: T = 42;
 }
 "#
         ),
@@ -1137,10 +1136,10 @@ fn struct_name_collides_with_type_param_valid_usage() {
     assert!(
         sema_ok(
             r#"
-fn unrelated<T>(x: T) -> T { return x }
+fn unrelated<T>(x: T) -> T { x }
 struct T { value: i64 }
 fn main() {
-    let x = T { value: 42 }
+    let x = T { value: 42 };
 }
 "#
         ),
@@ -1153,9 +1152,9 @@ fn generic_fn_no_collision_still_works() {
     assert!(
         sema_ok(
             r#"
-fn identity<T>(x: T) -> T { return x }
-fn main() -> i64 {
-    return identity(42)
+use std::process::ExitCode; fn identity<T>(x: T) -> T { x }
+fn main() -> ExitCode {
+    return ExitCode::from(identity(42) as u8);
 }
 "#
         ),
@@ -1169,8 +1168,8 @@ fn return_stack_array_lowers_successfully() {
     assert!(air_pipeline_ok(
         r#"
 fn bar() -> [i64; 3] {
-    let arr = [1, 2, 3]
-    return arr
+    let arr = [1, 2, 3];
+    arr
 }
 "#,
     ));
@@ -1182,8 +1181,8 @@ fn return_stack_array_compiles() {
     assert!(air_pipeline_ok(
         r#"
 fn baz() -> [i64; 2] {
-    let arr = [10, 20]
-    return arr
+    let arr = [10, 20];
+    arr
 }
 "#,
     ));
@@ -1195,8 +1194,8 @@ fn constant_sized_array_in_let_compiles() {
         air_pipeline_ok(
             r#"
 fn f() -> i64 {
-    let arr = [1, 2, 3]
-    return arr[0]
+    let arr = [1, 2, 3];
+    arr[0]
 }
 "#
         ),
@@ -1210,7 +1209,7 @@ fn nested_fn_as_last_stmt_with_return_type_rejected() {
         !sema_ok(
             r#"
 fn outer() -> i64 {
-    fn inner() -> i64 { return 1 }
+    fn inner() -> i64 { 1 }
 }
 "#
         ),
@@ -1224,7 +1223,7 @@ fn nested_fn_as_last_stmt_void_return_accepted() {
         sema_ok(
             r#"
 fn outer() {
-    fn inner() -> i64 { return 1 }
+    fn inner() -> i64 { 1 }
 }
 "#
         ),
@@ -1238,8 +1237,8 @@ fn nested_fn_followed_by_return_accepted() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    fn inner() -> i64 { return 1 }
-    return inner()
+    fn inner() -> i64 { 1 }
+    inner()
 }
 "#
         ),
@@ -1255,10 +1254,10 @@ fn unify_prevents_var_cycle_through_resolution() {
         sema_ok(
             r#"
 fn f(a, b) {
-    let x = a
-    let y = b
-    let z: i64 = x
-    let w: i64 = y
+    let x = a;
+    let y = b;
+    let z: i64 = x;
+    let w: i64 = y;
 }
 "#
         ),
@@ -1271,14 +1270,14 @@ fn compound_generic_does_not_create_infinite_type() {
     assert!(
         sema_ok(
             r#"
-fn wrap<T>(x: T) -> T {
-    return x
+use std::process::ExitCode; fn wrap<T>(x: T) -> T {
+    x
 }
 
-fn main() -> i64 {
-    let a = wrap(42)
-    let b = wrap(a)
-    return b
+fn main() -> ExitCode {
+    let a = wrap(42);
+    let b = wrap(a);
+    return ExitCode::from(b as u8);
 }
 "#
         ),
@@ -1292,7 +1291,7 @@ fn self_referencing_let_is_undefined_variable() {
         !sema_ok(
             r#"
 fn test() {
-    let f = fn(x) { return f }
+    let f = move |x| { f };
 }
 "#
         ),
@@ -1306,11 +1305,11 @@ fn var_chain_resolves_without_cycle() {
         sema_ok(
             r#"
 fn test() -> i64 {
-    let a = 1
-    let b = a
-    let c = b
-    let d = c
-    return d
+    let a = 1;
+    let b = a;
+    let c = b;
+    let d = c;
+    d
 }
 "#
         ),
@@ -1323,12 +1322,12 @@ fn substitution_apply_resolves_nested_vars() {
     assert!(
         air_pipeline_ok(
             r#"
-fn identity<T>(x: T) -> T { return x }
+use std::process::ExitCode; fn identity<T>(x: T) -> T { x }
 
-fn main() -> i64 {
-    let a = identity(42)
-    let b = identity(a)
-    return b
+fn main() -> ExitCode {
+    let a = identity(42);
+    let b = identity(a);
+    return ExitCode::from(b as u8);
 }
 "#
         ),
@@ -1341,9 +1340,9 @@ fn type_mismatch_does_not_leave_corrupt_substitution() {
     let count = sema_error_count(
         r#"
 fn f() -> i64 {
-    let x: i64 = "bad"
-    let y = 42
-    return y
+    let x: i64 = "bad";
+    let y = 42;
+    y
 }
 "#,
     );
@@ -1358,14 +1357,14 @@ fn f() -> i64 {
 fn error_recovery_does_not_corrupt_unrelated_compound_type() {
     let count = sema_error_count(
         r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
-    return f(x)
+use std::process::ExitCode; fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    f(x)
 }
 
-fn main() -> i64 {
-    let bad = "hello" + 42
-    let g = fn(n: i64) -> i64 { return n + 1 }
-    return apply(g, 10)
+fn main() -> ExitCode {
+    let bad = "hello" + 42;
+    let g = move |n: i64| -> i64 { n + 1 };
+    return ExitCode::from(apply(g, 10) as u8);
 }
 "#,
     );
@@ -1381,13 +1380,13 @@ fn inner_vars_in_function_type_resolve_through_finalization() {
     assert!(
         air_pipeline_ok(
             r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
-    return f(x)
+use std::process::ExitCode; fn apply(f: fn(i64) -> i64, x: i64) -> i64 {
+    f(x)
 }
 
-fn main() -> i64 {
-    let inc = fn(n: i64) -> i64 { return n + 1 }
-    return apply(inc, 5)
+fn main() -> ExitCode {
+    let inc = move |n: i64| -> i64 { n + 1 };
+    return ExitCode::from(apply(inc, 5) as u8);
 }
 "#
         ),
@@ -1400,10 +1399,10 @@ fn force_dynamic_on_error_preserves_valid_inference_elsewhere() {
     let count = sema_error_count(
         r#"
 fn f(x) {
-    let y: i64 = x
-    let z = y + "hello"
-    let w: i64 = 42
-    return w
+    let y: i64 = x;
+    let z = y + "hello";
+    let w: i64 = 42;
+    return w;
 }
 "#,
     );
@@ -1422,7 +1421,7 @@ fn recursion_limit_orphan_constraints_do_not_cause_miscompilation() {
         sema_ok(
             r#"
 fn f() -> i64 {
-    return 1 + 2 + 3
+    1 + 2 + 3
 }
 "#
         ),
@@ -1436,7 +1435,7 @@ fn recursion_limit_does_not_prevent_other_function_inference() {
         sema_ok(
             r#"
 fn simple() -> i64 {
-    return 42
+    42
 }
 "#
         ),
@@ -1450,9 +1449,9 @@ fn lambda_calling_nested_function_in_outer_scope() {
         air_pipeline_ok(
             r#"
 fn outer() -> i64 {
-    fn helper() -> i64 { return 42 }
-    let lambda = fn() -> i64 { return helper() }
-    return helper()
+    fn helper() -> i64 { 42 }
+    let lambda = move || -> i64 { helper() };
+    helper()
 }
 "#
         ),
@@ -1465,11 +1464,11 @@ fn lambda_calling_toplevel_function() {
     assert!(
         air_pipeline_ok(
             r#"
-fn helper() -> i64 { return 10 }
+use std::process::ExitCode; fn helper() -> i64 { 10 }
 
-fn main() -> i64 {
-    let f = fn() -> i64 { return helper() }
-    return helper()
+fn main() -> ExitCode {
+    let f = move || -> i64 { helper() };
+    return ExitCode::from(helper() as u8);
 }
 "#
         ),
@@ -1483,8 +1482,8 @@ fn array_literal_narrowing_tracked_variable() {
         sema_ok(
             r#"
 fn f() -> [i32; 3] {
-    let x = 100
-    return [x, 1, 2]
+    let x = 100;
+    [x, 1, 2]
 }
 "#
         ),
@@ -1498,7 +1497,7 @@ fn array_literal_narrowing_all_literals() {
         sema_ok(
             r#"
 fn f() -> [i32; 3] {
-    return [1, 2, 3]
+    [1, 2, 3]
 }
 "#
         ),
@@ -1512,7 +1511,7 @@ fn array_literal_narrowing_untracked_param_rejected() {
         !sema_ok(
             r#"
 fn f(y: i64) -> [i32; 3] {
-    return [y, 1, 2]
+    [y, 1, 2]
 }
 "#
         ),
@@ -1526,9 +1525,9 @@ fn array_literal_narrowing_mixed_tracked_and_literal() {
         sema_ok(
             r#"
 fn f() -> [i32; 4] {
-    let a = 10
-    let b = 20
-    return [a, b, 30, 40]
+    let a = 10;
+    let b = 20;
+    [a, b, 30, 40]
 }
 "#
         ),

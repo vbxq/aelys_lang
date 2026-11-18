@@ -91,12 +91,11 @@ fn run_row(row: &str, members: &[Member]) {
 const ROW_42: &[Member] = &[
     Member {
         name: "m1_mul_local",
-        src: r#"fn main() -> i64 {
-    let a: u8 = 250
-    let b: i64 = 1000
-    let r = b * 10 + a
-    println("{r}")
-    return 0
+        src: r#"fn main() {
+    let a: u8 = 250;
+    let b: i64 = 1000;
+    let r = b * 10 + a;
+    println!("{r}");
 }
 "#,
         module: None,
@@ -107,9 +106,9 @@ const ROW_42: &[Member] = &[
     },
     Member {
         name: "m2_mul_param",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return b * 10 + a }
-fn main() -> i64 { println("{f(250, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { b * 10 + a }
+fn main() { println!("{}", f(250, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -119,9 +118,9 @@ fn main() -> i64 { println("{f(250, 1000)}")
     },
     Member {
         name: "m3_paren",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return (b * 10) + a }
-fn main() -> i64 { println("{f(250, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { (b * 10) + a }
+fn main() { println!("{}", f(250, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -131,8 +130,8 @@ fn main() -> i64 { println("{f(250, 1000)}")
     },
     Member {
         name: "m4_sub",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return b - 1 - a }
-fn main() -> i64 { return f(1, 2) }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: i64) -> i64 { b - 1 - a }
+fn main() -> ExitCode { return ExitCode::from(f(1, 2) as u8); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -142,9 +141,9 @@ fn main() -> i64 { return f(1, 2) }
     },
     Member {
         name: "m5_cmp",
-        src: r#"fn f(a: u8, b: i64) -> bool { return b + 1 == a }
-fn main() -> i64 { if f(3, 2) { return 1 }
-    return 0 }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: i64) -> bool { b + 1 == a }
+fn main() -> ExitCode { if f(3, 2) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS; }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -154,8 +153,8 @@ fn main() -> i64 { if f(3, 2) { return 1 }
     },
     Member {
         name: "m6_i32",
-        src: r#"fn f(a: i32, b: i64) -> i64 { return b * 10 + a }
-fn main() -> i64 { return f(1, 2) }
+        src: r#"use std::process::ExitCode; fn f(a: i32, b: i64) -> i64 { b * 10 + a }
+fn main() -> ExitCode { return ExitCode::from(f(1, 2) as u8); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -165,9 +164,9 @@ fn main() -> i64 { return f(1, 2) }
     },
     Member {
         name: "m7_match",
-        src: r#"enum E { A(u8, i64) }
-fn get(e: E) -> i64 { match e { E::A(a, b) => { return b * 10 + a } } }
-fn main() -> i64 { return get(E::A(1, 2)) }
+        src: r#"use std::process::ExitCode; enum E { A(u8, i64) }
+fn get(e: E) -> i64 { match e { E::A(a, b) => { return b * 10 + a; } } }
+fn main() -> ExitCode { return ExitCode::from(get(E::A(1, 2)) as u8); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -177,8 +176,8 @@ fn main() -> i64 { return get(E::A(1, 2)) }
     },
     Member {
         name: "m8_cast_lit",
-        src: r#"fn f(b: i64) -> i64 { return b * 3 + (1 as u8) }
-fn main() -> i64 { return f(2) }
+        src: r#"use std::process::ExitCode; fn f(b: i64) -> i64 { b * 3 + (1 as u8) }
+fn main() -> ExitCode { return ExitCode::from(f(2) as u8); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -191,12 +190,12 @@ fn main() -> i64 { return f(2) }
 const ROW_43: &[Member] = &[
     Member {
         name: "a_shadow",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10
-    let k = b
-    let r = k + a
-    return r }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10;
+    let k = b;
+    let r = k + a;
+    r }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -206,11 +205,11 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "b_shadow_lit_ann",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10
-    let k: i64 = b
-    return k + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10;
+    let k: i64 = b;
+    k + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -220,12 +219,12 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "c_for",
-        src: r#"fn f(a: u8) -> i64 { let k = 10
-    let mut s: i64 = 0
-    for k in 0..300 { s = k + a }
-    return s }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let k = 10;
+    let mut s: i64 = 0;
+    for k in 0..300 { s = k + a; }
+    s }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -235,11 +234,11 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "d_closure",
-        src: r#"fn f(a: u8) -> i64 { let k = 10
-    let g = fn(k: i64) -> i64 { return k + a }
-    return g(1000) }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let k = 10;
+    let g = move |k: i64| -> i64 { k + a };
+    g(1000) }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -250,10 +249,10 @@ fn main() -> i64 { println("{f(3)}")
     Member {
         name: "e_match_bind",
         src: r#"enum E { A(i64) }
-fn f(a: u8, e: E) -> i64 { let k = 10
-    match e { E::A(k) => { return k + a } } }
-fn main() -> i64 { println("{f(3, E::A(1000))}")
-    return 0 }
+fn f(a: u8, e: E) -> i64 { let k = 10;
+    match e { E::A(k) => { return k + a; } } }
+fn main() { println!("{}", f(3, E::A(1000)));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -263,13 +262,13 @@ fn main() -> i64 { println("{f(3, E::A(1000))}")
     },
     Member {
         name: "f_inner_block_shadow",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10
-    let mut r: i64 = 0
-    if true { let k = b
-        r = k + a }
-    return r }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10;
+    let mut r: i64 = 0;
+    if true { let k = b;
+        r = k + a; }
+    r }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -279,12 +278,12 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "x2_copy_then_shadow",
-        src: r#"fn main() -> i64 { let k = 7
-    let j = k
-    let k = 1000
-    let y: u8 = j
-    println("{y} {k}")
-    return 0 }
+        src: r#"fn main() { let k = 7;
+    let j = k;
+    let k = 1000;
+    let y: u8 = j;
+    println!("{y} {k}");
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -294,17 +293,17 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "x12_block_expr_scope",
-        src: r#"fn main() -> i64 {
-    let x = 5
+        src: r#"use std::process::ExitCode; fn main() -> ExitCode {
+    let x = 5;
     let y = {
-        let x = 10  // shadows outer x
+        let x = 10;  // shadows outer x
         x * 2
-    }
+    };
     // x should still be 5 here (inner x was scoped to block)
     if x == 5 && y == 20 {
-        return 1
+        return ExitCode::from(1);
     }
-    return 0
+    return ExitCode::SUCCESS;
 }
 "#,
         module: None,
@@ -318,68 +317,68 @@ fn main() -> i64 { println("{f(3, 1000)}")
 const ROW_44: &[Member] = &[
     Member {
         name: "g_shadow_u8_ctx",
-        src: r#"fn f(a: u8, b: i64) -> u8 { let k = 10
-    let k = b
-    let r: u8 = k
-    return r + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> u8 { let k = 10;
+    let k = b;
+    let r: u8 = k;
+    r + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "h_shadow_u8_min",
-        src: r#"fn f(b: i64) -> i64 { let k = 10
-    let k = b
-    let r: u8 = k
-    println("{r}")
-    return 0 }
-fn main() -> i64 { return f(1000) }
+        src: r#"use std::process::ExitCode; fn f(b: i64) -> i64 { let k = 10;
+    let k = b;
+    let r: u8 = k;
+    println!("{r}");
+    0 }
+fn main() -> ExitCode { return ExitCode::from(f(1000) as u8); }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "i_closure_param_u8",
-        src: r#"fn main() -> i64 { let k = 10
-    let g = fn(k: i64) -> i64 { let r: u8 = k
-        return r }
-    println("{g(100000)}")
-    return 0 }
+        src: r#"fn main() { let k = 10;
+    let g = move |k: i64| -> i64 { let r: u8 = k;
+        r };
+    println!("{}", g(100000));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "j_for_u8",
-        src: r#"fn main() -> i64 { let k = 10
-    for k in 250..260 { let r: u8 = k
-        println("{r}") }
-    return 0 }
+        src: r#"fn main() { let k = 10;
+    for k in 250..260 { let r: u8 = k;
+        println!("{r}"); }
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "k_global_shadow",
-        src: r#"let k = 10
-fn f(k: i64) -> i64 { let r: u8 = k
-    return r }
-fn main() -> i64 { println("{f(1000)}")
-    return 0 }
+        src: r#"static k: i64 = 10;
+fn f(k: i64) -> i64 { let r: u8 = k;
+    r }
+fn main() { println!("{}", f(1000));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "x3_block_tail_shadow",
-        src: r#"fn f(b: i64) -> u8 { let k = 10
-    let y: u8 = { let k = b
-        k }
-    return y }
-fn main() -> i64 { println("{f(1000)}")
-    return 0 }
+        src: r#"fn f(b: i64) -> u8 { let k = 10;
+    let y: u8 = { let k = b;
+        k };
+    y }
+fn main() { println!("{}", f(1000));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
@@ -387,36 +386,36 @@ fn main() -> i64 { println("{f(1000)}")
     Member {
         name: "x4_match_arm_shadow",
         src: r#"enum E { A(i64), B }
-fn f(e: E) -> u8 { let k = 10
-    let y: u8 = match e { E::A(k) => k, E::B => 1 }
-    return y }
-fn main() -> i64 { println("{f(E::A(1000))}")
-    return 0 }
+fn f(e: E) -> u8 { let k = 10;
+    let y: u8 = match e { E::A(k) => k, E::B => 1 };
+    y }
+fn main() { println!("{}", f(E::A(1000)));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "x11_block_expr_shadow",
-        src: r#"fn f(b: i64) -> u8 { let k = b
-    let y = { let k = 10
-        k * 2 }
-    let z: u8 = k
-    println("{y}")
-    return z }
-fn main() -> i64 { println("{f(1000)}")
-    return 0 }
+        src: r#"fn f(b: i64) -> u8 { let k = b;
+    let y = { let k = 10;
+        k * 2 };
+    let z: u8 = k;
+    println!("{y}");
+    z }
+fn main() { println!("{}", f(1000));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "o_if_lit_init",
-        src: r#"fn f(c: bool) -> i64 { let k = if c { 1 } else { 2 }
-    let y: u8 = k
-    println("{y}")
-    return 0 }
-fn main() -> i64 { return f(true) }
+        src: r#"use std::process::ExitCode; fn f(c: bool) -> i64 { let k = if c { 1 } else { 2 };
+    let y: u8 = k;
+    println!("{y}");
+    0 }
+fn main() -> ExitCode { return ExitCode::from(f(true) as u8); }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
@@ -426,11 +425,11 @@ fn main() -> i64 { return f(true) }
 const ROW_45: &[Member] = &[
     Member {
         name: "d_ident_lit",
-        src: r#"fn f(a: u8) -> i64 { let k = 10
-    let r = k + a
-    return r }
-fn main() -> i64 { println("{f(250)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let k = 10;
+    let r = k + a;
+    r }
+fn main() { println!("{}", f(250));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -440,12 +439,12 @@ fn main() -> i64 { println("{f(250)}")
     },
     Member {
         name: "e_ident_mut",
-        src: r#"fn f(a: u8) -> i64 { let mut k = 10
-    k = 1000
-    let r = k + a
-    return r }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let mut k = 10;
+    k = 1000;
+    let r = k + a;
+    r }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -455,13 +454,13 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "e2_ident_mut_loop",
-        src: r#"fn f(a: u8) -> i64 { let mut k = 0
-    let mut i = 0
-    while i < 300 { k = k + 1
-        i = i + 1 }
-    return k + a }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let mut k = 0;
+    let mut i = 0;
+    while i < 300 { k = k + 1;
+        i = i + 1; }
+    k + a }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -471,10 +470,10 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "f_ident_mixed",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10
-    return b * k + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let k = 10;
+    b * k + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -484,10 +483,10 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "h_global_lit",
-        src: r#"let K = 10
-fn f(a: u8) -> i64 { return K + a }
-fn main() -> i64 { println("{f(250)}")
-    return 0 }
+        src: r#"static K: i64 = 10;
+fn f(a: u8) -> i64 { K + a }
+fn main() { println!("{}", f(250));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -497,10 +496,10 @@ fn main() -> i64 { println("{f(250)}")
     },
     Member {
         name: "k_f32_mixed",
-        src: r#"fn f(a: f32, x: f32) -> f32 { let k = 2.5
-    return a * k + x }
-fn main() -> i64 { println("{f(1.5, 1.0)}")
-    return 0 }
+        src: r#"fn f(a: f32, x: f32) -> f32 { let k = 2.5;
+    a * k + x }
+fn main() { println!("{}", f(1.5, 1.0));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -510,22 +509,22 @@ fn main() -> i64 { println("{f(1.5, 1.0)}")
     },
     Member {
         name: "l_f32_shadow",
-        src: r#"fn f(a: f32, b: f64) -> f64 { let k = 2.5
-    let k = b
-    return k + a }
-fn main() -> i64 { println("{f(1.5, 1.0)}")
-    return 0 }
+        src: r#"fn f(a: f32, b: f64) -> f64 { let k = 2.5;
+    let k = b;
+    k + a }
+fn main() { println!("{}", f(1.5, 1.0));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "p_copy_lit",
-        src: r#"fn main() -> i64 { let k = 7
-    let j = k
-    let y: u8 = j
-    println("{y}")
-    return 0 }
+        src: r#"fn main() { let k = 7;
+    let j = k;
+    let y: u8 = j;
+    println!("{y}");
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -535,15 +534,15 @@ fn main() -> i64 { println("{f(1.5, 1.0)}")
     },
     Member {
         name: "x1_mod_literal_global",
-        src: r#"needs m
-fn main() -> i64 { let a: u8 = 250
-    let y: u8 = m.K
-    println("{m.K + a} {y}")
-    return 0 }
+        src: r#"mod m;
+fn main() { let a: u8 = 250;
+    let y: u8 = m::K;
+    println!("{} {y}", m::K + a);
+ }
 "#,
         module: Some((
             r#"m.aelys"#,
-            r#"pub let K = 10
+            r#"pub static K: i64 = 10;
 "#,
         )),
         expect: Expect::Runs {
@@ -553,10 +552,10 @@ fn main() -> i64 { let a: u8 = 250
     },
     Member {
         name: "x7_closure_literal",
-        src: r#"fn main() -> i64 { let k = 10
-    let g = fn(a: u8) -> u8 { return a + k }
-    println("{g(250)}")
-    return 0 }
+        src: r#"fn main() { let k = 10;
+    let g = move |a: u8| -> u8 { a + k };
+    println!("{}", g(250));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -569,9 +568,9 @@ fn main() -> i64 { let a: u8 = 250
 const ROW_46: &[Member] = &[
     Member {
         name: "a_plain",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return b + a }
-fn main() -> i64 { println("{f(250, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { b + a }
+fn main() { println!("{}", f(250, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -581,9 +580,9 @@ fn main() -> i64 { println("{f(250, 1000)}")
     },
     Member {
         name: "b_lit_left",
-        src: r#"fn f(a: u8) -> i64 { return 10 + a }
-fn main() -> i64 { println("{f(250)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { 10 + a }
+fn main() { println!("{}", f(250));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -593,9 +592,9 @@ fn main() -> i64 { println("{f(250)}")
     },
     Member {
         name: "c_lit_u8_overflow",
-        src: r#"fn f(a: u8) -> u8 { return a + 10 }
-fn main() -> i64 { println("{f(250)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> u8 { a + 10 }
+fn main() { println!("{}", f(250));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -605,9 +604,9 @@ fn main() -> i64 { println("{f(250)}")
     },
     Member {
         name: "d_cmp",
-        src: r#"fn f(a: u8, b: i64) -> bool { return b < a }
-fn main() -> i64 { if f(3, 2) { return 1 }
-    return 0 }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: i64) -> bool { b < a }
+fn main() -> ExitCode { if f(3, 2) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS; }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -617,9 +616,9 @@ fn main() -> i64 { if f(3, 2) { return 1 }
     },
     Member {
         name: "e_cmp_lit",
-        src: r#"fn f(a: u8, b: i64) -> bool { return b * 2 < a }
-fn main() -> i64 { if f(3, 1) { return 1 }
-    return 0 }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: i64) -> bool { b * 2 < a }
+fn main() -> ExitCode { if f(3, 1) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS; }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -629,9 +628,9 @@ fn main() -> i64 { if f(3, 1) { return 1 }
     },
     Member {
         name: "f_mod",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return b % 7 + a }
-fn main() -> i64 { println("{f(3, 100)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { b % 7 + a }
+fn main() { println!("{}", f(3, 100));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -641,9 +640,9 @@ fn main() -> i64 { println("{f(3, 100)}")
     },
     Member {
         name: "g_bitand",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return (b & 255) | a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { (b & 255) | a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -653,9 +652,9 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "h_shift",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return b << a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { b << a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -665,9 +664,9 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "h2_shift_lit",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return (b << 2) + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { (b << 2) + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -677,9 +676,9 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "k_neg",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return -b * 2 + a }
-fn main() -> i64 { println("{f(3, 10)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { -b * 2 + a }
+fn main() { println!("{}", f(3, 10));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -689,18 +688,18 @@ fn main() -> i64 { println("{f(3, 10)}")
     },
     Member {
         name: "l_float",
-        src: r#"fn f(a: f32, b: f64) -> f64 { return b * 2.0 + a }
-fn main() -> i64 { println("{f(1.5, 2.0)}")
-    return 0 }
+        src: r#"fn f(a: f32, b: f64) -> f64 { b * 2.0 + a }
+fn main() { println!("{}", f(1.5, 2.0));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "s_i32_u8",
-        src: r#"fn f(a: u8, b: i32) -> i32 { return b * 2 + a }
-fn main() -> i64 { println("{f(3, 7)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i32) -> i32 { b * 2 + a }
+fn main() { println!("{}", f(3, 7));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -710,36 +709,36 @@ fn main() -> i64 { println("{f(3, 7)}")
     },
     Member {
         name: "t_u64_i64",
-        src: r#"fn f(a: u64, b: i64) -> i64 { return b * 2 + a }
-fn main() -> i64 { println("{f(3, 7)}")
-    return 0 }
+        src: r#"fn f(a: u64, b: i64) -> i64 { b * 2 + a }
+fn main() { println!("{}", f(3, 7));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "k_u8_i8",
-        src: r#"fn f(a: u8, c: i8) -> i64 { return a + c }
-fn main() -> i64 { println("{f(200, -1)}")
-    return 0 }
+        src: r#"fn f(a: u8, c: i8) -> i64 { a + c }
+fn main() { println!("{}", f(200, -1));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "m_u32_i32",
-        src: r#"fn f(a: u32, c: i32) -> i64 { return a + c }
-fn main() -> i64 { println("{f(1, 2)}")
-    return 0 }
+        src: r#"fn f(a: u32, c: i32) -> i64 { a + c }
+fn main() { println!("{}", f(1, 2));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "m_shift_u8_lit",
-        src: r#"fn f(a: u8) -> i64 { return a << 9 }
-fn main() -> i64 { println("{f(1)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { a << 9 }
+fn main() { println!("{}", f(1));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -749,10 +748,10 @@ fn main() -> i64 { println("{f(1)}")
     },
     Member {
         name: "x5_shift_literal_left",
-        src: r#"fn f(n: i64) -> i64 { let y: u8 = 1 << n
-    return y }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(n: i64) -> i64 { let y: u8 = 1 << n;
+    y }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -762,9 +761,9 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "x8_shift_amount_wide",
-        src: r#"fn f(a: u8, n: i64) -> i64 { return a << n }
-fn main() -> i64 { println("{f(1, 3)}")
-    return 0 }
+        src: r#"fn f(a: u8, n: i64) -> i64 { a << n }
+fn main() { println!("{}", f(1, 3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -777,10 +776,10 @@ fn main() -> i64 { println("{f(1, 3)}")
 const ROW_47: &[Member] = &[
     Member {
         name: "i_if",
-        src: r#"fn f(a: u8, b: i64, c: bool) -> i64 { let r = if c { a } else { b }
-    return r }
-fn main() -> i64 { println("{f(3, 1000, false)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64, c: bool) -> i64 { let r = if c { a } else { b };
+    r }
+fn main() { println!("{}", f(3, 1000, false));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -790,11 +789,11 @@ fn main() -> i64 { println("{f(3, 1000, false)}")
     },
     Member {
         name: "j_compound",
-        src: r#"fn f(a: u8) -> u8 { let mut x: u8 = a
-    x += 10
-    return x }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> u8 { let mut x: u8 = a;
+    x += 10;
+    x }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -804,11 +803,11 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "j2_compound_mixed",
-        src: r#"fn f(a: u8) -> i64 { let mut x: i64 = 5
-    x += a * 2
-    return x }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let mut x: i64 = 5;
+    x += a * 2;
+    x }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -819,9 +818,9 @@ fn main() -> i64 { println("{f(3)}")
     Member {
         name: "m_struct",
         src: r#"struct S { a: u8, b: i64 }
-fn f(s: S) -> i64 { return s.b * 10 + s.a }
-fn main() -> i64 { println("{f(S { a: 3, b: 7 })}")
-    return 0 }
+fn f(s: S) -> i64 { s.b * 10 + s.a }
+fn main() { println!("{}", f(S { a: 3, b: 7 }));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -831,20 +830,20 @@ fn main() -> i64 { println("{f(S { a: 3, b: 7 })}")
     },
     Member {
         name: "n_index",
-        src: r#"fn f(i: u8) -> i64 { let arr = [1, 2, 3, 4, 5]
-    return arr[i + 1] }
-fn main() -> i64 { println("{f(2)}")
-    return 0 }
+        src: r#"fn f(i: u8) -> i64 { let arr = [1, 2, 3, 4, 5];
+    arr[i + 1] }
+fn main() { println!("{}", f(2));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "n2_index_mixed",
-        src: r#"fn f(i: u8, j: i64) -> i64 { let arr = [1, 2, 3, 4, 5]
-    return arr[j * 1 + i] }
-fn main() -> i64 { println("{f(2, 1)}")
-    return 0 }
+        src: r#"fn f(i: u8, j: i64) -> i64 { let arr = [1, 2, 3, 4, 5];
+    arr[j * 1 + i] }
+fn main() { println!("{}", f(2, 1));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -856,15 +855,15 @@ fn main() -> i64 { println("{f(2, 1)}")
         name: "x9_match_arms_join",
         src: r#"enum E { A, B, C }
 fn f(e: E, a: u8, b: u16) -> u16 {
-    let r = match e { E::A => a, E::B => b, E::C => 300 }
-    return r + 65535
+    let r = match e { E::A => a, E::B => b, E::C => 300 };
+    r + 65535
 }
 fn g(e: E, a: u8, b: i64) -> i64 {
-    let k = 7
-    let r = match e { E::A => a, E::B => k, E::C => 250 }
-    return r + 10
+    let k = 7;
+    let r = match e { E::A => a, E::B => k, E::C => 250 };
+    r + 10
 }
-fn main() { println("{f(E::A, 200, 1)} {f(E::C, 1, 1)} {g(E::A, 250, 0)} {g(E::B, 0, 0)}") }
+fn main() { println!("{} {} {} {}", f(E::A, 200, 1), f(E::C, 1, 1), g(E::A, 250, 0), g(E::B, 0, 0)); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -874,10 +873,10 @@ fn main() { println("{f(E::A, 200, 1)} {f(E::C, 1, 1)} {g(E::A, 250, 0)} {g(E::B
     },
     Member {
         name: "p_let_lit_mix",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let t = 10 * b
-    return t + a + 1 }
-fn main() -> i64 { println("{f(3, 7)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let t = 10 * b;
+    t + a + 1 }
+fn main() { println!("{}", f(3, 7));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -887,9 +886,9 @@ fn main() -> i64 { println("{f(3, 7)}")
     },
     Member {
         name: "q_return_lit",
-        src: r#"fn f(a: u8) -> i64 { return a * 200 }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { a * 200 }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -899,23 +898,23 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "r_arg_mixed",
-        src: r#"fn g(x: i64) -> i64 { return x }
-fn f(a: u8) -> i64 { return g(a + 300) }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn g(x: i64) -> i64 { x }
+fn f(a: u8) -> i64 { g(a + 300) }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "u_while",
-        src: r#"fn f(a: u8) -> i64 { let mut s: i64 = 0
-    let mut i: i64 = 0
-    while i * 1 < a { s = s + i
-        i = i + 1 }
-    return s }
-fn main() -> i64 { println("{f(5)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let mut s: i64 = 0;
+    let mut i: i64 = 0;
+    while i * 1 < a { s = s + i;
+        i = i + 1; }
+    s }
+fn main() { println!("{}", f(5));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -925,9 +924,9 @@ fn main() -> i64 { println("{f(5)}")
     },
     Member {
         name: "a_if_partial",
-        src: r#"fn f(a: u8, b: i64, c: bool) -> i64 { return (if c { 10 } else { b }) + a }
-fn main() -> i64 { println("{f(3, 1000, false)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64, c: bool) -> i64 { (if c { 10 } else { b }) + a }
+fn main() { println!("{}", f(3, 1000, false));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -938,19 +937,19 @@ fn main() -> i64 { println("{f(3, 1000, false)}")
     Member {
         name: "x10_match_arm_literal_overflow",
         src: r#"enum E { A, B }
-fn f(e: E, a: u8) -> i64 { let r = match e { E::A => a, E::B => 300 }
-    return r }
-fn main() -> i64 { println("{f(E::B, 1)}")
-    return 0 }
+fn f(e: E, a: u8) -> i64 { let r = match e { E::A => a, E::B => 300 };
+    r }
+fn main() { println!("{}", f(E::B, 1));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "c_block_tail",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return { b * 10 } + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { b * 10 } + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -960,9 +959,9 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "g_unary",
-        src: r#"fn f(a: i8, b: i64) -> i64 { return -(b * 2) + a }
-fn main() -> i64 { println("{f(3, 10)}")
-    return 0 }
+        src: r#"fn f(a: i8, b: i64) -> i64 { -(b * 2) + a }
+fn main() { println!("{}", f(3, 10));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -972,9 +971,9 @@ fn main() -> i64 { println("{f(3, 10)}")
     },
     Member {
         name: "h_cmp_eq",
-        src: r#"fn f(a: u8, b: i64) -> bool { return b * 1 == a }
-fn main() -> i64 { if f(3, 3) { return 1 }
-    return 0 }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: i64) -> bool { b * 1 == a }
+fn main() -> ExitCode { if f(3, 3) { return ExitCode::from(1); }
+    return ExitCode::SUCCESS; }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -984,9 +983,9 @@ fn main() -> i64 { if f(3, 3) { return 1 }
     },
     Member {
         name: "i_nested",
-        src: r#"fn f(a: u8, b: i64) -> i64 { return a + (b + 1) }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { a + (b + 1) }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -996,11 +995,11 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "j_assign_u8",
-        src: r#"fn f(a: u8, b: i64) -> i64 { let mut x: u8 = a
-    x = x + 1
-    return b + x }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"fn f(a: u8, b: i64) -> i64 { let mut x: u8 = a;
+    x = x + 1;
+    b + x }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1010,10 +1009,10 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "k_arr_elem",
-        src: r#"fn f(a: u8) -> i64 { let arr: [i64; 3] = [1000, 2, 3]
-    return arr[0] * 2 + a }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn f(a: u8) -> i64 { let arr: [i64; 3] = [1000, 2, 3];
+    arr[0] * 2 + a }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1023,10 +1022,10 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "l_call_res",
-        src: r#"fn g() -> i64 { return 1000 }
-fn f(a: u8) -> i64 { return g() * 2 + a }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn g() -> i64 { 1000 }
+fn f(a: u8) -> i64 { g() * 2 + a }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1036,10 +1035,10 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "m_global",
-        src: r#"let G: i64 = 1000
-fn f(a: u8) -> i64 { return G * 2 + a }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"static G: i64 = 1000;
+fn f(a: u8) -> i64 { G * 2 + a }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1049,9 +1048,9 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "n_u16",
-        src: r#"fn f(a: u16, b: u8) -> u16 { return a * 2 + b }
-fn main() -> i64 { println("{f(3, 4)}")
-    return 0 }
+        src: r#"fn f(a: u16, b: u8) -> u16 { a * 2 + b }
+fn main() { println!("{}", f(3, 4));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1061,22 +1060,22 @@ fn main() -> i64 { println("{f(3, 4)}")
     },
     Member {
         name: "j_u8_from_mixed",
-        src: r#"fn f(a: u8, c: i64) -> u8 { let x: u8 = a + c
-    return x }
-fn main() -> i64 { println("{f(1, 2)}")
-    return 0 }
+        src: r#"fn f(a: u8, c: i64) -> u8 { let x: u8 = a + c;
+    x }
+fn main() { println!("{}", f(1, 2));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
     },
     Member {
         name: "l_nonlit_ctx",
-        src: r#"fn f(a: u8, b: u8) -> i64 { let r: i64 = a * b
-    let t = a * b
-    let s: i64 = t
-    println("{r} {s}")
-    return 0 }
-fn main() -> i64 { return f(200, 2) }
+        src: r#"use std::process::ExitCode; fn f(a: u8, b: u8) -> i64 { let r: i64 = a * b;
+    let t = a * b;
+    let s: i64 = t;
+    println!("{r} {s}");
+    0 }
+fn main() -> ExitCode { return ExitCode::from(f(200, 2) as u8); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1086,10 +1085,10 @@ fn main() -> i64 { return f(200, 2) }
     },
     Member {
         name: "n_arg_ctx",
-        src: r#"fn g(x: i64) -> i64 { return x }
-fn f(a: u8) -> i64 { return g(a * 200) }
-fn main() -> i64 { println("{f(3)}")
-    return 0 }
+        src: r#"fn g(x: i64) -> i64 { x }
+fn f(a: u8) -> i64 { g(a * 200) }
+fn main() { println!("{}", f(3));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1099,10 +1098,10 @@ fn main() -> i64 { println("{f(3)}")
     },
     Member {
         name: "x6_if_join",
-        src: r#"fn f(a: u8, c: bool) -> i64 { let r = if c { 300 } else { a }
-    return r }
-fn main() -> i64 { println("{f(3, true)}")
-    return 0 }
+        src: r#"fn f(a: u8, c: bool) -> i64 { let r = if c { 300 } else { a };
+    r }
+fn main() { println!("{}", f(3, true));
+ }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
@@ -1112,13 +1111,13 @@ fn main() -> i64 { println("{f(3, true)}")
 const ROW_48: &[Member] = &[
     Member {
         name: "a_try_u8",
-        src: r#"enum Result<T, E> { Ok(T), Err(E) }
-fn inner(x: i64) -> Result<u8, i64> { if x > 0 { return Result::Ok(200) }
-    return Result::Err(1) }
-fn outer() -> Result<i64, i64> { let v = inner(1)?
-    return Result::Ok(v * 2) }
-fn main() -> i64 { match outer() { Result::Ok(v) => { println("{v}") } Result::Err(e) => { return 1 } }
-    return 0 }
+        src: r#"use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
+fn inner(x: i64) -> Result<u8, i64> { if x > 0 { return Result::Ok(200); }
+    Result::Err(1) }
+fn outer() -> Result<i64, i64> { let v = inner(1)?;
+    Result::Ok(v * 2) }
+fn main() -> ExitCode { match outer() { Result::Ok(v) => { println!("{v}"); } Result::Err(e) => { return ExitCode::from(1); } }
+    return ExitCode::SUCCESS; }
 "#,
         module: None,
         expect: Expect::Refused("E0301"),
@@ -1127,12 +1126,12 @@ fn main() -> i64 { match outer() { Result::Ok(v) => { println("{v}") } Result::E
         name: "b_catch_u8",
         src: r#"enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
-fn get(b: i64) -> Result<u8, E> { if b > 0 { return Result::Ok(7) }
-    return Result::Err(E::B) }
-fn main() -> i64 { let b: i64 = 1000
-    let v = get(1) catch { E::A => 1, E::B => 2 }
-    println("{b * 2 + v}")
-    return 0 }
+fn get(b: i64) -> Result<u8, E> { if b > 0 { return Result::Ok(7); }
+    Result::Err(E::B) }
+fn main() { let b: i64 = 1000;
+    let v = match get(1) { Ok(v) => v, Err(E::A) => 1, Err(E::B) => 2 };
+    println!("{}", b * 2 + v);
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1142,11 +1141,11 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "c_closure_capture_u8",
-        src: r#"fn main() -> i64 { let a: u8 = 3
-    let b: i64 = 1000
-    let g = fn() -> i64 { return b * 2 + a }
-    println("{g()}")
-    return 0 }
+        src: r#"fn main() { let a: u8 = 3;
+    let b: i64 = 1000;
+    let g = move || -> i64 { b * 2 + a };
+    println!("{}", g());
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1156,10 +1155,10 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "d_string_len_u8",
-        src: r#"fn main() -> i64 { let a: u8 = 3
-    let s = "hello"
-    println("{s.len * 2 + a}")
-    return 0 }
+        src: r#"fn main() { let a: u8 = 3;
+    let s = "hello";
+    println!("{}", s.len() * 2 + a);
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1169,10 +1168,10 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "e_vec_len_u8",
-        src: r#"fn main() -> i64 { let a: u8 = 3
-    let v: Vec<i64> = vec[1, 2]
-    println("{v.len * 2 + a}")
-    return 0 }
+        src: r#"fn main() { let a: u8 = 3;
+    let v: Vec<i64> = vec![1, 2];
+    println!("{}", v.len() * 2 + a);
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1182,10 +1181,10 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "f_cast_mix",
-        src: r#"fn main() -> i64 { let a: u8 = 3
-    let x: f64 = 2.5
-    println("{(x as i64) * 2 + a}")
-    return 0 }
+        src: r#"fn main() { let a: u8 = 3;
+    let x: f64 = 2.5;
+    println!("{}", (x as i64) * 2 + a);
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1195,10 +1194,10 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "g_rc_get_u8",
-        src: r#"fn main() -> i64 { let a: u8 = 3
-    let r: Rc<i64> = Rc::new(1000)
-    println("{Rc::get(r) * 2 + a}")
-    return 0 }
+        src: r#"fn main() { let a: u8 = 3;
+    let r: Rc<i64> = Rc::new(1000);
+    println!("{}", Rc::get(r) * 2 + a);
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1208,9 +1207,9 @@ fn main() -> i64 { let b: i64 = 1000
     },
     Member {
         name: "i_nogc_mix",
-        src: r#"nogc fn f(a: u8, b: i64) -> i64 { return b * 2 + a }
-fn main() -> i64 { println("{f(3, 1000)}")
-    return 0 }
+        src: r#"nogc fn f(a: u8, b: i64) -> i64 { b * 2 + a }
+fn main() { println!("{}", f(3, 1000));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1220,10 +1219,10 @@ fn main() -> i64 { println("{f(3, 1000)}")
     },
     Member {
         name: "j_f32_lit",
-        src: r#"fn f(a: f32, b: f64) -> f64 { return b * 2.0 }
-fn g(a: f32) -> f32 { return a * 2.0 }
-fn main() -> i64 { println("{g(1.5)}")
-    return 0 }
+        src: r#"fn f(a: f32, b: f64) -> f64 { b * 2.0 }
+fn g(a: f32) -> f32 { a * 2.0 }
+fn main() { println!("{}", g(1.5));
+ }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1233,14 +1232,14 @@ fn main() -> i64 { println("{g(1.5)}")
     },
     Member {
         name: "n_module_mix",
-        src: r#"needs m
-fn main() -> i64 { let a: u8 = 3
-    println("{m.B * 2 + a}")
-    return 0 }
+        src: r#"mod m;
+fn main() { let a: u8 = 3;
+    println!("{}", m::B * 2 + a);
+ }
 "#,
         module: Some((
             r#"m.aelys"#,
-            r#"pub let B: i64 = 1000
+            r#"pub static B: i64 = 1000;
 "#,
         )),
         expect: Expect::Runs {
@@ -1256,9 +1255,9 @@ const ROW_51: &[Member] = &[
         src: r#"fn id8(x: u8) -> u8 { x }
 fn big() -> i64 { 100 }
 fn main() {
-    let k = 7
-    let v = big()
-    println("{id8({ let k = v; k } + k)}")
+    let k = 7;
+    let v = big();
+    println!("{}", id8({ let k = v; k } + k));
 }
 "#,
         module: None,
@@ -1268,11 +1267,11 @@ fn main() {
         name: "f5",
         src: r#"enum E { A(i64), B }
 fn id8(x: u8) -> u8 { x }
-fn mk(n: i64) -> E { if n > 0 { return E::A(n) } E::B }
+fn mk(n: i64) -> E { if n > 0 { return E::A(n); } E::B }
 fn main() {
-    let k = 7
-    let e = mk(100)
-    println("{id8(match e { E::A(k) => k, E::B => k })}")
+    let k = 7;
+    let e = mk(100);
+    println!("{}", id8(match e { E::A(k) => k, E::B => k }));
 }
 "#,
         module: None,
@@ -1282,11 +1281,11 @@ fn main() {
         name: "f6",
         src: r#"enum E { A(i64), B }
 fn id8(x: u8) -> u8 { x }
-fn mk(n: i64) -> E { if n > 0 { return E::A(n) } E::B }
+fn mk(n: i64) -> E { if n > 0 { return E::A(n); } E::B }
 fn main() {
-    let k = 7
-    let e = mk(300)
-    println("{id8(match e { E::A(k) => k, E::B => k })}")
+    let k = 7;
+    let e = mk(300);
+    println!("{}", id8(match e { E::A(k) => k, E::B => k }));
 }
 "#,
         module: None,
@@ -1296,12 +1295,12 @@ fn main() {
         name: "f7",
         src: r#"enum E { A(i64), B }
 fn id8(x: u8) -> u8 { x }
-fn mk(n: i64) -> E { if n > 0 { return E::A(n) } E::B }
+fn mk(n: i64) -> E { if n > 0 { return E::A(n); } E::B }
 fn main() {
-    let k = 7
-    let e = mk(100)
-    let r = id8(match e { E::A(k) => k, E::B => k })
-    println("{r}")
+    let k = 7;
+    let e = mk(100);
+    let r = id8(match e { E::A(k) => k, E::B => k });
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1310,12 +1309,12 @@ fn main() {
     Member {
         name: "f8",
         src: r#"enum E { A(i64), B }
-fn mk(n: i64) -> E { if n > 0 { return E::A(n) } E::B }
+fn mk(n: i64) -> E { if n > 0 { return E::A(n); } E::B }
 fn main() {
-    let k = 7
-    let e = mk(1000)
-    let y: u8 = 1
-    println("{y + match e { E::A(k) => k, E::B => k }}")
+    let k = 7;
+    let e = mk(1000);
+    let y: u8 = 1;
+    println!("{}", y + match e { E::A(k) => k, E::B => k });
 }
 "#,
         module: None,
@@ -1330,9 +1329,9 @@ const ROW_52: &[Member] = &[
     Member {
         name: "p1",
         src: r#"fn main() {
-    let k = 5
-    let y: u8 = -k
-    println("{y}")
+    let k = 5;
+    let y: u8 = -k;
+    println!("{y}");
 }
 "#,
         module: None,
@@ -1341,10 +1340,10 @@ const ROW_52: &[Member] = &[
     Member {
         name: "p2",
         src: r#"fn main() {
-    let a: u8 = 10
-    let k = 5
-    let y = a + -k
-    println("{y}")
+    let a: u8 = 10;
+    let k = 5;
+    let y = a + -k;
+    println!("{y}");
 }
 "#,
         module: None,
@@ -1354,8 +1353,8 @@ const ROW_52: &[Member] = &[
         name: "q2",
         src: r#"fn id8(x: u8) -> u8 { x }
 fn main() {
-    let k = 5
-    println("{id8(-k)}")
+    let k = 5;
+    println!("{}", id8(-k));
 }
 "#,
         module: None,
@@ -1364,10 +1363,10 @@ fn main() {
     Member {
         name: "q4",
         src: r#"fn main() {
-    let k = 128
-    let y: i8 = -k
-    let j: i8 = -128
-    println("{y} {j}")
+    let k = 128;
+    let y: i8 = -k;
+    let j: i8 = -128;
+    println!("{y} {j}");
 }
 "#,
         module: None,
@@ -1378,12 +1377,12 @@ fn main() {
     },
     Member {
         name: "mod1_neg_global",
-        src: r#"needs m
+        src: r#"mod m;
 fn main() {
-    let a: u8 = 10
-    let y: u8 = -m.K
-    let z: u8 = m.J + a
-    println("{y} {z}")
+    let a: u8 = 10;
+    let y: u8 = -m::K;
+    let z: u8 = m::J + a;
+    println!("{y} {z}");
 }
 "#,
         module: Some((
@@ -1399,14 +1398,14 @@ pub let J = K
 const ROW_53: &[Member] = &[
     Member {
         name: "rf1",
-        src: r#"fn g(r: &i64) -> i64 { return *r + 1 }
+        src: r#"fn g(r: &i64) -> i64 { *r + 1 }
 fn main() {
-    let k = 10
-    let p = &k
-    let a = g(&k)
-    let b = g(&(k))
-    let c = g(p)
-    println("{a} {b} {c} {*p}")
+    let k = 10;
+    let p = &k;
+    let a = g(&k);
+    let b = g(&(k));
+    let c = g(p);
+    println!("{a} {b} {c} {}", *p);
 }
 "#,
         module: None,
@@ -1418,9 +1417,9 @@ fn main() {
     Member {
         name: "shp1",
         src: r#"fn main() {
-    let a: i32 = 250
-    let r = a << (7)
-    println("{r}")
+    let a: i32 = 250;
+    let r = a << (7);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1432,9 +1431,9 @@ fn main() {
     Member {
         name: "shp2",
         src: r#"fn main() {
-    let a: u8 = 3
-    let r = a << (1 + 1)
-    println("{r}")
+    let a: u8 = 3;
+    let r = a << (1 + 1);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1446,10 +1445,10 @@ fn main() {
     Member {
         name: "shp3",
         src: r#"fn main() {
-    let a: i32 = 250
-    let k = 7
-    let r = a << (k)
-    println("{r}")
+    let a: i32 = 250;
+    let k = 7;
+    let r = a << (k);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1461,9 +1460,9 @@ fn main() {
     Member {
         name: "shp4",
         src: r#"fn main() {
-    let a: u8 = 3
-    let r = a << -(-2)
-    println("{r}")
+    let a: u8 = 3;
+    let r = a << -(-2);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1475,10 +1474,10 @@ fn main() {
     Member {
         name: "sh_aggk",
         src: r#"fn main() {
-    let a: i32 = 250
-    let k = 7
-    let r = a >> (k)
-    println("{r}")
+    let a: i32 = 250;
+    let k = 7;
+    let r = a >> (k);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1490,10 +1489,10 @@ fn main() {
     Member {
         name: "sh_all7",
         src: r#"fn main() {
-    let a: i32 = 250
-    let k = 7
-    let r = a << (7)
-    println("{r}")
+    let a: i32 = 250;
+    let k = 7;
+    let r = a << (7);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1505,10 +1504,10 @@ fn main() {
     Member {
         name: "gp1",
         src: r#"fn main() {
-    let a: i32 = 2147483647
-    let r = a + (1)
-    let s = a + 1
-    println("{r} {s}")
+    let a: i32 = 2147483647;
+    let r = a + (1);
+    let s = a + 1;
+    println!("{r} {s}");
 }
 "#,
         module: None,
@@ -1520,9 +1519,9 @@ fn main() {
     Member {
         name: "gp2",
         src: r#"fn main() {
-    let a: u8 = 255
-    let r: u8 = a + (1)
-    println("{r}")
+    let a: u8 = 255;
+    let r: u8 = a + (1);
+    println!("{r}");
 }
 "#,
         module: None,
@@ -1534,11 +1533,11 @@ fn main() {
     Member {
         name: "gp3",
         src: r#"fn main() {
-    let a: u8 = 255
-    let k = 1
-    let r = a + (k)
-    let s = a + k
-    println("{r} {s}")
+    let a: u8 = 255;
+    let k = 1;
+    let r = a + (k);
+    let s = a + k;
+    println!("{r} {s}");
 }
 "#,
         module: None,
@@ -1553,10 +1552,10 @@ const ROW_54: &[Member] = &[
     Member {
         name: "t1",
         src: r#"fn main() {
-    let x: u8 = 1
-    let n: i64 = 9
-    let y: i64 = x << n
-    println("{y}")
+    let x: u8 = 1;
+    let n: i64 = 9;
+    let y: i64 = x << n;
+    println!("{y}");
 }
 "#,
         module: None,
@@ -1568,12 +1567,12 @@ const ROW_54: &[Member] = &[
     Member {
         name: "p8",
         src: r#"fn main() {
-    let a: u8 = 1
-    let n: i64 = 9
-    let y: u8 = 1 << n
-    let z: i64 = a << n
-    let w: i64 = 1 << n
-    println("{y} {z} {w}")
+    let a: u8 = 1;
+    let n: i64 = 9;
+    let y: u8 = 1 << n;
+    let z: i64 = a << n;
+    let w: i64 = 1 << n;
+    println!("{y} {z} {w}");
 }
 "#,
         module: None,
@@ -1588,15 +1587,15 @@ const ROW_54: &[Member] = &[
 struct T { g: i64 }
 fn idc(x: i64) -> i64 { x }
 fn gb() -> i8 { 3 }
-let G = 3
+static G: i64 = 3;
 fn retc(a: i8, p: i8) -> i64 { let s = S { f: p }; let arr = [p, p];  a + 3 }
 fn probe(a: i8, p: i8) {
-    let s = S { f: p }
-    let arr = [p, p]
-    let r = 1 << ((a + 3) % 8)
-    println("{r}")
+    let s = S { f: p };
+    let arr = [p, p];
+    let r = 1 << ((a + 3) % 8);
+    println!("{r}");
 }
-fn main() { probe(100, 3) }
+fn main() { probe(100, 3); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1610,15 +1609,15 @@ fn main() { probe(100, 3) }
 struct T { g: i64 }
 fn idc(x: i64) -> i64 { x }
 fn gb() -> i8 { 3 }
-let G = 3
+static G: i64 = 3;
 fn retc(a: i8, p: i8) -> i64 { let s = S { f: p }; let arr = [p, p];  a | (3 as i8) }
 fn probe(a: i8, p: i8) {
-    let s = S { f: p }
-    let arr = [p, p]
-    let r = 1 << ((a | (3 as i8)) % 8)
-    println("{r}")
+    let s = S { f: p };
+    let arr = [p, p];
+    let r = 1 << ((a | (3 as i8)) % 8);
+    println!("{r}");
 }
-fn main() { probe(100, 3) }
+fn main() { probe(100, 3); }
 "#,
         module: None,
         expect: Expect::Runs {
@@ -1897,12 +1896,12 @@ fn propagated_types(mut program: TypedProgram, pass: &mut dyn OptimizationPass) 
 
 #[test]
 fn release01_50_constant_propagation_substitutes_a_literal_of_the_binding_type() {
-    let local = typed("fn f(b: i64) -> i64 { let k: i64 = 10\n    return b * k }\n");
+    let local = typed("fn f(b: i64) -> i64 { let k: i64 = 10;\n    b * k }\n");
     assert_eq!(
         propagated_types(local, &mut LocalConstantPropagator::new()),
         vec![InferType::I64]
     );
-    let global = typed("let k: i64 = 10\nfn f(b: i64) -> i64 { return b * k }\n");
+    let global = typed("static k: i64 = 10;\nfn f(b: i64) -> i64 { b * k }\n");
     assert_eq!(
         propagated_types(global, &mut GlobalConstantPropagator::new()),
         vec![InferType::I64]

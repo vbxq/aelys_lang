@@ -4,7 +4,7 @@ use std::fs;
 use std::process::Command;
 use tempfile::tempdir;
 
-const HEAD: &str = "enum Result<T, E> { Ok(T), Err(E) }\nenum E { X }\nfn mk() -> Result<i64, E> { return Result::Ok(7) }\n";
+const HEAD: &str = "enum Result<T, E> { Ok(T), Err(E) }\nenum E { X }\nfn mk() -> Result<i64, E> { Result::Ok(7) }\n";
 
 fn rejected(id: &str, body: &str) {
     let source = format!("{HEAD}{body}");
@@ -49,7 +49,7 @@ fn answers(id: &str, body: &str, want: i32) {
 fn s3_s1_a_lambda_written_inside_an_unsafe_block_does_not_inherit_it() {
     rejected(
         "S3-S1",
-        "fn main() -> i64 {\n    let f = unsafe { fn() -> i64 { return mk().unwrap_unchecked() } }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let f = unsafe { move || -> i64 { mk().unwrap_unchecked() } };\n    return ExitCode::from(f() as u8);\n}\n",
     );
 }
 
@@ -57,7 +57,7 @@ fn s3_s1_a_lambda_written_inside_an_unsafe_block_does_not_inherit_it() {
 fn s3_s2_a_lambda_assigned_inside_an_unsafe_block_does_not_inherit_it() {
     rejected(
         "S3-S2",
-        "fn main() -> i64 {\n    let mut f = fn() -> i64 { return 0 }\n    unsafe { f = fn() -> i64 { return mk().unwrap_unchecked() } }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut f = move || -> i64 { 0 };\n    unsafe { f = move || -> i64 { mk().unwrap_unchecked() }; }\n    return ExitCode::from(f() as u8);\n}\n",
     );
 }
 
@@ -65,7 +65,7 @@ fn s3_s2_a_lambda_assigned_inside_an_unsafe_block_does_not_inherit_it() {
 fn s3_s3_a_named_function_declared_under_a_while_inside_unsafe_does_not_inherit_it() {
     rejected(
         "S3-S3",
-        "fn main() -> i64 {\n    let mut r: i64 = 0\n    unsafe {\n        while true {\n            fn g() -> i64 { return mk().unwrap_unchecked() }\n            r = g()\n            break\n        }\n    }\n    return r\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut r: i64 = 0;\n    unsafe {\n        while true {\n            fn g() -> i64 { mk().unwrap_unchecked() }\n            r = g();\n            break;\n        }\n    }\n    return ExitCode::from(r as u8);\n}\n",
     );
 }
 
@@ -73,7 +73,7 @@ fn s3_s3_a_named_function_declared_under_a_while_inside_unsafe_does_not_inherit_
 fn s3_s4_the_same_named_function_escaped_and_called_outside_the_block() {
     rejected(
         "S3-S4",
-        "fn main() -> i64 {\n    let mut f = fn() -> i64 { return 0 }\n    unsafe {\n        while true {\n            fn g() -> i64 { return mk().unwrap_unchecked() }\n            f = g\n            break\n        }\n    }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut f = move || -> i64 { 0 };\n    unsafe {\n        while true {\n            fn g() -> i64 { mk().unwrap_unchecked() }\n            f = g;\n            break;\n        }\n    }\n    return ExitCode::from(f() as u8);\n}\n",
     );
 }
 
@@ -81,7 +81,7 @@ fn s3_s4_the_same_named_function_escaped_and_called_outside_the_block() {
 fn s3_s5_the_for_route_into_declaration() {
     rejected(
         "S3-S5",
-        "fn main() -> i64 {\n    let mut r: i64 = 0\n    unsafe {\n        for i in 0..1 {\n            fn g() -> i64 { return mk().unwrap_unchecked() }\n            r = g()\n        }\n    }\n    return r\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let mut r: i64 = 0;\n    unsafe {\n        for i in 0..1 {\n            fn g() -> i64 { mk().unwrap_unchecked() }\n            r = g();\n        }\n    }\n    return ExitCode::from(r as u8);\n}\n",
     );
 }
 
@@ -89,7 +89,7 @@ fn s3_s5_the_for_route_into_declaration() {
 fn s3_s6_the_same_route_inside_a_lambda_body() {
     rejected(
         "S3-S6",
-        "fn main() -> i64 {\n    let f = fn() -> i64 {\n        let mut r: i64 = 0\n        unsafe {\n            while true {\n                fn g() -> i64 { return mk().unwrap_unchecked() }\n                r = g()\n                break\n            }\n        }\n        return r\n    }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let f = move || -> i64 {\n        let mut r: i64 = 0;\n        unsafe {\n            while true {\n                fn g() -> i64 { mk().unwrap_unchecked() }\n                r = g();\n                break;\n            }\n        }\n        r\n    };\n    return ExitCode::from(f() as u8);\n}\n",
     );
 }
 
@@ -97,7 +97,7 @@ fn s3_s6_the_same_route_inside_a_lambda_body() {
 fn s3_s7_the_block_written_inside_the_body_is_the_accepted_twin() {
     answers(
         "S3-S7",
-        "fn main() -> i64 {\n    let f = fn() -> i64 { unsafe { return mk().unwrap_unchecked() } }\n    return f()\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    let f = move || -> i64 { unsafe { return mk().unwrap_unchecked(); } };\n    return ExitCode::from(f() as u8);\n}\n",
         7,
     );
 }
@@ -106,7 +106,7 @@ fn s3_s7_the_block_written_inside_the_body_is_the_accepted_twin() {
 fn s3_s8_a_named_function_carrying_its_own_block_is_accepted() {
     answers(
         "S3-S8",
-        "fn g() -> i64 { unsafe { return mk().unwrap_unchecked() } }\nfn main() -> i64 { return g() }\n",
+        "use std::process::ExitCode; fn g() -> i64 { unsafe { return mk().unwrap_unchecked(); } }\nfn main() -> ExitCode { return ExitCode::from(g() as u8); }\n",
         7,
     );
 }
@@ -115,7 +115,7 @@ fn s3_s8_a_named_function_carrying_its_own_block_is_accepted() {
 fn s3_s9_the_bare_form_stays_rejected() {
     rejected(
         "S3-S9",
-        "fn main() -> i64 { return mk().unwrap_unchecked() }\n",
+        "use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from(mk().unwrap_unchecked() as u8); }\n",
     );
 }
 
@@ -123,7 +123,7 @@ fn s3_s9_the_bare_form_stays_rejected() {
 fn s3_s10_a_block_in_the_calling_body_still_reaches_its_own_call() {
     answers(
         "S3-S10",
-        "fn main() -> i64 {\n    unsafe {\n        let v: i64 = mk().unwrap_unchecked()\n        return v\n    }\n}\n",
+        "use std::process::ExitCode; fn main() -> ExitCode {\n    unsafe {\n        let v: i64 = mk().unwrap_unchecked();\n        return ExitCode::from(v as u8);\n    }\n}\n",
         7,
     );
 }

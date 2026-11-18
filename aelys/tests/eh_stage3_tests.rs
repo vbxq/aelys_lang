@@ -47,12 +47,12 @@ fn run(src: &str) -> Option<Output> {
 #[test]
 fn unwrap_ok_returns_value() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn ok_val() -> Result<i64, E> { return Result::Ok(9) }
+fn ok_val() -> Result<i64, E> { Result::Ok(9) }
 
-fn main() -> i64 { return ok_val().unwrap() }
+fn main() -> ExitCode { return ExitCode::from(ok_val().unwrap() as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -65,12 +65,12 @@ fn main() -> i64 { return ok_val().unwrap() }
 #[test]
 fn unwrap_err_aborts_with_default_message() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn err_val() -> Result<i64, E> { return Result::Err(E::X) }
+fn err_val() -> Result<i64, E> { Result::Err(E::X) }
 
-fn main() -> i64 { return err_val().unwrap() }
+fn main() -> ExitCode { return ExitCode::from(err_val().unwrap() as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert!(
@@ -87,12 +87,12 @@ fn main() -> i64 { return err_val().unwrap() }
 #[test]
 fn expect_err_aborts_with_literal_message() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn err_val() -> Result<i64, E> { return Result::Err(E::X) }
+fn err_val() -> Result<i64, E> { Result::Err(E::X) }
 
-fn main() -> i64 { return err_val().expect("boom") }
+fn main() -> ExitCode { return ExitCode::from(err_val().expect("boom") as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert!(
@@ -109,12 +109,12 @@ fn main() -> i64 { return err_val().expect("boom") }
 #[test]
 fn expect_ok_returns_value() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn ok_val() -> Result<i64, E> { return Result::Ok(7) }
+fn ok_val() -> Result<i64, E> { Result::Ok(7) }
 
-fn main() -> i64 { return ok_val().expect("unreachable") }
+fn main() -> ExitCode { return ExitCode::from(ok_val().expect("unreachable") as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -127,14 +127,14 @@ fn main() -> i64 { return ok_val().expect("unreachable") }
 #[test]
 fn expect_non_literal_is_rejected() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn ok_val() -> Result<i64, E> { return Result::Ok(1) }
+fn ok_val() -> Result<i64, E> { Result::Ok(1) }
 
-fn main() -> i64 {
-    let msg: i64 = 7
-    return ok_val().expect(msg)
+fn main() -> ExitCode {
+    let msg: i64 = 7;
+    return ExitCode::from(ok_val().expect(msg) as u8);
 }
 "#;
     let err = reject(src);
@@ -147,13 +147,13 @@ fn main() -> i64 {
 #[test]
 fn struct_field_named_unwrap_still_compiles_and_runs() {
     let src = r#"
-struct S { unwrap: fn() -> i64 }
+use std::process::ExitCode; struct S { unwrap: fn() -> i64 }
 
-fn five() -> i64 { return 5 }
+fn five() -> i64 { 5 }
 
-fn main() -> i64 {
-    let s = S { unwrap: five }
-    return s.unwrap()
+fn main() -> ExitCode {
+    let s = S { unwrap: five };
+    return ExitCode::from(s.unwrap() as u8);
 }
 "#;
     let Some(out) = run(src) else { return };
@@ -167,9 +167,9 @@ fn main() -> i64 {
 #[test]
 fn unwrap_on_non_result_still_errors_without_swallow() {
     let src = r#"
-fn main() -> i64 {
-    let x: i64 = 42
-    return x.unwrap()
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 42;
+    return ExitCode::from(x.unwrap() as u8);
 }
 "#;
     let err = reject(src);
@@ -186,7 +186,7 @@ fn main() -> i64 {
 #[test]
 fn map_error_transforms_error_payload() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Lo, Hi }
 enum EB { Mild, Worse }
 
@@ -197,15 +197,15 @@ fn widen(e: EA) -> EB {
     }
 }
 
-fn get() -> Result<i64, EA> { return Result::Err(EA::Hi) }
+fn get() -> Result<i64, EA> { Result::Err(EA::Hi) }
 
-fn main() -> i64 {
-    let r: Result<i64, EB> = get().map_error(widen)
+fn main() -> ExitCode {
+    let r: Result<i64, EB> = get().map_error(widen);
     match r {
-        Result::Ok(v)  => return v,
+        Result::Ok(v)  => return ExitCode::from(v as u8),
         Result::Err(e) => match e {
-            EB::Mild  => return 1,
-            EB::Worse => return 2,
+            EB::Mild  => return ExitCode::from(1),
+            EB::Worse => return ExitCode::from(2),
         },
     }
 }
@@ -221,19 +221,19 @@ fn main() -> i64 {
 #[test]
 fn map_error_ok_passes_through() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Bad }
 enum EB { Worse }
 
-fn widen(e: EA) -> EB { return EB::Worse }
+fn widen(e: EA) -> EB { EB::Worse }
 
-fn get_ok() -> Result<i64, EA> { return Result::Ok(42) }
+fn get_ok() -> Result<i64, EA> { Result::Ok(42) }
 
-fn main() -> i64 {
-    let r: Result<i64, EB> = get_ok().map_error(widen)
+fn main() -> ExitCode {
+    let r: Result<i64, EB> = get_ok().map_error(widen);
     match r {
-        Result::Ok(v)  => return v,
-        Result::Err(e) => return 99,
+        Result::Ok(v)  => return ExitCode::from(v as u8),
+        Result::Err(e) => return ExitCode::from(99),
     }
 }
 "#;
@@ -252,13 +252,12 @@ enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Bad }
 enum EB { Worse }
 
-fn widen(e: EA) -> EB { return EB::Worse }
+fn widen(e: EA) -> EB { EB::Worse }
 
-fn get() -> Result<i64, EA> { return Result::Ok(1) }
+fn get() -> Result<i64, EA> { Result::Ok(1) }
 
-fn main() -> i64 {
-    get().map_error(widen)
-    return 0
+fn main() {
+    get().map_error(widen);
 }
 "#;
     let err = reject(src);
@@ -275,13 +274,12 @@ enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Bad }
 enum EB { Worse }
 
-fn widen(e: EA) -> EB { return EB::Worse }
+fn widen(e: EA) -> EB { EB::Worse }
 
-fn get() -> Result<i64, EA> { return Result::Ok(1) }
+fn get() -> Result<i64, EA> { Result::Ok(1) }
 
-fn main() -> i64 {
-    discard get().map_error(widen)
-    return 0
+fn main() {
+    let _ = get().map_error(widen);
 }
 "#;
     let Some(out) = run(src) else { return };
@@ -295,22 +293,22 @@ fn main() -> i64 {
 #[test]
 fn map_error_evaluates_f_exactly_once() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum EA { Bad }
 enum EB { Worse }
 
 fn tap(e: EA) -> EB {
-    print("F")
-    return EB::Worse
+    print!("F");
+    EB::Worse
 }
 
-fn get_err() -> Result<i64, EA> { return Result::Err(EA::Bad) }
+fn get_err() -> Result<i64, EA> { Result::Err(EA::Bad) }
 
-fn main() -> i64 {
-    let r: Result<i64, EB> = get_err().map_error(tap)
+fn main() -> ExitCode {
+    let r: Result<i64, EB> = get_err().map_error(tap);
     match r {
-        Result::Ok(v)  => return v,
-        Result::Err(e) => return 0,
+        Result::Ok(v)  => return ExitCode::from(v as u8),
+        Result::Err(e) => return ExitCode::SUCCESS,
     }
 }
 "#;
@@ -332,12 +330,12 @@ fn main() -> i64 {
 #[test]
 fn catch_binder_recovers_on_err_and_passes_ok_through() {
     let err_src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn get_err() -> Result<i64, E> { return Result::Err(E::X) }
+fn get_err() -> Result<i64, E> { Result::Err(E::X) }
 
-fn main() -> i64 { return get_err() catch |e| 100 }
+fn main() -> ExitCode { return ExitCode::from((match get_err() { Ok(v) => v, Err(e) => 100) as u8) }; }
 "#;
     if let Some(out) = run(err_src) {
         assert_eq!(
@@ -348,12 +346,12 @@ fn main() -> i64 { return get_err() catch |e| 100 }
     }
 
     let ok_src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn get_ok() -> Result<i64, E> { return Result::Ok(7) }
+fn get_ok() -> Result<i64, E> { Result::Ok(7) }
 
-fn main() -> i64 { return get_ok() catch |e| 100 }
+fn main() -> ExitCode { return ExitCode::from((match get_ok() { Ok(v) => v, Err(e) => 100) as u8) }; }
 "#;
     if let Some(out) = run(ok_src) {
         assert_eq!(
@@ -367,22 +365,22 @@ fn main() -> i64 { return get_ok() catch |e| 100 }
 #[test]
 fn catch_arms_discriminate_each_variant() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get_a() -> Result<i64, E> { return Result::Err(E::A) }
-fn get_b() -> Result<i64, E> { return Result::Err(E::B) }
+fn get_a() -> Result<i64, E> { Result::Err(E::A) }
+fn get_b() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 {
-    let a: i64 = get_a() catch {
-        E::A => 1,
-        E::B => 2,
-    }
-    let b: i64 = get_b() catch {
-        E::A => 1,
-        E::B => 2,
-    }
-    return a * 10 + b
+fn main() -> ExitCode {
+    let a: i64 = match get_a() { Ok(v) => v,
+        Err(E::A) => 1,
+        Err(E::B) => 2,
+    };
+    let b: i64 = match get_b() { Ok(v) => v,
+        Err(E::A) => 1,
+        Err(E::B) => 2,
+    };
+    return ExitCode::from((a * 10 + b) as u8);
 }
 "#;
     let Some(out) = run(src) else { return };
@@ -397,15 +395,15 @@ fn main() -> i64 {
 #[test]
 fn catch_arms_non_exhaustive_is_rejected() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get() -> Result<i64, E> { return Result::Err(E::B) }
+fn get() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 {
-    return get() catch {
-        E::A => 1,
-    }
+fn main() -> ExitCode {
+    return ExitCode::from((match get() { Ok(v) => v,
+        Err(E::A) => 1,
+    }) as u8);
 }
 "#;
     let err = reject(src);
@@ -418,16 +416,16 @@ fn main() -> i64 {
 #[test]
 fn catch_wildcard_and_binder_are_exhaustive() {
     let wildcard_src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get() -> Result<i64, E> { return Result::Err(E::B) }
+fn get() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 {
-    return get() catch {
-        E::A => 1,
-        _ => 2,
-    }
+fn main() -> ExitCode {
+    return ExitCode::from((match get() { Ok(v) => v,
+        Err(E::A) => 1,
+        Err(_) => 2,
+    }) as u8);
 }
 "#;
     if let Some(out) = run(wildcard_src) {
@@ -439,12 +437,12 @@ fn main() -> i64 {
     }
 
     let binder_src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get() -> Result<i64, E> { return Result::Err(E::B) }
+fn get() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 { return get() catch |e| 42 }
+fn main() -> ExitCode { return ExitCode::from((match get() { Ok(v) => v, Err(e) => 42) as u8) }; }
 "#;
     if let Some(out) = run(binder_src) {
         assert_eq!(
@@ -458,14 +456,14 @@ fn main() -> i64 { return get() catch |e| 42 }
 #[test]
 fn catch_yields_t_satisfies_must_use() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn get() -> Result<i64, E> { return Result::Ok(1) }
+fn get() -> Result<i64, E> { Result::Ok(1) }
 
-fn main() -> i64 {
-    get() catch |e| 0
-    return 5
+fn main() -> ExitCode {
+    match get() { Ok(v) => v, Err(e) => 0 };
+    return ExitCode::from(5);
 }
 "#;
     let Some(out) = run(src) else { return };
@@ -479,16 +477,16 @@ fn main() -> i64 {
 #[test]
 fn catch_binder_reads_the_err_payload() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { A, B }
 
-fn get() -> Result<i64, E> { return Result::Err(E::B) }
+fn get() -> Result<i64, E> { Result::Err(E::B) }
 
-fn main() -> i64 {
-    return get() catch |e| match e {
+fn main() -> ExitCode {
+    return ExitCode::from((match get() { Ok(v) => v, Err(e) => match e {
         E::A => 10,
         E::B => 20,
-    }
+    }) as u8) };
 }
 "#;
     let Some(out) = run(src) else { return };
@@ -506,16 +504,16 @@ fn never_rejected_outside_result_error_slot() {
             "fn return",
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
-fn f() -> Never { return 5 }
-fn main() -> i64 { return 0 }
+fn f() -> Never { 5 }
+fn main() { }
 "#,
         ),
         (
             "fn param",
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
-fn g(x: Never) -> i64 { return 1 }
-fn main() -> i64 { return 0 }
+fn g(x: Never) -> i64 { 1 }
+fn main() { }
 "#,
         ),
         (
@@ -523,16 +521,15 @@ fn main() -> i64 { return 0 }
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
 struct S { f: Never }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#,
         ),
         (
             "let annotation",
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
-fn main() -> i64 {
-    let x: Never = 5
-    return 0
+fn main() {
+    let x: Never = 5;
 }
 "#,
         ),
@@ -540,8 +537,8 @@ fn main() -> i64 {
             "Result value slot",
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
-fn f() -> Result<Never, i64> { return Result::Err(3) }
-fn main() -> i64 { return 0 }
+fn f() -> Result<Never, i64> { Result::Err(3) }
+fn main() { }
 "#,
         ),
         (
@@ -549,16 +546,16 @@ fn main() -> i64 { return 0 }
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
 enum Option<T> { Some(T), None }
-fn f() -> Option<Never> { return Option::None }
-fn main() -> i64 { return 0 }
+fn f() -> Option<Never> { Option::None }
+fn main() { }
 "#,
         ),
         (
             "Vec element",
             r#"
 enum Result<T, E> { Ok(T), Err(E) }
-fn f() -> Vec<Never> { return [] }
-fn main() -> i64 { return 0 }
+fn f() -> Vec<Never> { [] }
+fn main() { }
 "#,
         ),
     ];
@@ -574,11 +571,11 @@ fn main() -> i64 { return 0 }
 #[test]
 fn into_ok_runs_on_result_never() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 
-fn parse_fixed() -> Result<i64, Never> { return Result::Ok(42) }
+fn parse_fixed() -> Result<i64, Never> { Result::Ok(42) }
 
-fn main() -> i64 { return parse_fixed().into_ok() }
+fn main() -> ExitCode { return ExitCode::from(parse_fixed().into_ok() as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -591,12 +588,12 @@ fn main() -> i64 { return parse_fixed().into_ok() }
 #[test]
 fn into_ok_on_fallible_result_is_rejected() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum RealErr { Boom }
 
-fn maybe() -> Result<i64, RealErr> { return Result::Ok(5) }
+fn maybe() -> Result<i64, RealErr> { Result::Ok(5) }
 
-fn main() -> i64 { return maybe().into_ok() }
+fn main() -> ExitCode { return ExitCode::from(maybe().into_ok() as u8); }
 "#;
     let err = reject(src);
     assert!(
@@ -608,12 +605,12 @@ fn main() -> i64 { return maybe().into_ok() }
 #[test]
 fn unwrap_unchecked_in_unsafe_runs() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn mk_ok() -> Result<i64, E> { return Result::Ok(5) }
+fn mk_ok() -> Result<i64, E> { Result::Ok(5) }
 
-fn main() -> i64 { return unsafe { mk_ok().unwrap_unchecked() } }
+fn main() -> ExitCode { return ExitCode::from((unsafe { mk_ok().unwrap_unchecked() }) as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -626,12 +623,12 @@ fn main() -> i64 { return unsafe { mk_ok().unwrap_unchecked() } }
 #[test]
 fn unwrap_unchecked_outside_unsafe_is_rejected() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn mk_ok() -> Result<i64, E> { return Result::Ok(5) }
+fn mk_ok() -> Result<i64, E> { Result::Ok(5) }
 
-fn main() -> i64 { return mk_ok().unwrap_unchecked() }
+fn main() -> ExitCode { return ExitCode::from(mk_ok().unwrap_unchecked() as u8); }
 "#;
     let err = reject(src);
     assert!(
@@ -643,7 +640,7 @@ fn main() -> i64 { return mk_ok().unwrap_unchecked() }
 #[test]
 fn unsafe_block_is_transparent() {
     let src = r#"
-fn main() -> i64 { return unsafe { 6 + 6 } }
+use std::process::ExitCode; fn main() -> ExitCode { return ExitCode::from((unsafe { 6 + 6 }) as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -656,12 +653,12 @@ fn main() -> i64 { return unsafe { 6 + 6 } }
 #[test]
 fn nested_unsafe_still_compiles_and_runs() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn mk() -> Result<i64, E> { return Result::Ok(9) }
+fn mk() -> Result<i64, E> { Result::Ok(9) }
 
-fn main() -> i64 { return unsafe { unsafe { mk().unwrap_unchecked() } } }
+fn main() -> ExitCode { return ExitCode::from((unsafe { unsafe { mk().unwrap_unchecked() } }) as u8); }
 "#;
     let Some(out) = run(src) else { return };
     assert_eq!(
@@ -675,14 +672,14 @@ fn main() -> i64 { return unsafe { unsafe { mk().unwrap_unchecked() } } }
 #[test]
 fn unsafe_depth_not_leaked_after_block() {
     let src = r#"
-enum Result<T, E> { Ok(T), Err(E) }
+use std::process::ExitCode; enum Result<T, E> { Ok(T), Err(E) }
 enum E { X }
 
-fn mk() -> Result<i64, E> { return Result::Ok(1) }
+fn mk() -> Result<i64, E> { Result::Ok(1) }
 
-fn main() -> i64 {
-    let a: i64 = unsafe { mk().unwrap_unchecked() }
-    return mk().unwrap_unchecked()
+fn main() -> ExitCode {
+    let a: i64 = unsafe { mk().unwrap_unchecked() };
+    return ExitCode::from(mk().unwrap_unchecked() as u8);
 }
 "#;
     let err = reject(src);

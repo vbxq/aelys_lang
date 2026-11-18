@@ -241,25 +241,24 @@ struct Leaf { k: i64 }
 enum E { A(i32, Rc<Leaf>) }
 struct N { v: i64, e: E }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
     match Rc::get(a).e {
-        E::A(x, r) => { return x + Rc::get(r).k }
+        E::A(x, r) => { return x + Rc::get(r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -275,25 +274,24 @@ struct Leaf { k: i64 }
 enum E { A(u8, Rc<Leaf>) }
 struct N { v: i64, e: E }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
     match Rc::get(a).e {
-        E::A(x, r) => { return x + Rc::get(r).k }
+        E::A(x, r) => { return x + Rc::get(r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -309,25 +307,24 @@ struct Leaf { k: i64 }
 enum E { A(i64, Rc<Leaf>) }
 struct N { v: i64, e: E }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
     match Rc::get(a).e {
-        E::A(x, r) => { return x + Rc::get(r).k }
+        E::A(x, r) => { return x + Rc::get(r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(20, Rc::new(Leaf { k: 300 })) });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -343,25 +340,24 @@ struct Leaf { k: i64 }
 enum E { A(Rc<Leaf>, i32) }
 struct N { v: i64, e: E }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
     match Rc::get(a).e {
-        E::A(r, x) => { return Rc::get(r).k + x }
+        E::A(r, x) => { return Rc::get(r).k + x; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(Rc::new(Leaf { k: 300 }), 20) })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(Rc::new(Leaf { k: 300 }), 20) });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -378,26 +374,25 @@ enum E { A(Rc<Leaf>) }
 struct Inner { tag: u8, e: E }
 struct N { v: i64, w: i32, inner: Inner }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
-    let n = Rc::get(a)
+    let n = Rc::get(a);
     match n.inner.e {
-        E::A(r) => { return n.w + Rc::get(r).k }
+        E::A(r) => { return n.w + Rc::get(r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, w: 20, inner: Inner { tag: 7, e: E::A(Rc::new(Leaf { k: 300 })) } })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, w: 20, inner: Inner { tag: 7, e: E::A(Rc::new(Leaf { k: 300 })) } });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -414,25 +409,24 @@ struct P { k: i32, r: Rc<Leaf> }
 enum E { A(P) }
 struct N { v: i64, e: E }
 fn peek(a: Rc<N>) -> i64 {
-    let c = a
-    return Rc::get(c).v
+    let c = a;
+    Rc::get(c).v
 }
 fn read(a: Rc<N>) -> i64 {
     match Rc::get(a).e {
-        E::A(p) => { return p.k + Rc::get(p.r).k }
+        E::A(p) => { return p.k + Rc::get(p.r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(P { k: 20, r: Rc::new(Leaf { k: 300 }) }) })
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<N> = Rc::new(N { v: 1, e: E::A(P { k: 20, r: Rc::new(Leaf { k: 300 }) }) });
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -447,25 +441,24 @@ const RELEASE01_7: &str = r#"
 struct Leaf { k: i64 }
 enum E { A(i32, Rc<Leaf>) }
 fn peek(a: Rc<E>) -> i64 {
-    let c = a
-    return 1
+    let c = a;
+    1
 }
 fn read(a: Rc<E>) -> i64 {
     match Rc::get(a) {
-        E::A(x, r) => { return x + Rc::get(r).k }
+        E::A(x, r) => { return x + Rc::get(r).k; }
     }
 }
 fn work() -> i64 {
-    let a: Rc<E> = Rc::new(E::A(20, Rc::new(Leaf { k: 300 })))
-    let t = peek(a)
-    __aelys_collect()
-    return t + read(a)
+    let a: Rc<E> = Rc::new(E::A(20, Rc::new(Leaf { k: 300 })));
+    let t = peek(a);
+    __aelys_collect();
+    t + read(a)
 }
-fn main() -> i64 {
-    let t = work()
-    __aelys_collect()
-    println("{t}")
-    return 0
+fn main() {
+    let t = work();
+    __aelys_collect();
+    println!("{t}");
 }
 "#;
 
@@ -479,17 +472,16 @@ fn release01_7_an_enum_held_directly_in_an_rc_node_is_traced_at_its_real_offset(
 const RELEASE01_8: &str = r#"
 struct T { val: i64, parent: Rc<T>, child: Rc<T> }
 fn work() -> i64 {
-    let root: Rc<T> = Rc::new(T { val: 1, parent: Rc::null(), child: Rc::null() })
-    root.child = Rc::new(T { val: 2, parent: root, child: Rc::null() })
-    return Rc::get(Rc::get(root).child).val
+    let root: Rc<T> = Rc::new(T { val: 1, parent: Rc::null(), child: Rc::null() });
+    root.child = Rc::new(T { val: 2, parent: root, child: Rc::null() });
+    Rc::get(Rc::get(root).child).val
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -503,17 +495,16 @@ fn release01_8_a_parent_pointer_pair_is_collected() {
 const RELEASE01_9: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn work() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::new(Node { val: 2, next: Rc::new(Node { val: 3, next: Rc::null() }) }) })
-    Rc::get(Rc::get(a).next).next.next = a
-    return Rc::get(Rc::get(a).next).val
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::new(Node { val: 2, next: Rc::new(Node { val: 3, next: Rc::null() }) }) });
+    Rc::get(Rc::get(a).next).next.next = a;
+    Rc::get(Rc::get(a).next).val
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -527,21 +518,20 @@ fn release01_9_an_inline_three_cycle_is_collected() {
 const RELEASE01_10: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn build(n: i64, first: Rc<Node>) -> Rc<Node> {
-    if n == 0 { return first }
-    return Rc::new(Node { val: n, next: build(n - 1, first) })
+    if n == 0 { return first; }
+    Rc::new(Node { val: n, next: build(n - 1, first) })
 }
 fn work() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 0, next: Rc::null() })
-    a.next = build(5, a)
-    return Rc::get(Rc::get(a).next).val
+    let a: Rc<Node> = Rc::new(Node { val: 0, next: Rc::null() });
+    a.next = build(5, a);
+    Rc::get(Rc::get(a).next).val
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -555,22 +545,21 @@ fn release01_10_a_ring_built_by_recursion_is_collected() {
 const RELEASE01_11: &str = r#"
 struct DNode { val: i64, next: Rc<DNode>, prev: Rc<DNode> }
 fn build(n: i64, prev: Rc<DNode>) -> Rc<DNode> {
-    if n == 0 { return Rc::null() }
-    let me: Rc<DNode> = Rc::new(DNode { val: n, next: Rc::null(), prev: prev })
-    me.next = build(n - 1, me)
-    return me
+    if n == 0 { return Rc::null(); }
+    let me: Rc<DNode> = Rc::new(DNode { val: n, next: Rc::null(), prev: prev });
+    me.next = build(n - 1, me);
+    me
 }
 fn work() -> i64 {
-    let h = build(10, Rc::null())
-    return Rc::get(Rc::get(h).next).val
+    let h = build(10, Rc::null());
+    Rc::get(Rc::get(h).next).val
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -584,18 +573,17 @@ fn release01_11_a_doubly_linked_list_built_by_recursion_is_collected() {
 const RELEASE01_12: &str = r#"
 struct N { v: i64, next: Rc<Rc<N>> }
 fn work() -> i64 {
-    let a: Rc<N> = Rc::new(N { v: 1, next: Rc::null() })
-    let b: Rc<N> = Rc::new(N { v: 2, next: Rc::new(a) })
-    a.next = Rc::new(b)
-    return Rc::get(b).v
+    let a: Rc<N> = Rc::new(N { v: 1, next: Rc::null() });
+    let b: Rc<N> = Rc::new(N { v: 2, next: Rc::new(a) });
+    a.next = Rc::new(b);
+    Rc::get(b).v
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -610,26 +598,25 @@ const RELEASE01_13: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
 fn mk(h: &mut H, v: i64) {
-    let a: Rc<Node> = Rc::new(Node { val: v, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
-    a.next = b
-    (*h).r = a
+    let a: Rc<Node> = Rc::new(Node { val: v, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a });
+    a.next = b;
+    (*h).r = a;
 }
 fn work() -> i64 {
-    let mut h = H { r: Rc::null() }
-    mk(&mut h, 7)
-    __aelys_collect()
-    let v = Rc::get(h.r).val
-    h.r = Rc::null()
-    return v
+    let mut h = H { r: Rc::null() };
+    mk(&mut h, 7);
+    __aelys_collect();
+    let v = Rc::get(h.r).val;
+    h.r = Rc::null();
+    v
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -643,22 +630,21 @@ fn release01_13_a_survivor_dying_through_one_member_is_collected() {
 const RELEASE01_14: &str = r#"
 struct N { k: i64, a: Rc<N>, b: Rc<N> }
 fn work() -> i64 {
-    let c: Rc<N> = Rc::new(N { k: 5, a: Rc::null(), b: Rc::null() })
-    let mut x: Rc<N> = Rc::new(N { k: 1, a: c, b: Rc::null() })
-    let mut y: Rc<N> = Rc::new(N { k: 2, a: c, b: x })
-    x.b = y
-    x = Rc::null()
-    y = Rc::null()
-    __aelys_collect()
-    return Rc::get(c).k
+    let c: Rc<N> = Rc::new(N { k: 5, a: Rc::null(), b: Rc::null() });
+    let mut x: Rc<N> = Rc::new(N { k: 1, a: c, b: Rc::null() });
+    let mut y: Rc<N> = Rc::new(N { k: 2, a: c, b: x });
+    x.b = y;
+    x = Rc::null();
+    y = Rc::null();
+    __aelys_collect();
+    Rc::get(c).k
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -708,21 +694,20 @@ fn release01_15_a_dead_doubly_linked_list_of_a_million_nodes_is_collected_at_exi
 }
 
 const RELEASE01_16: &str = r#"
-struct N { s: string, next: Rc<N> }
+struct N { s: String, next: Rc<N> }
 struct H { r: Rc<N> }
-fn mk(h: &mut H, p: string) {
-    let a: Rc<N> = Rc::new(N { s: p + "cdefgh", next: Rc::null() })
-    a.next = a
-    (*h).r = a
+fn mk(h: &mut H, p: String) {
+    let a: Rc<N> = Rc::new(N { s: p + "cdefgh", next: Rc::null() });
+    a.next = a;
+    (*h).r = a;
 }
-fn take(s: string, k: i64) -> i64 {
-    return s.len + s.bytes[0] + k
+fn take(s: String, k: i64) -> i64 {
+    s.len() + s.as_bytes()[0] + k
 }
-fn main() -> i64 {
-    let mut h = H { r: Rc::null() }
-    mk(&mut h, "ab")
-    println(take(Rc::get(h.r).s, { h.r = Rc::null(); __aelys_collect(); 1 }))
-    return 0
+fn main() {
+    let mut h = H { r: Rc::null() };
+    mk(&mut h, "ab");
+    println!("{}", take(Rc::get(h.r).s, { h.r = Rc::null(); __aelys_collect(); 1 }));
 }
 "#;
 
@@ -737,27 +722,26 @@ const RELEASE01_17: &str = r#"
 struct N { k: i64, a: Rc<N>, b: Rc<N> }
 struct H { r: Rc<N> }
 fn work() -> i64 {
-    let mut h = H { r: Rc::null() }
-    let mut y: Rc<N> = Rc::new(N { k: 7, a: Rc::null(), b: Rc::null() })
-    let mut x: Rc<N> = Rc::new(N { k: 1, a: y, b: Rc::null() })
-    h.r = x
-    let mut p: Rc<N> = Rc::new(N { k: 2, a: y, b: Rc::null() })
-    let mut q: Rc<N> = Rc::new(N { k: 3, a: p, b: Rc::null() })
-    p.b = q
-    x = Rc::null()
-    y = Rc::null()
-    p = Rc::null()
-    q = Rc::null()
-    __aelys_collect()
-    return Rc::get(Rc::get(h.r).a).k
+    let mut h = H { r: Rc::null() };
+    let mut y: Rc<N> = Rc::new(N { k: 7, a: Rc::null(), b: Rc::null() });
+    let mut x: Rc<N> = Rc::new(N { k: 1, a: y, b: Rc::null() });
+    h.r = x;
+    let mut p: Rc<N> = Rc::new(N { k: 2, a: y, b: Rc::null() });
+    let mut q: Rc<N> = Rc::new(N { k: 3, a: p, b: Rc::null() });
+    p.b = q;
+    x = Rc::null();
+    y = Rc::null();
+    p = Rc::null();
+    q = Rc::null();
+    __aelys_collect();
+    Rc::get(Rc::get(h.r).a).k
 }
-fn main() -> i64 {
-    let t = work()
-    MID
-    let u = work()
-    println(t)
-    println(u)
-    return 0
+fn main() {
+    let t = work();
+    MID;
+    let u = work();
+    println!("{}", t);
+    println!("{}", u);
 }
 "#;
 
@@ -771,20 +755,19 @@ fn release01_17_an_object_live_only_by_propagation_is_kept() {
 const RELEASE01_18: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 fn churn(i: i64) -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: a })
-    a.next = b
-    return Rc::get(Rc::get(a).next).val
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: a });
+    a.next = b;
+    Rc::get(Rc::get(a).next).val
 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut n: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
     while i < 20000 {
-        n = n + churn(i)
-        i = i + 1
+        n = n + churn(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -798,25 +781,24 @@ fn release01_18_a_two_node_cycle_churned_in_a_loop_is_collected_during_execution
 const RELEASE01_19: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
-fn poke(h: &H) -> i64 { return Rc::get((*h).r).val }
+fn poke(h: &H) -> i64 { Rc::get((*h).r).val }
 fn work(i: i64) -> i64 {
-    let mut h = H { r: Rc::null() }
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    a.next = a
-    h.r = a
-    let t = poke(&h)
-    h.r = Rc::new(Node { val: 7, next: Rc::null() })
-    return t + poke(&h)
+    let mut h = H { r: Rc::null() };
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    a.next = a;
+    h.r = a;
+    let t = poke(&h);
+    h.r = Rc::new(Node { val: 7, next: Rc::null() });
+    t + poke(&h)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -830,27 +812,26 @@ fn release01_19_a_stack_holder_field_overwritten_then_a_safepoint_stays_balanced
 const RELEASE01_20: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
-fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn poke(h: Rc<H>) -> i64 { Rc::get(Rc::get(h).r).val }
 fn peek(h: Rc<H>) -> i64 {
-    let c = h
-    return 1
+    let c = h;
+    1
 }
 fn work(i: i64) -> i64 {
-    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
-    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() })
-    let t = poke(hold) + peek(hold)
-    Rc::get(hold).r = Rc::new(Node { val: 7, next: Rc::null() })
-    return t + poke(hold)
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() });
+    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() });
+    let t = poke(hold) + peek(hold);
+    Rc::get(hold).r = Rc::new(Node { val: 7, next: Rc::null() });
+    t + poke(hold)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -865,25 +846,24 @@ const RELEASE01_21: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
 struct W { k: i64, h: H }
-fn poke(w: &W) -> i64 { return Rc::get((*w).h.r).val }
+fn poke(w: &W) -> i64 { Rc::get((*w).h.r).val }
 fn work(i: i64) -> i64 {
-    let mut w = W { k: 1, h: H { r: Rc::null() } }
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    a.next = a
-    w.h.r = a
-    let t = poke(&w)
-    w.h.r = Rc::new(Node { val: 7, next: Rc::null() })
-    return t + poke(&w)
+    let mut w = W { k: 1, h: H { r: Rc::null() } };
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    a.next = a;
+    w.h.r = a;
+    let t = poke(&w);
+    w.h.r = Rc::new(Node { val: 7, next: Rc::null() });
+    t + poke(&w)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -897,29 +877,28 @@ fn release01_21_a_nested_stack_holder_field_overwrite_then_a_safepoint_stays_bal
 const RELEASE01_22: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
-fn poke(h: &H) -> i64 { return Rc::get((*h).r).val }
+fn poke(h: &H) -> i64 { Rc::get((*h).r).val }
 fn set(h: &mut H, v: i64) {
-    (*h).r = Rc::new(Node { val: v, next: Rc::null() })
-    let k = poke(&(*h))
+    (*h).r = Rc::new(Node { val: v, next: Rc::null() });
+    let k = poke(&(*h));
 }
 fn work(i: i64) -> i64 {
-    let mut h = H { r: Rc::null() }
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    a.next = a
-    h.r = a
-    let t = poke(&h)
-    set(&mut h, 7)
-    return t + poke(&h)
+    let mut h = H { r: Rc::null() };
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    a.next = a;
+    h.r = a;
+    let t = poke(&h);
+    set(&mut h, 7);
+    t + poke(&h)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -933,29 +912,28 @@ fn release01_22_a_field_overwrite_through_a_mutable_reference_then_a_safepoint_s
 const RELEASE01_23: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { k: i64, r: Rc<Node> }
-fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn poke(h: Rc<H>) -> i64 { Rc::get(Rc::get(h).r).val }
 fn peek(h: Rc<H>) -> i64 {
-    let c = h
-    return 1
+    let c = h;
+    1
 }
 fn work(i: i64) -> i64 {
-    let hold: Rc<H> = Rc::new(H { k: 0, r: Rc::null() })
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    Rc::get(hold).r = a
-    let t = poke(hold) + peek(hold)
-    let p = &mut Rc::get(hold)
-    *p = H { k: 1, r: Rc::new(Node { val: 7, next: Rc::null() }) }
-    return t + poke(hold)
+    let hold: Rc<H> = Rc::new(H { k: 0, r: Rc::null() });
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    Rc::get(hold).r = a;
+    let t = poke(hold) + peek(hold);
+    let p = &mut Rc::get(hold);
+    *p = H { k: 1, r: Rc::new(Node { val: 7, next: Rc::null() }) };
+    t + poke(hold)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -969,29 +947,28 @@ fn release01_23_a_whole_payload_overwrite_of_a_candidate_holder_then_a_safepoint
 const RELEASE01_24: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
-fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn poke(h: Rc<H>) -> i64 { Rc::get(Rc::get(h).r).val }
 fn peek(h: Rc<H>) -> i64 {
-    let c = h
-    return 1
+    let c = h;
+    1
 }
 fn work(i: i64) -> i64 {
-    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
-    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-    a.next = Rc::new(Node { val: 1, next: Rc::null() })
-    hold.r = a
-    let t = poke(hold) + peek(hold)
-    Rc::get(Rc::get(hold).r).next = Rc::new(Node { val: 7, next: Rc::null() })
-    return t + Rc::get(Rc::get(Rc::get(hold).r).next).val + poke(hold)
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() });
+    let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+    a.next = Rc::new(Node { val: 1, next: Rc::null() });
+    hold.r = a;
+    let t = poke(hold) + peek(hold);
+    Rc::get(Rc::get(hold).r).next = Rc::new(Node { val: 7, next: Rc::null() });
+    t + Rc::get(Rc::get(Rc::get(hold).r).next).val + poke(hold)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1005,28 +982,27 @@ fn release01_24_a_nested_field_overwrite_under_a_candidate_holder_then_a_safepoi
 const RELEASE01_25: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node>, me: Rc<H> }
-fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn poke(h: Rc<H>) -> i64 { Rc::get(Rc::get(h).r).val }
 fn peek(h: Rc<H>) -> i64 {
-    let c = h
-    return 1
+    let c = h;
+    1
 }
 fn work(i: i64) -> i64 {
-    let hold: Rc<H> = Rc::new(H { r: Rc::null(), me: Rc::null() })
-    hold.me = hold
-    hold.r = Rc::new(Node { val: i, next: Rc::null() })
-    let t = poke(hold) + peek(hold)
-    hold.r = Rc::new(Node { val: 7, next: Rc::null() })
-    return t + poke(hold)
+    let hold: Rc<H> = Rc::new(H { r: Rc::null(), me: Rc::null() });
+    hold.me = hold;
+    hold.r = Rc::new(Node { val: i, next: Rc::null() });
+    let t = poke(hold) + peek(hold);
+    hold.r = Rc::new(Node { val: 7, next: Rc::null() });
+    t + poke(hold)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1040,30 +1016,29 @@ fn release01_25_a_field_overwrite_of_a_self_cyclic_candidate_holder_then_a_safep
 const RELEASE01_26: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
 struct H { r: Rc<Node> }
-fn poke(h: Rc<H>) -> i64 { return Rc::get(Rc::get(h).r).val }
+fn poke(h: Rc<H>) -> i64 { Rc::get(Rc::get(h).r).val }
 fn peek(h: Rc<H>) -> i64 {
-    let c = h
-    return 1
+    let c = h;
+    1
 }
 fn set(h: &mut H, v: i64) {
-    (*h).r = Rc::new(Node { val: v, next: Rc::null() })
+    (*h).r = Rc::new(Node { val: v, next: Rc::null() });
 }
 fn work(i: i64) -> i64 {
-    let hold: Rc<H> = Rc::new(H { r: Rc::null() })
-    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() })
-    let t = poke(hold) + peek(hold)
-    set(&mut Rc::get(hold), 7)
-    return t + poke(hold)
+    let hold: Rc<H> = Rc::new(H { r: Rc::null() });
+    Rc::get(hold).r = Rc::new(Node { val: i, next: Rc::null() });
+    let t = poke(hold) + peek(hold);
+    set(&mut Rc::get(hold), 7);
+    t + poke(hold)
 }
-fn main() -> i64 {
-    let mut i = 0
-    let mut n = 0
+fn main() {
+    let mut i = 0;
+    let mut n = 0;
     while i < 3 {
-        n = n + work(i)
-        i = i + 1
+        n = n + work(i);
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1075,25 +1050,24 @@ fn release01_26_a_mutable_reference_into_an_rc_payload_overwrite_then_a_safepoin
 }
 
 const RELEASE01_27: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string, me: Rc<W> }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 
 fn use_view(bs: &[u8]) -> i64 {
-    let p = poke(1)
-    return bs[0] + bs.len
+    let p = poke(1);
+    bs[0] + bs.len()
 }
-fn main() -> i64 {
-    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
-    a.me = a
-    let bs = Rc::get(a).s.bytes
-    a = poke(2)
-    let n = use_view(bs)
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+fn main() {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() });
+    a.me = a;
+    let bs = Rc::get(a).s.as_bytes();
+    a = poke(2);
+    let n = use_view(bs);
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -1105,23 +1079,22 @@ fn release01_27_a_bytes_view_held_across_a_call_survives_the_collection_of_its_c
 }
 
 const RELEASE01_28: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string, me: Rc<W> }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 
-fn main() -> i64 {
-    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
-    a.me = a
-    let mut n: i64 = 0
-    for b in Rc::get(a).s.bytes {
-        a = poke(b)
-        let t: string = other(88888)
-        n = n + b + t.len
+fn main() {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() });
+    a.me = a;
+    let mut n: i64 = 0;
+    for b in Rc::get(a).s.as_bytes() {
+        a = poke(b);
+        let t: String = other(88888);
+        n = n + b + t.len();
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -1133,18 +1106,17 @@ fn release01_28_a_for_over_the_bytes_of_a_cycle_member_survives_the_body_droppin
 }
 
 const RELEASE01_29: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-struct W { s: string, me: Rc<W> }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+struct W { s: String, me: Rc<W> }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
 
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
-fn main() -> i64 {
-    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() })
-    a.me = a
-    println(take(Rc::get(a).s, { a = poke(5); let p = poke(6); 1 }))
-    return 0
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
+fn main() {
+    let mut a = Rc::new(W { s: victim(12345), me: Rc::null() });
+    a.me = a;
+    println!("{}", take(Rc::get(a).s, { a = poke(5); let p = poke(6); 1 }));
 }
 "#;
 
@@ -1156,23 +1128,22 @@ fn release01_29_a_string_argument_of_a_cycle_member_survives_a_block_argument_dr
 }
 
 const RELEASE01_30: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
-fn main() -> i64 {
-    let mut a = mk(12345)
-    println(take("{Rc::get(a).s}", { a = poke(5); let p = poke(6); 1 }))
-    return 0
+fn main() {
+    let mut a = mk(12345);
+    println!("{}", take(format!("{}", Rc::get(a).s), { a = poke(5); let p = poke(6); 1 }));
 }
 "#;
 
@@ -1184,27 +1155,26 @@ fn release01_30_an_interpolation_of_a_cycle_member_survives_a_block_argument_dro
 }
 
 const RELEASE01_31: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
 fn take_e(e: E, k: i64) -> i64 {
-    let p = poke(7)
-    return match e { E::A(x) => x.bytes[0] + x.len + k, E::B => 0 }
+    let p = poke(7);
+    match e { E::A(x) => x.as_bytes()[0] + x.len() + k, E::B => 0 }
 }
-fn main() -> i64 {
-    let mut a = mk(12345)
-    println(take_e(Rc::get(a).e, { a = poke(5); 1 }))
-    return 0
+fn main() {
+    let mut a = mk(12345);
+    println!("{}", take_e(Rc::get(a).e, { a = poke(5); 1 }));
 }
 "#;
 
@@ -1216,31 +1186,30 @@ fn release01_31_an_enum_field_argument_survives_a_block_argument_dropping_its_cy
 }
 
 const RELEASE01_32: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
-fn use_s(s: string) -> i64 {
-    let p = poke(8)
-    return s.bytes[0] + s.len
+fn use_s(s: String) -> i64 {
+    let p = poke(8);
+    s.as_bytes()[0] + s.len()
 }
-fn main() -> i64 {
-    let mut a = mk(12345)
-    let v = Rc::get(a).a[0..2]
-    a = poke(5)
-    let n = use_s(v[1])
-    let t: string = other(88888)
-    println("{n + t.len}")
-    return 0
+fn main() {
+    let mut a = mk(12345);
+    let v = Rc::get(a).a[0..2];
+    a = poke(5);
+    let n = use_s(v[1]);
+    let t: String = other(88888);
+    println!("{}", n + t.len());
 }
 "#;
 
@@ -1252,29 +1221,28 @@ fn release01_32_a_slice_element_of_a_cycle_member_survives_the_cycle_dropped_bef
 }
 
 const RELEASE01_33: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
-fn main() -> i64 {
-    let mut a = mk(12345)
-    let mut n: i64 = 0
+fn main() {
+    let mut a = mk(12345);
+    let mut n: i64 = 0;
     for b in bytes_of(&Rc::get(a)) {
-        a = poke(b)
-        let t: string = other(88888)
-        n = n + b + t.len
+        a = poke(b);
+        let t: String = other(88888);
+        n = n + b + t.len();
     }
-    println("{n}")
-    return 0
+    println!("{n}");
 }
 "#;
 
@@ -1286,28 +1254,27 @@ fn release01_33_a_for_over_a_view_returned_by_a_call_survives_the_body_dropping_
 }
 
 const RELEASE01_34: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
 fn clob(bs: &[u8], k: i64) -> i64 {
-    let p = poke(9)
-    let t: string = other(88888)
-    return bs[0] + bs.len + t.len + k
+    let p = poke(9);
+    let t: String = other(88888);
+    bs[0] + bs.len() + t.len() + k
 }
-fn main() -> i64 {
-    let mut a = mk(12345)
-    println(clob(bytes_of(&Rc::get(a)), { a = poke(5); 1 }))
-    return 0
+fn main() {
+    let mut a = mk(12345);
+    println!("{}", clob(bytes_of(&Rc::get(a)), { a = poke(5); 1 }));
 }
 "#;
 
@@ -1319,32 +1286,31 @@ fn release01_34_a_view_argument_returned_by_a_call_survives_a_block_argument_dro
 }
 
 const RELEASE01_35: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn other(n: i64) -> string { return "ZZ" + "{n}" }
-enum E { A(string), B }
-struct W { s: string, a: [string; 2], e: E, me: Rc<W> }
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn other(n: i64) -> String { "ZZ" + format!("{n}") }
+enum E { A(String), B }
+struct W { s: String, a: [String; 2], e: E, me: Rc<W> }
 fn mk(n: i64) -> Rc<W> {
-    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() })
-    w.me = w
-    return w
+    let w = Rc::new(W { s: victim(n), a: [victim(1), victim(n)], e: E::A(victim(n)), me: Rc::null() });
+    w.me = w;
+    w
 }
-fn poke(k: i64) -> Rc<W> { return Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
-fn bytes_of(w: &W) -> &[u8] { return (*w).s.bytes }
-fn take(s: string, k: i64) -> i64 { return s.len + s.bytes[0] + k }
+fn poke(k: i64) -> Rc<W> { Rc::new(W { s: other(k), a: [other(1), other(2)], e: E::B, me: Rc::null() }) }
+fn bytes_of(w: &W) -> &[u8] { (*w).s.as_bytes() }
+fn take(s: String, k: i64) -> i64 { s.len() + s.as_bytes()[0] + k }
 
-fn main() -> i64 {
-    let mut a = mk(12345)
-    let mut i = 0
-    let mut n = 0
-    let bs = Rc::get(a).s.bytes
+fn main() {
+    let mut a = mk(12345);
+    let mut i = 0;
+    let mut n = 0;
+    let bs = Rc::get(a).s.as_bytes();
     while i < 3 {
-        a = poke(i)
-        let t: string = other(88888)
-        n = n + bs[i] + t.len
-        i = i + 1
+        a = poke(i);
+        let t: String = other(88888);
+        n = n + bs[i] + t.len();
+        i = i + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }
 "#;
 
@@ -1356,31 +1322,30 @@ fn release01_35_a_bytes_view_held_across_iterations_survives_the_cycle_dropped_i
 }
 
 const RELEASE01_36: &str = r#"
-nogc fn take(h: fn() -> i64, s: string) -> i64 { return s.len }
-nogc fn spin(f: fn() -> i64, s: string, n: i64) -> i64 {
-    let mut i = 0
-    let mut t = 0
-    let mut acc: string = "x"
-    let mut g = f
+nogc fn take(h: fn() -> i64, s: String) -> i64 { s.len() }
+nogc fn spin(f: fn() -> i64, s: String, n: i64) -> i64 {
+    let mut i = 0;
+    let mut t = 0;
+    let mut acc: String = "x";
+    let mut g = f;
     while i < n {
-        g = f
-        acc = s
-        t = t + take(g, acc)
-        i = i + 1
+        g = f;
+        acc = s;
+        t = t + take(g, acc);
+        i = i + 1;
     }
-    return t
+    t
 }
-fn main() -> i64 {
-    let k: i64 = 5
-    let f = fn() -> i64 { return k }
-    let mut s: string = "a"
-    let mut j = 0
+fn main() {
+    let k: i64 = 5;
+    let f = move || -> i64 { k };
+    let mut s: String = "a";
+    let mut j = 0;
     while j < 3 {
-        s = s + "b"
-        j = j + 1
+        s = s + "b";
+        j = j + 1;
     }
-    println(spin(f, s, 10))
-    return 0
+    println!("{}", spin(f, s, 10));
 }
 "#;
 
@@ -1399,87 +1364,85 @@ fn release01_36_a_nogc_loop_releasing_closure_envs_and_strings_never_collects() 
 }
 
 const RELEASE01_37: &str = r#"
-struct S { s: string, k: i64 }
+struct S { s: String, k: i64 }
 struct Node { val: i64, next: Rc<Node> }
-nogc fn fill(p: &mut S, src: string, n: i64) {
-    let mut i = 0
+nogc fn fill(p: &mut S, src: String, n: i64) {
+    let mut i = 0;
     while i < n {
-        (*p).s = src
-        (*p).k = (*p).k + 1
-        i = i + 1
+        (*p).s = src;
+        (*p).k = (*p).k + 1;
+        i = i + 1;
     }
 }
-struct Tags { names: [string; 4], n: i64 }
+struct Tags { names: [String; 4], n: i64 }
 nogc fn rot(a: &mut Tags, n: i64) {
-    let mut i = 0
+    let mut i = 0;
     while i < n {
-        (*a).names[i % 4] = (*a).names[(i + 1) % 4]
-        i = i + 1
+        (*a).names[i % 4] = (*a).names[(i + 1) % 4];
+        i = i + 1;
     }
 }
-nogc fn relabel(s: string, n: i64) -> i64 {
-    let mut acc: string = "x"
-    let mut i = 0
+nogc fn relabel(s: String, n: i64) -> i64 {
+    let mut acc: String = "x";
+    let mut i = 0;
     while i < n {
-        acc = s
-        i = i + 1
+        acc = s;
+        i = i + 1;
     }
-    return acc.len
+    acc.len()
 }
-nogc fn take(h: fn() -> i64, s: string) -> i64 { return s.len }
-nogc fn spin(f: fn() -> i64, s: string, n: i64) -> i64 {
-    let mut i = 0
-    let mut t = 0
-    let mut g = f
+nogc fn take(h: fn() -> i64, s: String) -> i64 { s.len() }
+nogc fn spin(f: fn() -> i64, s: String, n: i64) -> i64 {
+    let mut i = 0;
+    let mut t = 0;
+    let mut g = f;
     while i < n {
-        g = f
-        t = t + take(g, s)
-        i = i + 1
+        g = f;
+        t = t + take(g, s);
+        i = i + 1;
     }
-    return t
+    t
 }
 fn churn(n: i64) -> i64 {
-    let mut i = 0
-    let mut t = 0
+    let mut i = 0;
+    let mut t = 0;
     while i < n {
-        let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-        a.next = a
-        t = t + Rc::get(a).val
-        i = i + 1
+        let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+        a.next = a;
+        t = t + Rc::get(a).val;
+        i = i + 1;
     }
-    return t
+    t
 }
-fn main() -> i64 {
-    let mut p = S { s: "a", k: 0 }
-    fill(&mut p, "b" + "c", 5)
-    let mut a = Tags { names: ["a", "bb", "ccc", "dddd"], n: 4 }
-    rot(&mut a, 7)
-    let k = 3
-    let f = fn() -> i64 { return k }
-    let t = spin(f, "xy" + "z", 4) + relabel("pq" + "r", 3) + churn(5)
-    println("{p.s} {p.k} {a.names[0]}{a.names[1]}{a.names[2]}{a.names[3]} {t}")
-    return 0
+fn main() {
+    let mut p = S { s: "a", k: 0 };
+    fill(&mut p, "b" + "c", 5);
+    let mut a = Tags { names: ["a", "bb", "ccc", "dddd"], n: 4 };
+    rot(&mut a, 7);
+    let k = 3;
+    let f = move || -> i64 { k };
+    let t = spin(f, "xy" + "z", 4) + relabel("pq" + "r", 3) + churn(5);
+    println!("{} {} {}{}{}{} {t}", p.s, p.k, a.names[0], a.names[1], a.names[2], a.names[3]);
 }
 "#;
 
 const RELEASE01_37_GLOBAL: &str = r#"
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-let mut G: string = "seed"
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+static mut G: String = "seed";
 nogc fn w(n: i64) {
-    let mut i = 0
+    let mut i = 0;
     while i < n {
-        G = "q"
-        i = i + 1
+        G = "q";
+        i = i + 1;
     }
 }
-nogc fn k(s: string) -> i64 {
-    w(3)
-    return s.bytes[0] + s.len
+nogc fn k(s: String) -> i64 {
+    w(3);
+    s.as_bytes()[0] + s.len()
 }
-fn main() -> i64 {
-    G = victim(12345)
-    println(k(G))
-    return 0
+fn main() {
+    G = victim(12345);
+    println!("{}", k(G));
 }
 "#;
 
@@ -1712,23 +1675,22 @@ fn release01_40_a_safepoint_planted_between_a_field_release_and_its_store_is_cau
 
 const RELEASE01_41: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let base: i64 = 0
-    let f = fn(n: i64) -> i64 {
-        let mut i = base
+fn main() {
+    let base: i64 = 0;
+    let f = move |n: i64| -> i64 {
+        let mut i = base;
 
-        let mut s = 0
+        let mut s = 0;
         while i < n {
-            let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() })
-            let b: Rc<Node> = Rc::new(Node { val: 1, next: a })
-            a.next = b
-            s = s + Rc::get(b).val
-            i = i + 1
+            let a: Rc<Node> = Rc::new(Node { val: i, next: Rc::null() });
+            let b: Rc<Node> = Rc::new(Node { val: 1, next: a });
+            a.next = b;
+            s = s + Rc::get(b).val;
+            i = i + 1;
         }
-        return s
-    }
-    println(f(30000))
-    return 0
+        s
+    };
+    println!("{}", f(30000));
 }
 "#;
 

@@ -36,22 +36,22 @@ fn assert_compiles(src: &str) {
 
 const USER_ENUM_VEC: &str = r#"
 enum Vec { Empty, One(i64) }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 const USER_STRUCT_RC: &str = r#"
 struct Rc { count: i64 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 const USER_STRUCT_VEC: &str = r#"
 struct Vec { len: i64 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 const USER_ENUM_RC: &str = r#"
 enum Rc { A, B }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 #[test]
@@ -77,7 +77,7 @@ fn user_enum_named_rc_rejects_e0419() {
 const RENAMED_TYPES: &str = r#"
 enum MyList { Empty, One(i64) }
 struct RefCount { count: i64 }
-fn main() -> i64 { return 0 }
+fn main() { }
 "#;
 
 #[test]
@@ -86,11 +86,11 @@ fn twin_renamed_user_types_compile() {
 }
 
 const BUILTIN_VEC_RC_USAGE: &str = r#"
-fn main() -> i64 {
-    let mut v = Vec::new()
-    Vec::push(v, 10)
-    let r: Rc<i64> = Rc::new(42)
-    return v[0] + Rc::get(r)
+use std::process::ExitCode; fn main() -> ExitCode {
+    let mut v = Vec::new();
+    Vec::push(v, 10);
+    let r: Rc<i64> = Rc::new(42);
+    return ExitCode::from((v[0] + Rc::get(r)) as u8);
 }
 "#;
 
@@ -101,21 +101,19 @@ fn twin_builtin_vec_rc_usage_compiles() {
 
 const INDIRECT_IF: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = if 1 == 1 { b } else { b }
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = if 1 == 1 { b } else { b };
 }
 "#;
 
 const INDIRECT_GROUPING: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = (b)
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = (b);
 }
 "#;
 
@@ -131,30 +129,27 @@ fn indirect_grouping_rc_field_assign_rejects_e0420() {
 
 const DIRECT_IDENT: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b;
 }
 "#;
 
 const DIRECT_RC_NEW: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    a.next = Rc::new(Node { val: 2, next: Rc::null() })
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    a.next = Rc::new(Node { val: 2, next: Rc::null() });
 }
 "#;
 
 const DIRECT_MEMBER: &str = r#"
 struct Node { val: i64, next: Rc<Node> }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() })
-    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() })
-    a.next = b.next
-    return 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1, next: Rc::null() });
+    let b: Rc<Node> = Rc::new(Node { val: 2, next: Rc::null() });
+    a.next = b.next;
 }
 "#;
 

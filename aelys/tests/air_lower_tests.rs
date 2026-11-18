@@ -43,7 +43,7 @@ fn has_named_call(f: &AirFunction, target: &str) -> bool {
 
 #[test]
 fn closure_env_struct_has_captured_field() {
-    let air = lower_source("fn outer(x) {\n    let c = fn(y) { return x + y }\n}");
+    let air = lower_source("fn outer(x) {\n    let c = move |y| { x + y };\n}");
     let env = air
         .structs
         .iter()
@@ -54,7 +54,7 @@ fn closure_env_struct_has_captured_field() {
 
 #[test]
 fn closure_function_first_param_is_env_ptr() {
-    let air = lower_source("fn outer(x) {\n    let c = fn(y) { return x + y }\n}");
+    let air = lower_source("fn outer(x) {\n    let c = move |y| { x + y };\n}");
     let lambda = air
         .functions
         .iter()
@@ -73,7 +73,7 @@ fn closure_function_first_param_is_env_ptr() {
 #[test]
 fn while_loop_has_branch_and_back_edge() {
     let air = lower_source(
-        "fn f() {\n    let mut x = 0\n    while x < 10 {\n        x = x + 1\n    }\n}",
+        "fn f() {\n    let mut x = 0;\n    while x < 10 {\n        x = x + 1;\n    }\n}",
     );
     let f = func(&air, "f");
     assert!(f.blocks.len() >= 3);
@@ -92,7 +92,7 @@ fn while_loop_has_branch_and_back_edge() {
 
 #[test]
 fn for_loop_has_four_blocks_with_mutable_iterator() {
-    let air = lower_source("fn f() {\n    for i in 0..10 {\n        let x = i\n    }\n}");
+    let air = lower_source("fn f() {\n    for i in 0..10 {\n        let x = i;\n    }\n}");
     let f = func(&air, "f");
     assert!(f.blocks.len() >= 4);
     let iter_local = f
@@ -116,7 +116,7 @@ fn for_loop_has_four_blocks_with_mutable_iterator() {
 
 #[test]
 fn short_circuit_and_produces_branch() {
-    let air = lower_source("fn f() {\n    let x = true && false\n}");
+    let air = lower_source("fn f() {\n    let x = true && false;\n}");
     let f = func(&air, "f");
     assert!(f.blocks.len() >= 3);
     assert!(
@@ -128,7 +128,7 @@ fn short_circuit_and_produces_branch() {
 
 #[test]
 fn fmt_string_calls_to_string_and_concat() {
-    let air = lower_source("fn f() {\n    let s = \"value: {42}\"\n}");
+    let air = lower_source("fn f() {\n    let s = format!(\"value: {}\", 42);\n}");
     let f = func(&air, "f");
     assert!(has_named_call(f, "__aelys_to_string"));
     assert!(has_named_call(f, "__aelys_str_concat"));
@@ -136,7 +136,7 @@ fn fmt_string_calls_to_string_and_concat() {
 
 #[test]
 fn cast_produces_rvalue_with_target_type() {
-    let air = lower_source("fn f() {\n    let v = 42 as f64\n}");
+    let air = lower_source("fn f() {\n    let v = 42 as f64;\n}");
     let f = func(&air, "f");
     let has_cast = f.blocks.iter().flat_map(|b| &b.stmts).any(|s| {
         matches!(
@@ -155,13 +155,13 @@ fn default_gc_mode_is_managed() {
 
 #[test]
 fn no_gc_decorator_sets_manual_mode() {
-    let air = lower_source("@no_gc\nfn f() { }");
+    let air = lower_source("#[no_gc]\nfn f() { }");
     assert_eq!(func(&air, "f").gc_mode, GcMode::Manual);
 }
 
 #[test]
 fn int_literal_defaults_to_i64() {
-    let air = lower_source("let a = 42");
+    let air = lower_source("static a: i64 = 42;");
     let g = air
         .globals
         .iter()
@@ -172,7 +172,7 @@ fn int_literal_defaults_to_i64() {
 
 #[test]
 fn float_literal_defaults_to_f64() {
-    let air = lower_source("let pi = 3.14");
+    let air = lower_source("static pi: f64 = 3.14;");
     let g = air
         .globals
         .iter()
@@ -188,10 +188,10 @@ fn float_literal_defaults_to_f64() {
 fn top_level_global_read_uses_global_get_instead_of_closure_env() {
     let air = lower_source(
         r#"
-let g: i64 = 7
+use std::process::ExitCode; static g: i64 = 7;
 
-fn main() -> i64 {
-    return g
+fn main() -> ExitCode {
+    return ExitCode::from(g as u8);
 }
 "#,
     );
@@ -220,7 +220,7 @@ enum Color {
     Green,
 }
 
-let c: Color = Color::Green
+static c: Color = Color::Green;
 "#,
     );
 
@@ -244,7 +244,7 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::None
+static g: Option<i64> = Option::None;
 "#,
     );
 
@@ -268,7 +268,7 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::Some(42)
+static g: Option<i64> = Option::Some(42);
 "#,
     );
 
@@ -289,11 +289,11 @@ let g: Option<i64> = Option::Some(42)
 fn top_level_fnptr_global_alias_lowers_to_target_fnref() {
     let air = lower_source(
         r#"
-let g: fn() -> i64 = main
-let h: fn() -> i64 = g
+use std::process::ExitCode; static g: fn() -> i64 = main;
+static h: fn() -> i64 = g;
 
-fn main() -> i64 {
-    return h()
+fn main() -> ExitCode {
+    return ExitCode::from(h() as u8);
 }
 "#,
     );
@@ -318,8 +318,8 @@ enum Option<T> {
     None,
 }
 
-let g: Option<i64> = Option::None
-let h: Option<i64> = g
+static g: Option<i64> = Option::None;
+static h: Option<i64> = g;
 "#,
     );
 
@@ -340,7 +340,7 @@ fn null_literal_lowers_to_ptr_void_not_bare_void() {
     let air = lower_source(
         r#"
 fn make_null() {
-    let x = null
+    let x = null;
 }
 "#,
     );
@@ -363,7 +363,7 @@ fn null_literal_type_is_not_void() {
     let air = lower_source(
         r#"
 fn test_null() {
-    let y = null
+    let y = null;
 }
 "#,
     );
@@ -387,8 +387,8 @@ fn non_constant_array_size_in_expr_produces_error() {
     lower_source(
         r#"
 fn f(n: i64) -> i64 {
-    let arr = [0; n]
-    return 0
+    let arr = [0; n];
+    0
 }
 "#,
     );
@@ -400,8 +400,8 @@ fn non_constant_array_size_error_message_is_descriptive() {
     lower_source(
         r#"
 fn g(size: i64) -> i64 {
-    let arr = [42; size]
-    return 0
+    let arr = [42; size];
+    0
 }
 "#,
     );
@@ -413,8 +413,8 @@ fn oversized_stack_array_in_expr_produces_error() {
     lower_source(
         r#"
 fn h() -> i64 {
-    let x = [0; 200000]
-    return x[0]
+    let x = [0; 200000];
+    x[0]
 }
 "#,
     );
@@ -426,8 +426,8 @@ fn oversized_array_error_aggregated_in_finish() {
     lower_source(
         r#"
 fn big() -> i64 {
-    let huge = [1; 300000]
-    return huge[0]
+    let huge = [1; 300000];
+    huge[0]
 }
 "#,
     );

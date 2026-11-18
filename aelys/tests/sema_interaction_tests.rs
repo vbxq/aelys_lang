@@ -35,10 +35,10 @@ fn constraint_chain_through_multiple_variables() {
         sema_ok(
             r#"
 fn f() -> i64 {
-    let c: i64 = 42
-    let b = c
-    let a = b
-    return a
+    let c: i64 = 42;
+    let b = c;
+    let a = b;
+    a
 }
 "#
         ),
@@ -52,8 +52,8 @@ fn constraint_conflict_detected() {
     assert!(
         sema_err(
             r#"
-fn f(a: i64) -> string {
-    return a
+fn f(a: i64) -> String {
+    a
 }
 "#
         ),
@@ -67,10 +67,10 @@ fn generic_function_called_with_different_types() {
     assert!(
         sema_ok(
             r#"
-fn id<T>(x: T) -> T { return x }
+fn id<T>(x: T) -> T { x }
 fn test() -> i64 {
-    let a = id(42)
-    return a
+    let a = id(42);
+    a
 }
 "#
         ),
@@ -86,7 +86,7 @@ fn struct_field_type_resolves_through_constraint() {
             r#"
 struct Vec2 { x: f64, y: f64 }
 fn length(v: Vec2) -> f64 {
-    return v.x * v.x + v.y * v.y
+    v.x * v.x + v.y * v.y
 }
 "#
         ),
@@ -101,9 +101,9 @@ fn struct_field_used_in_binary_op() {
         sema_err(
             r#"
 struct Foo { x: i64 }
-fn f() -> string {
-    let foo = Foo { x: 42 }
-    return foo.x
+fn f() -> String {
+    let foo = Foo { x: 42 };
+    foo.x
 }
 "#
         ),
@@ -119,8 +119,8 @@ fn struct_field_narrowing() {
             r#"
 struct Small { val: i32 }
 fn f() -> i32 {
-    let s = Small { val: 10 }
-    return s.val
+    let s = Small { val: 10 };
+    s.val
 }
 "#
         ),
@@ -135,7 +135,7 @@ fn array_of_structs_field_access() {
             r#"
 struct Item { val: i64 }
 fn get_val(items: [Item; 3], idx: i64) -> i64 {
-    return items[idx].val
+    items[idx].val
 }
 "#
         ),
@@ -149,8 +149,8 @@ fn array_element_type_mismatch_in_struct() {
         sema_err(
             r#"
 fn f() {
-    let arr = [1, 2, 3]
-    let s: string = arr[0]
+    let arr = [1, 2, 3];
+    let s: String = arr[0];
 }
 "#
         ),
@@ -164,7 +164,7 @@ fn annotated_vec_rejects_incompatible_element_type() {
         sema_err(
             r#"
 fn f() {
-    let v = vec<i64>["hello"]
+    let v: Vec<i64> = vec!["hello"];
 }
 "#
         ),
@@ -177,11 +177,11 @@ fn closure_capture_type_resolution() {
     assert!(
         sema_ok(
             r#"
-fn apply(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }
+fn apply(f: fn(i64) -> i64, x: i64) -> i64 { f(x) }
 fn test() -> i64 {
-    let offset: i64 = 10
-    let add = fn(x: i64) -> i64 { return x + offset }
-    return apply(add, 5)
+    let offset: i64 = 10;
+    let add = move |x: i64| -> i64 { x + offset };
+    apply(add, 5)
 }
 "#
         ),
@@ -195,7 +195,7 @@ fn closure_return_type_mismatch() {
         sema_err(
             r#"
 fn test() {
-    let f = fn(x: i64) -> string { return x }
+    let f = move |x: i64| -> String { x };
 }
 "#
         ),
@@ -211,11 +211,11 @@ fn error_in_struct_field_doesnt_crash_other_functions() {
             r#"
 struct Point { x: i64, y: i64 }
 fn bad() -> i64 {
-    let p = Point { x: 1, y: 2 }
-    return p.z
+    let p = Point { x: 1, y: 2 };
+    p.z
 }
 fn good() -> i64 {
-    return 42
+    42
 }
 "#
         ),
@@ -229,9 +229,9 @@ fn narrowing_in_if_branches() {
             r#"
 fn f(cond: bool) -> i32 {
     if cond {
-        return 1
+        return 1;
     }
-    return 0
+    0
 }
 "#
         ),
@@ -245,8 +245,8 @@ fn narrowing_array_of_i32() {
         sema_ok(
             r#"
 fn f() -> i32 {
-    let arr: [i32; 3] = [1, 2, 3]
-    return arr[0]
+    let arr: [i32; 3] = [1, 2, 3];
+    arr[0]
 }
 "#
         ),
@@ -260,11 +260,11 @@ fn narrowing_in_while_body() {
         sema_ok(
             r#"
 fn f() -> i32 {
-    let mut x: i32 = 0
+    let mut x: i32 = 0;
     while x < 10 {
-        x = x + 1
+        x = x + 1;
     }
-    return x
+    x
 }
 "#
         ),
@@ -278,9 +278,9 @@ fn dynamic_function_accepts_any_type() {
         sema_ok_with_builtins(
             r#"
 fn test() {
-    println("hello")
-    println(42)
-    println(true)
+    println!("hello");
+    println!("{}", 42);
+    println!("{}", true);
 }
 "#
         ),
@@ -295,9 +295,9 @@ fn recursive_function_return_type() {
             r#"
 fn fib(n: i64) -> i64 {
     if n < 2 {
-        return n
+        return n;
     }
-    return fib(n - 1) + fib(n - 2)
+    fib(n - 1) + fib(n - 2)
 }
 "#
         ),
@@ -310,11 +310,11 @@ fn recursive_function_return_type_mismatch() {
     assert!(
         sema_err(
             r#"
-fn fib(n: i64) -> string {
+fn fib(n: i64) -> String {
     if n < 2 {
-        return n
+        return n;
     }
-    return fib(n - 1)
+    fib(n - 1)
 }
 "#
         ),
@@ -328,8 +328,8 @@ fn index_assign_type_mismatch() {
         sema_err(
             r#"
 fn f() {
-    let mut arr = [1, 2, 3]
-    arr[0] = "hello"
+    let mut arr = [1, 2, 3];
+    arr[0] = "hello";
 }
 "#
         ),
@@ -343,7 +343,7 @@ fn cast_preserves_type() {
         sema_ok(
             r#"
 fn f(x: i64) -> f64 {
-    return x as f64
+    x as f64
 }
 "#
         ),
@@ -357,7 +357,7 @@ fn cast_chain_type_changes() {
         sema_ok(
             r#"
 fn f(x: i64) -> i8 {
-    return (x as i32) as i8
+    (x as i32) as i8
 }
 "#
         ),
@@ -388,9 +388,9 @@ fn multiple_returns_different_literal_types() {
             r#"
 fn f(cond: bool) -> i64 {
     if cond {
-        return "hello"
+        return "hello";
     }
-    return 42
+    42
 }
 "#
         ),
@@ -404,11 +404,11 @@ fn for_loop_iterator_is_i64() {
         sema_ok(
             r#"
 fn sum_to(n: i64) -> i64 {
-    let mut total: i64 = 0
+    let mut total: i64 = 0;
     for i in 0..n {
-        total = total + i
+        total = total + i;
     }
-    return total
+    total
 }
 "#
         ),
@@ -422,8 +422,8 @@ fn nested_function_has_own_scope() {
         sema_ok(
             r#"
 fn outer() -> i64 {
-    fn inner(x: i64) -> i64 { return x + 1 }
-    return inner(41)
+    fn inner(x: i64) -> i64 { x + 1 }
+    inner(41)
 }
 "#
         ),
@@ -436,8 +436,8 @@ fn string_equality_comparison() {
     assert!(
         sema_ok(
             r#"
-fn eq(a: string, b: string) -> bool {
-    return a == b
+fn eq(a: String, b: String) -> bool {
+    a == b
 }
 "#
         ),
@@ -451,7 +451,7 @@ fn unknown_struct_literal_is_rejected_in_sema() {
         sema_err(
             r#"
 fn main() {
-    let x = Ghost { a: 1 }
+    let x = Ghost { a: 1 };
 }
 "#
         ),

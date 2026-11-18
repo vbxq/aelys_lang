@@ -47,8 +47,8 @@ fn compile_source_expect_error(source: &str) -> String {
 fn llvm_rejects_user_defined_reserved_bootstrap_println() {
     let error = compile_source_expect_error(
         r#"
-fn println(s: string) {
-    return
+fn println(s: String) {
+    return;
 }
 "#,
     );
@@ -66,7 +66,7 @@ fn llvm_println_bootstrap_uses_write_ptr_len_only() {
     let ir = compile_source_to_verified_ir(
         r#"
 fn greet() {
-    println("Hello")
+    println!("Hello");
 }
 "#,
     );
@@ -89,13 +89,13 @@ fn greet() {
 fn llvm_user_str_param_is_passed_as_aelys_string_struct() {
     let ir = compile_source_to_verified_ir_with_opt(
         r#"
-fn sink(s: string) -> i64 {
-    print(s)
-    return 0
+fn sink(s: String) -> i64 {
+    print!("{}", s);
+    0
 }
 
 fn caller() -> i64 {
-    return sink("Hello")
+    sink("Hello")
 }
 "#,
         OptimizationLevel::None,
@@ -119,9 +119,9 @@ fn caller() -> i64 {
 fn unknown_field_on_str() {
     let error = compile_source_expect_error(
         r#"
-fn main() -> i64 {
-    let s = "Hello"
-    return s.foo
+use std::process::ExitCode; fn main() -> ExitCode {
+    let s = "Hello";
+    return ExitCode::from(s.foo as u8);
 }
 "#,
     );

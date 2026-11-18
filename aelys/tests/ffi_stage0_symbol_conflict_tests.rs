@@ -227,7 +227,7 @@ fn two_definitions_of_one_symbol_stay_on_the_older_code() {
 fn e0612_names_the_symbol_and_both_sites() {
     let source = Source::new(
         "<unit>",
-        "fn f(a: i64) -> i64 { return a }\nfn main() -> i64 { return f(1) }\n",
+        "use std::process::ExitCode; fn f(a: i64) -> i64 { a }\nfn main() -> ExitCode { return ExitCode::from(f(1) as u8); }\n",
     );
     let mut diag = CompileError::new(
         CompileErrorKind::ConflictingExternalSymbol {
@@ -254,17 +254,17 @@ fn e0612_names_the_symbol_and_both_sites() {
     assert!(!info.explanation.is_empty(), "E0612 must explain itself");
 }
 
-const BIG_ALLOC_MAIN: &str = r#"fn main() -> i64 {
-    let mut s: string = ""
+const BIG_ALLOC_MAIN: &str = r#"use std::process::ExitCode; fn main() -> ExitCode {
+    let mut s: String = "";
     for i in 0..20000 {
-        s = s + "x"
+        s = s + "x";
     }
-    println("{s.len}")
-    return 7
+    println!("{}", s.len());
+    return ExitCode::from(7);
 }
 "#;
 
-const MALLOC_DEFINITION: &str = "fn malloc(n: i64) -> i64 { return 0 }\n";
+const MALLOC_DEFINITION: &str = "fn malloc(n: i64) -> i64 { 0 }\n";
 
 struct Run {
     stdout: String,
@@ -347,7 +347,7 @@ fn an_aelys_main_never_claims_the_runtime_entry() {
 
 #[test]
 fn e0613_names_the_symbol_and_the_site() {
-    let source = Source::new("<unit>", "fn free(p: i64) -> i64 { return p }\n");
+    let source = Source::new("<unit>", "fn free(p: i64) -> i64 { p }\n");
     let rendered = CompileError::new(
         CompileErrorKind::ReservedRuntimeSymbol {
             symbol: "free".to_string(),
@@ -587,21 +587,21 @@ fn f3_37_a_declaration_of_a_bootstrap_builtin_is_claimed_too() {
     );
 }
 
-const EXTERN_MALLOC: &str = "unsafe extern fn malloc(n: i64) -> i64
+const EXTERN_MALLOC: &str = "use std::process::ExitCode; extern \"C\" { fn malloc(n: i64) -> i64; }
 
-fn main() -> i64 {
-    let p: i64 = unsafe { malloc(16) }
+fn main() -> ExitCode {
+    let p: i64 = unsafe { malloc(16) };
     if p == 0 {
-        return 1
+        return ExitCode::from(1);
     }
-    return 23
+    return ExitCode::from(23);
 }
 ";
 
 // gates the call site on , so the old bare spelling is kept as a rejected twin
 #[test]
 fn f3_38_bis_the_old_bare_spelling_of_the_malloc_call_is_now_e0617() {
-    let bare = "unsafe extern fn malloc(n: i64) -> i64\n\nfn main() -> i64 {\n    let p: i64 = malloc(16)\n    return p\n}\n";
+    let bare = "use std::process::ExitCode; extern \"C\" { fn malloc(n: i64) -> i64; }\n\nfn main() -> ExitCode {\n    let p: i64 = malloc(16);\n    return ExitCode::from(p as u8);\n}\n";
     let rendered = match aelys_driver::compile_to_typed_ast(bare) {
         Ok(_) => panic!("F3-38-bis: the bare call MUST be rejected\n{bare}"),
         Err(rendered) => rendered.to_string(),
@@ -635,10 +635,10 @@ fn rejected(name: &str, source: &str) -> String {
 fn f3_39_a_declaration_named_main_is_rejected() {
     let rendered = rejected(
         "extmain",
-        "unsafe extern fn main() -> i64
+        "extern \"C\" { fn main() -> i64; }
 
 fn f() -> i64 {
-    return 0
+    0
 }
 ",
     );
@@ -653,10 +653,9 @@ fn f() -> i64 {
 fn f3_40_a_declaration_named_after_the_allocator_is_rejected() {
     let rendered = rejected(
         "extimmix",
-        "unsafe extern fn aelys_immix_alloc(n: i64) -> i64
+        "extern \"C\" { fn aelys_immix_alloc(n: i64) -> i64; }
 
-fn main() -> i64 {
-    return 0
+fn main() {
 }
 ",
     );
@@ -673,10 +672,10 @@ fn f3_41_a_lying_declaration_of_a_data_object_links_and_crashes() {
     let run = compile_and_run(
         dir.path(),
         "callstdout",
-        "unsafe extern fn stdout() -> i64
+        "use std::process::ExitCode; extern \"C\" { fn stdout() -> i64; }
 
-fn main() -> i64 {
-    unsafe { return stdout() }
+fn main() -> ExitCode {
+    unsafe { return ExitCode::from(stdout() as u8); }
 }
 ",
     );
@@ -693,10 +692,10 @@ fn f3_42_the_same_declaration_never_called_answers_normally() {
     let run = compile_and_run(
         dir.path(),
         "declstdout",
-        "unsafe extern fn stdout() -> i64
+        "use std::process::ExitCode; extern \"C\" { fn stdout() -> i64; }
 
-fn main() -> i64 {
-    return 11
+fn main() -> ExitCode {
+    return ExitCode::from(11);
 }
 ",
     );
@@ -729,11 +728,11 @@ const OPT_LEVELS: [OptimizationLevel; 4] = [
 ];
 
 const UNSAFE_RETURN: &str =
-    "fn g(x: i64) -> i64 { unsafe { return x } }\nfn main() -> i64 { return g(7) }\n";
+    "use std::process::ExitCode; fn g(x: i64) -> i64 { unsafe { return x; } }\nfn main() -> ExitCode { return ExitCode::from(g(7) as u8); }\n";
 
-const UNSAFE_TAIL_CALL: &str = "fn h(x: i64) -> i64 { return x }\nfn g(x: i64) -> i64 { unsafe { h(x) } }\nfn main() -> i64 { return g(7) }\n";
+const UNSAFE_TAIL_CALL: &str = "use std::process::ExitCode; fn h(x: i64) -> i64 { x }\nfn g(x: i64) -> i64 { unsafe { h(x) } }\nfn main() -> ExitCode { return ExitCode::from(g(7) as u8); }\n";
 
-const UNSAFE_RETURN_REFERENCE: &str = "fn g(r: &i64) -> &i64 { unsafe { return r } }\nfn main() -> i64 {\n    let x: i64 = 7\n    let p: &i64 = &x\n    return *g(p)\n}\n";
+const UNSAFE_RETURN_REFERENCE: &str = "use std::process::ExitCode; fn g(r: &i64) -> &i64 { unsafe { return r; } }\nfn main() -> ExitCode {\n    let x: i64 = 7;\n    let p: &i64 = &x;\n    return ExitCode::from((*g(p)) as u8);\n}\n";
 
 // this row pinned as the verdict; seals the dead tail block, so it now pins the answer
 #[test]
@@ -887,10 +886,10 @@ fn run_root(files: Files) -> Run {
 }
 
 const MODULE_MALLOC: Files = &[
-    ("m.aelys", "pub fn malloc(n: i64) -> i64 {\n    return n * 2\n}\n"),
+    ("m.aelys", "pub fn malloc(n: i64) -> i64 {\n    n * 2\n}\n"),
     (
         "root.aelys",
-        "needs m\n\nfn main() -> i64 {\n    return m.malloc(3)\n}\n",
+        "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::malloc(3) as u8);\n}\n",
     ),
 ];
 
@@ -917,7 +916,7 @@ fn a_module_definition_named_malloc_reaches_the_link_qualified_and_runs() {
 fn a_root_definition_named_malloc_is_still_rejected() {
     let dir = stage(&[(
         "root.aelys",
-        "fn malloc(n: i64) -> i64 {\n    return n * 2\n}\nfn main() -> i64 {\n    return malloc(3)\n}\n",
+        "use std::process::ExitCode; fn malloc(n: i64) -> i64 {\n    n * 2\n}\nfn main() -> ExitCode {\n    return ExitCode::from(malloc(3) as u8);\n}\n",
     )]);
     let rendered = compile_file_with_llvm(
         &dir.path().join("root.aelys"),
@@ -938,11 +937,11 @@ fn a_private_module_definition_named_malloc_is_accepted() {
     const FILES: Files = &[
         (
             "m.aelys",
-            "fn malloc(n: i64) -> i64 {\n    return n * 3\n}\npub fn through(n: i64) -> i64 {\n    return malloc(n)\n}\n",
+            "fn malloc(n: i64) -> i64 {\n    n * 3\n}\npub fn through(n: i64) -> i64 {\n    malloc(n)\n}\n",
         ),
         (
             "root.aelys",
-            "needs m\n\nfn main() -> i64 {\n    return m.through(3)\n}\n",
+            "use std::process::ExitCode; mod m;\n\nfn main() -> ExitCode {\n    return ExitCode::from(m::through(3) as u8);\n}\n",
         ),
     ];
     assert_eq!(run_root(FILES).status, 9, "a private body is qualified too");
@@ -953,7 +952,7 @@ fn a_nested_module_path_keeps_a_reserved_name_off_the_link() {
     const FILES: Files = &[
         (
             "a/b/c.aelys",
-            "pub fn malloc(n: i64) -> i64 {\n    return n * 2\n}\n",
+            "pub fn malloc(n: i64) -> i64 {\n    n * 2\n}\n",
         ),
         (
             "root.aelys",
@@ -972,11 +971,11 @@ fn a_nested_module_path_keeps_a_reserved_name_off_the_link() {
 #[test]
 fn one_reserved_name_defined_in_two_modules_at_once_is_accepted() {
     const FILES: Files = &[
-        ("m.aelys", "pub fn malloc(n: i64) -> i64 {\n    return n * 2\n}\n"),
-        ("n.aelys", "pub fn malloc(n: i64) -> i64 {\n    return n + 100\n}\n"),
+        ("m.aelys", "pub fn malloc(n: i64) -> i64 {\n    n * 2\n}\n"),
+        ("n.aelys", "pub fn malloc(n: i64) -> i64 {\n    n + 100\n}\n"),
         (
             "root.aelys",
-            "needs m\nneeds n\n\nfn main() -> i64 {\n    return m.malloc(1) + n.malloc(1)\n}\n",
+            "use std::process::ExitCode; mod m;\nmod n;\n\nfn main() -> ExitCode {\n    return ExitCode::from((m::malloc(1) + n::malloc(1)) as u8);\n}\n",
         ),
     ];
     let dir = stage(FILES);
@@ -991,18 +990,18 @@ fn one_reserved_name_defined_in_two_modules_at_once_is_accepted() {
 #[test]
 fn a_diamond_over_an_aliased_reserved_name_stays_one_qualified_definition() {
     const FILES: Files = &[
-        ("base.aelys", "pub fn free(n: i64) -> i64 {\n    return n * 2\n}\n"),
+        ("base.aelys", "pub fn free(n: i64) -> i64 {\n    n * 2\n}\n"),
         (
             "left.aelys",
-            "needs base as z\npub fn l(n: i64) -> i64 {\n    return z.free(n)\n}\n",
+            "mod base; use base as z;\npub fn l(n: i64) -> i64 {\n    z::free(n)\n}\n",
         ),
         (
             "right.aelys",
-            "needs base\npub fn r(n: i64) -> i64 {\n    return base.free(n) + 1\n}\n",
+            "mod base;\npub fn r(n: i64) -> i64 {\n    base::free(n) + 1\n}\n",
         ),
         (
             "root.aelys",
-            "needs left\nneeds right\n\nfn main() -> i64 {\n    return left.l(2) + right.r(2)\n}\n",
+            "use std::process::ExitCode; mod left;\nmod right;\n\nfn main() -> ExitCode {\n    return ExitCode::from((left::l(2) + right::r(2)) as u8);\n}\n",
         ),
     ];
     let dir = stage(FILES);

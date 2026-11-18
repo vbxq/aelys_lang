@@ -33,8 +33,8 @@ fn array_literal_inferred() {
     let ir = compile_to_verified_ir(
         r#"
 fn second() -> i64 {
-    let arr = [10, 20, 30]
-    return arr[1]
+    let arr = [10, 20, 30];
+    arr[1]
 }
 "#,
     );
@@ -70,8 +70,8 @@ fn array_literal_annotated() {
     let ir = compile_to_verified_ir(
         r#"
 fn second() -> i64 {
-    let arr: [i64; 3] = [10, 20, 30]
-    return arr[1]
+    let arr: [i64; 3] = [10, 20, 30];
+    arr[1]
 }
 "#,
     );
@@ -98,8 +98,8 @@ fn array_annotation_f64() {
     let ir = compile_to_verified_ir(
         r#"
 fn first() -> f64 {
-    let arr: [f64; 2] = [1.0, 2.0]
-    return arr[0]
+    let arr: [f64; 2] = [1.0, 2.0];
+    arr[0]
 }
 "#,
     );
@@ -118,8 +118,8 @@ fn array_repeat_syntax() {
     let ir = compile_to_verified_ir(
         r#"
 fn first_zero() -> i64 {
-    let zeros = [0; 100]
-    return zeros[0]
+    let zeros = [0; 100];
+    zeros[0]
 }
 "#,
     );
@@ -139,8 +139,8 @@ fn array_repeat_syntax_nonzero_fill() {
     let ir = compile_to_verified_ir(
         r#"
 fn first_val() -> i64 {
-    let arr = [42; 5]
-    return arr[0]
+    let arr = [42; 5];
+    arr[0]
 }
 "#,
     );
@@ -160,8 +160,8 @@ fn array_repeat_syntax_small() {
     let ir = compile_to_verified_ir(
         r#"
 fn val() -> i64 {
-    let arr = [7; 3]
-    return arr[2]
+    let arr = [7; 3];
+    arr[2]
 }
 "#,
     );
@@ -181,8 +181,8 @@ fn array_f64() {
     let ir = compile_to_verified_ir(
         r#"
 fn first_f() -> f64 {
-    let arr = [1.5, 2.7, 3.14]
-    return arr[0]
+    let arr = [1.5, 2.7, 3.14];
+    arr[0]
 }
 "#,
     );
@@ -205,8 +205,8 @@ fn array_bool() {
     let ir = compile_to_verified_ir(
         r#"
 fn first_b() -> bool {
-    let arr = [true, false, true]
-    return arr[0]
+    let arr = [true, false, true];
+    arr[0]
 }
 "#,
     );
@@ -222,7 +222,7 @@ fn array_param_syntax() {
     let ir = compile_to_verified_ir(
         r#"
 fn process(data: [i64; 3]) -> i64 {
-    return data[0]
+    data[0]
 }
 "#,
     );
@@ -241,8 +241,8 @@ fn array_return_compiles() {
     let ir = compile_to_verified_ir(
         r#"
 fn make() -> [i64; 3] {
-    let arr = [1, 2, 3]
-    return arr
+    let arr = [1, 2, 3];
+    arr
 }
 "#,
     );
@@ -255,8 +255,8 @@ fn array_stack_overflow_repeat() {
     compile_to_verified_ir(
         r#"
 fn huge() -> i64 {
-    let big = [0; 200000]
-    return big[0]
+    let big = [0; 200000];
+    big[0]
 }
 "#,
     );
@@ -269,8 +269,8 @@ fn array_stack_overflow_let_optimization() {
     compile_to_verified_ir(
         r#"
 fn huge_let() -> i64 {
-    let big = [0; 500000]
-    return big[0]
+    let big = [0; 500000];
+    big[0]
 }
 "#,
     );
@@ -281,8 +281,8 @@ fn array_index_read() {
     let ir = compile_to_verified_ir(
         r#"
 fn third() -> i64 {
-    let arr = [100, 200, 300]
-    return arr[2]
+    let arr = [100, 200, 300];
+    arr[2]
 }
 "#,
     );
@@ -305,9 +305,9 @@ fn array_index_write() {
     let ir = compile_to_verified_ir(
         r#"
 fn mutate() -> i64 {
-    let mut arr = [10, 20, 30]
-    arr[1] = 99
-    return arr[1]
+    let mut arr = [10, 20, 30];
+    arr[1] = 99;
+    arr[1]
 }
 "#,
     );
@@ -326,12 +326,12 @@ fn array_foreach_known_length() {
     let ir = compile_to_verified_ir(
         r#"
 fn sum_arr() -> i64 {
-    let arr = [1, 2, 3]
-    let mut total: i64 = 0
+    let arr = [1, 2, 3];
+    let mut total: i64 = 0;
     for x in arr {
-        total = total + x
+        total = total + x;
     }
-    return total
+    total
 }
 "#,
     );
@@ -350,8 +350,8 @@ fn array_let_optimization_literal() {
     let ir = compile_to_verified_ir(
         r#"
 fn get() -> i64 {
-    let arr = [5, 10, 15]
-    return arr[0]
+    let arr = [5, 10, 15];
+    arr[0]
 }
 "#,
     );
@@ -369,8 +369,8 @@ fn array_let_optimization_repeat() {
     let ir = compile_to_verified_ir(
         r#"
 fn get() -> i64 {
-    let arr = [99; 10]
-    return arr[5]
+    let arr = [99; 10];
+    arr[5]
 }
 "#,
     );
@@ -390,8 +390,8 @@ fn array_single_element() {
     let ir = compile_to_verified_ir(
         r#"
 fn only() -> i64 {
-    let arr = [42]
-    return arr[0]
+    let arr = [42];
+    arr[0]
 }
 "#,
     );
@@ -407,14 +407,14 @@ fn array_in_loop_body() {
     let ir = compile_to_verified_ir(
         r#"
 fn use_in_loop() -> i64 {
-    let mut result: i64 = 0
-    let mut i: i64 = 0
+    let mut result: i64 = 0;
+    let mut i: i64 = 0;
     while i < 3 {
-        let arr = [i, i, i]
-        result = result + arr[0]
-        i = i + 1
+        let arr = [i, i, i];
+        result = result + arr[0];
+        i = i + 1;
     }
-    return result
+    result
 }
 "#,
     );
@@ -429,8 +429,8 @@ fn array_with_expressions() {
     let ir = compile_to_verified_ir(
         r#"
 fn expr_arr(a: i64) -> i64 {
-    let arr = [a + 1, a * 2, a - 3]
-    return arr[1]
+    let arr = [a + 1, a * 2, a - 3];
+    arr[1]
 }
 "#,
     );
@@ -458,9 +458,9 @@ fn array_struct_elements() {
         r#"
 struct Pair { x: i64, y: i64 }
 fn make_pairs() -> i64 {
-    let a = Pair { x: 1, y: 2 }
-    let b = Pair { x: 3, y: 4 }
-    return a.x + b.y
+    let a = Pair { x: 1, y: 2 };
+    let b = Pair { x: 3, y: 4 };
+    a.x + b.y
 }
 "#,
     );

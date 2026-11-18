@@ -26,7 +26,7 @@ fn warm_core_archive() {
     WARM.call_once(|| {
         let Ok(dir) = tempdir() else { return };
         let path = dir.path().join("warmup.aelys");
-        if fs::write(&path, "fn main() -> i64 { return 0 }\n").is_err() {
+        if fs::write(&path, "fn main() { }\n").is_err() {
             return;
         }
         let _ = compile_file_with_llvm_variant(
@@ -257,47 +257,44 @@ impl Harness {
 
 const S6_H1: &str = "struct V3 { x: i64, y: i64, z: i64 }\n\
                      nogc fn cn(src: &[V3], dst: &mut [V3]) -> i64 {\n\
-                     \x20   dst[0].x = src[0].y\n\
-                     \x20   return 0\n\
+                     \x20   dst[0].x = src[0].y;\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut sv: Vec<V3> = vec[V3 { x: 7919, y: 101, z: 3 }]\n\
-                     \x20   let mut dv: Vec<V3> = vec[V3 { x: 0, y: 0, z: 0 }]\n\
-                     \x20   let dw: Vec<V3> = dv\n\
-                     \x20   let q = cn(sv[0..1], dv[0..1])\n\
-                     \x20   println(dv[0].x)\n\
-                     \x20   println(dw[0].x)\n\
-                     \x20   println(sv[0].x)\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut sv: Vec<V3> = vec![V3 { x: 7919, y: 101, z: 3 }];\n\
+                     \x20   let mut dv: Vec<V3> = vec![V3 { x: 0, y: 0, z: 0 }];\n\
+                     \x20   let dw: Vec<V3> = dv;\n\
+                     \x20   let q = cn(sv[0..1], dv[0..1]);\n\
+                     \x20   println!(\"{}\", dv[0].x);\n\
+                     \x20   println!(\"{}\", dw[0].x);\n\
+                     \x20   println!(\"{}\", sv[0].x);\n\
                      }\n";
 
 const S6_H2: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut sv: Vec<i64> = vec[7919]\n\
-                     \x20   let mut dv: Vec<i64> = vec[0]\n\
-                     \x20   let dw: Vec<i64> = dv\n\
-                     \x20   let q = cn(sv[0..1], dv[0..1])\n\
-                     \x20   println(dv[0])\n\
-                     \x20   println(dw[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut sv: Vec<i64> = vec![7919];\n\
+                     \x20   let mut dv: Vec<i64> = vec![0];\n\
+                     \x20   let dw: Vec<i64> = dv;\n\
+                     \x20   let q = cn(sv[0..1], dv[0..1]);\n\
+                     \x20   println!(\"{}\", dv[0]);\n\
+                     \x20   println!(\"{}\", dw[0]);\n\
                      }\n";
 
-const S6_H3: &str = "nogc fn dbl(x: i64) -> i64 { return x + x }\n\
+const S6_H3: &str = "nogc fn dbl(x: i64) -> i64 { x + x }\n\
                      nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = dbl(src[0])\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = dbl(src[0]);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut sv: Vec<i64> = vec[50]\n\
-                     \x20   let mut dv: Vec<i64> = vec[0]\n\
-                     \x20   let dw: Vec<i64> = dv\n\
-                     \x20   let q = cn(sv[0..1], dv[0..1])\n\
-                     \x20   println(dv[0])\n\
-                     \x20   println(dw[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut sv: Vec<i64> = vec![50];\n\
+                     \x20   let mut dv: Vec<i64> = vec![0];\n\
+                     \x20   let dw: Vec<i64> = dv;\n\
+                     \x20   let q = cn(sv[0..1], dv[0..1]);\n\
+                     \x20   println!(\"{}\", dv[0]);\n\
+                     \x20   println!(\"{}\", dw[0]);\n\
                      }\n";
 
 #[test]
@@ -309,14 +306,13 @@ fn the_headline_a_nogc_fn_writes_a_managed_vec_through_a_mutable_view() {
     h.assert_legs(24);
 }
 
-const S6_H2_NOREGION: &str = "fn main() -> i64 {\n\
-                              \x20   let mut sv: Vec<i64> = vec[7919]\n\
-                              \x20   let mut dv: Vec<i64> = vec[0]\n\
-                              \x20   let dw: Vec<i64> = dv\n\
-                              \x20   dv[0] = sv[0]\n\
-                              \x20   println(dv[0])\n\
-                              \x20   println(dw[0])\n\
-                              \x20   return 0\n\
+const S6_H2_NOREGION: &str = "fn main() {\n\
+                              \x20   let mut sv: Vec<i64> = vec![7919];\n\
+                              \x20   let mut dv: Vec<i64> = vec![0];\n\
+                              \x20   let dw: Vec<i64> = dv;\n\
+                              \x20   dv[0] = sv[0];\n\
+                              \x20   println!(\"{}\", dv[0]);\n\
+                              \x20   println!(\"{}\", dw[0]);\n\
                               }\n";
 
 #[test]
@@ -338,38 +334,36 @@ fn the_region_adds_no_allocation_of_its_own() {
 }
 
 const S6_M1: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut sv: Vec<i64> = vec[7919]\n\
-                     \x20   let mut dv: Vec<i64> = vec[0]\n\
-                     \x20   let q = cn(sv[0..1], dv[0..1])\n\
-                     \x20   Vec::push(dv, 101)\n\
-                     \x20   Vec::push(sv, 5)\n\
-                     \x20   println(dv[0])\n\
-                     \x20   println(dv[1])\n\
-                     \x20   println(sv[0])\n\
-                     \x20   println(sv[1])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut sv: Vec<i64> = vec![7919];\n\
+                     \x20   let mut dv: Vec<i64> = vec![0];\n\
+                     \x20   let q = cn(sv[0..1], dv[0..1]);\n\
+                     \x20   Vec::push(dv, 101);\n\
+                     \x20   Vec::push(sv, 5);\n\
+                     \x20   println!(\"{}\", dv[0]);\n\
+                     \x20   println!(\"{}\", dv[1]);\n\
+                     \x20   println!(\"{}\", sv[0]);\n\
+                     \x20   println!(\"{}\", sv[1]);\n\
                      }\n";
 
 // the same, with the destination aliased before the call: growing `dv` afterwards must not
 const S6_M2: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     \x20   let mut sv: Vec<i64> = vec[7919]\n\
-                     \x20   let mut dv: Vec<i64> = vec[0]\n\
-                     \x20   let dw: Vec<i64> = dv\n\
-                     \x20   let q = cn(sv[0..1], dv[0..1])\n\
-                     \x20   Vec::push(dv, 101)\n\
-                     \x20   println(dv[0])\n\
-                     \x20   println(dv[1])\n\
-                     \x20   println(dw[0])\n\
-                     \x20   println(sv[0])\n\
-                     \x20   return 0\n\
+                     fn main() {\n\
+                     \x20   let mut sv: Vec<i64> = vec![7919];\n\
+                     \x20   let mut dv: Vec<i64> = vec![0];\n\
+                     \x20   let dw: Vec<i64> = dv;\n\
+                     \x20   let q = cn(sv[0..1], dv[0..1]);\n\
+                     \x20   Vec::push(dv, 101);\n\
+                     \x20   println!(\"{}\", dv[0]);\n\
+                     \x20   println!(\"{}\", dv[1]);\n\
+                     \x20   println!(\"{}\", dw[0]);\n\
+                     \x20   println!(\"{}\", sv[0]);\n\
                      }\n";
 
 #[test]
@@ -382,61 +376,61 @@ fn the_callers_vec_is_still_a_vec_after_the_nogc_call() {
 
 
 const S6_T1: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   let r: Rc<i64> = Rc::new(1)\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   let r: Rc<i64> = Rc::new(1);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_T2: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   let w: Vec<i64> = vec[1]\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   let w: Vec<i64> = vec![1];\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_T3: &str = "fn helper(x: i64) -> i64 {\n\
-                     \x20   let w: Vec<i64> = vec[x]\n\
-                     \x20   return w[0]\n\
+                     \x20   let w: Vec<i64> = vec![x];\n\
+                     \x20   w[0]\n\
                      }\n\
                      nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = helper(src[0])\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = helper(src[0]);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_T3_KEPT: &str = "fn helper(x: i64) -> i64 {\n\
-                          \x20   return x + 1\n\
+                          \x20   x + 1\n\
                           }\n\
                           nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                          \x20   dst[0] = helper(src[0])\n\
-                          \x20   return 0\n\
+                          \x20   dst[0] = helper(src[0]);\n\
+                          \x20   0\n\
                           }\n\
-                          fn main() -> i64 { return 0 }\n";
+                          fn main() { }\n";
 
 const S6_T4: &str = "nogc fn cn(src: &[i64], dst: &mut [i64], f: fn(i64) -> i64) -> i64 {\n\
-                     \x20   dst[0] = f(src[0])\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = f(src[0]);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_T5: &str = "nogc fn cn(src: Vec<i64>, dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_T6: &str = "nogc fn cn(dst: &mut [i64]) -> i64 {\n\
-                     \x20   println(dst[0])\n\
-                     \x20   return 0\n\
+                     \x20   println!(\"{}\", dst[0]);\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_KEPT: &str = "nogc fn cn(src: &[i64], dst: &mut [i64]) -> i64 {\n\
-                       \x20   dst[0] = src[0]\n\
-                       \x20   return 0\n\
+                       \x20   dst[0] = src[0];\n\
+                       \x20   0\n\
                        }\n\
-                       fn main() -> i64 { return 0 }\n";
+                       fn main() { }\n";
 
 const TWINS: &[(&str, &str, &str)] = &[
     ("S6-T1", S6_T1, "cn -> Rc::new"),
@@ -483,16 +477,16 @@ fn the_refusal_reason_is_a_path_through_the_program_and_not_a_type_name() {
 
 
 const S6_B1: &str = "nogc fn cn(src: &[Rc<i64>], dst: &mut [i64]) -> i64 {\n\
-                     \x20   dst[0] = 1\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = 1;\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 const S6_B2: &str = "nogc fn cn(src: &[Rc<i64>], dst: &mut [Rc<i64>]) -> i64 {\n\
-                     \x20   dst[0] = src[0]\n\
-                     \x20   return 0\n\
+                     \x20   dst[0] = src[0];\n\
+                     \x20   0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
 #[test]
 fn a_managed_element_type_is_not_itself_the_refusal() {
@@ -503,70 +497,65 @@ fn a_managed_element_type_is_not_itself_the_refusal() {
 }
 
 const S6_R1: &str = "nogc fn read(v: &Vec<i64>) -> i64 {\n\
-                     let s: &[i64] = Vec::as_slice(*v)\n\
-                     return Vec::len(*v) + s[0] - 7919\n\
+                     let s: &[i64] = Vec::as_slice(*v);\n\
+                     Vec::len(*v) + s[0] - 7919\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     let mut v: Vec<i64> = vec[7919, 2, 3]\n\
-                     println(read(&v))\n\
-                     println(v[0])\n\
-                     return 0\n\
+                     fn main() {\n\
+                     let mut v: Vec<i64> = vec![7919, 2, 3];\n\
+                     println!(\"{}\", read(&v));\n\
+                     println!(\"{}\", v[0]);\n\
                      }\n";
 
 const S6_R2: &str = "struct Vec3 { x: i64, y: i64, z: i64 }\n\
                      nogc fn compute_normals(vertices: &[Vec3], normals: &mut [Vec3]) -> i64 {\n\
-                     normals[0].x = vertices[0].y\n\
-                     return 0\n\
+                     normals[0].x = vertices[0].y;\n\
+                     0\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     let mut vertices: Vec<Vec3> = vec[Vec3 { x: 7919, y: 101, z: 3 }]\n\
-                     let mut normals: Vec<Vec3> = vec[Vec3 { x: 0, y: 0, z: 0 }]\n\
-                     let src: &[Vec3] = Vec::as_slice(vertices)\n\
-                     let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals)\n\
-                     compute_normals(src, dst)\n\
-                     println(normals[0].x)\n\
-                     println(vertices[0].x)\n\
-                     return 0\n\
+                     fn main() {\n\
+                     let mut vertices: Vec<Vec3> = vec![Vec3 { x: 7919, y: 101, z: 3 }];\n\
+                     let mut normals: Vec<Vec3> = vec![Vec3 { x: 0, y: 0, z: 0 }];\n\
+                     let src: &[Vec3] = Vec::as_slice(vertices);\n\
+                     let dst: &mut [Vec3] = Vec::try_as_unique_mut_slice(normals);\n\
+                     compute_normals(src, dst);\n\
+                     println!(\"{}\", normals[0].x);\n\
+                     println!(\"{}\", vertices[0].x);\n\
                      }\n";
 
-const S6_R3: &str = "nogc fn peek(v: &Vec<i64>) -> i64 { return (*v)[0] }\n\
-                     fn main() -> i64 {\n\
-                     let v: Vec<i64> = vec[7919, 2, 3]\n\
-                     println(peek(&v))\n\
-                     return 0\n\
+const S6_R3: &str = "nogc fn peek(v: &Vec<i64>) -> i64 { (*v)[0] }\n\
+                     fn main() {\n\
+                     let v: Vec<i64> = vec![7919, 2, 3];\n\
+                     println!(\"{}\", peek(&v));\n\
                      }\n";
 
 const S6_R4: &str = "nogc fn bad(v: &mut Vec<i64>) -> i64 {\n\
-                     Vec::push(*v, 101)\n\
-                     return 0\n\
+                     Vec::push(*v, 101);\n\
+                     0\n\
                      }\n\
-                     fn main() -> i64 { return 0 }\n";
+                     fn main() { }\n";
 
-const S6_R5: &str = "nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { return f(x) }\n\
-                     fn inc(x: i64) -> i64 { return x + 1 }\n\
-                     fn main() -> i64 { return invoke(inc, 1) }\n";
+const S6_R5: &str = "use std::process::ExitCode; nogc fn invoke(f: fn(i64) -> i64, x: i64) -> i64 { f(x) }\n\
+                     fn inc(x: i64) -> i64 { x + 1 }\n\
+                     fn main() -> ExitCode { return ExitCode::from(invoke(inc, 1) as u8); }\n";
 
-const S6_R6: &str = "nogc fn owns(v: Vec<i64>) -> i64 { return Vec::len(v) }\n\
-                     fn main() -> i64 { return 0 }\n";
+const S6_R6: &str = "nogc fn owns(v: Vec<i64>) -> i64 { Vec::len(v) }\n\
+                     fn main() { }\n";
 
 const S6_R4_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 {\n\
-                     let s: &[i64] = Vec::as_slice(*v)\n\
-                     return Vec::len(*v) + s[0] - 7919\n\
+                     let s: &[i64] = Vec::as_slice(*v);\n\
+                     Vec::len(*v) + s[0] - 7919\n\
                      }\n\
-                     fn main() -> i64 {\n\
-                     let v: Vec<i64> = vec[7919, 2, 3]\n\
-                     println(read(&v))\n\
-                     return 0\n\
+                     fn main() {\n\
+                     let v: Vec<i64> = vec![7919, 2, 3];\n\
+                     println!(\"{}\", read(&v));\n\
                      }\n";
 
-const S6_R5_KEEP: &str = "nogc fn invoke(x: i64) -> i64 { return x + 1 }\n\
-                     fn main() -> i64 { println(invoke(1)); return 0 }\n";
+const S6_R5_KEEP: &str = "nogc fn invoke(x: i64) -> i64 { x + 1 }\n\
+                     fn main() { println!(\"{}\", invoke(1)); }\n";
 
-const S6_R6_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 { return Vec::len(*v) }\n\
-                     fn main() -> i64 {\n\
-                     let v: Vec<i64> = vec[7919, 2, 3]\n\
-                     println(read(&v))\n\
-                     return 0\n\
+const S6_R6_KEEP: &str = "nogc fn read(v: &Vec<i64>) -> i64 { Vec::len(*v) }\n\
+                     fn main() {\n\
+                     let v: Vec<i64> = vec![7919, 2, 3];\n\
+                     println!(\"{}\", read(&v));\n\
                      }\n";
 
 #[test]
@@ -775,16 +764,15 @@ mod asan {
 
     // the leak oracle above is only worth its zero if a leak would be seen. a capturing closure
     const S6_LEAK: &str = "fn mk() -> Rc<i64> {\n\
-                           \x20   return Rc::new(7)\n\
+                           \x20   Rc::new(7)\n\
                            }\n\
                            fn burn() -> i64 {\n\
-                           \x20   let a: Rc<i64> = mk()\n\
-                           \x20   let b: Rc<i64> = mk()\n\
-                           \x20   return Rc::get(a) + Rc::get(b)\n\
+                           \x20   let a: Rc<i64> = mk();\n\
+                           \x20   let b: Rc<i64> = mk();\n\
+                           \x20   Rc::get(a) + Rc::get(b)\n\
                            }\n\
-                           fn main() -> i64 {\n\
-                           \x20   println(burn())\n\
-                           \x20   return 0\n\
+                           fn main() {\n\
+                           \x20   println!(\"{}\", burn());\n\
                            }\n";
 
     #[cfg(feature = "asan-invariants")]
