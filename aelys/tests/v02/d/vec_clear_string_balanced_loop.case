@@ -1,0 +1,19 @@
+fn mk(i: i64) -> string { return "s{i}" }
+
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut last: string = ""
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut v: Vec<string> = Vec::new()
+        for k in 0..5 { Vec::push(v, mk(k)) }
+        Vec::clear(v)
+        Vec::push(v, mk(i))
+        total = total + v.len
+        last = v[0]
+        i = i + 1
+    }
+    println(total)
+    println(last)
+    return 0
+}

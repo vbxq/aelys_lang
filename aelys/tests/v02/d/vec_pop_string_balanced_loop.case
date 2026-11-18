@@ -1,0 +1,25 @@
+fn mk(i: i64) -> string { return "s{i}" }
+
+fn main() -> i64 {
+    let mut total: i64 = 0
+    let mut last: string = ""
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut v: Vec<string> = Vec::new()
+        Vec::push(v, mk(i))
+        Vec::push(v, mk(i + 1))
+        Vec::push(v, mk(i + 2))
+        let mut go: bool = true
+        while go {
+            match Vec::pop(v) {
+                Some(s) => { total = total + 1
+                    last = s }
+                None => { go = false }
+            }
+        }
+        i = i + 1
+    }
+    println(total)
+    println(last)
+    return 0
+}

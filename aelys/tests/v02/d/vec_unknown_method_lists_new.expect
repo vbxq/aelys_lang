@@ -1,0 +1,7 @@
+refuse E0301
+unknown method 'frob' on Vec
+'insert'
+'remove'
+'clear'
+'get'
+'with_capacity'

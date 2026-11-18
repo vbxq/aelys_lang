@@ -1,0 +1,15 @@
+fn mk(i: i64) -> string { return "s{i}" }
+struct P { name: string, n: i64 }
+
+fn main() -> i64 {
+    let mut v: Vec<P> = Vec::new()
+    Vec::push(v, P { name: mk(1), n: 10 })
+    Vec::push(v, P { name: mk(2), n: 20 })
+    match Vec::pop(v) {
+        Some(p) => { println("{p.name} {p.n}") }
+        None => { println("none") }
+    }
+    println(v.len)
+    println(v[0].name)
+    return 0
+}

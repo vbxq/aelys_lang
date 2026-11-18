@@ -1,0 +1,22 @@
+struct Node { val: i64 }
+
+fn replace(r: &mut Rc<Node>, n: Rc<Node>) -> Rc<Node> {
+    let old: Rc<Node> = *r
+    *r = n
+    return old
+}
+fn main() -> i64 {
+    let mut a: Rc<Node> = Rc::new(Node { val: 1 })
+    let old: Rc<Node> = replace(&mut a, Rc::new(Node { val: 2 }))
+    println(Rc::get(old).val)
+    println(Rc::get(a).val)
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let o: Rc<Node> = replace(&mut a, Rc::new(Node { val: i }))
+        t = t + Rc::get(o).val
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

@@ -1,0 +1,36 @@
+struct Node { val: i64, next: Link }
+enum Link { Nil, Cons(Rc<Node>) }
+fn build(n: i64) -> Link {
+    let mut head: Link = Link::Nil
+    let mut i: i64 = 1
+    while i <= n {
+        head = Link::Cons(Rc::new(Node { val: i, next: head }))
+        i = i + 1
+    }
+    return head
+}
+fn sum(l: Link) -> i64 {
+    let mut cur: Link = l
+    let mut s: i64 = 0
+    let mut go: bool = true
+    while go {
+        match cur {
+            Link::Cons(n) => { s = s + Rc::get(n).val
+                cur = Rc::get(n).next }
+            Link::Nil => { go = false }
+        }
+    }
+    return s
+}
+
+fn main() -> i64 {
+    println(sum(build(100)))
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + sum(build(10))
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

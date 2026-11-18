@@ -1,0 +1,13 @@
+struct Node { val: i64 }
+
+fn same(r: &mut Rc<Node>) { *r = *r }
+fn main() -> i64 {
+    let mut a: Rc<Node> = Rc::new(Node { val: 7 })
+    let mut i: i64 = 0
+    while i < 1000 {
+        same(&mut a)
+        i = i + 1
+    }
+    println(Rc::get(a).val)
+    return 0
+}

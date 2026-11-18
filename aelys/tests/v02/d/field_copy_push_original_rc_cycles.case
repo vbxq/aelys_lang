@@ -1,0 +1,16 @@
+fn mk(i: i64) -> string { return "s{i}" }
+struct Tags { items: Vec<string> }
+
+fn main() -> i64 {
+    let mut acc: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let mut t = Tags { items: vec[mk(i)] }
+        let c = t
+        Vec::push(t.items, mk(i + 1))
+        acc = acc + c.items.len * 10 + t.items.len
+        i = i + 1
+    }
+    println(acc)
+    return 0
+}

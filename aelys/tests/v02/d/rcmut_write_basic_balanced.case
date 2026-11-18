@@ -1,0 +1,17 @@
+struct Node { val: i64 }
+fn adv(r: &mut Rc<Node>, v: i64) { *r = Rc::new(Node { val: v }) }
+
+fn main() -> i64 {
+    let mut a: Rc<Node> = Rc::new(Node { val: 1 })
+    adv(&mut a, 2)
+    println(Rc::get(a).val)
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        adv(&mut a, i)
+        t = t + Rc::get(a).val
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

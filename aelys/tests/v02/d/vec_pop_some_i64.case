@@ -1,0 +1,9 @@
+fn main() -> i64 {
+    let mut v: Vec<i64> = vec[1, 2, 3]
+    match Vec::pop(v) {
+        Some(x) => { println(x) }
+        None => { println("none") }
+    }
+    println(v.len)
+    return 0
+}

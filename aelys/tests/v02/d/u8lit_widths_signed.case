@@ -1,0 +1,9 @@
+fn main() -> i64 {
+    let a: Vec<i8> = vec[-1, 5]
+    let b: Vec<u16> = vec[65535]
+    let c: Vec<i32> = vec[-7]
+    println((a[0] as i64) + (a[1] as i64))
+    println(b[0])
+    println(c[0])
+    return 0
+}

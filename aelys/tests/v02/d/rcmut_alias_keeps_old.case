@@ -1,0 +1,11 @@
+struct Node { val: i64 }
+fn adv(r: &mut Rc<Node>, v: i64) { *r = Rc::new(Node { val: v }) }
+
+fn main() -> i64 {
+    let mut a: Rc<Node> = Rc::new(Node { val: 1 })
+    let keep: Rc<Node> = a
+    adv(&mut a, 2)
+    println(Rc::get(keep).val)
+    println(Rc::get(a).val)
+    return 0
+}

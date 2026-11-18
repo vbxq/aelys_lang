@@ -1,0 +1,14 @@
+fn mk(i: i64) -> string { return "s{i}" }
+
+fn main() -> i64 {
+    let mut v: Vec<string> = vec[mk(1), mk(2)]
+    let g = Vec::get(v, 0)
+    Vec::pop(v)
+    Vec::clear(v)
+    match g {
+        Some(s) => { println(s) }
+        None => { println("none") }
+    }
+    println(v.len)
+    return 0
+}

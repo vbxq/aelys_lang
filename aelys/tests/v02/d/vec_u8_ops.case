@@ -1,0 +1,19 @@
+fn main() -> i64 {
+    let mut v: Vec<u8> = Vec::new()
+    Vec::push(v, 1 as u8)
+    Vec::push(v, 3 as u8)
+    Vec::insert(v, 1, 2 as u8)
+    let x: u8 = Vec::remove(v, 0)
+    println(x)
+    match Vec::get(v, 1) {
+        Some(b) => { println(b) }
+        None => { println("none") }
+    }
+    match Vec::pop(v) {
+        Some(b) => { println(b) }
+        None => { println("none") }
+    }
+    println(v.len)
+    println(v[0])
+    return 0
+}

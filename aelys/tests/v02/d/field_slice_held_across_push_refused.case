@@ -1,0 +1,9 @@
+struct Bag { name: string, items: Vec<i64> }
+
+fn main() -> i64 {
+    let mut b = Bag { name: "x", items: vec[1, 2, 3] }
+    let view = b.items[0..2]
+    Vec::push(b.items, 4)
+    println(view[0])
+    return 0
+}

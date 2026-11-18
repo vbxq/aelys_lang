@@ -1,0 +1,6 @@
+fn main() -> i64 {
+    let mut v: Vec<u8> = Vec::new()
+    let x: i64 = 7
+    Vec::push(v, x)
+    return 0
+}

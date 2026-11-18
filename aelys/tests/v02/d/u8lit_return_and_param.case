@@ -1,0 +1,13 @@
+fn mk() -> Vec<u8> { return vec[1, 2, 3] }
+fn total(v: Vec<u8>) -> i64 {
+    let mut s: i64 = 0
+    for i in 0..v.len { s = s + (v[i] as i64) }
+    return s
+}
+fn main() -> i64 {
+    let v = mk()
+    println(v.len)
+    println(v[2])
+    println(total(vec[10, 20]))
+    return 0
+}

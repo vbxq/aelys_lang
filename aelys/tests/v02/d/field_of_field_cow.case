@@ -1,0 +1,12 @@
+struct Bag { name: string, items: Vec<i64> }
+
+struct Outer { inner: Bag, k: i64 }
+fn main() -> i64 {
+    let o = Outer { inner: Bag { name: "i", items: vec[1, 2] }, k: 7 }
+    let mut o2 = o
+    Vec::push(o2.inner.items, 3)
+    println(o.inner.items.len)
+    println(o2.inner.items.len)
+    println(o2.k)
+    return 0
+}
