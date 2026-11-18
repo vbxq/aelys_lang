@@ -2801,21 +2801,30 @@ fn rc2_99_a_slice_of_a_string_names_substring() {
     );
 }
 
+const RC2_100: &str = r#"
+struct Bag { items: Vec<i64> }
+fn mk(i: i64) -> i64 {
+    let b = Bag { items: vec[i, i + 1] }
+    return b.items[1]
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 10 {
+        t = t + mk(i)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}
+"#;
+
 #[test]
-fn rc2_100_a_vec_field_refusal_does_not_mention_rc() {
-    refusal_row_full(
-        "rc2-100",
-        "struct Bag { items: Vec<i64> }\nfn main() -> i64 {\n    let b = Bag { items: Vec::new() }\n\
-         \x20   return 0\n}\n",
-        &[],
-        "E0902",
-        &[
-            "field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not \
-             supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a \
-             fixed-size array field",
-        ],
-        &["Rc used where", "[rc]", "Rc"],
-    );
+fn rc2_100_a_vec_field_is_held_and_released() {
+    let h = Harness::new();
+    h.differential_row("rc2-100", RC2_100, &[], "55\n", (10, 10));
+    h.lsan_row("rc2-100", RC2_100, &[], "55\n");
+    h.assert_legs(24);
 }
 
 #[test]
@@ -4365,15 +4374,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc2_176_an_rc_written_through_a_mutable_reference_is_refused_by_name() {
-    refusal_row_full(
-        "rc2-176",
-        RC2_176,
-        &[],
-        "E0410",
-        &["writes an `Rc<N>` through a reference"],
-        &["E0901"],
-    );
+fn rc2_176_an_rc_written_through_a_mutable_reference_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-176", RC2_176, &[], "77\n", (2, 2));
+    h.lsan_row("rc2-176", RC2_176, &[], "77\n");
+    h.assert_legs(24);
 }
 
 const RC2_177: &str = r#"
@@ -4389,15 +4394,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc2_177_an_rc_written_through_a_reference_to_a_mutable_parameter_is_refused_by_name() {
-    refusal_row_full(
-        "rc2-177",
-        RC2_177,
-        &[],
-        "E0410",
-        &["writes an `Rc<N>` through a reference"],
-        &["E0901"],
-    );
+fn rc2_177_an_rc_written_through_a_reference_to_a_mutable_parameter_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-177", RC2_177, &[], "77 1\n", (6, 6));
+    h.lsan_row("rc2-177", RC2_177, &[], "77 1\n");
+    h.assert_legs(24);
 }
 
 const RC2_178: &str = r#"
@@ -4412,15 +4413,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc2_178_an_rc_argument_written_through_a_mutable_reference_is_refused_by_name() {
-    refusal_row_full(
-        "rc2-178",
-        RC2_178,
-        &[],
-        "E0410",
-        &["writes an `Rc<N>` through a reference"],
-        &["E0901"],
-    );
+fn rc2_178_an_rc_argument_written_through_a_mutable_reference_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-178", RC2_178, &[], "2 2\n", (6, 6));
+    h.lsan_row("rc2-178", RC2_178, &[], "2 2\n");
+    h.assert_legs(24);
 }
 
 const RC2_179: &str = r#"
@@ -4444,15 +4441,11 @@ fn main() -> i64 {
 "#;
 
 #[test]
-fn rc2_179_a_list_cursor_advanced_through_a_mutable_reference_is_refused_by_name() {
-    refusal_row_full(
-        "rc2-179",
-        RC2_179,
-        &[],
-        "E0410",
-        &["writes an `Rc<Node>` through a reference"],
-        &["E0901"],
-    );
+fn rc2_179_a_list_cursor_advanced_through_a_mutable_reference_takes_its_share() {
+    let h = Harness::new();
+    h.differential_row("rc2-179", RC2_179, &[], "81000\n", (9000, 9000));
+    h.lsan_row("rc2-179", RC2_179, &[], "81000\n");
+    h.assert_legs(24);
 }
 
 const RC2_180: &str = r#"

@@ -717,24 +717,23 @@ The first line is the error code, the area of the compiler in brackets, and what
 
 ### What 0.1 refuses
 
-A form outside the 0.1 surface is refused where it is written, with a code, never compiled into something else. A `Vec` inside a struct:
+A form outside the 0.1 surface is refused where it is written, with a code, never compiled into something else. A `Vec` inside an enum:
 
 ```rust refused E0902
-struct Bag { items: Vec<i64> }
+enum Shape { Points(Vec<i64>), Empty }
 
 fn main() -> i64 {
-    let b = Bag { items: vec[1, 2] }
-    println(b.items.len)
+    let s = Shape::Empty
     return 0
 }
 ```
 
 ```diagnostic
-error[E0902]: field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a fixed-size array field
- --> main.aelys:1:14
+error[E0902]: variant `Points` of enum `Shape` has a payload of type `Vec<i64>`: a Vec inside an enum is not supported in 0.1; keep the Vec in its own binding and pass it with `&mut`
+ --> main.aelys:1:21
   |
-1 | struct Bag { items: Vec<i64> }
-  |              ^^^^^^^^^^^^^^^ not supported yet
+1 | enum Shape { Points(Vec<i64>), Empty }
+  |                     ^^^^^^^^ not supported yet
 
 For more information about this error, try `aelys-cli --explain E0902`
 error: aborting due to 1 previous error
