@@ -566,7 +566,7 @@ impl<'a> LoweringContext<'a> {
         {
             let ty = self.lower_type_from_infer(var_type);
             let folded = self.try_global_const_expr(initializer);
-            if let Some((fault, message)) = Self::global_initializer_error(name, &ty, &folded) {
+            if let Some((fault, message)) = Self::global_initializer_error(name, &folded) {
                 self.report(fault, message);
             }
             let init = folded.ok();
@@ -641,7 +641,6 @@ impl<'a> LoweringContext<'a> {
 
     fn global_initializer_error(
         name: &str,
-        ty: &AirType,
         init: &Result<AirConst, ConstFoldFailure>,
     ) -> Option<(Fault, String)> {
         let init = match init {
@@ -655,7 +654,7 @@ impl<'a> LoweringContext<'a> {
                 ));
             }
         };
-        if matches!(ty, AirType::Enum(_)) && Self::enum_payload_needs_runtime_storage(init) {
+        if Self::holds_runtime_enum_payload(init) {
             return Some((
                 Fault::Unsupported,
                 format!(
@@ -664,6 +663,17 @@ impl<'a> LoweringContext<'a> {
             ));
         }
         None
+    }
+
+    fn holds_runtime_enum_payload(init: &AirConst) -> bool {
+        match init {
+            AirConst::Enum { .. } => Self::enum_payload_needs_runtime_storage(init),
+            AirConst::Array(elems) => elems.iter().any(Self::holds_runtime_enum_payload),
+            AirConst::Struct { fields, .. } => {
+                fields.iter().any(|(_, f)| Self::holds_runtime_enum_payload(f))
+            }
+            _ => false,
+        }
     }
 
     fn enum_payload_needs_runtime_storage(init: &AirConst) -> bool {

@@ -1,0 +1,5 @@
+struct S { k: i64, o: Option<string> }
+let G = S { k: 1, o: Some("x") }
+fn main() {
+    println(G.k)
+}
