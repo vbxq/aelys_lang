@@ -1,0 +1,8 @@
+struct N { k: i64 }
+struct Bag { v: Vec<Rc<N>> }
+fn main() -> i64 {
+    let b = Bag { v: Vec::new() }
+    let f = fn() -> i64 { return b.v.len }
+    println(f())
+    return 0
+}

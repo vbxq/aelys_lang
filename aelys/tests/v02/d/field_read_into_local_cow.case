@@ -1,0 +1,15 @@
+struct Bag { n: i64, items: Vec<i64> }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        let b = Bag { n: i, items: vec[1, 2, 3] }
+        let mut v = b.items
+        Vec::push(v, 10)
+        v[0] = 100
+        t = t + b.items.len * 1000 + b.items[0] + v.len * 10 + v[0]
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

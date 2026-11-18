@@ -1,0 +1,22 @@
+struct Cell { k: i64, t: T }
+enum T { Num(i64), One(Rc<Cell>) }
+fn probe(i: i64) -> i64 {
+    let x: Rc<Cell> = Rc::new(Cell { k: i, t: T::Num(123456789) })
+    let mut r: i64 = 0
+    if i >= 0 {
+        let y: Rc<Cell> = x
+        r = Rc::get(y).k
+    }
+    __aelys_collect()
+    return r + Rc::get(x).k
+}
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + probe(i)
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

@@ -1,0 +1,16 @@
+struct Bag { n: i64, items: Vec<i64> }
+fn make(k: i64) -> Bag { return Bag { n: k, items: vec[k, k + 1] } }
+fn take(b: Bag) -> Vec<i64> { return b.items }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 1000 {
+        t = t + make(i).items.len
+        let mut v = take(make(i))
+        Vec::push(v, 7)
+        t = t + v[1] + v.len
+        i = i + 1
+    }
+    println(t)
+    return 0
+}
