@@ -109,7 +109,7 @@ pub fn check_vec_surface(program: &AirProgram) -> Result<(), Vec<VecSurfaceError
         }
         for variant in &def.variants {
             for payload in &variant.payload {
-                scan.held(
+                scan.slot(
                     payload,
                     &format!("the payload of `{}::{}`", def.name, variant.name),
                     def.span,
@@ -138,7 +138,7 @@ pub fn type_args_reject(program: &AirProgram, ty: &AirType) -> Option<(SurfaceEr
     let mut visited = HashSet::new();
     match scan.holds_vec(ty, &mut visited) {
         Ok(true)
-            if matches!(ty, AirType::Struct(_))
+            if matches!(ty, AirType::Struct(_) | AirType::Enum(_))
                 && matches!(scan.offend_slot(ty, &mut HashSet::new()), Ok(false)) =>
         {
             None
@@ -335,7 +335,7 @@ impl Scan<'_> {
                 }
                 let mut found = false;
                 for payload in &payloads {
-                    found |= self.holds_vec(payload, visited)?;
+                    found |= self.offend_slot(payload, visited)?;
                 }
                 visited.remove(&symbol);
                 Ok(found)

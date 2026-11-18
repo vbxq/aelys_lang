@@ -563,8 +563,6 @@ impl TypeInference {
         inf.check_alias_bodies();
         let stmts = inf.collect_traits(stmts);
         let stmts = inf.collect_impls(stmts);
-        // a nominal holding a vec by value would leak its buffer, since carrier-vec
-        inf.reject_nominal_vec_carriers(&stmts);
         inf.reject_multi_variant_rc_enums(&stmts);
         inf.reject_polymorphic_recursion(&stmts);
         inf.collect_signatures(&stmts, "");

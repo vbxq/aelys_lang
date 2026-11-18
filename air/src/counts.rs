@@ -85,7 +85,11 @@ impl Carriers<'_> {
                         .variants
                         .iter()
                         .flat_map(|v| v.payload.iter())
-                        .any(|ty| (multi && matches!(ty, AirType::Rc(_))) || self.carries(ty, seen));
+                        .any(|ty| {
+                            (multi && matches!(ty, AirType::Rc(_)))
+                                || matches!(ty, AirType::Vec(_))
+                                || self.carries(ty, seen)
+                        });
                 }
                 // before the mono an instance names its template, whose charge holds the arguments
                 let Some(def) = self.enum_def(&r.name) else {
@@ -97,8 +101,11 @@ impl Carriers<'_> {
                     .flat_map(|v| v.payload.iter())
                     .any(|ty| match ty {
                         AirType::Param(p) => r.args.get(p.0 as usize).is_none_or(|arg| {
-                            (multi && matches!(arg, AirType::Rc(_))) || self.carries(arg, seen)
+                            (multi && matches!(arg, AirType::Rc(_)))
+                                || matches!(arg, AirType::Vec(_))
+                                || self.carries(arg, seen)
                         }),
+                        AirType::Vec(_) => true,
                         AirType::Rc(_) if multi => true,
                         other @ (AirType::I8
                         | AirType::I16
@@ -119,7 +126,6 @@ impl Carriers<'_> {
                         | AirType::Enum(_)
                         | AirType::Array(..)
                         | AirType::Slice(_)
-                        | AirType::Vec(_)
                         | AirType::FnPtr { .. }
                         | AirType::Opaque
                         | AirType::Void) => self.carries(other, seen),
@@ -189,7 +195,7 @@ impl Carriers<'_> {
                             .iter()
                             .enumerate()
                             .filter(|(_, ty)| {
-                                (multi && matches!(ty, AirType::Rc(_))) || self.counted(ty)
+                                (multi && matches!(ty, AirType::Rc(_))) || self.field_counted(ty)
                             })
                             .map(|(i, ty)| (i as u32, ty.clone()))
                             .collect();

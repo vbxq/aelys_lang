@@ -222,6 +222,7 @@ impl<'a> LoweringContext<'a> {
                     crate::StructRef::plain(name.clone())
                 };
                 let air_name = struct_ref.symbol();
+                let mut in_flight: Vec<LocalId> = Vec::new();
                 for (i, (fname, fval)) in fields.iter().enumerate() {
                     let op = self.lower_expr(fval);
                     let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
@@ -241,8 +242,10 @@ impl<'a> LoweringContext<'a> {
                             op
                         }
                     };
+                    self.hold_in_flight(&op, &fval.ty, &mut in_flight);
                     lowered_fields.push((fname.clone(), op));
                 }
+                self.land_in_flight(&in_flight);
                 let literal = self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::StructInit {
@@ -717,13 +720,23 @@ impl<'a> LoweringContext<'a> {
                 }
                 let mut payload: Vec<Operand> = Vec::with_capacity(args.len());
                 let values: Vec<&TypedExpr> = args.iter().collect();
+                let mut in_flight: Vec<LocalId> = Vec::new();
                 for (i, arg) in args.iter().enumerate() {
                     let op = self.lower_expr(arg);
                     let op = self.hold_operand(op, arg, &values[i + 1..], false, sp);
                     let payload_air_ty = self.lower_type_from_infer(&arg.ty);
-                    let op = self.own_field_value(op, arg, &payload_air_ty, sp);
+                    let op = if matches!(payload_air_ty, AirType::Vec(_)) {
+                        if !self.claim_owned_str_temp(&op) {
+                            self.emit_vec_slot_acquire(true, Some(&arg.kind), &op, sp);
+                        }
+                        op
+                    } else {
+                        self.own_field_value(op, arg, &payload_air_ty, sp)
+                    };
+                    self.hold_in_flight(&op, &arg.ty, &mut in_flight);
                     payload.push(op);
                 }
+                self.land_in_flight(&in_flight);
                 let air_ty = self.lower_type_from_infer(&expr.ty);
                 let enum_ref = match &air_ty {
                     AirType::Enum(r) => r.clone(),
@@ -2695,6 +2708,9 @@ impl<'a> LoweringContext<'a> {
                     if matches!(field_ty, AirType::Rc(_)) {
                         self.own_rc_binder(field_local, sp);
                     }
+                    if matches!(field_ty, AirType::Vec(_)) {
+                        self.own_vec_binder(field_local, sp);
+                    }
                 }
             }
 
@@ -2731,9 +2747,19 @@ impl<'a> LoweringContext<'a> {
                 for id in rc_binders {
                     self.emit_rc_release(id, None);
                 }
+                let vec_binders: Vec<LocalId> = self
+                    .cow_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in vec_binders {
+                    self.emit_cow_release(id, None);
+                }
             }
             self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.rc_locals.retain(|(_, d)| *d <= arm_scope_depth);
+            self.cow_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
@@ -2848,6 +2874,14 @@ impl<'a> LoweringContext<'a> {
             for local in &rc_binds {
                 self.own_rc_binder(*local, sp);
             }
+            let vec_binds: Vec<LocalId> = binds
+                .iter()
+                .filter(|(_, _, ty)| matches!(ty, AirType::Vec(_)))
+                .map(|(_, l, _)| *l)
+                .collect();
+            for local in &vec_binds {
+                self.own_vec_binder(*local, sp);
+            }
             if let Some(guard) = arm.guard() {
                 let before = self.str_temp_ids();
                 let cond = self.lower_expr(guard);
@@ -2866,6 +2900,9 @@ impl<'a> LoweringContext<'a> {
                     }
                     for local in &rc_binds {
                         self.emit_rc_release(*local, sp);
+                    }
+                    for local in &vec_binds {
+                        self.emit_cow_release(*local, sp);
                     }
                     self.seal_block(AirTerminator::Goto(fail));
                     self.fixup_block_id_noop(body_id);
@@ -2905,9 +2942,19 @@ impl<'a> LoweringContext<'a> {
                 for id in rc_binders {
                     self.emit_rc_release(id, None);
                 }
+                let vec_binders: Vec<LocalId> = self
+                    .cow_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in vec_binders {
+                    self.emit_cow_release(id, None);
+                }
             }
             self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.rc_locals.retain(|(_, d)| *d <= arm_scope_depth);
+            self.cow_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
@@ -2929,6 +2976,43 @@ impl<'a> LoweringContext<'a> {
     fn own_rc_binder(&mut self, local: LocalId, sp: Option<Span>) {
         self.emit_rc_retain(Operand::Copy(local), sp);
         self.rc_locals.push((local, self.locals_by_name.len()));
+    }
+
+    // a later operand may leave the function early, so a share already taken is released on that path
+    fn hold_in_flight(&mut self, op: &Operand, ty: &InferType, in_flight: &mut Vec<LocalId>) {
+        let managed = self.counted(ty)
+            || self.rc_shape(ty).is_some()
+            || matches!(ty, InferType::Vec(_))
+            || self
+                .aggregate_rc_paths(&self.lower_type_from_infer(ty))
+                .is_some();
+        if let Operand::Copy(id) | Operand::Move(id) = op
+            && managed
+            && !self.last_block_is_terminated()
+            && let Some(slot_ty) = self.local_air_type(*id)
+        {
+            let shadow = self.alloc_temp(slot_ty);
+            self.emit(
+                AirStmtKind::Assign {
+                    place: Place::Local(shadow),
+                    rvalue: Rvalue::Use(Operand::Copy(*id)),
+                },
+                None,
+            );
+            self.stmt_str_temps.push((shadow, self.current_blocks.len()));
+            in_flight.push(shadow);
+        }
+    }
+
+    fn land_in_flight(&mut self, in_flight: &[LocalId]) {
+        for id in in_flight {
+            self.claim_owned_str_temp(&Operand::Copy(*id));
+        }
+    }
+
+    fn own_vec_binder(&mut self, local: LocalId, sp: Option<Span>) {
+        self.emit_cow_retain(local, sp);
+        self.cow_locals.push((local, self.locals_by_name.len()));
     }
 
     fn branch_or_fail(&mut self, cond: Operand, fail: BlockId, negate: bool) {

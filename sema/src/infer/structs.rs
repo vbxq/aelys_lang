@@ -242,48 +242,4 @@ impl TypeInference {
             }
         }
     }
-
-    pub(super) fn reject_nominal_vec_carriers(&mut self, stmts: &[Stmt]) {
-        for stmt in stmts {
-            let StmtKind::EnumDecl {
-                name,
-                type_params,
-                variants,
-                ..
-            } = &stmt.kind
-            else {
-                continue;
-            };
-            if !type_params.is_empty() {
-                continue;
-            }
-            let Some(def) = self.type_table.get_enum(name) else {
-                continue;
-            };
-            let mut offenders = Vec::new();
-            for (variant_def, variant_ast) in def.variants.iter().zip(variants.iter()) {
-                for (payload_ty, payload_ann) in
-                    variant_def.data.iter().zip(variant_ast.fields.iter())
-                {
-                    if self.type_table.contains_vec_by_value(payload_ty) {
-                        offenders.push((
-                            variant_ast.name.clone(),
-                            payload_ann.span,
-                            payload_ty.to_string(),
-                        ));
-                    }
-                }
-            }
-            for (vname, vspan, vty) in offenders {
-                self.errors.push(crate::constraint::TypeError::not_supported_yet(
-                    format!(
-                        "variant `{vname}` of enum `{name}` has a payload of type `{vty}`: \
-                         a Vec inside an enum is not supported yet; keep the Vec in its \
-                         own binding and pass it with `&mut`"
-                    ),
-                    vspan,
-                ));
-            }
-        }
-    }
 }

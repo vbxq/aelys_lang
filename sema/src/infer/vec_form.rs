@@ -223,6 +223,7 @@ impl TypeInference {
                         matches!(&s.kind, TypedStmtKind::Let { name, .. } if name.starts_with("__recv$"))
                     })
             }
+            TypedExprKind::Match { .. } | TypedExprKind::If { .. } => true,
             _ => false,
         };
         if accepted {

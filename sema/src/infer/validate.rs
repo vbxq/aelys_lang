@@ -68,11 +68,23 @@ impl TypeInference {
         if !self.type_table.contains_rc_nominal(&value.ty) {
             return;
         }
+        if value.ty.is_rc() && Self::yields_owned_rc(value) {
+            return;
+        }
         if let Some(blocker) = crate::rc_init::rc_carrier_init_blocker(value) {
             self.errors.push(TypeError::rc_carrier_out_of_surface(
                 crate::rc_init::rc_init_refusal(blocker, what),
                 value.span,
             ));
+        }
+    }
+
+    // a match or an if of rc type lowers each arm into an owned result temp
+    fn yields_owned_rc(value: &TypedExpr) -> bool {
+        match &value.kind {
+            TypedExprKind::Grouping(inner) => Self::yields_owned_rc(inner),
+            TypedExprKind::Match { .. } | TypedExprKind::If { .. } => true,
+            _ => false,
         }
     }
 
@@ -1018,23 +1030,8 @@ impl TypeInference {
                 args,
                 ..
             } => {
-                let generic_enum = self
-                    .type_table
-                    .get_enum(enum_name)
-                    .is_some_and(|def| !def.type_params.is_empty());
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
-                    if generic_enum && self.type_table.contains_vec_by_value(&arg.ty) {
-                        self.errors.push(TypeError::vec_out_of_surface(
-                            format!(
-                                "the payload of `{}::{variant}` has type `{}`, which holds a \
-                                 `Vec<T>` by value: a Vec inside an enum is not supported yet",
-                                crate::modules::source_type_name(enum_name),
-                                arg.ty
-                            ),
-                            arg.span,
-                        ));
-                    }
                     if !crate::rc_init::RUNTIME_CARRIER_EXEMPT.contains(&enum_name.as_str()) {
                         self.check_rc_carrier_surface(
                             arg,
