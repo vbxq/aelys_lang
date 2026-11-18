@@ -216,7 +216,7 @@ impl TypeInference {
                     InferType::Var(_) => {
                         let params = self.type_table.get_struct(&qualified).map_or(0, |d| d.type_params.len());
                         let args = (0..params).map(|_| self.type_gen.fresh()).collect();
-                        let expected = InferType::Struct(qualified, args);
+                        let expected = InferType::Struct(qualified.clone(), args);
                         self.constraints.push(Constraint::equal(
                             ty.clone(),
                             expected.clone(),
