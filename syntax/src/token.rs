@@ -162,6 +162,42 @@ impl TokenKind {
         )
     }
 
+    pub fn is_reserved_word(&self) -> bool {
+        matches!(
+            self,
+            Self::Let
+                | Self::Mut
+                | Self::Fn
+                | Self::If
+                | Self::Else
+                | Self::While
+                | Self::Return
+                | Self::Break
+                | Self::Continue
+                | Self::And
+                | Self::Or
+                | Self::Not
+                | Self::True
+                | Self::False
+                | Self::Null
+                | Self::Pub
+                | Self::Needs
+                | Self::As
+                | Self::From
+                | Self::For
+                | Self::In
+                | Self::Step
+                | Self::Struct
+                | Self::Enum
+                | Self::Match
+                | Self::Discard
+                | Self::Catch
+                | Self::Unsafe
+                | Self::Nogc
+                | Self::Extern
+        )
+    }
+
     pub fn can_end_statement(&self) -> bool {
         matches!(
             self,

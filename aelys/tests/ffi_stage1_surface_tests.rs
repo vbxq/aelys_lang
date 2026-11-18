@@ -346,7 +346,7 @@ fn row_32_extern_is_no_longer_a_function_name() {
         "F1-32",
         "fn extern() -> i64 { return 1 }\n",
         E0101,
-        "expected function name, found extern",
+        "expected function name, found reserved word `extern`",
     );
 }
 
@@ -546,7 +546,7 @@ fn the_library_module_and_the_already_rejected_fixture_are_the_two_that_spell_ex
         .expect("that fixture MUST stay rejected")
         .to_string();
     assert!(
-        rendered.contains("expected decorator name, found extern"),
+        rendered.contains("expected decorator name, found reserved word `extern`"),
         "the first violation is the decorator on line 2, not the body-less `fn` on line 3:\n{rendered}"
     );
     assert!(
@@ -556,7 +556,7 @@ fn the_library_module_and_the_already_rejected_fixture_are_the_two_that_spell_ex
 }
 
 #[test]
-fn the_unsafe_token_is_read_at_three_sites_in_the_parser() {
+fn the_unsafe_token_is_read_at_four_sites_in_the_parser() {
     let root = repo_root().join("frontend/src/parser");
     let mut sites = 0usize;
     let mut stack = vec![root];
@@ -572,8 +572,9 @@ fn the_unsafe_token_is_read_at_three_sites_in_the_parser() {
         }
     }
     assert_eq!(
-        sites, 3,
-        "`unsafe` is read by `starts_expression`, by `primary`, and by the foreign lookahead"
+        sites, 4,
+        "`unsafe` is read by `starts_expression`, by `primary`, by the foreign lookahead and by \
+         the item resynchronisation"
     );
 }
 

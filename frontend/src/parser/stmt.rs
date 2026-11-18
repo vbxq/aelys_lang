@@ -156,6 +156,10 @@ impl Parser {
     fn return_statement(&mut self) -> Result<Stmt> {
         let start_span = self.previous().span;
 
+        if self.check(&TokenKind::RBrace) || self.is_at_end() {
+            return Ok(Stmt::new(StmtKind::Return(None), start_span));
+        }
+
         if self.check(&TokenKind::Semicolon) {
             self.consume_semicolon()?;
             return Ok(Stmt::new(StmtKind::Return(None), start_span));

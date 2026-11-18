@@ -42,6 +42,7 @@ impl Parser {
                 continue;
             }
 
+            let start = self.current;
             let parsed = if prologue_open && self.check(&TokenKind::Needs) {
                 self.needs_declaration()
             } else {
@@ -63,7 +64,7 @@ impl Parser {
                         }
                     };
                     self.errors.push(diag);
-                    self.synchronize();
+                    self.synchronize(start);
                 }
             }
         }
@@ -75,29 +76,39 @@ impl Parser {
         }
     }
 
-    fn synchronize(&mut self) {
-        while !self.is_at_end() {
-            if self.peek().kind == TokenKind::Semicolon {
-                self.advance();
-                return;
-            }
-
-            match &self.peek().kind {
-                TokenKind::Let
-                | TokenKind::Fn
-                | TokenKind::If
-                | TokenKind::While
-                | TokenKind::For
-                | TokenKind::Return
-                | TokenKind::Struct
-                | TokenKind::Enum
-                | TokenKind::Match
-                | TokenKind::Const
-                | TokenKind::Pub => return,
-                TokenKind::Eof => return,
+    fn synchronize(&mut self, start: usize) {
+        if self.current == start && !self.is_at_end() {
+            self.advance();
+        }
+        let mut depth = 0usize;
+        for token in &self.tokens[start..self.current] {
+            match token.kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth = depth.saturating_sub(1),
                 _ => {}
             }
-
+        }
+        while !self.is_at_end() {
+            match &self.peek().kind {
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth = depth.saturating_sub(1),
+                TokenKind::Fn
+                | TokenKind::Struct
+                | TokenKind::Enum
+                | TokenKind::Pub
+                | TokenKind::Const
+                | TokenKind::Nogc
+                | TokenKind::Extern
+                | TokenKind::Unsafe
+                | TokenKind::Needs
+                | TokenKind::At
+                | TokenKind::Let
+                    if depth == 0 =>
+                {
+                    return;
+                }
+                _ => {}
+            }
             self.advance();
         }
     }
@@ -193,8 +204,9 @@ impl Parser {
             kind => {
                 let found = match kind.keyword_spelling() {
                     Some(word) => {
-                        format!("keyword `{word}`; write `r#{word}` to use it as a name")
+                        format!("reserved word `{word}`; write `r#{word}` to use it as a name")
                     }
+                    None if kind.is_reserved_word() => format!("reserved word `{kind}`"),
                     None => kind.to_string(),
                 };
                 Err(self.error(CompileErrorKind::UnexpectedToken {
