@@ -1298,6 +1298,8 @@ impl TypeInference {
     pub(crate) fn define_trait_stub_values(&mut self, def: &TraitDef) {
         for m in &def.methods {
             if self.env.lookup_function(&m.stub).is_some() {
+                self.method_tparams
+                    .insert(m.stub.clone(), vec![SELF.to_string()]);
                 continue;
             }
             let value = ModuleValue {
