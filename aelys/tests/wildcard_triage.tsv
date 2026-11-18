@@ -1,4 +1,5 @@
 air/src/bir/effects.rs	walk_expr	1	InferType	_	{  }	correct-as-is	carrier-walk
+air/src/bir/loans.rs	built_only_from	1	InferType	_	false	correct-as-is	carrier-walk
 air/src/bir/loans.rs	projected_is_ref	1	InferType	_	return is_ref_ty(&local.ty)	correct-as-is	aggregate-only
 air/src/lower/expr.rs	lower_expr_kind	1	InferType	other	{ self.report_ice(format!( , other )); AirType }	correct-as-is	aggregate-only
 air/src/lower/expr.rs	lower_expr_kind	2	InferType	other	{ self.report_ice(format!( , other )); (AirTyp }	correct-as-is	aggregate-only
