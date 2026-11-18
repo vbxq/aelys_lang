@@ -55,7 +55,7 @@ fn greet() {
     print!("hello");
 }
 "#,
-        &["print;", "println"],
+        &["print", "println"],
     );
 
     let f = func(&air, "greet");
@@ -159,7 +159,7 @@ fn outer(x: i64) {
     };
 }
 "#,
-        &["print;", "println"],
+        &["print", "println"],
     );
 
     let env = air
@@ -549,7 +549,7 @@ fn main() {
     println!("Hello");
 }
 "#,
-        &["print;", "println"],
+        &["print", "println"],
     );
 
     let f = func(&air, "main");
@@ -1433,7 +1433,7 @@ fn main() {
     println!("hello world");
 }
 "#,
-        &["print;", "println"],
+        &["print", "println"],
     );
     compute_layouts(&mut air);
     let mut air = monomorphize(air).unwrap();

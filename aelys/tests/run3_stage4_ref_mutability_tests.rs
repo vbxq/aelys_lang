@@ -429,7 +429,7 @@ fn e0416_names_the_borrow_and_the_requirement() {
         );
     }
     assert!(
-        !rendered.contains("E0301;"),
+        !rendered.contains("E0301"),
         "the reference model refusal must not fall through to the generic mismatch code:\n\
          {rendered}"
     );

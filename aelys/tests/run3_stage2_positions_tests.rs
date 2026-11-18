@@ -17,7 +17,7 @@ const LEVELS: &[(&str, OptimizationLevel)] = &[
     ("-O3", OptimizationLevel::Aggressive),
 ];
 
-const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc;"))];
+const ALLOCATORS: &[(&str, Option<&str>)] = &[("immix", None), ("malloc", Some("malloc"))];
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Phase {
@@ -253,16 +253,16 @@ fn run_twin(h: &Harness, id: &str, t: &Twin) {
 
 fn required_verdict(class: Class, phase: Phase) -> Option<&'static str> {
     match (class, phase) {
-        (Class::MustBecomeAccepted, Phase::PreNarrowing) => Some("E0727;"),
+        (Class::MustBecomeAccepted, Phase::PreNarrowing) => Some("E0727"),
         (Class::MustBecomeAccepted, Phase::PostNarrowing) => None,
-        (Class::MustStayRejected, _) => Some("E0727;"),
+        (Class::MustStayRejected, _) => Some("E0727"),
         (Class::MustNotMoveAccepted, _) => None,
         (Class::MustNotMoveRejected(code), _) => Some(code),
         (Class::MustStayRejectedBehind(fence), _) => Some(fence),
         (Class::OnlyTheFenceHolds(fence), _) => Some(fence),
-        (Class::AcceptedButInert { .. }, Phase::PreNarrowing) => Some("E0727;"),
+        (Class::AcceptedButInert { .. }, Phase::PreNarrowing) => Some("E0727"),
         (Class::AcceptedButInert { .. }, Phase::PostNarrowing) => None,
-        (Class::AcceptedAndOwed(_), Phase::PreNarrowing) => Some("E0727;"),
+        (Class::AcceptedAndOwed(_), Phase::PreNarrowing) => Some("E0727"),
         (Class::AcceptedAndOwed(_), Phase::PostNarrowing) => None,
     }
 }
@@ -2143,30 +2143,30 @@ fn the_requirement_table_is_pinned_in_both_phases() {
     use Phase::*;
     assert_eq!(
         required_verdict(MustBecomeAccepted, PreNarrowing),
-        Some("E0727;")
+        Some("E0727")
     );
     assert_eq!(required_verdict(MustBecomeAccepted, PostNarrowing), None);
     assert_eq!(
         required_verdict(MustStayRejected, PreNarrowing),
-        Some("E0727;")
+        Some("E0727")
     );
     assert_eq!(
         required_verdict(MustStayRejected, PostNarrowing),
-        Some("E0727;")
+        Some("E0727")
     );
     assert_eq!(required_verdict(MustNotMoveAccepted, PreNarrowing), None);
     assert_eq!(required_verdict(MustNotMoveAccepted, PostNarrowing), None);
     assert_eq!(
         required_verdict(MustNotMoveRejected("E0304"), PostNarrowing),
-        Some("E0304;")
+        Some("E0304")
     );
     assert_eq!(
         required_verdict(MustStayRejectedBehind("E0429"), PreNarrowing),
-        Some("E0429;")
+        Some("E0429")
     );
     assert_eq!(
         required_verdict(MustStayRejectedBehind("E0429"), PostNarrowing),
-        Some("E0429;")
+        Some("E0429")
     );
 }
 
@@ -2502,13 +2502,13 @@ fn no_value_producing_builder_drops_its_operand() {
          E0722. every such site reads through `read_operand` or reaches a value instead"
     );
     assert_eq!(
-        build.matches("Aggregate(Vec::new());").count(),
+        build.matches("Aggregate(Vec::new())").count(),
         0,
         "an aggregate built from an empty operand list names nothing it was built from, so \
          E0714's loop, liveness, the conflict events and the move check all walk past it"
     );
     assert_eq!(
-        build.matches("BirOperand::Const;").count(),
+        build.matches("BirOperand::Const").count(),
         16,
         "the number of mentions of the constant operand moved. thirteen are value-producing \
          arms, each of which owes a row in VALUE_BUILDER_EXCLUSIONS; one is the guard in \
@@ -3275,13 +3275,13 @@ fn the_effect_decision_surface_is_one_file() {
     let root = repo_root();
     let effects = fs::read_to_string(root.join("air/src/bir/effects.rs")).expect("effects.rs");
     assert_eq!(
-        effects.matches("Effect::Managed;").count(),
+        effects.matches("Effect::Managed").count(),
         12,
         "the number of mentions of the managed effect changed. this is a drift detector over the \
          whole file, not a count of inserting sites"
     );
     assert_eq!(
-        effects.matches("set.insert(Effect::Managed);").count(),
+        effects.matches("set.insert(Effect::Managed)").count(),
         7,
         "the inserting sites are the parameter rule, alloc_managed, the managed-local rule, the \
          node rule, the store clause's two arms and the mutable-view clause. the other five \
@@ -3529,7 +3529,7 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
     let root = repo_root();
     let tt = fs::read_to_string(root.join("sema/src/types/type_table.rs")).expect("type table");
     assert_eq!(
-        tt.matches("type_params.is_empty();").count(),
+        tt.matches("type_params.is_empty()").count(),
         3,
         "the early-outs that make a generic nominal type read as Copy moved. a generic struct is \
          scanned through its instantiated fields and a generic enum still reads as Copy, so F3's \

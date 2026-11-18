@@ -1193,7 +1193,7 @@ mod asan {
         let mut instrumented_and_run = 0usize;
 
         for (id, src) in ASAN_ROWS {
-            let path = h.write(id, "asan;", src);
+            let path = h.write(id, "asan", src);
             if crate::common::with_outline_str_counts(|| {
                 compile_file_with_llvm_variant(
                     &path,
