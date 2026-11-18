@@ -270,7 +270,7 @@ impl Parser {
                 break;
             }
             let field_span = self.peek().span;
-            let field = self.consume_identifier("field name")?;
+            let field = self.consume_member_name("field name")?;
             let pat = if self.match_token(&TokenKind::Colon) {
                 self.parse_pattern()?
             } else {
