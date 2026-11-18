@@ -2,6 +2,31 @@
 
 All notable changes to Aelys, roughly grouped by version. I don't always tag releases perfectly, so this is reconstructed from git history
 
+## Unreleased: 0.2, the language
+
+- generic structs: `struct Pair<A, B>` is declared, built, passed, returned, nested and monomorphized like a generic enum; `Pair<i64, string>` and `Pair<string, i64>` are distinct types
+- methods: `impl T { fn f(self) / fn f(&self) / fn f(&mut self) / fn new() -> Self }`, `mut self`, calls `x.f()` with the receiver referenced automatically, chaining, `T::f(..)`, `impl<T> W<T>`; a `&mut self` call is a mutable loan, two-phase for a receiver whose arguments only read it
+- traits with static dispatch: required and default methods, associated functions, `impl Trait for Type`, generic traits (`trait Collection<T>`), bounds `T: Trait + eq` and `where` clauses, resolved by monomorphization; no trait objects
+- `eq` and `ord` are traits a user type implements (`fn eq(&self, o: &P) -> bool`, `fn cmp(&self, o: &P) -> i64`), used by `==`, `<` and the generic sorts; `string` is `ord` (byte order); `trait Display { fn to_string(&self) -> string }` makes `println("{x}")` work for a user type
+- patterns: literals, `_`, bindings, nested enum, struct and tuple patterns, `|`, guards, ranges on integers and `char`, `name @ pattern`, `if let`, `while let`; exhaustiveness and unreachable arms checked (`E0310`), a misspelled variant is never a catch-all
+- tuples: `(i64, string)`, `t.0`, `let (a, b) = t`, returns, equality and printing
+- `const` items (typed, evaluated at compile time, never narrowed), type aliases (generic ones too), raw identifiers `r#and`; `step` is no longer a keyword, a keyword is accepted as a field name
+- `Vec`: `get`, `insert`, `remove`, `clear`, `with_capacity`; a `Vec` field in a struct, generic structs and tuples included, a `Vec` in an enum payload, `Vec<Rc<T>>`, integer literals in a `Vec<u8>`
+- breaking: `Vec::pop` returns `Option<T>`
+- an `Rc` in a multi-variant enum, an `Rc` read and written through `&mut`, recursive enums through `Rc` (`enum Expr { Num(i64), Bin(char, Rc<Expr>, Rc<Expr>) }`), an `Rc` produced by `?` in a payload
+- the standard library has methods (`s.contains(x)`, `v.map(f).filter(g).sum()`, `v.sort()`, `s.chars()`), generic sorts usable on structs holding strings, and format specs `{x:>8}`, `{x:08.2}` (`E0391` for an unknown spec); the free functions remain
+- unsigned integers print unsigned; an integer literal up to `u64::MAX` is a `u64`
+- a generic enum variant whose payload does not match its type argument is refused (`E0301`); it compiled to a wrong value or a crash
+- passing the same `&mut` twice in one call is refused (`E0713`); writes could go to a reallocated buffer
+- writing a field or element of a global releases the old value; a global array of strings reads each string, not the first one
+- a format placeholder with anything after its expression is refused; `"{x y}"` printed the value of `x`
+- a local closure that shadows a function of the same name is called at every `-O` level; at `-O1` and above the function was inlined instead
+- `Vec::with_capacity` whose byte size overflows panics instead of writing past its buffer
+- a value taken into a payload or a field before an operand exits early through `?` is released
+- diagnostics name types as the source writes them (`Option<i64>`, `Vec<T>`, `fn(i64) -> i64`, `()`), recover at the next item, and name the program they were run as; `--explain`, `--version` and `--help` print on stdout
+- the object file of a linked program is a private temporary; an output path that names the source is refused
+- a function without a return type returns nothing: `return <value>` in it is refused (`E0301`)
+
 ## Unreleased: the 0.1 milestone (workspace 0.21.8-a)
 
 - an assignment whose source is its destination (`s = s`, `s = id(s)` once inlined) and a local array of managed values lent as a slice free what they held; both leaked what they held each time they ran
