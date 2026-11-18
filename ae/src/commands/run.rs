@@ -39,7 +39,10 @@ pub fn run(
     ));
     Err(Error {
         diagnostics: vec![diagnostic],
-        code: status.code().map_or(FAILURE, |code| code as u8),
+        code: status
+            .code()
+            .and_then(|code| u8::try_from(code).ok())
+            .unwrap_or(FAILURE),
     })
 }
 
