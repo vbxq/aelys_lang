@@ -174,11 +174,12 @@ impl TypeInference {
             InferType::Array(inner, _) | InferType::Vec(inner) => {
                 self.type_table.contains_vec_by_value(inner)
             }
-            InferType::Tuple(elems) => elems.iter().any(|e| match e {
-                InferType::Array(inner, _) | InferType::Vec(inner) => {
+            InferType::Tuple(elems) => elems.iter().any(|e| {
+                if let InferType::Array(inner, _) | InferType::Vec(inner) = e {
                     self.type_table.contains_vec_by_value(inner)
+                } else {
+                    false
                 }
-                _ => false,
             }),
             _ => false,
         };
