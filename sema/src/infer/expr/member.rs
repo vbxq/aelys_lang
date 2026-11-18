@@ -463,7 +463,6 @@ impl TypeInference {
         })
     }
 
-    // the named fields are evaluated first, then `base` once, and the other fields are read from it
     pub(super) fn struct_update(&mut self, name: &str, fields: &[StructFieldInit], base: &Expr, span: Span) -> Expr {
         let qualified = self.air_type_name(name, span);
         let declared: Vec<String> = self
