@@ -2819,28 +2819,30 @@ fn rc2_100_a_vec_field_refusal_does_not_mention_rc() {
 }
 
 #[test]
-fn rc2_101_a_tuple_type_says_tuples_are_unsupported() {
-    refusal_row_full(
+fn rc2_101_a_tuple_type_compiles() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-101",
         "fn divmod(a: i64, b: i64) -> (i64, i64) { return (a / b, a % b) }\n\
          fn main() -> i64 { return 0 }\n",
         &[],
-        "E0902",
-        &["tuples are not supported yet"],
-        &["expected type name"],
+        "",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 #[test]
-fn rc2_102_a_tuple_expression_says_tuples_are_unsupported() {
-    refusal_row_full(
+fn rc2_102_a_tuple_expression_compiles() {
+    let h = Harness::new();
+    h.differential_row(
         "rc2-102",
         "fn main() -> i64 {\n    let t = (1, 2)\n    return 0\n}\n",
         &[],
-        "E0902",
-        &["tuples are not supported yet"],
-        &["expected ), found ,"],
+        "",
+        (0, 0),
     );
+    h.assert_legs(18);
 }
 
 const LATE_HELP: &str = "no implicit conversion applies to a value that crosses a binding whose \
