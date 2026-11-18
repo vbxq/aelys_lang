@@ -675,10 +675,11 @@ impl TypeInference {
             );
         }
         let typed_vec = self.infer_expr(&args[0]);
-        let typed_elem = self.infer_expr(&args[1]);
+        let mut typed_elem = self.infer_expr(&args[1]);
 
         match &typed_vec.ty {
             InferType::Vec(inner) => {
+                self.try_narrow_literal(&mut typed_elem, inner);
                 self.constraints.push(Constraint::flows(
                     typed_elem.ty.clone(),
                     (**inner).clone(),
@@ -914,7 +915,8 @@ impl TypeInference {
         let typed_vec = self.infer_expr(&args[0]);
         let inner = self.vec_receiver_inner("insert", &typed_vec, args[0].span);
         let typed_index = self.vec_index_arg("insert", &args[1]);
-        let typed_elem = self.infer_expr(&args[2]);
+        let mut typed_elem = self.infer_expr(&args[2]);
+        self.try_narrow_literal(&mut typed_elem, &inner);
         self.constraints.push(Constraint::flows(
             typed_elem.ty.clone(),
             inner,

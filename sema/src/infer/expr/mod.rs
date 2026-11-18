@@ -691,6 +691,46 @@ impl TypeInference {
             }
         }
 
+        if let InferType::Vec(elem_ty) = target_ty
+            && let TypedExprKind::VecLiteral {
+                ref mut elements, ..
+            } = expr.kind
+        {
+            let mut all_narrowed = true;
+            let mut had_error = false;
+            for elem in elements.iter_mut() {
+                if !self.try_narrow_literal(elem, elem_ty) {
+                    had_error = true;
+                } else if elem.ty != **elem_ty && !matches!(elem.ty, InferType::Var(_)) {
+                    if elem.ty.can_implicit_widen_to(elem_ty) {
+                        let vspan = elem.span;
+                        let original = std::mem::replace(
+                            elem,
+                            TypedExpr {
+                                kind: TypedExprKind::Null,
+                                ty: InferType::Null,
+                                span: vspan,
+                            },
+                        );
+                        *elem = TypedExpr {
+                            kind: TypedExprKind::Cast {
+                                expr: Box::new(original),
+                                target: (**elem_ty).clone(),
+                            },
+                            ty: (**elem_ty).clone(),
+                            span: vspan,
+                        };
+                    } else {
+                        all_narrowed = false;
+                    }
+                }
+            }
+            if all_narrowed && !had_error && !elements.is_empty() {
+                expr.ty = target_ty.clone();
+            }
+            return !had_error;
+        }
+
         if let InferType::Array(elem_ty, target_len) = target_ty {
             if let TypedExprKind::ArraySized { size, fill_value } = &mut expr.kind {
                 // not override one it does: that is how a repeat overruns its storage

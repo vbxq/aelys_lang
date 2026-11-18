@@ -1505,7 +1505,20 @@ impl<'a> LoweringContext<'a> {
             if crate::symbols::BOOTSTRAP_BUILTIN_SYMBOLS.contains(&name.as_str())
                 || name.starts_with("__aelys_"));
         let refs: Vec<&TypedExpr> = args.iter().collect();
-        self.lower_call_operands(&refs, keeps_unretained, runs_code, sp)
+        let ops = self.lower_call_operands(&refs, keeps_unretained, runs_code, sp);
+        for (arg, op) in args.iter().zip(&ops) {
+            let fresh_vec = match &super::pin::peel(arg).kind {
+                TypedExprKind::VecLiteral { .. } => true,
+                TypedExprKind::EnumVariant {
+                    enum_name, variant, ..
+                } => enum_name == "Vec" && (variant == "new" || variant == "with_capacity"),
+                _ => false,
+            };
+            if fresh_vec {
+                self.pose_vec_call_result(op);
+            }
+        }
+        ops
     }
 
     pub(super) fn retain_str_fill(&mut self, fill: &Operand, sp: Option<Span>) {
