@@ -1,14 +1,16 @@
-use super::{ModuleFront, Typed, build_imports, fall_back_to_prelude, known_globals};
+use super::{
+    ModuleFront, Typed, backend_diagnostic_error, build_imports, fall_back_to_prelude,
+    fallback_source_span, known_globals,
+};
 use crate::modules::ModuleUnit;
 use aelys_air::{AirEnumDef, AirFunction, AirStructDef};
-use aelys_common::error::AelysError;
+use aelys_common::error::{AelysError, Fault};
 use aelys_sema::localize::{erase_type_vars, localize_imports};
 use aelys_sema::modules::{collect_exports, qualify_value};
 use aelys_sema::{ModuleExports, ModuleImports, TypeInference, TypedProgram};
 use std::collections::HashSet;
 use std::sync::Arc;
 
-// each round settles one more link of a const or trait chain that crosses modules
 pub(super) fn declare(
     units: &[ModuleUnit],
     first: usize,
@@ -22,7 +24,8 @@ pub(super) fn declare(
         })
     }));
     let mut prints = vec![String::new(); units.len() - first];
-    for _ in 0..=prints.len() + 1 {
+    let rounds = units[first..].iter().map(|unit| unit.stmts.len()).sum::<usize>() + 2;
+    for _ in 0..rounds {
         let mut settled = true;
         for (index, unit) in units.iter().enumerate().skip(first) {
             let mut imports = build_imports(unit, index, exports, true)?;
@@ -46,10 +49,19 @@ pub(super) fn declare(
             exports[index] = Arc::new(declared);
         }
         if settled {
-            break;
+            return Ok(());
         }
     }
-    Ok(())
+    let root = &units.last().expect("a group holds its root").source;
+    Err(backend_diagnostic_error(
+        root.clone(),
+        fallback_source_span(root.as_ref()),
+        "modules",
+        format!("the declarations of a module cycle did not settle in {rounds} rounds"),
+        None,
+        None,
+        Fault::Compiler,
+    ))
 }
 
 // the effects of every user function as one least fixpoint, so a nogc call may cross a cycle
