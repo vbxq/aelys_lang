@@ -185,3 +185,4 @@ sema/src/types/type_table.rs	scan_rc_outside_tags	2	InferType	_	d	correct-as-is	
 sema/src/infer/traits.rs	define_trait_stub_values	1	InferType	other	other.clone()	correct-as-is	aggregate-only
 sema/src/infer/traits.rs	enum_fix	1	InferType	other	other	correct-as-is	aggregate-only
 sema/src/infer/traits.rs	subst_names	1	InferType	other	other.clone()	correct-as-is	aggregate-only
+sema/src/infer/expr/call.rs	infer_call_expr	1	InferType	_	0	correct-as-is	aggregate-only
