@@ -475,7 +475,7 @@ pub fn retaining_functions(functions: &[AirFunction]) -> HashSet<String> {
         .collect()
 }
 
-pub(super) fn retaining_declarations(program: &aelys_sema::TypedProgram) -> HashSet<String> {
+pub fn retaining_declarations(program: &aelys_sema::TypedProgram) -> HashSet<String> {
     let mut decls: HashSet<String> = HashSet::new();
     crate::bir::build::for_each_fn_decl(&program.stmts, &mut |func, _| {
         if func.foreign.is_none() {

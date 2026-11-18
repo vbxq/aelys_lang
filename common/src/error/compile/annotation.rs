@@ -35,7 +35,7 @@ impl CompileErrorKind {
             Self::RecursionLimitExceeded => "recursion limit",
             Self::ModuleNotFound { .. } => "module not found",
             Self::AmbiguousModule { .. } => "found in more than one search root",
-            Self::CircularDependency { .. } => "creates circular dependency",
+            Self::ModuleImportsItself { .. } => "a module cannot import itself",
             Self::SymbolNotPublic { .. } => "symbol is not public",
             Self::ReservedModuleSegment { .. } => "reserved module path segment",
             Self::SymbolNotFound { .. } => "no such item in that module",

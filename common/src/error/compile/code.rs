@@ -53,7 +53,7 @@ impl CompileErrorKind {
 
             Self::ModuleNotFound { .. } => 601,
             Self::AmbiguousModule { .. } => 622,
-            Self::CircularDependency { .. } => 602,
+            Self::ModuleImportsItself { .. } => 210,
             Self::SymbolConflict { .. } => 603,
             Self::ReservedModuleSegment { .. } => 604,
             Self::SymbolNotPublic { .. } => 605,

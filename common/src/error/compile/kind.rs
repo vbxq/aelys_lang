@@ -115,8 +115,8 @@ pub enum CompileErrorKind {
         module_path: String,
         roots: Vec<String>,
     },
-    CircularDependency {
-        chain: Vec<String>,
+    ModuleImportsItself {
+        module_path: String,
     },
     SymbolNotPublic {
         symbol: String,

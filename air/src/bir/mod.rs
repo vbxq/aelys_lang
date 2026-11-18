@@ -155,6 +155,16 @@ pub struct Published {
     pub foreign_clashes: Vec<ForeignClash>,
 }
 
+pub fn effect_summary(
+    program: &TypedProgram,
+    imports: &Imports,
+) -> std::collections::HashMap<String, EffectSet> {
+    let bir = build::build_program_with_imports(program, &imports.names());
+    let mut effects = effects::effect_summaries_with_imports(&bir, &imports.effects);
+    effects.retain(|name, _| bir.bodies.iter().any(|b| !b.is_lambda && b.name == *name));
+    effects
+}
+
 pub fn check_with_imports(
     program: TypedProgram,
     imports: &Imports,

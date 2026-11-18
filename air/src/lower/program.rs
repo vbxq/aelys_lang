@@ -33,6 +33,26 @@ impl ConstFoldFailure {
 
 impl<'a> LoweringContext<'a> {
     pub(super) fn lower_program(&mut self) {
+        self.lower_type_decls();
+
+        let stmts: Vec<_> = self.program.stmts.clone();
+        for stmt in &stmts {
+            match &stmt.kind {
+                TypedStmtKind::StructDecl { .. }
+                | TypedStmtKind::EnumDecl { .. }
+                | TypedStmtKind::Function(_) => {}
+                _ => self.lower_toplevel_stmt(stmt),
+            }
+        }
+
+        for stmt in &stmts {
+            if let TypedStmtKind::Function(func) = &stmt.kind {
+                self.lower_function(func);
+            }
+        }
+    }
+
+    pub(super) fn lower_type_decls(&mut self) {
         let mut lowered_structs: std::collections::HashSet<String> =
             std::collections::HashSet::new();
         for stmt in &self.program.stmts {
@@ -63,22 +83,6 @@ impl<'a> LoweringContext<'a> {
             {
                 self.site = Some(stmt.span);
                 self.lower_enum_decl(name, type_params, variants, &stmt.span);
-            }
-        }
-
-        let stmts: Vec<_> = self.program.stmts.clone();
-        for stmt in &stmts {
-            match &stmt.kind {
-                TypedStmtKind::StructDecl { .. }
-                | TypedStmtKind::EnumDecl { .. }
-                | TypedStmtKind::Function(_) => {}
-                _ => self.lower_toplevel_stmt(stmt),
-            }
-        }
-
-        for stmt in &stmts {
-            if let TypedStmtKind::Function(func) = &stmt.kind {
-                self.lower_function(func);
             }
         }
     }

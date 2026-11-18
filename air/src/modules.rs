@@ -1,8 +1,8 @@
 use crate::{
-    AirBlock, AirConst, AirEnumDef, AirFunction, AirGlobal, AirProgram, AirStmtKind, AirTerminator,
-    AirType, Callee, EnumRef, FunctionId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirEnumDef, AirFunction, AirGlobal, AirProgram, AirStmtKind,
+    AirStructDef, AirTerminator, AirType, Callee, EnumRef, FunctionId, Operand, Place, Rvalue,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const GLOBAL_GET: &str = "__aelys_global_get_";
 const MONO_PREFIX: &str = "__mono_";
@@ -13,6 +13,7 @@ pub struct Qualifier {
     functions: HashSet<String>,
     globals: HashSet<String>,
     types: HashSet<String>,
+    renamed: HashMap<String, String>,
 }
 
 impl Qualifier {
@@ -26,18 +27,16 @@ impl Qualifier {
                 .map(|f| f.name.clone())
                 .collect(),
             globals: program.globals.iter().map(|g| g.name.clone()).collect(),
-            types: program
-                .structs
-                .iter()
-                .map(|s| s.name.clone())
-                .filter(|n| !crate::tuples::is_tuple_name(n))
-                .chain(program.enums.iter().map(|e| e.name.clone()))
-                .collect(),
+            types: type_names(&program.structs, &program.enums),
+            renamed: HashMap::new(),
         }
     }
 
     fn value(&self, name: &str) -> String {
-        aelys_sema::modules::qualify_value(&self.path, name)
+        match self.renamed.get(name) {
+            Some(renamed) => renamed.clone(),
+            None => aelys_sema::modules::qualify_value(&self.path, name),
+        }
     }
 
     fn type_name(&self, name: &str) -> String {
@@ -112,23 +111,69 @@ impl Qualifier {
     }
 }
 
+fn type_names(structs: &[AirStructDef], enums: &[AirEnumDef]) -> HashSet<String> {
+    structs
+        .iter()
+        .map(|s| s.name.clone())
+        .filter(|n| !crate::tuples::is_tuple_name(n))
+        .chain(enums.iter().map(|e| e.name.clone()))
+        .collect()
+}
+
+pub fn qualify_type_decls(structs: &mut [AirStructDef], enums: &mut [AirEnumDef], path: &str) {
+    if path.is_empty() {
+        return;
+    }
+    let q = Qualifier {
+        path: path.to_string(),
+        functions: HashSet::new(),
+        globals: HashSet::new(),
+        types: type_names(structs, enums),
+        renamed: HashMap::new(),
+    };
+    qualify_decls(structs, enums, &q);
+}
+
+fn qualify_decls(structs: &mut [AirStructDef], enums: &mut [AirEnumDef], q: &Qualifier) {
+    for def in structs {
+        if !crate::tuples::is_tuple_name(&def.name) {
+            def.name = q.type_name(&def.name);
+        }
+        for field in &mut def.fields {
+            qualify_type(&mut field.ty, q);
+        }
+    }
+    for def in enums {
+        qualify_enum(def, q);
+    }
+}
+
+// the root of a module cycle is qualified like any module, but the entry point keeps its name
+pub fn rename_function(program: &mut AirProgram, from: &str, to: &str) {
+    let q = Qualifier {
+        path: String::new(),
+        functions: HashSet::from([from.to_string()]),
+        globals: HashSet::new(),
+        types: HashSet::new(),
+        renamed: HashMap::from([(from.to_string(), to.to_string())]),
+    };
+    for global in &mut program.globals {
+        if let Some(init) = &mut global.init {
+            qualify_const(init, &q);
+        }
+    }
+    for function in &mut program.functions {
+        qualify_function(function, &q);
+    }
+}
+
 pub fn qualify(program: &mut AirProgram, path: &str) {
     if path.is_empty() {
         return;
     }
     let q = Qualifier::new(program, path);
 
-    for def in &mut program.structs {
-        if !crate::tuples::is_tuple_name(&def.name) {
-            def.name = q.type_name(&def.name);
-        }
-        for field in &mut def.fields {
-            qualify_type(&mut field.ty, &q);
-        }
-    }
-    for def in &mut program.enums {
-        qualify_enum(def, &q);
-    }
+    qualify_decls(&mut program.structs, &mut program.enums, &q);
     for global in &mut program.globals {
         qualify_global(global, &q);
     }

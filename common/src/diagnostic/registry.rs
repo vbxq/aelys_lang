@@ -1405,13 +1405,12 @@ is reported as E0201, an undefined variable.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
-        code: "E0602",
-        title: "circular module dependency",
+        code: "E0210",
+        title: "module imports itself",
         explanation: "\
-Two or more modules import each other, directly or through a chain.
-Each module is type-checked on its own, in dependency order, so a cycle
-has no order to check it in. Break the cycle by moving the shared items
-into a third module that both can import.",
+A module names itself in a `needs`. Its own items are already in scope
+under their bare names, so drop the import. Modules that import each
+other through a chain are fine.",
         severity: Severity::Error,
     },
     DiagnosticInfo {

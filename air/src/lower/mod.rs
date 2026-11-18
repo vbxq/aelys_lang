@@ -8,12 +8,21 @@ mod str_escape;
 mod str_temps;
 mod view_owner;
 
-pub use str_temps::{fresh_returning_functions, retaining_functions};
+pub use str_temps::{fresh_returning_functions, retaining_declarations, retaining_functions};
 
 use crate::*;
 use aelys_common::Fault;
 use aelys_sema::{InferType, TypedProgram};
 use aelys_syntax::BinaryOp;
+
+pub fn lower_type_decls(program: &TypedProgram) -> (Vec<AirStructDef>, Vec<AirEnumDef>) {
+    let mut cx = LoweringContext::new(program);
+    cx.lower_type_decls();
+    let tuples = cx.tuples.take();
+    let mut structs = std::mem::take(&mut cx.structs);
+    structs.extend(tuples.into_iter().map(crate::tuples::tuple_def));
+    (structs, std::mem::take(&mut cx.enums))
+}
 
 pub fn lower(program: &TypedProgram) -> AirProgram {
     try_lower(program).unwrap_or_else(|failure| panic!("{}", format_lowering_errors(&failure)))

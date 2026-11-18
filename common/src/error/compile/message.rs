@@ -118,8 +118,8 @@ impl CompileErrorKind {
                 module_path,
                 roots.len()
             ),
-            Self::CircularDependency { chain } => {
-                format!("circular dependency detected: {}", chain.join(" -> "))
+            Self::ModuleImportsItself { module_path } => {
+                format!("module `{module_path}` imports itself")
             }
             Self::SymbolNotPublic { symbol, module } => {
                 format!("'{}' is not public in module '{}'", symbol, module)
