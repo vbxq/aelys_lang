@@ -1,10 +1,10 @@
 fn lim(n: i64) -> i64 {
-    return n
+    n
 }
 fn main() {
-    let step = 3
-    let mut s = 0
-    for i in 0..lim(10) step step { s = s + i }
-    for i in 0..step { s = s + 100 }
-    println(s)
+    let step = 3;
+    let mut s = 0;
+    for i in (0..lim(10)).step_by(step) { s = s + i; }
+    for i in 0..step { s = s + 100; }
+    println!("{}", s);
 }

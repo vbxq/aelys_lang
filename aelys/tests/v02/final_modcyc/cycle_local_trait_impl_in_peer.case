@@ -1,7 +1,7 @@
-needs a
-pub trait Shout { fn shout(&self) -> i64 }
-fn loud<T: Shout>(x: T) -> i64 { return x.shout() * 10 }
+mod a;
+pub trait Shout { fn shout(&self) -> i64; }
+fn loud<T: Shout>(x: T) -> i64 { x.shout() * 10 }
 fn main() {
-    println(loud(a.mk(4)))
-    println(a.mk(5).shout())
+    println!("{}", loud(a::mk(4)));
+    println!("{}", a::mk(5).shout());
 }

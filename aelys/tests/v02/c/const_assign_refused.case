@@ -1,5 +1,5 @@
-const N: i64 = 3
+const N: i64 = 3;
 fn main() {
-    N = 4
-    println(N)
+    N = 4;
+    println!("{}", N);
 }

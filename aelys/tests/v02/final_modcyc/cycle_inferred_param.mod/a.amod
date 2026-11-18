@@ -1,2 +1,2 @@
-needs prog
-pub fn g(y) -> i64 { return prog.id(y) * 2 }
+use crate::prog;
+pub fn g(y) -> i64 { prog::id(y) * 2 }

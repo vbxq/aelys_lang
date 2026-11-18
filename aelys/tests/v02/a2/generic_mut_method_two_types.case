@@ -2,20 +2,20 @@ struct Acc<T> { last: T, n: i64 }
 
 impl<T> Acc<T> {
     fn put(&mut self, x: T) {
-        self.last = x
-        self.n = self.n + 1
+        self.last = x;
+        self.n = self.n + 1;
     }
-    fn count(&self) -> i64 { return self.n }
+    fn count(&self) -> i64 { self.n }
 }
 
 fn main() {
-    let mut a = Acc { last: 0, n: 0 }
-    let mut b = Acc { last: "z", n: 100 }
+    let mut a = Acc { last: 0, n: 0 };
+    let mut b = Acc { last: "z", n: 100 };
     for i in 0..50 {
-        a.put(i * 3)
-        b.put("s{i}")
+        a.put(i * 3);
+        b.put(format!("s{i}"));
     }
-    println(a.last)
-    println(b.last)
-    println(a.count() + b.count())
+    println!("{}", a.last);
+    println!("{}", b.last);
+    println!("{}", a.count() + b.count());
 }

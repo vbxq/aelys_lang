@@ -1,9 +1,9 @@
-fn label(n: i64) -> string {
-    return "x"
+fn label(n: i64) -> String {
+    "x"
 }
 nogc fn g(n: i64) {
-    println(label(n))
+    println!("{}", label(n));
 }
 fn main() {
-    g(1)
+    g(1);
 }

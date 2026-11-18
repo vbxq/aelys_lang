@@ -1,4 +1,4 @@
 fn main() {
-    let (a, b): (i64, i64) = (3, 4)
-    println(a * b)
+    let (a, b): (i64, i64) = (3, 4);
+    println!("{}", a * b);
 }

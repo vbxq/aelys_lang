@@ -1,4 +1,4 @@
 fn main() {
-    let s = "ab"
-    println("[{s:05}]")
+    let s = "ab";
+    println!("[{s:05}]");
 }

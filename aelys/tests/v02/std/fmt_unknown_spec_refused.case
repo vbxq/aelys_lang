@@ -1,4 +1,4 @@
 fn main() {
-    let x = 42
-    println("[{x:>8q}]")
+    let x = 42;
+    println!("[{x:>8q}]");
 }

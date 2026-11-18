@@ -1,5 +1,5 @@
 struct P { x: i64 }
 fn main() {
-    let t = (P { x: 1 }, 2)
-    println("{t}")
+    let t = (P { x: 1 }, 2);
+    println!("{t}");
 }

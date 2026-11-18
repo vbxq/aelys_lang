@@ -1,7 +1,6 @@
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    let view = v[0..2]
-    Vec::insert(v, 0, 9)
-    println(view[0])
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    let view = v[0..2];
+    Vec::insert(v, 0, 9);
+    println!("{}", view[0]);
 }

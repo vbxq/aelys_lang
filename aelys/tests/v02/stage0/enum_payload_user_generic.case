@@ -1,6 +1,6 @@
 enum Box2<T> { Full(T), Empty }
 
 fn main() {
-    let b: Box2<i64> = Box2::Full("s")
-    println(0)
+    let b: Box2<i64> = Box2::Full("s");
+    println!("{}", 0);
 }

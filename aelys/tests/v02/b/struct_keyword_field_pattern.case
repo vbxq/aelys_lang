@@ -1,10 +1,10 @@
-struct Span { in: i64, out: i64 }
+struct Span { r#in: i64, out: i64 }
 
 fn width(s: Span) -> i64 {
-    return match s { Span { in: 0, .. } => -1, Span { in: a, out } => out - a }
+    match s { Span { r#in: 0, .. } => -1, Span { r#in: a, out } => out - a }
 }
 
 fn main() {
-    println(width(Span { in: 0, out: 5 }))
-    println(width(Span { in: 2, out: 9 }))
+    println!("{}", width(Span { r#in: 0, out: 5 }));
+    println!("{}", width(Span { r#in: 2, out: 9 }));
 }

@@ -3,34 +3,34 @@ enum Pair<A, B> { Two(A, B), One(A) }
 struct H { o: Option<u8> }
 
 fn mk(n: i64) -> Option<i64> {
-    return Option::Some(n * 3)
+    Option::Some(n * 3)
 }
 
 fn main() {
-    let o: Option<u8> = Some(7)
-    let n: i32 = 5
-    let w: Option<i64> = Some(n)
-    let h = H { o: Some(9) }
-    let a: [Option<u16>; 2] = [Some(65535), None]
-    let v: Vec<Option<i64>> = vec[Some(-4), None]
-    let nest: Option<Option<i64>> = Some(Some(11))
-    let r: Result<string, i64> = Ok("fine")
-    let e: Result<string, i64> = Err(41)
-    let p: Pair<u8, string> = Pair::Two(200, "ok")
-    let big: Option<u64> = Some(18446744073709551615)
-    match o { Some(x) => println(x), None => println(0) }
-    match w { Some(x) => println(x + 1), None => println(0) }
-    match h.o { Some(x) => println(x), None => println(0) }
-    match a[0] { Some(x) => println(x), None => println(0) }
-    match a[1] { Some(x) => println(x), None => println(-1) }
-    match v[0] { Some(x) => println(x), None => println(0) }
+    let o: Option<u8> = Some(7);
+    let n: i32 = 5;
+    let w: Option<i64> = Some(n);
+    let h = H { o: Some(9) };
+    let a: [Option<u16>; 2] = [Some(65535), None];
+    let v: Vec<Option<i64>> = vec![Some(-4), None];
+    let nest: Option<Option<i64>> = Some(Some(11));
+    let r: Result<String, i64> = Ok("fine");
+    let e: Result<String, i64> = Err(41);
+    let p: Pair<u8, String> = Pair::Two(200, "ok");
+    let big: Option<u64> = Some(18446744073709551615);
+    match o { Some(x) => println!("{}", x), None => println!("{}", 0) }
+    match w { Some(x) => println!("{}", x + 1), None => println!("{}", 0) }
+    match h.o { Some(x) => println!("{}", x), None => println!("{}", 0) }
+    match a[0] { Some(x) => println!("{}", x), None => println!("{}", 0) }
+    match a[1] { Some(x) => println!("{}", x), None => println!("{}", -1) }
+    match v[0] { Some(x) => println!("{}", x), None => println!("{}", 0) }
     match nest {
-        Some(inner) => match inner { Some(x) => println(x), None => println(1) },
-        None => println(0)
+        Some(inner) => match inner { Some(x) => println!("{}", x), None => println!("{}", 1) },
+        None => println!("{}", 0),
     }
-    match r { Ok(s) => println(s), Err(c) => println(c) }
-    match e { Ok(s) => println(s), Err(c) => println(c + 1) }
-    match p { Pair::Two(x, s) => println("{x} {s}"), Pair::One(x) => println(x) }
-    match big { Some(x) => println(x), None => println(0) }
-    match mk(14) { Some(x) => println(x), None => println(0) }
+    match r { Ok(s) => println!("{}", s), Err(c) => println!("{}", c) }
+    match e { Ok(s) => println!("{}", s), Err(c) => println!("{}", c + 1) }
+    match p { Pair::Two(x, s) => println!("{x} {s}"), Pair::One(x) => println!("{}", x) }
+    match big { Some(x) => println!("{}", x), None => println!("{}", 0) }
+    match mk(14) { Some(x) => println!("{}", x), None => println!("{}", 0) }
 }

@@ -1,2 +1,2 @@
-needs prog
-pub fn f() -> i64 { return prog.seed() }
+use crate::prog;
+pub fn f() -> i64 { prog::seed() }

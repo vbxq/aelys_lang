@@ -1,5 +1,5 @@
-needs geom
-needs ext
+mod geom;
+mod ext;
 fn main() {
-    println(geom.Pt { v: 1 }.get())
+    println!("{}", geom::Pt { v: 1 }.get());
 }

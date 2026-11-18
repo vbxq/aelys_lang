@@ -1,12 +1,12 @@
 struct Pair<A, B> { a: A, b: B }
 fn dbl(x: i64) -> i64 {
-    return x * 2
+    x * 2
 }
 fn main() {
-    let p = Pair { a: 'z', b: dbl }
-    println(p.a)
-    println(p.b(21))
-    let q: Pair<u8, i8> = Pair { a: 250, b: -100 }
-    println(q.a + 10)
-    println(q.b - 100)
+    let p = Pair { a: 'z', b: dbl };
+    println!("{}", p.a);
+    println!("{}", p.b(21));
+    let q: Pair<u8, i8> = Pair { a: 250, b: -100 };
+    println!("{}", q.a + 10);
+    println!("{}", q.b - 100);
 }

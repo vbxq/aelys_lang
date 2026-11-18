@@ -1,14 +1,14 @@
 fn step(x: i64) -> i64 {
-    return x * 2
+    x * 2
 }
 fn g() -> i64 {
-    let step = 4
-    let mut c = 0
-    for i in 0..step step 2 { c = c + 1 }
-    return c
+    let step = 4;
+    let mut c = 0;
+    for i in (0..step).step_by(2) { c = c + 1; }
+    c
 }
 fn main() {
-    let mut s = 0
-    for i in 0..10 step 3 { s = s + i }
-    println("{s + step(5)} {g()}")
+    let mut s = 0;
+    for i in (0..10).step_by(3) { s = s + i; }
+    println!("{} {}", s + step(5), g());
 }

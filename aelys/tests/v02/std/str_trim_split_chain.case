@@ -1,14 +1,14 @@
-needs std.str
+use std::str;
 
 fn main() {
-    let mut total = 0
-    let mut i = 0
+    let mut total = 0;
+    let mut i = 0;
     while i < 300 {
-        let parts = "  ab,c,,déf  ".trim().split(",")
-        total = total + parts.len()
-        i = i + 1
+        let parts = "  ab,c,,déf  ".trim().split(",");
+        total = total + parts.len();
+        i = i + 1;
     }
-    let parts = "  ab,c,,déf  ".trim().split(",")
-    println(total)
-    println("[{parts[0]}][{parts[1]}][{parts[2]}][{parts[3]}]")
+    let parts = "  ab,c,,déf  ".trim().split(",");
+    println!("{}", total);
+    println!("[{}][{}][{}][{}]", parts[0], parts[1], parts[2], parts[3]);
 }

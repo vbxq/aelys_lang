@@ -1,8 +1,8 @@
 fn main() {
-    let a: [(i64, bool); 3] = [(1, true), (2, false), (3, true)]
-    let mut s = 0
+    let a: [(i64, bool); 3] = [(1, true), (2, false), (3, true)];
+    let mut s = 0;
     for i in 0..3 {
-        if a[i].1 { s = s + a[i].0 }
+        if a[i].1 { s = s + a[i].0; }
     }
-    println(s)
+    println!("{}", s);
 }

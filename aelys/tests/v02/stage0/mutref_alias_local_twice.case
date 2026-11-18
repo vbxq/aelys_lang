@@ -1,6 +1,6 @@
 struct C { n: i64 }
-fn two(a: &mut C, b: &mut C) { (*a).n = 1 }
-fn main() { let mut c = C { n: 5 }
- let r = &mut c
- two(r, r)
- println(c.n) }
+fn two(a: &mut C, b: &mut C) { (*a).n = 1; }
+fn main() { let mut c = C { n: 5 };
+ let r = &mut c;
+ two(r, r);
+ println!("{}", c.n); }

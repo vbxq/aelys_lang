@@ -1,4 +1,4 @@
 fn main() {
-    let x: Strng = "a"
-    println(x)
+    let x: Strng = "a";
+    println!("{}", x);
 }

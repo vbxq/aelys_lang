@@ -1,4 +1,4 @@
 fn main() {
-    let t = (1,)
-    println(t.0)
+    let t = (1,);
+    println!("{}", t.0)
 }

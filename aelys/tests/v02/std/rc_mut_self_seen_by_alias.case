@@ -1,15 +1,15 @@
 struct Counter { n: i64 }
 
 impl Counter {
-    fn bump(&mut self) { self.n = self.n + 1 }
-    fn get(&self) -> i64 { return self.n }
+    fn bump(&mut self) { self.n = self.n + 1; }
+    fn get(&self) -> i64 { self.n }
 }
 
 fn main() {
-    let r: Rc<Counter> = Rc::new(Counter { n: 0 })
-    let alias = r
-    r.bump()
-    r.bump()
-    alias.bump()
-    println("{r.get()} {alias.get()}")
+    let r: Rc<Counter> = Rc::new(Counter { n: 0 });
+    let alias = r;
+    r.bump();
+    r.bump();
+    alias.bump();
+    println!("{} {}", r.get(), alias.get());
 }

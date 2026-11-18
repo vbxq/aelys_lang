@@ -1,4 +1,4 @@
 pub trait Sh {
-    fn req(&self) -> i64
-    fn d(&self) -> i64 { return self.req() * 2 }
+    fn req(&self) -> i64;
+    fn d(&self) -> i64 { self.req() * 2 }
 }

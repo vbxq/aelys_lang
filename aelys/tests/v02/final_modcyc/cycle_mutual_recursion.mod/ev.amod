@@ -1,5 +1,5 @@
-needs od
+use crate::od;
 pub fn is_even(n: i64) -> bool {
-    if n == 0 { return true }
-    return od.is_odd(n - 1)
+    if n == 0 { return true; }
+    od::is_odd(n - 1)
 }

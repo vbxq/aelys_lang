@@ -1,4 +1,0 @@
-fn main() {
-    let s = "héllo"
-    println(s.char_count())
-}

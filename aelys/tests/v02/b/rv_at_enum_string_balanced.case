@@ -1,17 +1,16 @@
-fn pick(o: Option<string>) -> Option<string> {
-    return match o { w @ Some(s) if s.len > 1 => w, Some(_) => None, None => Some("d" + "") }
+fn pick(o: Option<String>) -> Option<String> {
+    match o { w @ Some(s) if s.len() > 1 => w, Some(_) => None, None => Some("d" + "") }
 }
 
-fn main() -> i64 {
-    let mut keep: Option<string> = None
-    let mut n: i64 = 0
+fn main() {
+    let mut keep: Option<String> = None;
+    let mut n: i64 = 0;
     for i in 0..100 {
-        let o: Option<string> = Some("x{i}")
-        let p = pick(o)
-        match p { Some(s) => { n = n + s.len }, None => {} }
-        keep = o
+        let o: Option<String> = Some(format!("x{i}"));
+        let p = pick(o);
+        match p { Some(s) => { n = n + s.len(); }, None => {} }
+        keep = o;
     }
-    match keep { Some(s) => println(s), None => println("none") }
-    println(n)
-    return 0
+    match keep { Some(s) => println!("{}", s), None => println!("none") }
+    println!("{}", n);
 }

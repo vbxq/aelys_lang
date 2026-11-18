@@ -1,28 +1,27 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
 impl Area for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 
 nogc fn total<T: Area>(s: &[T]) -> i64 {
-    let mut acc: i64 = 0
-    for x in s { acc = acc + x.area() }
-    return acc
+    let mut acc: i64 = 0;
+    for x in s { acc = acc + x.area(); }
+    acc
 }
 
-fn main() -> i64 {
-    let a: [Sq; 3] = [Sq { s: 1 }, Sq { s: 2 }, Sq { s: 3 }]
-    let b: [Rect; 2] = [Rect { w: 1, h: 1 }, Rect { w: 2, h: 2 }]
-    println(total(a[..]))
-    println(total(b[..]))
-    return 0
+fn main() {
+    let a: [Sq; 3] = [Sq { s: 1 }, Sq { s: 2 }, Sq { s: 3 }];
+    let b: [Rect; 2] = [Rect { w: 1, h: 1 }, Rect { w: 2, h: 2 }];
+    println!("{}", total(a[..]));
+    println!("{}", total(b[..]));
 }

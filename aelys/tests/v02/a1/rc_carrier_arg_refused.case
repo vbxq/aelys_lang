@@ -2,7 +2,7 @@ struct N { v: i64 }
 struct H { r: Rc<N>, k: i64 }
 struct W<T> { v: T }
 fn main() {
-    let r: Rc<N> = Rc::new(N { v: 1 })
-    let w = W { v: H { r: r, k: 1 } }
-    println(w.v.k)
+    let r: Rc<N> = Rc::new(N { v: 1 });
+    let w = W { v: H { r: r, k: 1 } };
+    println!("{}", w.v.k);
 }

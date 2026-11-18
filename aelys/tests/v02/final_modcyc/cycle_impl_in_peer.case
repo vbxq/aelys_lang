@@ -1,18 +1,18 @@
-needs inv
+mod inv;
 pub struct Item { pub price: i64, pub qty: i64 }
-impl inv.Stock {
+impl inv::Stock {
     pub fn value(&self) -> i64 {
-        let mut s = 0
-        let mut i = 0
+        let mut s = 0;
+        let mut i = 0;
         while i < self.items.len() {
-            s = s + self.items[i].cost()
-            i = i + 1
+            s = s + self.items[i].cost();
+            i = i + 1;
         }
-        return s
+        s
     }
 }
 fn main() {
-    let s = inv.stock(3)
-    println(s.value())
-    println(s.count())
+    let s = inv::stock(3);
+    println!("{}", s.value());
+    println!("{}", s.count());
 }

@@ -1,5 +1,4 @@
-fn main() -> i64 {
-    let v: Vec<u8> = vec[3, 300]
-    println(v.len)
-    return 0
+fn main() {
+    let v: Vec<u8> = vec![3, 300];
+    println!("{}", v.len());
 }

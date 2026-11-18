@@ -1,15 +1,14 @@
-fn main() -> i64 {
-    let mut a: i64 = 0
-    let mut b: i64 = 0
-    let mut c: i64 = 0
+fn main() {
+    let mut a: i64 = 0;
+    let mut b: i64 = 0;
+    let mut c: i64 = 0;
     for i in 0..1000 {
-        let s: string = match i % 3 { 0 => "a" + "x", 1 => "b" + "x", _ => "c" + "y" }
+        let s: String = match i % 3 { 0 => "a" + "x", 1 => "b" + "x", _ => "c" + "y" };
         match s {
-            "ax" => { a = a + 1 },
-            "bx" => { b = b + 1 },
-            _ => { c = c + 1 }
+            "ax" => { a = a + 1; },
+            "bx" => { b = b + 1; },
+            _ => { c = c + 1; }
         }
     }
-    println("{a} {b} {c}")
-    return 0
+    println!("{a} {b} {c}");
 }

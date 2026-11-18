@@ -1,12 +1,12 @@
-needs std.str
+use std::str;
 
 fn main() {
-    let cs = "añb€".chars()
-    println(cs.len())
-    println("{cs[1]}{cs[3]}")
-    let mut wide = 0
+    let cs = "añb€".chars();
+    println!("{}", cs.len());
+    println!("{}{}", cs[1], cs[3]);
+    let mut wide = 0;
     for i in 0..cs.len() {
-        if (cs[i] as i64) > 127 { wide = wide + i }
+        if (cs[i] as i64) > 127 { wide = wide + i; }
     }
-    println(wide)
+    println!("{}", wide);
 }

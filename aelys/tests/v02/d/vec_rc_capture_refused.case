@@ -1,8 +1,7 @@
 struct Node { val: i64 }
-fn main() -> i64 {
-    let mut v: Vec<Rc<Node>> = Vec::new()
-    Vec::push(v, Rc::new(Node { val: 1 }))
-    let f = fn() -> i64 { return v.len }
-    println(f())
-    return 0
+fn main() {
+    let mut v: Vec<Rc<Node>> = Vec::new();
+    Vec::push(v, Rc::new(Node { val: 1 }));
+    let f = move || -> i64 { v.len() };
+    println!("{}", f());
 }

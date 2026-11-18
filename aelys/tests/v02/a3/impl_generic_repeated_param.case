@@ -1,28 +1,27 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
 impl Area for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 
 struct Duo<A, B> { a: A, b: B }
 
 impl<T: Area> Area for Duo<T, T> {
-    fn area(&self) -> i64 { return self.a.area() - self.b.area() }
+    fn area(&self) -> i64 { self.a.area() - self.b.area() }
 }
 
-fn ar<T: Area>(x: T) -> i64 { return x.area() }
+fn ar<T: Area>(x: T) -> i64 { x.area() }
 
-fn main() -> i64 {
-    println(ar(Duo { a: Sq { s: 5 }, b: Sq { s: 3 } }))
-    println(ar(Duo { a: Rect { w: 1, h: 1 }, b: Rect { w: 0, h: 0 } }))
-    return 0
+fn main() {
+    println!("{}", ar(Duo { a: Sq { s: 5 }, b: Sq { s: 3 } }));
+    println!("{}", ar(Duo { a: Rect { w: 1, h: 1 }, b: Rect { w: 0, h: 0 } }));
 }

@@ -1,11 +1,11 @@
 fn get(x: i64) -> i64 {
-    return 999
+    999
 }
 
 fn apply(get: fn(i64) -> i64) -> i64 {
-    return get(1)
+    get(1)
 }
 
 fn main() {
-    println(apply(fn(x: i64) -> i64 { return x + 100 }))
+    println!("{}", apply(move |x: i64| -> i64 { x + 100 }));
 }

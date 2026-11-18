@@ -1,25 +1,24 @@
 trait Grow {
-    fn grown(&self) -> Self
-    fn get(&self) -> i64
+    fn grown(&self) -> Self;
+    fn get(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
 impl Grow for Sq {
-    fn grown(&self) -> Self { return Sq { s: self.s + 1 } }
-    fn get(&self) -> i64 { return self.s * self.s }
+    fn grown(&self) -> Self { Sq { s: self.s + 1 } }
+    fn get(&self) -> i64 { self.s * self.s }
 }
 
 impl Grow for Rect {
-    fn grown(&self) -> Self { return Rect { w: self.w * 2, h: self.h } }
-    fn get(&self) -> i64 { return self.w * self.h + 1000 }
+    fn grown(&self) -> Self { Rect { w: self.w * 2, h: self.h } }
+    fn get(&self) -> i64 { self.w * self.h + 1000 }
 }
 
-fn g2<T: Grow>(x: T) -> i64 { return x.grown().grown().get() }
+fn g2<T: Grow>(x: T) -> i64 { x.grown().grown().get() }
 
-fn main() -> i64 {
-    println(g2(Sq { s: 1 }))
-    println(g2(Rect { w: 1, h: 5 }))
-    return 0
+fn main() {
+    println!("{}", g2(Sq { s: 1 }));
+    println!("{}", g2(Rect { w: 1, h: 5 }));
 }

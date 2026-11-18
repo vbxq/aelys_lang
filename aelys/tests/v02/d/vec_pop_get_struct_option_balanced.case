@@ -1,28 +1,27 @@
-fn mk(i: i64) -> string { return "s{i}" }
-struct P { name: string, n: i64 }
+fn mk(i: i64) -> String { format!("s{i}") }
+struct P { name: String, n: i64 }
 fn last(v: &mut Vec<P>) -> Option<P> {
-    let r = Vec::pop(*v)
-    return r
+    let r = Vec::pop(*v);
+    r
 }
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut i: i64 = 0
-    let mut keep: Option<P> = None
+fn main() {
+    let mut total: i64 = 0;
+    let mut i: i64 = 0;
+    let mut keep: Option<P> = None;
     while i < 300 {
-        let mut v: Vec<P> = Vec::new()
-        Vec::push(v, P { name: mk(i), n: 1 })
-        Vec::push(v, P { name: mk(i + 1), n: 2 })
-        Vec::insert(v, 1, P { name: mk(7), n: 3 })
-        keep = Vec::get(v, 1)
-        let mut o = last(&mut v)
-        o = Vec::pop(v)
-        match o { Some(p) => { total = total + p.n * 10 } None => { total = total - 1000 } }
-        let r: P = Vec::remove(v, 0)
-        total = total + r.n + v.len * 100
-        Vec::clear(v)
-        i = i + 1
+        let mut v: Vec<P> = Vec::new();
+        Vec::push(v, P { name: mk(i), n: 1 });
+        Vec::push(v, P { name: mk(i + 1), n: 2 });
+        Vec::insert(v, 1, P { name: mk(7), n: 3 });
+        keep = Vec::get(v, 1);
+        let mut o = last(&mut v);
+        o = Vec::pop(v);
+        match o { Some(p) => { total = total + p.n * 10; } None => { total = total - 1000; } }
+        let r: P = Vec::remove(v, 0);
+        total = total + r.n + v.len() * 100;
+        Vec::clear(v);
+        i = i + 1;
     }
-    match keep { Some(p) => { println(p.name) } None => { println("none") } }
-    println(total)
-    return 0
+    match keep { Some(p) => { println!("{}", p.name); } None => { println!("none"); } }
+    println!("{}", total);
 }

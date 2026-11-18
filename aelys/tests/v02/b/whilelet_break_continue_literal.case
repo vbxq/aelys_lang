@@ -1,16 +1,15 @@
-needs std.vec
+use std::vec;
 
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[100, 9, 4, 0, 3, 2, 8]
-    let mut t: i64 = 0
-    while let Some(x) = vec.pop(&mut v) {
-        if x % 2 == 0 && x != 0 { continue }
+fn main() {
+    let mut v: Vec<i64> = vec![100, 9, 4, 0, 3, 2, 8];
+    let mut t: i64 = 0;
+    while let Some(x) = vec::pop(&mut v) {
+        if x % 2 == 0 && x != 0 { continue; }
         match x {
-            0 => { break },
-            _ => { t = t + x }
+            0 => { break; },
+            _ => { t = t + x; }
         }
-        t = t + 10
+        t = t + 10;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

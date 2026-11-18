@@ -1,23 +1,23 @@
-needs Area from shapes
-needs geo
-needs show
+mod shapes; use shapes::Area;
+mod geo;
+mod show;
 fn total<T: Area>(xs: Vec<T>) -> i64 {
-    let mut s = 0
-    let mut i = 0
+    let mut s = 0;
+    let mut i = 0;
     while i < xs.len() {
-        s = s + xs[i].area()
-        i = i + 1
+        s = s + xs[i].area();
+        i = i + 1;
     }
-    return s
+    s
 }
 fn main() {
-    let a = geo.Pt { v: 2 }
-    let b = geo.Pt { v: 2 }
-    println(a.area())
-    println(a == b)
-    println(a)
-    let mut v = Vec::new()
-    v.push(geo.Pt { v: 1 })
-    v.push(geo.Pt { v: 3 })
-    println(total(v))
+    let a = geo::Pt { v: 2 };
+    let b = geo::Pt { v: 2 };
+    println!("{}", a.area());
+    println!("{}", a == b);
+    println!("{}", a);
+    let mut v = Vec::new();
+    v.push(geo::Pt { v: 1 });
+    v.push(geo::Pt { v: 3 });
+    println!("{}", total(v));
 }

@@ -1,18 +1,17 @@
 struct Node { val: i64 }
-fn main() -> i64 {
-    let mut a: Vec<Rc<Node>> = Vec::new()
-    Vec::push(a, Rc::new(Node { val: 1 }))
-    Vec::push(a, Rc::new(Node { val: 2 }))
-    let mut b = a
-    Vec::push(b, Rc::new(Node { val: 3 }))
-    let n: Rc<Node> = a[0]
-    n.val = 9
-    println(a.len)
-    println(b.len)
-    println(Rc::get(b[0]).val)
-    let r: Rc<Node> = Vec::remove(b, 1)
-    Vec::clear(b)
-    println(Rc::get(r).val)
-    println(Rc::get(a[1]).val)
-    return 0
+fn main() {
+    let mut a: Vec<Rc<Node>> = Vec::new();
+    Vec::push(a, Rc::new(Node { val: 1 }));
+    Vec::push(a, Rc::new(Node { val: 2 }));
+    let mut b = a;
+    Vec::push(b, Rc::new(Node { val: 3 }));
+    let n: Rc<Node> = a[0];
+    n.val = 9;
+    println!("{}", a.len());
+    println!("{}", b.len());
+    println!("{}", Rc::get(b[0]).val);
+    let r: Rc<Node> = Vec::remove(b, 1);
+    Vec::clear(b);
+    println!("{}", Rc::get(r).val);
+    println!("{}", Rc::get(a[1]).val);
 }

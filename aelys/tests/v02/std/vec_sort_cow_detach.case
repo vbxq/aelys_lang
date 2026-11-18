@@ -1,18 +1,18 @@
-needs std.vec
+use std::vec;
 
 fn main() {
-    let mut i = 0
-    let mut acc = 0
+    let mut i = 0;
+    let mut acc = 0;
     while i < 500 {
-        let mut v: Vec<i64> = vec[3, 1, 2]
-        let alias = v
-        v.sort()
-        acc = acc + v[0] * 100 + alias[0]
-        i = i + 1
+        let mut v: Vec<i64> = vec![3, 1, 2];
+        let alias = v;
+        v.sort();
+        acc = acc + v[0] * 100 + alias[0];
+        i = i + 1;
     }
-    let mut v: Vec<i64> = vec[3, 1, 2]
-    let alias = v
-    v.sort()
-    println("{v[0]}{v[1]}{v[2]} {alias[0]}{alias[1]}{alias[2]}")
-    println(acc)
+    let mut v: Vec<i64> = vec![3, 1, 2];
+    let alias = v;
+    v.sort();
+    println!("{}{}{} {}{}{}", v[0], v[1], v[2], alias[0], alias[1], alias[2]);
+    println!("{}", acc);
 }

@@ -1,7 +1,7 @@
-impl string {
-    fn twice(self) -> string { return self + self }
+impl String {
+    fn twice(self) -> String { self + self }
 }
 
 fn main() {
-    println("a".twice())
+    println!("{}", "a".twice());
 }

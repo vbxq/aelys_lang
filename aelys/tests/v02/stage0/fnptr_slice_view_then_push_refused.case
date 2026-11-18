@@ -1,7 +1,7 @@
-fn bump(s: &mut [i64]) -> i64 { s[0] = 9
- return s[0] }
-fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { return f(s) }
-fn main() { let mut v: Vec<i64> = vec[1, 2, 3]
- let s: &mut [i64] = v[0..3]
- Vec::push(v, 4)
- println(apply(bump, s)) }
+fn bump(s: &mut [i64]) -> i64 { s[0] = 9;
+ s[0] }
+fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { f(s) }
+fn main() { let mut v: Vec<i64> = vec![1, 2, 3];
+ let s: &mut [i64] = v[0..3];
+ Vec::push(v, 4);
+ println!("{}", apply(bump, s)); }

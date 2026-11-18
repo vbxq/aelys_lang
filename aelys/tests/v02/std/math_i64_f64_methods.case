@@ -1,10 +1,10 @@
-needs std.math
+use std::math;
 
 fn main() {
-    let a = -7
-    let b = 12
-    let two = 2
-    println("{a.abs()} {a.min(b)} {a.max(b)} {b.clamp(0, 10)} {a.sign()} {two.pow(10)} {b.gcd(18)}")
-    let x: f64 = -2.5
-    println("{x.abs()} {x.min(1.0)} {x.max(1.0)}")
+    let a = -7;
+    let b = 12;
+    let two = 2;
+    println!("{} {} {} {} {} {} {}", a.abs(), a.min(b), a.max(b), b.clamp(0, 10), a.sign(), two.pow(10), b.gcd(18));
+    let x: f64 = -2.5;
+    println!("{} {} {}", x.abs(), x.min(1.0), x.max(1.0));
 }

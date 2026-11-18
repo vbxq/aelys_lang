@@ -1,14 +1,14 @@
-struct Holder<T> { item: T, tag: string }
+struct Holder<T> { item: T, tag: String }
 fn hold<T>(x: T) -> Holder<T> {
-    return Holder { item: x, tag: "h" }
+    Holder { item: x, tag: "h" }
 }
 fn main() {
-    let mut n = 0
+    let mut n = 0;
     for i in 0..40 {
-        let h = hold(("s{i}", i))
-        let mut c = h
-        c.item = ("t", 1)
-        n = n + h.item.0.len + h.item.1 + h.tag.len + c.item.0.len
+        let h = hold((format!("s{i}"), i));
+        let mut c = h;
+        c.item = ("t", 1);
+        n = n + h.item.0.len() + h.item.1 + h.tag.len() + c.item.0.len();
     }
-    println(n)
+    println!("{}", n);
 }

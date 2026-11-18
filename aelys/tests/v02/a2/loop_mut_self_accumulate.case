@@ -2,17 +2,17 @@ struct C { n: i64 }
 
 impl C {
     fn tick(&mut self) -> i64 {
-        self.n = self.n + 1
-        return self.n
+        self.n = self.n + 1;
+        self.n
     }
 }
 
 fn main() {
-    let mut c = C { n: 0 }
-    let mut t = 0
+    let mut c = C { n: 0 };
+    let mut t = 0;
     for i in 0..10 {
-        t = t + c.tick()
+        t = t + c.tick();
     }
-    println(t)
-    println(c.n)
+    println!("{}", t);
+    println!("{}", c.n);
 }

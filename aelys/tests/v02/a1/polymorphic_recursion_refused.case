@@ -1,6 +1,6 @@
 struct W<T> { v: T }
 struct G<T> { v: T, next: Rc<G<W<T>>> }
 fn main() {
-    let g: Rc<G<i64>> = Rc::new(G { v: 1, next: Rc::null() })
-    println(Rc::get(g).v)
+    let g: Rc<G<i64>> = Rc::new(G { v: 1, next: Rc::null() });
+    println!("{}", Rc::get(g).v);
 }

@@ -1,5 +1,5 @@
-needs prog
-needs Shout from prog
+use crate::prog;
+use crate::prog::Shout;
 pub struct W { pub v: i64 }
-impl Shout for W { fn shout(&self) -> i64 { return self.v + 1 } }
-pub fn mk(v: i64) -> W { return W { v: v } }
+impl Shout for W { fn shout(&self) -> i64 { self.v + 1 } }
+pub fn mk(v: i64) -> W { W { v: v } }

@@ -1,6 +1,6 @@
-struct Point { x: i64, y: i64 }
+use std::process::ExitCode; struct Point { x: i64, y: i64 }
 
-fn main() -> i64 {
-    let p = Point { x: 1, y: 2 }
-    return match p { Point { x } => x }
+fn main() -> ExitCode {
+    let p = Point { x: 1, y: 2 };
+    return ExitCode::from((match p { Point { x } => x }) as u8);
 }

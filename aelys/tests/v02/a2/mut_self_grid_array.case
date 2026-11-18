@@ -1,20 +1,20 @@
 struct Row { c: [i64; 3] }
 
 impl Row {
-    fn set(&mut self, j: i64, v: i64) { self.c[j] = v }
+    fn set(&mut self, j: i64, v: i64) { self.c[j] = v; }
 }
 
 struct Grid { rows: [Row; 2] }
 
 fn main() {
-    let mut g = Grid { rows: [Row { c: [0, 0, 0] }, Row { c: [0, 0, 0] }] }
+    let mut g = Grid { rows: [Row { c: [0, 0, 0] }, Row { c: [0, 0, 0] }] };
     for i in 0..2 {
         for j in 0..3 {
-            g.rows[i].set(j, i * 10 + j)
+            g.rows[i].set(j, i * 10 + j);
         }
     }
-    let h = g
-    g.rows[1].set(2, 99)
-    println(g.rows[1].c[2] + g.rows[0].c[1])
-    println(h.rows[1].c[2])
+    let h = g;
+    g.rows[1].set(2, 99);
+    println!("{}", g.rows[1].c[2] + g.rows[0].c[1]);
+    println!("{}", h.rows[1].c[2]);
 }

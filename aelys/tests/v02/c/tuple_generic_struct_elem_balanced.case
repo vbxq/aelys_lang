@@ -1,10 +1,10 @@
 struct Pair<A, B> { a: A, b: B }
 fn main() {
-    let mut n = 0
+    let mut n = 0;
     for i in 0..60 {
-        let t: (Pair<i64, string>, i64) = (Pair { a: i, b: "p{i}" }, 3)
-        let (p, k) = t
-        n = n + p.a + p.b.len + k + t.0.b.len
+        let t: (Pair<i64, String>, i64) = (Pair { a: i, b: format!("p{i}") }, 3);
+        let (p, k) = t;
+        n = n + p.a + p.b.len() + k + t.0.b.len();
     }
-    println(n)
+    println!("{}", n);
 }

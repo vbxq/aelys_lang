@@ -1,37 +1,36 @@
-fn mk(i: i64) -> string { return "s{i}" }
-struct Bag { name: string, items: Vec<string> }
+fn mk(i: i64) -> String { format!("s{i}") }
+struct Bag { name: String, items: Vec<String> }
 struct Outer { inner: Bag, k: i64 }
-fn make(i: i64) -> Bag { return Bag { name: mk(i), items: vec[mk(i), mk(i + 1)] } }
-fn count(b: Bag) -> i64 { return b.items.len }
-fn first(b: &Bag) -> string { return (*b).items[0] }
-fn reset(b: &mut Bag, c: Bag) { *b = c }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn make(i: i64) -> Bag { Bag { name: mk(i), items: vec![mk(i), mk(i + 1)] } }
+fn count(b: Bag) -> i64 { b.items.len() }
+fn first(b: &Bag) -> String { (*b).items[0] }
+fn reset(b: &mut Bag, c: Bag) { *b = c; }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let mut b = make(i)
-        let c = Bag { name: mk(7), items: b.items }
-        Vec::push(b.items, mk(99))
-        t = t + c.items.len * 1 + b.items.len * 10
-        t = t + count(Bag { name: mk(1), items: vec[mk(2)] }) * 100
-        let mut o = Outer { inner: b, k: 3 }
-        o.inner.items = c.items
-        Vec::insert(o.inner.items, 0, mk(5))
-        t = t + o.inner.items.len * 1000 + b.items.len * 10000 + c.items.len * 100000
-        let d = if i % 2 == 0 { b } else { make(i) }
-        t = t + d.items.len
-        reset(&mut b, c)
-        t = t + b.items.len * 1000000
-        match Vec::pop(b.items) { Some(s) => { t = t + s.len } None => { t = t - 1 } }
-        match Vec::get(o.inner.items, 0) { Some(s) => { t = t + s.len } None => { t = t - 1 } }
-        Vec::clear(o.inner.items)
-        let r: string = Vec::remove(c.items, 0)
-        t = t + r.len + c.items.len + o.inner.items.len + first(&b).len
-        for s in Vec::as_slice(c.items) { t = t + s.len }
-        o = Outer { inner: make(1), k: 4 }
-        t = t + o.inner.items.len
-        i = i + 1
+        let mut b = make(i);
+        let c = Bag { name: mk(7), items: b.items };
+        Vec::push(b.items, mk(99));
+        t = t + c.items.len() * 1 + b.items.len() * 10;
+        t = t + count(Bag { name: mk(1), items: vec![mk(2)] }) * 100;
+        let mut o = Outer { inner: b, k: 3 };
+        o.inner.items = c.items;
+        Vec::insert(o.inner.items, 0, mk(5));
+        t = t + o.inner.items.len() * 1000 + b.items.len() * 10000 + c.items.len() * 100000;
+        let d = if i % 2 == 0 { b } else { make(i) };
+        t = t + d.items.len();
+        reset(&mut b, c);
+        t = t + b.items.len() * 1000000;
+        match Vec::pop(b.items) { Some(s) => { t = t + s.len(); } None => { t = t - 1; } }
+        match Vec::get(o.inner.items, 0) { Some(s) => { t = t + s.len(); } None => { t = t - 1; } }
+        Vec::clear(o.inner.items);
+        let r: String = Vec::remove(c.items, 0);
+        t = t + r.len() + c.items.len() + o.inner.items.len() + first(&b).len();
+        for s in Vec::as_slice(c.items) { t = t + s.len(); }
+        o = Outer { inner: make(1), k: 4 };
+        t = t + o.inner.items.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

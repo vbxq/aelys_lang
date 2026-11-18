@@ -1,10 +1,10 @@
 fn f(x: i64) {
     if x > 0 {
-        return
+        return;
     }
-    println("neg {x}")
+    println!("neg {x}");
 }
 fn main() {
-    f(1)
-    f(-5)
+    f(1);
+    f(-5);
 }

@@ -1,7 +1,7 @@
-type Res<T> = Result<T, string>
+type Res<T> = Result<T, String>;
 fn f() -> Res<i64, i64> {
-    return Result::Ok(1)
+    Result::Ok(1)
 }
 fn main() {
-    f()
+    f();
 }

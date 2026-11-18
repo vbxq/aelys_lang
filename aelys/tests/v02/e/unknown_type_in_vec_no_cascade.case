@@ -1,4 +1,4 @@
 fn main() {
-    let v: Vec<Foo> = Vec::new()
-    println(v.len())
+    let v: Vec<Foo> = Vec::new();
+    println!("{}", v.len());
 }

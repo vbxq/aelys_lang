@@ -1,12 +1,12 @@
 struct Buf { a: [i64; 4], n: i64 }
 
 impl Buf {
-    fn put(&mut self, x: i64) { self.n = self.n + x }
+    fn put(&mut self, x: i64) { self.n = self.n + x; }
 }
 
 fn main() {
-    let mut b = Buf { a: [1, 2, 3, 4], n: 0 }
-    let s = b.a[..]
-    b.put(1)
-    println(s[0])
+    let mut b = Buf { a: [1, 2, 3, 4], n: 0 };
+    let s = b.a[..];
+    b.put(1);
+    println!("{}", s[0]);
 }

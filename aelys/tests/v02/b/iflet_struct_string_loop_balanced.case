@@ -1,21 +1,20 @@
-struct Named { name: string, id: i64 }
+struct Named { name: String, id: i64 }
 
 fn find(i: i64) -> Option<Named> {
-    if i % 2 == 0 { return None }
-    return Some(Named { name: "n{i}", id: i })
+    if i % 2 == 0 { return None; }
+    Some(Named { name: format!("n{i}"), id: i })
 }
 
-fn main() -> i64 {
-    let mut hits: i64 = 0
-    let mut last: string = ""
+fn main() {
+    let mut hits: i64 = 0;
+    let mut last: String = "";
     for i in 0..100 {
         if let Some(Named { name, .. }) = find(i) {
-            hits = hits + 1
-            last = name
+            hits = hits + 1;
+            last = name;
         } else {
-            hits = hits + 0
+            hits = hits + 0;
         }
     }
-    println("{hits} {last}")
-    return 0
+    println!("{hits} {last}");
 }

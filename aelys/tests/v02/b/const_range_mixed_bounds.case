@@ -1,23 +1,22 @@
-const CA: i64 = 3
-const CB: i64 = 8
-const C0: char = 'k'
+const CA: i64 = 3;
+const CB: i64 = 8;
+const C0: char = 'k';
 fn cls(i: i64) -> i64 {
     match i {
-        0..=CA => { return 1 }
-        CB..=100 => { return 3 }
-        _ => { return 2 }
+        0..=CA => { return 1; }
+        CB..=100 => { return 3; }
+        _ => { return 2; }
     }
-    return 9
+    9
 }
 fn letter(c: char) -> i64 {
     match c {
-        'a'..=C0 => { return 1 }
-        _ => { return 0 }
+        'a'..=C0 => { return 1; }
+        _ => { return 0; }
     }
-    return 9
+    9
 }
-fn main() -> i64 {
-    println("{cls(0)} {cls(3)} {cls(4)} {cls(7)} {cls(8)} {cls(100)} {cls(101)} {cls(-1)}")
-    println("{letter('a')} {letter('k')} {letter('l')}")
-    return 0
+fn main() {
+    println!("{} {} {} {} {} {} {} {}", cls(0), cls(3), cls(4), cls(7), cls(8), cls(100), cls(101), cls(-1));
+    println!("{} {} {}", letter('a'), letter('k'), letter('l'));
 }

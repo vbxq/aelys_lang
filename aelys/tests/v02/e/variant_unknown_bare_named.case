@@ -1,8 +1,8 @@
 enum Mode { On, Off }
 fn main() {
-    let m = Mode::On
+    let m = Mode::On;
     match m {
-        Blue => println("b")
-        _ => println("x")
+        Blue => println!("b"),
+        _ => println!("x"),
     }
 }

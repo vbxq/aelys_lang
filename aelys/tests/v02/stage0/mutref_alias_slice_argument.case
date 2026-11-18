@@ -1,6 +1,6 @@
-fn f(a: &mut Vec<i64>, s: &[i64]) -> i64 { return s[0] }
+fn f(a: &mut Vec<i64>, s: &[i64]) -> i64 { s[0] }
 fn m(v: &mut Vec<i64>) -> i64 {
-    return f(v, (*v)[0..1])
+    f(v, (*v)[0..1])
 }
-fn main() { let mut v: Vec<i64> = vec[1, 2]
- println(m(&mut v)) }
+fn main() { let mut v: Vec<i64> = vec![1, 2];
+ println!("{}", m(&mut v)); }

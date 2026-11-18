@@ -1,19 +1,19 @@
-needs Show from tr
+use crate::tr::Show;
 
 pub struct P { pub x: i64 }
 
 impl Show for P {
-    fn show(&self) -> i64 { return self.x * 10 }
+    fn show(&self) -> i64 { self.x * 10 }
 }
 
-impl eq for P {
-    fn eq(&self, o: &P) -> bool { return self.x == o.x }
+impl PartialEq for P {
+    fn eq(&self, o: &P) -> bool { self.x == o.x }
 }
 
-pub fn mk(v: i64) -> P { return P { x: v } }
+pub fn mk(v: i64) -> P { P { x: v } }
 
-pub fn twice(p: P) -> i64 { return p.show() + p.shown() }
+pub fn twice(p: P) -> i64 { p.show() + p.shown() }
 
-pub fn same(a: P, b: P) -> bool { return a == b }
+pub fn same(a: P, b: P) -> bool { a == b }
 
-pub fn gen<T: Show>(t: T) -> i64 { return t.show() + 1 }
+pub fn gen<T: Show>(t: T) -> i64 { t.show() + 1 }

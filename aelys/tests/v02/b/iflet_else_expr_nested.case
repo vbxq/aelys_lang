@@ -1,11 +1,10 @@
-fn f(r: Option<Result<i64, string>>) -> i64 {
-    let v = if let Some(Ok(n)) = r { n * 2 } else { -1 }
-    return v
+fn f(r: Option<Result<i64, String>>) -> i64 {
+    let v = if let Some(Ok(n)) = r { n * 2 } else { -1 };
+    v
 }
 
-fn main() -> i64 {
-    println(f(Some(Ok(3))))
-    println(f(Some(Err("e"))))
-    println(f(None))
-    return 0
+fn main() {
+    println!("{}", f(Some(Ok(3))));
+    println!("{}", f(Some(Err("e"))));
+    println!("{}", f(None));
 }

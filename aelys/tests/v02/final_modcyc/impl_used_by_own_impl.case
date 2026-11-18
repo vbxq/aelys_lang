@@ -1,6 +1,6 @@
-needs geo
-needs ext
+mod geo;
+mod ext;
 fn main() {
-    let p = geo.mk(3)
-    println(p.total())
+    let p = geo::mk(3);
+    println!("{}", p.total());
 }

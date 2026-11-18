@@ -6,14 +6,13 @@ fn ev(e: Expr) -> i64 {
         Expr::Neg(x) => 0 - ev(Rc::get(x)),
     }
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let r: Rc<S> = Rc::new(S { e: Expr::Neg(Rc::new(Expr::Num(i))), k: 1 })
-        t = t + ev(Rc::get(r).e) + Rc::get(r).k
-        i = i + 1
+        let r: Rc<S> = Rc::new(S { e: Expr::Neg(Rc::new(Expr::Num(i))), k: 1 });
+        t = t + ev(Rc::get(r).e) + Rc::get(r).k;
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

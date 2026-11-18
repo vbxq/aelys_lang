@@ -1,12 +1,12 @@
-fn split(i: i64) -> (string, string) {
-    return ("L{i}", "R{i * 2}")
+fn split(i: i64) -> (String, String) {
+    (format!("L{i}"), format!("R{}", i * 2))
 }
 fn main() {
-    let mut total = 0
+    let mut total = 0;
     for i in 0..300 {
-        let (l, r) = split(i)
-        let p = split(i + 1)
-        total = total + l.len + r.len + p.1.len
+        let (l, r) = split(i);
+        let p = split(i + 1);
+        total = total + l.len() + r.len() + p.1.len();
     }
-    println(total)
+    println!("{}", total);
 }

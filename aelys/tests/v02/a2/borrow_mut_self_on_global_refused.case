@@ -1,12 +1,12 @@
 struct P { x: i64 }
 
 impl P {
-    fn bump(&mut self) { self.x = self.x + 1 }
+    fn bump(&mut self) { self.x = self.x + 1; }
 }
 
-let mut g: P = P { x: 1 }
+static mut g: P = P { x: 1 };
 
 fn main() {
-    g.bump()
-    println(g.x)
+    g.bump();
+    println!("{}", g.x);
 }

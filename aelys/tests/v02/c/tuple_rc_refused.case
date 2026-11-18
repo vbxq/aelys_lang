@@ -1,4 +1,4 @@
 fn main() {
-    let t = (Rc::new(1), 2)
-    println(t.1)
+    let t = (Rc::new(1), 2);
+    println!("{}", t.1);
 }

@@ -1,7 +1,7 @@
-needs std.slice
+use std::slice;
 
 fn main() {
-    let a = [3, 1, 2]
-    a.sort()
-    println(a[0])
+    let a = [3, 1, 2];
+    a.sort();
+    println!("{}", a[0]);
 }

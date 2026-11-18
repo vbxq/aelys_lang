@@ -1,5 +1,0 @@
-fn main() {
-    let x = 42
-    let y = 1
-    println("{x, y}")
-}

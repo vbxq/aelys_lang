@@ -1,9 +1,9 @@
-needs std.vec
+use std::vec;
 
 fn main() {
-    let v: Vec<i64> = vec[4, 1, 3]
-    println(v.sorted().sum())
-    let s = v.sorted()
-    println("{s[0]}{s[1]}{s[2]} {v[0]}{v[1]}{v[2]}")
-    println(v.reversed().first().unwrap_or(0))
+    let v: Vec<i64> = vec![4, 1, 3];
+    println!("{}", v.sorted().sum());
+    let s = v.sorted();
+    println!("{}{}{} {}{}{}", s[0], s[1], s[2], v[0], v[1], v[2]);
+    println!("{}", v.reversed().first().unwrap_or(0));
 }

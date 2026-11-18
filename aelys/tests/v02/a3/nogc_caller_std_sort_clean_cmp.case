@@ -1,22 +1,21 @@
-needs std.sort
+use std::sort;
 
 struct K { key: i64, pay: i64 }
 
-impl eq for K {
-    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+impl PartialEq for K {
+    fn eq(&self, o: &K) -> bool { self.key == o.key }
 }
 
-impl ord for K {
-    fn cmp(&self, o: &K) -> i64 { return self.key - o.key }
+impl Ord for K {
+    fn cmp(&self, o: &K) -> i64 { self.key - o.key }
 }
 
 nogc fn sorter(s: &mut [K]) {
-    sort.insertion_sort(s)
+    sort::insertion_sort(s);
 }
 
-fn main() -> i64 {
-    let mut arr: [K; 3] = [K { key: 5, pay: 1 }, K { key: 2, pay: 2 }, K { key: 8, pay: 3 }]
-    sorter(arr[..])
-    println("{arr[0].pay}{arr[1].pay}{arr[2].pay}")
-    return 0
+fn main() {
+    let mut arr: [K; 3] = [K { key: 5, pay: 1 }, K { key: 2, pay: 2 }, K { key: 8, pay: 3 }];
+    sorter(arr[..]);
+    println!("{}{}{}", arr[0].pay, arr[1].pay, arr[2].pay);
 }

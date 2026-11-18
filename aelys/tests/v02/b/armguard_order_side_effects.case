@@ -1,25 +1,24 @@
-let mut trace: i64 = 0
+static mut trace: i64 = 0;
 
 fn probe(tag: i64, r: bool) -> bool {
-    trace = trace * 10 + tag
-    return r
+    trace = trace * 10 + tag;
+    r
 }
 
-fn f(o: Option<i64>) -> string {
-    return match o {
+fn f(o: Option<i64>) -> String {
+    match o {
         Some(x) if probe(1, x > 10) => "big",
         Some(x) if probe(2, x > 5) => "mid",
         Some(x) => "small",
         None if probe(3, true) => "none-g",
-        None => "none"
+        None => "none",
     }
 }
 
-fn main() -> i64 {
-    let a = f(Some(7))
-    println("{a} {trace}")
-    trace = 0
-    let b = f(None)
-    println("{b} {trace}")
-    return 0
+fn main() {
+    let a = f(Some(7));
+    println!("{a} {trace}");
+    trace = 0;
+    let b = f(None);
+    println!("{b} {trace}");
 }

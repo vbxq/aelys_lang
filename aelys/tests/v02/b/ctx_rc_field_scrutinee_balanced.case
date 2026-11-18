@@ -1,15 +1,14 @@
-struct Box1 { v: Option<string> }
+struct Box1 { v: Option<String> }
 
-fn f(r: Rc<Box1>) -> string {
-    return match Rc::get(r).v { Some("hi") => "greet", Some(s) => s, None => "none" }
+fn f(r: Rc<Box1>) -> String {
+    match Rc::get(r).v { Some("hi") => "greet", Some(s) => s, None => "none" }
 }
 
-fn main() -> i64 {
-    let a: Rc<Box1> = Rc::new(Box1 { v: Some("h" + "i") })
-    let b: Rc<Box1> = Rc::new(Box1 { v: Some("y" + "o") })
-    let c: Rc<Box1> = Rc::new(Box1 { v: None })
-    println(f(a))
-    println(f(b))
-    println(f(c))
-    return 0
+fn main() {
+    let a: Rc<Box1> = Rc::new(Box1 { v: Some("h" + "i") });
+    let b: Rc<Box1> = Rc::new(Box1 { v: Some("y" + "o") });
+    let c: Rc<Box1> = Rc::new(Box1 { v: None });
+    println!("{}", f(a));
+    println!("{}", f(b));
+    println!("{}", f(c));
 }

@@ -1,24 +1,24 @@
-needs std.slice
+use std::slice;
 
-struct Person { name: string, age: i64 }
+struct Person { name: String, age: i64 }
 
-impl eq for Person {
-    fn eq(&self, o: &Person) -> bool { return self.age == o.age }
+impl PartialEq for Person {
+    fn eq(&self, o: &Person) -> bool { self.age == o.age }
 }
 
-impl ord for Person {
-    fn cmp(&self, o: &Person) -> i64 { return self.age - o.age }
+impl Ord for Person {
+    fn cmp(&self, o: &Person) -> i64 { self.age - o.age }
 }
 
 fn main() {
-    let ps: [Person; 3] = [Person { name: "ana", age: 31 }, Person { name: "bo", age: 47 }, Person { name: "cy", age: 22 }]
+    let ps: [Person; 3] = [Person { name: "ana", age: 31 }, Person { name: "bo", age: 47 }, Person { name: "cy", age: 22 }];
     let oldest = match ps[..].max() {
         Some(p) => p.name,
         None => "-",
-    }
+    };
     let youngest = match ps.min() {
         Some(p) => p.name,
         None => "-",
-    }
-    println("{oldest} {youngest}")
+    };
+    println!("{oldest} {youngest}");
 }

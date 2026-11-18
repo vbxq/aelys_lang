@@ -1,10 +1,10 @@
 struct P { x: i64 }
 
 impl P {
-    fn get(&self) -> i64 { return self.x }
+    fn get(&self) -> i64 { self.x }
 }
 
 fn main() {
-    let k = 5
-    println(k.get())
+    let k = 5;
+    println!("{}", k.get());
 }

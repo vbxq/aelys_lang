@@ -1,6 +1,6 @@
 struct C { n: i64 }
 fn g<T>(a: T, b: T) { }
-fn m(c: &mut C) { g(c, c) }
-fn main() { let mut c = C { n: 5 }
- m(&mut c)
- println(c.n) }
+fn m(c: &mut C) { g(c, c); }
+fn main() { let mut c = C { n: 5 };
+ m(&mut c);
+ println!("{}", c.n); }

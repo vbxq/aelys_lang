@@ -1,5 +1,4 @@
 enum Msg { Batch(Vec<i64>), Empty }
-fn main() -> i64 {
-    let r: Rc<Msg> = Rc::new(Msg::Empty)
-    return 0
+fn main() {
+    let r: Rc<Msg> = Rc::new(Msg::Empty);
 }

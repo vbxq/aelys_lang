@@ -1,8 +1,8 @@
-needs std.vec
-needs std.str
+use std::vec;
+use std::str;
 
 fn main() {
-    let v: Vec<string> = vec["a", "bé", "c"]
-    println(v.join(", "))
-    println("x-y-z".split("-").join("+"))
+    let v: Vec<String> = vec!["a", "bé", "c"];
+    println!("{}", v.join(", "));
+    println!("{}", "x-y-z".split("-").join("+"));
 }

@@ -1,4 +1,4 @@
-const limit: i64 = 3
+const limit: i64 = 3;
 fn main() {
-    println(limit)
+    println!("{}", limit)
 }

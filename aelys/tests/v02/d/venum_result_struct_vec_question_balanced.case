@@ -1,28 +1,27 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
 struct Matrix { data: Vec<i64>, rows: i64 }
-fn mat(i: i64) -> Result<Matrix, string> {
-    if i % 4 == 3 { return Err("no{i}") }
-    return Ok(Matrix { data: mk(2), rows: i })
+fn mat(i: i64) -> Result<Matrix, String> {
+    if i % 4 == 3 { return Err(format!("no{i}")); }
+    Ok(Matrix { data: mk(2), rows: i })
 }
-fn sum2(i: i64) -> Result<i64, string> {
-    let m = mat(i)?
-    let n = mat(i + 1)?
-    return Ok(m.data.len + n.rows)
+fn sum2(i: i64) -> Result<i64, String> {
+    let m = mat(i)?;
+    let n = mat(i + 1)?;
+    Ok(m.data.len() + n.rows)
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        match sum2(i) { Ok(k) => { t = t + k } Err(e) => { t = t + e.len() * 1000 } }
-        i = i + 1
+        match sum2(i) { Ok(k) => { t = t + k; } Err(e) => { t = t + e.len() * 1000; } }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

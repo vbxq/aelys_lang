@@ -1,10 +1,10 @@
-needs a
+use crate::a;
 pub struct Pair<A, B> { pub first: A, pub second: B }
-pub fn pair<A, B>(x: A, y: B) -> Pair<A, B> { return Pair { first: x, second: y } }
-pub fn weight(p: Pair<a.Shape, i64>) -> i64 { return p.second * 100 }
-pub fn describe(s: a.Shape) -> i64 {
-    return match s {
-        a.Shape::Sq(_) => 1000 + a.area(s),
-        a.Shape::Rect(w, _) => 2000 + w + a.area(s)
+pub fn pair<A, B>(x: A, y: B) -> Pair<A, B> { Pair { first: x, second: y } }
+pub fn weight(p: Pair<a::Shape, i64>) -> i64 { p.second * 100 }
+pub fn describe(s: a::Shape) -> i64 {
+    match s {
+        a::Shape::Sq(_) => 1000 + a::area(s),
+        a::Shape::Rect(w, _) => 2000 + w + a::area(s),
     }
 }

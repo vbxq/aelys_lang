@@ -1,5 +1,5 @@
 struct N { v: i64 }
 fn main() {
-    let r = Rc::new(N { v: 1 })
-    let a = [r, r]
+    let r = Rc::new(N { v: 1 });
+    let a = [r, r];
 }

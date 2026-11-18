@@ -13,14 +13,13 @@ fn sb(b: B) -> i64 {
         B::Stop => 0,
     }
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let a = A::ToB(Rc::new(B::ToA(Rc::new(A::ToB(Rc::new(B::Y(i)))))))
-        t = t + sa(a)
-        i = i + 1
+        let a = A::ToB(Rc::new(B::ToA(Rc::new(A::ToB(Rc::new(B::Y(i)))))));
+        t = t + sa(a);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

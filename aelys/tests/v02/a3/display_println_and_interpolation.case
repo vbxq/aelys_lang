@@ -1,14 +1,13 @@
-struct P { x: i64, y: i64 }
+use std::fmt; struct P { x: i64, y: i64 }
 
-impl Display for P {
-    fn to_string(&self) -> string { return "P({self.x},{self.y})" }
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "P({},{})", self.x, self.y) }
 }
 
-fn main() -> i64 {
-    let p = P { x: 1, y: 2 }
-    println(p)
-    println("<{p}>")
-    let s = "{p}{p}"
-    println(s)
-    return 0
+fn main() {
+    let p = P { x: 1, y: 2 };
+    println!("{}", p);
+    println!("<{p}>");
+    let s = format!("{p}{p}");
+    println!("{}", s);
 }

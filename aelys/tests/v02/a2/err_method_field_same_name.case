@@ -1,9 +1,9 @@
 struct P { x: i64 }
 
 impl P {
-    fn x(&self) -> i64 { return 1 }
+    fn x(&self) -> i64 { 1 }
 }
 
 fn main() {
-    println(1)
+    println!("{}", 1);
 }

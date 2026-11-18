@@ -1,11 +1,11 @@
-needs Score from tr
+use crate::tr::Score;
 
 pub struct P { pub x: i64 }
 
 impl Score for P {
-    fn score(&self) -> i64 { return self.x * 3 }
+    fn score(&self) -> i64 { self.x * 3 }
 }
 
-impl eq for P {
-    fn eq(&self, o: &P) -> bool { return self.x % 10 == o.x % 10 }
+impl PartialEq for P {
+    fn eq(&self, o: &P) -> bool { self.x % 10 == o.x % 10 }
 }

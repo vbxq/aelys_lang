@@ -1,54 +1,54 @@
 struct C { n: i64 }
 
 fn get(c: &C) -> i64 {
-    return (*c).n
+    (*c).n
 }
 
 fn add(c: &mut C, d: i64) {
-    (*c).n = (*c).n + d
+    (*c).n = (*c).n + d;
 }
 
 fn bump(c: &mut C) {
-    (*c).n = (*c).n + 1
+    (*c).n = (*c).n + 1;
 }
 
 fn both(a: &C, b: &C) -> i64 {
-    return (*a).n + (*b).n
+    (*a).n + (*b).n
 }
 
 fn pass(r: &mut C) -> &mut C {
-    return r
+    r
 }
 
 fn grow(v: &mut Vec<i64>, k: i64) {
-    Vec::push(*v, k)
+    Vec::push(*v, k);
 }
 
 fn m(c: &mut C) {
-    let d = get(c)
-    add(c, d)
-    bump(c)
-    bump(c)
-    add(&mut *c, 100)
-    println(both(c, c))
-    let r2 = c
-    bump(r2)
-    bump(c)
+    let d = get(c);
+    add(c, d);
+    bump(c);
+    bump(c);
+    add(&mut *c, 100);
+    println!("{}", both(c, c));
+    let r2 = c;
+    bump(r2);
+    bump(c);
 }
 
 fn main() {
-    let mut c = C { n: 5 }
-    m(&mut c)
-    println(c.n)
-    let r = &mut c
-    bump(r)
-    bump(r)
-    let p = pass(r)
-    (*p).n = (*p).n * 2
-    println(c.n)
-    let mut v: Vec<i64> = vec[1]
-    let w = &mut v
-    grow(w, 2)
-    grow(w, 3)
-    println("{v.len} {v[0]} {v[2]}")
+    let mut c = C { n: 5 };
+    m(&mut c);
+    println!("{}", c.n);
+    let r = &mut c;
+    bump(r);
+    bump(r);
+    let p = pass(r);
+    (*p).n = (*p).n * 2;
+    println!("{}", c.n);
+    let mut v: Vec<i64> = vec![1];
+    let w = &mut v;
+    grow(w, 2);
+    grow(w, 3);
+    println!("{} {} {}", v.len(), v[0], v[2]);
 }

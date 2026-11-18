@@ -1,6 +1,6 @@
 struct H { o: Option<i64> }
 
 fn main() {
-    let h = H { o: Some("s") }
-    println(0)
+    let h = H { o: Some("s") };
+    println!("{}", 0);
 }

@@ -1,29 +1,28 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
 fn maybe(i: i64) -> Option<Vec<i64>> {
-    if i % 3 == 0 { return None }
-    return Some(mk(i % 5))
+    if i % 3 == 0 { return None; }
+    Some(mk(i % 5))
 }
 fn first(i: i64) -> Option<i64> {
-    let v = maybe(i)?
-    let mut w = v
-    Vec::push(w, 100)
-    return Some(v.len * 10 + w.len)
+    let v = maybe(i)?;
+    let mut w = v;
+    Vec::push(w, 100);
+    Some(v.len() * 10 + w.len())
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        match first(i) { Some(k) => { t = t + k } None => { t = t + 7 } }
-        if let Some(v) = maybe(i) { t = t + v.len * 10000 }
-        i = i + 1
+        match first(i) { Some(k) => { t = t + k; } None => { t = t + 7; } }
+        if let Some(v) = maybe(i) { t = t + v.len() * 10000; }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

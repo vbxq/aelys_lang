@@ -1,15 +1,14 @@
-fn victim(n: i64) -> string { return "cd" + "{n}" }
-fn left<T>(p: &(T, T)) -> T { return (*p).0 }
+fn victim(n: i64) -> String { "cd" + format!("{n}") }
+fn left<T>(p: &(T, T)) -> T { (*p).0 }
 fn shift<T>(p: &mut (T, T), x: T) -> T {
-    let o: T = left(p)
-    (*p).0 = (*p).1
-    (*p).1 = x
-    return o
+    let o: T = left(p);
+    (*p).0 = (*p).1;
+    (*p).1 = x;
+    o
 }
-fn main() -> i64 {
-    let mut p: (string, string) = (victim(1), victim(2))
-    let o: string = shift(&mut p, victim(3))
-    let filler: string = victim(9) + victim(8)
-    println("{o} {p.0} {p.1} {filler}")
-    return 0
+fn main() {
+    let mut p: (String, String) = (victim(1), victim(2));
+    let o: String = shift(&mut p, victim(3));
+    let filler: String = victim(9) + victim(8);
+    println!("{o} {} {} {filler}", p.0, p.1);
 }

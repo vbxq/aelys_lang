@@ -2,15 +2,15 @@ struct C { n: i64 }
 
 impl C {
     fn tick(&mut self) -> i64 {
-        self.n = self.n + 1
-        return self.n
+        self.n = self.n + 1;
+        self.n
     }
 }
 
 fn main() {
-    let mut c = C { n: 0 }
-    let g = fn() -> i64 { return c.tick() }
-    println(g())
-    println(g())
-    println(c.n)
+    let mut c = C { n: 0 };
+    let g = move || -> i64 { c.tick() };
+    println!("{}", g());
+    println!("{}", g());
+    println!("{}", c.n);
 }

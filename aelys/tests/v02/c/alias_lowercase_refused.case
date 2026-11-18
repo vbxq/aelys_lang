@@ -1,4 +1,4 @@
-type i64 = string
+type i64 = string;
 fn main() {
-    println(1)
+    println!("{}", 1)
 }

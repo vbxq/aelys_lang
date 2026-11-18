@@ -1,17 +1,17 @@
 struct P { x: i64, y: i64 }
 
 impl P {
-    fn new(x: i64, y: i64) -> Self { return P { x: x, y: y } }
-    fn sum(self) -> i64 { return self.x + self.y }
-    fn get(&self) -> i64 { return self.x * 10 + self.y }
-    fn bump(&mut self, d: i64) { self.x = self.x + d }
-    fn flipped(&self) -> Self { return Self { x: self.y, y: self.x } }
-    fn add(self, d: i64) -> Self { return P { x: self.x + d, y: self.y } }
+    fn new(x: i64, y: i64) -> Self { P { x: x, y: y } }
+    fn sum(self) -> i64 { self.x + self.y }
+    fn get(&self) -> i64 { self.x * 10 + self.y }
+    fn bump(&mut self, d: i64) { self.x = self.x + d; }
+    fn flipped(&self) -> Self { Self { x: self.y, y: self.x } }
+    fn add(self, d: i64) -> Self { P { x: self.x + d, y: self.y } }
 }
 
 fn main() {
-    let mut v: Vec<P> = Vec::new()
-    Vec::push(v, P { x: 1, y: 2 })
-    v[0].bump(1)
-    println(v[0].x)
+    let mut v: Vec<P> = Vec::new();
+    Vec::push(v, P { x: 1, y: 2 });
+    v[0].bump(1);
+    println!("{}", v[0].x);
 }

@@ -1,14 +1,14 @@
 struct N { v: i64 }
 struct Link<T> { v: T, to: Rc<N> }
 fn main() {
-    let mut i = 0
-    let mut t = 0
+    let mut i = 0;
+    let mut t = 0;
     while i < 100 {
-        let r: Rc<N> = Rc::new(N { v: i })
-        let l = Link { v: "x" + "{i}", to: r }
-        let m = l
-        t = t + Rc::get(m.to).v + Rc::get(l.to).v
-        i = i + 1
+        let r: Rc<N> = Rc::new(N { v: i });
+        let l = Link { v: "x" + format!("{i}"), to: r };
+        let m = l;
+        t = t + Rc::get(m.to).v + Rc::get(l.to).v;
+        i = i + 1;
     }
-    println(t)
+    println!("{}", t);
 }

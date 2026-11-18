@@ -1,11 +1,11 @@
 struct Box1<T> { v: T }
 
 impl<T> Box1<T> {
-    fn new(v: T) -> Self { return Box1 { v: v } }
-    fn get(&self) -> T { return self.v }
+    fn new(v: T) -> Self { Box1 { v: v } }
+    fn get(&self) -> T { self.v }
 }
 
 fn main() {
-    println(Box1::new(41).get() + 1)
-    println(Box1::new("q").get())
+    println!("{}", Box1::new(41).get() + 1);
+    println!("{}", Box1::new("q").get());
 }

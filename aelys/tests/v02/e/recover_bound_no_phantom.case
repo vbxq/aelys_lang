@@ -1,6 +1,6 @@
 fn show<T: Show>(x: T) {
-    println("{x}")
+    println!("{x}");
 }
 fn main() {
-    show(1)
+    show(1);
 }

@@ -1,17 +1,17 @@
-needs std.str
+use std::str;
 
-fn show(o: Option<i64>) -> string {
-    return match o {
-        Some(i) => "at {i}",
+fn show(o: Option<i64>) -> String {
+    match o {
+        Some(i) => format!("at {i}"),
         None => "none",
     }
 }
 
 fn main() {
-    println(show("ébcabc".find("ca")))
-    println(show("abc".find("zz")))
-    println("abc".index_of("c"))
-    println("abc".contains("bc"))
-    println("abc".starts_with("ab"))
-    println("abc".ends_with("ab"))
+    println!("{}", show("ébcabc".find("ca")));
+    println!("{}", show("abc".find("zz")));
+    println!("{}", "abc".index_of("c"));
+    println!("{}", "abc".contains("bc"));
+    println!("{}", "abc".starts_with("ab"));
+    println!("{}", "abc".ends_with("ab"));
 }

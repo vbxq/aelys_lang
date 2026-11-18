@@ -1,16 +1,16 @@
-needs std.vec
+use std::vec;
 
-fn inc(x: i64) -> i64 { return x + 1 }
-fn odd(x: i64) -> bool { return x % 2 == 1 }
-fn add(a: i64, x: i64) -> i64 { return a + x }
+fn inc(x: i64) -> i64 { x + 1 }
+fn odd(x: i64) -> bool { x % 2 == 1 }
+fn add(a: i64, x: i64) -> i64 { a + x }
 
 fn main() {
-    let v: Vec<i64> = vec[1, 2, 3, 4]
-    let mut total = 0
-    let mut i = 0
+    let v: Vec<i64> = vec![1, 2, 3, 4];
+    let mut total = 0;
+    let mut i = 0;
     while i < 10000 {
-        total = total + v.map(inc).filter(odd).fold(0, add)
-        i = i + 1
+        total = total + v.map(inc).filter(odd).fold(0, add);
+        i = i + 1;
     }
-    println(total)
+    println!("{}", total);
 }

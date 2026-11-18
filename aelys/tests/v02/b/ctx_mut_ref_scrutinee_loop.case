@@ -2,17 +2,16 @@ fn advance(o: &mut Option<i64>) -> bool {
     match *o {
         Some(9) => { *o = None },
         Some(x) => { *o = Some(x + 2) },
-        None => { return false }
+        None => { return false; }
     }
-    return true
+    true
 }
 
-fn main() -> i64 {
-    let mut o: Option<i64> = Some(3)
-    let mut n: i64 = 0
+fn main() {
+    let mut o: Option<i64> = Some(3);
+    let mut n: i64 = 0;
     while advance(&mut o) {
-        n = n + 1
+        n = n + 1;
     }
-    println(n)
-    return 0
+    println!("{}", n);
 }

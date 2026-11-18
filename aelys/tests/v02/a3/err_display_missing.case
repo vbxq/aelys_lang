@@ -1,7 +1,6 @@
 struct Q { x: i64 }
 
-fn main() -> i64 {
-    let q = Q { x: 1 }
-    println(q)
-    return 0
+fn main() {
+    let q = Q { x: 1 };
+    println!("{}", q);
 }

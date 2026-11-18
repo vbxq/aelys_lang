@@ -1,8 +1,7 @@
-fn f(o: Option<i64>) -> string {
-    return match o { Some(1 | 2) => "a", Some(_) => "b", None => "c" }
+fn f(o: Option<i64>) -> String {
+    match o { Some(1 | 2) => "a", Some(_) => "b", None => "c" }
 }
 
-fn main() -> i64 {
-    println("{f(Some(1))} {f(Some(2))} {f(Some(3))} {f(None)}")
-    return 0
+fn main() {
+    println!("{} {} {} {}", f(Some(1)), f(Some(2)), f(Some(3)), f(None));
 }

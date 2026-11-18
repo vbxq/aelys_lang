@@ -1,26 +1,25 @@
 struct W<T> { v: Vec<T>, n: i64 }
 fn fill<T>(x: T, n: i64) -> W<T> {
-    let mut w: W<T> = W { v: Vec::new(), n: n }
-    let mut i: i64 = 0
-    while i < n { Vec::push(w.v, x)
-        i = i + 1 }
-    return w
+    let mut w: W<T> = W { v: Vec::new(), n: n };
+    let mut i: i64 = 0;
+    while i < n { Vec::push(w.v, x);
+        i = i + 1; }
+    w
 }
 fn grow<T>(w: W<T>, x: T) -> i64 {
-    let mut c = w
-    Vec::push(c.v, x)
-    return c.v.len
+    let mut c = w;
+    Vec::push(c.v, x);
+    c.v.len()
 }
-fn mks(i: i64) -> string { return "s{i}" }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn mks(i: i64) -> String { format!("s{i}") }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let a = fill(i, 3)
-        let b = fill(mks(i), 2)
-        t = t + grow(a, 1) * 100 + a.v.len * 10 + grow(b, mks(1)) + b.v.len + a.v[2]
-        i = i + 1
+        let a = fill(i, 3);
+        let b = fill(mks(i), 2);
+        t = t + grow(a, 1) * 100 + a.v.len() * 10 + grow(b, mks(1)) + b.v.len() + a.v[2];
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

@@ -1,38 +1,37 @@
 struct N { val: i64 }
 fn mkv(n: i64) -> Vec<Rc<N>> {
-    let mut v: Vec<Rc<N>> = Vec::new()
-    for k in 0..n { Vec::push(v, Rc::new(N { val: k })) }
-    return v
+    let mut v: Vec<Rc<N>> = Vec::new();
+    for k in 0..n { Vec::push(v, Rc::new(N { val: k })); }
+    v
 }
 fn total(v: &Vec<Rc<N>>) -> i64 {
-    let mut s: i64 = 0
-    for i in 0..(*v).len { s = s + Rc::get((*v)[i]).val }
-    return s
+    let mut s: i64 = 0;
+    for i in 0..(*v).len() { s = s + Rc::get((*v)[i]).val; }
+    s
 }
-fn byval(v: Vec<Rc<N>>) -> i64 { return v.len }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn byval(v: Vec<Rc<N>>) -> i64 { v.len() }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let mut a = mkv(4)
-        let b = a
-        let x: Rc<N> = Rc::new(N { val: 100 })
-        a[0] = x
-        a[1] = a[2]
-        Vec::insert(a, 1, Rc::new(N { val: 50 }))
-        let r: Rc<N> = Vec::remove(a, 4)
-        match Vec::get(a, 0) { Some(n) => { t = t + Rc::get(n).val } None => { t = t - 1 } }
-        t = t + total(&a) + total(&b) + byval(a) + Rc::get(r).val + Rc::get(x).val
-        let lit: Vec<Rc<N>> = vec[Rc::new(N { val: 7 }), x]
-        t = t + total(&lit)
-        let mut m = mkv(3)
-        let s = Vec::try_as_unique_mut_slice(m)
-        s[0] = Rc::new(N { val: 9 })
-        t = t + total(&m)
-        Vec::clear(a)
-        t = t + a.len
-        i = i + 1
+        let mut a = mkv(4);
+        let b = a;
+        let x: Rc<N> = Rc::new(N { val: 100 });
+        a[0] = x;
+        a[1] = a[2];
+        Vec::insert(a, 1, Rc::new(N { val: 50 }));
+        let r: Rc<N> = Vec::remove(a, 4);
+        match Vec::get(a, 0) { Some(n) => { t = t + Rc::get(n).val; } None => { t = t - 1; } }
+        t = t + total(&a) + total(&b) + byval(a) + Rc::get(r).val + Rc::get(x).val;
+        let lit: Vec<Rc<N>> = vec![Rc::new(N { val: 7 }), x];
+        t = t + total(&lit);
+        let mut m = mkv(3);
+        let s = Vec::try_as_unique_mut_slice(m);
+        s[0] = Rc::new(N { val: 9 });
+        t = t + total(&m);
+        Vec::clear(a);
+        t = t + a.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

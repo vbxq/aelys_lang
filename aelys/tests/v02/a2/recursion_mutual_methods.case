@@ -2,21 +2,21 @@ struct N { k: i64 }
 
 impl N {
     fn even(&self) -> bool {
-        if self.k == 0 { return true }
-        let m = N { k: self.k - 1 }
-        return m.odd()
+        if self.k == 0 { return true; }
+        let m = N { k: self.k - 1 };
+        m.odd()
     }
     fn odd(&self) -> bool {
-        if self.k == 0 { return false }
-        let m = N { k: self.k - 1 }
-        return m.even()
+        if self.k == 0 { return false; }
+        let m = N { k: self.k - 1 };
+        m.even()
     }
 }
 
 fn main() {
-    let a = N { k: 7 }
-    let b = N { k: 10 }
-    println(a.even())
-    println(b.even())
-    println(a.odd())
+    let a = N { k: 7 };
+    let b = N { k: 10 };
+    println!("{}", a.even());
+    println!("{}", b.even());
+    println!("{}", a.odd());
 }

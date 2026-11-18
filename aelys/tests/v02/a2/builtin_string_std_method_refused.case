@@ -1,6 +1,6 @@
-needs std.str
+use std::str;
 
 fn main() {
-    let s = "  a  "
-    println(s.trim())
+    let s = "  a  ";
+    println!("{}", s.trim());
 }

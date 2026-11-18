@@ -1,25 +1,24 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
 impl Area for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 
-fn inner<U: Area>(u: U) -> i64 { return u.area() + 1 }
+fn inner<U: Area>(u: U) -> i64 { u.area() + 1 }
 
-fn outer<T: Area>(t: T) -> i64 { return inner(t) * 2 }
+fn outer<T: Area>(t: T) -> i64 { inner(t) * 2 }
 
-fn main() -> i64 {
-    println(outer(Sq { s: 3 }))
-    println(outer(Rect { w: 1, h: 1 }))
-    println(inner(Sq { s: 3 }))
-    return 0
+fn main() {
+    println!("{}", outer(Sq { s: 3 }));
+    println!("{}", outer(Rect { w: 1, h: 1 }));
+    println!("{}", inner(Sq { s: 3 }));
 }

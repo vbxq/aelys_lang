@@ -1,8 +1,8 @@
 struct W<T> { v: T }
 fn show<T>(w: W<T>) {
-    println(w.v)
+    println!("{}", w.v);
 }
 fn main() {
-    show(W { v: 5 })
-    show(W { v: "five" })
+    show(W { v: 5 });
+    show(W { v: "five" });
 }

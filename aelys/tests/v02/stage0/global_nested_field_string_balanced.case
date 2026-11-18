@@ -1,15 +1,15 @@
-struct In { s: string }
+struct In { s: String }
 struct Out { inner: In, n: i64 }
-let mut g = Out { inner: In { s: "x" }, n: 0 }
+static mut g: Out = Out { inner: In { s: "x" }, n: 0 };
 fn set(i: i64) {
-    g.inner.s = "i" + "{i}"
+    g.inner.s = "i" + format!("{i}");
 }
 fn main() {
-    let mut i = 0
+    let mut i = 0;
     while i < 300 {
-        set(i)
-        i = i + 1
+        set(i);
+        i = i + 1;
     }
-    println(g.inner.s)
-    g.inner.s = "end"
+    println!("{}", g.inner.s);
+    g.inner.s = "end";
 }

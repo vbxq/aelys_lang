@@ -1,4 +1,4 @@
 struct P<A, B> { a: A, b: B }
-fn f(p: P<i64, u8>) -> i64 { return (p.b as i64) + p.a }
-fn main() { let s = "x"
- println(f(P { a: s, b: 1 })) }
+fn f(p: P<i64, u8>) -> i64 { (p.b as i64) + p.a }
+fn main() { let s = "x";
+ println!("{}", f(P { a: s, b: 1 })); }

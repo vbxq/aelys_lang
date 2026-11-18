@@ -1,7 +1,6 @@
 struct Matrix { data: Vec<i64> }
 struct W<T> { v: Vec<T> }
-fn main() -> i64 {
-    let w: W<Matrix> = W { v: Vec::new() }
-    println(w.v.len)
-    return 0
+fn main() {
+    let w: W<Matrix> = W { v: Vec::new() };
+    println!("{}", w.v.len());
 }

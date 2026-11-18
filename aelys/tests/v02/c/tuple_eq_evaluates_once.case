@@ -1,7 +1,7 @@
 fn mk(i: i64) -> (i64, i64) {
-    println("mk")
-    return (i, i)
+    println!("mk");
+    (i, i)
 }
 fn main() {
-    println(mk(1) == mk(2))
+    println!("{}", mk(1) == mk(2));
 }

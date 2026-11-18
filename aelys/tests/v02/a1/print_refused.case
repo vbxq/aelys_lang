@@ -1,5 +1,5 @@
 struct W<T> { v: T }
 fn main() {
-    let w = W { v: 1 }
-    println(w)
+    let w = W { v: 1 };
+    println!("{}", w);
 }

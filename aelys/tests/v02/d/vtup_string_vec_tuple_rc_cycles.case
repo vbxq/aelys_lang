@@ -1,16 +1,15 @@
-fn s(i: i64) -> string { return "w{i}" }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn s(i: i64) -> String { format!("w{i}") }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let mut p: (Vec<string>, string) = (Vec::new(), s(i))
-        Vec::push(p.0, s(1))
-        Vec::push(p.0, s(22))
-        let q = p
-        match Vec::pop(p.0) { Some(x) => { t = t + x.len() } None => { t = t - 100 } }
-        t = t + q.0.len * 10 + p.0.len * 100 + q.1.len()
-        i = i + 1
+        let mut p: (Vec<String>, String) = (Vec::new(), s(i));
+        Vec::push(p.0, s(1));
+        Vec::push(p.0, s(22));
+        let q = p;
+        match Vec::pop(p.0) { Some(x) => { t = t + x.len(); } None => { t = t - 100; } }
+        t = t + q.0.len() * 10 + p.0.len() * 100 + q.1.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

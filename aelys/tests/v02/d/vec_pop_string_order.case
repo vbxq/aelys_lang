@@ -1,12 +1,11 @@
-fn main() -> i64 {
-    let mut v: Vec<string> = vec["pear", "apple", "fig"]
-    let mut go: bool = true
+fn main() {
+    let mut v: Vec<String> = vec!["pear", "apple", "fig"];
+    let mut go: bool = true;
     while go {
         match Vec::pop(v) {
-            Some(s) => { println(s) }
-            None => { println("none")
-                go = false }
+            Some(s) => { println!("{}", s); }
+            None => { println!("none");
+                go = false; }
         }
     }
-    return 0
 }

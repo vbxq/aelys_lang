@@ -1,7 +1,7 @@
-needs shapes
-needs geo
+mod shapes;
+mod geo;
 fn main() {
-    let c = geo.Circle { r: 3 }
-    println(c.describe())
-    println(shapes.total(c))
+    let c = geo::Circle { r: 3 };
+    println!("{}", c.describe());
+    println!("{}", shapes::total(c));
 }

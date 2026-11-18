@@ -1,16 +1,15 @@
-fn class(c: char) -> string {
-    return match c {
+fn class(c: char) -> String {
+    match c {
         'a'..='z' => "lower",
         'A'..='Z' => "upper",
         '0'..='9' => "digit",
-        _ => "other"
+        _ => "other",
     }
 }
 
-fn main() -> i64 {
-    let s: string = "aZ5-z"
+fn main() {
+    let s: String = "aZ5-z";
     for c in s {
-        println(class(c))
+        println!("{}", class(c));
     }
-    return 0
 }

@@ -1,25 +1,24 @@
 trait A {
-    fn name(&self) -> i64
+    fn name(&self) -> i64;
 }
 
 trait B {
-    fn name(&self) -> i64
+    fn name(&self) -> i64;
 }
 
 struct P { v: i64 }
 
 impl A for P {
-    fn name(&self) -> i64 { return self.v + 1 }
+    fn name(&self) -> i64 { self.v + 1 }
 }
 
 impl B for P {
-    fn name(&self) -> i64 { return self.v + 2 }
+    fn name(&self) -> i64 { self.v + 2 }
 }
 
-fn f<T: A + B>(x: &T) -> i64 { return x.name() }
+fn f<T: A + B>(x: &T) -> i64 { x.name() }
 
-fn main() -> i64 {
-    let p = P { v: 10 }
-    println(f(&p))
-    return 0
+fn main() {
+    let p = P { v: 10 };
+    println!("{}", f(&p));
 }

@@ -1,22 +1,21 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i * 10)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i * 10);
+        i = i + 1; }
+    d
 }
 
 struct B<T> { x: T, k: i64 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let b: B<Vec<i64>> = B { x: mk(6), k: 1 }
-        let mut b2 = b
-        Vec::push(b2.x, 0)
-        t = t + b.x.len * 10 + b2.x.len + b.k
-        i = i + 1
+        let b: B<Vec<i64>> = B { x: mk(6), k: 1 };
+        let mut b2 = b;
+        Vec::push(b2.x, 0);
+        t = t + b.x.len() * 10 + b2.x.len() + b.k;
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

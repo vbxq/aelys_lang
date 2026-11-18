@@ -1,13 +1,12 @@
-needs p2
+mod m; mod p2;
 
 fn show<T>(x: T) {
-    println(x)
+    println!("{}", x);
 }
 
-fn main() -> i64 {
-    println(p2.get())
-    show(p2.get())
-    let s = p2.get()
-    println("<{s}>")
-    return 0
+fn main() {
+    println!("{}", p2::get());
+    show(p2::get());
+    let s = p2::get();
+    println!("<{s}>");
 }

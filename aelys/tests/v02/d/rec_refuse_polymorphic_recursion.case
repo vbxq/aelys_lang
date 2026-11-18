@@ -1,7 +1,6 @@
 struct Pair<T> { a: T, b: T }
 enum P<T> { L(T), N(Rc<P<Pair<T>>>) }
-fn main() -> i64 {
-    let p: P<i64> = P::L(1)
-    match p { P::L(n) => { println(n) } P::N(x) => { println(0) } }
-    return 0
+fn main() {
+    let p: P<i64> = P::L(1);
+    match p { P::L(n) => { println!("{}", n); } P::N(x) => { println!("{}", 0); } }
 }

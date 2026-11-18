@@ -1,9 +1,9 @@
-type Name = string
-type Names = Vec<Name>
+type Name = String;
+type Names = Vec<Name>;
 fn main() {
-    let mut v: Names = vec[]
-    for i in 0..100 { Vec::push(v, "n{i}") }
-    let mut n = 0
-    for i in 0..v.len { n = n + v[i].len }
-    println(n)
+    let mut v: Names = vec![];
+    for i in 0..100 { Vec::push(v, format!("n{i}")); }
+    let mut n = 0;
+    for i in 0..v.len() { n = n + v[i].len(); }
+    println!("{}", n);
 }

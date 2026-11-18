@@ -1,33 +1,32 @@
 trait Sink<T> {
-    fn put(&mut self, x: T) -> i64
+    fn put(&mut self, x: T) -> i64;
 }
 
 struct Log { total: i64 }
 
 impl Sink<i64> for Log {
     fn put(&mut self, x: i64) -> i64 {
-        self.total = self.total + x
-        return self.total
+        self.total = self.total + x;
+        self.total
     }
 }
 
-impl Sink<string> for Log {
-    fn put(&mut self, x: string) -> i64 {
-        self.total = self.total + x.len * 100
-        return self.total
+impl Sink<String> for Log {
+    fn put(&mut self, x: String) -> i64 {
+        self.total = self.total + x.len() * 100;
+        self.total
     }
 }
 
-fn feed<S: Sink<string>>(s: &mut S) -> i64 { return s.put("abc") }
+fn feed<S: Sink<String>>(s: &mut S) -> i64 { s.put("abc") }
 
-fn feed_n<S: Sink<i64>>(s: &mut S) -> i64 { return s.put(7) }
+fn feed_n<S: Sink<i64>>(s: &mut S) -> i64 { s.put(7) }
 
-fn main() -> i64 {
-    let mut l = Log { total: 0 }
-    println(l.put(5))
-    println(l.put("xy"))
-    println(feed(&mut l))
-    println(feed_n(&mut l))
-    println(l.total)
-    return 0
+fn main() {
+    let mut l = Log { total: 0 };
+    println!("{}", l.put(5));
+    println!("{}", l.put("xy"));
+    println!("{}", feed(&mut l));
+    println!("{}", feed_n(&mut l));
+    println!("{}", l.total);
 }

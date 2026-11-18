@@ -1,6 +1,6 @@
 fn main() {
-    let (a, b) = (4, 5)
-    let (x, _) = (9, "unused")
-    let (_, y) = ("skip", 11)
-    println(a * b + x + y)
+    let (a, b) = (4, 5);
+    let (x, _) = (9, "unused");
+    let (_, y) = ("skip", 11);
+    println!("{}", a * b + x + y);
 }

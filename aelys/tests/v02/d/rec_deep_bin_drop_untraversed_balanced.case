@@ -1,29 +1,28 @@
 enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
 
 fn chains(n: i64) -> i64 {
-    let mut e: Expr = Expr::Num(1)
-    let mut i: i64 = 0
+    let mut e: Expr = Expr::Num(1);
+    let mut i: i64 = 0;
     while i < n {
-        e = Expr::Bin('+', Rc::new(e), Rc::new(Expr::Num(i)))
-        i = i + 1
+        e = Expr::Bin('+', Rc::new(e), Rc::new(Expr::Num(i)));
+        i = i + 1;
     }
-    let mut r: Expr = Expr::Num(0)
-    i = 0
+    let mut r: Expr = Expr::Num(0);
+    i = 0;
     while i < n {
-        r = Expr::Bin('+', Rc::new(Expr::Num(i)), Rc::new(r))
-        i = i + 1
+        r = Expr::Bin('+', Rc::new(Expr::Num(i)), Rc::new(r));
+        i = i + 1;
     }
-    let mut g: Expr = Expr::Num(2)
-    i = 0
+    let mut g: Expr = Expr::Num(2);
+    i = 0;
     while i < n {
-        g = Expr::Neg(Rc::new(g))
-        i = i + 1
+        g = Expr::Neg(Rc::new(g));
+        i = i + 1;
     }
-    let mut k: i64 = 0
-    match e { Expr::Bin(op, l, x) => { match Rc::get(x) { Expr::Num(v) => { k = v } _ => { k = -1 } } } _ => { k = -2 } }
-    return n + k
+    let mut k: i64 = 0;
+    match e { Expr::Bin(op, l, x) => { match Rc::get(x) { Expr::Num(v) => { k = v; } _ => { k = -1; } } } _ => { k = -2; } }
+    n + k
 }
-fn main() -> i64 {
-    println(chains(100000))
-    return 0
+fn main() {
+    println!("{}", chains(100000));
 }

@@ -1,4 +1,4 @@
 fn main() {
-    let r: Result<i64, string> = Ok("x")
-    println(0)
+    let r: Result<i64, String> = Ok("x");
+    println!("{}", 0);
 }

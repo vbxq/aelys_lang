@@ -1,10 +1,9 @@
 enum Msg { Batch(Vec<i64>), Empty }
 nogc fn f(m: &mut Msg) -> i64 {
-    *m = Msg::Empty
-    return 0
+    *m = Msg::Empty;
+    0
 }
-fn main() -> i64 {
-    let mut m = Msg::Batch(Vec::new())
-    println(f(&mut m))
-    return 0
+fn main() {
+    let mut m = Msg::Batch(Vec::new());
+    println!("{}", f(&mut m));
 }

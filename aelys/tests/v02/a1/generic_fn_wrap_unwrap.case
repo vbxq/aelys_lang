@@ -1,11 +1,11 @@
 struct W<T> { v: T }
 fn wrap<T>(x: T) -> W<T> {
-    return W { v: x }
+    W { v: x }
 }
 fn unwrap<T>(w: W<T>) -> T {
-    return w.v
+    w.v
 }
 fn main() {
-    println(unwrap(wrap(20)) + unwrap(wrap(22)))
-    println(unwrap(wrap("s")))
+    println!("{}", unwrap(wrap(20)) + unwrap(wrap(22)));
+    println!("{}", unwrap(wrap("s")));
 }

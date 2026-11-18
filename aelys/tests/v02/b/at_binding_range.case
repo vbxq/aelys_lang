@@ -1,9 +1,8 @@
 fn f(n: i64) -> i64 {
-    return match n { small @ 0..=9 => small * 100, big => big }
+    match n { small @ 0..=9 => small * 100, big => big }
 }
 
-fn main() -> i64 {
-    println(f(7))
-    println(f(42))
-    return 0
+fn main() {
+    println!("{}", f(7));
+    println!("{}", f(42));
 }

@@ -1,26 +1,25 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
 struct M { data: Vec<i64> }
-fn mkm(i: i64, bad: bool) -> Result<M, string> {
-    if bad { return Err("e{i}") }
-    return Ok(M { data: mk(i) })
+fn mkm(i: i64, bad: bool) -> Result<M, String> {
+    if bad { return Err(format!("e{i}")); }
+    Ok(M { data: mk(i) })
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
         match (mkm(i % 3 + 1, i % 5 == 0), mkm(2, i % 7 == 0)) {
-            (Ok(a), Ok(b)) => { t = t + a.data.len + b.data.len }
-            (Err(e), _) | (_, Err(e)) => { t = t + 1000 * e.len() }
+            (Ok(a), Ok(b)) => { t = t + a.data.len() + b.data.len(); }
+            (Err(e), _) | (_, Err(e)) => { t = t + 1000 * e.len(); }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

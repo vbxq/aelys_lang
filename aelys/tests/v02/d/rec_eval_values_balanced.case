@@ -19,16 +19,15 @@ fn simp(e: Expr) -> i64 {
         _ => eval(e),
     }
 }
-fn num(n: i64) -> Rc<Expr> { return Rc::new(Expr::Num(n)) }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn num(n: i64) -> Rc<Expr> { Rc::new(Expr::Num(n)) }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let e = Expr::Bin('*', Rc::new(Expr::Bin('+', num(i), num(2))), Rc::new(Expr::Neg(Rc::new(Expr::Neg(num(3))))))
-        let d = Expr::Bin('-', num(i), num(5))
-        t = t + eval(e) + simp(Expr::Neg(Rc::new(Expr::Neg(num(i))))) - eval(d)
-        i = i + 1
+        let e = Expr::Bin('*', Rc::new(Expr::Bin('+', num(i), num(2))), Rc::new(Expr::Neg(Rc::new(Expr::Neg(num(3))))));
+        let d = Expr::Bin('-', num(i), num(5));
+        t = t + eval(e) + simp(Expr::Neg(Rc::new(Expr::Neg(num(i))))) - eval(d);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

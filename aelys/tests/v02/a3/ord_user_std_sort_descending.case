@@ -1,21 +1,20 @@
-needs std.sort
-needs std.slice
+use std::sort;
+use std::slice;
 
 struct K { key: i64, pay: i64 }
 
-impl eq for K {
-    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+impl PartialEq for K {
+    fn eq(&self, o: &K) -> bool { self.key == o.key }
 }
 
-impl ord for K {
-    fn cmp(&self, o: &K) -> i64 { return o.key - self.key }
+impl Ord for K {
+    fn cmp(&self, o: &K) -> i64 { o.key - self.key }
 }
 
-fn main() -> i64 {
-    let mut arr: [K; 4] = [K { key: 2, pay: 0 }, K { key: 9, pay: 1 }, K { key: 4, pay: 2 }, K { key: 7, pay: 3 }]
-    sort.insertion_sort(arr[..])
-    println("{arr[0].key}{arr[1].key}{arr[2].key}{arr[3].key}")
-    println("{arr[0].pay}{arr[1].pay}{arr[2].pay}{arr[3].pay}")
-    println(slice.is_sorted(arr[..]))
-    return 0
+fn main() {
+    let mut arr: [K; 4] = [K { key: 2, pay: 0 }, K { key: 9, pay: 1 }, K { key: 4, pay: 2 }, K { key: 7, pay: 3 }];
+    sort::insertion_sort(arr[..]);
+    println!("{}{}{}{}", arr[0].key, arr[1].key, arr[2].key, arr[3].key);
+    println!("{}{}{}{}", arr[0].pay, arr[1].pay, arr[2].pay, arr[3].pay);
+    println!("{}", slice::is_sorted(arr[..]));
 }

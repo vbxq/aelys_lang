@@ -1,4 +1,4 @@
-needs Pt from geom
+use crate::geom::Pt;
 impl Pt {
-    pub fn half(&self) -> i64 { return self.v / 2 }
+    pub fn half(&self) -> i64 { self.v / 2 }
 }

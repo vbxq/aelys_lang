@@ -1,22 +1,21 @@
-struct P { x: i64 }
+use std::fmt; struct P { x: i64 }
 
-impl Display for P {
-    fn to_string(&self) -> string { return "p{self.x}" }
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "p{}", self.x) }
 }
 
-fn render<T: Display>(x: &T) -> i64 {
-    let s = x.to_string()
-    return s.len
+fn render<T: fmt::Display>(x: &T) -> i64 {
+    let s = x.to_string();
+    s.len()
 }
 
-fn main() -> i64 {
-    let mut acc: i64 = 0
+fn main() {
+    let mut acc: i64 = 0;
     for i in 0..1000 {
-        let p = P { x: i }
-        acc = acc + render(&p)
+        let p = P { x: i };
+        acc = acc + render(&p);
     }
-    println(acc)
-    let n: i64 = 5
-    println(render(&n))
-    return 0
+    println!("{}", acc);
+    let n: i64 = 5;
+    println!("{}", render(&n));
 }

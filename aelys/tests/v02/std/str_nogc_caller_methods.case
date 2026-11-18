@@ -1,19 +1,19 @@
-needs std.str
+use std::str;
 
-nogc fn score(s: string) -> i64 {
-    let mut n = s.char_count()
-    if s.starts_with("hé") { n = n + 100 }
-    if s.contains("lo") { n = n + 1000 }
-    let first = s.char_at(1)
+nogc fn score(s: String) -> i64 {
+    let mut n = s.char_count();
+    if s.starts_with("hé") { n = n + 100; }
+    if s.contains("lo") { n = n + 1000; }
+    let first = s.char_at(1);
     match first {
         Some(c) => {
-            if c.is_alpha() { n = n + 10000 }
+            if c.is_alpha() { n = n + 10000; }
         }
         None => {}
     }
-    return n
+    n
 }
 
 fn main() {
-    println(score("héllo"))
+    println!("{}", score("héllo"));
 }

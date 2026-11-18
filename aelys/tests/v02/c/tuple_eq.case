@@ -1,9 +1,9 @@
 fn main() {
-    let a = (1, "a")
-    let b = (1, "a")
-    let c = (1, "b")
-    let d = (1, 2) == (2, 1)
-    println("{a == b} {a != c} {d}")
-    let n = ((1, 2), 3)
-    println(n == ((1, 2), 3))
+    let a = (1, "a");
+    let b = (1, "a");
+    let c = (1, "b");
+    let d = (1, 2) == (2, 1);
+    println!("{} {} {d}", a == b, a != c);
+    let n = ((1, 2), 3);
+    println!("{}", n == ((1, 2), 3));
 }

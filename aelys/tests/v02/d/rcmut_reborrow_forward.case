@@ -1,14 +1,13 @@
 struct Node { val: i64 }
-fn adv(r: &mut Rc<Node>, v: i64) { *r = Rc::new(Node { val: v }) }
+fn adv(r: &mut Rc<Node>, v: i64) { *r = Rc::new(Node { val: v }); }
 fn twice(r: &mut Rc<Node>, v: i64) {
-    adv(r, v)
-    adv(r, v + 1)
+    adv(r, v);
+    adv(r, v + 1);
 }
-fn main() -> i64 {
-    let mut a: Rc<Node> = Rc::new(Node { val: 1 })
-    let keep: Rc<Node> = a
-    twice(&mut a, 8)
-    println(Rc::get(a).val)
-    println(Rc::get(keep).val)
-    return 0
+fn main() {
+    let mut a: Rc<Node> = Rc::new(Node { val: 1 });
+    let keep: Rc<Node> = a;
+    twice(&mut a, 8);
+    println!("{}", Rc::get(a).val);
+    println!("{}", Rc::get(keep).val);
 }

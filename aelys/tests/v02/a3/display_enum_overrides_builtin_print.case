@@ -1,18 +1,17 @@
-enum Shape { Sq(i64), Ci(i64) }
+use std::fmt; enum Shape { Sq(i64), Ci(i64) }
 
-impl Display for Shape {
-    fn to_string(&self) -> string {
+impl fmt::Display for Shape {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Shape::Sq(a) => return "sq{a}",
-            Shape::Ci(r) => return "ci{r}"
+            Shape::Sq(a) => return write!(f, "sq{a}"),
+            Shape::Ci(r) => return write!(f, "ci{r}"),
         }
-        return ""
+        write!(f, "")
     }
 }
 
-fn main() -> i64 {
-    println(Shape::Sq(3))
-    let c = Shape::Ci(7)
-    println("={c}=")
-    return 0
+fn main() {
+    println!("{}", Shape::Sq(3));
+    let c = Shape::Ci(7);
+    println!("={c}=");
 }

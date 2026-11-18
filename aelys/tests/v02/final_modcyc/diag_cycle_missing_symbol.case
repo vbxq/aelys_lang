@@ -1,5 +1,5 @@
-needs a
-pub fn g() -> i64 { return 1 }
+mod a;
+pub fn g() -> i64 { 1 }
 fn main() {
-    println(a.f())
+    println!("{}", a::f());
 }

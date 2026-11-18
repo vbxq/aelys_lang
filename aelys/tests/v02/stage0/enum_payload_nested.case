@@ -1,4 +1,4 @@
 fn main() {
-    let o: Option<Option<i64>> = Some(Some("s"))
-    println(0)
+    let o: Option<Option<i64>> = Some(Some("s"));
+    println!("{}", 0);
 }

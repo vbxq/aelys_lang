@@ -1,18 +1,18 @@
-struct Cell { v: i64, tag: string }
+struct Cell { v: i64, tag: String }
 
 impl Cell {
-    fn add(&mut self, k: i64) { self.v = self.v + k }
-    fn show(&self) -> string { return "{self.tag}{self.v}" }
+    fn add(&mut self, k: i64) { self.v = self.v + k; }
+    fn show(&self) -> String { format!("{}{}", self.tag, self.v) }
 }
 
 fn main() {
-    let mut total = 0
-    let mut i = 0
+    let mut total = 0;
+    let mut i = 0;
     while i < 3000 {
-        let r: Rc<Cell> = Rc::new(Cell { v: i, tag: "c" })
-        r.add(1)
-        total = total + r.show().len()
-        i = i + 1
+        let r: Rc<Cell> = Rc::new(Cell { v: i, tag: "c" });
+        r.add(1);
+        total = total + r.show().len();
+        i = i + 1;
     }
-    println(total)
+    println!("{}", total);
 }

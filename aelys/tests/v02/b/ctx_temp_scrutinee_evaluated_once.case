@@ -1,12 +1,11 @@
-let mut calls: i64 = 0
+static mut calls: i64 = 0;
 
 fn next() -> i64 {
-    calls = calls + 1
-    return 7
+    calls = calls + 1;
+    7
 }
 
-fn main() -> i64 {
-    let r: string = match next() { 0 => "a", 1..=5 => "b", 6 | 7 => "c", _ => "d" }
-    println("{r} {calls}")
-    return 0
+fn main() {
+    let r: String = match next() { 0 => "a", 1..=5 => "b", 6 | 7 => "c", _ => "d" };
+    println!("{r} {calls}");
 }

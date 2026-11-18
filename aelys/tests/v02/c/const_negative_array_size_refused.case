@@ -1,5 +1,5 @@
-const N: i64 = 0 - 3
+const N: i64 = 0 - 3;
 fn main() {
-    let a: [i64; N] = [0; 3]
-    println(a.len)
+    let a: [i64; N] = [0; 3];
+    println!("{}", a.len());
 }

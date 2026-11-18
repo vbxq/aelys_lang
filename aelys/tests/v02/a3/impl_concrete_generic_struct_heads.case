@@ -1,25 +1,24 @@
 trait Weigh {
-    fn w(&self) -> i64
+    fn w(&self) -> i64;
 }
 
 struct Box1<T> { v: T }
 
 impl Weigh for Box1<i64> {
-    fn w(&self) -> i64 { return self.v * 2 }
+    fn w(&self) -> i64 { self.v * 2 }
 }
 
-impl Weigh for Box1<string> {
-    fn w(&self) -> i64 { return self.v.len + 100 }
+impl Weigh for Box1<String> {
+    fn w(&self) -> i64 { self.v.len() + 100 }
 }
 
-fn weigh<T: Weigh>(x: T) -> i64 { return x.w() }
+fn weigh<T: Weigh>(x: T) -> i64 { x.w() }
 
-fn main() -> i64 {
-    let a = Box1 { v: 21 }
-    let b = Box1 { v: "abc" }
-    println(a.w())
-    println(b.w())
-    println(weigh(b))
-    println(weigh(a))
-    return 0
+fn main() {
+    let a = Box1 { v: 21 };
+    let b = Box1 { v: "abc" };
+    println!("{}", a.w());
+    println!("{}", b.w());
+    println!("{}", weigh(b));
+    println!("{}", weigh(a));
 }

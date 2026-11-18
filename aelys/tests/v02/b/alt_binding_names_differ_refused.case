@@ -1,6 +1,6 @@
-enum Ev { Key(i64), Click(i64), Quit }
+use std::process::ExitCode; enum Ev { Key(i64), Click(i64), Quit }
 
-fn main() -> i64 {
-    let e = Ev::Key(1)
-    return match e { Ev::Key(n) | Ev::Click(m) => 0, Ev::Quit => 1 }
+fn main() -> ExitCode {
+    let e = Ev::Key(1);
+    return ExitCode::from((match e { Ev::Key(n) | Ev::Click(m) => 0, Ev::Quit => 1 }) as u8);
 }

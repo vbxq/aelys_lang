@@ -1,8 +1,8 @@
 pub trait Sh {
-    fn sh(&self) -> i64
-    fn sh2(&self) -> i64 { return self.sh() * 2 }
+    fn sh(&self) -> i64;
+    fn sh2(&self) -> i64 { self.sh() * 2 }
 }
 pub struct Box<T> { pub v: T }
 impl<T> Sh for Box<T> {
-    fn sh(&self) -> i64 { return 21 }
+    fn sh(&self) -> i64 { 21 }
 }

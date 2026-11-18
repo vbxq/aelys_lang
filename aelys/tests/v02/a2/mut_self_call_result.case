@@ -2,13 +2,13 @@ struct C { n: i64 }
 
 impl C {
     fn inc(&mut self) -> i64 {
-        self.n = self.n + 1
-        return self.n
+        self.n = self.n + 1;
+        self.n
     }
 }
 
-fn mk() -> C { return C { n: 7 } }
+fn mk() -> C { C { n: 7 } }
 
 fn main() {
-    println(mk().inc())
+    println!("{}", mk().inc());
 }

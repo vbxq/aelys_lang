@@ -1,15 +1,14 @@
 struct Bag { items: Vec<i64> }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let b = Bag { items: vec[1, i] }
-        let o: Option<Bag> = Some(b)
-        Vec::push(b.items, 5)
-        match o { Some(x) => { t = t + x.items.len * 100 + x.items[1] } None => { t = t - 1 } }
-        t = t + b.items.len
-        i = i + 1
+        let b = Bag { items: vec![1, i] };
+        let o: Option<Bag> = Some(b);
+        Vec::push(b.items, 5);
+        match o { Some(x) => { t = t + x.items.len() * 100 + x.items[1]; } None => { t = t - 1; } }
+        t = t + b.items.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

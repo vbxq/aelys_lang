@@ -1,17 +1,16 @@
-struct Rec { name: string, k: i64 }
+struct Rec { name: String, k: i64 }
 
-fn main() -> i64 {
-    let mut a: i64 = 0
-    let mut b: i64 = 0
-    let mut c: i64 = 0
+fn main() {
+    let mut a: i64 = 0;
+    let mut b: i64 = 0;
+    let mut c: i64 = 0;
     for i in 0..300 {
-        let r = Rec { name: "n{i}", k: i % 3 }
+        let r = Rec { name: format!("n{i}"), k: i % 3 };
         match r {
-            Rec { name, k: 0 } => { a = a + name.len },
-            Rec { name: n2, k: 1 } if n2.len > 3 => { b = b + 1 },
-            _ => { c = c + 1 }
+            Rec { name, k: 0 } => { a = a + name.len(); },
+            Rec { name: n2, k: 1 } if n2.len() > 3 => { b = b + 1; },
+            _ => { c = c + 1; }
         }
     }
-    println("{a} {b} {c}")
-    return 0
+    println!("{a} {b} {c}");
 }

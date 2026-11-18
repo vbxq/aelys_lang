@@ -1,6 +1,6 @@
-let LIMIT: i64 = 3
+use std::process::ExitCode; static LIMIT: i64 = 3;
 
-fn main() -> i64 {
-    let n: i64 = 3
-    return match n { LIMIT => 1, _ => 0 }
+fn main() -> ExitCode {
+    let n: i64 = 3;
+    return ExitCode::from((match n { LIMIT => 1, _ => 0 }) as u8);
 }

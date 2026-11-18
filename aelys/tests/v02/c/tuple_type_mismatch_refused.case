@@ -1,4 +1,0 @@
-fn main() {
-    let t: (i64, string) = ("a", 1)
-    println(t.0)
-}

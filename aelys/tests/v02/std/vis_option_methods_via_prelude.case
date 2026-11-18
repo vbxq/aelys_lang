@@ -1,12 +1,12 @@
 fn find(v: &[i64], x: i64) -> Option<i64> {
     for i in 0..v.len() {
-        if v[i] == x { return Some(i) }
+        if v[i] == x { return Some(i); }
     }
-    return None
+    None
 }
 
 fn main() {
-    let a = [4, 5, 6]
-    println(find(a[..], 6).unwrap_or(-1))
-    println(find(a[..], 9).is_none())
+    let a = [4, 5, 6];
+    println!("{}", find(a[..], 6).unwrap_or(-1));
+    println!("{}", find(a[..], 9).is_none());
 }

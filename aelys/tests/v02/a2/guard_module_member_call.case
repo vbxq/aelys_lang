@@ -1,5 +1,5 @@
-needs std.str
+use std::str;
 
 fn main() {
-    println(str.from_int(42))
+    println!("{}", str::from_int(42));
 }

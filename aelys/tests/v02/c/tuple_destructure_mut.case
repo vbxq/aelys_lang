@@ -1,5 +1,5 @@
 fn main() {
-    let (mut a, b) = (1, 2)
-    a = a + b * 10
-    println(a)
+    let (mut a, b) = (1, 2);
+    a = a + b * 10;
+    println!("{}", a);
 }

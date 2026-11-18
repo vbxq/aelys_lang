@@ -1,14 +1,13 @@
-struct Tag { n: i64 }
+use std::fmt; struct Tag { n: i64 }
 
-impl Display for Tag {
-    fn to_string(&self) -> string { return "t{self.n}" }
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "t{}", self.n) }
 }
 
 nogc fn p(t: Tag) {
-    println(t)
+    println!("{}", t);
 }
 
-fn main() -> i64 {
-    p(Tag { n: 1 })
-    return 0
+fn main() {
+    p(Tag { n: 1 });
 }

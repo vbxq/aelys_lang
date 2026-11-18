@@ -1,10 +1,10 @@
-needs boxes
-needs ext
+mod boxes;
+mod ext;
 fn main() {
-    let b = boxes.Box { v: 5 }
-    println(b.get() + b.twice_with(3))
-    let s = boxes.Box { v: "hi" }
-    println(s.get())
-    let m: boxes.Box<i64> = boxes.Box::make(9)
-    println(m.v)
+    let b = boxes::Box { v: 5 };
+    println!("{}", b.get() + b.twice_with(3));
+    let s = boxes::Box { v: "hi" };
+    println!("{}", s.get());
+    let m: boxes::Box<i64> = boxes::Box::make(9);
+    println!("{}", m.v);
 }

@@ -3,10 +3,10 @@ fn area(s: Shape) -> i64 {
     let r = match s {
         Shape::Rect(dims) => dims.0 * dims.1,
         Shape::Empty => 0,
-    }
-    return r
+    };
+    r
 }
 fn main() {
-    println(area(Shape::Rect((6, 7))))
-    println(area(Shape::Empty))
+    println!("{}", area(Shape::Rect((6, 7))));
+    println!("{}", area(Shape::Empty));
 }

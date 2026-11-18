@@ -1,5 +1,5 @@
-fn f() -> i64 { return 3 }
-const X: i64 = f()
+fn f() -> i64 { 3 }
+const X: i64 = f();
 fn main() {
-    println(X)
+    println!("{}", X);
 }

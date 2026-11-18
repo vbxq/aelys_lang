@@ -1,12 +1,12 @@
-fn label(x: u64) -> string {
-    let s = "n=" + "{x}"
-    return s
+fn label(x: u64) -> String {
+    let s = "n=" + format!("{x}");
+    s
 }
 
 fn main() {
-    let z: u32 = 0
-    let t: u32 = z - 1
-    let kept = "t={t}"
-    println(label(18446744073709551615))
-    println(kept)
+    let z: u32 = 0;
+    let t: u32 = z - 1;
+    let kept = format!("t={t}");
+    println!("{}", label(18446744073709551615));
+    println!("{}", kept);
 }

@@ -1,24 +1,23 @@
-fn id(v: Vec<i64>) -> Vec<i64> { return v }
+fn id(v: Vec<i64>) -> Vec<i64> { v }
 fn sum<T>(v: Vec<T>, f: fn(T) -> i64) -> i64 {
-    let mut s: i64 = 0
-    for i in 0..v.len { s = s + f(v[i]) }
-    return s
+    let mut s: i64 = 0;
+    for i in 0..v.len() { s = s + f(v[i]); }
+    s
 }
-fn one(x: i64) -> i64 { return x }
-fn slen(x: string) -> i64 { return x.len }
-fn mk(i: i64) -> string { return "s{i}" }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
-    let g = fn(v: Vec<i64>) -> i64 { return v.len }
+fn one(x: i64) -> i64 { x }
+fn slen(x: String) -> i64 { x.len() }
+fn mk(i: i64) -> String { format!("s{i}") }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    let g = move |v: Vec<i64>| -> i64 { v.len() };
     while i < 200 {
-        let w = id(vec[1, 2, i])
-        t = t + w[2] + sum(id(vec[3, 4]), one) + sum(vec[mk(i), mk(10)], slen) + g(vec[1, 2, 3]) + g(Vec::new())
-        let u: Vec<u8> = id8(vec[200, 1])
-        t = t + (u[0] as i64)
-        i = i + 1
+        let w = id(vec![1, 2, i]);
+        t = t + w[2] + sum(id(vec![3, 4]), one) + sum(vec![mk(i), mk(10)], slen) + g(vec![1, 2, 3]) + g(Vec::new());
+        let u: Vec<u8> = id8(vec![200, 1]);
+        t = t + (u[0] as i64);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }
-fn id8(v: Vec<u8>) -> Vec<u8> { return v }
+fn id8(v: Vec<u8>) -> Vec<u8> { v }

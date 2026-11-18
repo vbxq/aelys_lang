@@ -1,6 +1,6 @@
 fn main() {
-    let mut t = ("a{1}", 2)
-    let r = &t.1
-    t = ("b{2}", 3)
-    println(*r)
+    let mut t = (format!("a{}", 1), 2);
+    let r = &t.1;
+    t = (format!("b{}", 2), 3);
+    println!("{}", *r);
 }

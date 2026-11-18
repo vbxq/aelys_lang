@@ -1,9 +1,8 @@
 struct Bx<T> { v: T, k: i64 }
 impl<T> Bx<T> {
-    fn kk(&self) -> i64 { return self.k * 2 }
+    fn kk(&self) -> i64 { self.k * 2 }
 }
-fn main() -> i64 {
-    let r: Rc<Bx<i64>> = Rc::new(Bx { v: 1, k: 4 })
-    println(Rc::get(r).kk())
-    return 0
+fn main() {
+    let r: Rc<Bx<i64>> = Rc::new(Bx { v: 1, k: 4 });
+    println!("{}", Rc::get(r).kk());
 }

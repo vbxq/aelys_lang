@@ -1,18 +1,17 @@
 struct Node { val: i64 }
 fn find(v: i64) -> Option<Rc<Node>> {
-    if v > 0 { return Some(Rc::new(Node { val: v })) }
-    return None
+    if v > 0 { return Some(Rc::new(Node { val: v })); }
+    None
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
         match find(i % 3) {
-            Some(n) => { t = t + Rc::get(n).val }
-            None => { t = t + 100 }
+            Some(n) => { t = t + Rc::get(n).val; }
+            None => { t = t + 100; }
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

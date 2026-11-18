@@ -1,39 +1,38 @@
 trait Collection<T> {
-    fn insert(&mut self, x: T)
-    fn contains(&self, x: T) -> bool
-    fn size(&self) -> i64
+    fn insert(&mut self, x: T);
+    fn contains(&self, x: T) -> bool;
+    fn size(&self) -> i64;
 }
 struct Bag { items: Vec<i64> }
 impl Collection<i64> for Bag {
-    fn insert(&mut self, x: i64) { self.items.push(x) }
+    fn insert(&mut self, x: i64) { self.items.push(x); }
     fn contains(&self, x: i64) -> bool {
         for i in 0..self.items.len() {
-            if self.items[i] == x { return true }
+            if self.items[i] == x { return true; }
         }
-        return false
+        false
     }
-    fn size(&self) -> i64 { return self.items.len() }
+    fn size(&self) -> i64 { self.items.len() }
 }
 fn fill<C: Collection<i64>>(c: &mut C, k: i64) {
-    for i in 0..k { c.insert(i * 3) }
+    for i in 0..k { c.insert(i * 3); }
 }
 fn probe<C: Collection<i64>>(c: C) -> i64 {
-    let mut d = c
-    d.insert(1)
-    let hit: i64 = if d.contains(9) { 1 } else { 0 }
-    return d.size() * 10 + hit
+    let mut d = c;
+    d.insert(1);
+    let hit: i64 = if d.contains(9) { 1 } else { 0 };
+    d.size() * 10 + hit
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let mut b = Bag { items: Vec::new() }
-        fill(&mut b, i % 6)
-        t = t + probe(b) * 100 + b.size()
-        let o: Option<Bag> = Some(b)
-        match o { Some(x) => { t = t + x.size() * 1000 } None => { } }
-        i = i + 1
+        let mut b = Bag { items: Vec::new() };
+        fill(&mut b, i % 6);
+        t = t + probe(b) * 100 + b.size();
+        let o: Option<Bag> = Some(b);
+        match o { Some(x) => { t = t + x.size() * 1000; } None => { } }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

@@ -1,6 +1,6 @@
-needs prog
+use crate::prog;
 
 pub fn f() -> i64 {
-    let s: string = prog.seed()
-    return 0
+    let s: String = prog::seed();
+    0
 }

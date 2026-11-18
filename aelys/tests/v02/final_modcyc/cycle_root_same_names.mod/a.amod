@@ -1,8 +1,8 @@
-needs prog
-struct Cfg { s: string, n: i64 }
-fn base() -> i64 { return 1000 }
+use crate::prog;
+struct Cfg { s: String, n: i64 }
+fn base() -> i64 { 1000 }
 pub fn check() -> i64 {
-    let mine = Cfg { s: "x", n: 5 }
-    let theirs = prog.Cfg { n: 7 }
-    return base() + prog.base() * 10 + mine.n * 100 + theirs.n
+    let mine = Cfg { s: "x", n: 5 };
+    let theirs = prog::Cfg { n: 7 };
+    base() + prog::base() * 10 + mine.n * 100 + theirs.n
 }

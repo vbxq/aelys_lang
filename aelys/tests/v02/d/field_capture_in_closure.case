@@ -1,10 +1,9 @@
-struct Bag { name: string, items: Vec<i64> }
+struct Bag { name: String, items: Vec<i64> }
 
-fn main() -> i64 {
-    let mut b = Bag { name: "c", items: vec[1, 2, 3] }
-    let f = fn() -> i64 { return b.items.len }
-    Vec::push(b.items, 4)
-    println(f())
-    println(b.items.len)
-    return 0
+fn main() {
+    let mut b = Bag { name: "c", items: vec![1, 2, 3] };
+    let f = move || -> i64 { b.items.len() };
+    Vec::push(b.items, 4);
+    println!("{}", f());
+    println!("{}", b.items.len());
 }

@@ -1,15 +1,14 @@
 struct Node { val: i64 }
 enum Link { Nil, Cons(Rc<Node>) }
 
-fn main() -> i64 {
-    let l: Link = Link::Cons(Rc::new(Node { val: 1 }))
-    let f = fn() -> i64 {
+fn main() {
+    let l: Link = Link::Cons(Rc::new(Node { val: 1 }));
+    let f = move || -> i64 {
         match l {
-            Link::Cons(n) => { return 1 }
-            Link::Nil => { return 0 }
+            Link::Cons(n) => { return 1; }
+            Link::Nil => { return 0; }
         }
-        return 2
-    }
-    println(f())
-    return 0
+        2
+    };
+    println!("{}", f());
 }

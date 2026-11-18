@@ -1,5 +1,5 @@
-fn f() { println(1) }
+fn f() { println!("{}", 1); }
 fn main() {
-    let x: i64 = f()
-    println(x)
+    let x: i64 = f();
+    println!("{}", x);
 }

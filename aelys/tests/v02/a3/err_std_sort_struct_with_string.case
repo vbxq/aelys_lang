@@ -1,18 +1,17 @@
-needs std.sort
+use std::sort;
 
-struct Person { name: string, age: i64 }
+struct Person { name: String, age: i64 }
 
-impl eq for Person {
-    fn eq(&self, o: &Person) -> bool { return self.age == o.age }
+impl PartialEq for Person {
+    fn eq(&self, o: &Person) -> bool { self.age == o.age }
 }
 
-impl ord for Person {
-    fn cmp(&self, o: &Person) -> i64 { return self.age - o.age }
+impl Ord for Person {
+    fn cmp(&self, o: &Person) -> i64 { self.age - o.age }
 }
 
-fn main() -> i64 {
-    let mut arr: [Person; 2] = [Person { name: "b", age: 40 }, Person { name: "a", age: 30 }]
-    sort.insertion_sort(arr[..])
-    println(arr[0].name)
-    return 0
+fn main() {
+    let mut arr: [Person; 2] = [Person { name: "b", age: 40 }, Person { name: "a", age: 30 }];
+    sort::insertion_sort(arr[..]);
+    println!("{}", arr[0].name);
 }

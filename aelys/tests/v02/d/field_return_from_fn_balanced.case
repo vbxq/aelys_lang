@@ -1,23 +1,22 @@
-struct Bag { name: string, items: Vec<i64> }
+struct Bag { name: String, items: Vec<i64> }
 
 fn mk_bag(n: i64) -> Bag {
-    let mut v: Vec<i64> = Vec::new()
-    for i in 0..n { Vec::push(v, i) }
-    return Bag { name: "m", items: v }
+    let mut v: Vec<i64> = Vec::new();
+    for i in 0..n { Vec::push(v, i); }
+    Bag { name: "m", items: v }
 }
-fn main() -> i64 {
-    let b = mk_bag(10)
-    let mut s: i64 = 0
-    for i in 0..b.items.len { s = s + b.items[i] }
-    println(s)
-    println(b.items.len)
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let b = mk_bag(10);
+    let mut s: i64 = 0;
+    for i in 0..b.items.len() { s = s + b.items[i]; }
+    println!("{}", s);
+    println!("{}", b.items.len());
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let c = mk_bag(i % 7)
-        t = t + c.items.len
-        i = i + 1
+        let c = mk_bag(i % 7);
+        t = t + c.items.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

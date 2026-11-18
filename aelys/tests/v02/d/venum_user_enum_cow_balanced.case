@@ -1,35 +1,34 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
-enum Msg { Batch(Vec<i64>), Empty, Named(string, Vec<string>) }
+enum Msg { Batch(Vec<i64>), Empty, Named(String, Vec<String>) }
 fn weigh(m: Msg) -> i64 {
     match m {
-        Msg::Batch(v) => { return v.len }
-        Msg::Empty => { return -1 }
-        Msg::Named(s, names) => { return s.len() * 100 + names.len }
+        Msg::Batch(v) => { return v.len(); }
+        Msg::Empty => { return -1; }
+        Msg::Named(s, names) => { return s.len() * 100 + names.len(); }
     }
-    return 0
+    0
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let mut names: Vec<string> = Vec::new()
-        Vec::push(names, "a{i}")
-        let m = Msg::Named("xy", names)
-        let c = m
-        Vec::push(names, "b")
-        let mut src = mk(3)
-        let b = Msg::Batch(src)
-        Vec::push(src, 9)
-        t = t + weigh(m) + weigh(c) + weigh(b) * 10 + src.len * 1000 + weigh(Msg::Empty)
-        i = i + 1
+        let mut names: Vec<String> = Vec::new();
+        Vec::push(names, format!("a{i}"));
+        let m = Msg::Named("xy", names);
+        let c = m;
+        Vec::push(names, "b");
+        let mut src = mk(3);
+        let b = Msg::Batch(src);
+        Vec::push(src, 9);
+        t = t + weigh(m) + weigh(c) + weigh(b) * 10 + src.len() * 1000 + weigh(Msg::Empty);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

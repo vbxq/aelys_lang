@@ -1,7 +1,7 @@
 struct Pair<A, B> { a: A, b: B }
 fn sum(p: Pair<i64, i64>) -> i64 {
-    return p.a * 10 + p.b
+    p.a * 10 + p.b
 }
 fn main() {
-    println(sum(Pair { a: 4, b: 2 }))
+    println!("{}", sum(Pair { a: 4, b: 2 }));
 }

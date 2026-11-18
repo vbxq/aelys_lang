@@ -1,9 +1,9 @@
-struct P { a: i64, b: string }
+struct P { a: i64, b: String }
 fn id<T>(x: T) -> T {
-    return x
+    x
 }
 fn main() {
-    let p = id(P { a: 1, b: "b" + "c" })
-    println(p.a)
-    println(p.b)
+    let p = id(P { a: 1, b: "b" + "c" });
+    println!("{}", p.a);
+    println!("{}", p.b);
 }

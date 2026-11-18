@@ -1,15 +1,14 @@
-struct P { x: i64 }
+use std::fmt; struct P { x: i64 }
 
-impl Display for P {
-    fn to_string(&self) -> string { return "P{self.x}" }
+impl fmt::Display for P {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "P{}", self.x) }
 }
 
 fn show<T>(x: T) {
-    println(x)
+    println!("{}", x);
 }
 
-fn main() -> i64 {
-    show(P { x: 4 })
-    show(9)
-    return 0
+fn main() {
+    show(P { x: 4 });
+    show(9);
 }

@@ -1,28 +1,27 @@
-fn victim(n: i64) -> string { return "ab" + "{n}" }
-fn churn() -> Vec<string> {
-    let mut keep: Vec<string> = Vec::new()
-    let mut i: i64 = 10
+fn victim(n: i64) -> String { "ab" + format!("{n}") }
+fn churn() -> Vec<String> {
+    let mut keep: Vec<String> = Vec::new();
+    let mut i: i64 = 10;
     while i < 50 {
-        Vec::push(keep, "Q" + "{i}")
-        i = i + 1
+        Vec::push(keep, "Q" + format!("{i}"));
+        i = i + 1;
     }
-    return keep
+    keep
 }
 fn take_first<T>(v: &mut Vec<T>, x: T) -> T {
-    let old: T = (*v)[0]
-    (*v)[0] = x
-    return old
+    let old: T = (*v)[0];
+    (*v)[0] = x;
+    old
 }
 fn cycle<T>(v: &mut Vec<T>, x: T) -> T {
-    let old: T = take_first(v, x)
-    Vec::push(*v, old)
-    return (*v)[0]
+    let old: T = take_first(v, x);
+    Vec::push(*v, old);
+    (*v)[0]
 }
-fn main() -> i64 {
-    let mut v: Vec<string> = Vec::new()
-    Vec::push(v, victim(1))
-    let r: string = cycle(&mut v, victim(2))
-    let k = churn()
-    println("{r} {v[0]} {v[1]} {v.len()}")
-    return 0
+fn main() {
+    let mut v: Vec<String> = Vec::new();
+    Vec::push(v, victim(1));
+    let r: String = cycle(&mut v, victim(2));
+    let k = churn();
+    println!("{r} {} {} {}", v[0], v[1], v.len());
 }

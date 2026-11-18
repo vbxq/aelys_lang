@@ -1,21 +1,21 @@
 struct S { v: i64 }
 enum E { Box(i64), No }
-pub let LO: i64 = -9223372036854775808
+pub static LO: i64 = -9223372036854775808;
 fn id(x: i64) -> i64 {
-    return x
+    x
 }
 fn main() {
-    let a: i64 = -9223372036854775808
-    let arr = [1, -9223372036854775808]
-    let v: Vec<i64> = vec[-9223372036854775808]
-    let s = S { v: -9223372036854775808 }
-    let e = E::Box(-9223372036854775808)
-    let u = -9223372036854775808 as u64
-    let w = match e { E::Box(x) => x, E::No => 0 }
-    println(a == id(-9223372036854775808))
-    println(arr[1] == LO)
-    println(v[0] == s.v)
-    println(w == a)
-    println(u / 2)
-    println("{-9223372036854775808}")
+    let a: i64 = -9223372036854775808;
+    let arr = [1, -9223372036854775808];
+    let v: Vec<i64> = vec![-9223372036854775808];
+    let s = S { v: -9223372036854775808 };
+    let e = E::Box(-9223372036854775808);
+    let u = -9223372036854775808 as u64;
+    let w = match e { E::Box(x) => x, E::No => 0 };
+    println!("{}", a == id(-9223372036854775808));
+    println!("{}", arr[1] == LO);
+    println!("{}", v[0] == s.v);
+    println!("{}", w == a);
+    println!("{}", u / 2);
+    println!("{}", -9223372036854775808);
 }

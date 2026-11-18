@@ -1,17 +1,16 @@
-fn mk(i: i64) -> string { return "s{i}" }
+fn mk(i: i64) -> String { format!("s{i}") }
 
-fn main() -> i64 {
-    let mut total: i64 = 0
-    let mut last: string = ""
-    let mut i: i64 = 0
+fn main() {
+    let mut total: i64 = 0;
+    let mut last: String = "";
+    let mut i: i64 = 0;
     while i < 1000 {
-        let mut v: Vec<string> = vec[mk(i), mk(i + 1), mk(i + 2)]
-        let r: string = Vec::remove(v, 1)
-        total = total + v.len
-        last = r
-        i = i + 1
+        let mut v: Vec<String> = vec![mk(i), mk(i + 1), mk(i + 2)];
+        let r: String = Vec::remove(v, 1);
+        total = total + v.len();
+        last = r;
+        i = i + 1;
     }
-    println(total)
-    println(last)
-    return 0
+    println!("{}", total);
+    println!("{}", last);
 }

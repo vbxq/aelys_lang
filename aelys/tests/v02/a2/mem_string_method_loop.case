@@ -1,19 +1,19 @@
-struct N { s: string }
+struct N { s: String }
 
 impl N {
-    fn tag(&self, i: i64) -> string {
-        let s = self.s
-        return "{s}-{i}"
+    fn tag(&self, i: i64) -> String {
+        let s = self.s;
+        format!("{s}-{i}")
     }
-    fn into_len(self) -> i64 { return self.s.len }
-    fn rename(&mut self, i: i64) { self.s = "n{i}" }
+    fn into_len(self) -> i64 { self.s.len() }
+    fn rename(&mut self, i: i64) { self.s = format!("n{i}"); }
 }
 
 fn main() {
-    let n = N { s: "ab" }
-    let mut t = 0
+    let n = N { s: "ab" };
+    let mut t = 0;
     for i in 0..1000 {
-        t = t + n.tag(i).len
+        t = t + n.tag(i).len();
     }
-    println(t)
+    println!("{}", t);
 }

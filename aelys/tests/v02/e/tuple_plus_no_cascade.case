@@ -1,4 +1,4 @@
 fn main() {
-    let t = (1, 2) + 1
-    println(1)
+    let t = (1, 2) + 1;
+    println!("{}", 1);
 }

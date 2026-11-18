@@ -1,5 +1,5 @@
-needs a
+mod b; mod a;
 fn main() {
-    println(a.X)
-    println(a.Z)
+    println!("{}", a::X);
+    println!("{}", a::Z);
 }

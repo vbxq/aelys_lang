@@ -1,9 +1,8 @@
-const CA: i64 = 3
-const CB: i64 = 8
-fn main() -> i64 {
+const CA: i64 = 3;
+const CB: i64 = 8;
+fn main() {
     match 5 {
-        CB..=CA => println(1),
-        _ => println(0)
+        CB..=CA => println!("{}", 1),
+        _ => println!("{}", 0),
     }
-    return 0
 }

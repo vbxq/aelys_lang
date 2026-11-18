@@ -6,7 +6,6 @@ fn first(o: Option<Expr>) -> i64 {
         None => 0,
     }
 }
-fn main() -> i64 {
-    println(first(Some(Expr::Num(4))))
-    return 0
+fn main() {
+    println!("{}", first(Some(Expr::Num(4))));
 }

@@ -1,15 +1,14 @@
-needs std.slice
+use std::slice;
 
 struct K { key: i64, pay: i64 }
 
-impl eq for K {
-    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+impl PartialEq for K {
+    fn eq(&self, o: &K) -> bool { self.key == o.key }
 }
 
-fn main() -> i64 {
-    let arr: [K; 3] = [K { key: 1, pay: 10 }, K { key: 2, pay: 20 }, K { key: 3, pay: 30 }]
-    println(slice.contains(arr[..], K { key: 2, pay: 999 }))
-    println(slice.index_of(arr[..], K { key: 3, pay: 0 }))
-    println(slice.index_of(arr[..], K { key: 9, pay: 10 }))
-    return 0
+fn main() {
+    let arr: [K; 3] = [K { key: 1, pay: 10 }, K { key: 2, pay: 20 }, K { key: 3, pay: 30 }];
+    println!("{}", slice::contains(arr[..], K { key: 2, pay: 999 }));
+    println!("{}", slice::index_of(arr[..], K { key: 3, pay: 0 }));
+    println!("{}", slice::index_of(arr[..], K { key: 9, pay: 10 }));
 }

@@ -1,11 +1,10 @@
-struct Bag { name: string, items: Vec<i64> }
+struct Bag { name: String, items: Vec<i64> }
 
-fn add(b: &mut Bag, x: i64) { Vec::push((*b).items, x) }
-fn main() -> i64 {
-    let mut b = Bag { name: "bag", items: vec[1, 2, 3] }
-    add(&mut b, 5)
-    add(&mut b, 6)
-    println(b.items.len)
-    println(b.items[4])
-    return 0
+fn add(b: &mut Bag, x: i64) { Vec::push((*b).items, x); }
+fn main() {
+    let mut b = Bag { name: "bag", items: vec![1, 2, 3] };
+    add(&mut b, 5);
+    add(&mut b, 6);
+    println!("{}", b.items.len());
+    println!("{}", b.items[4]);
 }

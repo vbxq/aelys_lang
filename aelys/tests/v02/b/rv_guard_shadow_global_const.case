@@ -1,12 +1,11 @@
-let lim: i64 = 10
+static lim: i64 = 10;
 
 fn f(o: Option<i64>) -> i64 {
-    return match o { Some(lim) if lim > 5 => lim, Some(_) => -1, None => lim }
+    match o { Some(lim) if lim > 5 => lim, Some(_) => -1, None => lim }
 }
 
-fn main() -> i64 {
-    println(f(Some(3)))
-    println(f(Some(8)))
-    println(f(None))
-    return 0
+fn main() {
+    println!("{}", f(Some(3)));
+    println!("{}", f(Some(8)));
+    println!("{}", f(None));
 }

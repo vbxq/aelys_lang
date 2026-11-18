@@ -1,11 +1,11 @@
-needs a
-needs std.str
-pub struct Node { pub name: string, pub next: Option<Rc<a.Link>> }
-pub fn mkname(i: i64) -> string { return "n{i}" }
+mod a;
+use std::str;
+pub struct Node { pub name: String, pub next: Option<Rc<a::Link>> }
+pub fn mkname(i: i64) -> String { format!("n{i}") }
 fn main() {
-    let l = a.chain(3)
-    println(a.render(l))
-    let f = fn(x: i64) -> string { return a.label(x) }
-    println(f(7))
-    println(str.repeat("ab", 2))
+    let l = a::chain(3);
+    println!("{}", a::render(l));
+    let f = move |x: i64| -> String { a::label(x) };
+    println!("{}", f(7));
+    println!("{}", str::repeat("ab", 2));
 }

@@ -1,22 +1,21 @@
 trait Unit {
-    fn unit() -> Self
-    fn val(&self) -> i64
+    fn unit() -> Self;
+    fn val(&self) -> i64;
 }
 
 struct M { v: i64 }
 struct N { v: i64 }
 
 impl Unit for M {
-    fn unit() -> Self { return M { v: 7 } }
-    fn val(&self) -> i64 { return self.v }
+    fn unit() -> Self { M { v: 7 } }
+    fn val(&self) -> i64 { self.v }
 }
 
 impl Unit for N {
-    fn unit() -> Self { return N { v: 40 } }
-    fn val(&self) -> i64 { return self.v + 1 }
+    fn unit() -> Self { N { v: 40 } }
+    fn val(&self) -> i64 { self.v + 1 }
 }
 
-fn main() -> i64 {
-    println(Unit::unit().val())
-    return 0
+fn main() {
+    println!("{}", Unit::unit().val());
 }

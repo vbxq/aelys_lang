@@ -1,13 +1,13 @@
 struct C { n: i64 }
 
 impl C {
-    fn get(&self) -> i64 { return self.n }
-    fn add(&mut self, d: i64) { self.n = self.n + d }
-    fn dbl(&mut self) { self.add(self.get()) }
+    fn get(&self) -> i64 { self.n }
+    fn add(&mut self, d: i64) { self.n = self.n + d; }
+    fn dbl(&mut self) { self.add(self.get()); }
 }
 
 fn main() {
-    let mut c = C { n: 5 }
-    c.dbl()
-    println(c.n)
+    let mut c = C { n: 5 };
+    c.dbl();
+    println!("{}", c.n);
 }

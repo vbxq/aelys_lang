@@ -1,13 +1,13 @@
-needs std.slice
+use std::slice;
 
 fn main() {
-    let names: [string; 3] = ["ana", "bo", "cy"]
-    println(names.contains("bo"))
-    println(names.contains("zed"))
-    println(names.index_of("cy"))
+    let names: [String; 3] = ["ana", "bo", "cy"];
+    println!("{}", names.contains("bo"));
+    println!("{}", names.contains("zed"));
+    println!("{}", names.index_of("cy"));
     let f = match names.find("ana") {
         Some(i) => i,
         None => -1,
-    }
-    println(f)
+    };
+    println!("{}", f);
 }

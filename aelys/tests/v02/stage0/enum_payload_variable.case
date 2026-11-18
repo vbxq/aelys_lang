@@ -1,5 +1,5 @@
 fn main() {
-    let s = "x"
-    let o: Option<i64> = Some(s)
-    println(0)
+    let s = "x";
+    let o: Option<i64> = Some(s);
+    println!("{}", 0);
 }

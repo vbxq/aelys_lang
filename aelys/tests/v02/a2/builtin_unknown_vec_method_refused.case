@@ -1,4 +1,4 @@
 fn main() {
-    let v: Vec<i64> = vec[1]
-    println(v.frob())
+    let v: Vec<i64> = vec![1];
+    println!("{}", v.frob());
 }

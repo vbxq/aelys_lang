@@ -1,10 +1,9 @@
 fn check(x: i64) -> Result<i64, i64> {
-    if x > 0 { return Ok(x) }
-    return Err(x)
+    if x > 0 { return Ok(x); }
+    Err(x)
 }
 
-fn main() -> i64 {
-    println(check(3).unwrap())
-    println(check(4).unwrap_or(0))
-    return 0
+fn main() {
+    println!("{}", check(3).unwrap());
+    println!("{}", check(4).unwrap_or(0));
 }

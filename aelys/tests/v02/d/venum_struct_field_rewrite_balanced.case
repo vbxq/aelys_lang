@@ -1,28 +1,27 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
 enum Msg { Batch(Vec<i64>), Empty }
 struct S { m: Msg, k: i64 }
 fn len(m: Msg) -> i64 {
-    match m { Msg::Batch(v) => { return v.len } Msg::Empty => { return -1 } }
-    return 0
+    match m { Msg::Batch(v) => { return v.len(); } Msg::Empty => { return -1; } }
+    0
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
-    let mut s = S { m: Msg::Empty, k: 1 }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    let mut s = S { m: Msg::Empty, k: 1 };
     while i < 300 {
-        let old = s
-        s.m = Msg::Batch(mk(i % 4))
-        t = t + len(s.m) * 10 + len(old.m) + s.k
-        if i % 5 == 0 { s.m = Msg::Empty }
-        i = i + 1
+        let old = s;
+        s.m = Msg::Batch(mk(i % 4));
+        t = t + len(s.m) * 10 + len(old.m) + s.k;
+        if i % 5 == 0 { s.m = Msg::Empty; }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

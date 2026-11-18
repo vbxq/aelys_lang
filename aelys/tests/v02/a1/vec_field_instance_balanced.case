@@ -1,11 +1,11 @@
 struct W<T> { v: T }
 fn main() {
-    let mut v: Vec<i64> = Vec::new()
-    Vec::push(v, 1)
-    let w = W { v: v }
-    let mut c = w
-    Vec::push(c.v, 2)
-    Vec::push(v, 3)
-    println(w.v.len * 100 + c.v.len * 10 + v.len)
-    println(c.v[1] + w.v[0])
+    let mut v: Vec<i64> = Vec::new();
+    Vec::push(v, 1);
+    let w = W { v: v };
+    let mut c = w;
+    Vec::push(c.v, 2);
+    Vec::push(v, 3);
+    println!("{}", w.v.len() * 100 + c.v.len() * 10 + v.len());
+    println!("{}", c.v[1] + w.v[0]);
 }

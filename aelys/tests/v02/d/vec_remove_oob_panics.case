@@ -1,7 +1,6 @@
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    println("before")
-    let r: i64 = Vec::remove(v, 3)
-    println(r)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    println!("before");
+    let r: i64 = Vec::remove(v, 3);
+    println!("{}", r);
 }

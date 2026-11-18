@@ -1,12 +1,12 @@
-needs node
+use crate::node;
 pub enum Kind { Big, Small }
-pub struct Tree { pub kids: Vec<node.Node>, pub tag: i64 }
+pub struct Tree { pub kids: Vec<node::Node>, pub tag: i64 }
 pub fn sum(t: Tree) -> i64 {
-    let mut s = t.tag
-    let mut i = 0
+    let mut s = t.tag;
+    let mut i = 0;
     while i < t.kids.len() {
-        s = s + node.weigh(t.kids[i])
-        i = i + 1
+        s = s + node::weigh(t.kids[i]);
+        i = i + 1;
     }
-    return s
+    s
 }

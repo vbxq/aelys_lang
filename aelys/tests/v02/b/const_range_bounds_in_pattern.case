@@ -1,13 +1,12 @@
-const CA: i64 = 3
-const CB: i64 = 8
-fn main() -> i64 {
-    let mut t = 0
+const CA: i64 = 3;
+const CB: i64 = 8;
+fn main() {
+    let mut t = 0;
     for i in 0..12 {
         match i {
-            CA..=CB => { t = t + 10 }
-            _ => { t = t + 1 }
+            CA..=CB => { t = t + 10; }
+            _ => { t = t + 1; }
         }
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

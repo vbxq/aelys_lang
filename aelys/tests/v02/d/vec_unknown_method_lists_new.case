@@ -1,5 +1,4 @@
-fn main() -> i64 {
-    let mut v: Vec<i64> = vec[1]
-    Vec::frob(v)
-    return 0
+fn main() {
+    let mut v: Vec<i64> = vec![1];
+    Vec::frob(v);
 }

@@ -1,11 +1,11 @@
-fn count(v: &Vec<i64>) -> i64 { return v.len() }
+fn count(v: &Vec<i64>) -> i64 { v.len() }
 
-fn add(v: &mut Vec<i64>) { v.push(7) }
+fn add(v: &mut Vec<i64>) { v.push(7); }
 
 fn main() {
-    let mut v: Vec<i64> = vec[1, 2, 3]
-    println(count(&v))
-    add(&mut v)
-    println(v.len())
-    println(v[3])
+    let mut v: Vec<i64> = vec![1, 2, 3];
+    println!("{}", count(&v));
+    add(&mut v);
+    println!("{}", v.len());
+    println!("{}", v[3]);
 }

@@ -1,14 +1,13 @@
-fn main() -> i64 {
-    let mut long: i64 = 0
-    let mut short: i64 = 0
+fn main() {
+    let mut long: i64 = 0;
+    let mut short: i64 = 0;
     for i in 0..200 {
-        let o: Option<string> = Some("k{i}")
+        let o: Option<String> = Some(format!("k{i}"));
         match o {
-            Some(s) if s.len > 2 => { long = long + 1 },
-            Some(s) => { short = short + 1 },
+            Some(s) if s.len() > 2 => { long = long + 1; },
+            Some(s) => { short = short + 1; },
             None => {}
         }
     }
-    println("{long} {short}")
-    return 0
+    println!("{long} {short}");
 }

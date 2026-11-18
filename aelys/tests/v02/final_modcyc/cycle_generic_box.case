@@ -1,9 +1,9 @@
-needs a
+mod a;
 pub struct Box<T> { pub v: T }
-pub fn wrap<T>(v: T) -> Box<T> { return Box { v: v } }
+pub fn wrap<T>(v: T) -> Box<T> { Box { v: v } }
 fn main() {
-    let b = a.twice_box(21)
-    println(b.v)
-    let s = a.wrap_str("hi")
-    println(s.v)
+    let b = a::twice_box(21);
+    println!("{}", b.v);
+    let s = a::wrap_str("hi");
+    println!("{}", s.v);
 }

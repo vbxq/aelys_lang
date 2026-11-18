@@ -1,8 +1,8 @@
 struct W<T> { v: T }
 nogc fn f() -> i64 {
-    let r: Rc<W<i64>> = Rc::new(W { v: 1 })
-    return Rc::get(r).v
+    let r: Rc<W<i64>> = Rc::new(W { v: 1 });
+    Rc::get(r).v
 }
 fn main() {
-    println(f())
+    println!("{}", f());
 }

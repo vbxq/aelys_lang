@@ -1,9 +1,9 @@
-needs shapes
-fn total(b: shapes.Board) -> i64 {
-    return b[0] + b[1] + b[2] + b[3]
+mod shapes;
+fn total(b: shapes::Board) -> i64 {
+    b[0] + b[1] + b[2] + b[3]
 }
 fn main() {
-    let p: shapes.Pt = shapes.origin()
-    println(p.x * 10 + p.y)
-    println(total([1, 2, 3, 4]))
+    let p: shapes::Pt = shapes::origin();
+    println!("{}", p.x * 10 + p.y);
+    println!("{}", total([1, 2, 3, 4]));
 }

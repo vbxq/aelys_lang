@@ -1,12 +1,12 @@
 struct Node { val: i64, next: Rc<Node> }
 
 impl Node {
-    fn v(&self) -> i64 { return self.val }
-    fn twice(self) -> i64 { return self.val * 2 }
+    fn v(&self) -> i64 { self.val }
+    fn twice(self) -> i64 { self.val * 2 }
 }
 
 fn main() {
-    let r: Rc<Node> = Rc::new(Node { val: 21, next: Rc::null() })
-    println(r.v() + r.twice())
-    println(r.val)
+    let r: Rc<Node> = Rc::new(Node { val: 21, next: Rc::null() });
+    println!("{}", r.v() + r.twice());
+    println!("{}", r.val);
 }

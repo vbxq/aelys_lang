@@ -1,15 +1,14 @@
 enum List<T> { Nil, Cons(T, Rc<List<T>>) }
-fn mk(i: i64) -> string { return "s{i}" }
-fn main() -> i64 {
-    let mut l: List<string> = List::Nil
-    let mut i: i64 = 0
+fn mk(i: i64) -> String { format!("s{i}") }
+fn main() {
+    let mut l: List<String> = List::Nil;
+    let mut i: i64 = 0;
     while i < 100000 {
-        l = List::Cons(mk(i), Rc::new(l))
-        i = i + 1
+        l = List::Cons(mk(i), Rc::new(l));
+        i = i + 1;
     }
     match l {
-        List::Cons(s, rest) => { match Rc::get(rest) { List::Cons(s2, r2) => { println("{s} {s2}") } List::Nil => { println("one") } } }
-        List::Nil => { println("nil") }
+        List::Cons(s, rest) => { match Rc::get(rest) { List::Cons(s2, r2) => { println!("{s} {s2}"); } List::Nil => { println!("one"); } } }
+        List::Nil => { println!("nil"); }
     }
-    return 0
 }

@@ -1,4 +1,4 @@
-let G: [Option<string>; 2] = [Some("x"), None]
+static G: [Option<String>; 2] = [Some("x"), None];
 fn main() {
-    println(G.len)
+    println!("{}", G.len());
 }

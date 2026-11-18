@@ -1,8 +1,8 @@
-type Grid = [[i64; 3]; 3]
+type Grid = [[i64; 3]; 3];
 fn trace(g: Grid) -> i64 {
-    return g[0][0] + g[1][1] + g[2][2]
+    g[0][0] + g[1][1] + g[2][2]
 }
 fn main() {
-    let g: Grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    println(trace(g))
+    let g: Grid = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+    println!("{}", trace(g));
 }

@@ -1,19 +1,18 @@
-struct Sq { s: i64 }
+use std::fmt; struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
-impl Display for Sq {
-    fn to_string(&self) -> string { return "sq{self.s}" }
+impl fmt::Display for Sq {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "sq{}", self.s) }
 }
 
-impl Display for Rect {
-    fn to_string(&self) -> string { return "rect{self.w}x{self.h}" }
+impl fmt::Display for Rect {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "rect{}x{}", self.w, self.h) }
 }
 
-fn wrap<T: Display>(x: T) -> string { return "<" + x.to_string() + ">" }
+fn wrap<T: fmt::Display>(x: T) -> String { "<" + x.to_string() + ">" }
 
-fn main() -> i64 {
-    println(wrap(Sq { s: 2 }))
-    println(wrap(Rect { w: 3, h: 4 }))
-    println(wrap(Sq { s: 5 }))
-    return 0
+fn main() {
+    println!("{}", wrap(Sq { s: 2 }));
+    println!("{}", wrap(Rect { w: 3, h: 4 }));
+    println!("{}", wrap(Sq { s: 5 }));
 }

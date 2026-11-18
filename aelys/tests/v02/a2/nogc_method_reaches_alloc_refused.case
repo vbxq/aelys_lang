@@ -1,16 +1,16 @@
 struct R { w: i64, h: i64 }
 
 impl R {
-    nogc fn area(&self) -> i64 { return self.w * self.h }
-    fn label(&self) -> string {
-        let w = self.w
-        return "r{w}"
+    nogc fn area(&self) -> i64 { self.w * self.h }
+    fn label(&self) -> String {
+        let w = self.w;
+        format!("r{w}")
     }
 }
 
-nogc fn report(r: &R) -> i64 { return r.label().len }
+nogc fn report(r: &R) -> i64 { r.label().len() }
 
 fn main() {
-    let a = R { w: 3, h: 4 }
-    println(report(&a))
+    let a = R { w: 3, h: 4 };
+    println!("{}", report(&a));
 }

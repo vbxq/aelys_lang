@@ -1,5 +1,0 @@
-fn a() {
-    let = 1
-}
-type T = = i64
-fn main() { println(1) }

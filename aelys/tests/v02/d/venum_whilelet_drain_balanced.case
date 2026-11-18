@@ -1,23 +1,22 @@
-fn s(i: i64) -> string { return "p{i}" }
-fn next(i: i64, k: i64) -> Option<Vec<string>> {
-    if k >= 3 { return None }
-    let mut v: Vec<string> = Vec::new()
-    let mut j: i64 = 0
-    while j <= k { Vec::push(v, s(i + j))
-        j = j + 1 }
-    return Some(v)
+fn s(i: i64) -> String { format!("p{i}") }
+fn next(i: i64, k: i64) -> Option<Vec<String>> {
+    if k >= 3 { return None; }
+    let mut v: Vec<String> = Vec::new();
+    let mut j: i64 = 0;
+    while j <= k { Vec::push(v, s(i + j));
+        j = j + 1; }
+    Some(v)
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let mut k: i64 = 0
+        let mut k: i64 = 0;
         while let Some(v) = next(i, k) {
-            t = t + v.len * 100 + v[v.len - 1].len()
-            k = k + 1
+            t = t + v.len() * 100 + v[v.len() - 1].len();
+            k = k + 1;
         }
-        i = i + 1
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

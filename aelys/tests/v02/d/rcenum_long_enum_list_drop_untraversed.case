@@ -1,13 +1,12 @@
 struct Node { val: i64, next: Link }
 enum Link { Nil, Cons(Rc<Node>) }
-fn main() -> i64 {
-    let mut head: Link = Link::Nil
-    let mut i: i64 = 1
+fn main() {
+    let mut head: Link = Link::Nil;
+    let mut i: i64 = 1;
     while i <= 1000000 {
-        head = Link::Cons(Rc::new(Node { val: i, next: head }))
-        i = i + 1
+        head = Link::Cons(Rc::new(Node { val: i, next: head }));
+        i = i + 1;
     }
-    head = Link::Nil
-    println(1)
-    return 0
+    head = Link::Nil;
+    println!("{}", 1);
 }

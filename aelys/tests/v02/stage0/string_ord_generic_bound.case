@@ -1,24 +1,24 @@
-fn mx<T: ord>(a: T, b: T) -> T {
+fn mx<T: Ord>(a: T, b: T) -> T {
     if a > b {
-        return a
+        return a;
     }
-    return b
+    b
 }
 
-fn smallest<T: ord>(xs: &[T]) -> T {
-    let mut best = xs[0]
-    for i in 0..xs.len {
+fn smallest<T: Ord>(xs: &[T]) -> T {
+    let mut best = xs[0];
+    for i in 0..xs.len() {
         if xs[i] < best {
-            best = xs[i]
+            best = xs[i];
         }
     }
-    return best
+    best
 }
 
 fn main() {
-    println(mx("pear", "apple"))
-    println(mx("", "a"))
-    let words: [string; 4] = ["pear", "apple", "épi", "apples"]
-    println(smallest(words[0..4]))
-    println(mx(3, 9))
+    println!("{}", mx("pear", "apple"));
+    println!("{}", mx("", "a"));
+    let words: [String; 4] = ["pear", "apple", "épi", "apples"];
+    println!("{}", smallest(words[0..4]));
+    println!("{}", mx(3, 9));
 }

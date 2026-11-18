@@ -1,20 +1,19 @@
-fn mk(i: i64) -> string { return "s{i}" }
-struct P { name: string, n: i64 }
+fn mk(i: i64) -> String { format!("s{i}") }
+struct P { name: String, n: i64 }
 
 struct Team { members: Vec<P> }
 fn total(t: &Team) -> i64 {
-    let mut s: i64 = 0
-    for i in 0..(*t).members.len { s = s + (*t).members[i].n }
-    return s
+    let mut s: i64 = 0;
+    for i in 0..(*t).members.len() { s = s + (*t).members[i].n; }
+    s
 }
-fn main() -> i64 {
-    let mut t = Team { members: Vec::new() }
-    Vec::push(t.members, P { name: mk(1), n: 1 })
-    Vec::push(t.members, P { name: mk(2), n: 2 })
-    let mut c = t
-    Vec::push(c.members, P { name: mk(3), n: 3 })
-    println(total(&t))
-    println(total(&c))
-    println(c.members[2].name)
-    return 0
+fn main() {
+    let mut t = Team { members: Vec::new() };
+    Vec::push(t.members, P { name: mk(1), n: 1 });
+    Vec::push(t.members, P { name: mk(2), n: 2 });
+    let mut c = t;
+    Vec::push(c.members, P { name: mk(3), n: 3 });
+    println!("{}", total(&t));
+    println!("{}", total(&c));
+    println!("{}", c.members[2].name);
 }

@@ -1,4 +1,4 @@
 fn f() -> i64 {
-    return
+    return;
 }
-fn main() { println(f()) }
+fn main() { println!("{}", f()); }

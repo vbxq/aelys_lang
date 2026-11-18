@@ -1,4 +1,4 @@
-fn main() -> i64 {
-    let b: bool = true
-    return match b { true => 1 }
+use std::process::ExitCode; fn main() -> ExitCode {
+    let b: bool = true;
+    return ExitCode::from((match b { true => 1 }) as u8);
 }

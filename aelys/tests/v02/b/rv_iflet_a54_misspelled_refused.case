@@ -1,7 +1,6 @@
-fn main() -> i64 {
-    let o: Option<i64> = None
+fn main() {
+    let o: Option<i64> = None;
     if let Nnoe = o {
-        println("x")
+        println!("x");
     }
-    return 0
 }

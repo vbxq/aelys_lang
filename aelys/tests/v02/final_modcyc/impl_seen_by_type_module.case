@@ -1,6 +1,6 @@
-needs geom
-needs ext
+mod geom;
+mod ext;
 fn main() {
-    println(geom.describe(geom.mk(6)))
-    println(geom.mk(2).half())
+    println!("{}", geom::describe(geom::mk(6)));
+    println!("{}", geom::mk(2).half());
 }

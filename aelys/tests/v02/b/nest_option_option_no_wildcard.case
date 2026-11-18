@@ -1,10 +1,9 @@
 fn f(o: Option<Option<i64>>) -> i64 {
-    return match o { Some(Some(x)) => x, Some(None) => -1, None => -2 }
+    match o { Some(Some(x)) => x, Some(None) => -1, None => -2 }
 }
 
-fn main() -> i64 {
-    println(f(Some(Some(5))))
-    println(f(Some(None)))
-    println(f(None))
-    return 0
+fn main() {
+    println!("{}", f(Some(Some(5))));
+    println!("{}", f(Some(None)));
+    println!("{}", f(None));
 }

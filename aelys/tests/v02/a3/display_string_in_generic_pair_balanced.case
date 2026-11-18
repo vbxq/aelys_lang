@@ -1,20 +1,19 @@
-struct Pair<T> { a: T, b: T }
+use std::fmt; struct Pair<T> { a: T, b: T }
 
-impl<T: Display> Display for Pair<T> {
-    fn to_string(&self) -> string { return "({self.a}, {self.b})" }
+impl<T: fmt::Display> fmt::Display for Pair<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "({}, {})", self.a, self.b) }
 }
 
-fn main() -> i64 {
-    let mut acc: i64 = 0
+fn main() {
+    let mut acc: i64 = 0;
     for i in 0..500 {
-        let p = Pair { a: "ab", b: "c" }
-        let s = "{p}"
-        acc = acc + s.len + i - i
+        let p = Pair { a: "ab", b: "c" };
+        let s = format!("{p}");
+        acc = acc + s.len() + i - i;
     }
-    println(acc)
-    let w: string = "q"
-    let t = w.to_string()
-    println(t)
-    println(w)
-    return 0
+    println!("{}", acc);
+    let w: String = "q";
+    let t = w.to_string();
+    println!("{}", t);
+    println!("{}", w);
 }

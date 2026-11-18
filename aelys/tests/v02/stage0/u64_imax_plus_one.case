@@ -1,5 +1,5 @@
 fn main() {
-    let b: u64 = 9223372036854775807
-    let c: u64 = b + 1
-    println("{c}")
+    let b: u64 = 9223372036854775807;
+    let c: u64 = b + 1;
+    println!("{c}");
 }

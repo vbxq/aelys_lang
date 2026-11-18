@@ -1,19 +1,18 @@
 trait Sink<T> {
-    fn put(&mut self, x: T) -> i64
+    fn put(&mut self, x: T) -> i64;
 }
 
 struct Log { total: i64 }
 
 impl Sink<i64> for Log {
-    fn put(&mut self, x: i64) -> i64 { return x }
+    fn put(&mut self, x: i64) -> i64 { x }
 }
 
 impl Sink<i64> for Log {
-    fn put(&mut self, x: i64) -> i64 { return x + 1 }
+    fn put(&mut self, x: i64) -> i64 { x + 1 }
 }
 
-fn main() -> i64 {
-    let mut l = Log { total: 0 }
-    println(l.put(1))
-    return 0
+fn main() {
+    let mut l = Log { total: 0 };
+    println!("{}", l.put(1));
 }

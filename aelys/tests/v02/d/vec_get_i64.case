@@ -1,16 +1,15 @@
 fn show(o: Option<i64>) {
     match o {
-        Some(x) => { println(x) }
-        None => { println("none") }
+        Some(x) => { println!("{}", x); }
+        None => { println!("none"); }
     }
 }
 
-fn main() -> i64 {
-    let v: Vec<i64> = vec[10, 20, 30]
-    show(Vec::get(v, 1))
-    show(Vec::get(v, 3))
-    show(Vec::get(v, -1))
-    show(Vec::get(v, 0))
-    println(v.len)
-    return 0
+fn main() {
+    let v: Vec<i64> = vec![10, 20, 30];
+    show(Vec::get(v, 1));
+    show(Vec::get(v, 3));
+    show(Vec::get(v, -1));
+    show(Vec::get(v, 0));
+    println!("{}", v.len());
 }

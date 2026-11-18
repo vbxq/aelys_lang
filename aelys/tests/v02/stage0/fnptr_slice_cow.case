@@ -1,6 +1,6 @@
-fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { return f(s) }
-fn main() { let mut v: Vec<i64> = vec[1, 2, 3]
- let w = v
- println(apply(fn(s: &mut [i64]) -> i64 { s[0] = 77
-   return 0 }, v[0..3]))
- println("{v[0]} {w[0]}") }
+fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { f(s) }
+fn main() { let mut v: Vec<i64> = vec![1, 2, 3];
+ let w = v;
+ println!("{}", apply(move |s: &mut [i64]| -> i64 { s[0] = 77;
+   0 }, v[0..3]));
+ println!("{} {}", v[0], w[0]); }

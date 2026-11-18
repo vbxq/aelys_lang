@@ -1,6 +1,6 @@
-needs geo
+use crate::geo;
 pub trait Shape {
-    fn area(&self) -> i64
-    fn describe(&self) -> string { return "area {self.area()}" }
+    fn area(&self) -> i64;
+    fn describe(&self) -> String { format!("area {}", self.area()) }
 }
-pub fn total<T: Shape>(x: T) -> i64 { return x.area() + geo.BONUS }
+pub fn total<T: Shape>(x: T) -> i64 { x.area() + geo::BONUS }

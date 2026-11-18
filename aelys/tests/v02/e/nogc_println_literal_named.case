@@ -1,6 +1,6 @@
 nogc fn g(n: i64) {
-    println("a")
+    println!("a");
 }
 fn main() {
-    g(1)
+    g(1);
 }

@@ -1,4 +1,4 @@
-type Option = i64
+type Option = i64;
 fn main() {
-    println(1)
+    println!("{}", 1)
 }

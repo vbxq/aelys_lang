@@ -1,23 +1,22 @@
 struct Matrix { data: Vec<i64>, rows: i64 }
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i * 10)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i * 10);
+        i = i + 1; }
+    d
 }
 
 fn two(n: i64) -> (Matrix, Matrix) {
-    return (Matrix { data: mk(n), rows: 1 }, Matrix { data: mk(n + 1), rows: 2 })
+    (Matrix { data: mk(n), rows: 1 }, Matrix { data: mk(n + 1), rows: 2 })
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let (a, b) = two(i % 5 + 1)
-        t = t + a.data.len * 100 + b.data.len + a.rows * 1000 + b.data[b.data.len - 1]
-        i = i + 1
+        let (a, b) = two(i % 5 + 1);
+        t = t + a.data.len() * 100 + b.data.len() + a.rows * 1000 + b.data[b.data.len() - 1];
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

@@ -1,13 +1,12 @@
 struct Buf { bytes: Vec<u8>, tag: i64 }
-fn main() -> i64 {
-    let mut b = Buf { bytes: Vec::new(), tag: 4 }
-    Vec::push(b.bytes, 200 as u8)
-    Vec::push(b.bytes, 7 as u8)
-    let c = b
-    Vec::push(b.bytes, 1 as u8)
-    println(c.bytes.len)
-    println(b.bytes.len)
-    println(c.bytes[0])
-    println(b.tag)
-    return 0
+fn main() {
+    let mut b = Buf { bytes: Vec::new(), tag: 4 };
+    Vec::push(b.bytes, 200 as u8);
+    Vec::push(b.bytes, 7 as u8);
+    let c = b;
+    Vec::push(b.bytes, 1 as u8);
+    println!("{}", c.bytes.len());
+    println!("{}", b.bytes.len());
+    println!("{}", c.bytes[0]);
+    println!("{}", b.tag);
 }

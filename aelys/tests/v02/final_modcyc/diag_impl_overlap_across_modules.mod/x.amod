@@ -1,4 +1,4 @@
-needs geo
-impl Display for geo.Pt {
-    fn to_string(&self) -> string { return "x" }
+use std::fmt; use crate::geo;
+impl fmt::Display for geo::Pt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "x") }
 }

@@ -1,10 +1,10 @@
-type BinOp = fn(i64, i64) -> i64
+type BinOp = fn(i64, i64) -> i64;
 fn apply(f: BinOp, a: i64, b: i64) -> i64 {
-    return f(a, b)
+    f(a, b)
 }
 fn mul(a: i64, b: i64) -> i64 {
-    return a * b
+    a * b
 }
 fn main() {
-    println(apply(mul, 6, 7))
+    println!("{}", apply(mul, 6, 7));
 }

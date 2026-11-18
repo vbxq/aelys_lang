@@ -1,20 +1,19 @@
-struct Pair { name: string, k: i64 }
-fn s(i: i64) -> string { return "s{i}" }
+struct Pair { name: String, k: i64 }
+fn s(i: i64) -> String { format!("s{i}") }
 fn g(i: i64) -> Option<i64> {
-    if i % 2 == 0 { return None }
-    return Some(i)
+    if i % 2 == 0 { return None; }
+    Some(i)
 }
 fn build(i: i64) -> Option<i64> {
-    let p = Pair { name: s(i), k: g(i)? }
-    return Some(p.name.len() + p.k)
+    let p = Pair { name: s(i), k: g(i)? };
+    Some(p.name.len() + p.k)
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        match build(i) { Some(x) => { t = t + x } None => { t = t + 100 } }
-        i = i + 1
+        match build(i) { Some(x) => { t = t + x; } None => { t = t + 100; } }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

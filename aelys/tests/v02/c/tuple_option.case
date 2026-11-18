@@ -1,14 +1,14 @@
-fn find(k: i64) -> Option<(i64, string)> {
-    if k > 0 { return Option::Some((k * 2, "pos")) }
-    return Option::None
+fn find(k: i64) -> Option<(i64, String)> {
+    if k > 0 { return Option::Some((k * 2, "pos")); }
+    Option::None
 }
 fn main() {
     match find(4) {
-        Some(p) => { println("{p.0} {p.1}") },
-        None => { println("none") },
+        Some(p) => { println!("{} {}", p.0, p.1); },
+        None => { println!("none"); },
     }
     match find(0) {
-        Some(p) => { println(p.0) },
-        None => { println("none") },
+        Some(p) => { println!("{}", p.0); },
+        None => { println!("none"); },
     }
 }

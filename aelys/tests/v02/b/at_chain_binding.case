@@ -1,9 +1,8 @@
 fn f(n: i64) -> i64 {
-    return match n { a @ b @ 1..=5 => a * 10 + b, c => -c }
+    match n { a @ b @ 1..=5 => a * 10 + b, c => -c }
 }
 
-fn main() -> i64 {
-    println(f(3))
-    println(f(9))
-    return 0
+fn main() {
+    println!("{}", f(3));
+    println!("{}", f(9));
 }

@@ -1,13 +1,13 @@
 struct Pair<A, B> { a: A, b: B }
-fn f(x: i64) -> Option<Pair<i64, string>> {
-    if x > 0 { return Some(Pair { a: x, b: "k" + "{x}" }) }
-    return None
+fn f(x: i64) -> Option<Pair<i64, String>> {
+    if x > 0 { return Some(Pair { a: x, b: "k" + format!("{x}") }); }
+    None
 }
 fn g(x: i64) -> Option<i64> {
-    let p = f(x)?
-    return Some(p.a * 10 + 2)
+    let p = f(x)?;
+    Some(p.a * 10 + 2)
 }
 fn main() {
-    match g(4) { Some(v) => println(v), None => println(-1) }
-    match g(-4) { Some(v) => println(v), None => println(-1) }
+    match g(4) { Some(v) => println!("{}", v), None => println!("{}", -1) }
+    match g(-4) { Some(v) => println!("{}", v), None => println!("{}", -1) }
 }

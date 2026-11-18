@@ -1,7 +1,7 @@
 fn f(n: i64) -> (i64, i64) {
-    if n == 0 { return (0, 1) }
-    return (f(n - 1).0 + 1, n)
+    if n == 0 { return (0, 1); }
+    (f(n - 1).0 + 1, n)
 }
 fn main() {
-    println(f(5).0 * 10 + f(5).1)
+    println!("{}", f(5).0 * 10 + f(5).1);
 }

@@ -1,5 +1,4 @@
 struct Node { val: i64 }
-fn main() -> i64 {
-    let a: [Rc<Node>; 2] = [Rc::new(Node { val: 1 }), Rc::new(Node { val: 2 })]
-    return 0
+fn main() {
+    let a: [Rc<Node>; 2] = [Rc::new(Node { val: 1 }), Rc::new(Node { val: 2 })];
 }

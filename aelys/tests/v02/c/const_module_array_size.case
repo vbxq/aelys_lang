@@ -1,5 +1,5 @@
-needs cfg
+mod cfg;
 fn main() {
-    let a: [i64; cfg.LEN] = [7; cfg.LEN]
-    println("{a.len} {a[2]}")
+    let a: [i64; cfg::LEN] = [7; cfg::LEN];
+    println!("{} {}", a.len(), a[2]);
 }

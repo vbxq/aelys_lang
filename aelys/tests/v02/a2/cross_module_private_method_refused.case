@@ -1,6 +1,6 @@
-needs geom
+mod geom;
 
 fn main() {
-    let p = geom.mk(4)
-    println(p.hidden())
+    let p = geom::mk(4);
+    println!("{}", p.hidden());
 }

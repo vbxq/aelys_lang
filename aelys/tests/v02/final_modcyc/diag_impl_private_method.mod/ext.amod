@@ -1,5 +1,5 @@
-needs geom
-impl geom.Pt {
-    fn secret(&self) -> i64 { return self.v }
+use crate::geom;
+impl geom::Pt {
+    fn secret(&self) -> i64 { self.v }
 }
-pub fn peek(p: geom.Pt) -> i64 { return p.secret() }
+pub fn peek(p: geom::Pt) -> i64 { p.secret() }

@@ -1,23 +1,22 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i * 10)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i * 10);
+        i = i + 1; }
+    d
 }
 
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
-    let mut r: (Vec<i64>, Vec<i64>) = (mk(1), mk(1))
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    let mut r: (Vec<i64>, Vec<i64>) = (mk(1), mk(1));
     while i < 300 {
-        let keep = r
-        r.0 = mk(i % 7)
-        r.1 = r.0
-        Vec::push(r.1, 5)
-        t = t + r.0.len * 100 + r.1.len * 10 + keep.0.len
-        i = i + 1
+        let keep = r;
+        r.0 = mk(i % 7);
+        r.1 = r.0;
+        Vec::push(r.1, 5);
+        t = t + r.0.len() * 100 + r.1.len() * 10 + keep.0.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

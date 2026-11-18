@@ -1,5 +1,5 @@
-needs ev
+mod od; mod ev;
 fn main() {
-    println(ev.is_even(10))
-    println(ev.is_even(7))
+    println!("{}", ev::is_even(10));
+    println!("{}", ev::is_even(7));
 }

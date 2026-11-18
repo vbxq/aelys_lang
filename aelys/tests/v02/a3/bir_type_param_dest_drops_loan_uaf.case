@@ -1,13 +1,13 @@
 fn ap<T>(f: fn(&[i64]) -> T, g: fn(T) -> i64) -> i64 {
-    let mut v: Vec<i64> = vec[11, 22, 33, 44]
-    let r: T = f(v.as_slice())
-    let mut i = 0
-    while i < 100 { v.push(i) ; i = i + 1 }
-    let w: Vec<i64> = vec[777, 777, 777, 777]
-    return g(r) + w[0]
+    let mut v: Vec<i64> = vec![11, 22, 33, 44];
+    let r: T = f(v.as_slice());
+    let mut i = 0;
+    while i < 100 { v.push(i) ; i = i + 1; }
+    let w: Vec<i64> = vec![777, 777, 777, 777];
+    g(r) + w[0]
 }
-fn idv(s: &[i64]) -> &[i64] { return s }
-fn fst(s: &[i64]) -> i64 { return s[0] }
+fn idv(s: &[i64]) -> &[i64] { s }
+fn fst(s: &[i64]) -> i64 { s[0] }
 fn main() {
-    println(ap(idv, fst))
+    println!("{}", ap(idv, fst));
 }

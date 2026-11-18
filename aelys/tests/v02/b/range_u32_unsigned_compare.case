@@ -1,16 +1,15 @@
-fn half(n: u32) -> string {
-    return match n {
+fn half(n: u32) -> String {
+    match n {
         0..=2147483647 => "low",
-        2147483648..=4294967295 => "high"
+        2147483648..=4294967295 => "high",
     }
 }
 
-fn main() -> i64 {
-    let a: u32 = 3000000000
-    let b: u32 = 5
-    let c: u32 = 4294967295
-    println(half(a))
-    println(half(b))
-    println(half(c))
-    return 0
+fn main() {
+    let a: u32 = 3000000000;
+    let b: u32 = 5;
+    let c: u32 = 4294967295;
+    println!("{}", half(a));
+    println!("{}", half(b));
+    println!("{}", half(c));
 }

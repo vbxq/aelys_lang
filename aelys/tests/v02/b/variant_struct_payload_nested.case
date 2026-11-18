@@ -2,18 +2,17 @@ struct Point { x: i64, y: i64 }
 enum Shape { Pt(Point), Circle(Point, i64), Empty }
 
 fn f(s: Shape) -> i64 {
-    return match s {
+    match s {
         Shape::Circle(Point { x: 0, y: 0 }, r) => r,
         Shape::Circle(p, r) => p.x + r,
         Shape::Pt(Point { x, .. }) => x,
-        Shape::Empty => 0
+        Shape::Empty => 0,
     }
 }
 
-fn main() -> i64 {
-    println(f(Shape::Circle(Point { x: 0, y: 0 }, 9)))
-    println(f(Shape::Circle(Point { x: 1, y: 0 }, 5)))
-    println(f(Shape::Empty))
-    println(f(Shape::Pt(Point { x: 2, y: 3 })))
-    return 0
+fn main() {
+    println!("{}", f(Shape::Circle(Point { x: 0, y: 0 }, 9)));
+    println!("{}", f(Shape::Circle(Point { x: 1, y: 0 }, 5)));
+    println!("{}", f(Shape::Empty));
+    println!("{}", f(Shape::Pt(Point { x: 2, y: 3 })));
 }

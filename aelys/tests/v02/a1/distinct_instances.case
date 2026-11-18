@@ -1,9 +1,9 @@
 struct W<T> { v: T }
 fn main() {
-    let a = W { v: 5 }
-    let b = W { v: "five" }
-    let c = W { v: true }
-    println(a.v + 1)
-    println(b.v)
-    if c.v { println("yes") } else { println("no") }
+    let a = W { v: 5 };
+    let b = W { v: "five" };
+    let c = W { v: true };
+    println!("{}", a.v + 1);
+    println!("{}", b.v);
+    if c.v { println!("yes"); } else { println!("no"); }
 }

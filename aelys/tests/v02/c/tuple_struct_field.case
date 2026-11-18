@@ -1,6 +1,6 @@
-struct Entry { key: (i64, string), weight: i64 }
+struct Entry { key: (i64, String), weight: i64 }
 fn main() {
-    let e = Entry { key: (7, "seven"), weight: 3 }
-    println(e.key.1)
-    println(e.key.0 * e.weight)
+    let e = Entry { key: (7, "seven"), weight: 3 };
+    println!("{}", e.key.1);
+    println!("{}", e.key.0 * e.weight);
 }

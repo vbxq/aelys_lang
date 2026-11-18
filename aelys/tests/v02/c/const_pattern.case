@@ -1,12 +1,12 @@
-const LIMIT: i64 = 3
-fn classify(x: i64) -> string {
+const LIMIT: i64 = 3;
+fn classify(x: i64) -> String {
     let r = match x {
         LIMIT => "limit",
         _ => "other",
-    }
-    return r
+    };
+    r
 }
 fn main() {
-    println(classify(3))
-    println(classify(4))
+    println!("{}", classify(3));
+    println!("{}", classify(4));
 }

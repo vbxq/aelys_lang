@@ -1,5 +1,5 @@
-const N: i64 = 3
+const N: i64 = 3;
 fn main() {
-    let r = &N
-    println(N)
+    let r = &N;
+    println!("{}", N);
 }

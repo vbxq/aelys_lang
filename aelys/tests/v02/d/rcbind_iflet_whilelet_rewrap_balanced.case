@@ -1,21 +1,20 @@
 struct N { val: i64, next: Option<Rc<N>> }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let mut head: Option<Rc<N>> = Some(Rc::new(N { val: i, next: Some(Rc::new(N { val: 1, next: None })) }))
-        let mut out: Option<Rc<N>> = None
+        let mut head: Option<Rc<N>> = Some(Rc::new(N { val: i, next: Some(Rc::new(N { val: 1, next: None })) }));
+        let mut out: Option<Rc<N>> = None;
         if let Some(h) = head {
-            head = None
-            out = Some(h)
+            head = None;
+            out = Some(h);
         }
         while let Some(h) = out {
-            out = Rc::get(h).next
-            t = t + Rc::get(h).val
+            out = Rc::get(h).next;
+            t = t + Rc::get(h).val;
         }
-        match head { Some(x) => { t = t - 1000 } None => { } }
-        i = i + 1
+        match head { Some(x) => { t = t - 1000; } None => { } }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

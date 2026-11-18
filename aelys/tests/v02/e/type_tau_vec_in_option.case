@@ -1,4 +1,4 @@
 fn main() {
-    let o = Option::Some(Vec::new())
-    let s: string = o
+    let o = Option::Some(Vec::new());
+    let s: String = o;
 }

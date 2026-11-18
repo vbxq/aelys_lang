@@ -1,9 +1,8 @@
 fn f(o: Option<i64>) -> i64 {
-    if let Some(s) = o { return s } else { return 0 }
+    if let Some(s) = o { return s; } else { return 0; }
 }
 
-fn main() -> i64 {
-    println(f(Some(3)))
-    println(f(None))
-    return 0
+fn main() {
+    println!("{}", f(Some(3)));
+    println!("{}", f(None));
 }

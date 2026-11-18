@@ -1,13 +1,12 @@
-fn k(o: Option<string>) -> i64 {
-    return match o { Some("ax") => 1, Some("") => 2, Some("é\t") => 3, Some(_) => 4, None => 5 }
+fn k(o: Option<String>) -> i64 {
+    match o { Some("ax") => 1, Some("") => 2, Some("é\t") => 3, Some(_) => 4, None => 5 }
 }
 
-fn main() -> i64 {
-    let mut acc: i64 = 0
+fn main() {
+    let mut acc: i64 = 0;
     for i in 0..100 {
-        acc = acc + k(Some("a" + "x")) + k(Some("a" + "xe")) + k(Some("" + "")) + k(Some("é" + "\t")) + k(Some("a" + ""))
+        acc = acc + k(Some("a" + "x")) + k(Some("a" + "xe")) + k(Some("" + "")) + k(Some("é" + "\t")) + k(Some("a" + ""));
     }
-    println(acc)
-    println(k(None))
-    return 0
+    println!("{}", acc);
+    println!("{}", k(None));
 }

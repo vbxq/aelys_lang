@@ -1,11 +1,11 @@
-needs std.vec
+use std::vec;
 
 fn main() {
-    let v: Vec<string> = vec["ab", "cd", "ef"]
-    println(v.contains("cd"))
-    println(v.index_of("ef"))
-    println(v.last().unwrap_or("-"))
-    println(vec.len(&v))
-    let w = v.concat(&v)
-    println(w.len())
+    let v: Vec<String> = vec!["ab", "cd", "ef"];
+    println!("{}", v.contains("cd"));
+    println!("{}", v.index_of("ef"));
+    println!("{}", v.last().unwrap_or("-"));
+    println!("{}", vec::len(&v));
+    let w = v.concat(&v);
+    println!("{}", w.len());
 }

@@ -1,12 +1,11 @@
-fn mk(i: i64) -> string { return "s{i}" }
+fn mk(i: i64) -> String { format!("s{i}") }
 
-fn main() -> i64 {
-    let mut a: Vec<string> = vec[mk(1), mk(2)]
-    let mut b = a
-    Vec::insert(b, 0, mk(0))
-    println(a.len)
-    println(a[0])
-    println(b.len)
-    println(b[0])
-    return 0
+fn main() {
+    let mut a: Vec<String> = vec![mk(1), mk(2)];
+    let mut b = a;
+    Vec::insert(b, 0, mk(0));
+    println!("{}", a.len());
+    println!("{}", a[0]);
+    println!("{}", b.len());
+    println!("{}", b[0]);
 }

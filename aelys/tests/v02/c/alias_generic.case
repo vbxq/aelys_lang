@@ -1,9 +1,9 @@
-type Res<T> = Result<T, string>
+type Res<T> = Result<T, String>;
 fn half(n: i64) -> Res<i64> {
-    if n % 2 == 0 { return Result::Ok(n / 2) }
-    return Result::Err("odd {n}")
+    if n % 2 == 0 { return Result::Ok(n / 2); }
+    Result::Err(format!("odd {n}"))
 }
 fn main() {
-    match half(10) { Ok(v) => { println(v) }, Err(e) => { println(e) } }
-    match half(7) { Ok(v) => { println(v) }, Err(e) => { println(e) } }
+    match half(10) { Ok(v) => { println!("{}", v); }, Err(e) => { println!("{}", e); } }
+    match half(7) { Ok(v) => { println!("{}", v); }, Err(e) => { println!("{}", e); } }
 }

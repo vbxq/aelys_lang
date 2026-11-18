@@ -1,13 +1,13 @@
-needs std.slice
+use std::slice;
 
 fn main() {
-    let mut a = [5, 2, 9, 1, 7]
-    a.sort()
-    println("{a[0]}{a[1]}{a[2]}{a[3]}{a[4]}")
-    a.reverse()
-    println("{a[0]}{a[1]}{a[2]}{a[3]}{a[4]}")
-    a.swap(0, 4)
-    println("{a[0]} {a[4]} {a.is_sorted()} {a.sum()}")
-    let s = a[..3]
-    println("{s.first().unwrap_or(-1)} {s.last().unwrap_or(-1)} {s.sum()}")
+    let mut a = [5, 2, 9, 1, 7];
+    a.sort();
+    println!("{}{}{}{}{}", a[0], a[1], a[2], a[3], a[4]);
+    a.reverse();
+    println!("{}{}{}{}{}", a[0], a[1], a[2], a[3], a[4]);
+    a.swap(0, 4);
+    println!("{} {} {} {}", a[0], a[4], a.is_sorted(), a.sum());
+    let s = a[..3];
+    println!("{} {} {}", s.first().unwrap_or(-1), s.last().unwrap_or(-1), s.sum());
 }

@@ -1,7 +1,7 @@
 struct Node<T> { v: T, next: Rc<Node<T>> }
 fn main() {
-    let c: Rc<Node<i64>> = Rc::new(Node { v: 3, next: Rc::null() })
-    let b: Rc<Node<i64>> = Rc::new(Node { v: 2, next: c })
-    let a: Rc<Node<i64>> = Rc::new(Node { v: 1, next: b })
-    println(Rc::get(Rc::get(Rc::get(a).next).next).v * 100 + Rc::get(Rc::get(a).next).v * 10 + Rc::get(a).v)
+    let c: Rc<Node<i64>> = Rc::new(Node { v: 3, next: Rc::null() });
+    let b: Rc<Node<i64>> = Rc::new(Node { v: 2, next: c });
+    let a: Rc<Node<i64>> = Rc::new(Node { v: 1, next: b });
+    println!("{}", Rc::get(Rc::get(Rc::get(a).next).next).v * 100 + Rc::get(Rc::get(a).next).v * 10 + Rc::get(a).v);
 }

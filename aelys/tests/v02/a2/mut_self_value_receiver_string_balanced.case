@@ -1,19 +1,19 @@
-struct Tag { name: string, hits: i64 }
+struct Tag { name: String, hits: i64 }
 
 impl Tag {
-    fn bump(mut self, s: string) -> Tag {
-        self.name = s
-        self.hits = self.hits + 1
-        return self
+    fn bump(mut self, s: String) -> Tag {
+        self.name = s;
+        self.hits = self.hits + 1;
+        self
     }
 }
 
 fn main() {
-    let mut total: i64 = 0
+    let mut total: i64 = 0;
     for i in 0..500 {
-        let t = Tag { name: "a", hits: i }
-        let u = t.bump("bb{i}")
-        total = total + u.hits + u.name.len
+        let t = Tag { name: "a", hits: i };
+        let u = t.bump(format!("bb{i}"));
+        total = total + u.hits + u.name.len();
     }
-    println(total)
+    println!("{}", total);
 }

@@ -1,17 +1,17 @@
-enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
+use std::fmt; enum Expr { Num(i64), Neg(Rc<Expr>), Bin(char, Rc<Expr>, Rc<Expr>) }
 
-impl Display for Expr {
-    fn to_string(&self) -> string {
-        return match self {
-            Expr::Num(n) => "{n}",
-            Expr::Neg(x) => "(neg {Rc::get(x)})",
-            Expr::Bin(op, l, r) => "({op} {Rc::get(l)} {Rc::get(r)})"
-        }
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            Expr::Num(n) => format!("{n}"),
+            Expr::Neg(x) => format!("(neg {})", Rc::get(x)),
+            Expr::Bin(op, l, r) => format!("({op} {} {})", Rc::get(l), Rc::get(r)),
+        })
     }
 }
 impl Expr {
     fn eval(&self) -> i64 {
-        return match self {
+        match self {
             Expr::Num(n) => n,
             Expr::Neg(x) => -Rc::get(x).eval(),
             Expr::Bin('+', l, r) => Rc::get(l).eval() + Rc::get(r).eval(),
@@ -19,15 +19,14 @@ impl Expr {
         }
     }
 }
-fn main() -> i64 {
-    let mut i: i64 = 0
-    let mut t: i64 = 0
+fn main() {
+    let mut i: i64 = 0;
+    let mut t: i64 = 0;
     while i < 100 {
-        let e = Expr::Bin('*', Rc::new(Expr::Bin('+', Rc::new(Expr::Num(i)), Rc::new(Expr::Num(2)))), Rc::new(Expr::Neg(Rc::new(Expr::Num(3)))))
-        t = t + e.eval()
-        if i == 5 { println(e) }
-        i = i + 1
+        let e = Expr::Bin('*', Rc::new(Expr::Bin('+', Rc::new(Expr::Num(i)), Rc::new(Expr::Num(2)))), Rc::new(Expr::Neg(Rc::new(Expr::Num(3)))));
+        t = t + e.eval();
+        if i == 5 { println!("{}", e); }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

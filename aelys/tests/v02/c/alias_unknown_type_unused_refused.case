@@ -1,5 +1,5 @@
-type Bad = (i64, Undefined)
-type Bad2<T> = T<i64>
+type Bad = (i64, Undefined);
+type Bad2<T> = T<i64>;
 fn main() {
-    println(1)
+    println!("{}", 1);
 }

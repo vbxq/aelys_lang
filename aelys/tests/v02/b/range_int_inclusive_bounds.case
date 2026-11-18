@@ -1,8 +1,7 @@
-fn r(n: i64) -> string {
-    return match n { 1..=5 => "a", 6..=10 => "b", _ => "c" }
+fn r(n: i64) -> String {
+    match n { 1..=5 => "a", 6..=10 => "b", _ => "c" }
 }
 
-fn main() -> i64 {
-    println("{r(0)} {r(1)} {r(5)} {r(6)} {r(10)} {r(11)}")
-    return 0
+fn main() {
+    println!("{} {} {} {} {} {}", r(0), r(1), r(5), r(6), r(10), r(11));
 }

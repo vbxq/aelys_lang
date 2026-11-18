@@ -1,14 +1,13 @@
-fn mk(i: i64) -> string { return "s{i}" }
-struct P { name: string, n: i64 }
+fn mk(i: i64) -> String { format!("s{i}") }
+struct P { name: String, n: i64 }
 
-fn main() -> i64 {
-    let mut v: Vec<P> = Vec::new()
-    Vec::push(v, P { name: mk(1), n: 1 })
-    Vec::push(v, P { name: mk(2), n: 2 })
-    Vec::push(v, P { name: mk(3), n: 3 })
-    let r: P = Vec::remove(v, 0)
-    println("{r.name} {r.n}")
-    println(v[0].name)
-    println(v[1].name)
-    return 0
+fn main() {
+    let mut v: Vec<P> = Vec::new();
+    Vec::push(v, P { name: mk(1), n: 1 });
+    Vec::push(v, P { name: mk(2), n: 2 });
+    Vec::push(v, P { name: mk(3), n: 3 });
+    let r: P = Vec::remove(v, 0);
+    println!("{} {}", r.name, r.n);
+    println!("{}", v[0].name);
+    println!("{}", v[1].name);
 }

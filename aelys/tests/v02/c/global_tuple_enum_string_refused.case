@@ -1,4 +1,4 @@
-let G: (i64, Option<string>) = (1, Some("x"))
+static G: (i64, Option<String>) = (1, Some("x"));
 fn main() {
-    println(G.0)
+    println!("{}", G.0);
 }

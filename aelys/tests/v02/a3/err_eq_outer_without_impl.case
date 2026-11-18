@@ -1,14 +1,13 @@
 struct K { key: i64, pay: i64 }
 
-impl eq for K {
-    fn eq(&self, o: &K) -> bool { return self.key == o.key }
+impl PartialEq for K {
+    fn eq(&self, o: &K) -> bool { self.key == o.key }
 }
 
 struct O { k: K, n: i64 }
 
-fn main() -> i64 {
-    let a = O { k: K { key: 1, pay: 2 }, n: 3 }
-    let b = O { k: K { key: 1, pay: 9 }, n: 3 }
-    println(a == b)
-    return 0
+fn main() {
+    let a = O { k: K { key: 1, pay: 2 }, n: 3 };
+    let b = O { k: K { key: 1, pay: 9 }, n: 3 };
+    println!("{}", a == b);
 }

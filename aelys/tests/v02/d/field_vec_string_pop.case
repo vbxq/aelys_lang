@@ -1,15 +1,14 @@
-fn mk(i: i64) -> string { return "s{i}" }
-struct Tags { items: Vec<string> }
+fn mk(i: i64) -> String { format!("s{i}") }
+struct Tags { items: Vec<String> }
 
-fn main() -> i64 {
-    let t = Tags { items: vec[mk(1), mk(2)] }
-    let mut c = t
+fn main() {
+    let t = Tags { items: vec![mk(1), mk(2)] };
+    let mut c = t;
     match Vec::pop(c.items) {
-        Some(s) => { println(s) }
-        None => { println("none") }
+        Some(s) => { println!("{}", s); }
+        None => { println!("none"); }
     }
-    println(t.items.len)
-    println(t.items[1])
-    println(c.items.len)
-    return 0
+    println!("{}", t.items.len());
+    println!("{}", t.items[1]);
+    println!("{}", c.items.len());
 }

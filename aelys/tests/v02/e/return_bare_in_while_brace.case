@@ -1,11 +1,11 @@
 fn count(n: i64) {
-    let mut i = 0
+    let mut i = 0;
     while true {
-        if i == n { return }
-        println("{i}")
-        i = i + 1
+        if i == n { return; }
+        println!("{i}");
+        i = i + 1;
     }
 }
 fn main() {
-    count(3)
+    count(3);
 }

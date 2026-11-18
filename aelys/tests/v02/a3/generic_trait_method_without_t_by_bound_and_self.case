@@ -1,33 +1,32 @@
 trait Tally<T> {
-    fn count(&self) -> i64
+    fn count(&self) -> i64;
 }
 
 struct X { v: i64 }
 
 impl Tally<i64> for X {
-    fn count(&self) -> i64 { return self.v + 1 }
+    fn count(&self) -> i64 { self.v + 1 }
 }
 
-impl Tally<string> for X {
-    fn count(&self) -> i64 { return self.v + 2 }
+impl Tally<String> for X {
+    fn count(&self) -> i64 { self.v + 2 }
 }
 
 struct Pair<T> { a: T, b: T }
 
 impl<T> Tally<T> for Pair<T> {
-    fn count(&self) -> i64 { return 2 }
+    fn count(&self) -> i64 { 2 }
 }
 
-fn by_str<S: Tally<string>>(s: &S) -> i64 { return s.count() }
+fn by_str<S: Tally<String>>(s: &S) -> i64 { s.count() }
 
-fn by_int<S: Tally<i64>>(s: &S) -> i64 { return s.count() }
+fn by_int<S: Tally<i64>>(s: &S) -> i64 { s.count() }
 
-fn main() -> i64 {
-    let x = X { v: 10 }
-    println(by_str(&x))
-    println(by_int(&x))
-    let p = Pair { a: "s", b: "t" }
-    println(p.count())
-    println(by_str(&p))
-    return 0
+fn main() {
+    let x = X { v: 10 };
+    println!("{}", by_str(&x));
+    println!("{}", by_int(&x));
+    let p = Pair { a: "s", b: "t" };
+    println!("{}", p.count());
+    println!("{}", by_str(&p));
 }

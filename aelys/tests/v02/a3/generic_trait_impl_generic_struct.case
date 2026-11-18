@@ -1,25 +1,24 @@
 trait Holder<T> {
-    fn first(&self) -> T
-    fn count(&self) -> i64
-    fn score(&self) -> i64 { return self.count() * 100 }
+    fn first(&self) -> T;
+    fn count(&self) -> i64;
+    fn score(&self) -> i64 { self.count() * 100 }
 }
 
 struct Pair<T> { a: T, b: T }
 
 impl<T> Holder<T> for Pair<T> {
-    fn first(&self) -> T { return self.a }
-    fn count(&self) -> i64 { return 2 }
+    fn first(&self) -> T { self.a }
+    fn count(&self) -> i64 { 2 }
 }
 
-fn total<H: Holder<i64>>(h: &H) -> i64 { return h.first() + h.count() + h.score() }
+fn total<H: Holder<i64>>(h: &H) -> i64 { h.first() + h.count() + h.score() }
 
-fn main() -> i64 {
-    let p = Pair { a: 40, b: 1 }
-    println(p.first())
-    println(total(&p))
-    let q = Pair { a: "st", b: "u" }
-    let s: string = q.first()
-    println(s)
-    println(q.score())
-    return 0
+fn main() {
+    let p = Pair { a: 40, b: 1 };
+    println!("{}", p.first());
+    println!("{}", total(&p));
+    let q = Pair { a: "st", b: "u" };
+    let s: String = q.first();
+    println!("{}", s);
+    println!("{}", q.score());
 }

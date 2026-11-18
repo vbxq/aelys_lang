@@ -1,5 +1,5 @@
-const A: i64 = B + 1
-const B: i64 = 2
+const A: i64 = B + 1;
+const B: i64 = 2;
 fn main() {
-    println(A)
+    println!("{}", A);
 }

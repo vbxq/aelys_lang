@@ -1,17 +1,16 @@
-nogc fn first_len(v: &Vec<string>) -> i64 {
-    let mut r: i64 = -1
+nogc fn first_len(v: &Vec<String>) -> i64 {
+    let mut r: i64 = -1;
     match Vec::get(*v, 1) {
-        Some(s) => { r = s.len }
-        None => { r = -2 }
+        Some(s) => { r = s.len(); }
+        None => { r = -2; }
     }
     match Vec::get(*v, 2) {
-        Some(s) => { r = r + 100 }
-        None => { r = r + 10 }
+        Some(s) => { r = r + 100; }
+        None => { r = r + 10; }
     }
-    return r
+    r
 }
-fn main() -> i64 {
-    let v: Vec<string> = vec["ab", "cde"]
-    println(first_len(&v))
-    return 0
+fn main() {
+    let v: Vec<String> = vec!["ab", "cde"];
+    println!("{}", first_len(&v));
 }

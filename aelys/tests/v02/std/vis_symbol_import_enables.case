@@ -1,7 +1,7 @@
-needs trim from std.str
+use std::str::trim;
 
 fn main() {
-    let s = trim("  héllo ")
-    println(s.char_count())
-    println("a,b".split(",").len())
+    let s = trim("  héllo ");
+    println!("{}", s.char_count());
+    println!("{}", "a,b".split(",").len());
 }

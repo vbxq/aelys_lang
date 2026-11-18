@@ -1,5 +1,5 @@
 fn main() {
-    let x = 42
-    let y = 1
-    println("{x:>8}")
+    let x = 42;
+    let y = 1;
+    println!("{x:>8}");
 }

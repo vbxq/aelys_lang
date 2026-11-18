@@ -1,7 +1,6 @@
-fn main() -> i64 {
-    let mut v: Vec<(Vec<i64>, i64)> = Vec::new()
-    let e: Vec<i64> = Vec::new()
-    Vec::push(v, (e, 1))
-    println(v.len)
-    return 0
+fn main() {
+    let mut v: Vec<(Vec<i64>, i64)> = Vec::new();
+    let e: Vec<i64> = Vec::new();
+    Vec::push(v, (e, 1));
+    println!("{}", v.len());
 }

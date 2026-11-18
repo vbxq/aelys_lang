@@ -1,16 +1,16 @@
 struct W<T> { v: T, n: i64 }
-let mut g: W<string> = W { v: "init", n: 0 }
+static mut g: W<String> = W { v: "init", n: 0 };
 fn bump(i: i64) {
-    g.v = "g" + "{i}"
-    g.n = g.n + i
+    g.v = "g" + format!("{i}");
+    g.n = g.n + i;
 }
 fn main() {
-    let mut i = 0
+    let mut i = 0;
     while i < 1000 {
-        bump(i)
-        i = i + 1
+        bump(i);
+        i = i + 1;
     }
-    println(g.v)
-    println(g.n)
-    g.v = "end"
+    println!("{}", g.v);
+    println!("{}", g.n);
+    g.v = "end";
 }

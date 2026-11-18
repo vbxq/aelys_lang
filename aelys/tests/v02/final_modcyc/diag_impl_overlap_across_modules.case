@@ -1,6 +1,6 @@
-needs geo
-needs x
-needs y
+mod geo;
+mod x;
+mod y;
 fn main() {
-    println(geo.Pt { v: 1 })
+    println!("{}", geo::Pt { v: 1 });
 }

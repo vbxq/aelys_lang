@@ -2,11 +2,11 @@ struct M { k: i64 }
 
 impl M {
     fn fib(n: i64) -> i64 {
-        if n < 2 { return n }
-        return Self::fib(n - 1) + Self::fib(n - 2)
+        if n < 2 { return n; }
+        Self::fib(n - 1) + Self::fib(n - 2)
     }
 }
 
 fn main() {
-    println(M::fib(20))
+    println!("{}", M::fib(20));
 }

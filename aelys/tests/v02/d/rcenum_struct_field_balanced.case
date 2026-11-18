@@ -1,25 +1,24 @@
 struct Node { val: i64 }
 enum Link { Nil, Cons(Rc<Node>) }
 fn val(l: Link) -> i64 {
-    let mut r: i64 = -1
+    let mut r: i64 = -1;
     match l {
-        Link::Cons(n) => { r = Rc::get(n).val }
-        Link::Nil => { r = 0 }
+        Link::Cons(n) => { r = Rc::get(n).val; }
+        Link::Nil => { r = 0; }
     }
-    return r
+    r
 }
 
 struct Holder { l: Link, k: i64 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let mut h = Holder { l: Link::Cons(Rc::new(Node { val: i })), k: 1 }
-        let h2 = h
-        h.l = Link::Nil
-        t = t + val(h2.l) + val(h.l) + h2.k
-        i = i + 1
+        let mut h = Holder { l: Link::Cons(Rc::new(Node { val: i })), k: 1 };
+        let h2 = h;
+        h.l = Link::Nil;
+        t = t + val(h2.l) + val(h.l) + h2.k;
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

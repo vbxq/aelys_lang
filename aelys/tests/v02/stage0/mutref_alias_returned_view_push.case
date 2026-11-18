@@ -1,8 +1,8 @@
-fn first(v: &mut Vec<i64>) -> &mut [i64] { return (*v)[0..1] }
+fn first(v: &mut Vec<i64>) -> &mut [i64] { (*v)[0..1] }
 fn m(v: &mut Vec<i64>) -> i64 {
-    let s = first(v)
-    Vec::push(*v, 5)
-    return s[0]
+    let s = first(v);
+    Vec::push(*v, 5);
+    s[0]
 }
-fn main() { let mut v: Vec<i64> = vec[1, 2]
- println(m(&mut v)) }
+fn main() { let mut v: Vec<i64> = vec![1, 2];
+ println!("{}", m(&mut v)); }

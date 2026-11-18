@@ -1,14 +1,14 @@
-struct S { s: string }
-let mut g = S { s: "" }
+struct S { s: String }
+static mut g: S = S { s: "" };
 fn grow() {
-    g.s = g.s + "ab"
+    g.s = g.s + "ab";
 }
 fn main() {
-    let mut i = 0
+    let mut i = 0;
     while i < 200 {
-        grow()
-        i = i + 1
+        grow();
+        i = i + 1;
     }
-    println(g.s.len)
-    g.s = "end"
+    println!("{}", g.s.len());
+    g.s = "end";
 }

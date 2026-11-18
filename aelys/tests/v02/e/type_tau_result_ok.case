@@ -1,4 +1,4 @@
 fn main() {
-    let r = Result::Ok(1)
-    let s: string = r
+    let r = Result::Ok(1);
+    let s: String = r;
 }

@@ -1,9 +1,9 @@
 fn main() {
-    let mut v: Vec<string> = Vec::new()
+    let mut v: Vec<String> = Vec::new();
     for i in 0..300 {
-        v.push("s{i}")
-        if v.len() > 4 { v.pop() }
+        v.push(format!("s{i}"));
+        if v.len() > 4 { v.pop(); }
     }
-    println(v.len())
-    println(v[3])
+    println!("{}", v.len());
+    println!("{}", v[3]);
 }

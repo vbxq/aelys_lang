@@ -1,5 +1,5 @@
-struct S { in: i64 }
+struct S { r#in: i64 }
 fn main() {
-    let s = S { in: 3 }
-    println(s.in)
+    let s = S { r#in: 3 };
+    println!("{}", s.r#in);
 }

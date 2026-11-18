@@ -1,19 +1,19 @@
-needs std.slice
+use std::slice;
 
-struct P { k: i64, tag: string }
+struct P { k: i64, tag: String }
 
-impl eq for P {
-    fn eq(&self, o: &P) -> bool { return self.k == o.k }
+impl PartialEq for P {
+    fn eq(&self, o: &P) -> bool { self.k == o.k }
 }
 
-impl ord for P {
-    fn cmp(&self, o: &P) -> i64 { return self.k - o.k }
+impl Ord for P {
+    fn cmp(&self, o: &P) -> i64 { self.k - o.k }
 }
 
 fn main() {
-    let mut ps: [P; 6] = [P { k: 2, tag: "a" }, P { k: 1, tag: "b" }, P { k: 2, tag: "c" }, P { k: 1, tag: "d" }, P { k: 0, tag: "e" }, P { k: 2, tag: "f" }]
-    ps.sort()
-    let mut out = ""
-    for p in ps { out = out + p.tag }
-    println(out)
+    let mut ps: [P; 6] = [P { k: 2, tag: "a" }, P { k: 1, tag: "b" }, P { k: 2, tag: "c" }, P { k: 1, tag: "d" }, P { k: 0, tag: "e" }, P { k: 2, tag: "f" }];
+    ps.sort();
+    let mut out = "";
+    for p in ps { out = out + p.tag; }
+    println!("{}", out);
 }

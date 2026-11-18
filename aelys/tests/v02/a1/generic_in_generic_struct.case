@@ -1,8 +1,8 @@
 struct W<T> { v: T }
 struct Outer<T> { inner: W<T>, n: i64 }
 fn main() {
-    let b = Outer { inner: W { v: 41 }, n: 1 }
-    println(b.inner.v + b.n)
-    let s = Outer { inner: W { v: "in" }, n: 0 }
-    println(s.inner.v)
+    let b = Outer { inner: W { v: 41 }, n: 1 };
+    println!("{}", b.inner.v + b.n);
+    let s = Outer { inner: W { v: "in" }, n: 0 };
+    println!("{}", s.inner.v);
 }

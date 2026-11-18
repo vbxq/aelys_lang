@@ -1,17 +1,16 @@
 fn mk(k: i64) -> fn(i64) -> i64 {
-    return fn(a: i64) -> i64 { return a + k }
+    move |a: i64| -> i64 { a + k }
 }
 
 fn reset(g: &mut fn(i64) -> i64) -> bool {
-    *g = mk(1000)
-    return true
+    *g = mk(1000);
+    true
 }
 
-fn main() -> i64 {
-    let mut g = mk(5)
-    let o: Option<i64> = Some(1)
-    let r: i64 = g(match o { Some(x) if reset(&mut g) => x, _ => 0 })
-    println(r)
-    println(g(0))
-    return 0
+fn main() {
+    let mut g = mk(5);
+    let o: Option<i64> = Some(1);
+    let r: i64 = g(match o { Some(x) if reset(&mut g) => x, _ => 0 });
+    println!("{}", r);
+    println!("{}", g(0));
 }

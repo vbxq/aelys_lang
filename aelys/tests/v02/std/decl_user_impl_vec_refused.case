@@ -1,8 +1,8 @@
 impl<T> Vec<T> {
-    fn size(&self) -> i64 { return 0 }
+    fn size(&self) -> i64 { 0 }
 }
 
 fn main() {
-    let v: Vec<i64> = vec[1]
-    println(v.size())
+    let v: Vec<i64> = vec![1];
+    println!("{}", v.size());
 }

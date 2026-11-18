@@ -1,17 +1,16 @@
-struct Tag { name: string, n: i64 }
+use std::fmt; struct Tag { name: String, n: i64 }
 
-impl Display for Tag {
-    fn to_string(&self) -> string { return "{self.name}#{self.n}" }
+impl fmt::Display for Tag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}#{}", self.name, self.n) }
 }
 
-fn main() -> i64 {
-    let mut acc: i64 = 0
+fn main() {
+    let mut acc: i64 = 0;
     for i in 0..2000 {
-        let t = Tag { name: "t", n: i }
-        let s = "{t}"
-        acc = acc + s.len
+        let t = Tag { name: "t", n: i };
+        let s = format!("{t}");
+        acc = acc + s.len();
     }
-    println(acc)
-    println(Tag { name: "end", n: 7 })
-    return 0
+    println!("{}", acc);
+    println!("{}", Tag { name: "end", n: 7 });
 }

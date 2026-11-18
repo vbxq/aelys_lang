@@ -1,15 +1,15 @@
-struct In { s: string, t: string }
+struct In { s: String, t: String }
 struct Out { inner: In }
-let mut g = Out { inner: In { s: "x", t: "y" } }
+static mut g: Out = Out { inner: In { s: "x", t: "y" } };
 fn set(i: i64) {
-    g.inner = In { s: "s" + "{i}", t: "t" + "{i}" }
+    g.inner = In { s: "s" + format!("{i}"), t: "t" + format!("{i}") };
 }
 fn main() {
-    let mut i = 0
+    let mut i = 0;
     while i < 300 {
-        set(i)
-        i = i + 1
+        set(i);
+        i = i + 1;
     }
-    println("{g.inner.s} {g.inner.t}")
-    g.inner = In { s: "a", t: "b" }
+    println!("{} {}", g.inner.s, g.inner.t);
+    g.inner = In { s: "a", t: "b" };
 }

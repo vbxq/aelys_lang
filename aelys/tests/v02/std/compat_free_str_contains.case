@@ -1,9 +1,9 @@
-needs std.str
+use std::str;
 
 fn main() {
-    let s = "héllo wörld"
-    println(str.contains(s, "wö"))
-    println(str.contains(s, "wo"))
-    println(str.index_of(s, "wö"))
-    println(str.char_count(s))
+    let s = "héllo wörld";
+    println!("{}", str::contains(s, "wö"));
+    println!("{}", str::contains(s, "wo"));
+    println!("{}", str::index_of(s, "wö"));
+    println!("{}", str::char_count(s));
 }

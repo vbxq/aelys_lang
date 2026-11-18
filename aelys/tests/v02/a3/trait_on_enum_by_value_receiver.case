@@ -1,5 +1,5 @@
 trait Area {
-    fn area(self) -> i64
+    fn area(self) -> i64;
 }
 
 enum Shape { Sq(i64), Ci(i64) }
@@ -8,18 +8,17 @@ impl Area for Shape {
     fn area(self) -> i64 {
         match self {
             Shape::Sq(a) => return a * a,
-            Shape::Ci(r) => return 3 * r * r
+            Shape::Ci(r) => return 3 * r * r,
         }
-        return 0
+        0
     }
 }
 
-fn ar<T: Area>(x: T) -> i64 { return x.area() }
+fn ar<T: Area>(x: T) -> i64 { x.area() }
 
-fn main() -> i64 {
-    println(Shape::Sq(3).area())
-    let c = Shape::Ci(2)
-    println(c.area())
-    println(ar(Shape::Ci(1)))
-    return 0
+fn main() {
+    println!("{}", Shape::Sq(3).area());
+    let c = Shape::Ci(2);
+    println!("{}", c.area());
+    println!("{}", ar(Shape::Ci(1)));
 }

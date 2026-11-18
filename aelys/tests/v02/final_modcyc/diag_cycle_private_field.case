@@ -1,6 +1,6 @@
-needs a
+mod a;
 pub struct S { v: i64 }
-pub fn mk() -> S { return S { v: 1 } }
+pub fn mk() -> S { S { v: 1 } }
 fn main() {
-    println(a.f())
+    println!("{}", a::f());
 }

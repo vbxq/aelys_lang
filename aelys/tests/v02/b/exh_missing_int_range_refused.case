@@ -1,4 +1,4 @@
-fn main() -> i64 {
-    let b: u8 = 7
-    return match b { 0..=99 => 1, 101..=255 => 2 }
+use std::process::ExitCode; fn main() -> ExitCode {
+    let b: u8 = 7;
+    return ExitCode::from((match b { 0..=99 => 1, 101..=255 => 2 }) as u8);
 }

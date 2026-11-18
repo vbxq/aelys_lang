@@ -1,3 +1,3 @@
-needs c
-needs a
-pub fn step(t: a.Tok) -> i64 { return c.step(a.Tok { v: t.v + 1 }) }
+use crate::c;
+use crate::a;
+pub fn step(t: a::Tok) -> i64 { c::step(a::Tok { v: t.v + 1 }) }

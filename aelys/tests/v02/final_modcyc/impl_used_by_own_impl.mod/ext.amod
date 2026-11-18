@@ -1,4 +1,4 @@
-needs geo
-impl geo.Pt {
-    pub fn dbl(&self) -> i64 { return self.v * 2 }
+use crate::geo;
+impl geo::Pt {
+    pub fn dbl(&self) -> i64 { self.v * 2 }
 }

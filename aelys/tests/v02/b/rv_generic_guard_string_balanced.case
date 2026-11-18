@@ -1,14 +1,13 @@
 fn pick<T>(o: Option<T>, ok: bool, d: T) -> T {
-    return match o { Some(x) if ok => x, Some(y) => d, None => d }
+    match o { Some(x) if ok => x, Some(y) => d, None => d }
 }
 
-fn main() -> i64 {
-    let mut n: i64 = 0
+fn main() {
+    let mut n: i64 = 0;
     for i in 0..100 {
-        let s: string = pick(Some("v{i}"), i % 2 == 0, "d" + "")
-        n = n + s.len
+        let s: String = pick(Some(format!("v{i}")), i % 2 == 0, "d" + "");
+        n = n + s.len();
     }
-    println(n)
-    println(pick(Some(4), false, 9))
-    return 0
+    println!("{}", n);
+    println!("{}", pick(Some(4), false, 9));
 }

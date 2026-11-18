@@ -1,36 +1,35 @@
 struct N { v: i64, next: Rc<N> }
-fn rd(x: &Rc<N>) -> Rc<N> { return *x }
-fn val(x: &Rc<N>) -> i64 { return (*x).v + Rc::get(*x).v }
-fn link(r: &mut Rc<N>, k: i64) { *r = Rc::new(N { v: k, next: *r }) }
-fn set_to(r: &mut Rc<N>, o: Rc<N>) { *r = o }
-fn clear(r: &mut Rc<N>) { *r = Rc::null() }
+fn rd(x: &Rc<N>) -> Rc<N> { *x }
+fn val(x: &Rc<N>) -> i64 { (*x).v + Rc::get(*x).v }
+fn link(r: &mut Rc<N>, k: i64) { *r = Rc::new(N { v: k, next: *r }); }
+fn set_to(r: &mut Rc<N>, o: Rc<N>) { *r = o; }
+fn clear(r: &mut Rc<N>) { *r = Rc::null(); }
 fn len(x: &Rc<N>) -> i64 {
-    let mut c: Rc<N> = *x
-    let mut n: i64 = 0
+    let mut c: Rc<N> = *x;
+    let mut n: i64 = 0;
     while Rc::is_null(c) == false {
-        n = n + 1
-        c = Rc::get(c).next
+        n = n + 1;
+        c = Rc::get(c).next;
     }
-    return n
+    n
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let mut h: Rc<N> = Rc::null()
-        link(&mut h, 1)
-        link(&mut h, 2)
-        link(&mut h, 3)
-        let q: Rc<N> = rd(&h)
-        t = t + val(&h) + len(&h) * 10 + Rc::get(q).v * 100
-        let o: Rc<N> = Rc::new(N { v: 50, next: Rc::null() })
-        set_to(&mut h, o)
-        t = t + Rc::get(o).v + len(&q) * 1000
-        set_to(&mut h, q)
-        clear(&mut h)
-        t = t + len(&h)
-        i = i + 1
+        let mut h: Rc<N> = Rc::null();
+        link(&mut h, 1);
+        link(&mut h, 2);
+        link(&mut h, 3);
+        let q: Rc<N> = rd(&h);
+        t = t + val(&h) + len(&h) * 10 + Rc::get(q).v * 100;
+        let o: Rc<N> = Rc::new(N { v: 50, next: Rc::null() });
+        set_to(&mut h, o);
+        t = t + Rc::get(o).v + len(&q) * 1000;
+        set_to(&mut h, q);
+        clear(&mut h);
+        t = t + len(&h);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

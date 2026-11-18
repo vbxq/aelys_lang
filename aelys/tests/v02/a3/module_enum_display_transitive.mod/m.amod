@@ -1,8 +1,8 @@
-pub enum Shape { Sq, Ci }
+use std::fmt; pub enum Shape { Sq, Ci }
 
-impl Display for Shape {
-    fn to_string(&self) -> string {
-        if *self == Shape::Sq { return "square" }
-        return "circle"
+impl fmt::Display for Shape {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if *self == Shape::Sq { return write!(f, "square"); }
+        write!(f, "circle")
     }
 }

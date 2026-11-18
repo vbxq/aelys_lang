@@ -1,11 +1,11 @@
 fn pair<T>(a: T, b: T) -> (T, T) {
-    return (a, b)
+    (a, b)
 }
 fn main() {
-    let mut n = 0
+    let mut n = 0;
     for i in 0..500 {
-        let (x, y) = pair("a{i}", "bb{i}")
-        n = n + x.len + y.len
+        let (x, y) = pair(format!("a{i}"), format!("bb{i}"));
+        n = n + x.len() + y.len();
     }
-    println(n)
+    println!("{}", n);
 }

@@ -1,5 +1,5 @@
-needs geom
+use crate::geom;
 
-impl geom.Pt {
-    pub fn get(&self) -> i64 { return self.v + 1 }
+impl geom::Pt {
+    pub fn get(&self) -> i64 { self.v + 1 }
 }

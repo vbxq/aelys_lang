@@ -1,43 +1,42 @@
 trait Bump {
-    fn bump(&mut self)
-    fn size(&self) -> i64
+    fn bump(&mut self);
+    fn size(&self) -> i64;
 }
-struct Bag { items: Vec<i64>, tag: string }
+struct Bag { items: Vec<i64>, tag: String }
 impl Bump for Bag {
-    fn bump(&mut self) { self.items.push(self.items.len()) }
-    fn size(&self) -> i64 { return self.items.len() }
+    fn bump(&mut self) { self.items.push(self.items.len()); }
+    fn size(&self) -> i64 { self.items.len() }
 }
 fn twice<T: Bump>(x: &mut T) {
-    x.bump()
-    x.bump()
+    x.bump();
+    x.bump();
 }
 fn copy_bump<T: Bump>(x: T) -> i64 {
-    let mut c = x
-    c.bump()
-    return c.size()
+    let mut c = x;
+    c.bump();
+    c.size()
 }
-fn id<T>(x: T) -> T { return x }
-fn fst<A, B>(p: (A, B)) -> A { return p.0 }
-fn swap<A, B>(p: (A, B)) -> (B, A) { return (p.1, p.0) }
-fn mk(i: i64) -> string { return "t{i}" }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn id<T>(x: T) -> T { x }
+fn fst<A, B>(p: (A, B)) -> A { p.0 }
+fn swap<A, B>(p: (A, B)) -> (B, A) { (p.1, p.0) }
+fn mk(i: i64) -> String { format!("t{i}") }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let mut b = Bag { items: Vec::new(), tag: mk(i) }
-        twice(&mut b)
-        let c = b
-        twice(&mut b)
-        t = t + b.size() * 100 + c.size() * 10 + copy_bump(c) + c.size()
-        let d = id(b)
-        Vec::push(b.items, 7)
-        t = t + d.items.len * 1000 + b.items.len
-        let e = fst((d, 3))
-        t = t + e.items.len
-        let (w, k) = swap((1, c))
-        t = t + w.items.len + k
-        i = i + 1
+        let mut b = Bag { items: Vec::new(), tag: mk(i) };
+        twice(&mut b);
+        let c = b;
+        twice(&mut b);
+        t = t + b.size() * 100 + c.size() * 10 + copy_bump(c) + c.size();
+        let d = id(b);
+        Vec::push(b.items, 7);
+        t = t + d.items.len() * 1000 + b.items.len();
+        let e = fst((d, 3));
+        t = t + e.items.len();
+        let (w, k) = swap((1, c));
+        t = t + w.items.len() + k;
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

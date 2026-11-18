@@ -1,7 +1,7 @@
 pub struct Pt { pub x: i64 }
 
 impl Pt {
-    pub fn get(&self) -> i64 { return self.x * 10 }
+    pub fn get(&self) -> i64 { self.x * 10 }
 }
 
-pub fn mk(x: i64) -> Pt { return Pt { x: x } }
+pub fn mk(x: i64) -> Pt { Pt { x: x } }

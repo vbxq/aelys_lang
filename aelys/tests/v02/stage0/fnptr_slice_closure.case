@@ -1,6 +1,6 @@
-fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { return f(s) }
-fn main() { let mut a: [i64; 3] = [1, 2, 3]
- let k = 40
- println(apply(fn(s: &mut [i64]) -> i64 { s[1] = 5
-   return s[1] + k }, a[0..3]))
- println(a[1]) }
+fn apply(f: fn(&mut [i64]) -> i64, s: &mut [i64]) -> i64 { f(s) }
+fn main() { let mut a: [i64; 3] = [1, 2, 3];
+ let k = 40;
+ println!("{}", apply(move |s: &mut [i64]| -> i64 { s[1] = 5;
+   s[1] + k }, a[0..3]));
+ println!("{}", a[1]); }

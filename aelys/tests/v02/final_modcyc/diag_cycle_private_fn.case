@@ -1,4 +1,4 @@
-needs a
+mod b; mod a;
 fn main() {
-    println(a.f())
+    println!("{}", a::f());
 }

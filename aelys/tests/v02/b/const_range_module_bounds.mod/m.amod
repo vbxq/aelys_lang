@@ -1,4 +1,4 @@
-pub const LO: i64 = 10
-pub const HI: i64 = 20
-pub const A: char = 'a'
-pub const F: char = 'f'
+pub const LO: i64 = 10;
+pub const HI: i64 = 20;
+pub const A: char = 'a';
+pub const F: char = 'f';

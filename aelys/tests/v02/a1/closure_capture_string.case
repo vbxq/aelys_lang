@@ -1,6 +1,6 @@
 struct W<T> { v: T }
 fn main() {
-    let w = W { v: "cap" + "tured" }
-    let f = fn() -> string { return w.v }
-    println(f())
+    let w = W { v: "cap" + "tured" };
+    let f = move || -> String { w.v };
+    println!("{}", f());
 }

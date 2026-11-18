@@ -1,4 +1,4 @@
 pub struct Pt { pub v: i64 }
 impl Pt {
-    pub fn get(&self) -> i64 { return self.v }
+    pub fn get(&self) -> i64 { self.v }
 }

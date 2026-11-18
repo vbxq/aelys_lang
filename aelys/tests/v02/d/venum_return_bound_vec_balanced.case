@@ -1,29 +1,28 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
 fn unwrap_or_empty(o: Option<Vec<i64>>) -> Vec<i64> {
     match o {
-        Some(v) => { return v }
-        None => { return Vec::new() }
+        Some(v) => { return v; }
+        None => { return Vec::new(); }
     }
-    return Vec::new()
+    Vec::new()
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 300 {
-        let o = if i % 4 == 0 { None } else { Some(mk(i % 5)) }
-        let mut v = unwrap_or_empty(o)
-        Vec::push(v, 7)
-        match o { Some(w) => { t = t + w.len * 10 } None => { t = t + 1000 } }
-        t = t + v.len
-        i = i + 1
+        let o = if i % 4 == 0 { None } else { Some(mk(i % 5)) };
+        let mut v = unwrap_or_empty(o);
+        Vec::push(v, 7);
+        match o { Some(w) => { t = t + w.len() * 10; } None => { t = t + 1000; } }
+        t = t + v.len();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

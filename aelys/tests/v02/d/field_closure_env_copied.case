@@ -1,18 +1,17 @@
 struct Bag { n: i64, items: Vec<i64> }
 fn mk(k: i64) -> fn() -> i64 {
-    let b = Bag { n: k, items: vec[k, 2 * k] }
-    let f = fn() -> i64 { return b.items[1] + b.items.len }
-    return f
+    let b = Bag { n: k, items: vec![k, 2 * k] };
+    let f = move || -> i64 { b.items[1] + b.items.len() };
+    f
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        let f = mk(i)
-        let g = f
-        t = t + g() + f()
-        i = i + 1
+        let f = mk(i);
+        let g = f;
+        t = t + g() + f();
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

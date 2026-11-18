@@ -1,13 +1,13 @@
-let mut ga: [string; 3] = ["a", "b", "c"]
+static mut ga: [String; 3] = ["a", "b", "c"];
 fn set(i: i64) {
-    ga[1] = "e" + "{i}"
+    ga[1] = "e" + format!("{i}");
 }
 fn main() {
-    let mut i = 0
+    let mut i = 0;
     while i < 400 {
-        set(i)
-        i = i + 1
+        set(i);
+        i = i + 1;
     }
-    println("{ga[0]} {ga[1]} {ga[2]}")
-    ga[1] = "end"
+    println!("{} {} {}", ga[0], ga[1], ga[2]);
+    ga[1] = "end";
 }

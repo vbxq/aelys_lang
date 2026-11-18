@@ -1,16 +1,16 @@
 fn f(a: &mut Vec<i64>, b: &mut Vec<i64>) -> i64 {
-    let s: &mut [i64] = (*a)[0..1]
-    let mut i = 0
+    let s: &mut [i64] = (*a)[0..1];
+    let mut i = 0;
     while i < 200000 {
-        Vec::push(*b, i)
-        i = i + 1
+        Vec::push(*b, i);
+        i = i + 1;
     }
-    s[0] = 77
-    return s[0]
+    s[0] = 77;
+    s[0]
 }
-fn m(v: &mut Vec<i64>) -> i64 { return f(v, v) }
+fn m(v: &mut Vec<i64>) -> i64 { f(v, v) }
 fn main() {
-    let mut v: Vec<i64> = vec[1, 2]
-    println(m(&mut v))
-    println(v[0])
+    let mut v: Vec<i64> = vec![1, 2];
+    println!("{}", m(&mut v));
+    println!("{}", v[0]);
 }

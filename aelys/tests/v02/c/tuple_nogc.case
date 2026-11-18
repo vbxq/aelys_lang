@@ -1,12 +1,12 @@
 nogc fn flip(p: (i64, i64)) -> (i64, i64) {
-    return (p.1, p.0)
+    (p.1, p.0)
 }
 nogc fn dot(a: (i64, i64), b: (i64, i64)) -> i64 {
-    let (x1, y1) = a
-    let (x2, y2) = b
-    return x1 * x2 + y1 * y2
+    let (x1, y1) = a;
+    let (x2, y2) = b;
+    x1 * x2 + y1 * y2
 }
 fn main() {
-    let f = flip((2, 3))
-    println(dot(f, (10, 100)))
+    let f = flip((2, 3));
+    println!("{}", dot(f, (10, 100)));
 }

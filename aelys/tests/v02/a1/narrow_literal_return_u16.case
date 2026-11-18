@@ -1,4 +1,4 @@
 struct P<A, B> { a: A, b: B }
-fn mk() -> P<string, u16> { return P { a: "k", b: 65535 } }
-fn main() { let p = mk()
- println("{p.a} {p.b}") }
+fn mk() -> P<String, u16> { P { a: "k", b: 65535 } }
+fn main() { let p = mk();
+ println!("{} {}", p.a, p.b); }

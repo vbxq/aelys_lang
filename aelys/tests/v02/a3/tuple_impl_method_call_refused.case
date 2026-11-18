@@ -1,10 +1,9 @@
-trait A { fn f(&self) -> i64 }
-impl A for (i64, i64) { fn f(&self) -> i64 { let t = *self
-        return t.0 * 10 + t.1 } }
-fn g<T: A>(x: &T) -> i64 { return x.f() }
-fn main() -> i64 {
-    let t = (3, 4)
-    println(g(&t))
-    println(t.f())
-    return 0
+trait A { fn f(&self) -> i64; }
+impl A for (i64, i64) { fn f(&self) -> i64 { let t = *self;
+        t.0 * 10 + t.1 } }
+fn g<T: A>(x: &T) -> i64 { x.f() }
+fn main() {
+    let t = (3, 4);
+    println!("{}", g(&t));
+    println!("{}", t.f());
 }

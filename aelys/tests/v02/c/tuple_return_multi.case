@@ -1,9 +1,9 @@
 fn divmod(a: i64, b: i64) -> (i64, i64) {
-    return (a / b, a % b)
+    (a / b, a % b)
 }
 fn main() {
-    let (q, r) = divmod(17, 5)
-    println("{q} {r}")
-    let p = divmod(100, 7)
-    println("{p.0} {p.1}")
+    let (q, r) = divmod(17, 5);
+    println!("{q} {r}");
+    let p = divmod(100, 7);
+    println!("{} {}", p.0, p.1);
 }

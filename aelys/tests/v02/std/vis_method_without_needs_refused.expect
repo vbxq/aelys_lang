@@ -1,5 +1,0 @@
-refuse E0304
-no method `char_count` on `&str`
-it is in `std.str` (needs std.str)
-!__recv
-!__pre$

@@ -1,3 +1,0 @@
-needs std.str
-
-pub fn width(s: string) -> i64 { return s.char_count() }

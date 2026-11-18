@@ -1,33 +1,32 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 struct Rect { w: i64, h: i64 }
 
 impl Area for Sq {
-    fn area(&self) -> i64 { return self.s * self.s }
+    fn area(&self) -> i64 { self.s * self.s }
 }
 
 impl Area for Rect {
-    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn area(&self) -> i64 { self.w * self.h + 1000 }
 }
 
 struct Pair<T> { a: T, b: T }
 
 impl<T: Area> Area for Pair<T> {
-    fn area(&self) -> i64 { return self.a.area() + self.b.area() * 3 }
+    fn area(&self) -> i64 { self.a.area() + self.b.area() * 3 }
 }
 
-fn ar<T: Area>(x: T) -> i64 { return x.area() }
+fn ar<T: Area>(x: T) -> i64 { x.area() }
 
-fn main() -> i64 {
-    let p = Pair { a: Sq { s: 2 }, b: Sq { s: 1 } }
-    let q = Pair { a: Rect { w: 1, h: 1 }, b: Rect { w: 1, h: 2 } }
-    println(p.area())
-    println(q.area())
-    println(ar(p))
-    let n = Pair { a: Pair { a: Sq { s: 1 }, b: Sq { s: 1 } }, b: Pair { a: Sq { s: 2 }, b: Sq { s: 0 } } }
-    println(ar(n))
-    return 0
+fn main() {
+    let p = Pair { a: Sq { s: 2 }, b: Sq { s: 1 } };
+    let q = Pair { a: Rect { w: 1, h: 1 }, b: Rect { w: 1, h: 2 } };
+    println!("{}", p.area());
+    println!("{}", q.area());
+    println!("{}", ar(p));
+    let n = Pair { a: Pair { a: Sq { s: 1 }, b: Sq { s: 1 } }, b: Pair { a: Sq { s: 2 }, b: Sq { s: 0 } } };
+    println!("{}", ar(n));
 }

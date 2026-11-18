@@ -1,27 +1,26 @@
 struct Node { val: i64, next: Rc<Node> }
-fn forward(r: &mut Rc<Node>) { *r = Rc::get(*r).next }
+fn forward(r: &mut Rc<Node>) { *r = Rc::get(*r).next; }
 fn build(n: i64) -> Rc<Node> {
-    let mut head: Rc<Node> = Rc::null()
-    for i in 1..n + 1 { head = Rc::new(Node { val: i, next: head }) }
-    return head
+    let mut head: Rc<Node> = Rc::null();
+    for i in 1..n + 1 { head = Rc::new(Node { val: i, next: head }); }
+    head
 }
 fn total(n: i64) -> i64 {
-    let mut cur: Rc<Node> = build(n)
-    let mut s: i64 = 0
+    let mut cur: Rc<Node> = build(n);
+    let mut s: i64 = 0;
     while Rc::is_null(cur) == false {
-        s = s + Rc::get(cur).val
-        forward(&mut cur)
+        s = s + Rc::get(cur).val;
+        forward(&mut cur);
     }
-    return s
+    s
 }
-fn main() -> i64 {
-    println(total(10))
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    println!("{}", total(10));
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        t = t + total(5)
-        i = i + 1
+        t = t + total(5);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

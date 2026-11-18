@@ -1,16 +1,15 @@
 struct N { val: i64 }
-fn id(v: Vec<Rc<N>>) -> Vec<Rc<N>> { return v }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn id(v: Vec<Rc<N>>) -> Vec<Rc<N>> { v }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 100 {
-        let v: Vec<Rc<N>> = vec[Rc::new(N { val: i }), Rc::new(N { val: 1 })]
-        for n in Vec::as_slice(v) { t = t + Rc::get(n).val }
-        let w = id(v)
-        let u = id(vec[Rc::new(N { val: 2 })])
-        t = t + w.len + Rc::get(u[0]).val
-        i = i + 1
+        let v: Vec<Rc<N>> = vec![Rc::new(N { val: i }), Rc::new(N { val: 1 })];
+        for n in Vec::as_slice(v) { t = t + Rc::get(n).val; }
+        let w = id(v);
+        let u = id(vec![Rc::new(N { val: 2 })]);
+        t = t + w.len() + Rc::get(u[0]).val;
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

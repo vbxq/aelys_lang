@@ -1,17 +1,16 @@
-needs Area from shapes
-needs geo
+mod shapes; use shapes::Area;
+mod geo;
 
 struct Local { v: i64 }
 
 impl Area for Local {
-    fn area(&self) -> i64 { return self.v + 1000 }
+    fn area(&self) -> i64 { self.v + 1000 }
 }
 
-fn ar<T: Area>(x: T) -> i64 { return x.area() }
+fn ar<T: Area>(x: T) -> i64 { x.area() }
 
-fn main() -> i64 {
-    println(ar(geo.mk(5)))
-    println(ar(Local { v: 1 }))
-    println(geo.mk(2).area())
-    return 0
+fn main() {
+    println!("{}", ar(geo::mk(5)));
+    println!("{}", ar(Local { v: 1 }));
+    println!("{}", geo::mk(2).area());
 }

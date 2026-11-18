@@ -1,34 +1,33 @@
-struct Nm { name: string, n: i64 }
+use std::fmt; struct Nm { name: String, n: i64 }
 
-impl Display for Nm {
-    fn to_string(&self) -> string { return self.name }
+impl fmt::Display for Nm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "{}", self.name) }
 }
 
 fn len_of<T>(x: T) -> i64 {
-    let s = "[{x}]"
-    return s.len
+    let s = format!("[{x}]");
+    s.len()
 }
 
-fn bounded<T: Display>(x: &T) -> i64 {
-    let s = x.to_string()
-    return s.len
+fn bounded<T: fmt::Display>(x: &T) -> i64 {
+    let s = x.to_string();
+    s.len()
 }
 
 fn show<T>(x: T) {
-    println(x)
+    println!("{}", x);
 }
 
-fn main() -> i64 {
-    let mut acc: i64 = 0
+fn main() {
+    let mut acc: i64 = 0;
     for i in 0..1000 {
-        let t = Nm { name: "abc", n: i }
-        acc = acc + len_of(t)
-        let u = Nm { name: "abcd", n: i }
-        acc = acc + bounded(&u)
+        let t = Nm { name: "abc", n: i };
+        acc = acc + len_of(t);
+        let u = Nm { name: "abcd", n: i };
+        acc = acc + bounded(&u);
     }
-    println(acc)
+    println!("{}", acc);
     for i in 0..3 {
-        show(Nm { name: "z", n: i })
+        show(Nm { name: "z", n: i });
     }
-    return 0
 }

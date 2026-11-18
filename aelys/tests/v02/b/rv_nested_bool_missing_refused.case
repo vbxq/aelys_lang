@@ -1,4 +1,4 @@
-fn main() -> i64 {
-    let o: Option<bool> = None
-    return match o { Some(true) => 1, None => 3 }
+use std::process::ExitCode; fn main() -> ExitCode {
+    let o: Option<bool> = None;
+    return ExitCode::from((match o { Some(true) => 1, None => 3 }) as u8);
 }

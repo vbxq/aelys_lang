@@ -1,8 +1,7 @@
-needs m
-fn main() -> i64 {
+mod m;
+fn main() {
     match 4 {
-        m.f => println(1),
-        _ => println(0)
+        m::f => println!("{}", 1),
+        _ => println!("{}", 0),
     }
-    return 0
 }

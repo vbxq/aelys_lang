@@ -1,8 +1,8 @@
 enum Pair { Two(i64, i64), One(i64) }
 fn main() {
-    let p = Pair::Two(1, 2)
+    let p = Pair::Two(1, 2);
     match p {
-        Pair::Two(x, x) => println(x),
-        Pair::One(y) => println(y)
+        Pair::Two(x, x) => println!("{}", x),
+        Pair::One(y) => println!("{}", y),
     }
 }

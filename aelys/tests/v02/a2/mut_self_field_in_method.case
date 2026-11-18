@@ -1,21 +1,21 @@
 struct P { x: i64 }
 
 impl P {
-    fn bump(&mut self, d: i64) { self.x = self.x + d }
+    fn bump(&mut self, d: i64) { self.x = self.x + d; }
 }
 
 struct W { p: P, q: P }
 
 impl W {
     fn both(&mut self) {
-        self.p.bump(1)
-        self.q.bump(self.p.x)
+        self.p.bump(1);
+        self.q.bump(self.p.x);
     }
 }
 
 fn main() {
-    let mut w = W { p: P { x: 1 }, q: P { x: 10 } }
-    w.both()
-    w.both()
-    println(w.p.x * 100 + w.q.x)
+    let mut w = W { p: P { x: 1 }, q: P { x: 10 } };
+    w.both();
+    w.both();
+    println!("{}", w.p.x * 100 + w.q.x);
 }

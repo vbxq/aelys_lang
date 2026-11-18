@@ -1,14 +1,13 @@
 trait Area {
-    fn area(&self) -> i64
+    fn area(&self) -> i64;
 }
 
 struct Sq { s: i64 }
 
 impl<T> Area for Sq {
-    fn area(&self) -> i64 { return self.s }
+    fn area(&self) -> i64 { self.s }
 }
 
-fn main() -> i64 {
-    println(Sq { s: 2 }.area())
-    return 0
+fn main() {
+    println!("{}", Sq { s: 2 }.area());
 }

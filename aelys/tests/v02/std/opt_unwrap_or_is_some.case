@@ -1,11 +1,11 @@
 fn half(x: i64) -> Option<i64> {
-    if x % 2 == 0 { return Some(x / 2) }
-    return None
+    if x % 2 == 0 { return Some(x / 2); }
+    None
 }
 
 fn main() {
-    println(half(10).unwrap_or(-1) + half(3).unwrap_or(-1))
-    println("{half(4).is_some()} {half(5).is_none()}")
-    let r = half(7).ok_or(9)
-    println(r.err_or(0))
+    println!("{}", half(10).unwrap_or(-1) + half(3).unwrap_or(-1));
+    println!("{} {}", half(4).is_some(), half(5).is_none());
+    let r = half(7).ok_or(9);
+    println!("{}", r.err_or(0));
 }

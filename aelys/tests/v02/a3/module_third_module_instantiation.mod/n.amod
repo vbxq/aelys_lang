@@ -1,13 +1,13 @@
-needs Score from tr
+use crate::tr::Score;
 
 pub fn total<T: Score>(xs: &[T]) -> i64 {
-    let mut a: i64 = 0
-    for x in xs { a = a + x.bonus() }
-    return a
+    let mut a: i64 = 0;
+    for x in xs { a = a + x.bonus(); }
+    a
 }
 
-pub fn count_eq<T: eq>(xs: &[T], y: T) -> i64 {
-    let mut c: i64 = 0
-    for x in xs { if x == y { c = c + 1 } }
-    return c
+pub fn count_eq<T: PartialEq>(xs: &[T], y: T) -> i64 {
+    let mut c: i64 = 0;
+    for x in xs { if x == y { c = c + 1; } }
+    c
 }

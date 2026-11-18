@@ -1,8 +1,7 @@
 struct P { x: i64 }
 
-fn main() -> i64 {
-    let p = P { x: 1 }
-    let q = P { x: 1 }
-    if p == q { println(1) }
-    return 0
+fn main() {
+    let p = P { x: 1 };
+    let q = P { x: 1 };
+    if p == q { println!("{}", 1); }
 }

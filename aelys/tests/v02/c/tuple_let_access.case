@@ -1,6 +1,6 @@
 fn main() {
-    let t = (3, "ab")
-    println("{t.0} {t.1}")
-    let u = t.0 * 7
-    println(u)
+    let t = (3, "ab");
+    println!("{} {}", t.0, t.1);
+    let u = t.0 * 7;
+    println!("{}", u);
 }

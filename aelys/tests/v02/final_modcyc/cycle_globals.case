@@ -1,7 +1,7 @@
-needs a
-pub const M: i64 = 5
-pub let N = M + 100
+mod a;
+pub const M: i64 = 5;
+pub static N: i64 = M + 100;
 fn main() {
-    println(a.K)
-    println(a.total())
+    println!("{}", a::K);
+    println!("{}", a::total());
 }

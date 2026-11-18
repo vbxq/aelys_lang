@@ -1,8 +1,7 @@
-fn f(n: i64) -> string {
-    return match n { 1 | 2 | 3 => "small", _ => "big" }
+fn f(n: i64) -> String {
+    match n { 1 | 2 | 3 => "small", _ => "big" }
 }
 
-fn main() -> i64 {
-    println("{f(1)} {f(3)} {f(4)} {f(2)}")
-    return 0
+fn main() {
+    println!("{} {} {} {}", f(1), f(3), f(4), f(2));
 }

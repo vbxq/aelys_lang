@@ -1,9 +1,9 @@
 enum Color { Light, Dark }
 enum Mode { On, Off }
 fn main() {
-    let m = Mode::On
+    let m = Mode::On;
     match m {
-        Color::Dark => println("d")
-        _ => println("x")
+        Color::Dark => println!("d"),
+        _ => println!("x"),
     }
 }

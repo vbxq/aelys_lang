@@ -1,4 +1,4 @@
-needs cfg
+mod cfg;
 fn main() {
-    println(cfg.HIDDEN)
+    println!("{}", cfg::HIDDEN);
 }

@@ -1,9 +1,9 @@
 struct Pair<A, B> { a: A, b: B }
 fn swap<A, B>(p: Pair<A, B>) -> Pair<B, A> {
-    return Pair { a: p.b, b: p.a }
+    Pair { a: p.b, b: p.a }
 }
 fn main() {
-    let q = swap(Pair { a: 1, b: "one" })
-    println(q.a)
-    println(q.b + 1)
+    let q = swap(Pair { a: 1, b: "one" });
+    println!("{}", q.a);
+    println!("{}", q.b + 1);
 }

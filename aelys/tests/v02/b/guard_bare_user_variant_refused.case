@@ -1,6 +1,6 @@
-enum Color { Red, Green }
+use std::process::ExitCode; enum Color { Red, Green }
 
-fn main() -> i64 {
-    let c: Color = Color::Red
-    return match c { Red => 1, Color::Green => 2 }
+fn main() -> ExitCode {
+    let c: Color = Color::Red;
+    return ExitCode::from((match c { Red => 1, Color::Green => 2 }) as u8);
 }

@@ -1,12 +1,11 @@
-struct Pair<T> { a: T, b: T }
+use std::fmt; struct Pair<T> { a: T, b: T }
 
-impl<T: Display> Display for Pair<T> {
-    fn to_string(&self) -> string { return "({self.a}, {self.b})" }
+impl<T: fmt::Display> fmt::Display for Pair<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result { write!(f, "({}, {})", self.a, self.b) }
 }
 
-fn main() -> i64 {
-    println(Pair { a: 1, b: 2 })
-    println(Pair { a: "x", b: "y" })
-    println(Pair { a: Pair { a: 1, b: 2 }, b: Pair { a: 3, b: 4 } })
-    return 0
+fn main() {
+    println!("{}", Pair { a: 1, b: 2 });
+    println!("{}", Pair { a: "x", b: "y" });
+    println!("{}", Pair { a: Pair { a: 1, b: 2 }, b: Pair { a: 3, b: 4 } });
 }

@@ -1,30 +1,29 @@
 fn mk(n: i64) -> Vec<i64> {
-    let mut d: Vec<i64> = Vec::new()
-    let mut i: i64 = 0
-    while i < n { Vec::push(d, i)
-        i = i + 1 }
-    return d
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i);
+        i = i + 1; }
+    d
 }
 
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 200 {
-        let mut o: Option<Vec<i64>> = Some(mk(i % 6))
-        let mut keep: Vec<i64> = Vec::new()
+        let mut o: Option<Vec<i64>> = Some(mk(i % 6));
+        let mut keep: Vec<i64> = Vec::new();
         match o {
             Some(v) => {
-                o = None
-                keep = v
-                Vec::push(keep, 1)
+                o = None;
+                keep = v;
+                Vec::push(keep, 1);
             }
             None => { }
         }
-        let mut again: Option<Vec<i64>> = None
-        match o { Some(v) => { t = t - 1000 } None => { again = Some(keep) } }
-        if let Some(w) = again { t = t + w.len * 10 + keep.len }
-        i = i + 1
+        let mut again: Option<Vec<i64>> = None;
+        match o { Some(v) => { t = t - 1000; } None => { again = Some(keep); } }
+        if let Some(w) = again { t = t + w.len() * 10 + keep.len(); }
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

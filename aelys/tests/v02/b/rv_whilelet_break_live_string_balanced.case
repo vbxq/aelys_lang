@@ -1,24 +1,23 @@
-struct Named { name: string, id: i64 }
+struct Named { name: String, id: i64 }
 
 fn find(i: i64) -> Option<Named> {
-    if i > 50 { return None }
-    return Some(Named { name: "n{i}", id: i })
+    if i > 50 { return None; }
+    Some(Named { name: format!("n{i}"), id: i })
 }
 
-fn main() -> i64 {
-    let mut i: i64 = 3
-    let mut t: i64 = 0
+fn main() {
+    let mut i: i64 = 3;
+    let mut t: i64 = 0;
     while let Some(Named { name, id: 7 }) | Some(Named { name, id: 3 }) = find(i % 8) {
-        t = t + name.len
-        if t > 4 { break }
-        i = i + 4
+        t = t + name.len();
+        if t > 4 { break; }
+        i = i + 4;
     }
-    let mut j: i64 = 0
+    let mut j: i64 = 0;
     while let Some(Named { name, .. }) = find(j) {
-        j = j + 1
-        if name == "n9" { break }
-        if j % 2 == 0 { continue }
+        j = j + 1;
+        if name == "n9" { break; }
+        if j % 2 == 0 { continue; }
     }
-    println("{t} {i} {j}")
-    return 0
+    println!("{t} {i} {j}");
 }

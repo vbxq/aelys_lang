@@ -1,4 +1,4 @@
 pub struct W<T> { pub v: T }
 pub fn get(w: W<i64>) -> i64 {
-    return w.v
+    w.v
 }

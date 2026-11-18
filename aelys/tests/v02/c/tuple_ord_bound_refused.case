@@ -1,6 +1,6 @@
-fn bigger<T: ord>(a: T, b: T) -> bool {
-    return a > b
+fn bigger<T: Ord>(a: T, b: T) -> bool {
+    a > b
 }
 fn main() {
-    println(bigger((1, 2), (1, 3)))
+    println!("{}", bigger((1, 2), (1, 3)));
 }

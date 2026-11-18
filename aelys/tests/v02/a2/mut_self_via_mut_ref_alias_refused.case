@@ -1,12 +1,12 @@
 struct C { n: i64 }
 
 impl C {
-    fn absorb(&mut self, o: &mut C) { self.n = self.n + o.n }
-    fn selfish(&mut self) { self.absorb(self) }
+    fn absorb(&mut self, o: &mut C) { self.n = self.n + o.n; }
+    fn selfish(&mut self) { self.absorb(self); }
 }
 
 fn main() {
-    let mut c = C { n: 1 }
-    c.selfish()
-    println(c.n)
+    let mut c = C { n: 1 };
+    c.selfish();
+    println!("{}", c.n);
 }

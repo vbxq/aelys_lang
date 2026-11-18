@@ -1,14 +1,13 @@
 struct Node { val: i64 }
 enum Link { Nil, Cons(Rc<Node>) }
 
-fn main() -> i64 {
-    let mut l: Link = Link::Cons(Rc::new(Node { val: 5 }))
-    let mut keep: Rc<Node> = Rc::null()
+fn main() {
+    let mut l: Link = Link::Cons(Rc::new(Node { val: 5 }));
+    let mut keep: Rc<Node> = Rc::null();
     match l {
-        Link::Cons(n) => { keep = n }
-        Link::Nil => { keep = Rc::null() }
+        Link::Cons(n) => { keep = n; }
+        Link::Nil => { keep = Rc::null(); }
     }
-    l = Link::Nil
-    println(Rc::get(keep).val)
-    return 0
+    l = Link::Nil;
+    println!("{}", Rc::get(keep).val);
 }

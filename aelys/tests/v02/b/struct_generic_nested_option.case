@@ -1,13 +1,12 @@
 struct Cell<T> { v: Option<T>, k: i64 }
 
 fn get<T>(c: Cell<T>, d: T) -> T {
-    return match c { Cell { v: Some(x), k: 1..=9 } => x, Cell { .. } => d }
+    match c { Cell { v: Some(x), k: 1..=9 } => x, Cell { .. } => d }
 }
 
-fn main() -> i64 {
-    println(get(Cell { v: Some(5), k: 3 }, 0))
-    println(get(Cell { v: Some(5), k: 30 }, 0))
-    println(get(Cell { v: None, k: 3 }, -1))
-    println(get(Cell { v: Some("s" + "t"), k: 9 }, "d"))
-    return 0
+fn main() {
+    println!("{}", get(Cell { v: Some(5), k: 3 }, 0));
+    println!("{}", get(Cell { v: Some(5), k: 30 }, 0));
+    println!("{}", get(Cell { v: None, k: 3 }, -1));
+    println!("{}", get(Cell { v: Some("s" + "t"), k: 9 }, "d"));
 }

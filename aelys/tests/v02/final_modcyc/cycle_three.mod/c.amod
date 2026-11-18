@@ -1,2 +1,2 @@
-needs a
-pub fn step(t: a.Tok) -> i64 { return a.finish(t) + 1 }
+use crate::a;
+pub fn step(t: a::Tok) -> i64 { a::finish(t) + 1 }

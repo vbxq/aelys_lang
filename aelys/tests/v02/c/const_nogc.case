@@ -1,7 +1,7 @@
-const SCALE: i64 = 1000
+const SCALE: i64 = 1000;
 nogc fn scale(x: i64) -> i64 {
-    return x * SCALE
+    x * SCALE
 }
 fn main() {
-    println(scale(7))
+    println!("{}", scale(7));
 }

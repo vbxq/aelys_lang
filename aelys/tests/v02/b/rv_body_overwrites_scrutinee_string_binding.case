@@ -1,16 +1,15 @@
-fn take(o: &mut Option<string>) -> string {
+fn take(o: &mut Option<String>) -> String {
     match *o {
         Some(s) => {
-            *o = None
-            return s + "!"
+            *o = None;
+            return s + "!";
         },
-        None => { return "none" }
+        None => { return "none"; }
     }
 }
 
-fn main() -> i64 {
-    let mut o: Option<string> = Some("a" + "b")
-    println(take(&mut o))
-    println(take(&mut o))
-    return 0
+fn main() {
+    let mut o: Option<String> = Some("a" + "b");
+    println!("{}", take(&mut o));
+    println!("{}", take(&mut o));
 }

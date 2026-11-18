@@ -1,27 +1,26 @@
 struct Cell { k: i64, e: Expr }
 enum Expr { Num(i64), Bin(i64, Rc<Expr>, Rc<Cell>) }
 fn probe(i: i64) -> i64 {
-    let c: Rc<Cell> = Rc::new(Cell { k: i, e: Expr::Num(123456789) })
-    let leaf: Rc<Expr> = Rc::new(Expr::Num(987654321))
-    let b: Rc<Expr> = Rc::new(Expr::Bin(3, leaf, c))
+    let c: Rc<Cell> = Rc::new(Cell { k: i, e: Expr::Num(123456789) });
+    let leaf: Rc<Expr> = Rc::new(Expr::Num(987654321));
+    let b: Rc<Expr> = Rc::new(Expr::Bin(3, leaf, c));
     if i % 2 == 0 {
-        c.e = Expr::Bin(4, b, c)
+        c.e = Expr::Bin(4, b, c);
     }
-    __aelys_collect()
-    let mut r: i64 = Rc::get(c).k
+    __aelys_collect();
+    let mut r: i64 = Rc::get(c).k;
     match Rc::get(c).e {
-        Expr::Bin(n, x, y) => { r = r + n + Rc::get(y).k }
-        Expr::Num(n) => { r = r + n % 10 }
+        Expr::Bin(n, x, y) => { r = r + n + Rc::get(y).k; }
+        Expr::Num(n) => { r = r + n % 10; }
     }
-    return r
+    r
 }
-fn main() -> i64 {
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 400 {
-        t = t + probe(i)
-        i = i + 1
+        t = t + probe(i);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

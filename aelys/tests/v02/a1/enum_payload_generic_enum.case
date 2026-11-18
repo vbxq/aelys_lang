@@ -1,14 +1,14 @@
 struct Pair<A, B> { a: A, b: B }
 enum Box2<T> { Full(Pair<T, T>), Empty }
 fn main() {
-    let s = Box2::Full(Pair { a: 3, b: 4 })
+    let s = Box2::Full(Pair { a: 3, b: 4 });
     match s {
-        Box2::Full(p) => println(p.a * 10 + p.b),
-        Box2::Empty => println(0)
+        Box2::Full(p) => println!("{}", p.a * 10 + p.b),
+        Box2::Empty => println!("{}", 0),
     }
-    let t = Box2::Full(Pair { a: "l", b: "r" })
+    let t = Box2::Full(Pair { a: "l", b: "r" });
     match t {
-        Box2::Full(p) => println(p.b),
-        Box2::Empty => println("e")
+        Box2::Full(p) => println!("{}", p.b),
+        Box2::Empty => println!("e"),
     }
 }

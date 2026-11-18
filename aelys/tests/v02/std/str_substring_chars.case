@@ -1,8 +1,8 @@
-needs std.str
+use std::str;
 
 fn main() {
-    let s = "héllo wörld"
-    println(s.substring(1, 4))
-    println(s.substring(6, 99))
-    println(s.substring(3, 1).is_empty())
+    let s = "héllo wörld";
+    println!("{}", s.substring(1, 4));
+    println!("{}", s.substring(6, 99));
+    println!("{}", s.substring(3, 1).is_empty());
 }

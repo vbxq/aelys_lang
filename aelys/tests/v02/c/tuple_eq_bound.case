@@ -1,7 +1,7 @@
-fn same<T: eq>(a: T, b: T) -> bool {
-    return a == b
+fn same<T: PartialEq>(a: T, b: T) -> bool {
+    a == b
 }
 fn main() {
-    println(same((1, "a{1}"), (1, "a1")))
-    println(same(((1, 'c'), "x"), ((1, 'd'), "x")))
+    println!("{}", same((1, format!("a{}", 1)), (1, "a1")));
+    println!("{}", same(((1, 'c'), "x"), ((1, 'd'), "x")));
 }

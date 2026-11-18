@@ -1,10 +1,10 @@
 fn mk() -> Option<i64> {
-    return Option::Some("abc")
+    Option::Some("abc")
 }
 
 fn main() {
     match mk() {
-        Some(v) => println(v + 1),
-        None => println(0)
+        Some(v) => println!("{}", v + 1),
+        None => println!("{}", 0),
     }
 }

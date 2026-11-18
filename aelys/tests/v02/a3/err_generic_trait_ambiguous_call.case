@@ -1,19 +1,18 @@
 trait Tally<T> {
-    fn count(&self) -> i64
+    fn count(&self) -> i64;
 }
 
 struct X { v: i64 }
 
 impl Tally<i64> for X {
-    fn count(&self) -> i64 { return 1 }
+    fn count(&self) -> i64 { 1 }
 }
 
-impl Tally<string> for X {
-    fn count(&self) -> i64 { return 2 }
+impl Tally<String> for X {
+    fn count(&self) -> i64 { 2 }
 }
 
-fn main() -> i64 {
-    let x = X { v: 0 }
-    println(x.count())
-    return 0
+fn main() {
+    let x = X { v: 0 };
+    println!("{}", x.count());
 }

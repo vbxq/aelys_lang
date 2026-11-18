@@ -1,5 +1,5 @@
 pub struct Pt { pub v: i64 }
-pub fn mk(v: i64) -> Pt { return Pt { v: v } }
+pub fn mk(v: i64) -> Pt { Pt { v: v } }
 impl Pt {
-    pub fn total(&self) -> i64 { return self.dbl() + self.v }
+    pub fn total(&self) -> i64 { self.dbl() + self.v }
 }

@@ -1,10 +1,9 @@
-struct Bag { name: string, items: Vec<i64> }
+struct Bag { name: String, items: Vec<i64> }
 
-fn main() -> i64 {
-    let b = Bag { name: "bag", items: vec[1, 2, 3] }
-    let mut c = b
-    c.items[0] = 100
-    println(b.items[0])
-    println(c.items[0])
-    return 0
+fn main() {
+    let b = Bag { name: "bag", items: vec![1, 2, 3] };
+    let mut c = b;
+    c.items[0] = 100;
+    println!("{}", b.items[0]);
+    println!("{}", c.items[0]);
 }

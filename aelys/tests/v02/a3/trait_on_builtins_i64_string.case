@@ -1,22 +1,21 @@
 trait Size {
-    fn size(self) -> i64
+    fn size(self) -> i64;
 }
 
 impl Size for i64 {
-    fn size(self) -> i64 { return self * 2 }
+    fn size(self) -> i64 { self * 2 }
 }
 
-impl Size for string {
-    fn size(self) -> i64 { return self.len * 10 }
+impl Size for String {
+    fn size(self) -> i64 { self.len() * 10 }
 }
 
-fn sz<T: Size>(x: T) -> i64 { return x.size() + 1 }
+fn sz<T: Size>(x: T) -> i64 { x.size() + 1 }
 
-fn main() -> i64 {
-    let n: i64 = 21
-    let s: string = "abcd"
-    println(n.size())
-    println(s.size())
-    println(sz(s) + sz(n))
-    return 0
+fn main() {
+    let n: i64 = 21;
+    let s: String = "abcd";
+    println!("{}", n.size());
+    println!("{}", s.size());
+    println!("{}", sz(s) + sz(n));
 }

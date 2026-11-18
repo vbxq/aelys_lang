@@ -1,18 +1,17 @@
 struct Node { val: i64 }
 
 fn rd(r: &Rc<Node>) -> i64 {
-    let x: Rc<Node> = *r
-    return Rc::get(x).val
+    let x: Rc<Node> = *r;
+    Rc::get(x).val
 }
-fn main() -> i64 {
-    let a: Rc<Node> = Rc::new(Node { val: 1 })
-    println(rd(&a))
-    let mut t: i64 = 0
-    let mut i: i64 = 0
+fn main() {
+    let a: Rc<Node> = Rc::new(Node { val: 1 });
+    println!("{}", rd(&a));
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
     while i < 1000 {
-        t = t + rd(&a)
-        i = i + 1
+        t = t + rd(&a);
+        i = i + 1;
     }
-    println(t)
-    return 0
+    println!("{}", t);
 }

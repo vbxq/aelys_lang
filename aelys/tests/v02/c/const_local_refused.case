@@ -1,4 +1,4 @@
 fn main() {
-    const N: i64 = 3
-    println(N)
+    const N: i64 = 3;
+    println!("{}", N)
 }

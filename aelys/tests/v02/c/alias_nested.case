@@ -1,11 +1,11 @@
-type Row = [i64; 3]
-type Grid = [Row; 2]
-pub type Total = i64
+type Row = [i64; 3];
+type Grid = [Row; 2];
+pub type Total = i64;
 fn sum(g: Grid) -> Total {
-    let mut s: Total = 0
-    for r in 0..2 { for c in 0..3 { s = s + g[r][c] } }
-    return s
+    let mut s: Total = 0;
+    for r in 0..2 { for c in 0..3 { s = s + g[r][c]; } }
+    s
 }
 fn main() {
-    println(sum([[1, 2, 3], [10, 20, 30]]))
+    println!("{}", sum([[1, 2, 3], [10, 20, 30]]));
 }

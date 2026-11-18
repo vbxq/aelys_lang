@@ -1,6 +1,6 @@
-enum V { I(i64), S(string) }
+use std::process::ExitCode; enum V { I(i64), S(String) }
 
-fn main() -> i64 {
-    let v = V::I(1)
-    return match v { V::I(x) | V::S(x) => 0 }
+fn main() -> ExitCode {
+    let v = V::I(1);
+    return ExitCode::from((match v { V::I(x) | V::S(x) => 0 }) as u8);
 }
