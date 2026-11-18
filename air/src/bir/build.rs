@@ -822,7 +822,7 @@ impl<'a> BodyBuilder<'a> {
             }
         }
         // the reborrow starts at the call, so an earlier argument may still read through the binding
-        if !deferred.is_empty() {
+        if !deferred.is_empty() || reserved.is_some() {
             for (i, op) in ops.iter_mut().enumerate() {
                 if let Some(BirOperand::Copy(place) | BirOperand::Move(place)) = op
                     && !place.proj.is_empty()
