@@ -142,17 +142,6 @@ impl Carriers<'_> {
             .find(|def| def.name == name)
     }
 
-    fn find(&self, name: &str) -> Option<&AirStructDef> {
-        self.structs
-            .iter()
-            .chain(self.imported.iter())
-            .find(|def| def.name == name)
-    }
-
-    pub fn struct_def(&self, r: &StructRef) -> Option<&AirStructDef> {
-        self.find(&r.symbol())
-    }
-
     pub fn struct_fields(&self, r: &StructRef) -> Option<Vec<(String, AirType)>> {
         crate::struct_fields_in(self.structs.iter().chain(self.imported.iter()), r)
     }

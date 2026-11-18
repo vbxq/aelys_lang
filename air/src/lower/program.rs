@@ -43,7 +43,7 @@ impl<'a> LoweringContext<'a> {
                 ..
             } = &stmt.kind
             {
-                if type_params.is_empty() && lowered_structs.insert(name.clone()) {
+                if lowered_structs.insert(name.clone()) {
                     self.site = Some(stmt.span);
                     self.lower_struct_decl(name, type_params, fields, &stmt.span);
                 }

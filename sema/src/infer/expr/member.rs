@@ -317,7 +317,7 @@ impl TypeInference {
             .get_struct(name)
             .map(|d| d.type_params.clone())
             .unwrap_or_default();
-        let inst_args: Vec<InferType> = match hint {
+        let mut inst_args: Vec<InferType> = match hint {
             Some(InferType::Struct(hname, hargs))
                 if hname == name && hargs.len() == type_params.len() =>
             {
@@ -384,6 +384,15 @@ impl TypeInference {
                         };
                     }
 
+                    if let Some(InferType::Struct(p, pargs)) = &declared
+                        && pargs.is_empty()
+                        && let Some(i) = type_params.iter().position(|tp| tp == p)
+                        && field_ty == inst_args[i]
+                        && matches!(field_ty, InferType::Var(_))
+                        && !matches!(typed_value.ty, InferType::Var(_))
+                    {
+                        inst_args[i] = typed_value.ty.clone();
+                    }
                     self.constraints.push(Constraint::flows(
                         typed_value.ty.clone(),
                         field_ty,

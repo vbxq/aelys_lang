@@ -47,13 +47,6 @@ impl<'a> Defs<'a> {
         }
     }
 
-    pub fn find_struct(&self, name: &str) -> Option<&'a AirStructDef> {
-        self.structs
-            .iter()
-            .chain(self.imported_structs.iter())
-            .find(|s| s.name == name)
-    }
-
     pub fn struct_fields(&self, r: &crate::StructRef) -> Option<Vec<(String, AirType)>> {
         crate::struct_fields_in(self.structs.iter().chain(self.imported_structs.iter()), r)
     }

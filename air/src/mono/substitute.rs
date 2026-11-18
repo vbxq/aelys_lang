@@ -129,7 +129,11 @@ fn substitute_rvalue(rvalue: &mut Rvalue, type_params: &[TypeParamId], type_args
         }
         Rvalue::EnumInit { enum_ref, .. }
         | Rvalue::EnumTag { enum_ref, .. }
-        | Rvalue::EnumPayload { enum_ref, .. } => {
+        | Rvalue::EnumPayload { enum_ref, .. }
+        | Rvalue::StructInit {
+            struct_ref: enum_ref,
+            ..
+        } => {
             for arg in &mut enum_ref.args {
                 substitute_type(arg, type_params, type_args);
             }

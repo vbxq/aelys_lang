@@ -67,8 +67,7 @@ pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<MonoError
         return Err(uninstantiated);
     }
 
-    // monomorphize generic enums
-    let errors = monomorphize_enums(&mut program);
+    let errors = monomorphize_nominals(&mut program);
     if !errors.is_empty() {
         return Err(errors);
     }
@@ -77,9 +76,13 @@ pub fn monomorphize(mut program: AirProgram) -> Result<AirProgram, Vec<MonoError
     Ok(program)
 }
 
-/// monomorphize generic enum definitions.
-fn monomorphize_enums(program: &mut AirProgram) -> Vec<MonoError> {
-    // collect generic enum indices
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum NominalKind {
+    Enum,
+    Struct,
+}
+
+fn monomorphize_nominals(program: &mut AirProgram) -> Vec<MonoError> {
     let generic_enums: HashMap<String, usize> = program
         .enums
         .iter()
@@ -87,14 +90,22 @@ fn monomorphize_enums(program: &mut AirProgram) -> Vec<MonoError> {
         .filter(|(_, e)| !e.type_params.is_empty())
         .map(|(i, e)| (e.name.clone(), i))
         .collect();
+    let generic_structs: HashMap<String, usize> = program
+        .structs
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.type_params.is_empty())
+        .map(|(i, s)| (s.name.clone(), i))
+        .collect();
 
-    if generic_enums.is_empty() {
+    if generic_enums.is_empty() && generic_structs.is_empty() {
         return Vec::new();
     }
 
     let mut errors: Vec<MonoError> = Vec::new();
-    let mut uses = EnumUses {
-        generic: &generic_enums,
+    let mut uses = NominalUses {
+        enums: &generic_enums,
+        structs: &generic_structs,
         wanted: Vec::new(),
         seen: HashSet::new(),
         bare: Vec::new(),
@@ -122,6 +133,9 @@ fn monomorphize_enums(program: &mut AirProgram) -> Vec<MonoError> {
         }
     }
     for def in &program.structs {
+        if !def.type_params.is_empty() {
+            continue;
+        }
         for field in &def.fields {
             uses.ty(&field.ty);
         }
@@ -137,92 +151,133 @@ fn monomorphize_enums(program: &mut AirProgram) -> Vec<MonoError> {
         }
     }
 
-    let mut instances: Vec<AirEnumDef> = Vec::new();
+    let mut enum_instances: Vec<AirEnumDef> = Vec::new();
+    let mut struct_instances: Vec<AirStructDef> = Vec::new();
     let mut cursor = 0usize;
     while cursor < uses.wanted.len() {
-        if instances.len() >= ENUM_MONO_LIMIT {
+        if enum_instances.len() + struct_instances.len() >= ENUM_MONO_LIMIT {
             errors.push(MonoError::mono(
                 Fault::Compiler,
                 format!(
-                    "generic enum instantiation did not terminate after {ENUM_MONO_LIMIT} \
-                     instances; an enum whose payload names itself under its own type argument \
-                     would do this and sema is expected to have refused it"
+                    "generic enum or struct instantiation did not terminate after \
+                     {ENUM_MONO_LIMIT} instances; a type that names itself under its own type \
+                     argument would do this and sema is expected to have refused it"
                 ),
             ));
             break;
         }
-        let request = uses.wanted[cursor].clone();
+        let (kind, request) = uses.wanted[cursor].clone();
         cursor += 1;
-        let enum_idx = generic_enums[&request.name];
-        let original = &program.enums[enum_idx];
-        if original.type_params.len() != request.args.len() {
+        let (what, params) = match kind {
+            NominalKind::Enum => ("enum", &program.enums[generic_enums[&request.name]].type_params),
+            NominalKind::Struct => (
+                "struct",
+                &program.structs[generic_structs[&request.name]].type_params,
+            ),
+        };
+        if params.len() != request.args.len() {
             errors.push(MonoError::mono(
                 Fault::Compiler,
                 format!(
-                    "enum `{}` takes {} type arguments and the lowered program asks for {}",
+                    "{what} `{}` takes {} type arguments and the lowered program asks for {}",
                     request.name,
-                    original.type_params.len(),
+                    params.len(),
                     request.args.len()
                 ),
             ));
             continue;
         }
-        let variants: Vec<AirEnumVariant> = original
-            .variants
-            .iter()
-            .map(|v| AirEnumVariant {
-                name: v.name.clone(),
-                tag: v.tag,
-                payload: v
-                    .payload
+        match kind {
+            NominalKind::Enum => {
+                let original = &program.enums[generic_enums[&request.name]];
+                let variants: Vec<AirEnumVariant> = original
+                    .variants
                     .iter()
-                    .map(|ty| substitute_type_params(ty, &original.type_params, &request.args))
-                    .collect(),
-            })
-            .collect();
-        for variant in &variants {
-            for payload in &variant.payload {
-                uses.ty(payload);
+                    .map(|v| AirEnumVariant {
+                        name: v.name.clone(),
+                        tag: v.tag,
+                        payload: v
+                            .payload
+                            .iter()
+                            .map(|ty| {
+                                substitute_type_params(ty, &original.type_params, &request.args)
+                            })
+                            .collect(),
+                    })
+                    .collect();
+                for variant in &variants {
+                    for payload in &variant.payload {
+                        uses.ty(payload);
+                    }
+                }
+                enum_instances.push(AirEnumDef {
+                    name: request.symbol(),
+                    type_params: Vec::new(),
+                    variants,
+                    span: original.span,
+                });
+            }
+            NominalKind::Struct => {
+                let original = &program.structs[generic_structs[&request.name]];
+                let fields: Vec<AirStructField> = original
+                    .fields
+                    .iter()
+                    .map(|f| AirStructField {
+                        name: f.name.clone(),
+                        ty: substitute_type_params(&f.ty, &original.type_params, &request.args),
+                        offset: None,
+                    })
+                    .collect();
+                for field in &fields {
+                    uses.ty(&field.ty);
+                }
+                struct_instances.push(AirStructDef {
+                    name: request.symbol(),
+                    type_params: Vec::new(),
+                    fields,
+                    is_closure_env: false,
+                    span: original.span,
+                });
             }
         }
-        instances.push(AirEnumDef {
-            name: request.symbol(),
-            type_params: Vec::new(),
-            variants,
-            span: original.span,
-        });
     }
 
     for name in uses.bare {
         errors.push(MonoError::mono(
             Fault::Compiler,
             format!(
-                "`{name}` is a generic enum and the lowered program names it with no type \
+                "`{name}` is a generic type and the lowered program names it with no type \
                  arguments, so no instance answers the reference"
             ),
         ));
     }
 
-    program.enums.extend(instances);
-    // remove generic enum definitions (they've been replaced by mono'd versions)
+    program.enums.extend(enum_instances);
     program.enums.retain(|e| e.type_params.is_empty());
+    program.structs.extend(struct_instances);
+    program.structs.retain(|s| s.type_params.is_empty());
 
     errors
 }
 
-struct EnumUses<'a> {
-    generic: &'a HashMap<String, usize>,
-    wanted: Vec<EnumRef>,
+struct NominalUses<'a> {
+    enums: &'a HashMap<String, usize>,
+    structs: &'a HashMap<String, usize>,
+    wanted: Vec<(NominalKind, NominalRef)>,
     seen: HashSet<String>,
     bare: Vec<String>,
 }
 
-impl EnumUses<'_> {
-    fn note(&mut self, r: &EnumRef) {
+impl NominalUses<'_> {
+    fn note(&mut self, kind: NominalKind, r: &NominalRef) {
         for arg in &r.args {
             self.ty(arg);
         }
-        if !self.generic.contains_key(&r.name) {
+        let generic = match kind {
+            NominalKind::Enum => self.enums.contains_key(&r.name),
+            NominalKind::Struct => self.structs.contains_key(&r.name),
+        };
+        if !generic {
             return;
         }
         if r.args.is_empty() {
@@ -232,13 +287,14 @@ impl EnumUses<'_> {
             return;
         }
         if self.seen.insert(r.symbol()) {
-            self.wanted.push(r.clone());
+            self.wanted.push((kind, r.clone()));
         }
     }
 
     fn ty(&mut self, ty: &AirType) {
         match ty {
-            AirType::Enum(r) => self.note(r),
+            AirType::Enum(r) => self.note(NominalKind::Enum, r),
+            AirType::Struct(r) => self.note(NominalKind::Struct, r),
             AirType::Ptr(inner)
             | AirType::Rc(inner)
             | AirType::Array(inner, _)
@@ -263,7 +319,6 @@ impl EnumUses<'_> {
             | AirType::Bool
             | AirType::Char
             | AirType::Str
-            | AirType::Struct(_)
             | AirType::Param(_)
             | AirType::Opaque
             | AirType::Void => {}
@@ -275,12 +330,13 @@ impl EnumUses<'_> {
             AirConst::Enum {
                 enum_ref, payload, ..
             } => {
-                self.note(enum_ref);
+                self.note(NominalKind::Enum, enum_ref);
                 for item in payload {
                     self.konst(item);
                 }
             }
-            AirConst::Struct { fields, .. } => {
+            AirConst::Struct { struct_ref, fields } => {
+                self.note(NominalKind::Struct, struct_ref);
                 for (_, item) in fields {
                     self.konst(item);
                 }
@@ -306,7 +362,7 @@ impl EnumUses<'_> {
             Rvalue::EnumInit {
                 enum_ref, payload, ..
             } => {
-                self.note(enum_ref);
+                self.note(NominalKind::Enum, enum_ref);
                 for op in payload {
                     self.operand(op);
                 }
@@ -315,7 +371,7 @@ impl EnumUses<'_> {
             | Rvalue::EnumPayload {
                 enum_ref, operand, ..
             } => {
-                self.note(enum_ref);
+                self.note(NominalKind::Enum, enum_ref);
                 self.operand(operand);
             }
             Rvalue::Cast { operand, from, to } => {
@@ -335,7 +391,8 @@ impl EnumUses<'_> {
                     self.operand(op);
                 }
             }
-            Rvalue::StructInit { fields, .. } => {
+            Rvalue::StructInit { struct_ref, fields } => {
+                self.note(NominalKind::Struct, struct_ref);
                 for (_, op) in fields {
                     self.operand(op);
                 }
@@ -689,8 +746,9 @@ impl MonoContext {
                     self.unify_param(ret, arg_ret, fn_type_params, resolved, conflicts);
                 }
             }
-            AirType::Enum(param_ref) => {
-                if let AirType::Enum(arg_ref) = arg_ty
+            AirType::Enum(param_ref) | AirType::Struct(param_ref) => {
+                if let AirType::Enum(arg_ref) | AirType::Struct(arg_ref) = arg_ty
+                    && std::mem::discriminant(param_ty) == std::mem::discriminant(arg_ty)
                     && param_ref.name == arg_ref.name
                     && param_ref.args.len() == arg_ref.args.len()
                 {
@@ -712,7 +770,6 @@ impl MonoContext {
             | AirType::Bool
             | AirType::Char
             | AirType::Str
-            | AirType::Struct(_)
             | AirType::Opaque
             | AirType::Void => {}
         }

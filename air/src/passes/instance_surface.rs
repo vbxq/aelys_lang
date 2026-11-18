@@ -22,6 +22,7 @@ enum Finding {
     NestedRcRead(AirType),
     RcThroughRef(AirType),
     RcWriteThroughRef(AirType),
+    RcInGenericStruct(AirType),
 }
 
 impl Finding {
@@ -32,7 +33,8 @@ impl Finding {
             | Finding::RcInVec(_)
             | Finding::NestedRcRead(_)
             | Finding::RcThroughRef(_)
-            | Finding::RcWriteThroughRef(_) => RC_CODE,
+            | Finding::RcWriteThroughRef(_)
+            | Finding::RcInGenericStruct(_) => RC_CODE,
         }
     }
 }
@@ -252,6 +254,11 @@ fn message(verdict: &Verdict, called: &str, caller: &str, args: &[AirType]) -> S
             user_type(inner),
             user_type(inner)
         ),
+        Finding::RcInGenericStruct(container) => format!(
+            "{head}{which} makes a `{}`: carrying an `Rc<T>` straight into a generic struct is \
+             not supported yet",
+            user_type(container)
+        ),
         Finding::RcThroughRef(inner) => format!(
             "{head}{which} reads an `{}` out of a `&{}` with `*`: reading an `Rc` through a \
              reference is not supported yet, pass the `Rc` itself",
@@ -317,7 +324,8 @@ impl Scan<'_> {
             | Finding::RcInVec(_)
             | Finding::NestedRcRead(_)
             | Finding::RcThroughRef(_)
-            | Finding::RcWriteThroughRef(_) => |t| matches!(t, AirType::Rc(_)),
+            | Finding::RcWriteThroughRef(_)
+            | Finding::RcInGenericStruct(_) => |t| matches!(t, AirType::Rc(_)),
         };
         args.iter()
             .any(|arg| self.mentions(arg, leaf, &mut HashSet::new()))
@@ -506,7 +514,7 @@ impl Scan<'_> {
             | AirType::Array(inner, _)
             | AirType::Slice(inner)
             | AirType::Vec(inner) => vec![inner],
-            AirType::Enum(r) => r.args.iter().collect(),
+            AirType::Enum(r) | AirType::Struct(r) => r.args.iter().collect(),
             AirType::FnPtr { params, ret, .. } => {
                 params.iter().chain(std::iter::once(ret.as_ref())).collect()
             }
@@ -523,7 +531,6 @@ impl Scan<'_> {
             | AirType::Bool
             | AirType::Char
             | AirType::Str
-            | AirType::Struct(_)
             | AirType::Param(_)
             | AirType::Opaque
             | AirType::Void => Vec::new(),
@@ -589,6 +596,13 @@ impl Scan<'_> {
         };
         if uncovered {
             return Some(Finding::UncountedRc(ty.clone()));
+        }
+        if let AirType::Struct(r) = ty
+            && r.args.iter().any(|arg| {
+                self.mentions(arg, |t| matches!(t, AirType::Rc(_)), &mut HashSet::new())
+            })
+        {
+            return Some(Finding::RcInGenericStruct(ty.clone()));
         }
         if let Some(key) = Self::key(ty)
             && !seen.insert(key)
