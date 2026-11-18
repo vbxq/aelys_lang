@@ -1036,7 +1036,8 @@ fn intrinsic_import(path: Vec<String>, kind: ImportKind) -> Option<(Vec<String>,
     match kind {
         ImportKind::Module { alias: None } if path[1] == "fmt" => None,
         ImportKind::Symbols(names) => {
-            let rest: Vec<String> = names.into_iter().filter(|n| !intrinsic.contains(&n.as_str())).collect();
+            let rest: Vec<(String, String)> =
+                names.into_iter().filter(|(item, _)| !intrinsic.contains(&item.as_str())).collect();
             (!rest.is_empty()).then(|| (path, ImportKind::Symbols(rest)))
         }
         kind => Some((path, kind)),

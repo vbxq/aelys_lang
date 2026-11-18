@@ -210,7 +210,11 @@ impl TypeInference {
                 fields,
                 rest,
                 span,
-            } if self.type_table.has_struct(&self.air_type_name(name, *span)) => {
+            } if {
+                let qualified = self.air_type_name(name, *span);
+                self.type_table.has_struct(&qualified)
+            } =>
+            {
                 let qualified = self.air_type_name(name, *span);
                 let expected = match ty {
                     InferType::Var(_) => {

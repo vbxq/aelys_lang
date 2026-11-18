@@ -129,7 +129,7 @@ fn impls_a_foreign_type(unit: &ModuleUnit) -> bool {
     }
     let imported = |name: &str| {
         unit.imports.iter().any(|import| match import {
-            ResolvedImport::Symbols { names, .. } => names.iter().any(|n| n == name),
+            ResolvedImport::Symbols { names, .. } => names.iter().any(|(_, local)| local == name),
             ResolvedImport::Namespace { .. } => false,
         })
     };

@@ -960,6 +960,7 @@ impl<'a> LoweringContext<'a> {
             | K::DerefAssign { .. }
             | K::Match { .. }
             | K::ResultAssert { .. }
+            | K::Loop(_)
             | K::Block { .. } => NotAConstant,
         }
     }
