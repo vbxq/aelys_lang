@@ -66,8 +66,8 @@ fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[?-stage1]"),
-        "keeps the [?-stage1] marker, got: {err}"
+        err.contains("[try]"),
+        "keeps the [try] marker, got: {err}"
     );
     assert!(
         err.contains(".map_error"),
@@ -140,8 +140,8 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[?-stage1]"),
-        "keeps the [?-stage1] marker, got: {err}"
+        err.contains("[try]"),
+        "keeps the [try] marker, got: {err}"
     );
     assert!(
         err.contains("requires the function to return"),
@@ -166,8 +166,8 @@ fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[?-stage1]"),
-        "keeps the [?-stage1] marker, got: {err}"
+        err.contains("[try]"),
+        "keeps the [try] marker, got: {err}"
     );
     assert!(
         err.contains("expects a `Result"),
@@ -188,8 +188,8 @@ fn main() -> i64 { return maybe().into_ok() }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]"),
-        "keeps the [eh-stage3] marker, got: {err}"
+        err.contains("[result]"),
+        "keeps the [result] marker, got: {err}"
     );
     assert!(err.contains("into_ok"), "must name into_ok, got: {err}");
     assert!(
@@ -211,8 +211,8 @@ fn main() -> i64 { return mk_ok().unwrap_unchecked() }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]"),
-        "keeps the [eh-stage3] marker, got: {err}"
+        err.contains("[result]"),
+        "keeps the [result] marker, got: {err}"
     );
     assert!(
         err.contains("unsafe"),
@@ -236,8 +236,8 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]"),
-        "keeps the [eh-stage3] marker, got: {err}"
+        err.contains("[result]"),
+        "keeps the [result] marker, got: {err}"
     );
     assert!(
         err.contains("string literal"),
@@ -257,8 +257,8 @@ fn main() -> i64 { return 0 }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]"),
-        "keeps the [eh-stage3] marker, got: {err}"
+        err.contains("[result]"),
+        "keeps the [result] marker, got: {err}"
     );
     assert!(
         err.contains("Never"),
@@ -283,8 +283,8 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]"),
-        "keeps the [eh-stage3] marker, got: {err}"
+        err.contains("[result]"),
+        "keeps the [result] marker, got: {err}"
     );
     assert!(
         err.contains("map_error"),

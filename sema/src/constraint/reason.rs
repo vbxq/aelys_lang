@@ -87,7 +87,7 @@ impl fmt::Display for ConstraintReason {
             ConstraintReason::QuestionErrorType => {
                 write!(
                     f,
-                    "[?-stage1] `?` error type must match the function's error type; cross two error types explicitly with `.map_error`"
+                    "[try] `?` error type must match the function's error type; cross two error types explicitly with `.map_error`"
                 )
             }
             ConstraintReason::Other(s) => write!(f, "{}", s),

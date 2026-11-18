@@ -405,7 +405,7 @@ fn a_scalar_read_through_a_reference_is_accepted_and_its_ref_typed_twin_is_not()
          fn main() -> i64 { return 0 }\n",
         &[
             "E0714",
-            "[borrow] references stored into aggregate containers are not supported in Run 1",
+            "[borrow] references stored into aggregate containers are not supported yet",
         ],
     );
 }

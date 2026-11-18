@@ -26,9 +26,9 @@ impl CompileErrorKind {
             ),
             Self::NotAVariantInScope { name } => format!(
                 "`{name}` is not a variant in scope; write `Enum::Variant`; binding patterns are \
-                 not supported in 0.1"
+                 not supported yet"
             ),
-            Self::NestedPattern => "nested patterns are not supported in 0.1".to_string(),
+            Self::NestedPattern => "nested patterns are not supported yet".to_string(),
             Self::UppercaseBinding { name } => format!(
                 "the binding `{name}` starts with an uppercase letter; a capitalized name in a \
                  pattern names a variant, never a binding"

@@ -110,6 +110,9 @@ pub enum TypeErrorKind {
     NotAVariantInScope {
         name: String,
         written: Option<String>,
+        scrutinee: String,
+        variants: Vec<String>,
+        owner: Option<String>,
     },
     RcFieldAssignIndirect,
     NotSupportedYet {
@@ -268,7 +271,7 @@ impl fmt::Display for TypeError {
                 let (operand, ret) = InferType::shown_pair(operand, ret);
                 write!(
                     f,
-                    "[?-stage1] `?` cannot bridge `{operand}` and `{ret}`: they are two distinct \
+                    "[try] `?` cannot bridge `{operand}` and `{ret}`: they are two distinct \
                      `{carrier}` types, and their variant tags need not agree. use one of the two \
                      on both sides, by importing it or by annotating this function with it"
                 )
@@ -283,7 +286,7 @@ impl fmt::Display for TypeError {
                 write!(f, "cannot assign to loop variable `{}`", name)
             }
             TypeErrorKind::RcOutOfSurface { detail } => {
-                write!(f, "[rc-stage1] {}", detail)
+                write!(f, "[rc] {}", detail)
             }
             TypeErrorKind::RcCarrierOutOfSurface { detail } => {
                 write!(f, "{}", detail)
@@ -396,17 +399,36 @@ impl fmt::Display for TypeError {
                 "[reserved-type] `Vec` and `Rc` are reserved builtin type names; a user type named \
                  `{name}` would compete with intrinsic path resolution. rename the type"
             ),
-            TypeErrorKind::NotAVariantInScope { name, written } => match written {
-                Some(path) => write!(
-                    f,
-                    "`{name}` alone does not name a variant; write `{path}::{name}`"
-                ),
-                None => write!(
-                    f,
-                    "`{name}` is not a variant in scope; write `Enum::Variant`; binding patterns \
-                     are not supported in 0.1"
-                ),
-            },
+            TypeErrorKind::NotAVariantInScope {
+                name,
+                written,
+                scrutinee,
+                variants,
+                owner,
+            } => {
+                if let Some(path) = written {
+                    return write!(
+                        f,
+                        "`{name}` alone does not name a variant; write `{path}::{name}`"
+                    );
+                }
+                match owner {
+                    Some(owner) => write!(
+                        f,
+                        "`{name}` is a variant of `{owner}`, not of `{scrutinee}`"
+                    )?,
+                    None => write!(f, "`{name}` is not a variant of `{scrutinee}`")?,
+                }
+                let shown: Vec<String> = variants.iter().map(|v| format!("`{v}`")).collect();
+                match shown.as_slice() {
+                    [] => write!(f, ", which has no variants")?,
+                    [only] => write!(f, ", whose only variant is {only}")?,
+                    [init @ .., last] => {
+                        write!(f, ", whose variants are {} and {last}", init.join(", "))?
+                    }
+                }
+                Ok(())
+            }
             TypeErrorKind::NotSupportedYet { detail } => write!(f, "{detail}"),
             TypeErrorKind::Coded { message, .. } => write!(f, "{message}"),
             TypeErrorKind::StringSlice => write!(

@@ -197,7 +197,7 @@ fn main() -> i64 {
 fn negative_oracle_cross_error_type_is_rejected() {
     let err = try_reject(NEG_MISMATCH_SRC);
     assert!(
-        err.contains("[?-stage1]"),
+        err.contains("[try]"),
         "cross-error-type `?` (Fault vs i64) must be rejected with the branded marker; got:\n{err}"
     );
 }

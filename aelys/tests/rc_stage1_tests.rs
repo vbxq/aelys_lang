@@ -474,7 +474,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N2 must carry the marker: {err}"
     );
 }
@@ -518,7 +518,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N3-bis must carry the marker: {err}"
     );
 }
@@ -558,7 +558,7 @@ fn main() -> i64 { return make() }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N5 must carry the marker: {err}"
     );
 }
@@ -612,7 +612,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N7(enum let) must carry the marker: {err}"
     );
 }
@@ -630,7 +630,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N7(enum return) must carry the marker: {err}"
     );
 }
@@ -648,7 +648,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N8(array return) must carry the marker: {err}"
     );
 }

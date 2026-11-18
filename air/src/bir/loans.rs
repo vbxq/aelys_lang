@@ -244,7 +244,7 @@ pub(super) fn gen_loans(body: &BirBody, errors: &mut Vec<BirDiagnostic>) -> Vec<
                                         "[borrow]",
                                         stmt.span,
                                         "[borrow] references stored into aggregate containers are \
-                                         not supported in Run 1"
+                                         not supported yet"
                                             .to_string(),
                                     )
                                     .with_secondary(decl, "this reference".to_string()),

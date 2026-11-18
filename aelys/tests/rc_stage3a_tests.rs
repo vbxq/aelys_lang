@@ -385,7 +385,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "T-Rej(b): an array of Rc in a field must be rejected; got:\n{err}"
     );
 }
@@ -399,7 +399,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "T-Rej(b): a vec of Rc in a field must be rejected; got:\n{err}"
     );
 }
@@ -443,7 +443,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "T-Rej(d): in-place reassign of a carrier field must be rejected; got:\n{err}"
     );
 }
@@ -486,7 +486,7 @@ fn main() -> i64 { return make() }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "T-Rej(f): a carrier captured by a closure must be rejected; got:\n{err}"
     );
 }

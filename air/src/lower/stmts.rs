@@ -821,7 +821,7 @@ impl<'a> LoweringContext<'a> {
             // skipping is only sound while generic structs never reach codegen; once they
             crate::rc_paths::RcScan::Undecidable(_) => None,
             crate::rc_paths::RcScan::RejectedMultiVariant(why) => {
-                self.report_unsupported(format!("[rc-stage1] {why}"));
+                self.report_unsupported(format!("[rc] {why}"));
                 None
             }
         }

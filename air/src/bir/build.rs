@@ -605,7 +605,7 @@ impl<'a> BodyBuilder<'a> {
                 "E0724",
                 "[escape]",
                 value.span,
-                "[escape] references stored into aggregate containers are not supported in Run 1"
+                "[escape] references stored into aggregate containers are not supported yet"
                     .to_string(),
             ));
         }
@@ -617,7 +617,7 @@ impl<'a> BodyBuilder<'a> {
                 "E0725",
                 "[escape]",
                 span,
-                "[escape] a closure that captures a reference is not supported in Run 1"
+                "[escape] a closure that captures a reference is not supported yet"
                     .to_string(),
             ));
         }
@@ -1172,7 +1172,7 @@ impl<'a> BodyBuilder<'a> {
                         "E0726",
                         "[escape]",
                         span,
-                        "[escape] references to references are not supported in Run 1".to_string(),
+                        "[escape] references to references are not supported yet".to_string(),
                     ));
                 }
                 match self.rooted_place(operand) {

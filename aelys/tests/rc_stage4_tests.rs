@@ -331,7 +331,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N1 must carry the marker: {err}"
     );
 }
@@ -349,7 +349,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N2 must carry the marker: {err}"
     );
 }
@@ -366,7 +366,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N3 (array) must carry the marker: {err}"
     );
 }
@@ -383,7 +383,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N4 must carry the marker: {err}"
     );
 }
@@ -401,7 +401,7 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc-stage1]"),
+        err.contains("[rc]"),
         "N5 must carry the marker: {err}"
     );
 }
@@ -578,7 +578,7 @@ fn main() -> i64 {
     assert!(
         err.contains(
             "[E0902]: field `v` of struct `H` has type `Vec<i64>`: a Vec inside a struct is not \
-             supported in 0.1; keep the Vec in its own binding and pass it with `&mut`, or use a \
+             supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a \
              fixed-size array field"
         ),
         "a struct with a Vec field must be rejected as unsupported: {err}"
@@ -595,7 +595,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported in 0.1"),
+        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported yet"),
         "a struct transitively holding a Vec must be rejected: {err}"
     );
 }
@@ -610,7 +610,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported in 0.1"),
+        err.contains("[E0902]") && err.contains("a Vec inside a struct is not supported yet"),
         "a forward-referenced Vec carrier must still be rejected: {err}"
     );
 }
@@ -624,7 +624,7 @@ fn main() -> i64 { return 0 }
 "#,
     );
     assert!(
-        err.contains("[E0902]") && err.contains("a Vec inside an enum is not supported in 0.1"),
+        err.contains("[E0902]") && err.contains("a Vec inside an enum is not supported yet"),
         "an enum variant with a Vec payload must be rejected: {err}"
     );
 }

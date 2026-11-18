@@ -141,6 +141,17 @@ impl TypeInference {
         name.to_string()
     }
 
+    pub(crate) fn enum_owning_variant(&self, variant: &str, scrutinee: &str) -> Option<String> {
+        let mut owners: Vec<String> = self
+            .type_table
+            .enums()
+            .filter(|def| def.name != scrutinee && def.variants.iter().any(|v| v.name == variant))
+            .filter_map(|def| self.spelled_enum(&def.name).ok())
+            .collect();
+        owners.sort();
+        owners.into_iter().next()
+    }
+
     pub(crate) fn spelled_enum(&self, qualified: &str) -> Result<String, (String, String)> {
         let Some((module, name)) = crate::modules::strip_type_head(qualified).rsplit_once('.')
         else {

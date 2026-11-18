@@ -26,7 +26,7 @@ impl TypeInference {
             }
             other => {
                 self.errors.push(TypeError::error_handling(
-                    format!("[eh-stage3] `catch` requires a `Result<T, E>` value, found `{other}`"),
+                    format!("[result] `catch` requires a `Result<T, E>` value, found `{other}`"),
                     "not a `Result` value",
                     scrutinee.span,
                 ));

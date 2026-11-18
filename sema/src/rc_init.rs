@@ -82,7 +82,7 @@ pub fn rc_carrier_init_blocker(expr: &TypedExpr) -> Option<RcInitBlocker> {
 pub fn rc_init_refusal(blocker: RcInitBlocker, what: &str) -> String {
     match blocker {
         RcInitBlocker::Compound => format!(
-            "[rc-stage3a] {what} is initialized from a conditional/compound expression producing \
+            "[rc] {what} is initialized from a conditional/compound expression producing \
              an `Rc<T>`-bearing value; only a direct reference (clone), a fresh literal or call, or a \
              conditional whose branches are both one or both the other is supported yet"
         ),

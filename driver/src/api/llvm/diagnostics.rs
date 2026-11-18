@@ -714,13 +714,13 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         ),
         TypeErrorKind::RcOutOfSurface { detail } => (
             "E0410",
-            format!("[rc-stage1] {}", detail),
-            "Rc used outside the Stage 1 supported surface".to_string(),
+            format!("[rc] {}", detail),
+            "Rc used where it is not supported yet".to_string(),
         ),
         TypeErrorKind::RcCarrierOutOfSurface { detail } => (
             "E0410",
             detail.clone(),
-            "Rc used outside the Stage 1 supported surface".to_string(),
+            "Rc used where it is not supported yet".to_string(),
         ),
         TypeErrorKind::VecOutOfSurface { detail } => (
             "E0412",

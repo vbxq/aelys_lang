@@ -139,8 +139,8 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]") && err.contains("string literal"),
-        "expected a [eh-stage3] string-literal rejection, got: {err}"
+        err.contains("[result]") && err.contains("string literal"),
+        "expected a [result] string-literal rejection, got: {err}"
     );
 }
 
@@ -174,7 +174,7 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        !err.contains("[eh-stage3]"),
+        !err.contains("[result]"),
         "i64 `.unwrap()` must not be swallowed by the seam, got: {err}"
     );
     assert!(
@@ -565,8 +565,8 @@ fn main() -> i64 { return 0 }
     for (label, src) in cases {
         let err = reject(src);
         assert!(
-            err.contains("[eh-stage3]") && err.contains("Never"),
-            "{label}: expected a [eh-stage3] Never-restriction error, got: {err}"
+            err.contains("[result]") && err.contains("Never"),
+            "{label}: expected a [result] Never-restriction error, got: {err}"
         );
     }
 }
@@ -600,7 +600,7 @@ fn main() -> i64 { return maybe().into_ok() }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]") && err.contains("into_ok"),
+        err.contains("[result]") && err.contains("into_ok"),
         "into_ok on a fallible Result must be rejected, got: {err}"
     );
 }
@@ -635,7 +635,7 @@ fn main() -> i64 { return mk_ok().unwrap_unchecked() }
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]") && err.contains("unsafe"),
+        err.contains("[result]") && err.contains("unsafe"),
         "unwrap_unchecked outside unsafe must be rejected, got: {err}"
     );
 }
@@ -687,7 +687,7 @@ fn main() -> i64 {
 "#;
     let err = reject(src);
     assert!(
-        err.contains("[eh-stage3]") && err.contains("unsafe"),
+        err.contains("[result]") && err.contains("unsafe"),
         "unwrap_unchecked after the unsafe block closes must be rejected (depth not leaked), got: {err}"
     );
 }

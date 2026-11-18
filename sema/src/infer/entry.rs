@@ -404,7 +404,7 @@ impl TypeInference {
 
         if ann.name == "Never" {
             self.errors.push(TypeError::member_access(
-                "[eh-stage3] `Never` may only appear as the error type of a `Result`".to_string(),
+                "[result] `Never` may only appear as the error type of a `Result`".to_string(),
                 ann.span,
             ));
             return;

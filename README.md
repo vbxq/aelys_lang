@@ -706,7 +706,7 @@ fn main() -> i64 {
 ```
 
 ```diagnostic
-error[E0902]: field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not supported in 0.1; keep the Vec in its own binding and pass it with `&mut`, or use a fixed-size array field
+error[E0902]: field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a fixed-size array field
  --> main.aelys:1:14
   |
 1 | struct Bag { items: Vec<i64> }

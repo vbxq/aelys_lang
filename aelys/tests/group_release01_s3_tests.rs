@@ -631,7 +631,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 expect: Expect::Refused {
                     code: "E0101",
                     at: (3, 36),
-                    says: "`Nnoe` is not a variant in scope; write `Enum::Variant`; binding patterns are not supported in 0.1",
+                    says: "`Nnoe` is not a variant of `Option`, whose variants are `Some` and `None`",
                 },
             },
             Case {
@@ -651,7 +651,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 expect: Expect::Refused {
                     code: "E0101",
                     at: (3, 27),
-                    says: "nested patterns are not supported in 0.1",
+                    says: "nested patterns are not supported yet",
                 },
             },
             Case {
@@ -661,7 +661,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 expect: Expect::Refused {
                     code: "E0101",
                     at: (3, 35),
-                    says: "nested patterns are not supported in 0.1",
+                    says: "nested patterns are not supported yet",
                 },
             },
             Case {
@@ -681,7 +681,7 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 expect: Expect::Refused {
                     code: "E0101",
                     at: (3, 36),
-                    says: "`other` is not a variant in scope; write `Enum::Variant`; binding patterns are not supported in 0.1",
+                    says: "`other` is not a variant in scope; write `Enum::Variant`; binding patterns are not supported yet",
                 },
             },
         ],

@@ -2011,7 +2011,7 @@ impl<'a> LoweringContext<'a> {
             );
             if cap_ty.is_rc() || cap_ty.contains_rc() || carrier_capture {
                 self.report_unsupported(format!(
-                    "[rc-stage1] closure captures `{cap_name}` of type `{cap_ty}` which is or contains \
+                    "[rc] closure captures `{cap_name}` of type `{cap_ty}` which is or contains \
                      an `Rc<T>`; capturing an Rc (or a carrier of one) in a closure is not supported"
                 ));
             }

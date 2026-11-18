@@ -225,7 +225,7 @@ impl TypeInference {
                         self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
                                 "field `{fname}` of struct `{name}` has type `{fty}`: a Vec inside \
-                                 a struct is not supported in 0.1; keep the Vec in its own binding \
+                                 a struct is not supported yet; keep the Vec in its own binding \
                                  and pass it with `&mut`, or use a fixed-size array field"
                             ),
                             fspan,
@@ -262,7 +262,7 @@ impl TypeInference {
                         self.errors.push(crate::constraint::TypeError::not_supported_yet(
                             format!(
                                 "variant `{vname}` of enum `{name}` has a payload of type `{vty}`: \
-                                 a Vec inside an enum is not supported in 0.1; keep the Vec in its \
+                                 a Vec inside an enum is not supported yet; keep the Vec in its \
                                  own binding and pass it with `&mut`"
                             ),
                             vspan,

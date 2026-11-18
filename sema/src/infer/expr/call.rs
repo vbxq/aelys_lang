@@ -264,7 +264,7 @@ impl TypeInference {
             None => {
                 self.errors.push(TypeError::error_handling(
                     format!(
-                        "[eh-stage3] `.{member}()` needs a declared `enum Result<T, E> {{ Ok(T), Err(E) }}`"
+                        "[result] `.{member}()` needs a declared `enum Result<T, E> {{ Ok(T), Err(E) }}`"
                     ),
                     "no `Ok` variant on this type",
                     span,
@@ -278,7 +278,7 @@ impl TypeInference {
                 if !args.is_empty() {
                     self.errors.push(TypeError::error_handling(
                         format!(
-                            "[eh-stage3] `.unwrap()` takes no arguments, found {}",
+                            "[result] `.unwrap()` takes no arguments, found {}",
                             args.len()
                         ),
                         "`.unwrap()` takes no arguments",
@@ -292,7 +292,7 @@ impl TypeInference {
                 if args.len() != 1 {
                     self.errors.push(TypeError::error_handling(
                         format!(
-                            "[eh-stage3] `.expect()` takes one string literal argument, found {}",
+                            "[result] `.expect()` takes one string literal argument, found {}",
                             args.len()
                         ),
                         "`.expect()` takes one string literal",
@@ -304,7 +304,7 @@ impl TypeInference {
                     ExprKind::String(msg) => ResultAssertOnErr::Panic(msg.clone()),
                     _ => {
                         self.errors.push(TypeError::error_handling(
-                            "[eh-stage3] `.expect(...)` takes a string literal message in V1"
+                            "[result] `.expect(...)` takes a string literal message"
                                 .to_string(),
                             "not a string literal",
                             args[0].span,
@@ -318,7 +318,7 @@ impl TypeInference {
                 if !args.is_empty() {
                     self.errors.push(TypeError::error_handling(
                         format!(
-                            "[eh-stage3] `.into_ok()` takes no arguments, found {}",
+                            "[result] `.into_ok()` takes no arguments, found {}",
                             args.len()
                         ),
                         "`.into_ok()` takes no arguments",
@@ -337,7 +337,7 @@ impl TypeInference {
                 if !matches!(e, InferType::Never) {
                     self.errors.push(TypeError::error_handling(
                         format!(
-                            "[eh-stage3] `.into_ok()` requires `Result<T, Never>`; this Result can fail with error type `{e}`"
+                            "[result] `.into_ok()` requires `Result<T, Never>`; this Result can fail with error type `{e}`"
                         ),
                         "this `Result` can still fail",
                         span,
@@ -350,7 +350,7 @@ impl TypeInference {
                 if !args.is_empty() {
                     self.errors.push(TypeError::error_handling(
                         format!(
-                            "[eh-stage3] `.unwrap_unchecked()` takes no arguments, found {}",
+                            "[result] `.unwrap_unchecked()` takes no arguments, found {}",
                             args.len()
                         ),
                         "`.unwrap_unchecked()` takes no arguments",
@@ -360,7 +360,7 @@ impl TypeInference {
                 }
                 if self.unsafe_depth == 0 {
                     self.errors.push(TypeError::error_handling(
-                        "[eh-stage3] `.unwrap_unchecked()` requires an `unsafe` block".to_string(),
+                        "[result] `.unwrap_unchecked()` requires an `unsafe` block".to_string(),
                         "unchecked assert outside an `unsafe` block",
                         span,
                     ));
@@ -392,7 +392,7 @@ impl TypeInference {
         if args.len() != 1 {
             self.errors.push(TypeError::error_handling(
                 format!(
-                    "[eh-stage3] `.map_error()` takes one function argument, found {}",
+                    "[result] `.map_error()` takes one function argument, found {}",
                     args.len()
                 ),
                 "`.map_error()` takes one function",
@@ -417,7 +417,7 @@ impl TypeInference {
             other => {
                 self.errors.push(TypeError::error_handling(
                     format!(
-                        "[eh-stage3] `.map_error(f)` needs `f: fn({e}) -> E2`, found `{other}`"
+                        "[result] `.map_error(f)` needs `f: fn({e}) -> E2`, found `{other}`"
                     ),
                     "not a one-argument function",
                     args[0].span,

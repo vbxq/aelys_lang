@@ -296,7 +296,7 @@ impl TypeInference {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(
                     "element of {} is a value of type `{}` which embeds an `Rc<T>`; \
-                     storing an Rc inside an array/vec is not supported in Stage 1",
+                     storing an Rc inside an array/vec is not supported yet",
                     kind, ty
                 ),
                 span,

@@ -401,14 +401,14 @@ and can't be overwritten inside the body.
     },
     DiagnosticInfo {
         code: "E0410",
-        title: "`Rc<T>` used outside the Stage 1 supported surface",
+        title: "`Rc<T>` used where it is not supported yet",
         explanation: "\
 `Rc<T>` is reference counted, and every retain has to be matched by a
 release the compiler can point at. Forms where that accounting cannot be
-proven are refused rather than silently miscompiled. A binding, and an
-`Rc` put straight into a generic enum, carry `[rc-stage1]`; a struct field
-or an enum payload initialized from a conditional carries `[rc-stage3a]`;
-the refusal of an enum with more than one variant carries no marker.
+proven are refused rather than silently miscompiled. A binding, an `Rc`
+put straight into a generic enum, and a struct field or an enum payload
+initialized from a conditional carry `[rc]`; the refusal of an enum with
+more than one variant carries no marker.
 
 Five shapes are refused today.
 
@@ -965,8 +965,8 @@ Ownership can only be transferred once.
         title: "use of a possibly-moved value",
         explanation: "\
 A value may have been moved on one branch but not another, so at this
-point it cannot be proven to still be owned. Run 1 does not track
-conditional moves, so the use is rejected.",
+point it cannot be proven to still be owned. This release does not
+track conditional moves, so the use is rejected.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -976,7 +976,7 @@ conditional moves, so the use is rejected.",
 An affine value may have been moved on one branch and not another, so
 the compiler cannot decide at a scope exit or a reassignment whether it
 still needs to be destroyed. Conditional moves are not supported in
-Run 1; make the move unconditional or avoid it.",
+this release; make the move unconditional or avoid it.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1014,8 +1014,8 @@ or a use of the owner while a `&mut` is live.",
         code: "E0714",
         title: "reference stored into a container",
         explanation: "\
-A reference was placed into an array, vec, or enum payload. Run 1 does
-not track references that flow through aggregate containers, so this is
+A reference was placed into an array, vec, or enum payload. This release
+does not track references that flow through aggregate containers, so this is
 rejected at the container boundary.",
         severity: Severity::Error,
     },
@@ -1043,7 +1043,7 @@ every borrow of it.",
         explanation: "\
 The compiler could not determine what a returned reference borrows, so
 it cannot prove the reference is safe to return. This is the
-conservative floor of the Run 1 escape check.",
+conservative floor of the escape check in this release.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1051,16 +1051,16 @@ conservative floor of the Run 1 escape check.",
         title: "reference stored into a container",
         explanation: "\
 A reference reached an aggregate container through a projected store
-(a field, index, or deref assignment). Run 1 does not track references
-inside containers, so this is rejected.",
+(a field, index, or deref assignment). This release does not track
+references inside containers, so this is rejected.",
         severity: Severity::Error,
     },
     DiagnosticInfo {
         code: "E0725",
         title: "closure captures a reference",
         explanation: "\
-A closure captured a reference in its environment. Run 1 cannot track a
-borrow that escapes into an opaque closure environment, so this is
+A closure captured a reference in its environment. This release cannot
+track a borrow that escapes into an opaque closure environment, so this is
 rejected.",
         severity: Severity::Error,
     },
@@ -1068,8 +1068,8 @@ rejected.",
         code: "E0726",
         title: "reference to a reference",
         explanation: "\
-A reference to a reference was formed. Run 1's whole-local provenance
-cannot follow a loan through the extra layer of indirection, so nested
+A reference to a reference was formed. The whole-local provenance of
+this release cannot follow a loan through the extra layer of indirection, so nested
 references are not supported.",
         severity: Severity::Error,
     },

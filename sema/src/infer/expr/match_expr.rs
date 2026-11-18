@@ -160,10 +160,24 @@ impl TypeInference {
                             .any(|v| v.name == *variant)
                             .then(|| self.spelled_enum(&enum_name).ok())
                             .flatten();
+                        let owner = match written {
+                            Some(_) => None,
+                            None => self.enum_owning_variant(variant, &enum_name),
+                        };
+                        let scrutinee = self.spelled_enum(&enum_name).unwrap_or_else(|_| {
+                            crate::modules::source_type_name(&enum_name).to_string()
+                        });
                         self.errors.push(TypeError {
                             kind: TypeErrorKind::NotAVariantInScope {
                                 name: variant.clone(),
                                 written,
+                                scrutinee,
+                                variants: enum_def
+                                    .variants
+                                    .iter()
+                                    .map(|v| v.name.clone())
+                                    .collect(),
+                                owner,
                             },
                             span: *pat_span,
                             reason: ConstraintReason::Other(String::new()),

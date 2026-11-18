@@ -2811,10 +2811,10 @@ fn rc2_100_a_vec_field_refusal_does_not_mention_rc() {
         "E0902",
         &[
             "field `items` of struct `Bag` has type `Vec<i64>`: a Vec inside a struct is not \
-             supported in 0.1; keep the Vec in its own binding and pass it with `&mut`, or use a \
+             supported yet; keep the Vec in its own binding and pass it with `&mut`, or use a \
              fixed-size array field",
         ],
-        &["Rc used outside", "[rc-stage1]", "Rc"],
+        &["Rc used where", "[rc]", "Rc"],
     );
 }
 
@@ -4987,7 +4987,7 @@ fn rc2_198_a_vec_enum_payload_names_the_own_binding_workaround() {
         "E0902",
         &[
             "variant `A` of enum `E` has a payload of type `Vec<string>`: a Vec inside an enum is \
-             not supported in 0.1; keep the Vec in its own binding and pass it with `&mut`",
+             not supported yet; keep the Vec in its own binding and pass it with `&mut`",
         ],
         &["struct or enum"],
     );

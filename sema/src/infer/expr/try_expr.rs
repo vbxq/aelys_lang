@@ -5,7 +5,7 @@ use crate::typed_ast::TypedExprKind;
 use crate::types::InferType;
 use aelys_syntax::{Expr, ExprKind, MatchArm, Pattern, Span, Stmt, StmtKind};
 
-const AMBIGUOUS: &str = "[?-stage1] cannot determine the type of the `?` operand here; give it an explicit `Result`/`Option` type";
+const AMBIGUOUS: &str = "[try] cannot determine the type of the `?` operand here; give it an explicit `Result`/`Option` type";
 const NOT_A_CARRIER: &str = "not a `Result` or `Option` value";
 const NO_CARRIER_RETURN: &str = "this function does not return a `Result`/`Option`";
 
@@ -58,7 +58,7 @@ impl TypeInference {
             Some(t) => t,
             None => {
                 self.errors.push(TypeError::error_handling(
-                    "[?-stage1] `?` used outside a function that returns `Result`/`Option`"
+                    "[try] `?` used outside a function that returns `Result`/`Option`"
                         .to_string(),
                     NO_CARRIER_RETURN,
                     span,
@@ -100,7 +100,7 @@ impl TypeInference {
                     (Some(("Result", _)), InferType::Enum(_, args)) => args[1].clone(),
                     _ => {
                         self.errors.push(TypeError::error_handling(
-                            "[?-stage1] `?` on a `Result` requires the function to return `Result<_, E>`"
+                            "[try] `?` on a `Result` requires the function to return `Result<_, E>`"
                                 .to_string(),
                             NO_CARRIER_RETURN,
                             span,
@@ -118,7 +118,7 @@ impl TypeInference {
             Carrier::Option { .. } => {
                 if !matches!(&ret_carrier, Some(("Option", _))) {
                     self.errors.push(TypeError::error_handling(
-                        "[?-stage1] `?` on an `Option` requires the function to return `Option<_>`"
+                        "[try] `?` on an `Option` requires the function to return `Option<_>`"
                             .to_string(),
                         NO_CARRIER_RETURN,
                         span,
@@ -193,7 +193,7 @@ fn classify_carrier(ty: &InferType) -> Result<Carrier, &'static str> {
         {
             Err(AMBIGUOUS)
         }
-        _ => Err("[?-stage1] the `?` operator expects a `Result<T, E>` or `Option<T>` value"),
+        _ => Err("[try] the `?` operator expects a `Result<T, E>` or `Option<T>` value"),
     }
 }
 

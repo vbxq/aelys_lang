@@ -88,6 +88,10 @@ impl TypeTable {
         self.enums.get(name)
     }
 
+    pub fn enums(&self) -> impl Iterator<Item = &EnumDef> {
+        self.enums.values()
+    }
+
     pub fn has_enum(&self, name: &str) -> bool {
         self.enums.contains_key(name)
     }

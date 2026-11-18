@@ -1485,7 +1485,7 @@ fn main() -> i64 {
         "S0.3b-N4 a conditional whose branches disagree on provenance",
         S03bExpect::Refused(
             "E0410",
-            &["[rc-stage3a]", "field `W.r`", "both one or both the other"],
+            &["[rc]", "field `W.r`", "both one or both the other"],
         ),
         r#"
 struct W { r: Rc<i64> }
@@ -1701,7 +1701,7 @@ fn s03b_the_canary_fires_on_the_pre_repair_measurement() {
         (
             "-O0",
             S03aVerdict::Refused(
-                "error[E0902]: [air-lowering] 1. [rc-stage3a] field `W.r` is initialized from a \
+                "error[E0902]: [air-lowering] 1. [rc] field `W.r` is initialized from a \
                  call returning an `Rc<T>`-bearing value"
                     .to_string(),
             ),
