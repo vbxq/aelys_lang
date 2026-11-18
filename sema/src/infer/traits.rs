@@ -354,7 +354,7 @@ fn unifiable(
 fn head_name(ty: &InferType) -> Option<String> {
     match ty {
         InferType::Struct(n, _) | InferType::Enum(n, _) => Some(n.clone()),
-        InferType::Tuple(_) => None,
+        InferType::Tuple(es) => Some(format!("({})", es.len())),
         other => Some(other.to_string()),
     }
 }
