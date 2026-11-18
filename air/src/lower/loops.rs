@@ -4,6 +4,23 @@ use aelys_sema::{InferType, TypedExpr, TypedExprKind, TypedStmt};
 use aelys_syntax::UnaryOp;
 
 impl<'a> LoweringContext<'a> {
+    fn assert_step(&mut self, step: LocalId, op: BinOp, zero: Operand, message: &str, sp: Option<Span>) {
+        let holds = self.emit_rvalue_to_temp(AirType::Bool, Rvalue::BinaryOp(op, Operand::Copy(step), zero), sp);
+        let ok = self.alloc_block_id();
+        let fail = self.alloc_block_id();
+        self.seal_block(AirTerminator::Branch {
+            cond: holds,
+            then_block: ok,
+            else_block: fail,
+        });
+        self.fixup_block_id_noop(fail);
+        self.seal_block(AirTerminator::Panic {
+            message: message.to_string(),
+            span: sp,
+        });
+        self.fixup_block_id_noop(ok);
+    }
+
     pub(super) fn lower_for(
         &mut self,
         iterator: &str,
@@ -64,6 +81,17 @@ impl<'a> LoweringContext<'a> {
             self.locals_by_name.truncate(scope_depth);
             return;
         }
+        if let Some(step_expr) = step.as_ref().filter(|s| !step_expr_is_positive(s)) {
+            let at = Some(self.span(&step_expr.span));
+            let zero = Operand::Const(
+                iter_ty
+                    .int_size()
+                    .map(|s| AirConst::Int(0, s))
+                    .unwrap_or(AirConst::IntLiteral(0)),
+            );
+            self.assert_step(step_local, BinOp::Ne, zero.clone(), "assertion failed: step != 0", at);
+            self.assert_step(step_local, BinOp::Gt, zero, "assertion failed: step > 0", at);
+        }
 
         let header_id = self.alloc_block_id();
         let body_id = self.alloc_block_id();
@@ -75,114 +103,18 @@ impl<'a> LoweringContext<'a> {
         self.seal_block(AirTerminator::Goto(header_id));
 
         self.fixup_block_id_noop(header_id);
-        let step_is_negative = step.as_ref().is_some_and(|s| step_expr_is_negative(s));
-        let step_is_const = step.as_ref().map_or(true, |s| {
-            step_expr_is_negative(s) || step_expr_is_positive(s)
-        });
-
         let cond_local = self.alloc_temp(AirType::Bool);
-        if step_is_const {
-            let cmp_op = if step_is_negative {
-                if inclusive { BinOp::Ge } else { BinOp::Gt }
-            } else {
-                if inclusive { BinOp::Le } else { BinOp::Lt }
-            };
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(cond_local),
-                    rvalue: Rvalue::BinaryOp(
-                        cmp_op,
-                        Operand::Copy(iter_local),
-                        Operand::Copy(end_local),
-                    ),
-                },
-                None,
-            );
-        } else {
-            let zero = Operand::Const(
-                iter_ty
-                    .int_size()
-                    .map(|s| AirConst::Int(0, s))
-                    .unwrap_or(AirConst::IntLiteral(0)),
-            );
-            let step_neg_local = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(step_neg_local),
-                    rvalue: Rvalue::BinaryOp(BinOp::Lt, Operand::Copy(step_local), zero),
-                },
-                None,
-            );
-            let fwd_op = if inclusive { BinOp::Le } else { BinOp::Lt };
-            let bwd_op = if inclusive { BinOp::Ge } else { BinOp::Gt };
-            let fwd_local = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(fwd_local),
-                    rvalue: Rvalue::BinaryOp(
-                        fwd_op,
-                        Operand::Copy(iter_local),
-                        Operand::Copy(end_local),
-                    ),
-                },
-                None,
-            );
-            let bwd_local = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(bwd_local),
-                    rvalue: Rvalue::BinaryOp(
-                        bwd_op,
-                        Operand::Copy(iter_local),
-                        Operand::Copy(end_local),
-                    ),
-                },
-                None,
-            );
-            let neg_and_bwd = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(neg_and_bwd),
-                    rvalue: Rvalue::BinaryOp(
-                        BinOp::And,
-                        Operand::Copy(step_neg_local),
-                        Operand::Copy(bwd_local),
-                    ),
-                },
-                None,
-            );
-            let not_neg = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(not_neg),
-                    rvalue: Rvalue::UnaryOp(UnOp::Not, Operand::Copy(step_neg_local)),
-                },
-                None,
-            );
-            let pos_and_fwd = self.alloc_temp(AirType::Bool);
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(pos_and_fwd),
-                    rvalue: Rvalue::BinaryOp(
-                        BinOp::And,
-                        Operand::Copy(not_neg),
-                        Operand::Copy(fwd_local),
-                    ),
-                },
-                None,
-            );
-            self.emit(
-                AirStmtKind::Assign {
-                    place: Place::Local(cond_local),
-                    rvalue: Rvalue::BinaryOp(
-                        BinOp::Or,
-                        Operand::Copy(neg_and_bwd),
-                        Operand::Copy(pos_and_fwd),
-                    ),
-                },
-                None,
-            );
-        }
+        self.emit(
+            AirStmtKind::Assign {
+                place: Place::Local(cond_local),
+                rvalue: Rvalue::BinaryOp(
+                    if inclusive { BinOp::Le } else { BinOp::Lt },
+                    Operand::Copy(iter_local),
+                    Operand::Copy(end_local),
+                ),
+            },
+            None,
+        );
         self.seal_block(AirTerminator::Branch {
             cond: Operand::Copy(cond_local),
             then_block: body_id,
@@ -462,20 +394,6 @@ impl<'a> LoweringContext<'a> {
         self.restamp_str_temps(&dominated);
         self.emit_scope_rc_releases(scope_depth);
         self.locals_by_name.truncate(scope_depth);
-    }
-}
-
-fn step_expr_is_negative(step: &TypedExpr) -> bool {
-    match &step.kind {
-        TypedExprKind::Int(v) => *v < 0,
-        TypedExprKind::Unary {
-            op: UnaryOp::Neg,
-            operand,
-        } => match &operand.kind {
-            TypedExprKind::Int(v) => *v > 0,
-            _ => false,
-        },
-        _ => false,
     }
 }
 

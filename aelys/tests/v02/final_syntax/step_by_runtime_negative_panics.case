@@ -1,0 +1,12 @@
+fn run(k: i64) -> i64 {
+    let mut n = 0;
+    for i in (0..10).step_by(k) {
+        n += i;
+    }
+    n
+}
+
+fn main() {
+    println!("{}", run(3));
+    println!("{}", run(-2));
+}
