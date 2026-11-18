@@ -1,0 +1,23 @@
+trait Area {
+    fn area(&self) -> i64
+}
+
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Area for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+}
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return 0 }
+}
+
+fn main() -> i64 {
+    println(Sq { s: 2 }.area())
+    return 0
+}

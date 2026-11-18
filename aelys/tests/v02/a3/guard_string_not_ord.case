@@ -1,0 +1,6 @@
+fn lt<T: ord>(a: T, b: T) -> bool { return a < b }
+
+fn main() -> i64 {
+    println(lt("a", "b"))
+    return 0
+}

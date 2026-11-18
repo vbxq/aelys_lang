@@ -1,0 +1,19 @@
+trait A {
+    fn name(&self) -> i64
+}
+
+struct P { v: i64 }
+
+impl P {
+    fn name(&self) -> i64 { return self.v }
+}
+
+impl A for P {
+    fn name(&self) -> i64 { return self.v + 1 }
+}
+
+fn main() -> i64 {
+    let p = P { v: 10 }
+    println(p.name())
+    return 0
+}

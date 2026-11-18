@@ -1,0 +1,9 @@
+needs Area from shapes
+
+pub struct Pt { pub v: i64 }
+
+impl Area for Pt {
+    fn area(&self) -> i64 { return self.v * 3 }
+}
+
+pub fn mk(v: i64) -> Pt { return Pt { v: v } }

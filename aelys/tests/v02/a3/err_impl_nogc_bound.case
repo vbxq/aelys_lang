@@ -1,0 +1,9 @@
+struct Sq { s: i64 }
+
+impl nogc for Sq {
+}
+
+fn main() -> i64 {
+    println(Sq { s: 2 }.s)
+    return 0
+}

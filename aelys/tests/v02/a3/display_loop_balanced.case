@@ -1,0 +1,17 @@
+struct Tag { name: string, n: i64 }
+
+impl Display for Tag {
+    fn to_string(&self) -> string { return "{self.name}#{self.n}" }
+}
+
+fn main() -> i64 {
+    let mut acc: i64 = 0
+    for i in 0..2000 {
+        let t = Tag { name: "t", n: i }
+        let s = "{t}"
+        acc = acc + s.len
+    }
+    println(acc)
+    println(Tag { name: "end", n: 7 })
+    return 0
+}

@@ -1,0 +1,28 @@
+trait Area {
+    fn area(&self) -> i64
+    fn tagged(&self) -> i64 { return self.area() * 10 + 1 }
+}
+
+struct Sq { s: i64 }
+struct Rect { w: i64, h: i64 }
+
+impl Area for Sq {
+    fn area(&self) -> i64 { return self.s * self.s }
+}
+
+impl Area for Rect {
+    fn area(&self) -> i64 { return self.w * self.h + 1000 }
+    fn tagged(&self) -> i64 { return self.area() * 10 + 2 }
+}
+
+fn t<T: Area>(x: T) -> i64 { return x.tagged() }
+
+fn main() -> i64 {
+    let a = Sq { s: 3 }
+    let b = Rect { w: 2, h: 5 }
+    println(a.tagged())
+    println(b.tagged())
+    println(t(a))
+    println(t(b))
+    return 0
+}
