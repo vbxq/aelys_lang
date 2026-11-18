@@ -28,7 +28,11 @@ pub fn localize_imports(imports: &mut ModuleImports) {
         own.alias(alias);
     }
     imports.methods = own.methods(std::mem::take(&mut imports.methods));
-    for def in imports.traits.values_mut().chain(imports.all_traits.values_mut()) {
+    for def in imports
+        .traits
+        .values_mut()
+        .chain(imports.all_traits.values_mut())
+    {
         own.trait_def(def);
     }
     for imp in &mut imports.impls {

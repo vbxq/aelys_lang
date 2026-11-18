@@ -1,6 +1,6 @@
 use crate::{
-    AirBlock, AirConst, AirEnumDef, AirFunction, AirGlobal, AirProgram, AirStmtKind,
-    AirStructDef, AirTerminator, AirType, Callee, EnumRef, FunctionId, Operand, Place, Rvalue,
+    AirBlock, AirConst, AirEnumDef, AirFunction, AirGlobal, AirProgram, AirStmtKind, AirStructDef,
+    AirTerminator, AirType, Callee, EnumRef, FunctionId, Operand, Place, Rvalue,
 };
 use std::collections::{HashMap, HashSet};
 

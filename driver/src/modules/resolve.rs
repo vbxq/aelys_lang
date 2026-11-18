@@ -94,7 +94,12 @@ pub(crate) fn discover(
         if std::mem::replace(&mut reached[index], true) {
             continue;
         }
-        pending.extend(discovery.units[index].imports.iter().map(ResolvedImport::target));
+        pending.extend(
+            discovery.units[index]
+                .imports
+                .iter()
+                .map(ResolvedImport::target),
+        );
     }
     for (unit, reached) in discovery.units.iter_mut().zip(reached) {
         unit.prelude_only = !reached;
@@ -279,7 +284,9 @@ impl Discovery {
             ModuleFile::Embedded { name, .. } => PathBuf::from(embedded_std_path(name)),
         };
         if let Some(index) = self.by_file.get(&identity).copied() {
-            self.imported_as.entry(index).or_insert_with(|| dotted.clone());
+            self.imported_as
+                .entry(index)
+                .or_insert_with(|| dotted.clone());
             self.by_path.insert(dotted, index);
             return Ok(index);
         }

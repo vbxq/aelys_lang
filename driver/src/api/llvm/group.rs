@@ -23,7 +23,8 @@ pub(super) fn declare(
             ..Default::default()
         })
     }));
-    let rounds = units[first..].iter().map(|unit| unit.stmts.len()).sum::<usize>() + 2;
+    let items: usize = units[first..].iter().map(|u| u.stmts.len()).sum();
+    let rounds = items + 2;
     for _ in 0..rounds {
         let mut settled = true;
         for (index, unit) in units.iter().enumerate().skip(first) {
