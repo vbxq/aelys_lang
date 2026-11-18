@@ -4,6 +4,6 @@ fn main() {
     println(p.a)
     println(p.b)
     let q: Pair<u8, i8> = Pair { a: 250, b: -100 }
-    println(q.a + 5)
-    println(q.b)
+    println(q.a + 10)
+    println(q.b - 100)
 }

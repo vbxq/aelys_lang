@@ -1,0 +1,4 @@
+needs m
+pub fn mk(x: i64) -> m.W<i64> {
+    return m.W { v: x * 2 }
+}

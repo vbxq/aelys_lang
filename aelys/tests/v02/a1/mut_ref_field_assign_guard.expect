@@ -1,0 +1,2 @@
+refuse E0401
+cannot assign to immutable variable `p`

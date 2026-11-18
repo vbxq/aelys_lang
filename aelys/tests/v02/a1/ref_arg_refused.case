@@ -1,0 +1,6 @@
+struct W<T> { v: T }
+fn main() {
+    let x = 5
+    let w = W { v: &x }
+    println(1)
+}

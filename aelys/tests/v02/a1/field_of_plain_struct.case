@@ -4,5 +4,5 @@ fn main() {
     let l = Line { src: Pair { a: 1, b: 2 }, dst: Pair { a: 4, b: 6 } }
     let dx = l.dst.a - l.src.a
     let dy = l.dst.b - l.src.b
-    println(dx * dx + dy * dy)
+    println(dx * 10 + dy)
 }

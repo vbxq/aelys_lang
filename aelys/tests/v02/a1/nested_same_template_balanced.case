@@ -1,0 +1,19 @@
+struct W<T> { v: T }
+struct Pair<A, B> { a: A, b: B }
+fn main() {
+    let mut i = 0
+    let mut n = 0
+    while i < 50 {
+        let p = Pair { a: Pair { a: i, b: 1 }, b: Pair { a: 2, b: "s" + "{i}" } }
+        let q = p
+        n = n + q.a.a + q.b.a
+        let w: W<W<string>> = W { v: W { v: "w" + "{i}" } }
+        let w2 = w
+        if i == 49 {
+            println(w2.v.v)
+            println(q.b.b)
+        }
+        i = i + 1
+    }
+    println(n)
+}

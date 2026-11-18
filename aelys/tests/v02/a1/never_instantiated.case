@@ -1,0 +1,4 @@
+struct Never<T> { v: T, next: Rc<Never<T>>, o: Option<T> }
+fn main() {
+    println(42)
+}

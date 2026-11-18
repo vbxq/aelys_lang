@@ -1,0 +1,5 @@
+needs m
+needs n
+fn main() {
+    println(m.get(n.mk(20)) + m.get(m.W { v: 2 }))
+}

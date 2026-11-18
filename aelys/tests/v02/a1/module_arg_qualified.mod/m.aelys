@@ -1,0 +1,5 @@
+pub struct Inner { pub x: i64 }
+pub struct Pair<A, B> { pub a: A, pub b: B }
+pub fn mk() -> Pair<Inner, i64> {
+    return Pair { a: Inner { x: 40 }, b: 2 }
+}
