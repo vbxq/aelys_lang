@@ -2,7 +2,7 @@ use aelys_air::symbols::SymbolCarrier;
 use aelys_codegen::{AirNodeLocation, AirNodePosition, LlvmBackendError};
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind, Fault};
 use aelys_common::{Diagnostic, Replacement, Severity, Suggestion};
-use aelys_sema::{InferType, TypeError, TypeErrorKind};
+use aelys_sema::{ConstraintReason, InferType, TypeError, TypeErrorKind};
 use aelys_syntax::{Source, Span as SyntaxSpan};
 use std::sync::Arc;
 
