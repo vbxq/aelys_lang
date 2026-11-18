@@ -186,7 +186,6 @@ impl TokenKind {
                 | Self::From
                 | Self::For
                 | Self::In
-                | Self::Step
                 | Self::Struct
                 | Self::Enum
                 | Self::Match
