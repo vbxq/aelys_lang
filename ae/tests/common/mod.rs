@@ -3,63 +3,58 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub const HELLO: &str = "fn main() -> i64 {\n    println(\"Hello, world!\")\n    return 0\n}\n";
+pub const HELLO: &str = "fn main() {\n    println!(\"Hello, world!\");\n}\n";
 
-pub const SUM_TO_TEN: &str = "fn main() -> i64 {
-    let mut total = 0
-    let mut i = 1
+pub const SUM_TO_TEN: &str = "fn main() {
+    let mut total = 0;
+    let mut i = 1;
     while i <= 10 {
-        total = total + i
-        i = i + 1
+        total = total + i;
+        i = i + 1;
     }
-    println(total)
-    return 0
+    println!(\"{}\", total);
 }
 ";
 
-pub const PRINTS_ONE: &str = "fn main() -> i64 {\n    println(1)\n    return 0\n}\n";
+pub const PRINTS_ONE: &str = "fn main() {\n    println!(\"{}\", 1);\n}\n";
 
-pub const PRINTS_TWO: &str = "fn main() -> i64 {\n    println(2)\n    return 0\n}\n";
+pub const PRINTS_TWO: &str = "fn main() {\n    println!(\"{}\", 2);\n}\n";
 
-pub const EXITS_THREE: &str = "fn main() -> i64 {\n    return 3\n}\n";
+pub const EXITS_THREE: &str = "use std::process::ExitCode; fn main() -> ExitCode {\n    return ExitCode::from(3);\n}\n";
 
-pub const ABORTS: &str = "unsafe extern nogc fn abort()
+pub const ABORTS: &str = "extern \"C\" { nogc fn abort(); }
 
-fn main() -> i64 {
-    unsafe { abort() }
-    return 0
+fn main() {
+    unsafe { abort(); }
 }
 ";
 
-pub const TYPE_ERROR: &str = "fn main() -> i64 {\n    let n: i64 = \"three\"\n    return 0\n}\n";
+pub const TYPE_ERROR: &str = "fn main() {\n    let n: i64 = \"three\";\n}\n";
 
-pub const NO_MAIN: &str = "fn helper() -> i64 {\n    return 1\n}\n";
+pub const NO_MAIN: &str = "fn helper() -> i64 {\n    1\n}\n";
 
-pub const HELPER_MODULE: &str = "pub fn helper() -> i64 {\n    return 7\n}\n";
+pub const HELPER_MODULE: &str = "pub fn helper() -> i64 {\n    7\n}\n";
 
-pub const SQRT_OF_TWO: &str = "unsafe extern nogc fn sqrt(x: f64) -> f64
+pub const SQRT_OF_TWO: &str = "extern \"C\" { nogc fn sqrt(x: f64) -> f64; }
 
-fn main() -> i64 {
-    let r = unsafe { sqrt(2.0) }
-    println(r)
-    return 0
+fn main() {
+    let r = unsafe { sqrt(2.0) };
+    println!(\"{}\", r);
 }
 ";
 
-pub const CALLS_AEFOO: &str = "unsafe extern nogc fn aefoo_answer() -> i64
+pub const CALLS_AEFOO: &str = "extern \"C\" { nogc fn aefoo_answer() -> i64; }
 
-fn main() -> i64 {
-    println(unsafe { aefoo_answer() })
-    return 0
+fn main() {
+    println!(\"{}\", unsafe { aefoo_answer() });
 }
 ";
 
-pub const CALLS_SDL: &str = "unsafe extern nogc fn SDL_GetRevisionNumber() -> i32
+pub const CALLS_SDL: &str = "extern \"C\" { nogc fn SDL_GetRevisionNumber() -> i32; }
 
-fn main() -> i64 {
-    let r = unsafe { SDL_GetRevisionNumber() }
-    println(r >= 0)
-    return 0
+fn main() {
+    let r = unsafe { SDL_GetRevisionNumber() };
+    println!(\"{}\", r >= 0);
 }
 ";
 

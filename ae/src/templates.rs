@@ -1,4 +1,4 @@
-pub const BIN_MAIN: &str = "fn main() -> i64 {\n    println(\"Hello, world!\")\n    return 0\n}\n";
+pub const BIN_MAIN: &str = "fn main() {\n    println!(\"Hello, world!\");\n}\n";
 
 pub const GITIGNORE: &str = "/target\n";
 

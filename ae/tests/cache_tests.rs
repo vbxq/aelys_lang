@@ -52,7 +52,7 @@ fn an_unrelated_file_does_not_recompile_but_a_removed_module_does() {
     let dir = project(
         "c_files",
         "",
-        "needs helper\n\nfn main() -> i64 {\n    println(helper.helper())\n    return 0\n}\n",
+        "mod helper;\n\nfn main() {\n    println!(\"{}\", helper::helper());\n}\n",
     );
     write(&dir.join("src/helper.aelys"), HELPER_MODULE);
     assert!(compiles(&ae(&dir, &["build"])));
@@ -72,12 +72,12 @@ fn a_module_behind_a_symlinked_directory_is_tracked() {
         "needs shared.lib\n\nfn main() -> i64 {\n    println(lib.val())\n    return 0\n}\n",
     );
     let lib = dir.join("outside/lib.aelys");
-    write(&lib, "pub fn val() -> i64 {\n    return 1\n}\n");
+    write(&lib, "pub fn val() -> i64 {\n    1\n}\n");
     std::os::unix::fs::symlink("../outside", dir.join("src/shared")).unwrap();
     let first = ae(&dir, &["run"]);
     assert!(compiles(&first));
     assert_eq!(first.stdout, "1\n");
-    write(&lib, "pub fn val() -> i64 {\n    return 2\n}\n");
+    write(&lib, "pub fn val() -> i64 {\n    2\n}\n");
     let edited = ae(&dir, &["run"]);
     assert!(compiles(&edited));
     assert_eq!(edited.stdout, "2\n");
@@ -148,16 +148,16 @@ fn editing_a_module_inside_an_import_cycle_recompiles() {
     let dir = project(
         "c_cycle",
         "",
-        "needs ev\n\nfn main() -> i64 {\n    println(ev.parity(7))\n    return 0\n}\n",
+        "mod ev;\n\nfn main() {\n    println!(\"{}\", ev::parity(7));\n}\n",
     );
     write(
         &dir.join("src/ev.aelys"),
-        "needs od\n\npub fn is_even(n: i64) -> bool {\n    if n == 0 { return true }\n    return od.is_odd(n - 1)\n}\n\npub fn parity(n: i64) -> i64 {\n    if is_even(n) { return od.base() }\n    return od.base() + 1\n}\n",
+        "mod od;\n\npub fn is_even(n: i64) -> bool {\n    if n == 0 { return true; }\n    od::is_odd(n - 1)\n}\n\npub fn parity(n: i64) -> i64 {\n    if is_even(n) { return od::base(); }\n    od::base() + 1\n}\n",
     );
     let od = dir.join("src/od.aelys");
     let odd = |base: i64| {
         format!(
-            "needs ev\n\npub fn is_odd(n: i64) -> bool {{\n    if n == 0 {{ return false }}\n    return ev.is_even(n - 1)\n}}\n\npub fn base() -> i64 {{\n    return {base}\n}}\n"
+            "mod ev;\n\npub fn is_odd(n: i64) -> bool {{\n    if n == 0 {{ return false; }}\n    ev::is_even(n - 1)\n}}\n\npub fn base() -> i64 {{\n    {base}\n}}\n"
         )
     };
     write(&od, &odd(10));
