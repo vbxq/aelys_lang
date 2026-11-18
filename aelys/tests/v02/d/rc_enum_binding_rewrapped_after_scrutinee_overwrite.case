@@ -1,0 +1,13 @@
+struct N { val: i64 }
+enum E { A(Rc<N>), Z }
+fn main() -> i64 {
+    let mut head: E = E::A(Rc::new(N { val: 2 }))
+    let mut out: E = E::Z
+    match head {
+        E::A(h) => { head = E::Z
+            out = E::A(h) }
+        E::Z => { }
+    }
+    match out { E::A(n) => { println(Rc::get(n).val) } E::Z => { println(0) } }
+    return 0
+}

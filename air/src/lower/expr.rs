@@ -2675,6 +2675,9 @@ impl<'a> LoweringContext<'a> {
                         self.str_locals
                             .push((field_local, self.locals_by_name.len()));
                     }
+                    if matches!(field_ty, AirType::Rc(_)) {
+                        self.own_rc_binder(field_local, sp);
+                    }
                 }
             }
 
@@ -2702,8 +2705,18 @@ impl<'a> LoweringContext<'a> {
                 for id in binders {
                     self.emit_str_release(id, None);
                 }
+                let rc_binders: Vec<LocalId> = self
+                    .rc_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in rc_binders {
+                    self.emit_rc_release(id, None);
+                }
             }
             self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
+            self.rc_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
@@ -2810,6 +2823,14 @@ impl<'a> LoweringContext<'a> {
                 self.emit_str_retain(*local, sp);
                 self.str_locals.push((*local, self.locals_by_name.len()));
             }
+            let rc_binds: Vec<LocalId> = binds
+                .iter()
+                .filter(|(_, _, ty)| matches!(ty, AirType::Rc(_)))
+                .map(|(_, l, _)| *l)
+                .collect();
+            for local in &rc_binds {
+                self.own_rc_binder(*local, sp);
+            }
             if let Some(guard) = arm.guard() {
                 let before = self.str_temp_ids();
                 let cond = self.lower_expr(guard);
@@ -2825,6 +2846,9 @@ impl<'a> LoweringContext<'a> {
                     self.fixup_block_id_noop(guard_fail);
                     for local in &counted {
                         self.emit_str_release(*local, sp);
+                    }
+                    for local in &rc_binds {
+                        self.emit_rc_release(*local, sp);
                     }
                     self.seal_block(AirTerminator::Goto(fail));
                     self.fixup_block_id_noop(body_id);
@@ -2855,8 +2879,18 @@ impl<'a> LoweringContext<'a> {
                 for id in binders {
                     self.emit_str_release(id, None);
                 }
+                let rc_binders: Vec<LocalId> = self
+                    .rc_locals
+                    .iter()
+                    .filter(|(_, d)| *d > arm_scope_depth)
+                    .map(|(l, _)| *l)
+                    .collect();
+                for id in rc_binders {
+                    self.emit_rc_release(id, None);
+                }
             }
             self.str_locals.retain(|(_, d)| *d <= arm_scope_depth);
+            self.rc_locals.retain(|(_, d)| *d <= arm_scope_depth);
             self.locals_by_name.truncate(arm_scope_depth);
             self.seal_block(AirTerminator::Goto(merge_id));
         }
@@ -2872,6 +2906,12 @@ impl<'a> LoweringContext<'a> {
         self.restamp_str_temps(&dominated);
         self.pose_owned_str_result(result, str_result || rc_result.is_some());
         result.map_or(Operand::Const(AirConst::Null), Operand::Copy)
+    }
+
+    // a binding into a place the arm may overwrite must hold its own share
+    fn own_rc_binder(&mut self, local: LocalId, sp: Option<Span>) {
+        self.emit_rc_retain(Operand::Copy(local), sp);
+        self.rc_locals.push((local, self.locals_by_name.len()));
     }
 
     fn branch_or_fail(&mut self, cond: Operand, fail: BlockId, negate: bool) {

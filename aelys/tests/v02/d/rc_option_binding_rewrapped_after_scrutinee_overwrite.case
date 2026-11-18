@@ -1,0 +1,12 @@
+struct N { val: i64 }
+fn main() -> i64 {
+    let mut head: Option<Rc<N>> = Some(Rc::new(N { val: 2 }))
+    let mut out: Option<Rc<N>> = None
+    match head {
+        Some(h) => { head = None
+            out = Some(h) }
+        None => { }
+    }
+    match out { Some(n) => { println(Rc::get(n).val) } None => { println(0) } }
+    return 0
+}
