@@ -230,7 +230,9 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::EnumVariant {
                 enum_name, variant, ..
             } if enum_name == "Rc" && variant == "get" => true,
-            TypedExprKind::Identifier(name) => self.lookup_local(name).is_some(),
+            TypedExprKind::Identifier(name) => {
+                self.lookup_local(name).is_some() || self.is_global_name(name)
+            }
             TypedExprKind::Member { object, .. } | TypedExprKind::Index { object, .. } => {
                 !Self::views_a_slice(&object.ty) && self.store_root_owns(object)
             }

@@ -575,16 +575,12 @@ impl CodegenContext {
         })?;
         let headered_ty = rc_headered_bytes_type(self.context, array_len);
         let storage_name = format!("{}{}_bytes", GLOBAL_STORAGE_PREFIX, name);
-        let backing = if let Some(existing) = self.module.get_global(&storage_name) {
-            existing
-        } else {
-            let global_value = self.module.add_global(headered_ty, None, &storage_name);
-            global_value.set_linkage(Linkage::Private);
-            global_value.set_constant(true);
-            global_value.set_alignment(RC_HEADER_SIZE as u32);
-            global_value.set_initializer(&rc_headered_bytes_value(self.context, bytes));
-            global_value
-        };
+        // one global can hold several strings, so each gets its own backing and llvm renames the clash
+        let backing = self.module.add_global(headered_ty, None, &storage_name);
+        backing.set_linkage(Linkage::Private);
+        backing.set_constant(true);
+        backing.set_alignment(RC_HEADER_SIZE as u32);
+        backing.set_initializer(&rc_headered_bytes_value(self.context, bytes));
 
         let ptr = unsafe {
             backing

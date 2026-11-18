@@ -1,0 +1,13 @@
+let mut ga: [string; 3] = ["a", "b", "c"]
+fn set(i: i64) {
+    ga[1] = "e" + "{i}"
+}
+fn main() {
+    let mut i = 0
+    while i < 400 {
+        set(i)
+        i = i + 1
+    }
+    println("{ga[0]} {ga[1]} {ga[2]}")
+    ga[1] = "end"
+}
