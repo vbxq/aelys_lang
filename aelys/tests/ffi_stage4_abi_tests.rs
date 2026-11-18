@@ -271,6 +271,7 @@ fn program_of(functions: Vec<AirFunction>) -> AirProgram {
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 

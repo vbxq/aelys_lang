@@ -122,6 +122,7 @@ fn array_index_read_generates_gep_and_bounds_check() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -209,6 +210,7 @@ fn string_index_below_sema_is_refused_by_codegen() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let err = compile_air_error(&program);
@@ -289,6 +291,7 @@ fn array_index_write_generates_gep_and_store() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -382,6 +385,7 @@ fn bounds_check_structure_has_unreachable_after_panic() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

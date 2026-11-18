@@ -78,6 +78,7 @@ fn llvm_panic_uses_ptr_len_signature() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -136,6 +137,7 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -268,6 +270,7 @@ fn ssa_params_use_llvm_args_directly() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -353,6 +356,7 @@ fn mutable_locals_use_alloca_with_correct_alignment() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);

@@ -30,6 +30,7 @@ fn empty_program() -> AirProgram {
         mono_instances: Vec::new(),
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 

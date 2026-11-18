@@ -95,6 +95,7 @@ fn program_with(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> AirProgra
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
+        dyn_tables: Default::default(),
     };
     let errs = compute_layouts(&mut p);
     assert!(errs.is_empty(), "layout errors: {errs:?}");
@@ -201,6 +202,7 @@ fn unit_missing_field_offset_is_a_hard_error() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
+        dyn_tables: Default::default(),
     };
     p.struct_sizes.clear();
     let err = compute_offset_for_path(
@@ -521,6 +523,7 @@ fn b_extra_collect_dedups_and_orders_by_appearance() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
+        dyn_tables: Default::default(),
     };
     let errs = compute_layouts(&mut p);
     assert!(errs.is_empty(), "layout: {errs:?}");
@@ -593,6 +596,7 @@ fn opta_no_real_type_is_zero() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: Default::default(),
+        dyn_tables: Default::default(),
     };
     let errs = compute_layouts(&mut p);
     assert!(errs.is_empty(), "layout: {errs:?}");

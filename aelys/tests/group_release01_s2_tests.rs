@@ -1763,6 +1763,7 @@ fn program_with(stmts: Vec<AirStmtKind>, ret: Operand) -> AirProgram {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 

@@ -33,6 +33,7 @@ fn program(structs: Vec<AirStructDef>) -> AirProgram {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 
@@ -64,6 +65,7 @@ fn program_with_enums(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> Air
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 

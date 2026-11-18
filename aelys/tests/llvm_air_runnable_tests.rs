@@ -89,6 +89,7 @@ fn program_with(locals: Vec<AirLocal>, stmts: Vec<AirStmt>, ret: Operand) -> Air
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     }
 }
 

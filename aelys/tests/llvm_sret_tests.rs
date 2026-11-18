@@ -129,6 +129,7 @@ fn extern_c_struct_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     if cfg!(target_os = "windows") {
@@ -195,6 +196,7 @@ fn c_convention_aelys_fn_returning_struct_uses_sret_on_windows_and_is_rejected_e
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     if cfg!(target_os = "windows") {
@@ -262,6 +264,7 @@ fn fastcc_struct_return_does_not_use_sret() {
         mono_instances: vec![],
         struct_sizes: std::collections::HashMap::new(),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let ir = compile_air_to_verified_ir(&program);
@@ -384,6 +387,7 @@ fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     if cfg!(target_os = "windows") {
@@ -458,6 +462,7 @@ fn extern_c_data_enum_param_is_rejected() {
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let mut codegen = CodegenContext::new("enum_param_reject");
@@ -594,6 +599,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     if !cfg!(target_os = "windows") {
@@ -682,6 +688,7 @@ fn c_convention_defined_data_enum_param_is_rejected() {
             aelys_air::layout::TypeLayout { size: 16, align: 8 },
         )]),
         rc_type_table: aelys_air::rc_types::RcTypeTable::default(),
+        dyn_tables: Default::default(),
     };
 
     let mut codegen = CodegenContext::new("c_param_reject");
