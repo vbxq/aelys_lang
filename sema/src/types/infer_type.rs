@@ -365,6 +365,20 @@ impl InferType {
         Self::ord_types().contains(self)
     }
 
+    pub fn int_bounds(&self) -> Option<(i128, i128)> {
+        match self {
+            InferType::I8 => Some((i8::MIN as i128, i8::MAX as i128)),
+            InferType::I16 => Some((i16::MIN as i128, i16::MAX as i128)),
+            InferType::I32 => Some((i32::MIN as i128, i32::MAX as i128)),
+            InferType::I64 => Some((i64::MIN as i128, i64::MAX as i128)),
+            InferType::U8 => Some((0, u8::MAX as i128)),
+            InferType::U16 => Some((0, u16::MAX as i128)),
+            InferType::U32 => Some((0, u32::MAX as i128)),
+            InferType::U64 => Some((0, u64::MAX as i128)),
+            _ => None,
+        }
+    }
+
     pub fn satisfies_eq(&self) -> bool {
         match self {
             InferType::Tuple(elems) => elems.iter().all(InferType::satisfies_eq),

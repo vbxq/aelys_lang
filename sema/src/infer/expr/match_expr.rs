@@ -512,7 +512,13 @@ impl TypeInference {
     ) -> Option<()> {
         let ok = match (lit, expected) {
             (PatLit::Int(v), t) if t.is_integer() => {
-                let (lo, hi) = int_bounds(t);
+                let Some((lo, hi)) = t.int_bounds() else {
+                    self.pattern_mismatch(
+                        format!("an integer pattern cannot match a `{t}` yet"),
+                        span,
+                    );
+                    return None;
+                };
                 if *v < lo || *v > hi {
                     self.pattern_mismatch(
                         format!("pattern `{v}` does not fit `{t}`, whose values are {lo}..={hi}"),
@@ -901,15 +907,3 @@ impl TypeInference {
     }
 }
 
-pub(crate) fn int_bounds(t: &InferType) -> (i128, i128) {
-    match t {
-        InferType::I8 => (i8::MIN as i128, i8::MAX as i128),
-        InferType::I16 => (i16::MIN as i128, i16::MAX as i128),
-        InferType::I32 => (i32::MIN as i128, i32::MAX as i128),
-        InferType::U8 => (0, u8::MAX as i128),
-        InferType::U16 => (0, u16::MAX as i128),
-        InferType::U32 => (0, u32::MAX as i128),
-        InferType::U64 => (0, u64::MAX as i128),
-        _ => (i64::MIN as i128, i64::MAX as i128),
-    }
-}

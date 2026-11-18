@@ -11,7 +11,6 @@ mod method;
 mod primary;
 mod try_expr;
 
-pub(crate) use match_expr::int_bounds;
 
 use super::{LiteralInit, TypeInference};
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
@@ -1005,6 +1004,7 @@ impl TypeInference {
             && target_name == name
             && !target_args.is_empty()
             && !target_ty.has_vars()
+            && !target_args.iter().any(|t| matches!(t, InferType::Never))
             && matches!(&expr.ty, InferType::Struct(n, a) if n == name && a.len() == target_args.len())
             && let Some(def) = self.type_table.get_struct(name).cloned()
             && def.type_params.len() == target_args.len()
@@ -1067,9 +1067,9 @@ impl TypeInference {
                         let all_expr_var = expr_type_args
                             .iter()
                             .all(|t| matches!(t, InferType::Var(_)));
-                        let all_target_concrete = target_type_args
-                            .iter()
-                            .all(|t| !t.has_vars() && *t != InferType::Dynamic);
+                        let all_target_concrete = target_type_args.iter().all(|t| {
+                            !t.has_vars() && !matches!(t, InferType::Dynamic | InferType::Never)
+                        });
 
                         let def = self.type_table.get_enum(enum_name).cloned();
                         let payload = def.as_ref().and_then(|d| {

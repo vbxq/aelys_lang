@@ -1531,7 +1531,7 @@ const GROUP_C: &[Row] = &[
     Row {
         id: "C18",
         position: "Match.scrutinee, managed",
-        class: Class::MustNotMoveRejected("E0301"),
+        class: Class::MustNotMoveRejected("E0727"),
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
               \x20   return match *r { _ => 0 }\n\
               }\n\
@@ -1589,8 +1589,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C23",
-        position: "Tuple, refused as unsupported",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "TupleLiteral.elements, projected",
+        class: Class::MustNotMoveAccepted,
         src: "nogc fn f(r: &Vec<i64>) -> i64 {\n\
               \x20   let t: (i64, i64) = ((*r)[0], 1)\n\
               \x20   return 0\n\
@@ -1653,22 +1653,22 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C29",
-        position: "F3, a generic struct by value, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3, a generic struct by value",
+        class: Class::MustNotMoveAccepted,
         src: F3_GENERIC_STRUCT_BY_VALUE,
         twin: None,
     },
     Row {
         id: "C30",
-        position: "F3, a generic struct by reference, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3, a generic struct by reference",
+        class: Class::MustNotMoveAccepted,
         src: F3_GENERIC_STRUCT_BY_REF,
         twin: None,
     },
     Row {
         id: "C31",
-        position: "F3, a generic struct as the return type, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3, a generic struct as the return type",
+        class: Class::MustNotMoveAccepted,
         src: F3_GENERIC_STRUCT_AS_RETURN,
         twin: None,
     },
@@ -1681,15 +1681,15 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C33",
-        position: "F3, an explicit nogc bound over a generic struct, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3, an explicit nogc bound over a generic struct",
+        class: Class::MustNotMoveAccepted,
         src: F3_EXPLICIT_NOGC_BOUND,
         twin: None,
     },
     Row {
         id: "C34",
-        position: "F3 callable, a nogc generic over a generic struct, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3 callable, a nogc generic over a generic struct instantiated at i64",
+        class: Class::MustNotMoveAccepted,
         src: "struct G<T> { n: T }\n\
               nogc fn f<T>(g: G<T>) -> i64 { return 0 }\n\
               fn main() -> i64 {\n\
@@ -1700,8 +1700,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C35",
-        position: "F3 callable, a generic struct over a managed carrier, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3 callable, a generic struct over a managed carrier, refused by the effects",
+        class: Class::MustNotMoveRejected("E0727"),
         src: "struct G<T> { n: Vec<T> }\n\
               nogc fn f(g: G<i64>) -> i64 { return 0 }\n\
               fn main() -> i64 { return 0 }\n",
@@ -1718,8 +1718,8 @@ const GROUP_C: &[Row] = &[
     },
     Row {
         id: "C37",
-        position: "F3 callable, a generic struct holding an Rc, refused at its declaration",
-        class: Class::MustNotMoveRejected("E0902"),
+        position: "F3 callable, a generic struct holding an Rc, refused at the binding",
+        class: Class::MustNotMoveRejected("E0410"),
         src: "struct G<T> { n: T }\n\
               fn main() -> i64 {\n\
               \x20   let g: G<Rc<i64>> = G{n: Rc::new(1)}\n\
@@ -3071,7 +3071,7 @@ fn the_corpus_census_is_exact() {
             owed_rows,
             total
         ),
-        (31, 27, 0, 0, 16, 43, 4, 0, 121),
+        (31, 27, 0, 0, 22, 37, 4, 0, 121),
         "the class split changed"
     );
 }
@@ -3628,9 +3628,11 @@ fn the_fail_open_category_boundary_is_where_the_scans_stop() {
     let tt = fs::read_to_string(root.join("sema/src/types/type_table.rs")).expect("type table");
     assert_eq!(
         tt.matches("type_params.is_empty()").count(),
-        4,
-        "the early-outs that make a generic nominal type read as Copy moved. F3's inert rows are \
-         representatives of the class they bound, so the row set has to be re-decided"
+        3,
+        "the early-outs that make a generic nominal type read as Copy moved. a generic struct is \
+         scanned through its instantiated fields and a generic enum still reads as Copy, so F3's \
+         inert rows are representatives of the class they bound and the row set has to be \
+         re-decided"
     );
     for scan in ["fn scan_vec_by_value(", "fn scan_rc_nominal("] {
         assert!(

@@ -1,5 +1,4 @@
 use super::TypeInference;
-use super::expr::int_bounds;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::modules::source_type_name;
 use crate::typed_ast::{TypedExpr, TypedMatchArm, TypedPattern, TypedPatternKind};
@@ -111,7 +110,10 @@ impl Checker<'_> {
         match ty {
             InferType::Bool => Universe::Ranges(vec![(0, 1)]),
             InferType::Char => Universe::Ranges(char_domain()),
-            t if t.is_integer() => Universe::Ranges(vec![int_bounds(t)]),
+            t if t.is_integer() => match t.int_bounds() {
+                Some(bounds) => Universe::Ranges(vec![bounds]),
+                None => Universe::Infinite,
+            },
             InferType::Enum(name, _) => match self.table.get_enum(name) {
                 Some(def) => Universe::Variants(def.variants.iter().map(|v| v.tag).collect()),
                 None => Universe::Infinite,
@@ -438,7 +440,9 @@ fn show_char(c: i128) -> String {
 }
 
 fn show_int(v: i128, ty: &InferType) -> String {
-    let (lo, hi) = int_bounds(ty);
+    let Some((lo, hi)) = ty.int_bounds() else {
+        return v.to_string();
+    };
     if v == lo && lo != 0 {
         format!("{ty}::MIN")
     } else if v == hi {

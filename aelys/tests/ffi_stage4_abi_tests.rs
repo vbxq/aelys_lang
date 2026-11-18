@@ -89,15 +89,23 @@ fn the_pre_existing_rejections_are_unchanged() {
     rejected_e0615("T12", "unsafe extern fn probe(p: void)");
 }
 
-// t15, t16: the two spellings that never existed
+// t15: the spelling that never existed
 #[test]
-fn the_glued_ampersand_and_the_type_alias_are_still_syntax_errors() {
-    for (id, source) in [
-        ("T15", "unsafe extern fn probe() -> &&i64"),
-        ("T16", "type H = &i64"),
+fn the_glued_ampersand_is_still_a_syntax_error() {
+    let rendered = lower(&format!("unsafe extern fn probe() -> &&i64{MAIN}")).expect_err("T15");
+    assert!(rendered.contains("E0101"), "T15: {rendered}");
+}
+
+// t16: an alias is expanded before the external surface is checked, so it hides no reference
+#[test]
+fn a_type_alias_naming_a_reference_meets_the_same_external_refusal() {
+    for (id, source, named) in [
+        ("T16", "type H = &i64\nunsafe extern fn probe() -> H", "'&i64' for the return type"),
+        ("T16s", "type S = &[i64]\nunsafe extern fn probe(p: S)", "'&[i64]' for parameter `p`"),
     ] {
         let rendered = lower(&format!("{source}{MAIN}")).expect_err(id);
-        assert!(rendered.contains("E0101"), "{id}: {rendered}");
+        assert!(rendered.contains("E0615"), "{id}: {rendered}");
+        assert!(rendered.contains(named), "{id}: {rendered}");
     }
 }
 

@@ -161,3 +161,4 @@ aelys	readme_examples_tests	test
 aelys	group_release01_lk_tests	test
 aelys	group_release01_ng_tests	test
 aelys	v02_e_cli_tests	test
+aelys	v02_matrix_tests	test

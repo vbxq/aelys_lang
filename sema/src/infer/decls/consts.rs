@@ -53,26 +53,8 @@ pub(super) fn scalar_type(ann: &TypeAnnotation) -> Option<InferType> {
         .then_some(ty)
 }
 
-fn range(ty: &InferType) -> (i128, i128) {
-    match ty {
-        InferType::I8 => (i8::MIN as i128, i8::MAX as i128),
-        InferType::I16 => (i16::MIN as i128, i16::MAX as i128),
-        InferType::I32 => (i32::MIN as i128, i32::MAX as i128),
-        InferType::U8 => (0, u8::MAX as i128),
-        InferType::U16 => (0, u16::MAX as i128),
-        InferType::U32 => (0, u32::MAX as i128),
-        InferType::U64 => (0, u64::MAX as i128),
-        _ => (i64::MIN as i128, i64::MAX as i128),
-    }
-}
-
-fn width(ty: &InferType) -> u32 {
-    match ty {
-        InferType::I8 | InferType::U8 => 8,
-        InferType::I16 | InferType::U16 => 16,
-        InferType::I32 | InferType::U32 => 32,
-        _ => 64,
-    }
+fn width(ty: &InferType) -> Option<u32> {
+    ty.int_bounds().map(|(lo, hi)| 128 - (hi - lo).leading_zeros())
 }
 
 fn signed(ty: &InferType) -> bool {
@@ -82,15 +64,15 @@ fn signed(ty: &InferType) -> bool {
     )
 }
 
-fn wrap(v: i128, ty: &InferType) -> i128 {
-    let w = width(ty);
+fn wrap(v: i128, ty: &InferType) -> Option<i128> {
+    let w = width(ty)?;
     let mask = (1i128 << w) - 1;
     let low = v & mask;
-    if signed(ty) && low >= (1i128 << (w - 1)) {
+    Some(if signed(ty) && low >= (1i128 << (w - 1)) {
         low - (1i128 << w)
     } else {
         low
-    }
+    })
 }
 
 impl<'a> ConstEval<'a> {
@@ -174,7 +156,9 @@ impl<'a> ConstEval<'a> {
     }
 
     fn check_int(&mut self, name: &str, v: i128, ty: &InferType, span: Span) -> R<Val> {
-        let (lo, hi) = range(ty);
+        let Some((lo, hi)) = ty.int_bounds() else {
+            return Err(self.not_const(name, span));
+        };
         if v < lo || v > hi {
             return Err(self.fail(name, &format!("overflows `{ty}`"), span));
         }
@@ -294,7 +278,10 @@ impl<'a> ConstEval<'a> {
                     (UnaryOp::Neg, Val::Int(v)) => Ok((self.check_int(owner, -v, &t, e.span)?, t)),
                     (UnaryOp::Neg, Val::Float(v)) => Ok((Val::Float(-v), t)),
                     (UnaryOp::BitNot, Val::Int(v)) => {
-                        let r = if signed(&t) { !v } else { wrap(!v, &t) };
+                        let r = if signed(&t) { Some(!v) } else { wrap(!v, &t) };
+                        let Some(r) = r else {
+                            return Err(self.not_const(owner, e.span));
+                        };
                         Ok((Val::Int(r), t))
                     }
                     (UnaryOp::Not, Val::Bool(b)) => Ok((Val::Bool(!b), t)),
@@ -325,21 +312,29 @@ impl<'a> ConstEval<'a> {
                 let hint = self.natural(owner, expr)?;
                 let (v, _) = self.eval(owner, expr, hint.as_ref())?;
                 let out = match v {
-                    Val::Int(v) if to.is_integer() => Val::Int(wrap(v, &to)),
+                    Val::Int(v) if to.is_integer() => match wrap(v, &to) {
+                        Some(w) => Val::Int(w),
+                        None => return Err(self.not_const(owner, e.span)),
+                    },
                     Val::Int(v) if to.is_float() => Val::Float(v as f64),
                     Val::Float(f) if to.is_float() => {
                         Val::Float(if to == InferType::F32 { f as f32 as f64 } else { f })
                     }
                     Val::Float(f) if to.is_integer() => {
                         let t = f.trunc();
-                        let (lo, hi) = range(&to);
+                        let Some((lo, hi)) = to.int_bounds() else {
+                            return Err(self.not_const(owner, e.span));
+                        };
                         if !t.is_finite() || t < lo as f64 || t > hi as f64 {
                             return Err(self.fail(owner, &format!("overflows `{to}`"), e.span));
                         }
                         Val::Int(t as i128)
                     }
                     Val::Bool(b) if to.is_integer() => Val::Int(b as i128),
-                    Val::Char(c) if to.is_integer() => Val::Int(wrap(c as i128, &to)),
+                    Val::Char(c) if to.is_integer() => match wrap(c as i128, &to) {
+                        Some(w) => Val::Int(w),
+                        None => return Err(self.not_const(owner, e.span)),
+                    },
                     Val::Bool(b) if to == InferType::Bool => Val::Bool(b),
                     Val::Char(c) if to == InferType::Char => Val::Char(c),
                     _ => return Err(self.not_const(owner, e.span)),
@@ -374,11 +369,17 @@ impl<'a> ConstEval<'a> {
             let (Val::Int(l), Val::Int(r)) = (l, r) else {
                 return Err(self.not_const(owner, e.span));
             };
-            if r < 0 || r >= width(&lt) as i128 {
+            let Some(bits) = width(&lt) else {
+                return Err(self.not_const(owner, e.span));
+            };
+            if r < 0 || r >= bits as i128 {
                 return Err(self.fail(owner, &format!("overflows `{lt}`"), e.span));
             }
             let v = if op == BinaryOp::Shl {
-                wrap(l << r, &lt)
+                match wrap(l << r, &lt) {
+                    Some(w) => w,
+                    None => return Err(self.not_const(owner, e.span)),
+                }
             } else {
                 l >> r
             };
@@ -440,7 +441,11 @@ impl<'a> ConstEval<'a> {
                     BinaryOp::BitXor => a ^ b,
                     _ => return Err(self.not_const(owner, e.span)),
                 };
-                if op == BinaryOp::Mod && a == range(&lt).0 && b == -1 && signed(&lt) {
+                if op == BinaryOp::Mod
+                    && lt.int_bounds().is_some_and(|(lo, _)| a == lo)
+                    && b == -1
+                    && signed(&lt)
+                {
                     return Err(self.fail(owner, &format!("overflows `{lt}`"), e.span));
                 }
                 Ok((self.check_int(owner, v, &lt, e.span)?, lt))

@@ -1450,9 +1450,10 @@ impl<'a> BodyBuilder<'a> {
                     ty.clone(),
                     scrutinee.span,
                 );
-                match held {
-                    BirOperand::Copy(p) | BirOperand::Move(p) => Some((p.local, ty)),
-                    BirOperand::Const => None,
+                if let BirOperand::Copy(p) | BirOperand::Move(p) = held {
+                    Some((p.local, ty))
+                } else {
+                    None
                 }
             })
         } else {
