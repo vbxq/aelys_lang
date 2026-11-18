@@ -2661,9 +2661,9 @@ fn expr_children(e: &TypedExpr) -> (&'static str, Vec<&TypedExpr>) {
         ),
         K::Cast { expr, .. } => ("Cast", vec![&**expr]),
         K::EnumVariant { args, .. } => ("EnumVariant", args.iter().collect()),
-        K::Match { scrutinee, arms } => {
+        K::Match { scrutinee, arms, .. } => {
             let mut v = vec![&**scrutinee];
-            v.extend(arms.iter().map(|a| &*a.body));
+            v.extend(arms.iter().map(|a| a.body()));
             ("Match", v)
         }
         K::ResultAssert { scrutinee, .. } => ("ResultAssert", vec![&**scrutinee]),
