@@ -419,7 +419,20 @@ impl TypeInference {
                 self.validate_expr(operand, generic_scope, declared_type_params);
             }
             TypedExprKind::Call { callee, args } => {
-                if !matches!(callee.kind, TypedExprKind::Identifier(_)) {
+                if let TypedExprKind::Member { object, member } = &callee.kind
+                    && let InferType::Tuple(elems) = &object.ty
+                {
+                    self.validate_expr(object, generic_scope, declared_type_params);
+                    self.errors.push(TypeError::member_access(
+                        format!(
+                            "the tuple `{}` has no method `{member}`; a tuple has only its {} \
+                             numbered elements, read as `.0`, `.1` and so on",
+                            object.ty,
+                            elems.len()
+                        ),
+                        callee.span,
+                    ));
+                } else if !matches!(callee.kind, TypedExprKind::Identifier(_)) {
                     self.validate_expr(callee, generic_scope, declared_type_params);
                 }
                 for arg in args {
@@ -648,7 +661,19 @@ impl TypeInference {
                             ));
                         }
                     }
-                    InferType::Dynamic | InferType::Tuple(_) => {}
+                    InferType::Dynamic => {}
+                    InferType::Tuple(_) if member.starts_with(|c: char| c.is_ascii_digit()) => {}
+                    InferType::Tuple(elems) => {
+                        self.errors.push(TypeError::member_access(
+                            format!(
+                                "the tuple `{}` has no field `{member}`; a tuple has only its {} \
+                                 numbered elements, read as `.0`, `.1` and so on",
+                                object.ty,
+                                elems.len()
+                            ),
+                            expr.span,
+                        ));
+                    }
                     InferType::Var(_) if self.is_deferred_site(expr.span, &deferred) => {}
                     other => {
                         self.errors.push(TypeError::member_access(
