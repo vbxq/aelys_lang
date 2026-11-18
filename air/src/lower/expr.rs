@@ -74,6 +74,18 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Bool(v) => Operand::Const(AirConst::Bool(*v)),
             TypedExprKind::Char(cp) => Operand::Const(AirConst::Char(*cp)),
             TypedExprKind::String(v) => Operand::Const(AirConst::Str(v.clone())),
+            TypedExprKind::Null if matches!(expr.ty, InferType::Ref { .. }) => {
+                let ty = self.lower_type_from_infer(&expr.ty);
+                let tmp = self.alloc_temp(ty);
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(tmp),
+                        rvalue: Rvalue::Use(Operand::Const(AirConst::Null)),
+                    },
+                    None,
+                );
+                Operand::Copy(tmp)
+            }
             TypedExprKind::Null => Operand::Const(AirConst::Null),
 
             TypedExprKind::Identifier(name) => {
