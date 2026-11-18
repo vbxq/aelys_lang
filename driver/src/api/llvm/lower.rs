@@ -93,8 +93,31 @@ pub(super) fn compile_air_with_llvm_linked(
         .iter()
         .any(|function| !function.is_extern && function.name == "main");
 
+    let target = if emit_llvm_ir {
+        requested(output, || ir_path_for(path))
+    } else if has_main_entry {
+        requested(output, || executable_path_for(path))
+    } else {
+        requested(output, || object_path_for(path))
+    };
+    if same_file(path, &target) {
+        return Err(backend_diagnostic_error(
+            source.clone(),
+            program_anchor_span(air, source.as_ref()),
+            "output",
+            format!(
+                "the output `{}` is the source file itself, and writing it would destroy the \
+                 source",
+                target.display()
+            ),
+            None,
+            Some("name another output with `-o`".to_string()),
+            Fault::Environment,
+        ));
+    }
+
     if emit_llvm_ir {
-        let ir_path = requested(output, || ir_path_for(path));
+        let ir_path = target;
         let ir_path_str = ir_path.to_string_lossy().to_string();
         codegen
             .emit_ir(&ir_path_str)
@@ -102,11 +125,21 @@ pub(super) fn compile_air_with_llvm_linked(
         return Ok(CompiledArtifact::LlvmIr(ir_path));
     }
 
-    let exe_path = requested(output, || executable_path_for(path));
-    let object_path = if has_main_entry {
-        object_beside(&exe_path)
-    } else {
-        requested(output, || object_path_for(path))
+    let exe_path = target;
+    let object_path = match (has_main_entry, keep_object) {
+        (false, _) => exe_path.clone(),
+        (true, true) => object_path_for(path),
+        (true, false) => private_object_path().map_err(|message| {
+            backend_diagnostic_error(
+                source.clone(),
+                program_anchor_span(air, source.as_ref()),
+                "llvm-linker",
+                message,
+                None,
+                None,
+                Fault::Environment,
+            )
+        })?,
     };
     let object_path_str = object_path.to_string_lossy().to_string();
     codegen
@@ -161,10 +194,62 @@ pub(super) fn compile_air_with_llvm_linked(
     linked.map(|()| CompiledArtifact::Executable(exe_path))
 }
 
-fn object_beside(exe: &Path) -> PathBuf {
-    let mut object = exe.as_os_str().to_owned();
-    object.push(if cfg!(windows) { ".obj" } else { ".o" });
-    PathBuf::from(object)
+// the object of a linked program never takes a name a user file could already hold
+fn private_object_path() -> Result<PathBuf, String> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let dir = std::env::temp_dir();
+    let extension = if cfg!(windows) { "obj" } else { "o" };
+    for _ in 0..64 {
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.subsec_nanos());
+        let candidate = dir.join(format!(
+            "aelys-{}-{}-{}.{}",
+            std::process::id(),
+            nanos,
+            n,
+            extension
+        ));
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
+            Ok(_) => return Ok(candidate),
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(err) => {
+                return Err(format!(
+                    "cannot create a temporary object file in `{}`: {}",
+                    dir.display(),
+                    err
+                ));
+            }
+        }
+    }
+    Err(format!(
+        "cannot create a temporary object file in `{}`",
+        dir.display()
+    ))
+}
+
+fn same_file(a: &Path, b: &Path) -> bool {
+    let (Ok(left), Ok(right)) = (std::fs::metadata(a), std::fs::metadata(b)) else {
+        return false;
+    };
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        left.dev() == right.dev() && left.ino() == right.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (left, right);
+        matches!(
+            (std::fs::canonicalize(a), std::fs::canonicalize(b)),
+            (Ok(x), Ok(y)) if x == y
+        )
+    }
 }
 
 fn claimed_runtime_symbol_error(
