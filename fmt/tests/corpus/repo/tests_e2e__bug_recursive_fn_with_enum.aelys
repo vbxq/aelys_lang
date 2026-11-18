@@ -1,0 +1,27 @@
+// Test: recursive function returning a generic enum.
+// Exercises the interaction between recursion and generic enum mono.
+use std::process::ExitCode; enum Option<T> { Some(T), None }
+
+fn find_first_above(arr: [i64; 5], threshold: i64, idx: i64) -> Option<i64> {
+    if idx >= 5 {
+        return Option::None;
+    }
+    if arr[idx] > threshold {
+        return Option::Some(arr[idx]);
+    }
+    find_first_above(arr, threshold, idx + 1)
+}
+
+fn main() -> ExitCode {
+    let data = [3, 7, 1, 9, 4];
+    let result = find_first_above(data, 5, 0);
+    let val: i64 = match result {
+        Option::Some(v) => v,
+        Option::None => -1,
+    };
+    // First value above 5 is 7 (at index 1)
+    if val == 7 {
+        return ExitCode::SUCCESS;
+    }
+    return ExitCode::from(val as u8);
+}

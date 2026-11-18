@@ -1,0 +1,6 @@
+[package]
+name = "aelys-fmt"
+version.workspace = true
+edition = "2024"
+
+[dependencies]

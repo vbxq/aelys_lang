@@ -1,0 +1,14 @@
+fn step(num: Option<i64>, d: i64, c: char, toks: &mut Vec<Tok>) -> Result<Option<i64>, String> {
+    let num = match num {
+        Some(n) => Some(n * 10 + d),
+        None => Some(d),
+    };
+    match c {
+        ' ' => {}
+        '+' | '-' | '*' | '/' => toks.push(Tok::Op(c)),
+        other => {
+            return Err(format!("unexpected character '{other}'"));
+        }
+    }
+    Ok(num)
+}

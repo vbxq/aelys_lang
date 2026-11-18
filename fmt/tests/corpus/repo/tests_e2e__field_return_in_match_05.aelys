@@ -1,0 +1,15 @@
+// Return in match with wildcard arm
+use std::process::ExitCode; enum Shape { Circle, Square, Triangle }
+
+fn sides(s: Shape) -> i64 {
+    match s {
+        Shape::Triangle => return 3,
+        Shape::Square => return 4,
+        _ => return 0,
+    }
+    -1
+}
+
+fn main() -> ExitCode {
+    return ExitCode::from(sides(Shape::Triangle) as u8);  // 3
+}

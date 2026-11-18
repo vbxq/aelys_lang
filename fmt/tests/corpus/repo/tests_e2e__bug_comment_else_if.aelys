@@ -1,0 +1,15 @@
+// Test: comment between } and else if.
+use std::process::ExitCode; fn main() -> ExitCode {
+    let x: i64 = 5;
+    if x > 10 {
+        return ExitCode::from(1);
+    }
+    // comment here
+    else if x > 3 {
+        return ExitCode::SUCCESS;
+    }
+    // another comment
+    else {
+        return ExitCode::from(2);
+    }
+}

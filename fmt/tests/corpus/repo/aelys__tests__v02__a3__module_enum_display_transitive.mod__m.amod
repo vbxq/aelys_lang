@@ -1,0 +1,8 @@
+use std::fmt; pub enum Shape { Sq, Ci }
+
+impl fmt::Display for Shape {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if *self == Shape::Sq { return write!(f, "square"); }
+        write!(f, "circle")
+    }
+}

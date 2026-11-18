@@ -1,0 +1,386 @@
+
+
+pub nogc fn is_empty(s: String) -> bool { s.len() == 0 }
+
+// i is a byte offset here, the same index s.bytes takes and the same unit s.len counts
+pub nogc fn is_char_boundary(s: String, i: i64) -> bool {
+    if i < 0 { return false; }
+    if i > s.len() { return false; }
+    if i == s.len() { return true; }
+    let b: u8 = s.as_bytes()[i];
+    (b & 192) != 128
+}
+
+pub nogc fn char_len(s: String, i: i64) -> i64 {
+    if i < 0 { return -1; }
+    if i >= s.len() { return -1; }
+    let b: u8 = s.as_bytes()[i];
+    if b < 128 { return 1; }
+    if b < 192 { return -1; }
+    if b < 224 { return 2; }
+    if b < 240 { return 3; }
+    if b < 248 { return 4; }
+    -1
+}
+
+pub nogc fn char_count(s: String) -> i64 {
+    let mut n: i64 = 0;
+    for b in s.as_bytes() {
+        if (b & 192) != 128 { n = n + 1; }
+    }
+    n
+}
+
+nogc fn byte_offset(s: String, k: i64) -> i64 {
+    if k <= 0 { return 0; }
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
+    while i < s.len() {
+        i = i + 1;
+        while i < s.len() && (s.as_bytes()[i] & 192) == 128 { i = i + 1; }
+        n = n + 1;
+        if n == k { return i; }
+    }
+    s.len()
+}
+
+pub nogc fn char_at(s: String, i: i64) -> Option<char> {
+    if i < 0 { return None; }
+    let mut k: i64 = 0;
+    for c in s {
+        if k == i { return Some(c); }
+        k = k + 1;
+    }
+    None
+}
+
+pub fn substring(s: String, start: i64, end: i64) -> String {
+    let mut lo: i64 = start;
+    if lo < 0 { lo = 0; }
+    let mut hi: i64 = end;
+    if hi < lo { hi = lo; }
+    s[byte_offset(s, lo)..byte_offset(s, hi)].to_string()
+}
+
+pub nogc fn compare(a: String, b: String) -> i64 {
+    let mut n: i64 = a.len();
+    if b.len() < n { n = b.len(); }
+    let mut i: i64 = 0;
+    while i < n {
+        let x: u8 = a.as_bytes()[i];
+        let y: u8 = b.as_bytes()[i];
+        if x != y {
+            if x < y { return -1; }
+            return 1;
+        }
+        i = i + 1;
+    }
+    if a.len() < b.len() { return -1; }
+    if a.len() > b.len() { return 1; }
+    0
+}
+
+pub nogc fn starts_with(s: String, p: String) -> bool {
+    if p.len() > s.len() { return false; }
+    for i in 0..p.len() {
+        if s.as_bytes()[i] != p.as_bytes()[i] { return false; }
+    }
+    true
+}
+
+pub nogc fn ends_with(s: String, p: String) -> bool {
+    if p.len() > s.len() { return false; }
+    let off: i64 = s.len() - p.len();
+    for i in 0..p.len() {
+        if s.as_bytes()[off + i] != p.as_bytes()[i] { return false; }
+    }
+    true
+}
+
+// the answer is a character index, so the byte scan counts the characters it walks past
+pub nogc fn index_of(s: String, needle: String) -> i64 {
+    if needle.len() == 0 { return 0; }
+    if needle.len() > s.len() { return -1; }
+    let last: i64 = s.len() - needle.len();
+    let mut i: i64 = 0;
+    let mut n: i64 = 0;
+    while i <= last {
+        if (s.as_bytes()[i] & 192) != 128 {
+            let mut j: i64 = 0;
+            let mut hit: bool = true;
+            while j < needle.len() {
+                if s.as_bytes()[i + j] != needle.as_bytes()[j] {
+                    hit = false;
+                    break;
+                }
+                j = j + 1;
+            }
+            if hit { return n; }
+            n = n + 1;
+        }
+        i = i + 1;
+    }
+    -1
+}
+
+pub nogc fn contains(s: String, needle: String) -> bool { index_of(s, needle) >= 0 }
+
+pub fn repeat(s: String, n: i64) -> String {
+    let mut out: String = "";
+    let mut i: i64 = 0;
+    while i < n {
+        out = out + s;
+        i = i + 1;
+    }
+    out
+}
+
+pub nogc fn is_space(c: char) -> bool {
+    c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+nogc fn space_byte(b: u8) -> bool {
+    b == 32 || b == 9 || b == 10 || b == 13
+}
+
+pub fn trim(s: String) -> String {
+    let mut lo: i64 = 0;
+    while lo < s.len() && space_byte(s.as_bytes()[lo]) { lo = lo + 1; }
+    let mut hi: i64 = s.len();
+    while hi > lo && space_byte(s.as_bytes()[hi - 1]) { hi = hi - 1; }
+    s[lo..hi].to_string()
+}
+
+// an empty separator would never advance, so the whole string comes back as one part
+pub fn split(s: String, sep: String) -> Vec<String> {
+    let mut out = Vec::new();
+    if sep.len() == 0 {
+        Vec::push(out, s);
+        return out;
+    }
+    let mut start: i64 = 0;
+    let mut i: i64 = 0;
+    let last: i64 = s.len() - sep.len();
+    // utf-8 is self synchronising, so a byte run equal to sep can only begin on a character boundary
+    while i <= last {
+        let mut j: i64 = 0;
+        let mut hit: bool = true;
+        while j < sep.len() {
+            if s.as_bytes()[i + j] != sep.as_bytes()[j] {
+                hit = false;
+                break;
+            }
+            j = j + 1;
+        }
+        if hit {
+            let part: String = s[start..i].to_string();
+            Vec::push(out, part);
+            i = i + sep.len();
+            start = i;
+        } else {
+            i = i + 1;
+        }
+    }
+    let tail: String = s[start..s.len()].to_string();
+    Vec::push(out, tail);
+    out
+}
+
+pub fn join(parts: &Vec<String>, sep: String) -> String {
+    let mut out: String = "";
+    let mut lead: bool = true;
+    for p in Vec::as_slice(*parts) {
+        if lead { lead = false; } else { out = out + sep; }
+        out = out + p;
+    }
+    out
+}
+
+nogc fn digit_of(b: u8) -> i64 {
+    if b < 48 { return -1; }
+    if b > 57 { return -1; }
+    (b as i64) - 48
+}
+
+// err codes: 1 empty, 2 sign with no digits, 3 non-digit, 4 out of i64 range
+pub nogc fn parse_int(s: String) -> Result<i64, i64> {
+    if s.len() == 0 { return Err(1); }
+    let mut i: i64 = 0;
+    let mut neg: bool = false;
+    if s.as_bytes()[0] == 45 {
+        neg = true;
+        i = 1;
+    }
+    if i >= s.len() { return Err(2); }
+    // the least i64 is unspellable as a literal
+    let min: i64 = 0 - 9223372036854775807 - 1;
+    let limit: i64 = min / 10;
+    let mut acc: i64 = 0;
+    // + and * wrap silently, so the magnitude accumulates negative and every step is checked before it runs
+    while i < s.len() {
+        let d: i64 = digit_of(s.as_bytes()[i]);
+        if d < 0 { return Err(3); }
+        if acc < limit { return Err(4); }
+        acc = acc * 10;
+        if acc < min + d { return Err(4); }
+        acc = acc - d;
+        i = i + 1;
+    }
+    if neg { return Ok(acc); }
+    if acc == min { return Err(4); }
+    let v: i64 = 0 - acc;
+    Ok(v)
+}
+
+pub fn from_int(n: i64) -> String { format!("{n}") }
+
+pub nogc fn find(s: String, needle: String) -> Option<i64> {
+    let i: i64 = index_of(s, needle);
+    if i < 0 { return None; }
+    Some(i)
+}
+
+pub fn chars(s: String) -> Vec<char> {
+    let mut out = Vec::new();
+    for c in s { Vec::push(out, c); }
+    out
+}
+
+nogc fn line_end(s: String, start: i64, end: i64) -> i64 {
+    if end > start && s.as_bytes()[end - 1] == 13 { return end - 1; }
+    end
+}
+
+pub fn lines(s: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut start: i64 = 0;
+    let mut i: i64 = 0;
+    while i < s.len() {
+        if s.as_bytes()[i] == 10 {
+            let part: String = s[start..line_end(s, start, i)].to_string();
+            Vec::push(out, part);
+            start = i + 1;
+        }
+        i = i + 1;
+    }
+    if start < s.len() {
+        let tail: String = s[start..line_end(s, start, s.len())].to_string();
+        Vec::push(out, tail);
+    }
+    out
+}
+
+pub fn replace(s: String, old: String, new: String) -> String {
+    if old.len() == 0 { return s; }
+    let mut out: String = "";
+    let mut start: i64 = 0;
+    let mut i: i64 = 0;
+    let last: i64 = s.len() - old.len();
+    while i <= last {
+        let mut j: i64 = 0;
+        let mut hit: bool = true;
+        while j < old.len() {
+            if s.as_bytes()[i + j] != old.as_bytes()[j] {
+                hit = false;
+                break;
+            }
+            j = j + 1;
+        }
+        if hit {
+            out = out + s[start..i].to_string() + new;
+            i = i + old.len();
+            start = i;
+        } else {
+            i = i + 1;
+        }
+    }
+    out = out + s[start..s.len()].to_string();
+    out
+}
+
+fn shift_case(c: char, lo: char, hi: char, delta: i64) -> char {
+    if c >= lo && c <= hi { return char::from_i64((c as i64) + delta); }
+    c
+}
+
+pub fn to_upper(s: String) -> String {
+    let mut out: String = "";
+    for c in s { out = out + shift_case(c, 'a', 'z', -32).to_string(); }
+    out
+}
+
+pub fn to_lower(s: String) -> String {
+    let mut out: String = "";
+    for c in s { out = out + shift_case(c, 'A', 'Z', 32).to_string(); }
+    out
+}
+
+pub fn pad_left(s: String, w: i64) -> String {
+    let n: i64 = char_count(s);
+    if n >= w { return s; }
+    repeat(" ", w - n) + s
+}
+
+pub fn pad_right(s: String, w: i64) -> String {
+    let n: i64 = char_count(s);
+    if n >= w { return s; }
+    s + repeat(" ", w - n)
+}
+
+pub fn split_whitespace(s: String) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i: i64 = 0;
+    while i < s.len() {
+        while i < s.len() && space_byte(s.as_bytes()[i]) { i = i + 1; }
+        let start: i64 = i;
+        while i < s.len() && !space_byte(s.as_bytes()[i]) { i = i + 1; }
+        if i > start {
+            let part: String = s[start..i].to_string();
+            Vec::push(out, part);
+        }
+    }
+    out
+}
+
+pub nogc fn is_digit(c: char) -> bool { c >= '0' && c <= '9' }
+
+pub nogc fn is_alpha(c: char) -> bool { (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') }
+
+pub nogc fn to_digit(c: char) -> Option<i64> {
+    if is_digit(c) { return Some((c as i64) - 48); }
+    None
+}
+
+impl String {
+    pub nogc fn char_count(self) -> i64 { char_count(self) }
+    pub nogc fn is_empty(self) -> bool { is_empty(self) }
+    pub nogc fn is_char_boundary(self, i: i64) -> bool { is_char_boundary(self, i) }
+    pub nogc fn char_len(self, i: i64) -> i64 { char_len(self, i) }
+    pub nogc fn char_at(self, i: i64) -> Option<char> { char_at(self, i) }
+    pub fn substring(self, start: i64, end: i64) -> String { substring(self, start, end) }
+    pub nogc fn compare(self, other: String) -> i64 { compare(self, other) }
+    pub nogc fn starts_with(self, p: String) -> bool { starts_with(self, p) }
+    pub nogc fn ends_with(self, p: String) -> bool { ends_with(self, p) }
+    pub nogc fn index_of(self, needle: String) -> i64 { index_of(self, needle) }
+    pub nogc fn contains(self, needle: String) -> bool { contains(self, needle) }
+    pub nogc fn find(self, needle: String) -> Option<i64> { find(self, needle) }
+    pub fn repeat(self, n: i64) -> String { repeat(self, n) }
+    pub fn trim(self) -> String { trim(self) }
+    pub fn split(self, sep: String) -> Vec<String> { split(self, sep) }
+    pub nogc fn parse_int(self) -> Result<i64, i64> { parse_int(self) }
+    pub fn chars(self) -> Vec<char> { chars(self) }
+    pub fn lines(self) -> Vec<String> { lines(self) }
+    pub fn replace(self, old: String, new: String) -> String { replace(self, old, new) }
+    pub fn to_upper(self) -> String { to_upper(self) }
+    pub fn to_lower(self) -> String { to_lower(self) }
+    pub fn pad_left(self, w: i64) -> String { pad_left(self, w) }
+    pub fn pad_right(self, w: i64) -> String { pad_right(self, w) }
+    pub fn split_whitespace(self) -> Vec<String> { split_whitespace(self) }
+}
+
+impl char {
+    pub nogc fn is_space(self) -> bool { is_space(self) }
+    pub nogc fn is_digit(self) -> bool { is_digit(self) }
+    pub nogc fn is_alpha(self) -> bool { is_alpha(self) }
+    pub nogc fn to_digit(self) -> Option<i64> { to_digit(self) }
+}

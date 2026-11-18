@@ -1,0 +1,66 @@
+use std::vec::{self, Vec};
+
+pub struct Pair<T: Ord> {
+    pub a: T,
+    b: Option<T>,
+}
+
+enum Op {
+    Add,
+    Lit(i64),
+    Bin { l: i64, r: i64 },
+}
+
+trait Eval {
+    fn eval(&self) -> i64;
+}
+
+impl Eval for Op {
+    fn eval(&self) -> i64 {
+        match self {
+            Op::Add => 0,
+            Op::Lit(n) if n > 0 => n,
+            Op::Lit(_) | Op::Bin { .. } => {
+                return -1;
+            }
+        }
+    }
+}
+
+const N: usize = 4;
+static mut HITS: i64 = 0;
+
+fn run<T: Ord + Clone>(xs: &mut Vec<T>, f: fn(i64) -> i64) -> Result<i64, String> {
+    let mut acc: i64 = 0;
+    let (p, q) = (1, -2);
+    for i in 0..N {
+        acc += f(i as i64) * p - q;
+    }
+    'outer: while acc < 100 {
+        if acc % 2 == 0 && acc != 4 || acc > 50 {
+            acc <<= 1;
+            continue 'outer;
+        } else if let Some(v) = xs.first() {
+            acc -= 1;
+        } else {
+            break;
+        }
+    }
+    let c = |x: i64| x + acc;
+    let d = move || c(1);
+    let arr = [1, 2, 3];
+    let rep = [0u8; 8];
+    let t = (arr[0], rep.len(), d());
+    let s = Pair { a: 1, b: None };
+    let v = xs.iter().map(|x| x.clone()).filter(|x| *x > 0).count();
+    let r = &mut acc;
+    *r = !t.0 & 0xff;
+    let w = loop {
+        break 3;
+    };
+    unsafe {
+        HITS += w;
+    }
+    println!("{} {}", acc, v);
+    Ok(acc)
+}

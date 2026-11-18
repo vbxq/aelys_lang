@@ -1,0 +1,88 @@
+const TOP: i64 = 5;
+
+type Entry = (String, i64);
+
+struct Freq {
+    entries: Vec<Entry>,
+    words: i64,
+}
+
+impl Freq {
+    fn new() -> Self {
+        Freq { entries: Vec::new(), words: 0 }
+    }
+
+    fn bump(&mut self, w: &str) {
+        self.words += 1;
+        for i in 0..self.entries.len() {
+            let (word, n) = self.entries[i];
+            if word == w {
+                self.entries[i] = (word, n + 1);
+                return;
+            }
+        }
+        self.entries.push((w.to_string(), 1));
+    }
+
+    fn ranked(&self) -> Vec<Entry> {
+        let mut v = self.entries;
+        for i in 1..v.len() {
+            let mut j = i;
+            while j > 0 && before(v[j], v[j - 1]) {
+                v.swap(j - 1, j);
+                j -= 1;
+            }
+        }
+        v
+    }
+}
+
+fn before(a: Entry, b: Entry) -> bool {
+    match (a, b) {
+        ((wa, na), (wb, nb)) if na == nb => wa < wb,
+        ((_, na), (_, nb)) => na > nb,
+    }
+}
+
+fn fold(c: char) -> Option<char> {
+    match c {
+        'a'..='z' | 'ß'..='ö' | 'ø'..='ÿ' => Some(c),
+        'A'..='Z' | 'À'..='Ö' | 'Ø'..='Þ' => char::from_u32(c as u32 + 32),
+        _ => None,
+    }
+}
+
+fn main() {
+    let text = "L'été arrive. Le café du matin, le café du soir : l'été, c'est la saison du café ! \
+                Où est passé l'été ? Là où le soleil brûle, le café désaltérant refroidit. ÉTÉ, Été, été... Ça suffit, Noël.";
+    let mut freq = Freq::new();
+    let mut cur = String::new();
+    let mut longest = String::new();
+    let mut accented = 0;
+    for c in format!("{text} ").chars() {
+        match fold(c) {
+            Some(l @ 'ß'..='ÿ') => {
+                accented += 1;
+                cur.push(l);
+            }
+            Some(l) => cur.push(l),
+            None if !cur.is_empty() => {
+                freq.bump(&cur);
+                if cur.chars().count() > longest.chars().count() {
+                    longest = cur;
+                }
+                cur = String::new();
+            }
+            None => {}
+        }
+    }
+    println!("{} bytes, {} chars, {accented} accented letters", text.len(), text.chars().count());
+    println!("{} words, {} distinct", freq.words, freq.entries.len());
+    println!("longest: {longest} ({} chars, {} bytes)", longest.chars().count(), longest.len());
+    let ranked = freq.ranked();
+    for i in 0..TOP {
+        if let Some((w, n)) = ranked.get(i) {
+            println!("{}. {:<9}{n}", i + 1, w);
+        }
+    }
+}

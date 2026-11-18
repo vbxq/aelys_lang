@@ -1,0 +1,37 @@
+use std::process::ExitCode; struct Holder { v: i64 }
+
+enum Tagged { None, Some(i64) }
+
+static g: i64 = 3;
+
+fn ident<T>(v: T) -> T {
+    v
+}
+
+fn helper(n: i64) -> i64 {
+    n + 1
+}
+
+fn wrap(n: i64) -> Holder {
+    Holder { v: n }
+}
+
+fn unwrap(t: Tagged) -> i64 {
+    match t {
+        Tagged::Some(n) => n,
+        Tagged::None => 0,
+    }
+}
+
+fn seven() -> i64 {
+    7
+}
+
+fn main() -> ExitCode {
+    println!("base");
+    let anchor: i64 = 10;
+    let f = seven;
+    let bump = move |n: i64| -> i64 { n + anchor + g };
+    let h = wrap(helper(1));
+    return ExitCode::from((h.v + unwrap(Tagged::Some(4)) + f() + bump(2) + ident(6)) as u8);
+}

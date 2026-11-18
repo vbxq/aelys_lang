@@ -1,0 +1,19 @@
+// Bug test: generic function returning a generic enum.
+// The type parameter in the enum return type must be instantiated.
+use std::process::ExitCode; enum Maybe<T> { Just(T), Nothing }
+
+fn wrap<T>(x: T) -> Maybe<T> {
+    Maybe::Just(x)
+}
+
+fn main() -> ExitCode {
+    let m = wrap(42);
+    let result: i64 = match m {
+        Maybe::Just(v) => v,
+        Maybe::Nothing => -1,
+    };
+    if result == 42 {
+        return ExitCode::SUCCESS;
+    }
+    return ExitCode::from(result as u8);
+}

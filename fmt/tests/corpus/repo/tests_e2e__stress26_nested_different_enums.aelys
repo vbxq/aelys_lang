@@ -1,0 +1,51 @@
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+enum Option<T> {
+    Some(T),
+    None,
+}
+
+fn safe_div(a: i64, b: i64) -> Result<i64, String> {
+    if b == 0 {
+        Result::Err("division by zero")
+    } else {
+        Result::Ok(a / b)
+    }
+}
+
+fn try_div(a: i64, b: i64) -> i64 {
+    match safe_div(a, b) {
+        Result::Ok(v) => v,
+        Result::Err(_) => -999,
+    }
+}
+
+fn wrap_result(x: i64) -> Result<Option<i64>, String> {
+    if x < 0 {
+        Result::Err("negative")
+    } else {
+        Result::Ok(Option::Some(x))
+    }
+}
+
+fn unwrap_nested(r: Result<Option<i64>, String>) -> i64 {
+    match r {
+        Result::Ok(opt) => match opt {
+            Option::Some(v) => v,
+            Option::None => -1,
+        }
+        Result::Err(_) => -2,
+    }
+}
+
+fn main() {
+    println!("{}", try_div(10, 3));
+    println!("{}", try_div(10, 0));
+
+    println!("{}", unwrap_nested(wrap_result(42)));
+    println!("{}", unwrap_nested(wrap_result(-5)));
+    println!("{}", unwrap_nested(Result::Ok(Option::None)));
+}

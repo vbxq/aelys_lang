@@ -1,0 +1,53 @@
+// file header comment
+
+/* block header */
+use std::vec; // trailing on use
+use std::str;
+
+// leading comment on a struct
+struct Point { // after brace
+    x: i64, // after x
+    /* before y */ y: i64,
+    // before closing brace
+}
+
+enum Shape {
+    Circle(i64), // circle
+    // own line before variant
+    Rect(i64, i64)
+}
+
+fn area(s: Shape /* inline param */) -> i64 {
+    // first statement comment
+    let a = match s { // after match brace
+        Shape::Circle(r) => r * r * 3, // arm trailing
+        // own line before arm
+        Shape::Rect(w, h) => {
+            w * h // tail trailing
+        }
+    };
+
+    // after a blank line
+    a /* inline before close */
+}
+
+fn calls() {
+    let v = vec![
+        1, // one
+        2  // two
+    ];
+    foo(a, /* mid */ b);
+    foo(
+        a, // after a
+        b
+    );
+    if x { // after if brace
+        y();
+    } // after if close
+    else {
+        z();
+    }
+    let total = 1 + // after plus
+        2;
+}
+// trailing at end of file

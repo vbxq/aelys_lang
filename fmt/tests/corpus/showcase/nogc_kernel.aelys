@@ -1,0 +1,142 @@
+struct Shape {
+    n: i64,
+    m: i64,
+    p: i64,
+}
+
+impl Shape {
+    fn a_at(&self, i: i64, k: i64) -> i64 {
+        i * self.m + k
+    }
+
+    fn b_at(&self, k: i64, j: i64) -> i64 {
+        k * self.p + j
+    }
+
+    fn out_at(&self, i: i64, j: i64) -> i64 {
+        i * self.p + j
+    }
+}
+
+nogc fn matmul(a: &[i64], b: &[i64], out: &mut [i64], s: Shape) {
+    for i in 0..s.n {
+        for j in 0..s.p {
+            let mut acc = 0;
+            for k in 0..s.m {
+                acc += a[s.a_at(i, k)] * b[s.b_at(k, j)];
+            }
+            out[s.out_at(i, j)] = acc;
+        }
+    }
+}
+
+nogc fn transpose(src: &[i64], dst: &mut [i64], rows: i64, cols: i64) {
+    for r in 0..rows {
+        for c in 0..cols {
+            dst[c * rows + r] = src[r * cols + c];
+        }
+    }
+}
+
+nogc fn trace(a: &[i64], n: i64) -> i64 {
+    let mut t = 0;
+    for i in 0..n {
+        t += a[i * n + i];
+    }
+    t
+}
+
+nogc fn peak(a: &[i64]) -> i64 {
+    a.iter().max().unwrap_or(0)
+}
+
+struct Matrix {
+    rows: i64,
+    cols: i64,
+    data: Vec<i64>,
+}
+
+impl Matrix {
+    fn from_fn(rows: i64, cols: i64, f: fn(i64, i64) -> i64) -> Self {
+        let mut data = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                data.push(f(r, c));
+            }
+        }
+        Matrix { rows, cols, data }
+    }
+
+    fn zeros(rows: i64, cols: i64) -> Self {
+        Matrix::from_fn(rows, cols, |_, _| 0)
+    }
+
+    fn mul(&self, other: &Matrix) -> Result<Matrix, String> {
+        if self.cols != other.rows {
+            return Err(format!(
+                "cannot multiply {}x{} by {}x{}",
+                self.rows, self.cols, other.rows, other.cols
+            ));
+        }
+        let mut out = Matrix::zeros(self.rows, other.cols);
+        let shape = Shape { n: self.rows, m: self.cols, p: other.cols };
+        matmul(&self.data, &other.data, &mut out.data, shape);
+        Ok(out)
+    }
+
+    fn transposed(&self) -> Matrix {
+        let mut out = Matrix::zeros(self.cols, self.rows);
+        transpose(&self.data, &mut out.data, self.rows, self.cols);
+        out
+    }
+
+    fn pow(&self, k: i64) -> Result<Matrix, String> {
+        let mut acc = Matrix::from_fn(self.rows, self.cols, |r, c| if r == c { 1 } else { 0 });
+        for _ in 0..k {
+            acc = acc.mul(self)?;
+        }
+        Ok(acc)
+    }
+}
+
+impl Display for Matrix {
+    fn to_string(&self) -> String {
+        let mut s = String::new();
+        for r in 0..self.rows {
+            if r > 0 {
+                s += "\n";
+            }
+            for c in 0..self.cols {
+                s += &format!("{:>6}", self.data[r * self.cols + c]);
+            }
+        }
+        s
+    }
+}
+
+fn main() {
+    let a = Matrix::from_fn(2, 3, |r, c| r * 3 + c + 1);
+    let b = Matrix::from_fn(3, 2, |r, c| 7 + r * 2 + c);
+    println!("A =\n{a}\nB =\n{b}");
+    match a.mul(&b) {
+        Ok(ab) => {
+            println!("A*B =");
+            println!("{ab}");
+            println!("trace {}, peak {}", trace(&ab.data, 2), peak(&ab.data));
+            let (bt, at) = (b.transposed(), a.transposed());
+            if let Ok(btat) = bt.mul(&at) {
+                let abt = ab.transposed();
+                println!("transpose identity: {}", abt.data == btat.data);
+            }
+        }
+        Err(e) => println!("error: {e}"),
+    }
+    if let Err(e) = a.mul(&a) {
+        println!("error: {e}");
+    }
+    let m = Matrix::from_fn(3, 3, |r, c| if r == c { 2 } else { 1 });
+    match (m.pow(3), m.pow(10)) {
+        (Ok(m3), Ok(m10)) => println!("M^3 =\n{m3}\ntrace(M^10) = {}", trace(&m10.data, 3)),
+        (Err(e), _) | (_, Err(e)) => println!("error: {e}"),
+    }
+}

@@ -1,0 +1,6 @@
+fn main() {
+    let mut x = 1;
+    let t = (&mut x, 2);
+    *t.0 = 9;
+    println!("{}", x);
+}

@@ -1,0 +1,10 @@
+// Implicit widening: pass i8 where i64 is expected
+use std::process::ExitCode; fn add_numbers(a: i64, b: i64) -> i64 {
+    a + b
+}
+
+fn main() -> ExitCode {
+    let x: i8 = 10;
+    let y: i8 = 20;
+    return ExitCode::from(add_numbers(x, y) as u8);  // implicit i8 -> i64
+}

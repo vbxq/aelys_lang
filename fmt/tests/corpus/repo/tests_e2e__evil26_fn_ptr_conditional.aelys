@@ -1,0 +1,17 @@
+// Select function pointer based on condition, then call it
+use std::process::ExitCode; fn square(x: i64) -> i64 { x * x }
+fn negate(x: i64) -> i64 { 0 - x }
+
+fn pick(use_square: bool) -> fn(i64) -> i64 {
+    if use_square {
+        square
+    } else {
+        negate
+    }
+}
+
+fn main() -> ExitCode {
+    let f = pick(true);
+    let g = pick(false);
+    return ExitCode::from((f(5) + g(3)) as u8);  // 25 + (-3) = 22
+}

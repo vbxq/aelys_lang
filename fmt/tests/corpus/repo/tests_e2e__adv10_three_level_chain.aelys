@@ -1,0 +1,17 @@
+// Chain: f returns g which returns h, each capturing from creator scope
+use std::process::ExitCode; fn make_f() -> fn() -> fn() -> i64 {
+    let a: i64 = 1;
+    move || -> fn() -> i64 {
+        let b: i64 = 2;
+        move || -> i64 {
+            a + b
+        }
+    }
+}
+
+fn main() -> ExitCode {
+    let f = make_f();
+    let g = f();
+    let h = g();
+    return ExitCode::from(h as u8);  // 1 + 2 = 3
+}

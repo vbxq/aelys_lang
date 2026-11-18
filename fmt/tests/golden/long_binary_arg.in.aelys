@@ -1,0 +1,3 @@
+fn main() {
+    println!("{}", Rc::get(Rc::get(Rc::get(a).next).next).v * 100 + Rc::get(Rc::get(a).next).v * 10 + Rc::get(a).v);
+}

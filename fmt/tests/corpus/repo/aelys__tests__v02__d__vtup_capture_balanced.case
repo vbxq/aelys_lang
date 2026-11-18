@@ -1,0 +1,21 @@
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new();
+    let mut i: i64 = 0;
+    while i < n { Vec::push(d, i * 10);
+        i = i + 1; }
+    d
+}
+
+struct W<T> { v: Vec<T>, tag: i64 }
+fn main() {
+    let mut t: i64 = 0;
+    let mut i: i64 = 0;
+    while i < 100 {
+        let p: (Vec<i64>, i64) = (mk(i % 4), 3);
+        let w: W<i64> = W { v: mk(2), tag: i };
+        let f = move || -> i64 { p.0.len() * 10 + p.1 + w.v.len() * 100 + w.tag };
+        t = t + f();
+        i = i + 1;
+    }
+    println!("{}", t);
+}

@@ -1,0 +1,6 @@
+// Modulo operator
+use std::process::ExitCode; fn main() -> ExitCode {
+    let a: i64 = 17;
+    let b: i64 = 5;
+    return ExitCode::from((a % b) as u8);  // should be 2
+}

@@ -1,0 +1,183 @@
+struct Node<T> {
+    val: T,
+    left: Option<Rc<Node<T>>>,
+    right: Option<Rc<Node<T>>>,
+}
+
+struct Tree<T> {
+    root: Option<Rc<Node<T>>>,
+    count: i64,
+}
+
+trait Collection<T> {
+    fn insert(&mut self, x: T) -> bool;
+    fn contains(&self, x: T) -> bool;
+    fn len(&self) -> i64;
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+impl<T: Ord> Tree<T> {
+    fn new() -> Self {
+        Tree { root: None, count: 0 }
+    }
+
+    fn min(&self) -> Option<T> {
+        let mut cur = self.root;
+        let mut best: Option<T> = None;
+        while let Some(n) = cur {
+            best = Some(n.val);
+            cur = n.left;
+        }
+        best
+    }
+
+    fn in_order(&self) -> Vec<T> {
+        let mut out = Vec::new();
+        walk(self.root, &mut out);
+        out
+    }
+}
+
+impl<T: Ord> Collection<T> for Tree<T> {
+    fn insert(&mut self, x: T) -> bool {
+        if let Some(n) = self.root {
+            if !insert_at(n, x) {
+                return false;
+            }
+        } else {
+            self.root = Some(leaf(x));
+        }
+        self.count += 1;
+        true
+    }
+
+    fn contains(&self, x: T) -> bool {
+        let mut cur = self.root;
+        while let Some(n) = cur {
+            if x == n.val {
+                return true;
+            }
+            cur = if x < n.val { n.left } else { n.right };
+        }
+        false
+    }
+
+    fn len(&self) -> i64 {
+        self.count
+    }
+}
+
+fn leaf<T>(x: T) -> Rc<Node<T>> {
+    Rc::new(Node { val: x, left: None, right: None })
+}
+
+fn insert_at<T: Ord>(n: Rc<Node<T>>, x: T) -> bool {
+    if x == n.val {
+        return false;
+    }
+    let next = if x < n.val { n.left } else { n.right };
+    if let Some(child) = next {
+        return insert_at(child, x);
+    }
+    if x < n.val {
+        n.left = Some(leaf(x));
+    } else {
+        n.right = Some(leaf(x));
+    }
+    true
+}
+
+fn walk<T>(link: Option<Rc<Node<T>>>, out: &mut Vec<T>) {
+    if let Some(n) = link {
+        walk(n.left, out);
+        out.push(n.val);
+        walk(n.right, out);
+    }
+}
+
+fn height<T>(link: Option<Rc<Node<T>>>) -> i64 {
+    match link {
+        Some(n) => {
+            let (l, r) = (height(n.left), height(n.right));
+            if l > r { l + 1 } else { r + 1 }
+        }
+        None => 0,
+    }
+}
+
+struct Word {
+    text: String,
+}
+
+fn word(s: &str) -> Word {
+    Word { text: s.to_string() }
+}
+
+impl PartialEq for Word {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+    }
+}
+
+impl Ord for Word {
+    fn cmp(&self, other: &Self) -> i64 {
+        self.text.cmp(&other.text)
+    }
+}
+
+impl Display for Word {
+    fn to_string(&self) -> String {
+        self.text
+    }
+}
+
+fn render<T: Display>(items: Vec<T>) -> String {
+    let mut out = String::new();
+    for x in items {
+        out = if out.is_empty() { format!("{x}") } else { format!("{out} {x}") };
+    }
+    out
+}
+
+fn report<T, C: Collection<T>>(name: &str, c: &C, _sample: &[T]) {
+    println!("{name}: {} items, empty={}", c.len(), c.is_empty());
+}
+
+fn fill<T, C: Collection<T>>(c: &mut C, xs: &[T]) -> i64 {
+    let mut dups = 0;
+    for x in xs {
+        if !c.insert(x) {
+            dups += 1;
+        }
+    }
+    dups
+}
+
+fn summarize<T>(name: &str, t: &Tree<T>, dups: i64, probe: T, absent: T)
+where
+    T: Ord + Display,
+{
+    println!("{name}: {} items, empty={}", t.len(), t.is_empty());
+    println!("duplicates: {dups}");
+    println!("in order: {}", render(t.in_order()));
+    println!("contains {probe}: {}, contains {absent}: {}", t.contains(probe), t.contains(absent));
+    if let Some(m) = t.min() {
+        println!("min: {m}, height: {}", height(t.root));
+    }
+}
+
+fn main() {
+    let mut nums: Tree<i64> = Tree::new();
+    let none = [0];
+    report("nums", &nums, &none[..0]);
+    let xs = [50, 30, 70, 20, 40, 60, 80, 30, 65, 20];
+    let dups = fill(&mut nums, &xs[..]);
+    summarize("nums", &nums, dups, 65, 45);
+    let mut words: Tree<Word> = Tree::new();
+    let ws = [word("pear"), word("fig"), word("apple"), word("kiwi"), word("fig"), word("banana"), word("cherry")];
+    let wd = fill(&mut words, &ws[..]);
+    summarize("words", &words, wd, word("kiwi"), word("grape"));
+}

@@ -1,0 +1,10 @@
+fn main() {
+    let threshold =
+        configuration.base_threshold * configuration.scale_factor + configuration.offset_correction;
+    let result = some_function_with_a_long_name(
+        first_argument_value,
+        second_argument_value,
+        third_arg_value,
+    );
+    x = y;
+}

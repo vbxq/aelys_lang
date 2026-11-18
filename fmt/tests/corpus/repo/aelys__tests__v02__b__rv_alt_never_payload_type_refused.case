@@ -1,0 +1,10 @@
+enum Result<T, E> { Ok(T), Err(E) }
+
+fn f(r: Result<i64, Never>) -> i64 {
+    match r { Result::Err(x) | Result::Ok(x) => x }
+}
+
+fn main() {
+    let r: Result<i64, Never> = Result::Ok(3);
+    println!("{}", f(r));
+}

@@ -13,6 +13,7 @@ members = [
     "driver",
     "cli",
     "ae",
+    "fmt",
 ]
 
 [workspace.package]

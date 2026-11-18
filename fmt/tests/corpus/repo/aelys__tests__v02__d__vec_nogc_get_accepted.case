@@ -1,0 +1,12 @@
+nogc fn first(v: &Vec<i64>) -> i64 {
+    let mut r: i64 = -1;
+    match Vec::get(*v, 0) {
+        Some(x) => { r = x; }
+        None => { r = -1; }
+    }
+    r
+}
+fn main() {
+    let v: Vec<i64> = vec![10, 20];
+    println!("{}", first(&v));
+}

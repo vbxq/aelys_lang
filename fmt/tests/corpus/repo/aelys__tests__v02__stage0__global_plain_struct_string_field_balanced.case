@@ -1,0 +1,15 @@
+struct S { name: String, k: i64 }
+static mut g: S = S { name: "a", k: 0 };
+fn set(i: i64) {
+    g.name = "n" + format!("{i}");
+    g.k = i;
+}
+fn main() {
+    let mut i = 0;
+    while i < 500 {
+        set(i);
+        i = i + 1;
+    }
+    println!("{} {}", g.name, g.k);
+    g.name = "end";
+}

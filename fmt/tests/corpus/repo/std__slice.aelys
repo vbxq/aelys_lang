@@ -1,0 +1,117 @@
+
+use std::sort;
+
+// there is no bound for arithmetic, so the element stays i64 until one exists
+pub nogc fn sum(s: &[i64]) -> i64 {
+    let mut acc: i64 = 0;
+    for x in s { acc = acc + x; }
+    acc
+}
+
+pub fn first<T>(s: &[T]) -> Option<T> {
+    if s.len() == 0 { return None; }
+    Some(s[0])
+}
+
+pub fn last<T>(s: &[T]) -> Option<T> {
+    if s.len() == 0 { return None; }
+    Some(s[s.len() - 1])
+}
+
+pub fn max<T: Ord>(s: &[T]) -> Option<T> {
+    if s.len() == 0 { return None; }
+    let mut m: T = s[0];
+    for x in s {
+        if x > m { m = x; }
+    }
+    Some(m)
+}
+
+pub fn min<T: Ord>(s: &[T]) -> Option<T> {
+    if s.len() == 0 { return None; }
+    let mut m: T = s[0];
+    for x in s {
+        if x < m { m = x; }
+    }
+    Some(m)
+}
+
+pub fn index_of<T: PartialEq>(s: &[T], x: T) -> i64 {
+    for i in 0..s.len() {
+        if s[i] == x { return i; }
+    }
+    -1
+}
+
+pub fn find<T: PartialEq>(s: &[T], x: T) -> Option<i64> {
+    let i: i64 = index_of(s, x);
+    if i < 0 { return None; }
+    Some(i)
+}
+
+pub fn contains<T: PartialEq>(s: &[T], x: T) -> bool {
+    index_of(s, x) >= 0
+}
+
+pub fn eq<T: PartialEq>(a: &[T], b: &[T]) -> bool {
+    if a.len() != b.len() { return false; }
+    for i in 0..a.len() {
+        if a[i] != b[i] { return false; }
+    }
+    true
+}
+
+pub fn is_sorted<T: Ord>(s: &[T]) -> bool {
+    for i in 1..s.len() {
+        if s[i] < s[i - 1] { return false; }
+    }
+    true
+}
+
+pub fn fill<T>(s: &mut [T], x: T) {
+    for i in 0..s.len() { s[i] = x; }
+}
+
+pub fn swap<T>(s: &mut [T], i: i64, j: i64) {
+    let t: T = s[i];
+    s[i] = s[j];
+    s[j] = t;
+}
+
+pub fn reverse<T>(s: &mut [T]) {
+    let mut i: i64 = 0;
+    let mut j: i64 = s.len() - 1;
+    while i < j {
+        swap(s, i, j);
+        i = i + 1;
+        j = j - 1;
+    }
+}
+
+impl<T> [T] {
+    pub fn first(&self) -> Option<T> { first(self) }
+    pub fn last(&self) -> Option<T> { last(self) }
+    pub fn fill(&mut self, x: T) { fill(self, x); }
+    pub fn swap(&mut self, i: i64, j: i64) { swap(self, i, j); }
+    pub fn reverse(&mut self) { reverse(self); }
+    pub fn sort_by(&mut self, f: fn(T, T) -> i64) { sort::sort_by(self, f); }
+}
+
+impl<T: PartialEq> [T] {
+    pub fn index_of(&self, x: T) -> i64 { index_of(self, x) }
+    pub fn find(&self, x: T) -> Option<i64> { find(self, x) }
+    pub fn contains(&self, x: T) -> bool { contains(self, x) }
+}
+
+impl<T: Ord> [T] {
+    pub fn max(&self) -> Option<T> { max(self) }
+    pub fn min(&self) -> Option<T> { min(self) }
+    pub fn is_sorted(&self) -> bool { is_sorted(self) }
+    pub fn binary_search(&self, x: T) -> i64 { sort::binary_search(self, x) }
+    pub fn sort(&mut self) { sort::merge_sort(self); }
+    pub fn sort_unstable(&mut self) { sort::heap_sort(self); }
+}
+
+impl [i64] {
+    pub nogc fn sum(&self) -> i64 { sum(self) }
+}
