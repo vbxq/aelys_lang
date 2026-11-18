@@ -12,10 +12,11 @@ impl TypeInference {
         scrutinee: &Expr,
         arms: &[MatchArm],
         origin: MatchOrigin,
+        expect: Option<&InferType>,
         span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_scrutinee = self.infer_expr(scrutinee);
-        self.infer_match_typed(typed_scrutinee, scrutinee.span, arms, span, origin)
+        self.infer_match_typed(typed_scrutinee, scrutinee.span, arms, span, origin, expect)
     }
 
     pub(super) fn infer_match_typed(
@@ -25,6 +26,7 @@ impl TypeInference {
         arms: &[MatchArm],
         span: Span,
         origin: MatchOrigin,
+        expect: Option<&InferType>,
     ) -> (TypedExprKind, InferType) {
         let typed_scrutinee = match &typed_scrutinee.ty {
             InferType::Ref { referent, .. } => {
@@ -87,6 +89,7 @@ impl TypeInference {
                 ));
                 typed
             });
+            self.dyn_expect = expect.cloned();
             let typed_body = self.infer_expr(&arm.body);
             self.env.pop_scope();
             typed_arms.push(TypedMatchArm::new(pattern, guard, typed_body));

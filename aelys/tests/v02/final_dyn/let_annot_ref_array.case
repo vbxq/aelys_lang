@@ -1,0 +1,19 @@
+trait Tr {
+    fn v(&self) -> i64
+}
+struct S { n: i64 }
+struct T { n: i64 }
+impl Tr for S {
+    fn v(&self) -> i64 { return self.n }
+}
+impl Tr for T {
+    fn v(&self) -> i64 { return self.n * 1000 }
+}
+fn main() -> i64 {
+    let s = S { n: 1 }
+    let t = T { n: 2 }
+    let a: [&dyn Tr; 2] = [&s, &t]
+    println(a[0].v())
+    println(a[1].v())
+    return 0
+}

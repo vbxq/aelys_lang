@@ -2,7 +2,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, Span};
+use aelys_syntax::Expr;
 
 impl TypeInference {
     pub(super) fn infer_if_expr(
@@ -10,10 +10,12 @@ impl TypeInference {
         condition: &Expr,
         then_branch: &Expr,
         else_branch: &Expr,
-        _span: Span,
+        expect: Option<&InferType>,
     ) -> (TypedExprKind, InferType) {
         let typed_cond = self.infer_expr(condition);
+        self.dyn_expect = expect.cloned();
         let mut typed_then = self.infer_expr(then_branch);
+        self.dyn_expect = expect.cloned();
         let mut typed_else = self.infer_expr(else_branch);
 
         self.constraints.push(Constraint::equal(

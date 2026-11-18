@@ -1,0 +1,39 @@
+trait Tr {
+    fn v(&self) -> i64
+}
+struct S { n: i64 }
+struct T { n: i64 }
+struct U { n: i64 }
+impl Tr for S {
+    fn v(&self) -> i64 { return self.n }
+}
+impl Tr for T {
+    fn v(&self) -> i64 { return self.n * 1000 }
+}
+impl Tr for U {
+    fn v(&self) -> i64 { return self.n * 100 }
+}
+fn pick(k: i64) -> Rc<dyn Tr> {
+    let a: Rc<dyn Tr> = match k {
+        0 => Rc::new(S { n: 5 }),
+        1 => { Rc::new(T { n: 2 }) },
+        _ => if k > 5 { Rc::new(U { n: 3 }) } else { Rc::new(S { n: 4 }) },
+    }
+    return a
+}
+fn ret_if(c: bool) -> Rc<dyn Tr> {
+    if c { Rc::new(T { n: 7 }) } else { Rc::new(S { n: 8 }) }
+}
+fn main() -> i64 {
+    println(pick(0).v())
+    println(pick(1).v())
+    println(pick(9).v())
+    println(pick(2).v())
+    println(ret_if(true).v())
+    println(ret_if(false).v())
+    let s = S { n: 6 }
+    let t = T { n: 1 }
+    let r: &dyn Tr = if s.n > 3 { &t } else { &s }
+    println(r.v())
+    return 0
+}

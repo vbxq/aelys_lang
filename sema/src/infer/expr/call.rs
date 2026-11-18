@@ -496,6 +496,7 @@ impl TypeInference {
             &arms,
             span,
             aelys_syntax::MatchOrigin::Match,
+            None,
         );
         (kind, InferType::Enum(enum_name, vec![t, e2]))
     }

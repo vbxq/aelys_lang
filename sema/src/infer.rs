@@ -55,6 +55,7 @@ pub struct TypeInference {
     instantiated_param_names: HashMap<crate::types::TypeVarId, String>,
     literal_init_vars: HashMap<crate::env::BindingId, LiteralInit>,
     struct_literal_hint: Option<InferType>,
+    dyn_expect: Option<InferType>,
     pub(crate) literal_globals: HashMap<String, LiteralInit>,
     keep_binding_use: bool,
     try_counter: usize,

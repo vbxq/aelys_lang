@@ -18,8 +18,7 @@ impl TypeInference {
                 self.infer_stmt(stmt)
             }
             aelys_syntax::StmtKind::Expression(expr) => {
-                let mut typed_expr = self.infer_expr(expr);
-                self.coerce_dyn(&mut typed_expr, return_type);
+                let mut typed_expr = self.infer_expecting(expr, return_type);
                 self.try_narrow_literal(&mut typed_expr, return_type);
 
                 if typed_expr.ty != *return_type && typed_expr.ty.can_implicit_widen_to(return_type)

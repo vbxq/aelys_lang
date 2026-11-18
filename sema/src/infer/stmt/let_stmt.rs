@@ -33,13 +33,15 @@ impl TypeInference {
         {
             self.struct_literal_hint = Some(decl.clone());
         }
-        let mut typed_init = self.infer_expr(initializer);
+        let mut typed_init = match &declared_type {
+            Some(decl) => self.infer_expecting(initializer, decl),
+            None => self.infer_expr(initializer),
+        };
         self.struct_literal_hint = None;
 
         let mut literal = None;
 
         let var_type = if let Some(decl) = &declared_type {
-            self.coerce_dyn(&mut typed_init, decl);
             // narrowing alone must never be the sole source of truth for a type
             self.try_narrow_literal(&mut typed_init, decl);
 

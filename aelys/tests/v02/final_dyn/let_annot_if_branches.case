@@ -1,0 +1,20 @@
+trait Tr {
+    fn v(&self) -> i64
+}
+struct S { n: i64 }
+struct T { n: i64 }
+impl Tr for S {
+    fn v(&self) -> i64 { return self.n }
+}
+impl Tr for T {
+    fn v(&self) -> i64 { return self.n * 1000 }
+}
+fn pick(c: bool) -> Rc<dyn Tr> {
+    let a: Rc<dyn Tr> = if c { Rc::new(T { n: 2 }) } else { Rc::new(S { n: 5 }) }
+    return a
+}
+fn main() -> i64 {
+    println(pick(true).v())
+    println(pick(false).v())
+    return 0
+}

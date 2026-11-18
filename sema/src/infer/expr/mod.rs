@@ -22,7 +22,13 @@ use aelys_syntax::{BinaryOp, Expr, ExprKind};
 use std::collections::HashMap;
 
 impl TypeInference {
+    pub(crate) fn infer_expecting(&mut self, expr: &Expr, expected: &InferType) -> TypedExpr {
+        self.dyn_expect = Some(expected.clone());
+        self.infer_expr(expr)
+    }
+
     pub(super) fn infer_expr(&mut self, expr: &Expr) -> TypedExpr {
+        let expect = self.dyn_expect.take();
         self.depth += 1;
         if self.depth > super::MAX_INFERENCE_DEPTH {
             self.errors.push(TypeError::recursion_limit(expr.span));
@@ -160,6 +166,7 @@ impl TypeInference {
                 self.infer_assign_expr(name, value, expr.span)
             }
             ExprKind::Grouping(inner) => {
+                self.dyn_expect = expect.clone();
                 let typed_inner = self.infer_expr(inner);
                 let ty = typed_inner.ty.clone();
                 (TypedExprKind::Grouping(Box::new(typed_inner)), ty)
@@ -168,7 +175,7 @@ impl TypeInference {
                 condition,
                 then_branch,
                 else_branch,
-            } => self.infer_if_expr(condition, then_branch, else_branch, expr.span),
+            } => self.infer_if_expr(condition, then_branch, else_branch, expect.as_ref()),
             ExprKind::Lambda {
                 params,
                 return_type,
@@ -177,7 +184,9 @@ impl TypeInference {
             ExprKind::Member { object, member } => {
                 self.infer_member_expr(object, member, expr.span)
             }
-            ExprKind::ArrayLiteral { elements } => self.infer_array_literal(elements, expr.span),
+            ExprKind::ArrayLiteral { elements } => {
+                self.infer_array_literal(elements, expect.as_ref())
+            }
             ExprKind::ArraySized { size, fill_value } => {
                 self.infer_array_sized(size, fill_value.as_deref(), expr.span)
             }
@@ -309,7 +318,7 @@ impl TypeInference {
             ExprKind::StructLiteral { name, fields } => {
                 self.infer_struct_literal(name, fields, expr.span)
             }
-            ExprKind::Tuple(elems) => self.infer_tuple_literal(elems, expr.span),
+            ExprKind::Tuple(elems) => self.infer_tuple_literal(elems, expect.as_ref(), expr.span),
             ExprKind::Cast {
                 expr: inner,
                 target,
@@ -351,10 +360,11 @@ impl TypeInference {
                 scrutinee,
                 arms,
                 origin,
-            } => self.infer_match_expr(scrutinee, arms, *origin, expr.span),
+            } => self.infer_match_expr(scrutinee, arms, *origin, expect.as_ref(), expr.span),
             ExprKind::Block { stmts, tail } => {
                 self.env.push_scope();
                 let typed_stmts = self.infer_stmts(stmts);
+                self.dyn_expect = expect.clone();
                 let typed_tail = self.infer_expr(tail);
                 self.env.pop_scope();
                 let ty = if typed_stmts
@@ -398,11 +408,15 @@ impl TypeInference {
             },
             _ => (kind, ty),
         };
-        TypedExpr {
+        let mut typed = TypedExpr {
             kind,
             ty,
             span: expr.span,
+        };
+        if let Some(expected) = &expect {
+            self.coerce_dyn(&mut typed, expected);
         }
+        typed
     }
 
     pub(super) fn is_literal_like(&self, expr: &TypedExpr) -> bool {
@@ -1182,9 +1196,21 @@ impl TypeInference {
     fn infer_tuple_literal(
         &mut self,
         elems: &[Expr],
+        expect: Option<&InferType>,
         span: aelys_syntax::Span,
     ) -> (TypedExprKind, InferType) {
-        let typed: Vec<TypedExpr> = elems.iter().map(|e| self.infer_expr(e)).collect();
+        let expected = match expect {
+            Some(InferType::Tuple(tys)) if tys.len() == elems.len() => tys.as_slice(),
+            _ => &[],
+        };
+        let typed: Vec<TypedExpr> = elems
+            .iter()
+            .enumerate()
+            .map(|(i, e)| {
+                self.dyn_expect = expected.get(i).cloned();
+                self.infer_expr(e)
+            })
+            .collect();
         let ty = InferType::Tuple(typed.iter().map(|e| e.ty.clone()).collect());
         self.reject_tuple_carriers(&ty, span);
         let fields = typed

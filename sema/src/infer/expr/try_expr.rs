@@ -172,6 +172,7 @@ impl TypeInference {
             &arms,
             span,
             aelys_syntax::MatchOrigin::Match,
+            None,
         )
     }
 

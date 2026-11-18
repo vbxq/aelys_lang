@@ -76,6 +76,7 @@ impl TypeInference {
             &arms,
             span,
             aelys_syntax::MatchOrigin::Match,
+            None,
         );
         // pin t so must-use never fires: catch removes e, so the value is no longer a result
         (kind, t)

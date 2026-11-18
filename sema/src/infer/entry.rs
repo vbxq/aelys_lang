@@ -31,6 +31,7 @@ impl Default for TypeInference {
             instantiated_param_names: HashMap::new(),
             literal_init_vars: HashMap::new(),
             struct_literal_hint: None,
+            dyn_expect: None,
             literal_globals: HashMap::new(),
             keep_binding_use: false,
             try_counter: 0,

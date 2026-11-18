@@ -105,10 +105,19 @@ impl TypeInference {
     pub(super) fn infer_array_literal(
         &mut self,
         elements: &[Expr],
-        _span: Span,
+        expect: Option<&InferType>,
     ) -> (TypedExprKind, InferType) {
-        let mut typed_elements: Vec<TypedExpr> =
-            elements.iter().map(|e| self.infer_expr(e)).collect();
+        let elem_expect = match expect {
+            Some(InferType::Array(elem, _)) => Some(elem.as_ref()),
+            _ => None,
+        };
+        let mut typed_elements: Vec<TypedExpr> = elements
+            .iter()
+            .map(|e| {
+                self.dyn_expect = elem_expect.cloned();
+                self.infer_expr(e)
+            })
+            .collect();
 
         self.reject_rc_aggregate_elements(&typed_elements, "array literal");
         self.reject_vec_aggregate_elements(&typed_elements, "array literal");
