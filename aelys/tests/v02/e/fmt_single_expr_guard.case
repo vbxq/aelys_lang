@@ -1,0 +1,5 @@
+fn main() {
+    let x = 42
+    let v = [1, 2, 3]
+    println("{x} {x + 1} {v[1]} {(x)}")
+}

@@ -698,6 +698,20 @@ impl Parser {
             )
             .into());
         }
+        while matches!(parser.peek().kind, TokenKind::Semicolon | TokenKind::Newline) {
+            parser.advance();
+        }
+        if !parser.is_at_end() {
+            return Err(CompileError::new(
+                CompileErrorKind::UnexpectedToken {
+                    expected: format!("the end of `{{{code}}}`"),
+                    found: format!("`{}`; a format placeholder holds one expression", parser.peek().kind),
+                },
+                span,
+                Arc::clone(&self.source),
+            )
+            .into());
+        }
 
         remap_expr_spans(&mut expr, span);
         Ok(expr)
