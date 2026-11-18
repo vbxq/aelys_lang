@@ -107,11 +107,17 @@ impl TypeInference {
         let saved_env = std::mem::replace(&mut self.env, func_env);
         let saved_unsafe = std::mem::replace(&mut self.unsafe_depth, 0);
 
-        self.collect_signatures(&func.body, &func.name);
+        let skip_body =
+            self.declarations_only && func.params.iter().all(|p| p.type_annotation.is_some());
+        if !skip_body {
+            self.collect_signatures(&func.body, &func.name);
+        }
 
         self.push_return_type(return_type.clone());
 
-        let typed_body = if func.body.is_empty() && func.foreign.is_none() {
+        let typed_body = if skip_body {
+            vec![]
+        } else if func.body.is_empty() && func.foreign.is_none() {
             // empty body implicitly returns null, constrain against the declared return type so fn f()->i64 {} is rejected
             self.constraints.push(Constraint::equal(
                 InferType::Null,

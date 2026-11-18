@@ -2,6 +2,7 @@ pub mod ablation;
 pub mod constraint;
 pub mod env;
 pub mod infer;
+pub mod localize;
 pub mod modules;
 pub mod place_spine;
 pub mod rc_init;

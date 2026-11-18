@@ -116,7 +116,7 @@ impl TypeInference {
         out
     }
 
-    fn in_std(&self) -> bool {
+    pub(crate) fn in_std(&self) -> bool {
         self.module_imports.std_privilege || self.module_path().starts_with("std.")
     }
 
@@ -154,6 +154,22 @@ impl TypeInference {
             self.errors
                 .push(TypeError::coded("E0341", shown, "builtin type", head.span));
             return true;
+        }
+        if let Some(qualified) = self.crate_type_of_other_module(head) {
+            let declared = self.declared_type_params(&qualified);
+            let found = if !head.type_params.is_empty() {
+                head.type_params.len()
+            } else {
+                usize::from(head.type_param.is_some())
+            };
+            if declared != found {
+                let shown = crate::modules::strip_type_head(&qualified);
+                self.errors.push(TypeError::type_arg_count(
+                    "struct", shown, declared, found, head.span,
+                ));
+                return true;
+            }
+            return self.unconstrained_impl_param(decl);
         }
         let foreign = if name.contains('.') {
             Some(name.to_string())
@@ -227,6 +243,22 @@ impl TypeInference {
         false
     }
 
+    // rust keeps inherent impls inside the crate of the type; every module outside std is one crate
+    fn crate_type_of_other_module(&self, head: &TypeAnnotation) -> Option<String> {
+        if self.in_std() {
+            return None;
+        }
+        let qualified = if head.name.contains('.') {
+            let (ns, member) = head.name.split_once('.')?;
+            let exports = self.module_imports.namespaces.get(ns)?;
+            exports.types.get(member)?.qualified.clone()
+        } else {
+            self.imported_type_name(&head.name)?
+        };
+        let module = crate::modules::module_of_type(&qualified)?;
+        (!crate::modules::is_std_module(module)).then_some(qualified)
+    }
+
     fn declares_local(&self, name: &str) -> bool {
         !self.imported_types.contains(name)
             && (self.type_table.has_struct(name) || self.type_table.has_enum(name))
@@ -251,13 +283,21 @@ impl TypeInference {
         } else {
             None
         };
-        let table_key = match builtin {
-            Some(key) => key.to_string(),
-            None => head.name.clone(),
+        let foreign = self.crate_type_of_other_module(&head);
+        let table_key = match (builtin, &foreign) {
+            (Some(key), _) => key.to_string(),
+            (None, Some(qualified)) => qualified.clone(),
+            (None, None) => head.name.clone(),
         };
-        let type_name = match builtin {
-            Some(key) => builtin_fn_prefix(key).to_string(),
-            None => head.name.clone(),
+        let type_name = match (builtin, &foreign) {
+            (Some(key), _) => builtin_fn_prefix(key).to_string(),
+            (None, Some(qualified)) => qualified.clone(),
+            (None, None) => head.name.clone(),
+        };
+        let shown = crate::modules::strip_type_head(&type_name);
+        let fn_prefix = match &foreign {
+            Some(qualified) => crate::modules::strip_type_head(qualified).replace('.', "$"),
+            None => type_name.clone(),
         };
         let fields: Vec<String> = self
             .type_table
@@ -277,7 +317,7 @@ impl TypeInference {
             if fields.contains(&mname) {
                 self.errors.push(TypeError::coded(
                     "E0342",
-                    format!("`{type_name}` has a field named `{mname}`; a method cannot share it"),
+                    format!("`{shown}` has a field named `{mname}`; a method cannot share it"),
                     "clashes with a field",
                     func.span,
                 ));
@@ -287,7 +327,7 @@ impl TypeInference {
                 self.errors.push(TypeError::coded(
                     "E0342",
                     format!(
-                        "`{mname}` is already a variant of `{type_name}`; an associated function \
+                        "`{mname}` is already a variant of `{shown}`; an associated function \
                          cannot share its name"
                     ),
                     "clashes with a variant",
@@ -317,15 +357,19 @@ impl TypeInference {
             }
             let shown_head = match builtin {
                 Some(key) => builtin_key_shown(key).to_string(),
-                None => type_name.clone(),
+                None => shown.to_string(),
             };
+            let table_is_shared = foreign.is_some() || builtin.is_some();
             let table = if builtin.is_some() {
                 &mut self.builtin_methods
             } else {
                 &mut self.methods
             };
             let entries = table.entry(table_key.clone()).or_default();
-            if entries.iter().any(|e| e.name == mname) {
+            if entries
+                .iter()
+                .any(|e| e.name == mname && (table_is_shared || e.module.is_empty()))
+            {
                 self.errors.push(TypeError::coded(
                     "E0342",
                     format!("duplicate method `{mname}` on `{shown_head}`"),
@@ -350,7 +394,12 @@ impl TypeInference {
                 ));
                 continue;
             }
-            let fn_name = format!("{type_name}::{mname}");
+            let fn_name = format!("{fn_prefix}::{mname}");
+            if let Some(qualified) = &foreign {
+                self.module_decls
+                    .foreign_methods
+                    .push((fn_name.clone(), qualified.clone()));
+            }
             entries.push(MethodEntry {
                 name: mname,
                 receiver: method.receiver,

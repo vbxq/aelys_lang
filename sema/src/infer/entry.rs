@@ -1,7 +1,7 @@
 use super::{KNOWN_TYPE_NAMES, TypeInference};
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::modules::ModuleImports;
-use crate::typed_ast::TypedProgram;
+use crate::typed_ast::{TypedProgram, TypedStmt};
 use crate::types::{InferType, TypeTable};
 use aelys_common::Warning;
 use aelys_syntax::{Source, Stmt, StmtKind, TypeAnnotation};
@@ -79,6 +79,7 @@ impl Default for TypeInference {
             local_traits: Vec::new(),
             used_builtin_stubs: HashSet::new(),
             pending_trait_args: None,
+            declarations_only: false,
         }
     }
 }
@@ -529,46 +530,12 @@ impl TypeInference {
     }
 
     pub fn infer_program_full(
-        mut stmts: Vec<Stmt>,
+        stmts: Vec<Stmt>,
         source: Arc<Source>,
         imports: ModuleImports,
         known_globals: HashSet<String>,
     ) -> Result<InferenceResult, Vec<TypeError>> {
-        let mut inf = TypeInference::new();
-        inf.module_is_importable = imports.is_importable;
-        inf.install_imports(imports);
-
-        for global in &known_globals {
-            let ty = match global.as_str() {
-                "print" | "println" => InferType::Function {
-                    params: vec![InferType::Dynamic],
-                    ret: Box::new(InferType::Null),
-                    nogc: false,
-                },
-                "__aelys_collect" => InferType::Function {
-                    params: vec![],
-                    ret: Box::new(InferType::Null),
-                    nogc: false,
-                },
-                _ => InferType::Dynamic,
-            };
-            inf.env.define_function_owned(global.clone(), ty);
-        }
-
-        inf.prepare_decls(&mut stmts);
-        inf.reject_reserved_type_names(&stmts);
-        inf.register_struct_names(&stmts);
-        inf.collect_enums(&stmts);
-        inf.resolve_struct_fields(&stmts);
-        inf.check_alias_bodies();
-        let stmts = inf.collect_traits(stmts);
-        let stmts = inf.collect_impls(stmts);
-        inf.reject_multi_variant_rc_enums(&stmts);
-        inf.reject_polymorphic_recursion(&stmts);
-        inf.collect_signatures(&stmts, "");
-        inf.fill_trait_sigs();
-        inf.check_ord_has_eq();
-
+        let (mut inf, stmts) = Self::collect_declarations(stmts, imports, known_globals, false);
         let mut typed_stmts = inf.infer_stmts(&stmts);
         typed_stmts.extend(inf.infer_used_builtin_stubs());
 
@@ -621,32 +588,99 @@ impl TypeInference {
         if all_errors.iter().any(|err| !defers(&err.kind)) {
             return Err(all_errors);
         }
-        let deferred_errors = all_errors;
+        Ok(inf.into_result(final_stmts, source, all_errors))
+    }
 
-        let type_table = inf.type_table;
+    // bodies skipped and errors dropped: the module is typed again once its neighbours are known
+    pub fn infer_declarations(
+        stmts: Vec<Stmt>,
+        source: Arc<Source>,
+        imports: ModuleImports,
+        known_globals: HashSet<String>,
+    ) -> TypedProgram {
+        let (mut inf, stmts) = Self::collect_declarations(stmts, imports, known_globals, true);
+        let typed_stmts = inf.infer_stmts(&stmts);
+        let subst = inf.solve_constraints();
+        let resolved = inf.apply_substitution_stmts(&typed_stmts, &subst);
+        let stmts = inf.finalize_stmts(resolved);
+        inf.into_result(stmts, source, Vec::new()).program
+    }
 
-        Ok(InferenceResult {
+    fn collect_declarations(
+        mut stmts: Vec<Stmt>,
+        imports: ModuleImports,
+        known_globals: HashSet<String>,
+        declarations_only: bool,
+    ) -> (TypeInference, Vec<Stmt>) {
+        let mut inf = TypeInference::new();
+        inf.declarations_only = declarations_only;
+        inf.module_is_importable = imports.is_importable;
+        inf.install_imports(imports);
+
+        for global in &known_globals {
+            let ty = match global.as_str() {
+                "print" | "println" => InferType::Function {
+                    params: vec![InferType::Dynamic],
+                    ret: Box::new(InferType::Null),
+                    nogc: false,
+                },
+                "__aelys_collect" => InferType::Function {
+                    params: vec![],
+                    ret: Box::new(InferType::Null),
+                    nogc: false,
+                },
+                _ => InferType::Dynamic,
+            };
+            inf.env.define_function_owned(global.clone(), ty);
+        }
+
+        inf.prepare_decls(&mut stmts);
+        inf.reject_reserved_type_names(&stmts);
+        inf.register_struct_names(&stmts);
+        inf.collect_enums(&stmts);
+        inf.resolve_struct_fields(&stmts);
+        inf.check_alias_bodies();
+        let stmts = inf.collect_traits(stmts);
+        inf.register_impls_of_local_traits();
+        let stmts = inf.collect_impls(stmts);
+        inf.reject_multi_variant_rc_enums(&stmts);
+        inf.reject_polymorphic_recursion(&stmts);
+        inf.collect_signatures(&stmts, "");
+        inf.fill_trait_sigs();
+        inf.check_ord_has_eq();
+
+        (inf, stmts)
+    }
+
+    fn into_result(
+        self,
+        stmts: Vec<TypedStmt>,
+        source: Arc<Source>,
+        deferred_errors: Vec<TypeError>,
+    ) -> InferenceResult {
+        let type_table = self.type_table;
+        InferenceResult {
             program: TypedProgram {
-                stmts: final_stmts,
+                stmts,
                 source,
                 type_table: type_table.clone(),
-                literal_globals: inf.literal_globals,
-                decls: inf.module_decls,
-                traits: inf
+                literal_globals: self.literal_globals,
+                decls: self.module_decls,
+                traits: self
                     .local_traits
                     .iter()
-                    .filter_map(|q| inf.trait_defs.get(q).cloned())
+                    .filter_map(|q| self.trait_defs.get(q).cloned())
                     .collect(),
-                impls: inf
+                impls: self
                     .local_impls
                     .iter()
-                    .map(|&i| inf.impl_defs[i].clone())
+                    .map(|&i| self.impl_defs[i].clone())
                     .collect(),
             },
-            warnings: inf.warnings,
+            warnings: self.warnings,
             deferred_errors,
             type_table,
-        })
+        }
     }
 }
 

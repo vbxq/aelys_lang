@@ -24,6 +24,7 @@ pub struct TypedProgram {
 pub struct ModuleDecls {
     pub consts: Vec<(String, bool, ConstLit)>,
     pub aliases: Vec<(String, crate::modules::AliasDef)>,
+    pub foreign_methods: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

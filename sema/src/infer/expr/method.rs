@@ -603,14 +603,19 @@ impl TypeInference {
         if entry.is_pub || entry.module.is_empty() {
             return;
         }
+        let path = self.module_path();
+        let ty = if crate::modules::module_of_type(key).is_some() {
+            crate::modules::strip_type_head(key).to_string()
+        } else if crate::infer::is_builtin_key(key) {
+            format!("{}.{}", entry.module, source_type_name(key))
+        } else if path.is_empty() {
+            key.to_string()
+        } else {
+            format!("{path}.{key}")
+        };
         self.errors.push(TypeError::coded(
             "E0610",
-            format!(
-                "method `{}` of `{}.{}` is not public",
-                entry.name,
-                entry.module,
-                source_type_name(key)
-            ),
+            format!("method `{}` of `{ty}` is not public", entry.name),
             "method is not public",
             span,
         ));

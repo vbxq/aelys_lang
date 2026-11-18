@@ -220,6 +220,15 @@ pub(crate) fn qualify_alias_body(
     }
 }
 
+pub fn module_of_type(qualified: &str) -> Option<&str> {
+    let bare = qualified.strip_prefix(TYPE_HEAD)?;
+    bare.rsplit_once('.').map(|(module, _)| module)
+}
+
+pub fn is_std_module(path: &str) -> bool {
+    path == "std" || path.starts_with("std.")
+}
+
 pub fn strip_type_head(name: &str) -> &str {
     name.strip_prefix(TYPE_HEAD).unwrap_or(name)
 }
@@ -321,6 +330,25 @@ fn reach(
     }
 }
 
+fn qualify_def(def: ModuleTypeDef, path: &str, owned: &HashSet<String>) -> ModuleTypeDef {
+    match def {
+        ModuleTypeDef::Struct(mut def) => {
+            for field in &mut def.fields {
+                field.ty = qualify_infer_type(&field.ty, path, owned);
+            }
+            ModuleTypeDef::Struct(def)
+        }
+        ModuleTypeDef::Enum(mut def) => {
+            for variant in &mut def.variants {
+                for payload in &mut variant.data {
+                    *payload = qualify_infer_type(payload, path, owned);
+                }
+            }
+            ModuleTypeDef::Enum(def)
+        }
+    }
+}
+
 fn field_is_pub(table: &crate::types::TypeTable, struct_name: &str, field: &str) -> bool {
     table
         .get_struct(struct_name)
@@ -375,11 +403,18 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                     bounds,
                     literal: None,
                 };
-                let method_key = match func.name.split_once("::") {
-                    Some((tname, mname)) if owned.contains(tname) => {
+                let foreign = program
+                    .decls
+                    .foreign_methods
+                    .iter()
+                    .find(|(fn_name, _)| *fn_name == func.name)
+                    .map(|(_, key)| key.clone());
+                let method_key = match (func.name.split_once("::"), foreign) {
+                    (Some((_, mname)), Some(key)) => Some((key, mname)),
+                    (Some((tname, mname)), None) if owned.contains(tname) => {
                         Some((qualify_type_name(path, tname), mname))
                     }
-                    Some((tname, mname)) if path.starts_with("std.") => {
+                    (Some((tname, mname)), None) if path.starts_with("std.") => {
                         crate::infer::builtin_key_of_prefix(tname).map(|k| (k.to_string(), mname))
                     }
                     _ => None,
@@ -512,7 +547,12 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
             }
         }
     }
-    exports.reachable = reachable;
+    // a neighbour's type seen from inside a cycle names this module's types bare
+    exports.reachable = reachable
+        .into_iter()
+        .filter(|(name, _)| !owned.contains(name))
+        .map(|(name, def)| (name, qualify_def(def, path, &owned)))
+        .collect();
 
     for (name, is_pub, lit) in &program.decls.consts {
         exports.values.insert(

@@ -1149,7 +1149,15 @@ impl TypeInference {
             }
             _ => false,
         };
-        if !local_trait && !local_type {
+        let in_crate = |q: &str| {
+            crate::modules::module_of_type(q).is_some_and(|m| !crate::modules::is_std_module(m))
+        };
+        let crate_type = match &self_ty {
+            InferType::Struct(n, _) | InferType::Enum(n, _) => in_crate(n),
+            _ => false,
+        };
+        let crate_impl = !self.in_std() && (in_crate(&q) || crate_type);
+        if !local_trait && !local_type && !crate_impl {
             self.errors.push(TypeError::coded(
                 "E0757",
                 format!(
@@ -1385,6 +1393,19 @@ impl TypeInference {
         }
         self.type_params_in_scope = saved;
         ok
+    }
+
+    // an impl of this module's trait written in a neighbour arrives before the trait is collected
+    pub(super) fn register_impls_of_local_traits(&mut self) {
+        let late: Vec<ImplDef> = self
+            .impl_defs
+            .iter()
+            .filter(|imp| self.local_traits.contains(&imp.trait_q))
+            .cloned()
+            .collect();
+        for imp in &late {
+            self.register_impl_entries(imp);
+        }
     }
 
     pub(crate) fn register_impl_entries(&mut self, imp: &ImplDef) {
