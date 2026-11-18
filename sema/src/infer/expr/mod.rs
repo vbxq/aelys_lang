@@ -1198,16 +1198,6 @@ impl TypeInference {
                 ));
                 return;
             }
-            if matches!(elem, InferType::Vec(_)) || self.type_table.contains_vec_by_value(elem) {
-                self.errors.push(TypeError::vec_out_of_surface(
-                    format!(
-                        "the tuple `{ty}` holds a `Vec<T>` by value, which is not supported; \
-                         keep the Vec in its own binding"
-                    ),
-                    span,
-                ));
-                return;
-            }
         }
     }
 }

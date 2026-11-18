@@ -1,0 +1,20 @@
+struct Matrix { data: Vec<i64> }
+fn mk(n: i64) -> Vec<i64> {
+    let mut d: Vec<i64> = Vec::new()
+    let mut i: i64 = 0
+    while i < n { Vec::push(d, i * 10)
+        i = i + 1 }
+    return d
+}
+
+fn main() -> i64 {
+    let p = (Matrix { data: mk(3) }, Matrix { data: mk(4) })
+    let mut q = p
+    Vec::push(q.0.data, 100)
+    q.1.data[0] = 7
+    println(p.0.data.len)
+    println(q.0.data.len)
+    println(p.1.data[0])
+    println(q.1.data[0])
+    return 0
+}

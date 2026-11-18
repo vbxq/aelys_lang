@@ -1018,8 +1018,23 @@ impl TypeInference {
                 args,
                 ..
             } => {
+                let generic_enum = self
+                    .type_table
+                    .get_enum(enum_name)
+                    .is_some_and(|def| !def.type_params.is_empty());
                 for arg in args {
                     self.validate_expr(arg, generic_scope, declared_type_params);
+                    if generic_enum && self.type_table.contains_vec_by_value(&arg.ty) {
+                        self.errors.push(TypeError::vec_out_of_surface(
+                            format!(
+                                "the payload of `{}::{variant}` has type `{}`, which holds a \
+                                 `Vec<T>` by value: a Vec inside an enum is not supported yet",
+                                crate::modules::source_type_name(enum_name),
+                                arg.ty
+                            ),
+                            arg.span,
+                        ));
+                    }
                     if !crate::rc_init::RUNTIME_CARRIER_EXEMPT.contains(&enum_name.as_str()) {
                         self.check_rc_carrier_surface(
                             arg,

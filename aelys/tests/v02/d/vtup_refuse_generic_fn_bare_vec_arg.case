@@ -1,0 +1,7 @@
+fn fst<A, B>(p: (A, B)) -> A { return p.0 }
+fn main() -> i64 {
+    let e: Vec<i64> = Vec::new()
+    let x = fst((e, 1))
+    println(x.len)
+    return 0
+}

@@ -1,0 +1,16 @@
+struct Bag { items: Vec<i64> }
+struct Pair<A, B> { a: A, b: B }
+fn main() -> i64 {
+    let mut t: i64 = 0
+    let mut i: i64 = 0
+    while i < 100 {
+        let b = Bag { items: vec[4, i] }
+        let q = Pair { a: 3, b: b }
+        let mut r = q
+        Vec::push(r.b.items, 1)
+        t = t + q.a + q.b.items.len * 10 + r.b.items.len * 100 + q.b.items[1]
+        i = i + 1
+    }
+    println(t)
+    return 0
+}

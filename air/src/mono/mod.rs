@@ -98,13 +98,6 @@ fn tuple_carrier_errors(program: &AirProgram) -> Vec<MonoError> {
                         .to_string(),
                 }];
             }
-            if matches!(field.ty, AirType::Vec(_)) {
-                return vec![MonoError::vec_surface(format!(
-                    "{} a tuple holds a `Vec<T>` by value, which is not supported; keep the Vec \
-                     in its own binding",
-                    crate::passes::vec_surface::MARKER
-                ))];
-            }
         }
     }
     Vec::new()
