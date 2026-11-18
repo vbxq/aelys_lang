@@ -221,6 +221,9 @@ impl TypeInference {
     }
 
     fn struct_field_type(&self, object: &InferType, field: &str) -> Option<InferType> {
+        if let InferType::Tuple(elems) = object {
+            return field.parse::<usize>().ok().and_then(|i| elems.get(i).cloned());
+        }
         let (name, args) = match object {
             InferType::Struct(name, args) => (name, args),
             InferType::Rc(inner) => match inner.as_ref() {

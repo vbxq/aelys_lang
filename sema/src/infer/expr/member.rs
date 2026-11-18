@@ -101,15 +101,11 @@ impl TypeInference {
                 }
             },
             InferType::Dynamic => InferType::Dynamic,
-            InferType::Var(_) => {
-                self.errors.push(TypeError::member_access(
-                    format!(
-                        "type annotations needed: the element `{member}` is read before the                          tuple type is known"
-                    ),
-                    span,
-                ));
-                InferType::Dynamic
-            }
+            InferType::Var(_) => self.defer_read(
+                ty,
+                crate::infer::projection::ProjKind::Field(member.to_string()),
+                span,
+            ),
             other => {
                 self.errors.push(TypeError::member_access(
                     format!("`{other}` has no element {member}; only a tuple has numbered elements"),
@@ -235,7 +231,9 @@ impl TypeInference {
         if let Some((struct_name, _)) = object_struct.clone() {
             self.reject_private_field(&struct_name, field, span);
         }
-        if field.starts_with(|c: char| c.is_ascii_digit()) {
+        if field.starts_with(|c: char| c.is_ascii_digit())
+            && !Self::projection_waits(&typed_object.ty)
+        {
             let field_ty = self.tuple_element_type(&typed_object.ty, field, span);
             if field_ty != InferType::Dynamic {
                 if field_ty.is_rc() || field_ty.contains_rc() {
