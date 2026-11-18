@@ -305,6 +305,18 @@ impl<'a> FunctionCodegen<'a> {
         if *elem == AirType::Str {
             return None;
         }
+        if matches!(elem, AirType::Rc(_)) {
+            let name = if retain {
+                aelys_air::counts::RC_RETAIN_SLOT
+            } else {
+                aelys_air::counts::RC_RELEASE_SLOT
+            };
+            return Some(self.module.get_function(name).unwrap_or_else(|| {
+                let ptr_ty = self.context.ptr_type(AddressSpace::default());
+                let fn_ty = self.context.void_type().fn_type(&[ptr_ty.into()], false);
+                self.module.add_function(name, fn_ty, None)
+            }));
+        }
         let carriers =
             aelys_air::counts::Carriers::merged(&self.program.structs, &self.program.enums);
         if !carriers.carries_string(elem) {

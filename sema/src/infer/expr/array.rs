@@ -292,6 +292,9 @@ impl TypeInference {
     }
 
     pub(crate) fn reject_rc_aggregate_element(&mut self, ty: &InferType, kind: &str, span: Span) {
+        if kind == "vec literal" && ty.is_rc() {
+            return;
+        }
         if ty.is_rc() || ty.contains_rc() || self.type_table.contains_rc_nominal(ty) {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(

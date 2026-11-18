@@ -345,6 +345,20 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::VecLiteral { elements, .. } => {
                 let refs: Vec<&TypedExpr> = elements.iter().collect();
                 let lowered = self.lower_pinned_operands_owning(&refs, true, sp);
+                let lowered: Vec<Operand> = lowered
+                    .into_iter()
+                    .zip(elements.iter())
+                    .map(|(op, e)| {
+                        if !matches!(e.ty, InferType::Rc(_)) {
+                            return op;
+                        }
+                        let shape = super::RcShape {
+                            ty: self.lower_type_from_infer(&e.ty),
+                            paths: vec![crate::rc_paths::RcLeafPath { steps: Vec::new() }],
+                        };
+                        self.own_rc_value(op, &e.ty, &shape, Some(e), sp)
+                    })
+                    .collect();
                 let vec_ty = self.lower_type_from_infer(&expr.ty);
                 let elem_ty = match &vec_ty {
                     AirType::Vec(inner) => (**inner).clone(),
@@ -1212,7 +1226,8 @@ impl<'a> LoweringContext<'a> {
         let idx = self.lower_expr(index);
         let val = if compound_info.is_none() {
             let op = self.lower_expr(value);
-            self.own_str_for_store(op, &value.ty, sp)
+            let value_air = self.lower_type_from_infer(&value.ty);
+            self.own_field_value(op, value, &value_air, sp)
         } else {
             Operand::Const(AirConst::Null)
         };
@@ -1258,7 +1273,8 @@ impl<'a> LoweringContext<'a> {
         // a mutable slice is a unique borrow, so its slots keep one share each like an array's
         let drops_old =
             Self::roots_a_vec(&object.ty) || owned_array || Self::slice_is_mutable(&object.ty);
-        let old_elem = (drops_old && self.counted(&value.ty)).then(|| {
+        let rc_elem = matches!(value.ty, InferType::Rc(_));
+        let old_elem = (drops_old && (rc_elem || self.counted(&value.ty))).then(|| {
             let elem_ty = self.lower_type_from_infer(&value.ty);
             self.emit_rvalue_to_temp(
                 elem_ty,
@@ -1277,7 +1293,11 @@ impl<'a> LoweringContext<'a> {
             sp,
         );
         if let Some(Operand::Copy(old) | Operand::Move(old)) = old_elem {
-            self.emit_str_release(old, sp);
+            if rc_elem {
+                self.emit_rc_release(old, sp);
+            } else {
+                self.emit_str_release(old, sp);
+            }
         }
         Operand::Const(AirConst::Null)
     }
@@ -1818,7 +1838,7 @@ impl<'a> LoweringContext<'a> {
         };
         let elem_ty = self.lower_type_from_infer(&args[1].ty);
         let elem_op = self.lower_expr(&args[1]);
-        let elem_op = self.own_str_for_store(elem_op, &args[1].ty, sp);
+        let elem_op = self.own_field_value(elem_op, &args[1], &elem_ty, sp);
         let elem_slot = self.alloc_temp_mut(elem_ty.clone());
         self.emit(
             AirStmtKind::Assign {
@@ -2101,7 +2121,7 @@ impl<'a> LoweringContext<'a> {
         let idx = self.lower_expr(&args[1]);
         let elem_ty = self.lower_type_from_infer(&args[2].ty);
         let elem_op = self.lower_expr(&args[2]);
-        let elem_op = self.own_str_for_store(elem_op, &args[2].ty, sp);
+        let elem_op = self.own_field_value(elem_op, &args[2], &elem_ty, sp);
         let elem_slot = self.alloc_temp_mut(elem_ty.clone());
         self.emit(
             AirStmtKind::Assign {

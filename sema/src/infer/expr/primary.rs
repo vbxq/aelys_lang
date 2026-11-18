@@ -463,6 +463,18 @@ impl TypeInference {
 
         let typed_arg = self.infer_expr(&args[0]);
         let inner = typed_arg.ty.clone();
+        if let InferType::Vec(elem) = &inner
+            && self.type_table.contains_rc_nominal(elem)
+        {
+            self.errors.push(TypeError::rc_out_of_surface(
+                format!(
+                    "the `Rc` payload has type `{inner}`, a `Vec` that holds an `Rc`: a \
+                     `Vec<Rc<T>>` inside an `Rc` is not supported yet, the cycle collector \
+                     does not trace a Vec buffer"
+                ),
+                args[0].span,
+            ));
+        }
         (
             TypedExprKind::EnumVariant {
                 enum_name: "Rc".to_string(),
@@ -648,7 +660,7 @@ impl TypeInference {
     }
 
     pub(crate) fn reject_rc_vec_push(&mut self, ty: &InferType, span: Span) {
-        if self.type_table.contains_rc_nominal(ty) {
+        if !ty.is_rc() && self.type_table.contains_rc_nominal(ty) {
             self.errors.push(TypeError::rc_out_of_surface(
                 format!(
                     "element pushed to a Vec has type `{}` which embeds an `Rc<T>`; \

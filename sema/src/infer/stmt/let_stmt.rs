@@ -124,11 +124,13 @@ impl TypeInference {
             let direct_init = matches!(
                 &init.kind,
                 ExprKind::EnumVariant { enum_name, variant, .. }
-                    if enum_name == "Rc" && (variant == "new" || variant == "null")
+                    if (enum_name == "Rc" && (variant == "new" || variant == "null"))
+                        || (enum_name == "Vec" && variant == "remove")
             ) || matches!(
                 init.kind,
                 ExprKind::Identifier(_)
                     | ExprKind::Deref(_)
+                    | ExprKind::Index { .. }
                     | ExprKind::Member { .. }
                     | ExprKind::Call { .. }
                     | ExprKind::Block { .. }
@@ -145,8 +147,9 @@ impl TypeInference {
                         span,
                     ));
             }
-        } else if (var_type.contains_rc() && self.type_table.rc_outside_variant_tags(var_type))
-            || self.aggregate_embeds_rc_nominal(var_type)
+        } else if !matches!(var_type, crate::types::InferType::Vec(inner) if inner.is_rc())
+            && ((var_type.contains_rc() && self.type_table.rc_outside_variant_tags(var_type))
+                || self.aggregate_embeds_rc_nominal(var_type))
         {
             self.errors
                 .push(crate::constraint::TypeError::rc_out_of_surface(
