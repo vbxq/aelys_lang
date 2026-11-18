@@ -816,7 +816,7 @@ impl MonoContext {
                 }
             },
             AirType::Ptr(inner) => {
-                if let AirType::Ptr(arg_inner) = arg_ty {
+                if let AirType::Ptr(arg_inner) | AirType::Rc(arg_inner) = arg_ty {
                     self.unify_param(inner, arg_inner, fn_type_params, resolved, conflicts);
                 }
             }
