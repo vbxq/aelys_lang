@@ -1,0 +1,5 @@
+fn main() {
+    let r#or = 5
+    let r#step = 2
+    println(r#or * r#step)
+}

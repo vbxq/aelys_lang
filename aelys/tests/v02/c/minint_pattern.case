@@ -1,0 +1,12 @@
+fn f(x: i64) -> i64 {
+    let r = match x {
+        -9223372036854775808 => 1,
+        _ => 2,
+    }
+    return r
+}
+fn main() {
+    let m: i64 = -9223372036854775807 - 1
+    println(f(m))
+    println(f(0))
+}

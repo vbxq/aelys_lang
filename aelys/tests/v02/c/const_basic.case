@@ -1,0 +1,5 @@
+const N: i64 = 10
+pub const M: i64 = 32
+fn main() {
+    println(N * 2 + M)
+}

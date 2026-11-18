@@ -1,0 +1,6 @@
+const MIN: i64 = -9223372036854775808
+const ALSO: i64 = -9223372036854775807 - 1
+fn main() {
+    println(MIN == ALSO)
+    println(MIN)
+}

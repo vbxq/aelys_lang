@@ -1,0 +1,6 @@
+nogc fn tag(x: i64) -> (i64, string) {
+    return (x, "n{x}")
+}
+fn main() {
+    println(tag(1).0)
+}

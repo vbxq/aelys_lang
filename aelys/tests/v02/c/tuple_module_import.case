@@ -1,0 +1,6 @@
+needs geo
+fn main() {
+    let (n, s) = geo.pair(2)
+    println("{n} {s}")
+    println(geo.sum((n, 1)))
+}

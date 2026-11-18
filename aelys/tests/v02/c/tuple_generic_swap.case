@@ -1,0 +1,9 @@
+fn swap<T, U>(p: (T, U)) -> (U, T) {
+    return (p.1, p.0)
+}
+fn main() {
+    let q = swap((1, "a"))
+    println("{q.0} {q.1}")
+    let r = swap((true, 9))
+    println(r.0 + 1)
+}

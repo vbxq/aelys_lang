@@ -1,0 +1,4 @@
+pub let ORIGIN: (i64, i64) = (3, 4)
+fn main() {
+    println(ORIGIN.0 * 10 + ORIGIN.1)
+}

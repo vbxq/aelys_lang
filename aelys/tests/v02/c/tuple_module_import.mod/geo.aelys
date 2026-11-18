@@ -1,0 +1,6 @@
+pub fn pair(n: i64) -> (i64, string) {
+    return (n * 5, "five")
+}
+pub fn sum(p: (i64, i64)) -> i64 {
+    return p.0 + p.1
+}

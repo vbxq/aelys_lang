@@ -1,0 +1,5 @@
+fn main() {
+    let t: (i64, bool, string) = (41, true, "z")
+    if t.1 { println(t.0 + 1) }
+    println(t.2)
+}

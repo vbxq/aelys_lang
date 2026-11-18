@@ -1,0 +1,6 @@
+fn and(a: bool, b: bool) -> bool {
+    return a
+}
+fn main() {
+    println(1)
+}

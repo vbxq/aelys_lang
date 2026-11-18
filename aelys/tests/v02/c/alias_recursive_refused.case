@@ -1,0 +1,4 @@
+type L = Vec<L>
+fn main() {
+    let x: L = vec[]
+}

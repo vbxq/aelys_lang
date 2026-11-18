@@ -1,0 +1,8 @@
+fn main() {
+    let mut t = ("init", 0)
+    for i in 0..400 {
+        t = ("s{i}", i)
+        t.0 = "z{i}"
+    }
+    println("{t.0} {t.1}")
+}

@@ -1,0 +1,6 @@
+pub const LIMIT: i64 = 99
+pub const NAME: string = "cfg"
+const HIDDEN: i64 = 1
+pub fn limit_plus(n: i64) -> i64 {
+    return LIMIT + n + HIDDEN
+}

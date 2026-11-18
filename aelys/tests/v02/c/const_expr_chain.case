@@ -1,0 +1,7 @@
+const A: i64 = 6
+const B: i64 = A * 7
+const C: i64 = (B - 2) / 4 % 7
+const D: i64 = (1 << 10) | 5
+fn main() {
+    println("{B} {C} {D}")
+}

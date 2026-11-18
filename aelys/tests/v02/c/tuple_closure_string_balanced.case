@@ -1,0 +1,11 @@
+fn main() {
+    let mut n = 0
+    for i in 0..200 {
+        let t = ("k{i}", i)
+        let f = fn() -> i64 {
+            return t.0.len + t.1
+        }
+        n = n + f()
+    }
+    println(n)
+}

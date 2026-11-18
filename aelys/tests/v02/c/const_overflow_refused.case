@@ -1,0 +1,4 @@
+const X: i64 = 9223372036854775807 + 1
+fn main() {
+    println(X)
+}

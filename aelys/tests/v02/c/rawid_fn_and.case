@@ -1,0 +1,10 @@
+fn r#and(a: bool, b: bool) -> bool {
+    return a and b
+}
+fn r#or(a: bool, b: bool) -> bool {
+    return a or b
+}
+fn main() {
+    println(r#and(true, false))
+    println(r#or(true, false))
+}

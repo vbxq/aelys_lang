@@ -1,0 +1,6 @@
+needs logic
+fn main() {
+    println(logic.and(true, true))
+    println(logic.r#and(true, false))
+    println(logic.step(41))
+}
