@@ -497,19 +497,40 @@ fn subst_function(func: &mut Function, head: &TypeAnnotation) {
 
 fn subst_pattern(pattern: &mut Pattern, head: &TypeAnnotation) {
     match pattern {
-        Pattern::Variant { enum_name, .. } => subst_name(enum_name, head),
-        Pattern::Tuple { elems, .. } => {
+        Pattern::Variant {
+            enum_name, fields, ..
+        } => {
+            subst_name(enum_name, head);
+            for p in fields {
+                subst_pattern(p, head);
+            }
+        }
+        Pattern::Tuple { elems, .. } | Pattern::Or(elems, _) => {
             for p in elems {
                 subst_pattern(p, head);
             }
         }
-        Pattern::Wildcard(_) | Pattern::Binding { .. } => {}
+        Pattern::Struct { name, fields, .. } => {
+            subst_name(name, head);
+            for (_, p, _) in fields {
+                subst_pattern(p, head);
+            }
+        }
+        Pattern::Binding { sub, .. } => {
+            if let Some(p) = sub {
+                subst_pattern(p, head);
+            }
+        }
+        Pattern::Wildcard(_) | Pattern::Lit(..) | Pattern::Range { .. } => {}
     }
 }
 
 fn subst_arms(arms: &mut [MatchArm], head: &TypeAnnotation) {
     for arm in arms {
         subst_pattern(&mut arm.pattern, head);
+        if let Some(g) = arm.guard.as_mut() {
+            subst_expr(g, head);
+        }
         subst_expr(&mut arm.body, head);
     }
 }
@@ -650,7 +671,9 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
             subst_expr(inner, head);
             subst_ann(target, head);
         }
-        ExprKind::Match { scrutinee, arms } => {
+        ExprKind::Match {
+            scrutinee, arms, ..
+        } => {
             subst_expr(scrutinee, head);
             subst_arms(arms, head);
         }
