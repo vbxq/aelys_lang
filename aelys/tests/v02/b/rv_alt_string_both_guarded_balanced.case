@@ -1,0 +1,23 @@
+enum V { A(string), B(string), C }
+
+fn mk(i: i64) -> V {
+    if i % 3 == 0 { return V::A("a{i}") }
+    if i % 3 == 1 { return V::B("b{i}") }
+    return V::C
+}
+
+fn main() -> i64 {
+    let mut hit: i64 = 0
+    let mut miss: i64 = 0
+    let mut last: string = ""
+    for i in 0..300 {
+        match mk(i) {
+            V::A(s) | V::B(s) if s.len > 2 => { hit = hit + 1
+                last = s },
+            V::A(s) | V::B(s) => { miss = miss + s.len },
+            V::C => {}
+        }
+    }
+    println("{hit} {miss} {last}")
+    return 0
+}

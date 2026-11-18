@@ -1,0 +1,16 @@
+fn take(o: &mut Option<string>) -> string {
+    match *o {
+        Some(s) => {
+            *o = None
+            return s + "!"
+        },
+        None => { return "none" }
+    }
+}
+
+fn main() -> i64 {
+    let mut o: Option<string> = Some("a" + "b")
+    println(take(&mut o))
+    println(take(&mut o))
+    return 0
+}

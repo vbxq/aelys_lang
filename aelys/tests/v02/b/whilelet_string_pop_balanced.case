@@ -1,12 +1,12 @@
-fn take(v: &mut Vec<string>) -> Option<string> {
-    if Vec::len(*v) == 0 { return None }
-    return Some(Vec::pop(*v))
+fn at(v: &Vec<string>, i: i64) -> Option<string> {
+    if i >= Vec::len(*v) { return None }
+    return Some((*v)[i])
 }
 
 fn main() -> i64 {
-    let mut v: Vec<string> = vec["a", "b", "c"]
+    let v: Vec<string> = vec["a" + "", "b", "c"]
     let mut n: i64 = 0
-    while let Some(s) = take(&mut v) {
+    while let Some(s) = at(&v, n) {
         println(s + "!")
         n = n + 1
     }

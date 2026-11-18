@@ -583,9 +583,9 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { Some(v) => v, Option::Some(w) => w + 1, None => 0 }\n}\n",
                 module: None,
                 expect: Expect::Refused {
-                    code: "E0301",
+                    code: "E0310",
                     at: (3, 36),
-                    says: "duplicate pattern for variant 'Option::Some'",
+                    says: "unreachable match arm: duplicate pattern for variant 'Option::Some'",
                 },
             },
             Case {
@@ -593,9 +593,9 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
                 src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { None => 0, _ => 1, Some(v) => v }\n}\n",
                 module: None,
                 expect: Expect::Refused {
-                    code: "E0304",
-                    at: (3, 33),
-                    says: "wildcard pattern must be the last match arm",
+                    code: "E0310",
+                    at: (3, 41),
+                    says: "unreachable match arm: wildcard pattern must be the last match arm",
                 },
             },
             Case {
@@ -646,23 +646,15 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "nested_unit_variant",
-                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Some(None)\n    return match o { Some(None) => 1, Some(x) => 2, None => 3 }\n}\n",
+                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Some(None)\n    let v: i64 = match o { Some(None) => 1, Some(x) => 2, None => 3 }\n    println(\"{v}\")\n    return 0\n}\n",
                 module: None,
-                expect: Expect::Refused {
-                    code: "E0101",
-                    at: (3, 27),
-                    says: "nested patterns are not supported yet",
-                },
+                expect: Expect::Runs("1\n"),
             },
             Case {
                 name: "nested_qualified_variant",
-                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Option::Some(Option::None)\n    return match o { Option::Some(Option::Some(v)) => v, _ => 0 }\n}\n",
+                src: "fn main() -> i64 {\n    let o: Option<Option<i64>> = Option::Some(Option::None)\n    let v: i64 = match o { Option::Some(Option::Some(v)) => v, _ => 7 }\n    println(\"{v}\")\n    return 0\n}\n",
                 module: None,
-                expect: Expect::Refused {
-                    code: "E0101",
-                    at: (3, 35),
-                    says: "nested patterns are not supported yet",
-                },
+                expect: Expect::Runs("7\n"),
             },
             Case {
                 name: "lowercase_variant_declaration",
@@ -676,13 +668,9 @@ fn release01_87_match_arms_of_either_spelling_are_checked_as_one() {
             },
             Case {
                 name: "lowercase_catch_all",
-                src: "fn main() -> i64 {\n    let o: Option<i64> = Some(1)\n    return match o { Some(v) => v, other => 0 }\n}\n",
+                src: "fn main() -> i64 {\n    let o: Option<i64> = None\n    let v: i64 = match o { Some(v) => v, other => 5 }\n    println(\"{v}\")\n    return 0\n}\n",
                 module: None,
-                expect: Expect::Refused {
-                    code: "E0101",
-                    at: (3, 36),
-                    says: "`other` is not a variant in scope; write `Enum::Variant`; binding patterns are not supported yet",
-                },
+                expect: Expect::Runs("5\n"),
             },
         ],
     );
