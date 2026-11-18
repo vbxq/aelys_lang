@@ -456,7 +456,7 @@ fn foo() -> i64 {
         .expect_err("compilation should fail at sema stage");
     let rendered = err.to_string();
     assert!(
-        rendered.contains("expected `i64`, found `null`"),
+        rendered.contains("expected `i64`, found `()`"),
         "{rendered}"
     );
     assert!(

@@ -117,7 +117,8 @@ impl TypeInference {
                 InferType::Null,
                 return_type.clone(),
                 func.span,
-                ConstraintReason::Return {
+                ConstraintReason::ReturnNoValue {
+                    fallthrough: true,
                     func_name: func.name.clone(),
                 },
             ));

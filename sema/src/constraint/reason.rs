@@ -12,6 +12,8 @@ pub enum ConstraintReason {
     Argument { func_name: String, arg_index: usize },
     /// Function return type
     Return { func_name: String },
+    ReturnNoValue { func_name: String, fallthrough: bool },
+    ReturnInUnit { func_name: String },
     /// Variable assignment (reassignment)
     Assignment { var_name: String },
     /// Explicit type annotation on variable declaration (FATAL error)
@@ -61,6 +63,12 @@ impl fmt::Display for ConstraintReason {
             }
             ConstraintReason::Return { func_name } => {
                 write!(f, "return type of function '{}'", func_name)
+            }
+            ConstraintReason::ReturnNoValue { func_name, .. } => {
+                write!(f, "`{func_name}` ends here without returning a value")
+            }
+            ConstraintReason::ReturnInUnit { func_name } => {
+                write!(f, "`{func_name}` declares no return type")
             }
             ConstraintReason::Assignment { var_name } => {
                 write!(f, "assignment to variable '{}'", var_name)

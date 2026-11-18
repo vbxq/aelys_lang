@@ -609,9 +609,45 @@ fn string_ordering(error: &TypeError) -> bool {
 fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnostic {
     let promoted = promoted_reason(error);
     let (code, message, annotation) = match &error.kind {
-        TypeErrorKind::Mismatch { expected, found } => match &promoted {
-            Some(reason) => ("E0301", reason.clone(), reason.clone()),
-            None => {
+        TypeErrorKind::Mismatch { expected, found } => match (&promoted, &error.reason) {
+            (Some(reason), _) => ("E0301", reason.clone(), reason.clone()),
+            (
+                None,
+                ConstraintReason::ReturnNoValue {
+                    func_name,
+                    fallthrough,
+                },
+            ) => {
+                let declared = if matches!(expected, InferType::Null) { found } else { expected };
+                if *fallthrough {
+                    (
+                        "E0301",
+                        format!(
+                            "`{func_name}` returns `{declared}`, but it can reach its end \
+                             without a `return`"
+                        ),
+                        format!("`{func_name}` can end after this without returning a value"),
+                    )
+                } else {
+                    (
+                        "E0301",
+                        format!("`{func_name}` returns `{declared}`, but this `return` gives no value"),
+                        "no value given here".to_string(),
+                    )
+                }
+            }
+            (None, ConstraintReason::ReturnInUnit { func_name }) => {
+                let value = if matches!(expected, InferType::Null) { found } else { expected };
+                (
+                    "E0301",
+                    format!(
+                        "`{func_name}` declares no return type, so it returns nothing, but this \
+                         gives it a value of type `{value}`"
+                    ),
+                    format!("a value of type `{value}` returned here"),
+                )
+            }
+            (None, _) => {
                 let (expected, found) = InferType::shown_pair(expected, found);
                 (
                     "E0301",
@@ -962,12 +998,21 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
     }
 
     match &error.kind {
-        TypeErrorKind::Mismatch { .. } if promoted.is_none() => {
-            let reason_str = error.reason.to_string();
-            if !reason_str.is_empty() {
-                diag.add_note(user_facing(reason_str));
+        TypeErrorKind::Mismatch { expected, found } if promoted.is_none() => match &error.reason {
+            ConstraintReason::ReturnNoValue { .. } => {}
+            ConstraintReason::ReturnInUnit { func_name } => {
+                let value = if matches!(expected, InferType::Null) { found } else { expected };
+                diag.add_help(format!(
+                    "declare the type it returns: `fn {func_name}(..) -> {value}`"
+                ));
             }
-        }
+            _ => {
+                let reason_str = error.reason.to_string();
+                if !reason_str.is_empty() {
+                    diag.add_note(user_facing(reason_str));
+                }
+            }
+        },
         _ => {}
     }
 

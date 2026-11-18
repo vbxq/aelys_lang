@@ -36,17 +36,21 @@ impl TypeInference {
                     };
                 }
 
+                let func_name = self
+                    .env
+                    .current_function()
+                    .cloned()
+                    .unwrap_or_else(|| "<anonymous>".to_string());
+                let reason = if matches!(return_type, InferType::Null) {
+                    ConstraintReason::ReturnInUnit { func_name }
+                } else {
+                    ConstraintReason::Return { func_name }
+                };
                 self.constraints.push(Constraint::flows_into(
                     return_type.clone(),
                     typed_expr.ty.clone(),
                     expr.span,
-                    ConstraintReason::Return {
-                        func_name: self
-                            .env
-                            .current_function()
-                            .cloned()
-                            .unwrap_or_else(|| "<anonymous>".to_string()),
-                    },
+                    reason,
                 ));
 
                 TypedStmt {
@@ -122,7 +126,8 @@ impl TypeInference {
                         InferType::Null,
                         return_type.clone(),
                         stmt.span,
-                        ConstraintReason::Return {
+                        ConstraintReason::ReturnNoValue {
+                            fallthrough: true,
                             func_name: self
                                 .env
                                 .current_function()

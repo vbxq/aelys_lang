@@ -37,18 +37,25 @@ impl TypeInference {
                 .as_ref()
                 .map(|e| e.ty.clone())
                 .unwrap_or(InferType::Null);
+            let func_name = self
+                .env
+                .current_function()
+                .cloned()
+                .unwrap_or_else(|| "<anonymous>".to_string());
+            let reason = match (&typed_expr, &expected_ret) {
+                (None, _) => ConstraintReason::ReturnNoValue {
+                    func_name,
+                    fallthrough: false,
+                },
+                (Some(_), InferType::Null) => ConstraintReason::ReturnInUnit { func_name },
+                _ => ConstraintReason::Return { func_name },
+            };
 
             self.constraints.push(Constraint::flows_into(
                 expected_ret,
                 actual_ret,
                 span,
-                ConstraintReason::Return {
-                    func_name: self
-                        .env
-                        .current_function()
-                        .cloned()
-                        .unwrap_or_else(|| "<anonymous>".to_string()),
-                },
+                reason,
             ));
         }
 

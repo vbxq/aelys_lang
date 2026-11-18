@@ -481,7 +481,7 @@ impl InferType {
             InferType::Bool => write!(f, "bool"),
             InferType::Char => write!(f, "char"),
             InferType::String => write!(f, "string"),
-            InferType::Null => write!(f, "null"),
+            InferType::Null => write!(f, "()"),
             InferType::Never => write!(f, "Never"),
             InferType::Function { params, ret, nogc } => {
                 write!(f, "{}fn(", if *nogc { "nogc " } else { "" })?;

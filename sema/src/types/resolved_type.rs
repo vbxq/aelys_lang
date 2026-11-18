@@ -158,7 +158,7 @@ impl fmt::Display for ResolvedType {
             ResolvedType::Bool => write!(f, "bool"),
             ResolvedType::Char => write!(f, "char"),
             ResolvedType::String => write!(f, "string"),
-            ResolvedType::Null => write!(f, "null"),
+            ResolvedType::Null => write!(f, "()"),
             ResolvedType::Function { params, ret } => {
                 write!(f, "fn(")?;
                 for (i, p) in params.iter().enumerate() {
