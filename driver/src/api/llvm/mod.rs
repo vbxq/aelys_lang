@@ -723,6 +723,12 @@ fn air_stage(
     }
 
     drop_unreached_prelude_functions(fronts, &mut programs);
+    let std_functions: HashSet<String> = fronts
+        .iter()
+        .zip(&programs)
+        .filter(|(front, _)| front.dotted.starts_with("std."))
+        .flat_map(|(_, program)| program.functions.iter().map(|f| f.name.clone()))
+        .collect();
 
     let typed_program = typed.last().copied().expect("a graph always holds its root");
     let src = root.clone();
@@ -790,6 +796,15 @@ fn air_stage(
     if let Err(errors) = aelys_air::passes::vec_surface::check_vec_surface(&air) {
         return Err(vec_surface_errors_to_error(errors, &air, src.clone()).into());
     }
+    let std_instances: HashSet<aelys_air::FunctionId> = air
+        .mono_instances
+        .iter()
+        .filter(|m| std_functions.contains(&m.original_name))
+        .map(|m| m.result)
+        .collect();
+    aelys_air::passes::unreached::drop_unreached(&mut air, |f| {
+        std_functions.contains(&f.name) || std_instances.contains(&f.id)
+    });
     let layout_errors = aelys_air::layout::compute_layouts(&mut air);
     if !layout_errors.is_empty() {
         let messages: Vec<String> = layout_errors.iter().map(|e| e.to_string()).collect();

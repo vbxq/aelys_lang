@@ -1,0 +1,13 @@
+pub trait Area {
+    fn area(&self) -> i64;
+}
+
+pub struct Square {
+    pub side: i64,
+}
+
+impl Area for Square {
+    fn area(&self) -> i64 {
+        self.side * self.side
+    }
+}

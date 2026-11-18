@@ -1,0 +1,7 @@
+use std::shapes::{Area, Square};
+
+fn main() {
+    let s = Square { side: 7 };
+    let a: &dyn Area = &s;
+    println!("{}", a.area());
+}
