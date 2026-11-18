@@ -347,7 +347,10 @@ impl TypedMatchArm {
     }
 
     pub fn exprs(&self) -> impl Iterator<Item = &TypedExpr> {
-        self.guard.as_deref().into_iter().chain(std::iter::once(&*self.rhs))
+        self.guard
+            .as_deref()
+            .into_iter()
+            .chain(std::iter::once(&*self.rhs))
     }
 
     pub fn exprs_mut(&mut self) -> impl Iterator<Item = &mut TypedExpr> {
@@ -446,7 +449,9 @@ impl TypedPattern {
     pub fn irrefutable_shallow(&self) -> bool {
         match &self.kind {
             TypedPatternKind::Wildcard => true,
-            TypedPatternKind::Binding { sub, .. } => sub.as_ref().is_none_or(|s| s.irrefutable_shallow()),
+            TypedPatternKind::Binding { sub, .. } => {
+                sub.as_ref().is_none_or(|s| s.irrefutable_shallow())
+            }
             _ => false,
         }
     }

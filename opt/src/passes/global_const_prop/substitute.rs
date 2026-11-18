@@ -118,8 +118,11 @@ impl GlobalConstantPropagator {
             } => {
                 self.substitute_constants(scrutinee);
                 for arm in arms {
-                    let names: Vec<String> =
-                        arm.bindings().iter().map(|(n, _, _)| n.to_string()).collect();
+                    let names: Vec<String> = arm
+                        .bindings()
+                        .iter()
+                        .map(|(n, _, _)| n.to_string())
+                        .collect();
                     let shadowed: Vec<(String, aelys_sema::TypedExpr)> = names
                         .into_iter()
                         .filter_map(|name| self.constants.remove(&name).map(|v| (name, v)))

@@ -515,9 +515,7 @@ impl TypeInference {
                 let (lo, hi) = int_bounds(t);
                 if *v < lo || *v > hi {
                     self.pattern_mismatch(
-                        format!(
-                            "pattern `{v}` does not fit `{t}`, whose values are {lo}..={hi}"
-                        ),
+                        format!("pattern `{v}` does not fit `{t}`, whose values are {lo}..={hi}"),
                         span,
                     );
                     return None;
@@ -648,9 +646,9 @@ impl TypeInference {
         }
         if pat_enum != enum_name {
             let reason = match self.spelled_enum(&enum_name) {
-                Ok(path) => format!(
-                    "pattern enum '{written_enum}' does not match scrutinee enum '{path}'"
-                ),
+                Ok(path) => {
+                    format!("pattern enum '{written_enum}' does not match scrutinee enum '{path}'")
+                }
                 Err((module, name)) => {
                     let alias = module.rsplit('.').next().unwrap_or(&module);
                     format!(
@@ -691,8 +689,7 @@ impl TypeInference {
             return None;
         };
         let Some(variant_def) = enum_def.variants.iter().find(|v| v.name == variant) else {
-            let variant_names: Vec<_> =
-                enum_def.variants.iter().map(|v| v.name.as_str()).collect();
+            let variant_names: Vec<_> = enum_def.variants.iter().map(|v| v.name.as_str()).collect();
             self.pattern_mismatch(
                 format!(
                     "unknown variant '{}' on enum '{}'; known variants: {}",

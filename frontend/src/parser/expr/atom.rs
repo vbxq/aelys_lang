@@ -67,7 +67,13 @@ impl Parser {
                 self.block_expression()?
             };
             let span = start_span.merge(self.previous().span);
-            return Ok(Self::if_let_match(pattern, scrutinee, then_branch, else_branch, span));
+            return Ok(Self::if_let_match(
+                pattern,
+                scrutinee,
+                then_branch,
+                else_branch,
+                span,
+            ));
         }
         let condition = self.expression()?;
         self.consume(&TokenKind::LBrace, "{")?;

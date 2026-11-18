@@ -1,8 +1,8 @@
 use super::scope::ScopeStack;
 use crate::passes::{ConstantFolder, OptimizationPass, OptimizationStats};
 use aelys_sema::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedProgram,
-    TypedStmt, TypedStmtKind,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedProgram, TypedStmt,
+    TypedStmtKind,
 };
 
 pub struct LocalConstantPropagator {
@@ -501,8 +501,11 @@ impl LocalConstantPropagator {
                 self.propagate_expr(scrutinee);
                 for arm in arms {
                     self.scopes.push();
-                    let names: Vec<String> =
-                        arm.bindings().iter().map(|(n, _, _)| n.to_string()).collect();
+                    let names: Vec<String> = arm
+                        .bindings()
+                        .iter()
+                        .map(|(n, _, _)| n.to_string())
+                        .collect();
                     for name in &names {
                         self.scopes.block(name);
                     }

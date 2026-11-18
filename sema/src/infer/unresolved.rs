@@ -1,8 +1,7 @@
 use super::TypeInference;
 use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{
-    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedStmt,
-    TypedStmtKind,
+    TypedExpr, TypedExprKind, TypedFmtStringPart, TypedFunction, TypedStmt, TypedStmtKind,
 };
 use crate::types::{InferType, TypeVarId};
 use aelys_syntax::Span;

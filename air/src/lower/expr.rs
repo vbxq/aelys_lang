@@ -2448,9 +2448,7 @@ impl<'a> LoweringContext<'a> {
 
     fn pattern_const(&self, lit: &aelys_sema::PatLit, ty: &InferType) -> AirConst {
         match lit {
-            aelys_sema::PatLit::Int(v) => {
-                AirConst::Int(*v as i64, super::infer_to_int_size(ty))
-            }
+            aelys_sema::PatLit::Int(v) => AirConst::Int(*v as i64, super::infer_to_int_size(ty)),
             aelys_sema::PatLit::Char(c) => AirConst::Char(*c),
             aelys_sema::PatLit::Bool(b) => AirConst::Bool(*b),
             aelys_sema::PatLit::Str(s) => AirConst::Str(s.clone()),

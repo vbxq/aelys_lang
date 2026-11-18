@@ -24,9 +24,9 @@ impl CompileErrorKind {
             Self::UnknownTypeBound { name } => format!(
                 "`{name}` is not a bound; the bounds are `nogc`, `eq` and `ord`, combined with `+`"
             ),
-            Self::NotAVariantInScope { name } => format!(
-                "`{name}` is not a variant in scope; write `Enum::Variant`"
-            ),
+            Self::NotAVariantInScope { name } => {
+                format!("`{name}` is not a variant in scope; write `Enum::Variant`")
+            }
             Self::NestedPattern => "nested patterns are not supported in 0.1".to_string(),
             Self::PatternUnsupported { detail } => detail.clone(),
             Self::PatternFormNotSupported { what } => {

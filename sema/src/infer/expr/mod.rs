@@ -346,8 +346,7 @@ impl TypeInference {
                         s.kind,
                         TypedStmtKind::Return(_) | TypedStmtKind::Break | TypedStmtKind::Continue
                     )
-                })
-                {
+                }) {
                     InferType::Never
                 } else {
                     typed_tail.ty.clone()

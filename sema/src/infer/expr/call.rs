@@ -458,7 +458,13 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, err_arm];
-        let (kind, _) = self.infer_match_typed(typed_object, obj_span, &arms, span, aelys_syntax::MatchOrigin::Match);
+        let (kind, _) = self.infer_match_typed(
+            typed_object,
+            obj_span,
+            &arms,
+            span,
+            aelys_syntax::MatchOrigin::Match,
+        );
         (kind, InferType::Enum(enum_name, vec![t, e2]))
     }
 

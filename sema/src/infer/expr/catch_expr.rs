@@ -70,7 +70,13 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, err_arm];
-        let (kind, _) = self.infer_match_typed(typed_scrutinee, obj_span, &arms, span, aelys_syntax::MatchOrigin::Match);
+        let (kind, _) = self.infer_match_typed(
+            typed_scrutinee,
+            obj_span,
+            &arms,
+            span,
+            aelys_syntax::MatchOrigin::Match,
+        );
         // pin t so must-use never fires: catch removes e, so the value is no longer a result
         (kind, t)
     }

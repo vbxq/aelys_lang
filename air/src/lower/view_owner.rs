@@ -1,6 +1,5 @@
 use aelys_sema::{
-    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedStmt,
-    TypedStmtKind,
+    InferType, TypedExpr, TypedExprKind, TypedFmtStringPart, TypedParam, TypedStmt, TypedStmtKind,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -603,7 +602,10 @@ impl Pass<'_> {
                 for arm in arms {
                     self.scopes.push(HashMap::new());
                     for (name, _, _) in arm.bindings() {
-                        self.scopes.last_mut().unwrap().insert(name.to_string(), None);
+                        self.scopes
+                            .last_mut()
+                            .unwrap()
+                            .insert(name.to_string(), None);
                     }
                     for e in arm.exprs() {
                         self.expr(e);

@@ -166,7 +166,13 @@ impl TypeInference {
         };
 
         let arms = vec![ok_arm, prop_arm];
-        self.infer_match_typed(typed_inner, inner.span, &arms, span, aelys_syntax::MatchOrigin::Match)
+        self.infer_match_typed(
+            typed_inner,
+            inner.span,
+            &arms,
+            span,
+            aelys_syntax::MatchOrigin::Match,
+        )
     }
 
     // $ is rejected by the identifier scanner, so these names never collide with user code
