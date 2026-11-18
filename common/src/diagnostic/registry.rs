@@ -455,6 +455,20 @@ variants, since `x.f(..)` and `T::f(..)` would then name two things:
     impl P { fn x(&self) -> i64 { ... } }   // E0342",
         severity: Severity::Error,
     },
+    DiagnosticInfo {
+        code: "E0391",
+        title: "format specification not understood",
+        explanation: "\
+A placeholder `{x:spec}` pads or rounds the value it prints. The spec is
+`[[fill]align][0][width][.precision]`: align is `<`, `>` or `^`, the width
+counts characters, `0` pads a number with zeros after its sign, and the
+precision applies to `f32` and `f64` only:
+
+    println(\"{n:>8}\")      // ok, right aligned in 8 characters
+    println(\"{x:.2}\")      // ok when `x` is a float
+    println(\"{s:05}\")      // E0391 when `s` is a string",
+        severity: Severity::Error,
+    },
     // mutability (e04xx)
     DiagnosticInfo {
         code: "E0401",

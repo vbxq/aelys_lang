@@ -1,0 +1,19 @@
+struct P { x: i64, name: string }
+
+impl Display for P {
+    fn to_string(&self) -> string { return "{self.name}={self.x}" }
+}
+
+fn main() {
+    let mut total = 0
+    let mut i = 0
+    while i < 2000 {
+        let p = P { x: i % 10, name: "k" }
+        let line = "[{p:>6}][{i:<5}]"
+        total = total + line.len()
+        i = i + 1
+    }
+    let p = P { x: 3, name: "ab" }
+    println("[{p:>7}][{p:<6}]")
+    println(total)
+}
