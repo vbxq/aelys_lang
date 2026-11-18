@@ -209,7 +209,7 @@ pub enum NeedsTarget {
 #[derive(Debug, Clone)]
 pub enum ImportKind {
     Module { alias: Option<String> }, // needs foo.bar (as alias)?
-    Symbols(Vec<String>),             // needs x, y from foo.bar
+    Symbols(Vec<(String, String)>),   // (item, local name)
     Wildcard,                         // needs foo.bar.*
 }
 

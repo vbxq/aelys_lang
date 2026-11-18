@@ -1,0 +1,23 @@
+mod geo;
+use geo::mk as make;
+use geo::Pt as Q;
+use geo::{self, mk};
+use geo::Dir::N;
+use geo::Dir::{S, W};
+
+fn name(d: geo::Dir) -> i64 {
+    match d {
+        N => 1,
+        S => 2,
+        W(k) => k,
+    }
+}
+
+fn main() {
+    let a = make(4);
+    let b = Q { x: 1, y: 2 };
+    let c = mk(5);
+    let d = geo::mk(6);
+    println!("{} {} {} {}", a.x, b.y, c.x, d.x);
+    println!("{} {} {}", name(N), name(S), name(W(9)));
+}

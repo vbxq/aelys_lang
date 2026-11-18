@@ -129,6 +129,7 @@ pub struct ModuleImports {
     pub namespaces: HashMap<String, Arc<ModuleExports>>,
     pub values: HashMap<String, ModuleValue>,
     pub types: HashMap<String, ModuleType>,
+    pub variants: HashMap<String, (ModuleType, String)>,
     pub aliases: HashMap<String, AliasDef>,
     pub methods: HashMap<String, Vec<MethodEntry>>,
     pub module_path: String,

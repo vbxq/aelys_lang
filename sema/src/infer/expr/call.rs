@@ -127,6 +127,11 @@ impl TypeInference {
             let t = self.infer_expr(&literal);
             return (t.kind, t.ty);
         }
+        if let ExprKind::Identifier(name) = &callee.kind
+            && let Some((enum_name, variant)) = self.imported_variant(name)
+        {
+            return self.infer_enum_variant(&enum_name, &variant, args, span);
+        }
         let extended: Vec<Expr>;
         let args: &[Expr] = match &callee.kind {
             ExprKind::Identifier(name) if self.hidden_count(name) > 0 => {

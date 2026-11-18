@@ -68,7 +68,10 @@ impl TypeInference {
                     let t = self.infer_expr(&unit);
                     (t.kind, t.ty)
                 }
-                None => self.infer_identifier_expr(name, expr.span),
+                None => match self.imported_variant(name) {
+                    Some((enum_name, variant)) => self.infer_enum_variant(&enum_name, &variant, &[], expr.span),
+                    None => self.infer_identifier_expr(name, expr.span),
+                },
             },
             ExprKind::Binary { left, op, right } => {
                 let mut typed_left = self.infer_expr(left);

@@ -145,7 +145,7 @@ impl TypeInference {
         out: &mut Vec<TypedStmt>,
     ) {
         use aelys_syntax::{Expr, ExprKind, Pattern};
-        if let Some(converted) = self.struct_pattern(pattern) {
+        if let Some(converted) = self.resolve_pattern_path(pattern) {
             return self.bind_pattern_parts(&converted, ty, source, out);
         }
         match pattern {

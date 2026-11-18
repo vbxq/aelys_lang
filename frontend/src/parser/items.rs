@@ -984,7 +984,7 @@ impl Parser {
                             if name == "self" {
                                 out.push((prefix.clone(), ImportKind::Module { alias: None }));
                             } else {
-                                symbols.push(name);
+                                symbols.push((name.clone(), name));
                             }
                         } else {
                             self.use_tree(prefix.clone(), out)?;
@@ -1015,7 +1015,7 @@ impl Parser {
                         prefix.push(segment);
                         out.push((prefix, ImportKind::Module { alias: None }));
                     } else {
-                        out.push((prefix, ImportKind::Symbols(vec![segment])));
+                        out.push((prefix, ImportKind::Symbols(vec![(segment.clone(), segment)])));
                     }
                     return Ok(());
                 }

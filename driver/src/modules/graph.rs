@@ -7,7 +7,7 @@ pub(crate) enum ResolvedImport {
         target: usize,
     },
     Symbols {
-        names: Vec<String>,
+        names: Vec<(String, String)>,
         target: usize,
         span: aelys_syntax::Span,
     },

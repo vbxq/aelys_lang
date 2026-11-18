@@ -418,6 +418,13 @@ impl Discovery {
                 ));
             }
             let names = binding_names(needs, path, kind);
+            let rebinds_namespace = matches!(kind, ImportKind::Module { .. })
+                && imports.iter().any(|import| {
+                    matches!(import, ResolvedImport::Namespace { local, target: t } if *t == target && names.contains(local))
+                });
+            if rebinds_namespace {
+                continue;
+            }
             for name in &names {
                 let binding = TopLevelBinding {
                     name: name.clone(),
@@ -436,8 +443,8 @@ impl Discovery {
                 }
             }
             imports.push(match kind {
-                ImportKind::Symbols(_) => ResolvedImport::Symbols {
-                    names,
+                ImportKind::Symbols(items) => ResolvedImport::Symbols {
+                    names: items.clone(),
                     target,
                     span: needs.span,
                 },
@@ -463,7 +470,7 @@ impl Discovery {
         Ok(index)
     }
 
-    // `use a::b::f;` names the item `f` of module `a::b` when no module `a/b/f` exists
+    // `use a::b::f;` names the item `f` of module `a::b` when no module `a/b/f` exists, and `use a::E::V;` the variant `V` of `E`
     fn items_imported_by_path(&self, stmts: &mut [Stmt]) {
         for stmt in stmts {
             let StmtKind::Needs(NeedsStmt {
@@ -473,14 +480,24 @@ impl Discovery {
             else {
                 continue;
             };
-            if path.len() < 2 || !matches!(kind, ImportKind::Module { alias: None }) {
+            if path.len() < 2
+                || !matches!(self.locate(path), Located::Missing(_))
+                || !matches!(self.locate(&path[..path.len() - 1]), Located::Found(_))
+            {
                 continue;
             }
-            if matches!(self.locate(path), Located::Missing(_))
-                && matches!(self.locate(&path[..path.len() - 1]), Located::Found(_))
-            {
-                let item = path.pop().expect("checked above");
-                *kind = ImportKind::Symbols(vec![item]);
+            let item = path.pop().expect("checked above");
+            match kind {
+                ImportKind::Module { alias } => {
+                    let local = alias.take().unwrap_or_else(|| item.clone());
+                    *kind = ImportKind::Symbols(vec![(item, local)]);
+                }
+                ImportKind::Symbols(names) => {
+                    for (variant, _) in names.iter_mut() {
+                        *variant = format!("{item}::{variant}");
+                    }
+                }
+                ImportKind::Wildcard => path.push(item),
             }
         }
     }
@@ -578,7 +595,7 @@ impl Discovery {
 
 fn binding_names(_needs: &NeedsStmt, path: &[String], kind: &ImportKind) -> Vec<String> {
     match kind {
-        ImportKind::Symbols(names) => names.clone(),
+        ImportKind::Symbols(names) => names.iter().map(|(_, local)| local.clone()).collect(),
         ImportKind::Module { alias } => vec![
             alias
                 .clone()

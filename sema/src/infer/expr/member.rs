@@ -406,7 +406,7 @@ impl TypeInference {
         ))
     }
 
-    pub(crate) fn struct_pattern(&mut self, pattern: &Pattern) -> Option<Pattern> {
+    pub(crate) fn resolve_pattern_path(&mut self, pattern: &Pattern) -> Option<Pattern> {
         let Pattern::Variant {
             enum_name,
             variant,
@@ -417,6 +417,17 @@ impl TypeInference {
         else {
             return None;
         };
+        if enum_name.is_empty()
+            && let Some((enum_name, variant)) = self.imported_variant(variant)
+        {
+            return Some(Pattern::Variant {
+                enum_name,
+                variant,
+                fields: fields.clone(),
+                span: *span,
+                unqualified: false,
+            });
+        }
         let name = Expr::new(ExprKind::Identifier(variant.clone()), *span);
         let path = if enum_name.is_empty() {
             name

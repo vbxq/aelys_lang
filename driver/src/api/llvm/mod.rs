@@ -213,8 +213,8 @@ fn build_imports(
                 target,
                 span,
             } => {
-                for name in names {
-                    if let Err(kind) = import_symbol(&mut imports, &exports[*target], name)
+                for (item, local) in names {
+                    if let Err(kind) = import_symbol(&mut imports, &exports[*target], item, local)
                         && !tolerant
                     {
                         return Err(import_error(unit, *span, kind));
@@ -229,44 +229,59 @@ fn build_imports(
 fn import_symbol(
     imports: &mut aelys_sema::ModuleImports,
     module: &aelys_sema::ModuleExports,
-    name: &str,
+    item: &str,
+    local: &str,
 ) -> Result<(), CompileErrorKind> {
     use aelys_sema::Lookup;
 
     let not_public = || CompileErrorKind::SymbolNotPublic {
-        symbol: name.to_string(),
+        symbol: item.to_string(),
         module: module.path.clone(),
     };
-    match module.value(name) {
-        Lookup::Found(item) => {
-            imports.values.insert(name.to_string(), item.clone());
+    if let Some((ty, variant)) = item.split_once("::") {
+        return match module.module_type(ty) {
+            Lookup::Found(found) => {
+                imports
+                    .variants
+                    .insert(local.to_string(), (found.clone(), variant.to_string()));
+                Ok(())
+            }
+            Lookup::NotPublic | Lookup::Missing => Err(CompileErrorKind::SymbolNotFound {
+                symbol: item.replace("::", "."),
+                module: module.path.clone(),
+            }),
+        };
+    }
+    match module.value(item) {
+        Lookup::Found(found) => {
+            imports.values.insert(local.to_string(), found.clone());
             return Ok(());
         }
         Lookup::NotPublic => return Err(not_public()),
         Lookup::Missing => {}
     }
-    if let Some(def) = module.traits.get(name) {
+    if let Some(def) = module.traits.get(item) {
         if !def.is_pub {
             return Err(not_public());
         }
-        imports.traits.insert(name.to_string(), def.clone());
+        imports.traits.insert(local.to_string(), def.clone());
         return Ok(());
     }
-    if let Some(def) = module.aliases.get(name) {
+    if let Some(def) = module.aliases.get(item) {
         if !def.is_pub {
             return Err(not_public());
         }
-        imports.aliases.insert(name.to_string(), def.clone());
+        imports.aliases.insert(local.to_string(), def.clone());
         return Ok(());
     }
-    match module.module_type(name) {
+    match module.module_type(item) {
         Lookup::Found(ty) => {
-            imports.types.insert(name.to_string(), ty.clone());
+            imports.types.insert(local.to_string(), ty.clone());
             Ok(())
         }
         Lookup::NotPublic => Err(not_public()),
         Lookup::Missing => Err(CompileErrorKind::SymbolNotFound {
-            symbol: name.to_string(),
+            symbol: item.to_string(),
             module: module.path.clone(),
         }),
     }

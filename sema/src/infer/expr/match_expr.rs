@@ -225,7 +225,7 @@ impl TypeInference {
             }
         }
         let pat = arms.iter().find_map(|a| first_informative(&a.pattern))?;
-        let converted = self.struct_pattern(pat);
+        let converted = self.resolve_pattern_path(pat);
         match converted.as_ref().unwrap_or(pat) {
             Pattern::Variant {
                 enum_name, span, ..
@@ -308,7 +308,7 @@ impl TypeInference {
         expected: &InferType,
         seen: &mut Vec<String>,
     ) -> Option<TypedPattern> {
-        if let Some(converted) = self.struct_pattern(pat) {
+        if let Some(converted) = self.resolve_pattern_path(pat) {
             return self.check_pattern(&converted, expected, seen);
         }
         let span = pat.span();

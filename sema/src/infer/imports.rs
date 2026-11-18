@@ -26,6 +26,9 @@ impl TypeInference {
             self.import_aliases
                 .insert(local.clone(), item.qualified.clone());
         }
+        for (ty, _) in imports.variants.values() {
+            self.register_module_type_def(ty);
+        }
         for (local, ty) in &imports.types {
             self.register_module_type_def(ty);
             self.import_aliases
@@ -256,6 +259,14 @@ impl TypeInference {
             _ => return None,
         };
         self.type_table.has_struct(&qualified).then_some((written, qualified))
+    }
+
+    pub(crate) fn imported_variant(&self, name: &str) -> Option<(String, String)> {
+        if self.env.lookup(name).is_some() {
+            return None;
+        }
+        let (ty, variant) = self.module_imports.variants.get(name)?;
+        Some((ty.qualified.clone(), variant.clone()))
     }
 
     pub(crate) fn is_module_namespace(&self, name: &str) -> bool {
