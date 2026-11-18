@@ -1,0 +1,3 @@
+refuse E0301
+`main` returns nothing or an `ExitCode`
+use `fn main()` or `fn main() -> ExitCode`

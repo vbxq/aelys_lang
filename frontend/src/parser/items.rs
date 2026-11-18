@@ -354,6 +354,19 @@ impl Parser {
         } else {
             None
         };
+        if let Some(ty) = &return_type
+            && name == "main"
+            && !allow_receiver
+            && self.block_depth == 0
+            && !self.source.content[ty.span.start..ty.span.end].ends_with("ExitCode")
+        {
+            return self.fail_help(
+                301,
+                "`main` returns nothing or an `ExitCode`",
+                "use `fn main()` or `fn main() -> ExitCode`",
+                ty.span,
+            );
+        }
         self.parse_where_clause(&mut generics)?;
         let mut type_params = generics.params;
         let mut bounds = generics.bounds;

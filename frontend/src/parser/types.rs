@@ -3,9 +3,8 @@ use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{Parameter, RefKind, Span, TokenKind, TraitRef, TypeAnnotation, TypeBounds};
 
-const PRIMITIVES: [&str; 15] = [
-    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool", "char", "string",
-    "usize", "isize",
+const PRIMITIVES: [&str; 14] = [
+    "i8", "i16", "i32", "i64", "u8", "u16", "u32", "u64", "f32", "f64", "bool", "char", "usize", "isize",
 ];
 
 pub(super) fn is_primitive(name: &str) -> bool {
@@ -219,6 +218,9 @@ impl Parser {
                 }
                 TokenKind::Super => {
                     return self.fail(137, "`super::` paths are not supported yet", self.peek().span);
+                }
+                TokenKind::Identifier(w) if w == "string" && segments.is_empty() => {
+                    return self.fail_help(301, "`string` is not a type", "use `String`", self.peek().span);
                 }
                 _ => segments.push(self.consume_identifier("a type name")?),
             }

@@ -1,0 +1,3 @@
+refuse E0301
+`string` is not a type
+use `String`
