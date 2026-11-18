@@ -1,0 +1,21 @@
+struct Pair<A, B> { a: A, b: B }
+
+fn label(p: Pair<i64, string>) -> string {
+    return match p {
+        Pair { a: 0, .. } => "zero",
+        Pair { a, b } if a > 10 => b + "!",
+        Pair { b, .. } => b
+    }
+}
+
+fn main() -> i64 {
+    let mut n: i64 = 0
+    for i in 0..60 {
+        let s: string = label(Pair { a: i % 15, b: "v{i}" })
+        n = n + s.len
+    }
+    println(n)
+    println(label(Pair { a: 12, b: "x" + "y" }))
+    println(label(Pair { a: 0, b: "q" }))
+    return 0
+}
