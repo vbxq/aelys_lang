@@ -1134,7 +1134,7 @@ impl Parser {
             Some(Tail::Expr(e)) => e,
             Some(Tail::Block(form)) => form.into_value(self, required)?,
             None => {
-                if required && !stmts.iter().any(stmt_diverges) {
+                if required && !stmts.is_empty() && !stmts.iter().any(stmt_diverges) {
                     return match stmts.last() {
                         Some(last) if matches!(last.kind, StmtKind::Semi(_)) => self.fail_help(
                             114,
