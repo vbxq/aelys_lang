@@ -149,16 +149,12 @@ fn find_core_lib_in_dir(dir: &Path, variant: RuntimeVariant) -> Option<PathBuf> 
 }
 
 fn find_core_lib_in_build_out(build_dir: &Path, variant: RuntimeVariant) -> Option<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(build_dir) else {
-        return None;
-    };
-    for entry in entries.flatten() {
-        let out_dir = entry.path().join("out");
-        if let Some(path) = find_core_lib_in_dir(&out_dir, variant) {
-            return Some(path);
-        }
-    }
-    None
+    let entries = std::fs::read_dir(build_dir).ok()?;
+    // a profile or env change leaves several aelys-core-<hash> dirs, and only the newest can match core/src
+    entries
+        .flatten()
+        .filter_map(|entry| find_core_lib_in_dir(&entry.path().join("out"), variant))
+        .max_by_key(|path| path.metadata().and_then(|m| m.modified()).ok())
 }
 
 fn core_profile_dirs(root: &Path, prefer_release: bool) -> Vec<PathBuf> {
@@ -364,6 +360,35 @@ mod tests {
 
         assert_eq!(resolved.as_deref(), Ok(release.as_path()));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn the_newest_of_several_build_dirs_is_chosen() {
+        let id = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let build = std::env::temp_dir().join(format!("aelys-core-lib-dirs-{id}"));
+        for hash in ["a", "b", "c", "d"] {
+            let out = build.join(format!("aelys-core-{hash}/out"));
+            fs::create_dir_all(&out).unwrap();
+            fs::write(out.join("libaelys-core-rc.a"), b"old").unwrap();
+        }
+        let last_listed = fs::read_dir(&build)
+            .unwrap()
+            .last()
+            .unwrap()
+            .unwrap()
+            .path();
+        thread::sleep(Duration::from_millis(10));
+        let newest = last_listed.join("out/libaelys-core-rc.a");
+        fs::write(&newest, b"new").unwrap();
+
+        assert_eq!(
+            find_core_lib_in_build_out(&build, RuntimeVariant::Rc),
+            Some(newest)
+        );
+        fs::remove_dir_all(build).unwrap();
     }
 
     #[test]
