@@ -933,6 +933,58 @@ from nogc
 10
 ```
 
+## Methods of the standard library
+
+A std module gives methods to the builtin types it serves: `std.str` to `string` and `char`, `std.slice` to slices and arrays, `std.vec` to `Vec`, `std.math` to `i64` and `f64`. A method is visible where its module is imported, and it is a second spelling of the module's function: `s.trim()` is `str.trim(s)`, and every function stays. `Option` and `Result` carry their methods through the prelude.
+
+```rust run
+needs std.str
+needs std.vec
+
+fn double(x: i64) -> i64 { return x * 2 }
+
+fn main() -> i64 {
+    let words = "  pear fig  apple ".trim().split_whitespace()
+    println(words.sorted().join(","))
+    let v: Vec<i64> = vec[3, 1, 2]
+    println(v.map(double).sum())
+    println("héllo".char_count())
+    println(v.first().unwrap_or(0))
+    return 0
+}
+```
+
+```output
+apple,fig,pear
+12
+5
+3
+```
+
+Without the import the method is refused, and the diagnostic names the module that holds it.
+
+```rust refused E0304
+fn main() -> i64 {
+    println("abc".char_count())
+    return 0
+}
+```
+
+A placeholder takes a format spec after a colon, `[[fill]align][0][width][.precision]`. The width counts characters, a number aligns right and anything else left unless the spec says otherwise, `0` pads a number after its sign, and the precision applies to floats.
+
+```rust run
+fn main() -> i64 {
+    let n = -42
+    let x: f64 = 3.14159
+    println("[{n:>6}][{n:<6}][{"ab":^6}][{n:06}][{x:.2}][{x:*>8.3}]")
+    return 0
+}
+```
+
+```output
+[   -42][-42   ][  ab  ][-00042][3.14][***3.142]
+```
+
 ## Generics
 
 A function takes a type parameter and unifies it against the element of a slice at the call site.
@@ -1111,7 +1163,7 @@ true
 true
 ```
 
-`str.compare(a, b)` answers `-1`, `0` or `1` over the same bytes, and `sort.strings` is built on it.
+`str.compare(a, b)` answers `-1`, `0` or `1` over the same bytes, and `sort.strings` is the generic `sort.insertion_sort` on strings.
 
 ```rust run
 needs std.sort
