@@ -246,9 +246,12 @@ fn expr(e: &mut Expr, f: &mut dyn FnMut(&mut TypeAnnotation)) {
             expr(target, f);
             expr(value, f);
         }
-        ExprKind::StructLiteral { fields, .. } => {
+        ExprKind::StructLiteral { fields, base, .. } => {
             for field in fields {
                 expr(&mut field.value, f);
+            }
+            if let Some(base) = base {
+                expr(base, f);
             }
         }
         ExprKind::EnumVariant { args, .. } => {

@@ -9,7 +9,6 @@ use aelys_common::Diagnostic;
 use aelys_common::Result;
 use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
 use aelys_syntax::{Source, Span, Stmt, Token, TokenKind};
-use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 const MAX_RECURSION_DEPTH: usize = 1000;
@@ -27,15 +26,12 @@ pub struct Parser {
     loops: Vec<block::LoopCtx>,
     temps: usize,
     fn_returns: Vec<bool>,
-    tuple_structs: HashMap<String, usize>,
-    unit_structs: HashSet<String>,
-    struct_fields: HashMap<String, Vec<String>>,
     fmt_writes: Option<Vec<(String, Span)>>,
 }
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, source: Arc<Source>) -> Self {
-        let mut parser = Self {
+        Self {
             tokens,
             current: 0,
             source,
@@ -48,13 +44,8 @@ impl Parser {
             loops: Vec::new(),
             temps: 0,
             fn_returns: Vec::new(),
-            tuple_structs: HashMap::new(),
-            unit_structs: HashSet::new(),
-            struct_fields: HashMap::new(),
             fmt_writes: None,
-        };
-        parser.collect_struct_shapes();
-        parser
+        }
     }
 
     pub fn parse(mut self) -> Result<Vec<Stmt>> {
@@ -83,95 +74,6 @@ impl Parser {
             Ok(statements)
         } else {
             Err(AelysError::Multiple(self.errors))
-        }
-    }
-
-    // struct shapes declared in this file let `P(1, 2)`, `Marker` and `..base` lower to plain struct literals
-    fn collect_struct_shapes(&mut self) {
-        let mut i = 0;
-        while i + 2 < self.tokens.len() {
-            if self.tokens[i].kind != TokenKind::Struct {
-                i += 1;
-                continue;
-            }
-            let TokenKind::Identifier(name) = self.tokens[i + 1].kind.clone() else {
-                i += 1;
-                continue;
-            };
-            let mut j = i + 2;
-            if self.tokens[j].kind == TokenKind::Lt {
-                let mut depth = 0i32;
-                while j < self.tokens.len() {
-                    match self.tokens[j].kind {
-                        TokenKind::Lt => depth += 1,
-                        TokenKind::Gt => depth -= 1,
-                        TokenKind::Shr => depth -= 2,
-                        _ => {}
-                    }
-                    j += 1;
-                    if depth <= 0 {
-                        break;
-                    }
-                }
-            }
-            match self.tokens.get(j).map(|t| &t.kind) {
-                Some(TokenKind::Semicolon) => {
-                    self.unit_structs.insert(name);
-                }
-                Some(TokenKind::LParen) => {
-                    let (mut depth, mut arity, mut empty) = (0i32, 0usize, true);
-                    let mut k = j;
-                    while k < self.tokens.len() {
-                        match self.tokens[k].kind {
-                            TokenKind::LParen | TokenKind::LBracket | TokenKind::Lt => depth += 1,
-                            TokenKind::RParen | TokenKind::RBracket | TokenKind::Gt => depth -= 1,
-                            TokenKind::Shr => depth -= 2,
-                            TokenKind::Comma if depth == 1 => {
-                                if !matches!(self.tokens[k + 1].kind, TokenKind::RParen) {
-                                    arity += 1;
-                                }
-                            }
-                            _ if depth == 1 => empty = false,
-                            _ => {}
-                        }
-                        k += 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    self.tuple_structs.insert(name, if empty { 0 } else { arity + 1 });
-                }
-                Some(TokenKind::LBrace) => {
-                    let mut fields = Vec::new();
-                    let mut depth = 0i32;
-                    let mut k = j;
-                    while k + 1 < self.tokens.len() {
-                        match &self.tokens[k].kind {
-                            TokenKind::LBrace | TokenKind::LParen | TokenKind::LBracket | TokenKind::Lt => depth += 1,
-                            TokenKind::RBrace | TokenKind::RParen | TokenKind::RBracket | TokenKind::Gt => depth -= 1,
-                            TokenKind::Shr => depth -= 2,
-                            TokenKind::Identifier(f)
-                                if depth == 1 && self.tokens[k + 1].kind == TokenKind::Colon =>
-                            {
-                                fields.push(f.clone());
-                            }
-                            other if depth == 1 && self.tokens[k + 1].kind == TokenKind::Colon => {
-                                if let Some(w) = other.keyword_spelling() {
-                                    fields.push(w.to_string());
-                                }
-                            }
-                            _ => {}
-                        }
-                        k += 1;
-                        if depth == 0 {
-                            break;
-                        }
-                    }
-                    self.struct_fields.insert(name, fields);
-                }
-                _ => {}
-            }
-            i = j;
         }
     }
 

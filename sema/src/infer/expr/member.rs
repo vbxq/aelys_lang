@@ -2,7 +2,7 @@ use super::TypeInference;
 use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorSuggestion};
 use crate::typed_ast::{TypedExpr, TypedExprKind};
 use crate::types::InferType;
-use aelys_syntax::{Expr, ExprKind, Span, StructFieldInit};
+use aelys_syntax::{Expr, ExprKind, Pattern, Span, Stmt, StmtKind, StructFieldInit};
 
 impl TypeInference {
     // balance retain/release, but never in a generic slot, where the type erases and the
@@ -285,6 +285,7 @@ impl TypeInference {
             self.reject_private_field(&struct_name, field, span);
         }
         if field.starts_with(|c: char| c.is_ascii_digit())
+            && object_struct.is_none()
             && !Self::projection_waits(&typed_object.ty)
         {
             let field_ty = self.tuple_element_type(&typed_object.ty, field, span);
@@ -368,6 +369,157 @@ impl TypeInference {
                 value: Box::new(typed_value),
             },
             InferType::Null,
+        )
+    }
+
+    pub(super) fn struct_constructor(&mut self, path: &Expr, args: Option<&[Expr]>, span: Span) -> Option<Expr> {
+        let (written, qualified) = self.named_struct(path)?;
+        let declared = &self.type_table.get_struct(&qualified)?.fields;
+        let tuple = declared.first().is_none_or(|f| f.name == "0");
+        let arity = declared.len();
+        let args = match args {
+            None if arity == 0 => &[][..],
+            Some(args) if tuple => args,
+            _ => return None,
+        };
+        if args.len() != arity {
+            self.errors.push(TypeError::coded(
+                "E0301",
+                format!("`{written}` has {arity} field(s), but {} value(s) are given", args.len()),
+                "wrong number of fields",
+                span,
+            ));
+        }
+        let fields = args
+            .iter()
+            .enumerate()
+            .map(|(i, value)| StructFieldInit {
+                name: i.to_string(),
+                value: Box::new(value.clone()),
+                span: value.span,
+            })
+            .collect();
+        Some(Expr::new(
+            ExprKind::StructLiteral {
+                name: written,
+                fields,
+                base: None,
+            },
+            span,
+        ))
+    }
+
+    pub(crate) fn struct_pattern(&mut self, pattern: &Pattern) -> Option<Pattern> {
+        let Pattern::Variant {
+            enum_name,
+            variant,
+            fields,
+            span,
+            ..
+        } = pattern
+        else {
+            return None;
+        };
+        let name = Expr::new(ExprKind::Identifier(variant.clone()), *span);
+        let path = if enum_name.is_empty() {
+            name
+        } else {
+            Expr::new(
+                ExprKind::Member {
+                    object: Box::new(Expr::new(ExprKind::Identifier(enum_name.clone()), *span)),
+                    member: variant.clone(),
+                },
+                *span,
+            )
+        };
+        let (written, qualified) = self.named_struct(&path)?;
+        let arity = self.type_table.get_struct(&qualified)?.fields.len();
+        if fields.len() != arity {
+            self.errors.push(TypeError::coded(
+                "E0301",
+                format!("`{written}` has {arity} field(s), but the pattern has {}", fields.len()),
+                "wrong number of fields",
+                *span,
+            ));
+            return Some(Pattern::Wildcard(*span));
+        }
+        Some(Pattern::Struct {
+            name: written,
+            fields: fields
+                .iter()
+                .enumerate()
+                .map(|(i, p)| (i.to_string(), p.clone(), p.span()))
+                .collect(),
+            rest: false,
+            span: *span,
+        })
+    }
+
+    // the named fields are evaluated first, then `base` once, and the other fields are read from it
+    pub(super) fn struct_update(&mut self, name: &str, fields: &[StructFieldInit], base: &Expr, span: Span) -> Expr {
+        let qualified = self.air_type_name(name, span);
+        let declared: Vec<String> = self
+            .type_table
+            .get_struct(&qualified)
+            .map(|d| d.fields.iter().map(|f| f.name.clone()).collect())
+            .unwrap_or_default();
+        let mut stmts = Vec::new();
+        let mut bind = |this: &mut Self, value: Expr| {
+            let n = this.try_counter;
+            this.try_counter += 1;
+            let temp = format!("__u${n}");
+            let at = value.span;
+            stmts.push(Stmt::new(
+                StmtKind::Let {
+                    name: temp.clone(),
+                    mutable: false,
+                    type_annotation: None,
+                    initializer: value,
+                    is_pub: false,
+                },
+                at,
+            ));
+            Expr::new(ExprKind::Identifier(temp), at)
+        };
+        let mut fields: Vec<StructFieldInit> = fields
+            .iter()
+            .map(|f| StructFieldInit {
+                name: f.name.clone(),
+                value: Box::new(bind(self, (*f.value).clone())),
+                span: f.span,
+            })
+            .collect();
+        let base = bind(self, base.clone());
+        for field in declared {
+            if fields.iter().any(|f| f.name == field) {
+                continue;
+            }
+            fields.push(StructFieldInit {
+                value: Box::new(Expr::new(
+                    ExprKind::Member {
+                        object: Box::new(base.clone()),
+                        member: field.clone(),
+                    },
+                    span,
+                )),
+                name: field,
+                span,
+            });
+        }
+        let literal = Expr::new(
+            ExprKind::StructLiteral {
+                name: name.to_string(),
+                fields,
+                base: None,
+            },
+            span,
+        );
+        Expr::new(
+            ExprKind::Block {
+                stmts,
+                tail: Box::new(literal),
+            },
+            span,
         )
     }
 

@@ -1,0 +1,23 @@
+struct P(i64, i64);
+struct Pt { x: i64, y: i64 }
+struct Wrap(String, Vec<i64>);
+
+fn main() {
+    let mut p = P(1, 2);
+    p.0 = 7;
+    p.0 += 1;
+    p.1 *= 10;
+    let P(a, b) = p;
+    println!("{} {}", a, b);
+    match p {
+        P(8, d) => println!("eight {}", d),
+        P(_, _) => println!("other"),
+    }
+    let q = Pt { x: 3, y: 4 };
+    let Pt { x, y } = q;
+    let Pt { x: px, .. } = q;
+    println!("{} {} {}", x, y, px);
+    let w = Wrap("ab".to_string(), vec![1, 2]);
+    let Wrap(s, v) = w;
+    println!("{} {}", s, v.len());
+}

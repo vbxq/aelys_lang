@@ -282,7 +282,9 @@ fn expr_breaks(e: &Expr) -> bool {
         ExprKind::Range { start, end, .. } => {
             start.as_deref().is_some_and(expr_breaks) || end.as_deref().is_some_and(expr_breaks)
         }
-        ExprKind::StructLiteral { fields, .. } => fields.iter().any(|f| expr_breaks(&f.value)),
+        ExprKind::StructLiteral { fields, base, .. } => {
+            fields.iter().any(|f| expr_breaks(&f.value)) || base.as_deref().is_some_and(expr_breaks)
+        }
         ExprKind::Match { scrutinee, arms, .. } => {
             expr_breaks(scrutinee)
                 || arms
@@ -1009,7 +1011,7 @@ impl Parser {
                 is_pub: false,
             },
             Pattern::Wildcard(_) => StmtKind::Discard(initializer),
-            pattern @ (Pattern::Tuple { .. } | Pattern::Struct { .. }) => StmtKind::LetPattern {
+            pattern @ (Pattern::Tuple { .. } | Pattern::Struct { .. } | Pattern::Variant { .. }) => StmtKind::LetPattern {
                 pattern,
                 type_annotation,
                 initializer,

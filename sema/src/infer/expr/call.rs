@@ -123,6 +123,10 @@ impl TypeInference {
         args: &[Expr],
         span: Span,
     ) -> (TypedExprKind, InferType) {
+        if let Some(literal) = self.struct_constructor(callee, Some(args), span) {
+            let t = self.infer_expr(&literal);
+            return (t.kind, t.ty);
+        }
         let extended: Vec<Expr>;
         let args: &[Expr] = match &callee.kind {
             ExprKind::Identifier(name) if self.hidden_count(name) > 0 => {

@@ -849,10 +849,13 @@ fn subst_expr(expr: &mut Expr, head: &TypeAnnotation) {
             subst_expr(target, head);
             subst_expr(value, head);
         }
-        ExprKind::StructLiteral { name, fields } => {
+        ExprKind::StructLiteral { name, fields, base } => {
             subst_name(name, head);
             for f in fields {
                 subst_expr(&mut f.value, head);
+            }
+            if let Some(base) = base {
+                subst_expr(base, head);
             }
         }
         ExprKind::EnumVariant {

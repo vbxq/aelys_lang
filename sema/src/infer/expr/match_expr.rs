@@ -225,7 +225,8 @@ impl TypeInference {
             }
         }
         let pat = arms.iter().find_map(|a| first_informative(&a.pattern))?;
-        match pat {
+        let converted = self.struct_pattern(pat);
+        match converted.as_ref().unwrap_or(pat) {
             Pattern::Variant {
                 enum_name, span, ..
             } if !enum_name.is_empty() => Some(InferType::Enum(
@@ -283,7 +284,7 @@ impl TypeInference {
         }
     }
 
-    fn pattern_error(&mut self, kind: TypeErrorKind, span: Span) {
+    pub(crate) fn pattern_error(&mut self, kind: TypeErrorKind, span: Span) {
         self.errors.push(TypeError::pattern(kind, span));
     }
 
@@ -307,6 +308,9 @@ impl TypeInference {
         expected: &InferType,
         seen: &mut Vec<String>,
     ) -> Option<TypedPattern> {
+        if let Some(converted) = self.struct_pattern(pat) {
+            return self.check_pattern(&converted, expected, seen);
+        }
         let span = pat.span();
         match pat {
             Pattern::Wildcard(_) => Some(TypedPattern::new(

@@ -1004,41 +1004,8 @@ impl Parser {
     }
 
     fn single_name(&mut self, name: String, span: Span) -> Result<Expr> {
-        if let Some(&arity) = self.tuple_structs.get(&name)
-            && self.check(&TokenKind::LParen)
-        {
-            self.advance();
-            let args = self.call_args(TokenKind::RParen)?;
-            let end = span.merge(self.previous().span);
-            if args.len() != arity {
-                return self.fail(
-                    301,
-                    &format!("`{name}` has {arity} field(s), but {} value(s) are given", args.len()),
-                    end,
-                );
-            }
-            let fields = args
-                .into_iter()
-                .enumerate()
-                .map(|(i, value)| StructFieldInit {
-                    name: i.to_string(),
-                    span: value.span,
-                    value: Box::new(value),
-                })
-                .collect();
-            return Ok(expr(ExprKind::StructLiteral { name, fields }, end));
-        }
         if self.check(&TokenKind::LBrace) && !self.no_struct && name.starts_with(char::is_uppercase) {
             return self.struct_literal(name, span);
-        }
-        if self.unit_structs.contains(&name) {
-            return Ok(expr(
-                ExprKind::StructLiteral {
-                    name,
-                    fields: Vec::new(),
-                },
-                span,
-            ));
         }
         Ok(match aelys_syntax::prelude_variant_enum(&name) {
             Some(enum_name) => expr(
@@ -1094,71 +1061,11 @@ impl Parser {
         }
         self.consume(&TokenKind::RBrace, "`}`")?;
         let span = start.merge(self.previous().span);
-        let Some(base) = base else {
-            return Ok(expr(ExprKind::StructLiteral { name, fields }, span));
-        };
-        self.struct_update(name, fields, base, span)
-    }
-
-    fn struct_update(&mut self, name: String, mut fields: Vec<StructFieldInit>, base: Expr, span: Span) -> Result<Expr> {
-        let Some(declared) = self.struct_fields.get(name.rsplit('.').next().unwrap_or(&name)).cloned() else {
-            return self.fail_help(
-                132,
-                &format!("struct update syntax `..base` needs the fields of `{name}`, which is declared in another file"),
-                "list every field",
-                span,
-            );
-        };
-        let mut stmts = Vec::new();
-        if !fields.iter().all(|f| is_pure(&f.value)) {
-            for f in &mut fields {
-                let value = std::mem::replace(&mut f.value, Box::new(expr(ExprKind::Null, span)));
-                let temp = self.temp("field");
-                stmts.push(Stmt::new(
-                    StmtKind::Let {
-                        name: temp.clone(),
-                        mutable: false,
-                        type_annotation: None,
-                        initializer: *value,
-                        is_pub: false,
-                    },
-                    span,
-                ));
-                f.value = Box::new(expr(ExprKind::Identifier(temp), span));
-            }
-        }
-        let base_name = self.temp("base");
-        stmts.push(Stmt::new(
-            StmtKind::Let {
-                name: base_name.clone(),
-                mutable: false,
-                type_annotation: None,
-                initializer: base,
-                is_pub: false,
-            },
-            span,
-        ));
-        for field in declared {
-            if fields.iter().any(|f| f.name == field) {
-                continue;
-            }
-            let value = expr(
-                ExprKind::Member {
-                    object: Box::new(expr(ExprKind::Identifier(base_name.clone()), span)),
-                    member: field.clone(),
-                },
-                span,
-            );
-            fields.push(StructFieldInit {
-                name: field,
-                value: Box::new(value),
-                span,
-            });
-        }
         Ok(expr(
-            ExprKind::Block {
-                stmts,
-                tail: Box::new(expr(ExprKind::StructLiteral { name, fields }, span)),
+            ExprKind::StructLiteral {
+                name,
+                fields,
+                base: base.map(Box::new),
             },
             span,
         ))

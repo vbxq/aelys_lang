@@ -1,0 +1,5 @@
+pub struct Pt { pub x: i64, pub y: i64 }
+
+pub struct P(pub i64, pub i64);
+
+pub struct Unit;

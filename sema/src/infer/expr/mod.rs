@@ -63,7 +63,13 @@ impl TypeInference {
                 (TypedExprKind::FmtString(typed_parts), InferType::String)
             }
             ExprKind::Null => (TypedExprKind::Null, InferType::Null),
-            ExprKind::Identifier(name) => self.infer_identifier_expr(name, expr.span),
+            ExprKind::Identifier(name) => match self.struct_constructor(expr, None, expr.span) {
+                Some(unit) => {
+                    let t = self.infer_expr(&unit);
+                    (t.kind, t.ty)
+                }
+                None => self.infer_identifier_expr(name, expr.span),
+            },
             ExprKind::Binary { left, op, right } => {
                 let mut typed_left = self.infer_expr(left);
                 let mut typed_right = self.infer_expr(right);
@@ -181,9 +187,13 @@ impl TypeInference {
                 return_type,
                 body,
             } => self.infer_lambda_expr(params, return_type.as_ref(), body, expr.span),
-            ExprKind::Member { object, member } => {
-                self.infer_member_expr(object, member, expr.span)
-            }
+            ExprKind::Member { object, member } => match self.struct_constructor(expr, None, expr.span) {
+                Some(unit) => {
+                    let t = self.infer_expr(&unit);
+                    (t.kind, t.ty)
+                }
+                None => self.infer_member_expr(object, member, expr.span),
+            },
             ExprKind::ArrayLiteral { elements } => {
                 self.infer_array_literal(elements, expect.as_ref())
             }
@@ -336,8 +346,19 @@ impl TypeInference {
                     InferType::Null,
                 )
             }
-            ExprKind::StructLiteral { name, fields } => {
-                self.infer_struct_literal(name, fields, expr.span)
+            ExprKind::StructLiteral {
+                name,
+                fields,
+                base: None,
+            } => self.infer_struct_literal(name, fields, expr.span),
+            ExprKind::StructLiteral {
+                name,
+                fields,
+                base: Some(base),
+            } => {
+                let update = self.struct_update(name, fields, base, expr.span);
+                let t = self.infer_expr(&update);
+                (t.kind, t.ty)
             }
             ExprKind::Tuple(elems) => self.infer_tuple_literal(elems, expect.as_ref(), expr.span),
             ExprKind::Cast {

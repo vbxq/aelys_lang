@@ -7,7 +7,7 @@ mod needs;
 mod return_stmt;
 
 use super::TypeInference;
-use crate::constraint::{Constraint, ConstraintReason, TypeError};
+use crate::constraint::{Constraint, ConstraintReason, TypeError, TypeErrorKind};
 use crate::typed_ast::{TypedStmt, TypedStmtKind};
 use crate::types::InferType;
 use aelys_syntax::{ExprKind, Stmt, StmtKind};
@@ -145,6 +145,9 @@ impl TypeInference {
         out: &mut Vec<TypedStmt>,
     ) {
         use aelys_syntax::{Expr, ExprKind, Pattern};
+        if let Some(converted) = self.struct_pattern(pattern) {
+            return self.bind_pattern_parts(&converted, ty, source, out);
+        }
         match pattern {
             Pattern::Wildcard(_) => {}
             Pattern::Binding {
@@ -202,18 +205,92 @@ impl TypeInference {
                     self.bind_pattern_parts(elem, part, access, out);
                 }
             }
+            Pattern::Struct {
+                name,
+                fields,
+                rest,
+                span,
+            } if self.type_table.has_struct(&self.air_type_name(name, *span)) => {
+                let qualified = self.air_type_name(name, *span);
+                let expected = match ty {
+                    InferType::Var(_) => {
+                        let params = self.type_table.get_struct(&qualified).map_or(0, |d| d.type_params.len());
+                        let args = (0..params).map(|_| self.type_gen.fresh()).collect();
+                        let expected = InferType::Struct(qualified, args);
+                        self.constraints.push(Constraint::equal(
+                            ty.clone(),
+                            expected.clone(),
+                            *span,
+                            ConstraintReason::Other("a struct pattern".to_string()),
+                        ));
+                        expected
+                    }
+                    other => other.clone(),
+                };
+                let declared = match &expected {
+                    InferType::Struct(found, args) if *found == qualified => {
+                        self.type_table.struct_fields(&qualified, args).unwrap_or_default()
+                    }
+                    InferType::Dynamic => {
+                        self.bind_refused_pattern(pattern);
+                        return;
+                    }
+                    other => {
+                        self.pattern_error(
+                            TypeErrorKind::PatternMalformed {
+                                detail: format!("pattern `{name} {{ .. }}` matches a `{name}`, but the value has type `{other}`"),
+                            },
+                            *span,
+                        );
+                        self.bind_refused_pattern(pattern);
+                        return;
+                    }
+                };
+                let unknown = fields.iter().find(|(f, _, _)| !declared.iter().any(|d| d.name == *f));
+                let missing = declared.iter().find(|d| !fields.iter().any(|(f, _, _)| *f == d.name));
+                let detail = match (unknown, missing) {
+                    (Some((field, _, _)), _) => Some(format!("struct `{name}` has no field `{field}`")),
+                    (None, Some(d)) if !rest => Some(format!(
+                        "this pattern does not mention field `{}` of `{name}`; name it, or write `..` to skip the fields left out",
+                        d.name
+                    )),
+                    _ => None,
+                };
+                if let Some(detail) = detail {
+                    self.pattern_error(TypeErrorKind::PatternMalformed { detail }, *span);
+                    self.bind_refused_pattern(pattern);
+                    return;
+                }
+                for (field, sub, at) in fields {
+                    let field_ty = declared
+                        .iter()
+                        .find(|d| d.name == *field)
+                        .map_or(InferType::Dynamic, |d| d.ty.clone());
+                    let access = Expr::new(
+                        ExprKind::Member {
+                            object: Box::new(source.clone()),
+                            member: field.clone(),
+                        },
+                        *at,
+                    );
+                    self.bind_pattern_parts(sub, &field_ty, access, out);
+                }
+            }
             Pattern::Variant { span, .. }
             | Pattern::Lit(_, span)
             | Pattern::Range { span, .. }
             | Pattern::ConstRange { span, .. }
             | Pattern::Struct { span, .. }
             | Pattern::Or(_, span) => {
-                self.errors.push(TypeError::coded(
+                let mut err = TypeError::coded(
                     "E0101",
-                    "a let pattern cannot fail; use match",
+                    "this pattern can fail to match, so `let` needs an `else`",
                     "refutable pattern",
                     *span,
-                ));
+                );
+                err.help = Some("write `let PATTERN = value else { return; };`".to_string());
+                self.errors.push(err);
+                self.bind_refused_pattern(pattern);
             }
         }
     }

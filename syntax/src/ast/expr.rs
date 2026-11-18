@@ -373,6 +373,7 @@ pub enum ExprKind {
     StructLiteral {
         name: String,
         fields: Vec<StructFieldInit>,
+        base: Option<Box<Expr>>,
     },
 
     EnumVariant {

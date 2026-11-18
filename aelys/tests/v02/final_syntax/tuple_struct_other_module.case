@@ -1,0 +1,20 @@
+mod geo;
+use geo::P;
+
+fn main() {
+    let p = P(1, 2);
+    let q = geo::P(3, 4);
+    let u = geo::Unit;
+    let b = geo::Pt { x: 1, y: 2 };
+    let d = geo::Pt { x: 9, ..b };
+    let P(e, f) = q;
+    let geo::P(g, _) = p;
+    match q {
+        geo::P(3, h) => println!("h {}", h),
+        _ => println!("no"),
+    }
+    match u {
+        geo::Unit => println!("unit"),
+    }
+    println!("{} {} {} {} {} {}", p.0, d.x, d.y, e, f, g);
+}

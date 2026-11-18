@@ -233,31 +233,6 @@ impl Parser {
             });
         }
         let first = segments.pop().unwrap();
-        if self.tuple_structs.contains_key(&first) && matches!(next, TokenKind::LParen) {
-            let fields = self
-                .variant_fields()?
-                .into_iter()
-                .enumerate()
-                .map(|(i, p)| {
-                    let at = p.span();
-                    (i.to_string(), p, at)
-                })
-                .collect();
-            return Ok(Pattern::Struct {
-                name: first,
-                fields,
-                rest: false,
-                span: span.merge(self.previous().span),
-            });
-        }
-        if self.unit_structs.contains(&first) && !matches!(next, TokenKind::LParen | TokenKind::LBrace) {
-            return Ok(Pattern::Struct {
-                name: first,
-                fields: Vec::new(),
-                rest: true,
-                span,
-            });
-        }
         let lower = !first.starts_with(char::is_uppercase);
         if (lower || self.pattern_in_let) && !matches!(next, TokenKind::LParen | TokenKind::LBrace) {
             if !self.refuse_reserved_value_name(&first, span) && !lower {
