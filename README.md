@@ -168,7 +168,6 @@ fn main() -> i64 {
 - `as` between integer types truncates; `as` from a float to an integer saturates, and a NaN converts to 0. An integer literal above `i64::MAX` is a `u64`, and one above `u64::MAX` is refused (`E0003`).
 - A global holding a `string`, directly or in a struct field, that the program assigns at run time is not released at exit. The memory goes back with the process, and LeakSanitizer reports nothing; `AELYS_RC_STATS` counts one allocation more than frees per such string.
 - A slice must start at 0: `v[1..3]` is refused with `E0425` (see [Lengths and indexing](#lengths-and-indexing)).
-- The object file is left beside the source, as shown above.
 - A closure works on its own copy of a variable it captures. An assignment inside the closure changes that copy, which persists from one call to the next; the variable outside keeps its value.
 
 ```rust run
@@ -986,6 +985,256 @@ fn main() -> i64 {
 [   -42][-42   ][  ab  ][-00042][3.14][***3.142]
 ```
 
+## The 0.2 language
+
+0.2 adds generic structs, methods, richer patterns, tuples, constants and type aliases.
+
+A struct takes type parameters, and an `impl` block gives it methods. `swap` takes `self` by value and returns a pair with the two types exchanged.
+
+```rust run
+struct Pair<A, B> { first: A, second: B }
+
+impl<A, B> Pair<A, B> {
+    fn swap(self) -> Pair<B, A> { return Pair { first: self.second, second: self.first } }
+}
+
+fn main() -> i64 {
+    let p = Pair { first: 1, second: "one" }
+    let q = p.swap()
+    println("{q.first} {q.second}")
+    let r: Pair<string, Vec<i64>> = Pair { first: "xs", second: vec[1, 2, 3] }
+    println("{r.first} {r.second.len}")
+    return 0
+}
+```
+
+```output
+one 1
+xs 3
+```
+
+Inside an `impl`, `Self` names the type. A method takes `self` by value, `&self` to read or `&mut self` to write the caller's value. A function without `self` is called on the type, as `Counter::new(3)`. Calls chain.
+
+```rust run
+struct Counter { n: i64, step: i64 }
+
+impl Counter {
+    fn new(step: i64) -> Self { return Self { n: 0, step: step } }
+    fn tick(&mut self) { self.n = self.n + self.step }
+    fn value(&self) -> i64 { return self.n }
+    fn doubled(self) -> Self { return Counter { n: self.n * 2, step: self.step * 2 } }
+}
+
+fn main() -> i64 {
+    let mut c = Counter::new(3)
+    c.tick()
+    c.tick()
+    println(c.value())
+    println(Counter::new(5).doubled().doubled().step)
+    let mut d = c.doubled()
+    d.tick()
+    println(d.value())
+    return 0
+}
+```
+
+```output
+6
+20
+18
+```
+
+A `match` arm takes literals, ranges `a..=b`, alternatives joined by `|`, a guard after `if`, and `name @ pattern`, which binds the value the pattern matched. Arms are tried in order.
+
+```rust run
+fn describe(n: i64) -> string {
+    return match n {
+        0 => "zero",
+        1 | 2 | 3 => "small",
+        x @ 4..=9 if x % 2 == 0 => "even digit",
+        4..=9 => "odd digit",
+        x if x < 0 => "negative",
+        _ => "large"
+    }
+}
+
+fn main() -> i64 {
+    for n in [0, 2, 6, 7, -5, 40] {
+        println("{n:>3} {describe(n)}")
+    }
+    return 0
+}
+```
+
+```output
+  0 zero
+  2 small
+  6 even digit
+  7 odd digit
+ -5 negative
+ 40 large
+```
+
+A tuple groups values of different types. `t.0` reads a field, `let (a, b) = ...` takes one apart, and patterns nest inside tuples and enums.
+
+```rust run
+fn min_max(xs: &[i64]) -> (i64, i64) {
+    let mut lo = xs[0]
+    let mut hi = xs[0]
+    for x in xs {
+        if x < lo { lo = x }
+        if x > hi { hi = x }
+    }
+    return (lo, hi)
+}
+
+fn main() -> i64 {
+    let v: Vec<i64> = vec[4, -2, 9, 3]
+    let (lo, hi) = min_max(v[0..4])
+    println("{lo} {hi}")
+    let named: (i64, string) = (7, "seven")
+    println("{named.1} is {named.0}")
+    match (lo < 0, Some(hi)) {
+        (true, Some(h @ 5..=10)) => println("mixed, top {h}"),
+        (true, _) => println("mixed"),
+        (false, _) => println("positive")
+    }
+    return 0
+}
+```
+
+```output
+-2 9
+seven is 7
+mixed, top 9
+```
+
+`if let` runs a block when one pattern matches. `while let` loops while it matches, here until `pop` answers `None`.
+
+```rust run
+fn main() -> i64 {
+    let mut stack: Vec<i64> = vec[1, 2, 3]
+    let mut total = 0
+    while let Some(x) = stack.pop() {
+        total = total * 10 + x
+    }
+    println(total)
+    let found: Option<string> = Some("key")
+    if let Some(k) = found {
+        println("found {k}")
+    }
+    if let None = stack.pop() {
+        println("empty")
+    }
+    return 0
+}
+```
+
+```output
+321
+found key
+empty
+```
+
+`const` declares a constant and `type` an alias, another name for the same type. `r#` turns a keyword into a name: `r#and` is a function named `and`.
+
+```rust run
+const SCALE: i64 = 10
+
+type Point = (i64, i64)
+
+fn scaled(p: Point) -> Point {
+    return (p.0 * SCALE, p.1 * SCALE)
+}
+
+fn r#and(a: Point, b: Point) -> Point {
+    return (a.0 + b.0, a.1 + b.1)
+}
+
+fn main() -> i64 {
+    let p = r#and(scaled((1, 2)), (3, 4))
+    println("{p.0},{p.1}")
+    return 0
+}
+```
+
+```output
+13,24
+```
+
+A struct field can be a `Vec`, and a `&mut self` method pushes to it. The format spec of a placeholder lines up columns.
+
+```rust run
+struct Ledger { names: Vec<string>, amounts: Vec<i64> }
+
+impl Ledger {
+    fn new() -> Self { return Ledger { names: Vec::new(), amounts: Vec::new() } }
+    fn add(&mut self, name: string, amount: i64) {
+        self.names.push(name)
+        self.amounts.push(amount)
+    }
+    fn total(&self) -> i64 {
+        let mut t = 0
+        for a in Vec::as_slice(self.amounts) { t = t + a }
+        return t
+    }
+}
+
+fn main() -> i64 {
+    let mut l = Ledger::new()
+    l.add("rent", 1200)
+    l.add("food", 345)
+    for i in 0..l.names.len {
+        let name = l.names[i]
+        let amount = l.amounts[i]
+        println("{name:<6}{amount:>8}")
+    }
+    let t = l.total()
+    println("{"total":<6}{t:>8}")
+    return 0
+}
+```
+
+```output
+rent      1200
+food       345
+total     1545
+```
+
+An enum refers to itself through `Rc`. `Rc::get` reads the value behind an `Rc`, and `match` takes it apart.
+
+```rust run
+enum Expr { Num(i64), Add(Rc<Expr>, Rc<Expr>), Mul(Rc<Expr>, Rc<Expr>) }
+
+fn num(n: i64) -> Rc<Expr> { return Rc::new(Expr::Num(n)) }
+
+fn eval(e: Rc<Expr>) -> i64 {
+    return match Rc::get(e) {
+        Expr::Num(n) => n,
+        Expr::Add(a, b) => eval(a) + eval(b),
+        Expr::Mul(a, b) => eval(a) * eval(b)
+    }
+}
+
+fn show(e: Rc<Expr>) -> string {
+    return match Rc::get(e) {
+        Expr::Num(n) => "{n}",
+        Expr::Add(a, b) => "({show(a)} + {show(b)})",
+        Expr::Mul(a, b) => "{show(a)} * {show(b)}"
+    }
+}
+
+fn main() -> i64 {
+    let e = Rc::new(Expr::Mul(Rc::new(Expr::Add(num(1), num(2))), num(4)))
+    println("{show(e)} = {eval(e)}")
+    return 0
+}
+```
+
+```output
+(1 + 2) * 4 = 12
+```
+
 ## Generics
 
 A function takes a type parameter and unifies it against the element of a slice at the call site.
@@ -1027,6 +1276,116 @@ fn main() -> i64 {
 ```output
 26
 Sq(3)
+```
+
+A trait takes type parameters. `Collection<T>` is implemented once for every `Bag<T>`, and `fill` takes any `C` that implements `Collection<i64>`.
+
+```rust run
+trait Collection<T> {
+    fn add(&mut self, x: T)
+    fn size(&self) -> i64
+    fn is_empty(&self) -> bool { return self.size() == 0 }
+}
+
+struct Bag<T> { items: Vec<T> }
+
+impl<T> Collection<T> for Bag<T> {
+    fn add(&mut self, x: T) { self.items.push(x) }
+    fn size(&self) -> i64 { return self.items.len }
+}
+
+fn fill<C: Collection<i64>>(c: &mut C, n: i64) {
+    for i in 0..n { c.add(i * i) }
+}
+
+fn main() -> i64 {
+    let mut b: Bag<i64> = Bag { items: Vec::new() }
+    println(b.is_empty())
+    fill(&mut b, 4)
+    println("{b.size()} {b.items[3]}")
+    let mut w: Bag<string> = Bag { items: Vec::new() }
+    w.add("one")
+    println(w.size())
+    return 0
+}
+```
+
+```output
+true
+4 9
+1
+```
+
+A user type gets `==` from `impl eq`, `<` and `>` from `impl ord`, and `println` from `impl Display`. `cmp` answers a negative number, zero or a positive number.
+
+```rust run
+struct Version { major: i64, minor: i64 }
+
+impl eq for Version {
+    fn eq(&self, o: &Version) -> bool { return self.major == o.major and self.minor == o.minor }
+}
+
+impl ord for Version {
+    fn cmp(&self, o: &Version) -> i64 {
+        if self.major != o.major { return self.major - o.major }
+        return self.minor - o.minor
+    }
+}
+
+impl Display for Version {
+    fn to_string(&self) -> string { return "v{self.major}.{self.minor}" }
+}
+
+fn newest<T: ord>(xs: &[T]) -> T {
+    let mut best = xs[0]
+    for x in xs {
+        if x > best { best = x }
+    }
+    return best
+}
+
+fn main() -> i64 {
+    let vs: [Version; 3] = [Version { major: 1, minor: 4 }, Version { major: 2, minor: 0 }, Version { major: 1, minor: 10 }]
+    println(newest(vs[..]))
+    println(vs[0] < vs[2])
+    println(vs[1] == Version { major: 2, minor: 0 })
+    return 0
+}
+```
+
+```output
+v2.0
+true
+true
+```
+
+A trait is not a type. There are no trait objects, and a trait written where a type goes is refused:
+
+```rust refused E0750
+trait Shape {
+    fn area(&self) -> i64
+}
+
+fn total(shapes: &[Shape]) -> i64 {
+    let mut t: i64 = 0
+    for s in shapes { t = t + s.area() }
+    return t
+}
+
+fn main() -> i64 {
+    return 0
+}
+```
+
+```diagnostic
+error[E0750]: the trait `Shape` is used as a type, and trait objects are not supported; take a type parameter `<T: Shape>` instead
+ --> main.aelys:5:20
+  |
+5 | fn total(shapes: &[Shape]) -> i64 {
+  |                    ^^^^^ trait used as a type
+
+For more information about this error, try `aelys-cli --explain E0750`
+error: aborting due to 1 previous error
 ```
 
 ```rust run
