@@ -1088,7 +1088,11 @@ fn the_projected_global_and_its_local_twin_point_the_same_way() {
 fn s4_n11_n12_a_slice_crosses_a_fn_pointer_and_a_vec_in_a_nogc_struct_stays_refused() {
     let h = Harness::new();
     h.value_row("S4-N11", S4_N11, "7922\n7919\n", 0, 0);
-    h.fenced_row("S4-N12", S4_N12, "E0902");
+    let rendered = h.fenced_row("S4-N12", S4_N12, "E0727");
+    assert!(
+        rendered.contains("the managed parameter `h`"),
+        "S4-N12 must name the Vec-holding parameter\ngot:\n{rendered}"
+    );
     h.assert_legs(4 + 8);
 }
 

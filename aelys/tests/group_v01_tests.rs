@@ -445,9 +445,7 @@ fn group_v01_r07_werror_input_is_the_same_at_every_level() {
 const NET_FIXTURE: &str = "enum Opt<T> { Some(T), Nil }\n\
                            \n\
                            fn main() -> i64 {\n\
-                           \x20   let mut i1 = Vec::new()\n\
-                           \x20   Vec::push(i1, 1)\n\
-                           \x20   let a = Opt::Some(i1)\n\
+                           \x20   let a: Opt<[Vec<i64>; 1]> = Opt::Nil\n\
                            \x20   return 0\n\
                            }\n";
 

@@ -66,13 +66,22 @@ fn test() {}
 }
 
 #[test]
-fn generic_struct_field_type_param_is_refused_as_unsupported() {
-    assert!(should_fail(
+fn generic_struct_field_type_param_accepted() {
+    should_pass(
         r#"
 struct Wrapper<T> { value: T }
 fn test() {}
 "#,
-    ));
+    );
+    assert!(
+        should_fail(
+            r#"
+struct Wrapper<T> { value: U }
+fn test() {}
+"#
+        ),
+        "a field naming an undeclared type parameter should be rejected"
+    );
 }
 
 #[test]

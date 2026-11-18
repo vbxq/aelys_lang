@@ -448,12 +448,23 @@ mod tests {
     }
 
     #[test]
-    fn generic_enum_instantiated_at_vec_is_rejected() {
+    fn generic_enum_instantiated_at_vec_is_accepted() {
         let mut program = empty_program();
         program.enums.push(opt_enum(
             "__mono_Opt_Vec$i64",
             Vec::new(),
             AirType::Vec(Box::new(AirType::I64)),
+        ));
+        assert!(check_vec_surface(&program).is_ok());
+    }
+
+    #[test]
+    fn generic_enum_instantiated_at_a_vec_of_vec_is_rejected() {
+        let mut program = empty_program();
+        program.enums.push(opt_enum(
+            "__mono_Opt_Vec$Vec$i64",
+            Vec::new(),
+            AirType::Vec(Box::new(AirType::Vec(Box::new(AirType::I64)))),
         ));
         assert!(check_vec_surface(&program).is_err());
     }

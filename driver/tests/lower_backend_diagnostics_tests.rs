@@ -128,7 +128,6 @@ struct Node {
 
 fn main() {
     let n = Node { next: OptionNode::None };
-    n;
 }
 "#;
     assert_lowering_error(src, "recursive type cycle involving by-value enums/structs");

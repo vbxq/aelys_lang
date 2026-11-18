@@ -1851,9 +1851,7 @@ fn main() -> i64 {
         r#"
 enum Opt<T> { Some(T), Nil }
 fn main() -> i64 {
-    let mut i1 = Vec::new()
-    Vec::push(i1, 1)
-    let a = Opt::Some(i1)
+    let a: Opt<Vec<Vec<i64>>> = Opt::Nil
     return 0
 }
 "#,

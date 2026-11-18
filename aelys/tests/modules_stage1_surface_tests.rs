@@ -1292,7 +1292,7 @@ fn group_mod_w3_the_root_may_name_its_own_private_types() {
 const LEAK_CONVERTERS: &[(&str, &str, &str)] = &[
     (
         "vec-surface",
-        "pub struct Holder { pub v: i64 }\n\npub enum Opt<T> { None, Some(T) }\n\npub fn go() -> i64 {\n    let xs: vec<Holder> = vec[Holder { v: 9 }]\n    let o: Opt<vec<Holder>> = Opt::Some(xs)\n    return match o {\n        Opt::Some(h) => h[0].v\n        Opt::None => 0\n    }\n}\n",
+        "pub struct Holder { pub v: i64 }\n\npub enum Opt<T> { None, Some(T) }\n\npub fn go() -> i64 {\n    let o: Opt<[vec<Holder>; 1]> = Opt::None\n    return match o {\n        Opt::Some(h) => h[0][0].v\n        Opt::None => 0\n    }\n}\n",
         "return m.go()",
     ),
     (

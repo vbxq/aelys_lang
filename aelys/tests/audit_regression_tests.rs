@@ -1069,18 +1069,33 @@ fn main() {
 }
 
 #[test]
-fn generic_struct_field_type_param_is_refused_as_unsupported() {
+fn generic_struct_field_type_param_accepted() {
+    assert!(
+        sema_ok(
+            r#"
+struct Wrapper<T> { value: T }
+fn main() -> i64 {
+    let w = Wrapper { value: 42 }
+    let n: i64 = w.value
+    return n
+}
+"#
+        ),
+        "a generic struct field takes the type argument of its literal"
+    );
     assert_eq!(
         sema_error_count(
             r#"
 struct Wrapper<T> { value: T }
-fn main() {
+fn main() -> i64 {
     let w = Wrapper { value: 42 }
+    let s: string = w.value
+    return 0
 }
 "#
         ),
         1,
-        "a generic struct is refused once, at its declaration"
+        "a field instantiated at i64 is refused once where a string is expected"
     );
 }
 

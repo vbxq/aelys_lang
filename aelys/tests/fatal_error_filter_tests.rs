@@ -337,10 +337,9 @@ fn test() -> i64 { return identity(42) }
 }
 
 #[test]
-fn generic_struct_with_type_param_name_collision_rejected() {
-    // struct T shadows type param T in Box<T>, so Box { inner: 42 } is a type error
+fn generic_struct_type_param_shadows_a_same_named_struct() {
     assert!(
-        !sema_ok(
+        sema_ok(
             r#"
 struct T { value: i64 }
 struct Box<T> { inner: T }
@@ -350,6 +349,20 @@ fn test() -> i64 {
 }
 "#
         ),
-        "struct T shadows type param T in generic struct, should be rejected"
+        "inside Box<T> the field type T is the parameter, not struct T"
+    );
+    assert!(
+        !sema_ok(
+            r#"
+struct T { value: i64 }
+struct Box<T> { inner: T }
+fn test() -> i64 {
+    let b = Box { inner: 42 }
+    let t: T = b.inner
+    return t.value
+}
+"#
+        ),
+        "a field instantiated at i64 must not be accepted as struct T"
     );
 }

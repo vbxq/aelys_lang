@@ -420,14 +420,12 @@ fn main() -> i64 { let v = vec[1, 2]; return keep(v) }
     ),
     (
         // invariant. a live dangerous construct must reject at every level, and this fixture pins that.
-        "reject_e0412_generic_enum_with_vec_payload",
+        "reject_e0412_generic_enum_with_vec_array_payload",
         "E0412",
         "enum Opt<T> { Some(T), Nil }
 fn main() -> i64 {
-    let mut i1 = Vec::new()
-    Vec::push(i1, 1)
-    let a = Opt::Some(i1)
-    let r: i64 = match a { Opt::Some(w) => w[0], Opt::Nil => 0 }
+    let a: Opt<[Vec<i64>; 1]> = Opt::Nil
+    let r: i64 = match a { Opt::Some(w) => w[0][0], Opt::Nil => 0 }
     return r
 }
 ",
