@@ -1783,7 +1783,8 @@ impl<'a> LoweringContext<'a> {
         ty: &InferType,
     ) {
         let Some(shape) = rc_result else {
-            self.store_arm_result(result, val, str_result);
+            let fresh_vec = Self::vec_rhs_is_fresh(&super::pin::peel(arm).kind);
+            self.store_arm_result(result, val, str_result, fresh_vec);
             return;
         };
         let val = if self.last_block_is_terminated() {
@@ -1800,7 +1801,13 @@ impl<'a> LoweringContext<'a> {
         );
     }
 
-    fn store_arm_result(&mut self, result: LocalId, mut val: Operand, str_result: bool) {
+    fn store_arm_result(
+        &mut self,
+        result: LocalId,
+        mut val: Operand,
+        str_result: bool,
+        fresh_vec: bool,
+    ) {
         let vec_result = matches!(self.local_air_type(result), Some(AirType::Vec(_)));
         let claimed = (str_result || vec_result) && self.claim_owned_str_temp(&val);
         if let (true, Operand::Copy(id)) = (claimed, &val) {
@@ -1808,6 +1815,7 @@ impl<'a> LoweringContext<'a> {
         }
         let owned = !(str_result || vec_result)
             || claimed
+            || (vec_result && fresh_vec)
             || (str_result
                 && (matches!(val, Operand::Const(_)) || self.str_operand_is_fresh(&val)));
         let reachable = !self.last_block_is_terminated();

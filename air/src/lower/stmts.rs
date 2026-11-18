@@ -456,7 +456,7 @@ impl<'a> LoweringContext<'a> {
     }
 
     // the one place a vec-producing form's freshness is decided. a fresh producer owns the +1 the
-    fn vec_rhs_is_fresh(kind: &TypedExprKind) -> bool {
+    pub(super) fn vec_rhs_is_fresh(kind: &TypedExprKind) -> bool {
         match kind {
             TypedExprKind::EnumVariant {
                 enum_name, variant, ..
