@@ -895,7 +895,10 @@ fn lower_file_to_air_with_source(
     opt_level: OptimizationLevel,
     sources: &SourceOptions,
 ) -> Result<LoweringArtifacts, AelysError> {
-    let graph = crate::modules::discover(path, sources).map_err(|failure| failure.error)?;
+    let mut graph = crate::modules::discover(path, sources).map_err(|failure| failure.error)?;
+    crate::timing::phase("strip", || {
+        crate::modules::strip_unnamed_std_functions(&mut graph.units)
+    });
 
     let src = graph.root().source.clone();
     let module_sources = ModuleSources::new(

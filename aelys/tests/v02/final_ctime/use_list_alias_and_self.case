@@ -1,0 +1,8 @@
+use std::str::{self, pad_left as pl, trim};
+use std::str::repeat as rep;
+use std::vec;
+
+fn main() {
+    let v: Vec<String> = vec!["b", "a"];
+    println!("[{}] [{}] [{}] [{}] {}", rep("xy", 2), pl("ab", 4), trim(" c "), str::to_upper("q"), v.is_empty());
+}
