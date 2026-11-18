@@ -32,6 +32,29 @@ impl Parser {
             let size_token = self.advance();
             let size = match &size_token.kind {
                 TokenKind::Int(n) if *n >= 0 => *n as u64,
+                TokenKind::Identifier(first) => {
+                    let mut name = first.clone();
+                    if self.check(&TokenKind::Dot)
+                        && let TokenKind::Identifier(member) = &self.peek_at(1).kind
+                    {
+                        name = format!("{name}.{member}");
+                        self.advance();
+                        self.advance();
+                    }
+                    if !self.check(&TokenKind::RBracket) {
+                        return Err(self.rule(
+                            101,
+                            "an array size is an integer literal or a const name",
+                            self.peek().span,
+                        ));
+                    }
+                    self.advance();
+                    let end_span = self.previous().span;
+                    let mut ann = TypeAnnotation::array_sized(inner, 0, start_span.merge(end_span));
+                    ann.array_size = None;
+                    ann.array_size_name = Some(name);
+                    return Ok(ann);
+                }
                 other => {
                     let found = other.to_string();
                     return Err(self.error(

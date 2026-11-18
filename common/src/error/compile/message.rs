@@ -35,6 +35,7 @@ impl CompileErrorKind {
             ),
             Self::ExpectedExpression => "expected expression".to_string(),
             Self::ExpectedIdentifier => "expected identifier".to_string(),
+            Self::ParseRule { message, .. } => message.clone(),
             Self::InvalidAssignmentTarget => "invalid assignment target".to_string(),
             Self::RecursionDepthExceeded { max } => {
                 format!("expression nesting too deep (max {} levels)", max)

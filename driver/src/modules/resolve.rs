@@ -459,7 +459,7 @@ struct TopLevelBinding {
 
 impl TopLevelBinding {
     fn is_type(&self) -> bool {
-        matches!(self.form, "a struct" | "an enum")
+        matches!(self.form, "a struct" | "an enum" | "a type alias")
     }
 }
 
@@ -479,6 +479,8 @@ fn top_level_bindings(stmts: &[Stmt]) -> Vec<TopLevelBinding> {
                 StmtKind::Let { name, .. } => (name.clone(), "a global"),
                 StmtKind::StructDecl { name, .. } => (name.clone(), "a struct"),
                 StmtKind::EnumDecl { name, .. } => (name.clone(), "an enum"),
+                StmtKind::Const { name, .. } => (name.clone(), "a const"),
+                StmtKind::TypeAlias { name, .. } => (name.clone(), "a type alias"),
                 _ => return None,
             };
             Some(TopLevelBinding {

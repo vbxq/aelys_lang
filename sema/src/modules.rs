@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub enum ItemKind {
     Function,
     Global,
+    Const,
 }
 
 #[derive(Debug, Clone)]
@@ -35,12 +36,20 @@ pub struct ModuleType {
     pub is_pub: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct AliasDef {
+    pub params: Vec<String>,
+    pub target: aelys_syntax::TypeAnnotation,
+    pub is_pub: bool,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ModuleExports {
     pub path: String,
     pub values: HashMap<String, ModuleValue>,
     pub types: HashMap<String, ModuleType>,
     pub reachable: HashMap<String, ModuleTypeDef>,
+    pub aliases: HashMap<String, AliasDef>,
 }
 
 pub enum Lookup<'a, T> {
@@ -73,11 +82,15 @@ pub struct ModuleImports {
     pub namespaces: HashMap<String, Arc<ModuleExports>>,
     pub values: HashMap<String, ModuleValue>,
     pub types: HashMap<String, ModuleType>,
+    pub aliases: HashMap<String, AliasDef>,
 }
 
 impl ModuleImports {
     pub fn is_empty(&self) -> bool {
-        self.namespaces.is_empty() && self.values.is_empty() && self.types.is_empty()
+        self.namespaces.is_empty()
+            && self.values.is_empty()
+            && self.types.is_empty()
+            && self.aliases.is_empty()
     }
 }
 
@@ -110,6 +123,49 @@ pub fn qualify_type_name(path: &str, name: &str) -> String {
         return qualify_value(path, name);
     }
     format!("{}{}.{}", TYPE_HEAD, path, name)
+}
+
+pub(crate) fn qualify_alias_body(
+    ann: &mut aelys_syntax::TypeAnnotation,
+    path: &str,
+    owned: &HashSet<String>,
+    params: &[String],
+    namespaces: Option<&HashMap<String, Arc<ModuleExports>>>,
+) {
+    let bare = ann.type_param.is_none() && ann.type_params.is_empty();
+    if !(bare && params.contains(&ann.name)) {
+        if owned.contains(&ann.name) {
+            ann.name = qualify_type_name(path, &ann.name);
+        } else if let Some(namespaces) = namespaces
+            && let Some((ns, member)) = ann.name.split_once('.')
+            && let Some(ex) = namespaces.get(ns)
+            && let Some(ty) = ex.types.get(member)
+        {
+            ann.name = ty.qualified.clone();
+        }
+    }
+    let go = |a: &mut aelys_syntax::TypeAnnotation| {
+        qualify_alias_body(a, path, owned, params, namespaces)
+    };
+    if let Some(p) = &mut ann.type_param {
+        go(p);
+    }
+    for p in &mut ann.type_params {
+        go(p);
+    }
+    if let Some(ps) = &mut ann.fn_params {
+        for p in ps {
+            go(p);
+        }
+    }
+    if let Some(r) = &mut ann.fn_ret {
+        go(r);
+    }
+    if let Some(es) = &mut ann.tuple_elems {
+        for e in es {
+            go(e);
+        }
+    }
 }
 
 pub fn strip_type_head(name: &str) -> &str {
@@ -387,6 +443,26 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
         }
     }
     exports.reachable = reachable;
+
+    for (name, is_pub, lit) in &program.decls.consts {
+        exports.values.insert(
+            name.clone(),
+            ModuleValue {
+                kind: ItemKind::Const,
+                ty: lit.ty.clone(),
+                qualified: qualify_value(path, name),
+                is_pub: *is_pub,
+                type_params: Vec::new(),
+                bounds: Vec::new(),
+                literal: Some(crate::typed_ast::LiteralInit::Const(lit.clone())),
+            },
+        );
+    }
+    for (name, def) in &program.decls.aliases {
+        let mut def = def.clone();
+        qualify_alias_body(&mut def.target, path, &owned, &def.params, None);
+        exports.aliases.insert(name.clone(), def);
+    }
 
     exports
 }

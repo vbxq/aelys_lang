@@ -15,6 +15,8 @@ pub struct TypeAnnotation {
     pub fn_params: Option<Vec<TypeAnnotation>>,
     pub fn_ret: Option<Box<TypeAnnotation>>,
     pub array_size: Option<u64>,
+    pub array_size_name: Option<String>,
+    pub tuple_elems: Option<Vec<TypeAnnotation>>,
     pub reference: Option<RefKind>,
     pub is_slice: bool,
     pub nogc: bool,
@@ -30,6 +32,8 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: false,
             nogc: false,
@@ -45,6 +49,8 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: false,
             nogc: false,
@@ -60,6 +66,8 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: true,
             nogc: false,
@@ -80,6 +88,8 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: false,
             nogc: false,
@@ -100,6 +110,8 @@ impl TypeAnnotation {
             fn_params: Some(params),
             fn_ret: Some(Box::new(ret)),
             array_size: None,
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: false,
             nogc,
@@ -115,11 +127,19 @@ impl TypeAnnotation {
             fn_params: None,
             fn_ret: None,
             array_size: Some(size),
+            array_size_name: None,
+            tuple_elems: None,
             reference: None,
             is_slice: false,
             nogc: false,
             span,
         }
+    }
+
+    pub fn tuple(elems: Vec<TypeAnnotation>, span: Span) -> Self {
+        let mut ann = Self::new("(tuple)".to_string(), span);
+        ann.tuple_elems = Some(elems);
+        ann
     }
 
     pub fn is_function_type(&self) -> bool {

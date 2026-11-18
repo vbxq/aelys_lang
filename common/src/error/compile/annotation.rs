@@ -13,6 +13,7 @@ impl CompileErrorKind {
             Self::RecursionDepthExceeded { .. } => "nesting limit exceeded",
             Self::CommentNestingTooDeep { .. } => "nesting limit exceeded",
             Self::UnexpectedToken { .. } => "unexpected token",
+            Self::ParseRule { .. } => "here",
             Self::UnknownTypeBound { .. } => "not a bound",
             Self::NotAVariantInScope { .. } => "not a variant in scope",
             Self::NestedPattern => "nested pattern",

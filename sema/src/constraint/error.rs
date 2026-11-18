@@ -115,6 +115,11 @@ pub enum TypeErrorKind {
     NotSupportedYet {
         detail: String,
     },
+    Coded {
+        code: &'static str,
+        message: String,
+        annotation: String,
+    },
     StringSlice,
     ComputedLen {
         ty: InferType,
@@ -399,6 +404,7 @@ impl fmt::Display for TypeError {
                 ),
             },
             TypeErrorKind::NotSupportedYet { detail } => write!(f, "{detail}"),
+            TypeErrorKind::Coded { message, .. } => write!(f, "{message}"),
             TypeErrorKind::StringSlice => write!(
                 f,
                 "a `string` has no slices, so `s[a..b]` does not exist on one. take a substring \
@@ -566,6 +572,21 @@ impl TypeError {
     pub fn string_slice(span: Span) -> Self {
         TypeError {
             kind: TypeErrorKind::StringSlice,
+            span,
+            reason: ConstraintReason::Other(String::new()),
+            secondary_spans: Vec::new(),
+            help: None,
+            suggestion: None,
+        }
+    }
+
+    pub fn coded(code: &'static str, message: impl Into<String>, annotation: &str, span: Span) -> Self {
+        TypeError {
+            kind: TypeErrorKind::Coded {
+                code,
+                message: message.into(),
+                annotation: annotation.to_string(),
+            },
             span,
             reason: ConstraintReason::Other(String::new()),
             secondary_spans: Vec::new(),

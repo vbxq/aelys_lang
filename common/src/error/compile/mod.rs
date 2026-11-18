@@ -47,6 +47,11 @@ impl CompileError {
             CompileErrorKind::SourceUnreadable { path, .. } => {
                 diag.add_help(format!("check that `{}` exists and is readable", path));
             }
+            CompileErrorKind::ParseRule {
+                help: Some(help), ..
+            } => {
+                diag.add_help(help.clone());
+            }
             CompileErrorKind::BackendDiagnostic { note, help, .. } => {
                 if let Some(note) = note {
                     diag.add_note(note.clone());

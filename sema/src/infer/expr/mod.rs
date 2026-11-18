@@ -143,7 +143,17 @@ impl TypeInference {
             ExprKind::And { left, right } => self.infer_logical_expr("and", left, right, expr),
             ExprKind::Or { left, right } => self.infer_logical_expr("or", left, right, expr),
             ExprKind::Call { callee, args } => self.infer_call_expr(callee, args, expr.span),
-            ExprKind::Assign { name, value } => self.infer_assign_expr(name, value, expr.span),
+            ExprKind::Assign { name, value } => {
+                if self.const_literal(name, expr.span).is_some() {
+                    self.errors.push(TypeError::coded(
+                        "E0401",
+                        format!("cannot assign to the const `{name}`"),
+                        "a const",
+                        expr.span,
+                    ));
+                }
+                self.infer_assign_expr(name, value, expr.span)
+            }
             ExprKind::Grouping(inner) => {
                 let typed_inner = self.infer_expr(inner);
                 let ty = typed_inner.ty.clone();
@@ -191,6 +201,16 @@ impl TypeInference {
                 let mut bare = &**operand;
                 while let ExprKind::Grouping(inner) = &bare.kind {
                     bare = inner;
+                }
+                if let ExprKind::Identifier(name) = &bare.kind
+                    && self.const_literal(name, bare.span).is_some()
+                {
+                    self.errors.push(TypeError::coded(
+                        "E0421",
+                        format!("a const has no storage; bind `{name}` to a local first"),
+                        "a const",
+                        expr.span,
+                    ));
                 }
                 let names_binding = matches!(bare.kind, ExprKind::Identifier(_));
                 let saved = self.keep_binding_use;
@@ -353,7 +373,7 @@ impl TypeInference {
             {
                 Some(LiteralInit::Int(v)) => (TypedExprKind::Int(*v), InferType::I64),
                 Some(LiteralInit::Float(v)) => (TypedExprKind::Float(*v), InferType::F64),
-                None => (kind, ty),
+                Some(LiteralInit::Const(_)) | None => (kind, ty),
             },
             _ => (kind, ty),
         };

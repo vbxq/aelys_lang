@@ -92,6 +92,7 @@ impl Parser {
                 | TokenKind::Struct
                 | TokenKind::Enum
                 | TokenKind::Match
+                | TokenKind::Const
                 | TokenKind::Pub => return,
                 TokenKind::Eof => return,
                 _ => {}
@@ -133,6 +134,15 @@ impl Parser {
             fault: aelys_common::error::Fault::Unsupported,
         };
         let span = open.merge(self.previous().span);
+        CompileError::new(kind, span, Arc::clone(&self.source)).into()
+    }
+
+    pub(crate) fn rule(&self, code: u16, message: &str, span: aelys_syntax::Span) -> AelysError {
+        let kind = CompileErrorKind::ParseRule {
+            code,
+            message: message.to_string(),
+            help: None,
+        };
         CompileError::new(kind, span, Arc::clone(&self.source)).into()
     }
 

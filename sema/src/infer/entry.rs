@@ -59,6 +59,9 @@ impl Default for TypeInference {
             deferred_results: HashSet::new(),
             deferred_carriers: Vec::new(),
             deferred_mutability: Vec::new(),
+            consts: HashMap::new(),
+            alias_names: HashSet::new(),
+            module_decls: Default::default(),
         }
     }
 }
@@ -160,6 +163,11 @@ impl TypeInference {
         // resolved once, so the `result` special case and the generic path name the same enum
         let qualified = match self.imported_type_name(&ann.name) {
             Some(q) => Some(q),
+            None if ann.name.starts_with(crate::modules::TYPE_HEAD)
+                && (self.type_table.has_struct(&ann.name) || self.type_table.has_enum(&ann.name)) =>
+            {
+                Some(ann.name.clone())
+            }
             None if ann.name.contains('.') => {
                 let before = self.errors.len();
                 match self.resolve_module_type_name(&ann.name, ann.span) {
@@ -446,7 +454,7 @@ impl TypeInference {
     }
 
     pub fn infer_program_full(
-        stmts: Vec<Stmt>,
+        mut stmts: Vec<Stmt>,
         source: Arc<Source>,
         imports: ModuleImports,
         known_globals: HashSet<String>,
@@ -472,6 +480,7 @@ impl TypeInference {
             inf.env.define_function_owned(global.clone(), ty);
         }
 
+        inf.prepare_decls(&mut stmts);
         inf.reject_reserved_type_names(&stmts);
         inf.register_struct_names(&stmts);
         inf.collect_enums(&stmts);
@@ -541,6 +550,7 @@ impl TypeInference {
                 source,
                 type_table: type_table.clone(),
                 literal_globals: inf.literal_globals,
+                decls: inf.module_decls,
             },
             warnings: inf.warnings,
             deferred_errors,

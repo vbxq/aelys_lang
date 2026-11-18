@@ -761,6 +761,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
         TypeErrorKind::NotSupportedYet { detail } => {
             ("E0902", detail.clone(), "not supported yet".to_string())
         }
+        TypeErrorKind::Coded {
+            code,
+            message,
+            annotation,
+        } => (*code, message.clone(), annotation.clone()),
         TypeErrorKind::StringSlice => (
             "E0425",
             error.to_string(),

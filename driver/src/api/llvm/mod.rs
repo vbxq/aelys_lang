@@ -187,6 +187,20 @@ fn build_imports(
                         }
                         Lookup::Missing => {}
                     }
+                    if let Some(def) = module.aliases.get(name) {
+                        if !def.is_pub {
+                            return Err(import_error(
+                                unit,
+                                *span,
+                                CompileErrorKind::SymbolNotPublic {
+                                    symbol: name.clone(),
+                                    module: module.path.clone(),
+                                },
+                            ));
+                        }
+                        imports.aliases.insert(name.clone(), def.clone());
+                        continue;
+                    }
                     match module.module_type(name) {
                         Lookup::Found(ty) => {
                             imports.types.insert(name.clone(), ty.clone());

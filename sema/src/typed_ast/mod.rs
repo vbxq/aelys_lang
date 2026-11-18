@@ -14,12 +14,35 @@ pub struct TypedProgram {
     pub source: Arc<Source>,
     pub type_table: TypeTable,
     pub literal_globals: std::collections::HashMap<String, LiteralInit>,
+    pub decls: ModuleDecls,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ModuleDecls {
+    pub consts: Vec<(String, bool, ConstLit)>,
+    pub aliases: Vec<(String, crate::modules::AliasDef)>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiteralInit {
     Int(i64),
     Float(f64),
+    Const(ConstLit),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ConstLit {
+    pub ty: InferType,
+    pub value: ConstScalar,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConstScalar {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+    Char(u32),
+    Str(String),
 }
 
 #[derive(Debug, Clone)]

@@ -73,6 +73,20 @@ pub enum StmtKind {
         variants: Vec<EnumVariantDecl>,
         is_pub: bool,
     },
+
+    Const {
+        name: String,
+        type_annotation: TypeAnnotation,
+        initializer: Expr,
+        is_pub: bool,
+    },
+
+    TypeAlias {
+        name: String,
+        type_params: Vec<String>,
+        target: TypeAnnotation,
+        is_pub: bool,
+    },
 }
 
 #[derive(Debug, Clone)]

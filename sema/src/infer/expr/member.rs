@@ -49,6 +49,9 @@ impl TypeInference {
         if let ExprKind::Identifier(namespace) = &object.kind {
             if self.is_module_namespace(namespace) {
                 let (qualified, ty) = self.resolve_module_member(namespace, member, _span);
+                if let Some(found) = self.const_literal(&qualified, _span) {
+                    return found;
+                }
                 self.note_generic_value(&qualified, _span);
                 return (TypedExprKind::Identifier(qualified), ty);
             }
@@ -272,7 +275,12 @@ impl TypeInference {
         let resolved = self.air_type_name(name, span);
         let name = resolved.as_str();
         let struct_exists = self.type_table.has_struct(name);
-        if !struct_exists {
+        if !struct_exists && self.alias_names.contains(name) {
+            self.errors.push(TypeError::member_access(
+                format!("`{name}` is a type alias; a struct literal names the struct itself"),
+                span,
+            ));
+        } else if !struct_exists {
             self.errors.push(TypeError::member_access(
                 format!("unknown struct '{}'", name),
                 span,

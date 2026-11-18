@@ -132,6 +132,20 @@ impl TypeInference {
                     is_pub: *is_pub,
                 }
             }
+            StmtKind::Const { .. } | StmtKind::TypeAlias { .. } => {
+                let what = if matches!(stmt.kind, StmtKind::Const { .. }) {
+                    "a const"
+                } else {
+                    "a type alias"
+                };
+                self.errors.push(TypeError::coded(
+                    "E0101",
+                    format!("{what} is declared at module level"),
+                    "not at module level",
+                    stmt.span,
+                ));
+                TypedStmtKind::Block(Vec::new())
+            }
         };
 
         TypedStmt {

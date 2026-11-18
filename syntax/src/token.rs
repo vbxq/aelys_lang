@@ -59,6 +59,7 @@ pub enum TokenKind {
     Unsafe,
     Nogc,
     Extern,
+    Const,
 
     Plus,
     Minus,
@@ -141,6 +142,7 @@ impl TokenKind {
             Self::Unsafe => "unsafe",
             Self::Nogc => "nogc",
             Self::Extern => "extern",
+            Self::Const => "const",
             _ => return None,
         })
     }
@@ -229,6 +231,7 @@ impl std::fmt::Display for TokenKind {
             Self::Unsafe => write!(f, "unsafe"),
             Self::Nogc => write!(f, "nogc"),
             Self::Extern => write!(f, "extern"),
+            Self::Const => write!(f, "const"),
             Self::Plus => write!(f, "+"),
             Self::Minus => write!(f, "-"),
             Self::Star => write!(f, "*"),

@@ -1,6 +1,7 @@
 mod bounds;
 mod captures;
 mod constraints;
+mod decls;
 pub mod entry;
 mod enums;
 mod expr;
@@ -77,4 +78,7 @@ pub struct TypeInference {
     deferred_results: HashSet<crate::types::TypeVarId>,
     deferred_carriers: Vec<projection::CarrierCheck>,
     deferred_mutability: Vec<(InferType, TypeError)>,
+    consts: HashMap<String, crate::typed_ast::ConstLit>,
+    alias_names: HashSet<String>,
+    module_decls: crate::typed_ast::ModuleDecls,
 }

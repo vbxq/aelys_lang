@@ -24,6 +24,11 @@ pub enum CompileErrorKind {
     },
     ExpectedExpression,
     ExpectedIdentifier,
+    ParseRule {
+        code: u16,
+        message: String,
+        help: Option<String>,
+    },
     InvalidAssignmentTarget,
     RecursionDepthExceeded {
         max: usize,

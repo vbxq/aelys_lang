@@ -16,6 +16,12 @@ impl TypeInference {
             }
         }
         for (local, item) in &imports.values {
+            if let (ItemKind::Const, Some(crate::typed_ast::LiteralInit::Const(lit))) =
+                (item.kind, &item.literal)
+            {
+                self.consts.insert(local.clone(), lit.clone());
+                continue;
+            }
             self.define_imported_value(item);
             self.import_aliases
                 .insert(local.clone(), item.qualified.clone());
@@ -87,6 +93,11 @@ impl TypeInference {
                 self.record_imported_bound_sig(item);
                 if !item.type_params.is_empty() {
                     self.generic_fn_sigs.insert(item.qualified.clone());
+                }
+            }
+            ItemKind::Const => {
+                if let Some(crate::typed_ast::LiteralInit::Const(lit)) = &item.literal {
+                    self.consts.insert(item.qualified.clone(), lit.clone());
                 }
             }
             ItemKind::Global => {

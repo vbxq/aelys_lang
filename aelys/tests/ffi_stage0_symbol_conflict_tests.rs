@@ -807,6 +807,7 @@ fn a_body_less_declaration_is_visited_and_the_reserved_prefix_fires_on_it() {
         source: Source::new("<unit>", ""),
         type_table: TypeTable::new(),
         literal_globals: Default::default(),
+        decls: Default::default(),
     };
 
     let mut visited: Vec<String> = Vec::new();

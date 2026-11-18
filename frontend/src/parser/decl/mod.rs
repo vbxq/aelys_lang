@@ -3,6 +3,7 @@ use aelys_common::Result;
 use aelys_common::error::CompileErrorKind;
 use aelys_syntax::{Stmt, TokenKind};
 
+mod const_decl;
 mod decorators;
 mod enum_decl;
 mod function;
@@ -74,9 +75,17 @@ impl Parser {
             return self.let_declaration(is_pub);
         }
 
+        if self.check(&TokenKind::Const) {
+            return self.const_declaration(is_pub);
+        }
+
+        if self.starts_type_alias() {
+            return self.type_alias_declaration(is_pub);
+        }
+
         if is_pub {
             return Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: "fn, let, struct, or enum after pub".to_string(),
+                expected: "fn, let, const, type, struct, or enum after pub".to_string(),
                 found: self.peek().kind.to_string(),
             }));
         }

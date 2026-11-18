@@ -17,6 +17,7 @@ impl CompileErrorKind {
             Self::UnexpectedToken { .. } => 101,
             Self::ExpectedExpression => 102,
             Self::ExpectedIdentifier => 103,
+            Self::ParseRule { code, .. } => *code,
             Self::InvalidAssignmentTarget => 104,
             Self::RecursionDepthExceeded { .. } => 105,
             Self::UnknownTypeBound { .. } => 106,

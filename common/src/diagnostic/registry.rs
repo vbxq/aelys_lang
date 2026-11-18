@@ -355,6 +355,21 @@ or extremely deep type dependency that the inference engine can't
 untangle. Simplify the involved types or add explicit annotations.",
         severity: Severity::Error,
     },
+    DiagnosticInfo {
+        code: "E0370",
+        title: "a const initializer is not a constant expression",
+        explanation: "\
+A `const` is computed by the compiler. Its initializer may use literals,
+other consts, arithmetic, comparisons, `and`, `or`, `not` and `as` between
+scalars. A call, a variable, a cycle between consts, an overflow at the
+declared width or a division by zero is refused.
+
+    const N: i64 = 4 * 8           // ok
+    const M: i64 = f()             // E0370, not a constant expression
+    const A: i64 = A + 1           // E0370, refers to itself
+    const B: u8 = 200 + 100        // E0370, overflows `u8`",
+        severity: Severity::Error,
+    },
     // mutability (e04xx)
     DiagnosticInfo {
         code: "E0401",

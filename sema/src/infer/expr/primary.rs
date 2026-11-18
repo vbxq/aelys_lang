@@ -17,6 +17,9 @@ impl TypeInference {
         if self.env.lookup_local(name).is_none() {
             self.note_generic_value(name, span);
         }
+        if let Some(found) = self.const_literal(name, span) {
+            return found;
+        }
         if self.env.lookup(name).is_none() && self.env.lookup_function_ref(name).is_none() {
             if let Some((qualified, ty)) = self.resolve_import_alias(name) {
                 self.note_generic_value(&qualified, span);
