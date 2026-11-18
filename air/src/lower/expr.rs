@@ -36,11 +36,11 @@ impl<'a> LoweringContext<'a> {
         }
     }
 
-    fn air_field_type_of(&self, struct_name: &str, field: &str) -> Option<AirType> {
+    fn air_field_type_of(&self, r: &crate::StructRef, field: &str) -> Option<AirType> {
         self.defs()
-            .find_struct(struct_name)
-            .and_then(|d| d.fields.iter().find(|f| f.name == field))
-            .map(|f| f.ty.clone())
+            .struct_fields(r)
+            .and_then(|fields| fields.into_iter().find(|(f, _)| f == field))
+            .map(|(_, ty)| ty)
     }
 
     pub(super) fn lower_expr(&mut self, expr: &TypedExpr) -> Operand {
@@ -204,15 +204,16 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::StructLiteral { name, fields } => {
                 let mut lowered_fields: Vec<(String, Operand)> = Vec::with_capacity(fields.len());
                 let values: Vec<&TypedExpr> = fields.iter().map(|(_, e)| e.as_ref()).collect();
-                let air_name = if let AirType::Struct(n) = self.lower_type_from_infer(&expr.ty) {
-                    n
+                let struct_ref = if let AirType::Struct(r) = self.lower_type_from_infer(&expr.ty) {
+                    r
                 } else {
-                    name.clone()
+                    crate::StructRef::plain(name.clone())
                 };
+                let air_name = struct_ref.symbol();
                 for (i, (fname, fval)) in fields.iter().enumerate() {
                     let op = self.lower_expr(fval);
                     let op = self.hold_operand(op, fval, &values[i + 1..], false, sp);
-                    let op = match self.air_field_type_of(&air_name, fname) {
+                    let op = match self.air_field_type_of(&struct_ref, fname) {
                         Some(field_air_ty) => self.own_field_value(op, fval, &field_air_ty, sp),
                         None => {
                             self.report_ice(format!(
@@ -227,7 +228,7 @@ impl<'a> LoweringContext<'a> {
                 let literal = self.emit_rvalue_to_temp(
                     self.lower_type_from_infer(&expr.ty),
                     Rvalue::StructInit {
-                        name: name.clone(),
+                        struct_ref,
                         fields: lowered_fields,
                     },
                     sp,
@@ -1316,7 +1317,7 @@ impl<'a> LoweringContext<'a> {
         let object_is_rc_handle = matches!(obj.ty, InferType::Rc(_));
         let lift_field_ty: Option<AirType> = if object_is_rc_handle || self.store_root_owns(obj) {
             match &base.pointee {
-                AirType::Struct(name) => match self.air_field_type_of(name, field) {
+                AirType::Struct(r) => match self.air_field_type_of(r, field) {
                     Some(fty @ AirType::Rc(_)) => Some(fty),
                     Some(
                         AirType::I8
@@ -2027,12 +2028,14 @@ impl<'a> LoweringContext<'a> {
             )
         } else {
             let env_name = format!("__closure_env_{}", lambda_name);
-            let env_ptr_ty = AirType::Rc(Box::new(AirType::Struct(env_name.clone())));
+            let env_ptr_ty = AirType::Rc(Box::new(AirType::Struct(crate::StructRef::plain(
+                env_name.clone(),
+            ))));
             let env_ptr = self.alloc_temp(env_ptr_ty.clone());
             self.emit(
                 AirStmtKind::RcAlloc {
                     local: env_ptr,
-                    ty: AirType::Struct(env_name.clone()),
+                    ty: AirType::Struct(crate::StructRef::plain(env_name.clone())),
                 },
                 sp,
             );

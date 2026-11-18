@@ -21,7 +21,9 @@ impl<'a> FunctionCodegen<'a> {
                     CodegenError::LlvmError("call used as value returned void".to_string())
                 })
             }
-            Rvalue::StructInit { name, fields } => self.generate_struct_init(name, fields),
+            Rvalue::StructInit { struct_ref, fields } => {
+                self.generate_struct_init(&struct_ref.symbol(), fields)
+            }
             Rvalue::FieldAccess { base, field } => self.generate_field_access(base, field),
             Rvalue::AddressOf(place) => Ok(self.place_ptr(place)?.as_basic_value_enum()),
             Rvalue::Len(op) => {

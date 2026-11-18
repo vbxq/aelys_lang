@@ -65,7 +65,7 @@ fn closure_function_first_param_is_env_ptr() {
         &first.ty,
         AirType::Ptr(inner) if matches!(
             inner.as_ref(),
-            AirType::Struct(s) if s.starts_with("__closure_env")
+            AirType::Struct(s) if s.name.starts_with("__closure_env")
         )
     ));
 }

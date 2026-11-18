@@ -434,6 +434,14 @@ pub(crate) fn substitute_type_params(
                 .map(|a| substitute_type_params(a, type_params, type_args))
                 .collect(),
         }),
+        AirType::Struct(r) => AirType::Struct(StructRef {
+            name: r.name.clone(),
+            args: r
+                .args
+                .iter()
+                .map(|a| substitute_type_params(a, type_params, type_args))
+                .collect(),
+        }),
         AirType::I8
         | AirType::I16
         | AirType::I32
@@ -447,7 +455,6 @@ pub(crate) fn substitute_type_params(
         | AirType::Bool
         | AirType::Char
         | AirType::Str
-        | AirType::Struct(_)
         | AirType::Opaque
         | AirType::Void => ty.clone(),
     }

@@ -172,8 +172,17 @@ struct Scan<'a> {
 impl Scan<'_> {
     // a closure environment releases its vec captures through its own glue
     fn is_closure_env(&self, ty: &AirType) -> bool {
-        matches!(ty, AirType::Struct(name)
-            if self.structs.get(name.as_str()).is_some_and(|def| def.is_closure_env))
+        matches!(ty, AirType::Struct(r)
+            if self.structs.get(r.symbol().as_str()).is_some_and(|def| def.is_closure_env))
+    }
+
+    fn struct_fields(&self, r: &crate::StructRef) -> Result<(String, Vec<AirType>), Reject> {
+        let symbol = r.symbol();
+        crate::struct_fields_in(self.structs.values().copied(), r)
+            .map(|fields| (symbol.clone(), fields.into_iter().map(|(_, ty)| ty).collect()))
+            .ok_or_else(|| {
+                Reject::NoDefinition(format!("struct `{symbol}` has no definition in the program"))
+            })
     }
 }
 
@@ -239,20 +248,16 @@ impl Scan<'_> {
         match ty {
             AirType::Vec(_) => Ok(true),
             AirType::Array(inner, _) => self.holds_vec(inner, visited),
-            AirType::Struct(name) => {
-                let Some(def) = self.structs.get(name.as_str()) else {
-                    return Err(Reject::NoDefinition(format!(
-                        "struct `{name}` has no definition in the program"
-                    )));
-                };
+            AirType::Struct(r) => {
+                let (name, fields) = self.struct_fields(r)?;
                 if !visited.insert(name.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
-                for field in &def.fields {
-                    found |= self.holds_vec(&field.ty, visited)?;
+                for field_ty in &fields {
+                    found |= self.holds_vec(field_ty, visited)?;
                 }
-                visited.remove(name);
+                visited.remove(&name);
                 Ok(found)
             }
             AirType::Enum(r) => {
@@ -298,24 +303,21 @@ impl Scan<'_> {
     fn offend_slot(&self, ty: &AirType, visited: &mut HashSet<String>) -> Result<bool, Reject> {
         match ty {
             AirType::Vec(inner) | AirType::Array(inner, _) => self.holds_vec(inner, visited),
-            AirType::Struct(name) => {
-                let Some(def) = self.structs.get(name.as_str()) else {
-                    return Err(Reject::NoDefinition(format!(
-                        "struct `{name}` has no definition in the program"
-                    )));
-                };
+            AirType::Struct(r) => {
+                let closure_env = self.is_closure_env(ty);
+                let (name, fields) = self.struct_fields(r)?;
                 if !visited.insert(name.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
-                for field in &def.fields {
-                    found |= if def.is_closure_env {
-                        self.offend_slot(&field.ty, visited)?
+                for field_ty in &fields {
+                    found |= if closure_env {
+                        self.offend_slot(field_ty, visited)?
                     } else {
-                        self.holds_vec(&field.ty, visited)?
+                        self.holds_vec(field_ty, visited)?
                     };
                 }
-                visited.remove(name);
+                visited.remove(&name);
                 Ok(found)
             }
             AirType::Enum(r) => {
@@ -396,7 +398,7 @@ mod tests {
     #[test]
     fn unknown_struct_type_arg_rejects_not_passes() {
         let program = empty_program();
-        assert!(type_args_reject(&program, &AirType::Struct("Ghost".to_string())).is_some());
+        assert!(type_args_reject(&program, &AirType::Struct("Ghost".into())).is_some());
     }
 
     #[test]

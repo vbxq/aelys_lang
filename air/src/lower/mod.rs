@@ -542,7 +542,7 @@ impl<'a> LoweringContext<'a> {
         self.type_params_map.iter().any(|(n, _)| n == name)
             || self
                 .carriers()
-                .carries_string(&AirType::Struct(name.clone()))
+                .carries_string(&AirType::Struct(crate::StructRef::plain(name.clone())))
     }
 
     pub(super) fn lower_type_params(&mut self, type_params: &[String]) -> Vec<TypeParamId> {
@@ -616,7 +616,7 @@ impl<'a> LoweringContext<'a> {
                 if let Some((_, id)) = self.type_params_map.iter().find(|(n, _)| n == name) {
                     AirType::Param(*id)
                 } else {
-                    AirType::Struct(name.clone())
+                    AirType::Struct(crate::StructRef::plain(name.clone()))
                 }
             }
             InferType::Enum(name, type_args) => AirType::Enum(EnumRef {
@@ -716,7 +716,7 @@ impl<'a> LoweringContext<'a> {
 
     pub(super) fn emit_affine_drop(&mut self, local: LocalId, id_field: &str, sp: Option<Span>) {
         let base_ty = self.local_air_type(local).unwrap_or(AirType::Struct(
-            crate::bir::category::AFFINE_TEST_TYPE.to_string(),
+            crate::StructRef::plain(crate::bir::category::AFFINE_TEST_TYPE),
         ));
         let field_ty = self.air_struct_field_type(&base_ty, id_field);
         let id = self.emit_rvalue_to_temp(

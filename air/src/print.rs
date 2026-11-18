@@ -20,7 +20,7 @@ pub fn fmt_type(ty: &AirType) -> String {
         AirType::Void => "void".into(),
         AirType::Ptr(inner) => format!("*{}", fmt_type(inner)),
         AirType::Rc(inner) => format!("Rc<{}>", fmt_type(inner)),
-        AirType::Struct(name) => name.clone(),
+        AirType::Struct(r) => r.symbol(),
         AirType::Enum(r) => format!("enum {}", r.symbol()),
         AirType::Array(inner, len) => format!("[{}; {}]", fmt_type(inner), len),
         AirType::Slice(inner) => format!("[{}]", fmt_type(inner)),
@@ -87,13 +87,13 @@ pub fn fmt_const(c: &AirConst) -> String {
             let elems = elems.iter().map(fmt_const).collect::<Vec<_>>().join(", ");
             format!("[{}]", elems)
         }
-        AirConst::Struct { name, fields } => {
+        AirConst::Struct { struct_ref, fields } => {
             let fields = fields
                 .iter()
                 .map(|(f, c)| format!("{}: {}", f, fmt_const(c)))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!("{} {{ {} }}", name, fields)
+            format!("{} {{ {} }}", struct_ref.symbol(), fields)
         }
     }
 }
@@ -187,11 +187,12 @@ fn place_type(place: &Place, func: &AirFunction, program: &AirProgram) -> AirTyp
         Place::Field(id, name) => {
             let base = local_type(func, *id);
             let root = base.pointee().unwrap_or(base);
-            if let AirType::Struct(sname) = root {
+            if let AirType::Struct(r) = root {
+                let sname = r.symbol();
                 program
                     .structs
                     .iter()
-                    .find(|s| s.name == *sname)
+                    .find(|s| s.name == sname)
                     .and_then(|s| s.fields.iter().find(|f| f.name == *name))
                     .map(|f| f.ty.clone())
                     .unwrap_or(AirType::Void)
@@ -264,12 +265,12 @@ fn fmt_rvalue(rv: &Rvalue, func: &AirFunction, program: &AirProgram) -> String {
             fmt_callee(callee, program),
             fmt_args(args, func)
         ),
-        Rvalue::StructInit { name, fields } => {
+        Rvalue::StructInit { struct_ref, fields } => {
             let fs: Vec<_> = fields
                 .iter()
                 .map(|(n, op)| format!("{}: {}", n, fmt_operand(op, func)))
                 .collect();
-            format!("struct {} {{ {} }}", name, fs.join(", "))
+            format!("struct {} {{ {} }}", struct_ref.symbol(), fs.join(", "))
         }
         Rvalue::FieldAccess { base, field } => {
             format!("field {} . {}", fmt_operand(base, func), field)
@@ -441,10 +442,10 @@ fn fmt_terminator(term: &AirTerminator, func: &AirFunction, program: &AirProgram
 
 fn type_layout_for_print(ty: &AirType, program: &AirProgram) -> (u32, u32) {
     match ty {
-        AirType::Struct(name) => program
+        AirType::Struct(r) => program
             .structs
             .iter()
-            .find(|s| s.name == *name)
+            .find(|s| s.name == r.symbol())
             .map(|d| struct_size_align(d, program))
             .unwrap_or((0, 1)),
         AirType::I8

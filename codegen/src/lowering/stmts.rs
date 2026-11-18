@@ -197,7 +197,8 @@ impl<'a> FunctionCodegen<'a> {
             Place::Local(local) => self.lookup_local_ptr(*local),
             Place::Global(name) => self.lookup_global_ptr(name),
             Place::Field(local, field) => match self.local_air_type(*local)?.clone() {
-                AirType::Struct(name) => {
+                AirType::Struct(r) => {
+                    let name = r.symbol();
                     let struct_ty = self.context.get_struct_type(&name).ok_or_else(|| {
                         CodegenError::UnsupportedType(format!("unknown struct {}", name))
                     })?;
@@ -208,13 +209,14 @@ impl<'a> FunctionCodegen<'a> {
                         .map_err(|e| CodegenError::LlvmError(e.to_string()))
                 }
                 AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
-                    AirType::Struct(name) => {
-                        let struct_ty = self.context.get_struct_type(name).ok_or_else(|| {
+                    AirType::Struct(r) => {
+                        let name = r.symbol();
+                        let struct_ty = self.context.get_struct_type(&name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
                         })?;
                         let base_ptr = self.load_local(*local)?.into_pointer_value();
                         self.emit_null_check(base_ptr)?;
-                        let index = self.struct_field_index(name, field)?;
+                        let index = self.struct_field_index(&name, field)?;
                         self.builder
                             .build_struct_gep(struct_ty, base_ptr, index, "place_field")
                             .map_err(|e| CodegenError::LlvmError(e.to_string()))
@@ -449,9 +451,9 @@ impl<'a> FunctionCodegen<'a> {
             Place::Global(name) => Ok(self.lookup_program_global(name)?.ty.clone()),
             Place::Field(local, field) => {
                 let struct_name = match self.local_air_type(*local)? {
-                    AirType::Struct(name) => name.as_str(),
+                    AirType::Struct(r) => r.symbol(),
                     AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
-                        AirType::Struct(name) => name.as_str(),
+                        AirType::Struct(r) => r.symbol(),
                         AirType::I8
                         | AirType::I16
                         | AirType::I32
@@ -508,7 +510,7 @@ impl<'a> FunctionCodegen<'a> {
                         )));
                     }
                 };
-                Ok(self.struct_field_type(struct_name, field)?.clone())
+                Ok(self.struct_field_type(&struct_name, field)?.clone())
             }
             Place::Deref(local) => match self.local_air_type(*local)? {
                 AirType::Ptr(inner) | AirType::Rc(inner) => Ok((**inner).clone()),

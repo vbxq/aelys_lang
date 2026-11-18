@@ -49,10 +49,12 @@ pub fn air_type_to_llvm<'ctx>(
                 )))
             }
         }
-        AirType::Struct(name) => context
-            .get_struct_type(name)
-            .map(Into::into)
-            .ok_or_else(|| CodegenError::UnsupportedType(format!("unknown struct type: {}", name))),
+        AirType::Struct(r) => {
+            let name = r.symbol();
+            context.get_struct_type(&name).map(Into::into).ok_or_else(|| {
+                CodegenError::UnsupportedType(format!("unknown struct type: {}", name))
+            })
+        }
         AirType::Array(inner, len) => {
             let inner_ty = air_basic_type_to_llvm(inner, context)?;
             let len_u32 = u32::try_from(*len).map_err(|_| {

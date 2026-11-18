@@ -107,7 +107,9 @@ impl<'a> FunctionCodegen<'a> {
                 Ok(ty.clone())
             }
             Operand::Const(AirConst::Array(_)) => Ok(AirType::Opaque),
-            Operand::Const(AirConst::Struct { name, .. }) => Ok(AirType::Struct(name.clone())),
+            Operand::Const(AirConst::Struct { struct_ref, .. }) => {
+                Ok(AirType::Struct(struct_ref.clone()))
+            }
         }
     }
 }

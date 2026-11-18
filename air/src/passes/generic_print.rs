@@ -98,8 +98,7 @@ fn source_name(name: &str) -> &str {
 
 fn shown(ty: &AirType) -> String {
     match ty {
-        AirType::Struct(name) => source_name(name).to_string(),
-        AirType::Enum(r) => source_name(&r.name).to_string(),
+        AirType::Struct(r) | AirType::Enum(r) => source_name(&r.name).to_string(),
         AirType::Array(inner, n) => format!("[{}; {n}]", shown(inner)),
         AirType::Slice(inner) => format!("&[{}]", shown(inner)),
         AirType::Vec(inner) => format!("Vec<{}>", shown(inner)),

@@ -324,11 +324,12 @@ fn check_type_agreement(
         Operand::Const(AirConst::IntLiteral(_)) => None,
         Operand::Const(c) => Some(crate::mono::substitute::const_type(c)),
     };
-    let field_ty = |struct_name: &str, field: &str| {
+    let field_ty = |r: &crate::StructRef, field: &str| {
+        let symbol = r.symbol();
         program
             .structs
             .iter()
-            .find(|d| d.name == struct_name && d.type_params.is_empty())
+            .find(|d| d.name == symbol && d.type_params.is_empty())
             .and_then(|d| d.fields.iter().find(|f| f.name == field))
             .map(|f| f.ty.clone())
     };
@@ -339,9 +340,9 @@ fn check_type_agreement(
             _ => None,
         },
         Place::Field(id, field) => match local_ty(*id) {
-            Some(AirType::Struct(name)) => field_ty(&name, field),
+            Some(AirType::Struct(r)) => field_ty(&r, field),
             Some(AirType::Ptr(inner)) => match *inner {
-                AirType::Struct(name) => field_ty(&name, field),
+                AirType::Struct(r) => field_ty(&r, field),
                 _ => None,
             },
             _ => None,
@@ -534,9 +535,10 @@ fn ptr_payload_leaf(
 ) -> Option<String> {
     match ty {
         AirType::Ptr(_) | AirType::Slice(_) => Some(String::new()),
-        AirType::Struct(name) => {
-            let def = program.structs.iter().find(|d| &d.name == name)?;
-            if def.is_closure_env || !seen.insert(name.clone()) {
+        AirType::Struct(r) => {
+            let name = r.symbol();
+            let def = program.structs.iter().find(|d| d.name == name)?;
+            if def.is_closure_env || !seen.insert(name) {
                 return None;
             }
             def.fields.iter().find_map(|f| {
@@ -1155,12 +1157,7 @@ fn check_type_for_params(
 ) {
     match ty {
         AirType::Param(id) => note_type_param(format!("param_{}", id.0), owner, context, errors),
-        AirType::Struct(name) => {
-            if name.contains("param_") {
-                note_type_param(name.clone(), owner, context, errors);
-            }
-        }
-        AirType::Enum(r) => {
+        AirType::Struct(r) | AirType::Enum(r) => {
             let symbol = r.symbol();
             if symbol.contains("param_") {
                 note_type_param(symbol, owner, context, errors);
@@ -1213,10 +1210,8 @@ fn check_const_for_params(
                 check_const_for_params(item, owner, context, errors);
             }
         }
-        AirConst::Struct { name, fields } => {
-            if name.contains("param_") {
-                note_type_param(name.clone(), owner, context, errors);
-            }
+        AirConst::Struct { struct_ref, fields } => {
+            check_type_for_params(&AirType::Struct(struct_ref.clone()), owner, context, errors);
             for (_, item) in fields {
                 check_const_for_params(item, owner, context, errors);
             }
@@ -1360,10 +1355,8 @@ fn check_rvalue_for_params(
             check_type_for_params(&AirType::Enum(enum_ref.clone()), owner, context, errors);
             check_operand_for_params(operand, owner, context, errors);
         }
-        Rvalue::StructInit { name, fields } => {
-            if name.contains("param_") {
-                note_type_param(name.clone(), owner, context, errors);
-            }
+        Rvalue::StructInit { struct_ref, fields } => {
+            check_type_for_params(&AirType::Struct(struct_ref.clone()), owner, context, errors);
             for (_, op) in fields {
                 check_operand_for_params(op, owner, context, errors);
             }

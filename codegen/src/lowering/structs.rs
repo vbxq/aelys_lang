@@ -170,9 +170,9 @@ impl<'a> FunctionCodegen<'a> {
         }
 
         if let Operand::Copy(local) | Operand::Move(local) = base {
-            if let AirType::Struct(name) = self.local_air_type(*local)?.clone() {
+            if let AirType::Struct(r) = self.local_air_type(*local)?.clone() {
                 if !self.local_uses_alloca(*local) {
-                    let index = self.struct_field_index(&name, field)?;
+                    let index = self.struct_field_index(&r.symbol(), field)?;
                     let struct_value = self.load_local(*local)?.into_struct_value();
                     return Ok(self
                         .builder
@@ -226,18 +226,19 @@ impl<'a> FunctionCodegen<'a> {
     ) -> Result<(String, StructType<'static>, PointerValue<'static>), CodegenError> {
         match operand {
             Operand::Copy(local) | Operand::Move(local) => match self.local_air_type(*local)? {
-                AirType::Struct(name) => {
-                    let ty = self.context.get_struct_type(name).ok_or_else(|| {
+                AirType::Struct(r) => {
+                    let name = r.symbol();
+                    let ty = self.context.get_struct_type(&name).ok_or_else(|| {
                         CodegenError::UnsupportedType(format!("unknown struct {}", name))
                     })?;
-                    Ok((name.clone(), ty, self.lookup_local_ptr(*local)?))
+                    Ok((name, ty, self.lookup_local_ptr(*local)?))
                 }
                 AirType::Ptr(inner) | AirType::Rc(inner) => match inner.as_ref() {
-                    AirType::Struct(name) => {
-                        let ty = self.context.get_struct_type(name).ok_or_else(|| {
+                    AirType::Struct(r) => {
+                        let name = r.symbol();
+                        let ty = self.context.get_struct_type(&name).ok_or_else(|| {
                             CodegenError::UnsupportedType(format!("unknown struct {}", name))
                         })?;
-                        let name = name.clone();
                         let base = self.load_local(*local)?.into_pointer_value();
                         self.emit_null_check(base)?;
                         Ok((name, ty, base))

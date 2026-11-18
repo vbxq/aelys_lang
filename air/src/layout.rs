@@ -74,8 +74,11 @@ pub fn layout_of(ty: &AirType) -> TypeLayout {
             }
         }
         AirType::Enum(_) => TypeLayout { size: 4, align: 4 },
-        AirType::Struct(name) => {
-            panic!("layout_of: Struct({name}) requires program context; run compute_layouts first")
+        AirType::Struct(r) => {
+            panic!(
+                "layout_of: Struct({}) requires program context; run compute_layouts first",
+                r.symbol()
+            )
         }
     }
 }
@@ -192,7 +195,7 @@ where
 
 fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
     match ty {
-        AirType::Struct(name) => resolved.contains_key(name.as_str()),
+        AirType::Struct(r) => resolved.contains_key(r.symbol().as_str()),
         AirType::Enum(r) => resolved.contains_key(r.symbol().as_str()),
         AirType::Array(inner, _) => type_resolved(inner, resolved),
         AirType::I8
@@ -221,8 +224,11 @@ fn type_resolved(ty: &AirType, resolved: &HashMap<String, TypeLayout>) -> bool {
 
 pub fn resolved_layout(ty: &AirType, sizes: &HashMap<String, TypeLayout>) -> TypeLayout {
     match ty {
-        AirType::Struct(name) => *sizes.get(name.as_str()).unwrap_or_else(|| {
-            panic!("invariant: struct `{name}` referenced before its layout is computed")
+        AirType::Struct(r) => *sizes.get(r.symbol().as_str()).unwrap_or_else(|| {
+            panic!(
+                "invariant: struct `{}` referenced before its layout is computed",
+                r.symbol()
+            )
         }),
         AirType::Enum(r) => sizes
             .get(r.symbol().as_str())
@@ -318,7 +324,7 @@ fn detect_self_references(structs: &[AirStructDef]) -> Vec<LayoutError> {
 
 fn references_by_value(ty: &AirType, target: &str) -> bool {
     match ty {
-        AirType::Struct(name) => name == target,
+        AirType::Struct(r) => r.symbol() == target,
         AirType::Array(inner, _) => references_by_value(inner, target),
         AirType::I8
         | AirType::I16
@@ -347,8 +353,8 @@ fn references_by_value(ty: &AirType, target: &str) -> bool {
 
 fn field_struct_deps(ty: &AirType, deps: &mut HashSet<String>) {
     match ty {
-        AirType::Struct(name) => {
-            deps.insert(name.clone());
+        AirType::Struct(r) => {
+            deps.insert(r.symbol());
         }
         AirType::Array(inner, _) => field_struct_deps(inner, deps),
         AirType::I8

@@ -41,15 +41,16 @@ pub fn compute_offset_for_path(
     for step in &path.steps {
         match step {
             RcPathStep::Field(field_name) => {
-                let AirType::Struct(struct_name) = &cur else {
+                let AirType::Struct(struct_ref) = &cur else {
                     return Err(RcOffsetError(format!(
                         "Field step `{field_name}` on non-struct type {cur:?}"
                     )));
                 };
+                let struct_name = struct_ref.symbol();
                 let def = program
                     .structs
                     .iter()
-                    .find(|s| &s.name == struct_name)
+                    .find(|s| s.name == struct_name)
                     .ok_or_else(|| {
                         RcOffsetError(format!("unknown struct `{struct_name}` along Rc path"))
                     })?;

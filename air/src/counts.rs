@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::{
     AirBlock, AirConst, AirEnumDef, AirFunction, AirIntSize, AirLocal, AirParam, AirProgram,
     AirStmt, AirStmtKind, AirStructDef, AirTerminator, AirType, BinOp, BlockId, Callee,
-    CallingConv, EnumRef, FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId, Operand, Place,
+    CallingConv, EnumRef, StructRef, FunctionAttribs, FunctionId, GcMode, InlineHint, LocalId, Operand, Place,
     Rvalue,
 };
 
@@ -56,12 +56,14 @@ impl Carriers<'_> {
             AirType::Str | AirType::Param(_) => true,
             AirType::FnPtr { .. } => is_closure(ty),
             AirType::Array(inner, _) => self.carries(inner, seen),
-            AirType::Struct(name) => {
-                if !seen.insert(name.clone()) {
+            AirType::Struct(r) => {
+                if !seen.insert(r.symbol()) {
                     return false;
                 }
-                self.find(name)
-                    .is_some_and(|def| def.fields.iter().any(|f| self.carries(&f.ty, seen)))
+                match self.struct_fields(r) {
+                    Some(fields) => fields.iter().any(|(_, ty)| self.carries(ty, seen)),
+                    None => r.args.iter().any(|a| self.carries(a, seen)),
+                }
             }
             AirType::Enum(r) => {
                 let symbol = r.symbol();
@@ -147,16 +149,24 @@ impl Carriers<'_> {
             .find(|def| def.name == name)
     }
 
+    pub fn struct_def(&self, r: &StructRef) -> Option<&AirStructDef> {
+        self.find(&r.symbol())
+    }
+
+    pub fn struct_fields(&self, r: &StructRef) -> Option<Vec<(String, AirType)>> {
+        crate::struct_fields_in(self.structs.iter().chain(self.imported.iter()), r)
+    }
+
     fn leaves(&self, ty: &AirType) -> Vec<Leaf> {
         let mut out = Vec::new();
         match ty {
-            AirType::Struct(name) => {
-                let Some(def) = self.find(name) else {
+            AirType::Struct(r) => {
+                let Some(fields) = self.struct_fields(r) else {
                     return out;
                 };
-                for field in &def.fields {
-                    if self.counted(&field.ty) {
-                        out.push(Leaf::Field(field.name.clone(), field.ty.clone()));
+                for (field, field_ty) in fields {
+                    if self.counted(&field_ty) {
+                        out.push(Leaf::Field(field, field_ty));
                     }
                 }
             }
@@ -671,14 +681,14 @@ impl<'a> GlueSet<'a> {
         for step in &path.steps {
             let (next_ty, rvalue) = match step {
                 crate::rc_paths::RcPathStep::Field(field) => {
-                    let owner = if let AirType::Struct(name) = &cur_ty {
-                        self.structs.iter().find(|def| &def.name == name)
+                    let owner = if let AirType::Struct(r) = &cur_ty {
+                        self.carriers().struct_fields(r)
                     } else {
                         None
                     };
                     let field_ty = owner
-                        .and_then(|def| def.fields.iter().find(|f| &f.name == field))
-                        .map_or(AirType::Rc(Box::new(AirType::Void)), |f| f.ty.clone());
+                        .and_then(|fields| fields.into_iter().find(|(f, _)| f == field))
+                        .map_or(AirType::Rc(Box::new(AirType::Void)), |(_, ty)| ty);
                     (
                         field_ty,
                         Rvalue::FieldAccess {
@@ -792,25 +802,16 @@ impl<'a> GlueSet<'a> {
     }
 
     fn release_vec_fields(&mut self, body: &mut GlueBody, ty: &AirType, addr: LocalId) -> u64 {
-        let AirType::Struct(name) = ty else {
+        let AirType::Struct(r) = ty else {
             return 0;
         };
-        let fields: Vec<(String, AirType)> = self
-            .carriers()
-            .find(name)
-            .map(|def| {
-                def.fields
-                    .iter()
-                    .map(|f| (f.name.clone(), f.ty.clone()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let fields: Vec<(String, AirType)> = self.carriers().struct_fields(r).unwrap_or_default();
         let mut calls = 0;
         for (field, field_ty) in fields {
             if !struct_holds_vec(
                 &field_ty,
                 &self.carriers(),
-                &mut HashSet::from([name.clone()]),
+                &mut HashSet::from([r.symbol()]),
             ) {
                 continue;
             }
@@ -898,16 +899,16 @@ impl<'a> GlueSet<'a> {
 }
 
 fn struct_holds_vec(ty: &AirType, carriers: &Carriers<'_>, seen: &mut HashSet<String>) -> bool {
-    let AirType::Struct(name) = ty else {
+    let AirType::Struct(r) = ty else {
         return matches!(ty, AirType::Vec(_));
     };
-    if !seen.insert(name.clone()) {
+    if !seen.insert(r.symbol()) {
         return false;
     }
-    carriers.find(name).is_some_and(|def| {
-        def.fields
+    carriers.struct_fields(r).is_some_and(|fields| {
+        fields
             .iter()
-            .any(|f| struct_holds_vec(&f.ty, carriers, seen))
+            .any(|(_, ty)| struct_holds_vec(ty, carriers, seen))
     })
 }
 

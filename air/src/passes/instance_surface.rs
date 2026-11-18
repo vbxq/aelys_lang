@@ -285,9 +285,8 @@ pub fn user_type(ty: &AirType) -> String {
         AirType::Str => "string".into(),
         AirType::Ptr(inner) => format!("&{}", user_type(inner)),
         AirType::Rc(inner) => format!("Rc<{}>", user_type(inner)),
-        AirType::Struct(name) => name.clone(),
-        AirType::Enum(r) if r.args.is_empty() => r.name.clone(),
-        AirType::Enum(r) => format!(
+        AirType::Struct(r) | AirType::Enum(r) if r.args.is_empty() => r.name.clone(),
+        AirType::Struct(r) | AirType::Enum(r) => format!(
             "{}<{}>",
             r.name,
             r.args.iter().map(user_type).collect::<Vec<_>>().join(", ")
@@ -411,13 +410,20 @@ impl Scan<'_> {
 
     fn payloads(&self, ty: &AirType) -> Vec<AirType> {
         match ty {
-            AirType::Struct(name) => self
-                .program
-                .structs
-                .iter()
-                .find(|d| &d.name == name && !d.is_closure_env)
-                .map(|d| d.fields.iter().map(|f| f.ty.clone()).collect())
-                .unwrap_or_default(),
+            AirType::Struct(r) => {
+                let symbol = r.symbol();
+                if self
+                    .program
+                    .structs
+                    .iter()
+                    .any(|d| d.name == symbol && d.is_closure_env)
+                {
+                    return Vec::new();
+                }
+                crate::struct_fields_in(self.program.structs.iter(), r)
+                    .map(|fields| fields.into_iter().map(|(_, ty)| ty).collect())
+                    .unwrap_or_default()
+            }
             AirType::Enum(r) => {
                 let symbol = r.symbol();
                 let mut out: Vec<AirType> = r.args.clone();
@@ -453,8 +459,7 @@ impl Scan<'_> {
 
     fn key(ty: &AirType) -> Option<String> {
         match ty {
-            AirType::Struct(name) => Some(name.clone()),
-            AirType::Enum(r) => Some(r.symbol()),
+            AirType::Struct(r) | AirType::Enum(r) => Some(r.symbol()),
             AirType::I8
             | AirType::I16
             | AirType::I32

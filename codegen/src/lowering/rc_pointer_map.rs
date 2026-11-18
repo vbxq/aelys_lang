@@ -74,13 +74,14 @@ impl CodegenContext {
         for step in &path.steps {
             match step {
                 RcPathStep::Field(field_name) => {
-                    let AirType::Struct(struct_name) = &cur else {
+                    let AirType::Struct(struct_ref) = &cur else {
                         return Err(map_error(data_ty, format!("field step on {cur:?}")));
                     };
+                    let struct_name = struct_ref.symbol();
                     let def = program
                         .structs
                         .iter()
-                        .find(|s| &s.name == struct_name)
+                        .find(|s| s.name == struct_name)
                         .ok_or_else(|| map_error(data_ty, format!("no struct {struct_name}")))?;
                     let index = def
                         .fields
@@ -89,7 +90,7 @@ impl CodegenContext {
                         .ok_or_else(|| map_error(data_ty, format!("no field {field_name}")))?;
                     let st = self
                         .context
-                        .get_struct_type(struct_name)
+                        .get_struct_type(&struct_name)
                         .ok_or_else(|| map_error(data_ty, format!("no llvm type {struct_name}")))?;
                     acc += td
                         .offset_of_element(&st, index as u32)

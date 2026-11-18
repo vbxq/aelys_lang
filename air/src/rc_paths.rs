@@ -54,6 +54,10 @@ impl<'a> Defs<'a> {
             .find(|s| s.name == name)
     }
 
+    pub fn struct_fields(&self, r: &crate::StructRef) -> Option<Vec<(String, AirType)>> {
+        crate::struct_fields_in(self.structs.iter().chain(self.imported_structs.iter()), r)
+    }
+
     pub fn find_enum(&self, name: &str) -> Option<&'a AirEnumDef> {
         self.enums
             .iter()
@@ -104,13 +108,14 @@ fn scan(
             });
             Ok(())
         }
-        AirType::Struct(name) => {
-            let Some(def) = defs.find_struct(name) else {
+        AirType::Struct(r) => {
+            let name = r.symbol();
+            let Some(fields) = defs.struct_fields(r) else {
                 return Err(ScanReject::Undecidable(format!(
                     "`{name}` (unresolved/generic struct instantiation; its Rc-ness is undecidable at AIR level)"
                 )));
             };
-            if def.fields.iter().any(|f| field_is_erased_generic(&f.ty)) {
+            if fields.iter().any(|(_, ty)| field_is_erased_generic(ty)) {
                 return Err(ScanReject::Undecidable(format!(
                     "`{name}` is a generic struct instantiated with erased type arguments; \
                      a generic carrier of `Rc<T>` is undecidable at AIR level"
@@ -119,13 +124,13 @@ fn scan(
             if !visited.insert(name.clone()) {
                 return Ok(());
             }
-            for f in &def.fields {
-                prefix.push(RcPathStep::Field(f.name.clone()));
-                let r = scan(&f.ty, defs, prefix, out, visited);
+            for (field, field_ty) in &fields {
+                prefix.push(RcPathStep::Field(field.clone()));
+                let r = scan(field_ty, defs, prefix, out, visited);
                 prefix.pop();
                 r?;
             }
-            visited.remove(name);
+            visited.remove(&name);
             Ok(())
         }
         AirType::Enum(r) => {

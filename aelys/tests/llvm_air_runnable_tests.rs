@@ -162,7 +162,7 @@ fn index_through_a_pointer_to_an_array_writes_the_owner() {
 
 #[test]
 fn field_through_a_stack_derived_pointer_writes_the_owner() {
-    let cell = AirType::Struct("Cell".to_string());
+    let cell = AirType::Struct("Cell".into());
     let mut program = program_with(
         vec![
             local(0, cell.clone(), Some("c"), true),
@@ -173,7 +173,7 @@ fn field_through_a_stack_derived_pointer_writes_the_owner() {
             assign(
                 Place::Local(LocalId(0)),
                 Rvalue::StructInit {
-                    name: "Cell".to_string(),
+                    struct_ref: "Cell".into(),
                     fields: vec![
                         (
                             "f".to_string(),
@@ -240,8 +240,8 @@ fn field_through_a_stack_derived_pointer_writes_the_owner() {
 /// `place`. every intermediate is a `ptr(t)` local, and the answer must still reach the owner.
 #[test]
 fn a_chained_address_of_a_field_writes_the_owner() {
-    let inner = AirType::Struct("In".to_string());
-    let outer = AirType::Struct("Out".to_string());
+    let inner = AirType::Struct("In".into());
+    let outer = AirType::Struct("Out".into());
     let mut program = program_with(
         vec![
             local(0, outer.clone(), Some("o"), true),

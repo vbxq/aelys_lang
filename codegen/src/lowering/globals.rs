@@ -212,10 +212,13 @@ impl CodegenContext {
             AirConst::Array(elems) => {
                 self.array_initializer(&global.name, &global.ty, elems, program)
             }
-            AirConst::Struct {
-                name: struct_name,
+            AirConst::Struct { struct_ref, fields } => self.struct_initializer(
+                &global.name,
+                &global.ty,
+                &struct_ref.symbol(),
                 fields,
-            } => self.struct_initializer(&global.name, &global.ty, struct_name, fields, program),
+                program,
+            ),
             other => Err(CodegenError::UnsupportedInstruction(format!(
                 "global '{}' has unsupported initializer kind {}",
                 global.name,

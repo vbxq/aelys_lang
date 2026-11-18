@@ -106,12 +106,13 @@ impl<'a> FunctionCodegen<'a> {
                     Ok((4, 4))
                 }
             }
-            AirType::Struct(name) => {
+            AirType::Struct(r) => {
+                let name = r.symbol();
                 let def = self
                     .program
                     .structs
                     .iter()
-                    .find(|s| s.name == *name)
+                    .find(|s| s.name == name)
                     .ok_or_else(|| {
                         CodegenError::UnsupportedType(format!("unknown struct {}", name))
                     })?;

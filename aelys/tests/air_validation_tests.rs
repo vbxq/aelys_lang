@@ -252,11 +252,11 @@ fn make() -> Point {
 
     let init = f.blocks.iter().flat_map(|b| b.stmts.iter()).find_map(|s| {
         if let AirStmtKind::Assign {
-            rvalue: Rvalue::StructInit { name, fields },
+            rvalue: Rvalue::StructInit { struct_ref, fields },
             ..
         } = &s.kind
         {
-            Some((name.clone(), fields.len()))
+            Some((struct_ref.symbol(), fields.len()))
         } else {
             None
         }

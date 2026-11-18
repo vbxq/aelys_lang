@@ -17,7 +17,7 @@ pub(crate) fn type_to_string(ty: &AirType) -> String {
         AirType::Str => "str".to_string(),
         AirType::Ptr(inner) => format!("ptr_{}", type_to_string(inner)),
         AirType::Rc(inner) => format!("rc_{}", type_to_string(inner)),
-        AirType::Struct(name) => name.clone(),
+        AirType::Struct(r) => r.symbol(),
         AirType::Enum(r) => format!("enum_{}", r.symbol()),
         AirType::Array(inner, size) => format!("array_{}_{}", type_to_string(inner), size),
         AirType::Slice(inner) => format!("slice_{}", type_to_string(inner)),
@@ -84,7 +84,7 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
             }
             substitute_type(ret, type_params, type_args);
         }
-        AirType::Enum(r) => {
+        AirType::Enum(r) | AirType::Struct(r) => {
             for arg in &mut r.args {
                 substitute_type(arg, type_params, type_args);
             }
@@ -102,7 +102,6 @@ fn substitute_type(ty: &mut AirType, type_params: &[TypeParamId], type_args: &[A
         | AirType::Bool
         | AirType::Char
         | AirType::Str
-        | AirType::Struct(_)
         | AirType::Opaque
         | AirType::Void => {}
     }
@@ -194,6 +193,6 @@ pub(crate) fn const_type(c: &AirConst) -> AirType {
         AirConst::Enum { enum_ref, .. } => AirType::Enum(enum_ref.clone()),
         AirConst::ZeroInit(ty) | AirConst::Undef(ty) => ty.clone(),
         AirConst::Array(_) => AirType::Opaque, // type not recoverable without element info
-        AirConst::Struct { name, .. } => AirType::Struct(name.clone()),
+        AirConst::Struct { struct_ref, .. } => AirType::Struct(struct_ref.clone()),
     }
 }

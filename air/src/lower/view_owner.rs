@@ -773,15 +773,10 @@ impl super::LoweringContext<'_> {
                 out.push(prefix.clone());
                 true
             }
-            crate::AirType::Struct(name) => {
-                let Some(def) = self.defs().find_struct(name) else {
+            crate::AirType::Struct(r) => {
+                let Some(fields) = self.defs().struct_fields(r) else {
                     return !self.counted_air(ty);
                 };
-                let fields: Vec<(String, crate::AirType)> = def
-                    .fields
-                    .iter()
-                    .map(|f| (f.name.clone(), f.ty.clone()))
-                    .collect();
                 for (fname, fty) in fields {
                     prefix.push((LeafStep::Field(fname), fty.clone()));
                     let ok = self.view_str_leaves(&fty, prefix, out);

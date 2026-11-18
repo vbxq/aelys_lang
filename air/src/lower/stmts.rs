@@ -751,16 +751,11 @@ impl<'a> LoweringContext<'a> {
     }
 
     pub(super) fn air_struct_field_type(&self, ty: &AirType, field: &str) -> AirType {
-        if let AirType::Struct(name) = ty {
-            let mine = self.structs.iter();
-            if let Some(def) = mine
-                .chain(self.imported.structs.iter())
-                .find(|s| &s.name == name)
-            {
-                if let Some(f) = def.fields.iter().find(|f| f.name == field) {
-                    return f.ty.clone();
-                }
-            }
+        if let AirType::Struct(r) = ty
+            && let Some(fields) = self.defs().struct_fields(r)
+            && let Some((_, field_ty)) = fields.into_iter().find(|(f, _)| f == field)
+        {
+            return field_ty;
         }
         AirType::Rc(Box::new(AirType::Void))
     }

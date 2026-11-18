@@ -39,21 +39,24 @@ pub struct Span {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnumRef {
+pub struct NominalRef {
     pub name: String,
     pub args: Vec<AirType>,
 }
 
-impl EnumRef {
+pub type EnumRef = NominalRef;
+pub type StructRef = NominalRef;
+
+impl NominalRef {
     pub fn plain(name: impl Into<String>) -> Self {
-        EnumRef {
+        NominalRef {
             name: name.into(),
             args: Vec::new(),
         }
     }
 
     pub fn new(name: impl Into<String>, args: Vec<AirType>) -> Self {
-        EnumRef {
+        NominalRef {
             name: name.into(),
             args,
         }
@@ -63,6 +66,51 @@ impl EnumRef {
     pub fn symbol(&self) -> String {
         derive_enum_symbol(&self.name, &self.args)
     }
+}
+
+impl From<&str> for NominalRef {
+    fn from(name: &str) -> Self {
+        NominalRef::plain(name)
+    }
+}
+
+impl From<String> for NominalRef {
+    fn from(name: String) -> Self {
+        NominalRef::plain(name)
+    }
+}
+
+pub fn struct_fields_in<'a>(
+    defs: impl Iterator<Item = &'a AirStructDef> + Clone,
+    r: &StructRef,
+) -> Option<Vec<(String, AirType)>> {
+    let symbol = r.symbol();
+    if let Some(def) = defs.clone().find(|d| d.name == symbol) {
+        return Some(
+            def.fields
+                .iter()
+                .map(|f| (f.name.clone(), f.ty.clone()))
+                .collect(),
+        );
+    }
+    if r.args.is_empty() {
+        return None;
+    }
+    let def = defs.clone().find(|d| d.name == r.name)?;
+    if def.type_params.len() != r.args.len() {
+        return None;
+    }
+    Some(
+        def.fields
+            .iter()
+            .map(|f| {
+                (
+                    f.name.clone(),
+                    mono::substitute_type_params(&f.ty, &def.type_params, &r.args),
+                )
+            })
+            .collect(),
+    )
 }
 
 // three pinned strings and the byte golden read a plain enum under its bare name, so arity 0 must not decorate
@@ -102,7 +150,7 @@ pub enum AirType {
     Str,
     Ptr(Box<AirType>),
     Rc(Box<AirType>),
-    Struct(String),
+    Struct(StructRef),
     Enum(EnumRef),
     Array(Box<AirType>, u64),
     Slice(Box<AirType>),
@@ -378,7 +426,7 @@ pub enum Rvalue {
         args: Vec<Operand>,
     },
     StructInit {
-        name: String,
+        struct_ref: StructRef,
         fields: Vec<(String, Operand)>,
     },
     FieldAccess {
@@ -458,7 +506,7 @@ pub enum AirConst {
     Undef(AirType),
     Array(Vec<AirConst>),
     Struct {
-        name: String,
+        struct_ref: StructRef,
         fields: Vec<(String, AirConst)>,
     },
 }

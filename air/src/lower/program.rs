@@ -318,7 +318,9 @@ impl<'a> LoweringContext<'a> {
         });
 
         let env_param_id = self.alloc_local_id();
-        let env_ty = AirType::Ptr(Box::new(AirType::Struct(env_name.clone())));
+        let env_ty = AirType::Ptr(Box::new(AirType::Struct(crate::StructRef::plain(
+            env_name.clone(),
+        ))));
         self.current_params.push(AirParam {
             id: env_param_id,
             ty: env_ty.clone(),
@@ -629,7 +631,7 @@ impl<'a> LoweringContext<'a> {
                     field_consts.push((fname.clone(), self.try_global_const_expr(fexpr)?));
                 }
                 Ok(AirConst::Struct {
-                    name,
+                    struct_ref: self.const_struct_ref(&expr.ty, &name),
                     fields: field_consts,
                 })
             }
@@ -694,6 +696,13 @@ impl<'a> LoweringContext<'a> {
                 }
                 other => return Some(other),
             }
+        }
+    }
+
+    fn const_struct_ref(&self, ty: &aelys_sema::InferType, name: &str) -> crate::StructRef {
+        match self.lower_type_from_infer(ty) {
+            AirType::Struct(r) => r,
+            _ => crate::StructRef::plain(name),
         }
     }
 
@@ -787,7 +796,7 @@ impl<'a> LoweringContext<'a> {
                     .map(|(fname, fexpr)| self.try_const_expr(fexpr).map(|c| (fname.clone(), c)))
                     .collect();
                 field_consts.map(|fields| AirConst::Struct {
-                    name: name.clone(),
+                    struct_ref: self.const_struct_ref(&expr.ty, name),
                     fields,
                 })
             }

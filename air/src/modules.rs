@@ -235,10 +235,8 @@ fn qualify_rvalue(rvalue: &mut Rvalue, q: &Qualifier) {
                 qualify_operand(arg, q);
             }
         }
-        Rvalue::StructInit { name, fields } => {
-            if let Some(renamed) = q.type_ref(name) {
-                *name = renamed;
-            }
+        Rvalue::StructInit { struct_ref, fields } => {
+            qualify_nominal_ref(struct_ref, q);
             for (_, op) in fields {
                 qualify_operand(op, q);
             }
@@ -257,7 +255,7 @@ fn qualify_rvalue(rvalue: &mut Rvalue, q: &Qualifier) {
         Rvalue::EnumInit {
             enum_ref, payload, ..
         } => {
-            qualify_enum_ref(enum_ref, q);
+            qualify_nominal_ref(enum_ref, q);
             for op in payload {
                 qualify_operand(op, q);
             }
@@ -266,7 +264,7 @@ fn qualify_rvalue(rvalue: &mut Rvalue, q: &Qualifier) {
         | Rvalue::EnumPayload {
             enum_ref, operand, ..
         } => {
-            qualify_enum_ref(enum_ref, q);
+            qualify_nominal_ref(enum_ref, q);
             qualify_operand(operand, q);
         }
         Rvalue::ClosureCreate { fn_name, env } => {
@@ -318,15 +316,13 @@ fn qualify_const(value: &mut AirConst, q: &Qualifier) {
         AirConst::Enum {
             enum_ref, payload, ..
         } => {
-            qualify_enum_ref(enum_ref, q);
+            qualify_nominal_ref(enum_ref, q);
             for item in payload {
                 qualify_const(item, q);
             }
         }
-        AirConst::Struct { name, fields } => {
-            if let Some(renamed) = q.type_ref(name) {
-                *name = renamed;
-            }
+        AirConst::Struct { struct_ref, fields } => {
+            qualify_nominal_ref(struct_ref, q);
             for (_, item) in fields {
                 qualify_const(item, q);
             }
@@ -341,7 +337,7 @@ fn qualify_const(value: &mut AirConst, q: &Qualifier) {
     }
 }
 
-fn qualify_enum_ref(r: &mut EnumRef, q: &Qualifier) {
+fn qualify_nominal_ref(r: &mut EnumRef, q: &Qualifier) {
     if let Some(renamed) = q.type_ref(&r.name) {
         r.name = renamed;
     }
@@ -352,12 +348,7 @@ fn qualify_enum_ref(r: &mut EnumRef, q: &Qualifier) {
 
 fn qualify_type(ty: &mut AirType, q: &Qualifier) {
     match ty {
-        AirType::Struct(name) => {
-            if let Some(renamed) = q.type_ref(name) {
-                *name = renamed;
-            }
-        }
-        AirType::Enum(r) => qualify_enum_ref(r, q),
+        AirType::Struct(r) | AirType::Enum(r) => qualify_nominal_ref(r, q),
         AirType::Ptr(inner)
         | AirType::Rc(inner)
         | AirType::Array(inner, _)
