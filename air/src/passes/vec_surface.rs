@@ -311,13 +311,22 @@ impl Scan<'_> {
         match ty {
             AirType::Vec(inner) | AirType::Array(inner, _) => self.holds_vec(inner, visited),
             AirType::Struct(r) => {
+                let generic = !r.args.is_empty()
+                    || self
+                        .structs
+                        .get(r.name.as_str())
+                        .is_some_and(|def| !def.type_params.is_empty());
                 let (name, fields) = self.struct_fields(r)?;
                 if !visited.insert(name.clone()) {
                     return Ok(false);
                 }
                 let mut found = false;
                 for field_ty in &fields {
-                    found |= self.offend_slot(field_ty, visited)?;
+                    found |= if generic {
+                        self.holds_vec(field_ty, visited)?
+                    } else {
+                        self.offend_slot(field_ty, visited)?
+                    };
                 }
                 visited.remove(&name);
                 Ok(found)

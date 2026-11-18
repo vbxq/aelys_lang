@@ -2102,8 +2102,8 @@ fn rc2_64_an_rc_through_a_single_variant_enum_in_a_multi_variant_enum_is_refused
          \x20   println(\"{go(L::A(One::It(r)))}\")\n    return 0\n}\n",
         &[],
         "E0410",
-        "variant `L::A` has a payload of type `One`, which holds an `Rc`: an enum with more than \
-         one variant cannot carry an Rc yet",
+        "variant `L::A` has a payload of type `One`, which holds an `Rc` inside it: an enum with \
+         more than one variant carries an Rc only as a direct `Rc<T>` payload yet",
     );
 }
 
@@ -2567,34 +2567,28 @@ fn rc2_85_a_string_and_rc_argument_takes_one_share_when_a_sibling_reassigns_the_
     h.assert_legs(24);
 }
 
-const MULTI_VARIANT_RC: &str = "an enum with more than one variant cannot carry an Rc yet";
+const MULTI_VARIANT_RC: &str =
+    "an enum with more than one variant carries an Rc only as a direct `Rc<T>` payload yet";
 
 #[test]
-fn rc2_86_a_linked_list_enum_carrying_an_rc_is_refused_at_its_declaration() {
-    refusal_row_full(
-        "rc2-86",
+fn rc2_86_a_linked_list_enum_carrying_an_rc_runs() {
+    let src: &str =
         "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
          fn sum(l: Link) -> i64 {\n    match l {\n\
          \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
          \x20       Link::Nil => { return 0 }\n    }\n}\nfn main() -> i64 {\n\
          \x20   let c = Rc::new(Node { val: 3, next: Link::Nil })\n\
          \x20   let b = Rc::new(Node { val: 2, next: Link::Cons(c) })\n\
-         \x20   println(\"sum={sum(Link::Cons(b))}\")\n    return 0\n}\n",
-        &[],
-        "E0410",
-        &[
-            "variant `Link::Cons` has a payload of type `Rc<Node>`, which holds an `Rc`",
-            MULTI_VARIANT_RC,
-            "enum Link { Nil, Cons(Rc<Node>) }",
-        ],
-        &["is given a value of type"],
-    );
+         \x20   println(\"sum={sum(Link::Cons(b))}\")\n    return 0\n}\n";
+    let h = Harness::new();
+    h.differential_row("rc2-86", src, &[], "sum=5\n", (4, 4));
+    h.lsan_row("rc2-86", src, &[], "sum=5\n");
+    h.assert_legs(24);
 }
 
 #[test]
-fn rc2_87_a_linked_list_built_through_a_generic_identity_is_refused_at_its_declaration() {
-    refusal_row_full(
-        "rc2-87",
+fn rc2_87_a_linked_list_built_through_a_generic_identity_runs() {
+    let src: &str =
         "struct Node { val: i64, next: Link }\nenum Link { Nil, Cons(Rc<Node>) }\n\
          fn id<T>(x: T) -> T { return x }\nfn sum(l: Link) -> i64 {\n    match l {\n\
          \x20       Link::Cons(n) => { return Rc::get(n).val + sum(Rc::get(n).next) }\n\
@@ -2603,35 +2597,26 @@ fn rc2_87_a_linked_list_built_through_a_generic_identity_is_refused_at_its_decla
          \x20   let b = id(Rc::new(Node { val: 2, next: Link::Cons(c) }))\n\
          \x20   return sum(Link::Cons(b))\n}\nfn main() -> i64 {\n    let mut t: i64 = 0\n\
          \x20   let mut i: i64 = 0\n    while i < 1000 { t = t + once()\n        i = i + 1 }\n\
-         \x20   println(\"{t}\")\n    return 0\n}\n",
-        &[],
-        "E0410",
-        &[
-            "variant `Link::Cons` has a payload of type `Rc<Node>`",
-            MULTI_VARIANT_RC,
-        ],
-        &[],
-    );
+         \x20   println(\"{t}\")\n    return 0\n}\n";
+    let h = Harness::new();
+    h.differential_row("rc2-87", src, &[], "5000\n", (2000, 2000));
+    h.lsan_row("rc2-87", src, &[], "5000\n");
+    h.assert_legs(24);
 }
 
 #[test]
-fn rc2_88_an_rc_handed_to_a_multi_variant_enum_through_a_generic_binding_is_refused() {
-    refusal_row_full(
-        "rc2-88",
+fn rc2_88_an_rc_handed_to_a_multi_variant_enum_through_a_generic_binding_runs() {
+    let src: &str =
         "struct N { v: i64 }\nenum L { Num(i64), R(Rc<N>) }\nfn id<T>(x: T) -> T { return x }\n\
          fn val(l: L) -> i64 { match l { L::Num(x) => { return x } L::R(n) => { return Rc::get(n).v } } }\n\
          fn main() -> i64 {\n    let mut t: i64 = 0\n    let mut i: i64 = 0\n\
          \x20   while i < 1000 { let r = Rc::new(N { v: 1 })\n        let r2 = id(r)\n\
          \x20       t = t + val(L::R(r2))\n        i = i + 1 }\n    println(\"{t}\")\n\
-         \x20   return 0\n}\n",
-        &[],
-        "E0410",
-        &[
-            "variant `L::R` has a payload of type `Rc<N>`",
-            MULTI_VARIANT_RC,
-        ],
-        &[],
-    );
+         \x20   return 0\n}\n";
+    let h = Harness::new();
+    h.differential_row("rc2-88", src, &[], "1000\n", (1000, 1000));
+    h.lsan_row("rc2-88", src, &[], "1000\n");
+    h.assert_legs(24);
 }
 
 #[test]
@@ -2668,19 +2653,13 @@ fn rc2_90_a_multi_variant_enum_carrying_an_imported_rc_carrier_is_refused() {
 }
 
 #[test]
-fn rc2_91_a_generic_multi_variant_enum_with_a_concrete_rc_payload_is_refused() {
-    refusal_row_full(
-        "rc2-91",
+fn rc2_91_a_generic_multi_variant_enum_with_a_concrete_rc_payload_runs() {
+    let src: &str =
         "struct N { v: i64 }\nenum L<T> { Nil, V(T), R(Rc<N>) }\n\
-         fn main() -> i64 { println(\"ok\"); return 0 }\n",
-        &[],
-        "E0410",
-        &[
-            "variant `L::R` has a payload of type `Rc<N>`",
-            MULTI_VARIANT_RC,
-        ],
-        &[],
-    );
+         fn main() -> i64 { println(\"ok\"); return 0 }\n";
+    let h = Harness::new();
+    h.differential_row("rc2-91", src, &[], "ok\n", (0, 0));
+    h.assert_legs(18);
 }
 
 #[test]
@@ -3467,7 +3446,7 @@ const GENERIC_ENUM_RC: &str = "payload 0 of enum variant `May::Yes` stores a val
                                `Rc<N>` carrying an `Rc<T>` straight into a generic enum";
 
 #[test]
-fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_is_refused() {
+fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_runs() {
     let src = format!(
         "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
          \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
@@ -3475,18 +3454,14 @@ fn rc2_139_an_rc_field_of_a_generic_result_put_in_a_generic_enum_is_refused() {
          \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
          \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
     );
-    refusal_row_full(
-        "rc2-139",
-        &src,
-        &[],
-        "E0410",
-        &[GENERIC_ENUM_RC],
-        &["E0901"],
-    );
+    let h = Harness::new();
+    h.differential_row("rc2-139", &src, &[], "1000\n", (5000, 5000));
+    h.lsan_row("rc2-139", &src, &[], "1000\n");
+    h.assert_legs(24);
 }
 
 #[test]
-fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_is_refused() {
+fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_runs() {
     let src = format!(
         "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
          \x20   while i < 1000 {{\n        let r = Rc::new(N {{ s: victim(i) }})\n        let q = id(r)\n\
@@ -3494,18 +3469,14 @@ fn rc2_140_an_rc_returned_by_a_generic_put_in_a_generic_enum_is_refused() {
          \x20       match m {{ May::Yes(x) => {{ t = t + 1 }} May::No => {{ t = t + 0 }} }}\n\
          \x20       i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
     );
-    refusal_row_full(
-        "rc2-140",
-        &src,
-        &[],
-        "E0410",
-        &[GENERIC_ENUM_RC],
-        &["E0901"],
-    );
+    let h = Harness::new();
+    h.differential_row("rc2-140", &src, &[], "1000\n", (5000, 5000));
+    h.lsan_row("rc2-140", &src, &[], "1000\n");
+    h.assert_legs(24);
 }
 
 #[test]
-fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_is_refused() {
+fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_runs() {
     let src = format!(
         "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
          \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
@@ -3514,14 +3485,10 @@ fn rc2_141_an_rc_field_of_a_generic_result_read_back_from_a_generic_enum_is_refu
          May::No => {{ t = t + 0 }} }}\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n\
          \x20   return 0\n}}\n"
     );
-    refusal_row_full(
-        "rc2-141",
-        &src,
-        &[],
-        "E0410",
-        &[GENERIC_ENUM_RC],
-        &["E0901"],
-    );
+    let h = Harness::new();
+    h.differential_row("rc2-141", &src, &[], "4890\n", (5000, 5000));
+    h.lsan_row("rc2-141", &src, &[], "4890\n");
+    h.assert_legs(24);
 }
 
 #[test]
@@ -3543,21 +3510,17 @@ fn rc2_142_an_array_of_rc_fields_of_a_generic_result_is_refused() {
 }
 
 #[test]
-fn rc2_143_an_rc_field_of_a_generic_result_pushed_into_a_vec_is_refused() {
+fn rc2_143_an_rc_field_of_a_generic_result_pushed_into_a_vec_runs() {
     let src = format!(
         "{RC2_LATE_CARRIER}fn main() -> i64 {{\n    let mut i: i64 = 0\n    let mut t: i64 = 0\n\
          \x20   while i < 1000 {{\n        let h = id(H {{ r: Rc::new(N {{ s: victim(i) }}), k: 1 }})\n\
          \x20       let mut v = Vec::new()\n        Vec::push(v, h.r)\n        let junk = victim(3)\n\
          \x20       t = t + v.len\n        i = i + 1\n    }}\n    println(\"{{t}}\")\n    return 0\n}}\n"
     );
-    refusal_row_full(
-        "rc2-143",
-        &src,
-        &[],
-        "E0410",
-        &["element pushed to a Vec has type `Rc<N>` which embeds an `Rc<T>`"],
-        &["E0901"],
-    );
+    let h = Harness::new();
+    h.differential_row("rc2-143", &src, &[], "1000\n", (6000, 6000));
+    h.lsan_row("rc2-143", &src, &[], "1000\n");
+    h.assert_legs(24);
 }
 
 const RC2_144: &str = r#"

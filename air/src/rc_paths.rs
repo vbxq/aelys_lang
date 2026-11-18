@@ -156,6 +156,12 @@ fn scan(
                         scan(pty, defs, &mut Vec::new(), &mut probe, visited)?;
                         if !probe.is_empty() || holds_guarded_rc(pty, defs, &mut HashSet::new()) {
                             visited.remove(&name);
+                            if defs.find_enum(&name).is_none() {
+                                return Err(ScanReject::Undecidable(format!(
+                                    "`{name}` instantiates a multi-variant enum with an \
+                                     `Rc<T>` nested inside a payload"
+                                )));
+                            }
                             return Err(ScanReject::MultiVariant(format!(
                                 "`{name}` is a multi-variant enum that carries an `Rc<T>` nested \
                                  inside a variant payload; a multi-variant enum carries an `Rc` \

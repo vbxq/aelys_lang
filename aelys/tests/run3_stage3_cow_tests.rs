@@ -1036,9 +1036,9 @@ fn s3_20c_a_generic_instantiated_at_a_vec_is_the_other_half() {
 #[test]
 fn s3_21_the_rc_bearing_and_struct_nested_families_never_reach_it_either() {
     let h = Harness::new();
-    h.fenced_row("S3-21-rc", S3_21_RC, "E0410");
+    h.value_row("S3-21-rc", S3_21_RC, "", 2, 2);
     h.value_row("S3-21-struct", S3_21_STRUCT, "", 1, 1);
-    h.assert_legs(12);
+    h.assert_legs(16);
 }
 
 // unreachable a slot typed `vec<t>` owns exactly one counted share, so refcount 0 means the

@@ -600,8 +600,8 @@ fn main() -> i64 { return 0 }
 }
 
 #[test]
-fn n7_generic_enum_holding_rc_in_let_is_rejected() {
-    let err = rc_reject(
+fn n7_generic_enum_holding_rc_in_let_is_counted_by_tag() {
+    let ir = rc_ir(
         r#"
 enum Opt<T> { Some(T), None }
 fn main() -> i64 {
@@ -612,26 +612,29 @@ fn main() -> i64 {
 "#,
     );
     assert!(
-        err.contains("[rc]"),
-        "N7(enum let) must carry the marker: {err}"
+        ir.contains("@__aelys_rc_release_slot"),
+        "N7(enum let): the payload is released through the tag-switched glue:\n{ir}"
     );
 }
 
 #[test]
-fn n7_generic_enum_holding_rc_in_return_is_rejected() {
-    let err = rc_reject(
+fn n7_generic_enum_holding_rc_in_return_is_counted_by_tag() {
+    let ir = rc_ir(
         r#"
 enum Opt<T> { Some(T), None }
 fn make() -> Opt<Rc<i64>> {
     let a: Rc<i64> = Rc::new(7)
     return Opt::Some(a)
 }
-fn main() -> i64 { return 0 }
+fn main() -> i64 {
+    let o = make()
+    return 0
+}
 "#,
     );
     assert!(
-        err.contains("[rc]"),
-        "N7(enum return) must carry the marker: {err}"
+        ir.contains("@__aelys_rc_release_slot"),
+        "N7(enum return): the returned payload is released through the tag-switched glue:\n{ir}"
     );
 }
 

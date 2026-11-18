@@ -610,41 +610,50 @@ fn main() -> i64 {
 }
 
 #[test]
-fn f1_rej_multivariant_rc_enum_is_rejected() {
-    let err = rc_reject(
+fn f1_multivariant_rc_enum_frees_its_payload_once() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 enum E { A(Rc<i64>), B(i64) }
 fn main() -> i64 {
     let e: E = E::B(99)
-    return 0
+    let f: E = E::A(Rc::new(5))
+    let mut out: i64 = 0
+    match f {
+        E::A(r) => { out = Rc::get(r) }
+        E::B(x) => { out = x }
+    }
+    return out
 }
 "#,
-    );
-    assert!(
-        err.contains("[E0410]: variant `E::A` has a payload of type `Rc<i64>`")
-            && err.contains("an enum with more than one variant cannot carry an Rc yet")
-            && err.contains("enum E { A(Rc<i64>), B(i64) }"),
-        "F1-rej: a multi-variant Rc-bearing enum must be rejected at its declaration; got:\n{err}"
-    );
+    ) else {
+        return;
+    };
+    assert_eq!(code, 5, "stderr:\n{stderr}");
+    assert!(stderr.contains("[rc] allocs=1 frees=1"), "stderr:\n{stderr}");
 }
 
 #[test]
-fn f1_rej_multivariant_rc_enum_transitive_in_struct_is_rejected() {
-    let err = rc_reject(
+fn f1_multivariant_rc_enum_in_a_struct_frees_its_payload_once() {
+    let Some((code, stderr)) = run_with_stats(
         r#"
 enum E { A(Rc<i64>), B(i64) }
 struct S { e: E }
 fn main() -> i64 {
-    let s: S = S { e: E::B(99) }
-    return 0
+    let s: S = S { e: E::A(Rc::new(6)) }
+    let t = s
+    let mut out: i64 = 0
+    match t.e {
+        E::A(r) => { out = Rc::get(r) }
+        E::B(x) => { out = x }
+    }
+    return out
 }
 "#,
-    );
-    assert!(
-        err.contains("[E0410]: variant `E::A` has a payload of type `Rc<i64>`")
-            && err.contains("an enum with more than one variant cannot carry an Rc yet"),
-        "F1-rej(transitive): a struct carrier of a multi-variant Rc enum must be rejected; got:\n{err}"
-    );
+    ) else {
+        return;
+    };
+    assert_eq!(code, 6, "stderr:\n{stderr}");
+    assert!(stderr.contains("[rc] allocs=1 frees=1"), "stderr:\n{stderr}");
 }
 
 #[test]

@@ -66,13 +66,13 @@ fn vec_call_kept(kind: &AirStmtKind) -> Option<Vec<Operand>> {
     else {
         return None;
     };
-    if !name.starts_with("__aelys_vec_") {
-        return None;
+    match name.as_str() {
+        "__aelys_vec_push" | "__aelys_vec_insert" => Some(args.get(1).cloned().into_iter().collect()),
+        "__aelys_vec_pop" | "__aelys_vec_remove" | "__aelys_vec_clear" | "__aelys_vec_init"
+        | "__aelys_vec_init_cap" | "__aelys_vec_detach" | "__aelys_vec_retain"
+        | "__aelys_vec_release" => Some(Vec::new()),
+        _ => None,
     }
-    Some(match name.as_str() {
-        "__aelys_vec_push" | "__aelys_vec_insert" => args.get(1).cloned().into_iter().collect(),
-        _ => Vec::new(),
-    })
 }
 
 fn assigned_local(kind: &AirStmtKind) -> Option<LocalId> {
