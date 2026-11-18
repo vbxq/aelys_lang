@@ -85,10 +85,16 @@ impl TypeInference {
         self.member_of_typed(typed_object, member, _span)
     }
 
-    pub(super) fn deref_struct_ref(typed_object: TypedExpr) -> TypedExpr {
+    pub(super) fn deref_member_ref(typed_object: TypedExpr) -> TypedExpr {
         match &typed_object.ty {
             InferType::Ref { referent, .. }
-                if matches!(referent.as_ref(), InferType::Struct(..)) =>
+                if matches!(
+                    referent.as_ref(),
+                    InferType::Struct(..)
+                        | InferType::Vec(_)
+                        | InferType::Array(..)
+                        | InferType::String
+                ) =>
             {
                 let ty = (**referent).clone();
                 let span = typed_object.span;
@@ -119,7 +125,7 @@ impl TypeInference {
                 ty,
             );
         }
-        let typed_object = Self::deref_struct_ref(typed_object);
+        let typed_object = Self::deref_member_ref(typed_object);
         let ty = if Self::projection_waits(&typed_object.ty) {
             let kind = crate::infer::projection::ProjKind::Field(member.to_string());
             self.defer_read(&typed_object.ty, kind, span)
@@ -244,7 +250,7 @@ impl TypeInference {
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
         let object_through_ref = matches!(&typed_object.ty, InferType::Ref { .. });
-        let typed_object = Self::deref_struct_ref(typed_object);
+        let typed_object = Self::deref_member_ref(typed_object);
         let mut typed_value = self.infer_expr(value);
 
         let object_through_rc_handle = matches!(&typed_object.ty, InferType::Rc(_));

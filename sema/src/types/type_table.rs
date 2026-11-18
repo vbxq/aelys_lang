@@ -20,6 +20,7 @@ pub struct EnumVariant {
     pub name: String,
     pub tag: u32,
     pub data: Vec<InferType>, // empty = unit variant, non-empty = tuple variant
+    pub discr: i64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,6 +87,12 @@ impl TypeTable {
 
     pub fn register_enum(&mut self, def: EnumDef) {
         self.enums.insert(def.name.clone(), def);
+    }
+
+    pub fn fieldless_enum(&self, name: &str) -> Option<&EnumDef> {
+        self.enums
+            .get(name)
+            .filter(|d| d.type_params.is_empty() && d.variants.iter().all(|v| v.data.is_empty()))
     }
 
     pub fn get_enum(&self, name: &str) -> Option<&EnumDef> {

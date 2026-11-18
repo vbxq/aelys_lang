@@ -40,13 +40,42 @@ impl TypeInference {
         }
     }
 
+    pub(crate) fn peel_refs(mut ty: &InferType) -> &InferType {
+        while let InferType::Ref { referent, .. } = ty {
+            ty = referent;
+        }
+        ty
+    }
+
+    fn infer_index_operand(&mut self, index: &Expr, reason: ConstraintReason) -> TypedExpr {
+        let typed = self.infer_expr(index);
+        if !typed.ty.is_integer() || typed.ty == InferType::I64 {
+            self.constraints.push(Constraint::equal(
+                typed.ty.clone(),
+                InferType::I64,
+                index.span,
+                reason,
+            ));
+            return typed;
+        }
+        let span = typed.span;
+        TypedExpr {
+            kind: TypedExprKind::Cast {
+                expr: Box::new(typed),
+                target: InferType::I64,
+            },
+            ty: InferType::I64,
+            span,
+        }
+    }
+
     // decided here and not on the air, so the optimizer cannot fold a local into the answer
     pub(crate) fn reject_const_index_out_of_bounds(
         &mut self,
         object: &TypedExpr,
         index: &TypedExpr,
     ) {
-        let InferType::Array(_, Some(len)) = &object.ty else {
+        let InferType::Array(_, Some(len)) = Self::peel_refs(&object.ty) else {
             return;
         };
         let Some(at) = Self::closed_const_int(index) else {
@@ -266,18 +295,11 @@ impl TypeInference {
         _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
-        let typed_index = self.infer_expr(index);
-
-        self.constraints.push(Constraint::equal(
-            typed_index.ty.clone(),
-            InferType::I64,
-            index.span,
-            ConstraintReason::ArrayIndex,
-        ));
+        let typed_index = self.infer_index_operand(index, ConstraintReason::ArrayIndex);
 
         self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
 
-        let elem_ty = match &typed_object.ty {
+        let elem_ty = match Self::peel_refs(&typed_object.ty) {
             InferType::Array(inner, _) => (**inner).clone(),
             InferType::Vec(inner) => (**inner).clone(),
             InferType::Slice { elem, .. } => (**elem).clone(),
@@ -341,11 +363,14 @@ impl TypeInference {
         _span: Span,
     ) -> (TypedExprKind, InferType) {
         let typed_object = self.infer_expr(object);
-        let typed_index = self.infer_expr(index);
+        let typed_index = self.infer_index_operand(index, ConstraintReason::ArrayIndex);
         let mut typed_value = self.infer_expr(value);
 
         // a slice write is governed by the slice referent, not the binding mutability
-        if !matches!(typed_object.ty, InferType::Slice { .. }) {
+        if !matches!(
+            typed_object.ty,
+            InferType::Slice { .. } | InferType::Ref { .. }
+        ) {
             if let ExprKind::Identifier(ref name) = object.kind {
                 if !self.env.is_mutable(name) {
                     let binding_span = self.env.lookup_binding_span(name);
@@ -369,19 +394,12 @@ impl TypeInference {
             }
         }
 
-        self.constraints.push(Constraint::equal(
-            typed_index.ty.clone(),
-            InferType::I64,
-            index.span,
-            ConstraintReason::ArrayIndex,
-        ));
-
         self.reject_const_index_out_of_bounds(&typed_object, &typed_index);
 
         // r1-r3 already refuse the construction forms; this is the fail-closed backstop
         self.reject_vec_into_element(&typed_object.ty, &typed_value);
 
-        match &typed_object.ty {
+        match Self::peel_refs(&typed_object.ty) {
             InferType::Array(elem_ty, _)
             | InferType::Vec(elem_ty)
             | InferType::Slice { elem: elem_ty, .. } => {
@@ -486,24 +504,12 @@ impl TypeInference {
                 end,
                 inclusive,
             } => {
-                let typed_start = start.as_ref().map(|e| Box::new(self.infer_expr(e)));
-                let typed_end = end.as_ref().map(|e| Box::new(self.infer_expr(e)));
-                if let Some(ref s) = typed_start {
-                    self.constraints.push(Constraint::equal(
-                        s.ty.clone(),
-                        InferType::I64,
-                        s.span,
-                        ConstraintReason::RangeBound,
-                    ));
-                }
-                if let Some(ref e) = typed_end {
-                    self.constraints.push(Constraint::equal(
-                        e.ty.clone(),
-                        InferType::I64,
-                        e.span,
-                        ConstraintReason::RangeBound,
-                    ));
-                }
+                let typed_start = start
+                    .as_ref()
+                    .map(|e| Box::new(self.infer_index_operand(e, ConstraintReason::RangeBound)));
+                let typed_end = end
+                    .as_ref()
+                    .map(|e| Box::new(self.infer_index_operand(e, ConstraintReason::RangeBound)));
                 TypedExpr {
                     kind: TypedExprKind::Range {
                         start: typed_start,

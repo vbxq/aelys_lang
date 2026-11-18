@@ -460,6 +460,7 @@ impl TypeInference {
                 type_params,
                 variants,
                 is_pub,
+                ..
             } => {
                 let enum_def = self.type_table.get_enum(name).cloned();
                 TypedStmtKind::EnumDecl {

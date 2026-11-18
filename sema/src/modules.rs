@@ -510,6 +510,11 @@ pub fn collect_exports(path: &str, program: &TypedProgram) -> ModuleExports {
                         .map(|(variant, tag, data)| EnumVariant {
                             name: variant.clone(),
                             tag: *tag,
+                            discr: program
+                                .type_table
+                                .get_enum(name)
+                                .and_then(|d| d.variants.iter().find(|v| v.name == *variant))
+                                .map_or(*tag as i64, |v| v.discr),
                             data: data
                                 .iter()
                                 .map(|ty| qualify_infer_type(ty, path, &owned))

@@ -6,7 +6,7 @@ use crate::constraint::{ConstraintReason, TypeError, TypeErrorKind};
 use crate::modules::{AliasDef, ModuleExports, qualify_alias_body};
 use crate::typed_ast::{ConstLit, ConstScalar};
 use crate::types::InferType;
-use aelys_syntax::{Span, Stmt, StmtKind, TypeAnnotation};
+use aelys_syntax::{Expr, Span, Stmt, StmtKind, TypeAnnotation};
 use consts::{ConstEval, ConstSource};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -425,6 +425,17 @@ impl TypeInference {
             substitute(&mut body, &params, &stand_in);
             self.check_type_annotation(&body);
         }
+    }
+
+    pub(super) fn eval_discriminant(
+        &self,
+        owner: &str,
+        e: &Expr,
+        want: &InferType,
+    ) -> Option<i128> {
+        let sources = HashMap::new();
+        ConstEval::new(&sources, &self.consts, &self.module_imports.namespaces)
+            .eval_int(owner, e, want)
     }
 
     pub(crate) fn failed_const(&self, name: &str) -> bool {

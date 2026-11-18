@@ -324,7 +324,10 @@ impl TypeInference {
             }
             InferType::Struct(name, targs) | InferType::Enum(name, targs) => {
                 let is_struct = matches!(base, InferType::Struct(..));
-                if is_struct && self.type_table.field_type(name, targs, member).is_some() {
+                if is_struct
+                    && self.type_table.field_type(name, targs, member).is_some()
+                    && !self.has_method(&base, member)
+                {
                     return Err(typed_object);
                 }
                 if is_struct && !self.type_table.has_struct(name) {

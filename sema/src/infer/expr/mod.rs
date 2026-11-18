@@ -2,6 +2,7 @@ mod array;
 mod assign;
 mod binary;
 mod call;
+mod const_int;
 mod fmt_spec;
 mod if_expr;
 mod lambda;
@@ -576,40 +577,6 @@ impl TypeInference {
         )
     }
 
-    fn try_extract_int_value(expr: &TypedExpr) -> Option<i64> {
-        match &expr.kind {
-            TypedExprKind::Int(v) => Some(*v),
-            TypedExprKind::Unary {
-                op: aelys_syntax::UnaryOp::Neg,
-                operand,
-            } => {
-                if let TypedExprKind::Int(v) = &operand.kind {
-                    v.checked_neg()
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    fn const_int_value(expr: &TypedExpr) -> Option<i64> {
-        match &expr.kind {
-            TypedExprKind::Int(v) => Some(*v),
-            TypedExprKind::Grouping(inner) => Self::const_int_value(inner),
-            TypedExprKind::Unary {
-                op: aelys_syntax::UnaryOp::Neg,
-                operand,
-            } => Self::const_int_value(operand)?.checked_neg(),
-            TypedExprKind::Binary { left, op, right } => Self::compute_binop_int_result(
-                *op,
-                Self::const_int_value(left)?,
-                Self::const_int_value(right)?,
-            ),
-            _ => None,
-        }
-    }
-
     fn retype_literal(expr: &mut TypedExpr, target_ty: &InferType) {
         expr.ty = target_ty.clone();
         match &mut expr.kind {
@@ -623,15 +590,6 @@ impl TypeInference {
         }
     }
 
-    fn compute_binop_int_result(op: BinaryOp, left: i64, right: i64) -> Option<i64> {
-        match op {
-            BinaryOp::Add => left.checked_add(right),
-            BinaryOp::Sub => left.checked_sub(right),
-            BinaryOp::Mul => left.checked_mul(right),
-            _ => None, // div, mod, comparisons, shifts: not validated at narrowing time
-        }
-    }
-
     pub(super) fn try_narrow_literal(
         &mut self,
         expr: &mut TypedExpr,
@@ -642,31 +600,15 @@ impl TypeInference {
         }
 
         let lit_like = self.is_literal_like(expr);
-        if lit_like
-            && target_ty.is_integer()
-            && *target_ty != InferType::I64
-            && !matches!(expr.kind, TypedExprKind::Int(_))
-            && let Some(value) = Self::const_int_value(expr)
-        {
-            if InferType::int_fits(value, target_ty) {
-                Self::retype_literal(expr, target_ty);
-                return true;
+        if lit_like && target_ty.is_integer() && !matches!(expr.kind, TypedExprKind::Int(_)) {
+            match self.fold_int_in(expr, target_ty) {
+                Ok(_) => {
+                    Self::retype_literal(expr, target_ty);
+                    return true;
+                }
+                Err(const_int::Fold::Reported) => return false,
+                Err(const_int::Fold::NotConst) => {}
             }
-            self.errors.push(TypeError {
-                kind: TypeErrorKind::Mismatch {
-                    expected: target_ty.clone(),
-                    found: InferType::I64,
-                },
-                span: expr.span,
-                reason: ConstraintReason::IntLiteralOverflow {
-                    value,
-                    target: target_ty.clone(),
-                },
-                secondary_spans: Vec::new(),
-                help: None,
-                suggestion: None,
-            });
-            return false;
         }
         // extract values needed for matching before taking mutable borrows.
         let int_val = if let TypedExprKind::Int(v) = &expr.kind {
@@ -877,36 +819,11 @@ impl TypeInference {
                 return ok;
             }
             if expr.ty == InferType::I64 && target_ty.is_integer() && *target_ty != InferType::I64 {
-                let binop = *op;
                 let left_ok = self.try_narrow_literal(left, target_ty);
                 let right_ok = self.try_narrow_literal(right, target_ty);
                 let left_narrowed = left.ty == *target_ty;
                 let right_narrowed = right.ty == *target_ty;
                 if left_ok && right_ok && left_narrowed && right_narrowed {
-                    if let (Some(lv), Some(rv)) = (
-                        Self::try_extract_int_value(left),
-                        Self::try_extract_int_value(right),
-                    ) {
-                        if let Some(result) = Self::compute_binop_int_result(binop, lv, rv) {
-                            if !InferType::int_fits(result, target_ty) {
-                                self.errors.push(TypeError {
-                                    kind: TypeErrorKind::Mismatch {
-                                        expected: target_ty.clone(),
-                                        found: InferType::I64,
-                                    },
-                                    span: expr.span,
-                                    reason: ConstraintReason::IntLiteralOverflow {
-                                        value: result,
-                                        target: target_ty.clone(),
-                                    },
-                                    secondary_spans: Vec::new(),
-                                    help: None,
-                                    suggestion: None,
-                                });
-                                return false;
-                            }
-                        }
-                    }
                     expr.ty = target_ty.clone();
                     return true;
                 }

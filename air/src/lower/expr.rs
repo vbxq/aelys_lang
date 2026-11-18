@@ -570,6 +570,12 @@ impl<'a> LoweringContext<'a> {
             TypedExprKind::Cast {
                 expr: inner,
                 target,
+            } if matches!(inner.ty, InferType::Enum(..)) => {
+                self.lower_enum_discr(inner, target, sp)
+            }
+            TypedExprKind::Cast {
+                expr: inner,
+                target,
             } => {
                 let operand = self.lower_expr(inner);
                 let from = self.lower_type_from_infer(&inner.ty);
@@ -2725,6 +2731,76 @@ impl<'a> LoweringContext<'a> {
         if self.str_operand_is_fresh(operand) {
             self.pose_owned_temp(&Operand::Copy(*id));
         }
+    }
+
+    fn lower_enum_discr(
+        &mut self,
+        inner: &TypedExpr,
+        target: &InferType,
+        sp: Option<Span>,
+    ) -> Operand {
+        let operand = self.lower_expr(inner);
+        if self.position_is_dead() {
+            return Operand::Const(AirConst::Null);
+        }
+        let to = self.lower_type_from_infer(target);
+        let (AirType::Enum(enum_ref), InferType::Enum(name, _)) =
+            (self.lower_type_from_infer(&inner.ty), &inner.ty)
+        else {
+            self.report_ice(format!("enum cast of a non-enum operand: {:?}", inner.ty));
+            return Operand::Const(AirConst::Null);
+        };
+        let discrs: Vec<i64> = self
+            .program
+            .type_table
+            .get_enum(name)
+            .map(|d| d.variants.iter().map(|v| v.discr).collect())
+            .unwrap_or_default();
+        let tag = self.emit_rvalue_to_temp(AirType::I32, Rvalue::EnumTag { enum_ref, operand }, sp);
+        let (value, from) = if discrs.iter().enumerate().all(|(i, d)| *d == i as i64) {
+            (tag, AirType::I32)
+        } else {
+            let result = self.alloc_temp_mut(AirType::I64);
+            let merge = self.alloc_block_id();
+            let arms: Vec<BlockId> = discrs.iter().map(|_| self.alloc_block_id()).collect();
+            let default = self.alloc_block_id();
+            self.seal_block(AirTerminator::Switch {
+                discr: tag,
+                targets: arms
+                    .iter()
+                    .enumerate()
+                    .map(|(i, b)| (AirConst::Int(i as i64, AirIntSize::I32), *b))
+                    .collect(),
+                default,
+            });
+            for (block, d) in arms.into_iter().zip(discrs) {
+                self.fixup_block_id_noop(block);
+                self.emit(
+                    AirStmtKind::Assign {
+                        place: Place::Local(result),
+                        rvalue: Rvalue::Use(Operand::Const(AirConst::Int(d, AirIntSize::I64))),
+                    },
+                    sp,
+                );
+                self.seal_block(AirTerminator::Goto(merge));
+            }
+            self.fixup_block_id_noop(default);
+            self.seal_block(AirTerminator::Unreachable);
+            self.fixup_block_id_noop(merge);
+            (Operand::Copy(result), AirType::I64)
+        };
+        if from == to {
+            return value;
+        }
+        self.emit_rvalue_to_temp(
+            to.clone(),
+            Rvalue::Cast {
+                operand: value,
+                from,
+                to,
+            },
+            sp,
+        )
     }
 
     fn lower_match_expr(

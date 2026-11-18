@@ -783,7 +783,7 @@ impl TypeInference {
                 ) {
                     self.errors
                         .push(TypeError::generic_index(&object.ty, expr.span));
-                } else if !Self::is_indexable_type(&object.ty) {
+                } else if !Self::is_indexable_type(Self::peel_refs(&object.ty)) {
                     self.errors.push(TypeError::member_access(
                         format!("index operation on non-indexable type {}", object.ty),
                         expr.span,
@@ -799,6 +799,12 @@ impl TypeInference {
                 self.validate_expr(index, generic_scope, declared_type_params);
                 self.validate_expr(value, generic_scope, declared_type_params);
                 self.check_write_target(object, "an indexed assignment", expr.span);
+                if matches!(object.ty, InferType::Ref { mutable: false, .. }) {
+                    self.errors.push(TypeError::shared_mut(
+                        "an indexed assignment through a shared reference",
+                        expr.span,
+                    ));
+                }
                 self.check_deferred_write(
                     ProjKind::IndexWrite,
                     object,
@@ -807,7 +813,7 @@ impl TypeInference {
                     expr.span,
                 );
 
-                if !Self::is_index_assignable_type(&object.ty)
+                if !Self::is_index_assignable_type(Self::peel_refs(&object.ty))
                     && !self.is_active_generic_placeholder_type(
                         &object.ty,
                         generic_scope,
@@ -1393,6 +1399,9 @@ impl TypeInference {
     }
 
     fn is_cast_allowed_resolved(&self, src: &InferType, target: &InferType) -> bool {
+        if let InferType::Enum(name, _) = src {
+            return target.is_integer() && self.type_table.fieldless_enum(name).is_some();
+        }
         if *src == InferType::Char {
             return target.is_integer();
         }

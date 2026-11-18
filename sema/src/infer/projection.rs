@@ -241,7 +241,11 @@ impl TypeInference {
     }
 
     pub(crate) fn project(&self, object: &InferType, kind: &ProjKind) -> Option<InferType> {
-        let elem = match object {
+        let indexed = match kind {
+            ProjKind::Index | ProjKind::IndexWrite => Self::peel_refs(object),
+            _ => object,
+        };
+        let elem = match indexed {
             InferType::Array(inner, _) | InferType::Vec(inner) => Some((**inner).clone()),
             InferType::Slice { elem, .. } => Some((**elem).clone()),
             _ => None,

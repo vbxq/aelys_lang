@@ -476,12 +476,13 @@ type (`Option`, `Result`) cannot receive an `impl` block here:
         code: "E0342",
         title: "method name already taken",
         explanation: "\
-A method name is unique for its type across all its `impl` blocks, and it
-cannot share the name of one of the struct's fields or one of the enum's
-variants, since `x.f(..)` and `T::f(..)` would then name two things:
+A method name is unique for its type across all its `impl` blocks, and an
+associated function cannot share the name of one of the enum's variants,
+since `T::f(..)` would then name two things. A field and a method may share
+a name: `p.x` is the field, `p.x()` the method.
 
-    struct P { x: i64 }
-    impl P { fn x(&self) -> i64 { ... } }   // E0342",
+    enum E { A }
+    impl E { fn A() -> E { ... } }          // E0342",
         severity: Severity::Error,
     },
     DiagnosticInfo {
@@ -1026,6 +1027,67 @@ A `Vec<T>` is refused by E0414 instead, which names the counting-loop
 workaround. This code was carried by E0304 `invalid member access` until
 it was split out: a `for` header is not a field access, and the page it
 sent the reader to described one.",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0450",
+        title: "this arithmetic operation will overflow",
+        explanation: "\
+An integer expression made only of literals is computed by the compiler in
+the type its context expects, one operation at a time. An operation whose
+result leaves that type is refused, as is a shift by the width of the type
+or more.
+
+    let a: i32 = 65536 * 2         // ok, 131072
+    let b: i32 = 65536 * 65536     // E0450
+    let c: u8 = 200 + 100 - 100    // E0450, `200_u8 + 100_u8` overflows
+    let d: u8 = 1 << 8             // E0450",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0451",
+        title: "this operation will panic at runtime",
+        explanation: "\
+A literal integer expression divides by zero or takes a remainder by zero.
+
+    let q: i32 = 10 / (5 - 5)      // E0451",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0452",
+        title: "discriminant value assigned more than once",
+        explanation: "\
+Two variants of an enum have the same discriminant, written or implied.
+
+    enum E { A = 1, B = 0, C }     // E0452, C is 1 like A",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0453",
+        title: "enum discriminant out of range",
+        explanation: "\
+A discriminant does not fit in the type named by `@repr`, or the implicit
+discriminant after the last explicit one overflows it.
+
+    @repr(u8)
+    enum E { A = 256 }             // E0453
+
+    @repr(u8)
+    enum F { A = 255, B }          // E0453, B would be 256",
+        severity: Severity::Error,
+    },
+    DiagnosticInfo {
+        code: "E0454",
+        title: "invalid enum discriminant or representation",
+        explanation: "\
+An explicit discriminant or `@repr(T)` needs an enum whose variants carry
+no data, `T` must be an integer type, and a discriminant is a constant
+integer expression.
+
+    enum E { A(i64) = 1 }          // E0454
+    @repr(f64)
+    enum F { A }                   // E0454
+    enum G { A = f() }             // E0454",
         severity: Severity::Error,
     },
     DiagnosticInfo {

@@ -850,7 +850,17 @@ impl<'a> LoweringContext<'a> {
             } if target.is_integer() => {
                 let v = const_int_of(&self.try_const_expr(inner)?)
                     .ok_or(ConstFoldFailure::FoldNotImplemented)?;
-                Self::const_int_in(expr, v)
+                let v = match &inner.ty {
+                    InferType::Enum(name, _) => self
+                        .program
+                        .type_table
+                        .get_enum(name)
+                        .and_then(|def| def.variants.get(v as usize))
+                        .map(|variant| variant.discr)
+                        .ok_or(ConstFoldFailure::FoldNotImplemented)?,
+                    _ => v,
+                };
+                Self::const_int_in(expr, wrap_to(v, target))
             }
             TypedExprKind::Unary { op, operand } => {
                 let inner = self.try_const_expr(operand)?;
@@ -963,6 +973,18 @@ impl<'a> LoweringContext<'a> {
             | K::Block { .. }
             | K::Loop(_) => NotAConstant,
         }
+    }
+}
+
+fn wrap_to(v: i64, ty: &InferType) -> i64 {
+    match ty {
+        InferType::I8 => v as i8 as i64,
+        InferType::I16 => v as i16 as i64,
+        InferType::I32 => v as i32 as i64,
+        InferType::U8 => v as u8 as i64,
+        InferType::U16 => v as u16 as i64,
+        InferType::U32 => v as u32 as i64,
+        _ => v,
     }
 }
 

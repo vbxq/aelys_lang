@@ -313,6 +313,11 @@ impl TypeInference {
         {
             return self.infer_method_path_call(enum_name, entry, args, span);
         }
+        if variant == "from_i64"
+            && let Some(def) = self.type_table.fieldless_enum(enum_name).cloned()
+        {
+            return self.infer_enum_from_i64(&def, args, span);
+        }
         let enum_def = self.type_table.get_enum(enum_name).cloned();
         match enum_def {
             Some(def) => {
@@ -872,7 +877,7 @@ impl TypeInference {
         )
     }
 
-    fn option_of(&mut self, inner: InferType, span: Span) -> InferType {
+    pub(crate) fn option_of(&mut self, inner: InferType, span: Span) -> InferType {
         let name = self.air_type_name("Option", span);
         if self.type_table.get_enum(&name).is_none() {
             self.errors.push(TypeError::rc_out_of_surface(

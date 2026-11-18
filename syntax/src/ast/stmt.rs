@@ -85,6 +85,7 @@ pub enum StmtKind {
         type_params: Vec<String>,
         variants: Vec<EnumVariantDecl>,
         is_pub: bool,
+        repr: Option<Decorator>,
     },
 
     Const {
@@ -191,6 +192,7 @@ pub struct StructFieldDecl {
 pub struct EnumVariantDecl {
     pub name: String,
     pub fields: Vec<TypeAnnotation>, // empty = unit variant, non-empty = tuple variant
+    pub discriminant: Option<Expr>,
     pub span: Span,
 }
 

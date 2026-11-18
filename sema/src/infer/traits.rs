@@ -1185,14 +1185,6 @@ impl TypeInference {
                 return;
             }
         }
-        let fields: Vec<String> = match &self_ty {
-            InferType::Struct(n, _) => self
-                .type_table
-                .get_struct(n)
-                .map(|d| d.fields.iter().map(|f| f.name.clone()).collect())
-                .unwrap_or_default(),
-            _ => Vec::new(),
-        };
         let key = head_name(&self_ty);
         let path = self.module_path();
         let owned: HashSet<String> = self.local_type_names();
@@ -1200,19 +1192,6 @@ impl TypeInference {
         let tkey = type_key(&qualified_self, &decl.type_params);
         let mut errored = false;
         for m in &tdef.methods {
-            if fields.contains(&m.name) {
-                self.errors.push(TypeError::coded(
-                    "E0342",
-                    format!(
-                        "`{shown_ty}` has a field named `{}`; the method `{}` of `{tshown}` \
-                         cannot share it",
-                        m.name, m.name
-                    ),
-                    "clashes with a field",
-                    decl.span,
-                ));
-                errored = true;
-            }
             if let Some(k) = &key
                 && self
                     .methods
@@ -1463,6 +1442,13 @@ impl TypeInference {
             .filter(|n| !self.imported_types.contains(*n) && !n.contains('.'))
             .cloned()
             .collect()
+    }
+
+    pub(crate) fn has_method(&self, ty: &InferType, member: &str) -> bool {
+        head_name(ty)
+            .and_then(|k| self.methods.get(&k))
+            .is_some_and(|es| es.iter().any(|e| e.name == member))
+            || !self.trait_candidates(ty, member).is_empty()
     }
 
     pub(crate) fn trait_candidates(&self, ty: &InferType, member: &str) -> Vec<MethodEntry> {

@@ -59,24 +59,7 @@ impl Parser {
             TokenKind::LBracket => {
                 self.advance();
                 let inner = self.parse_type()?;
-                self.consume(&TokenKind::Semicolon, "`;` in an array type `[T; N]`")?;
-                let size = self.peek().kind.clone();
-                match size {
-                    TokenKind::Int(n) if n >= 0 => {
-                        self.advance();
-                        self.consume(&TokenKind::RBracket, "`]`")?;
-                        Ok(TypeAnnotation::array_sized(inner, n as u64, start.merge(self.previous().span)))
-                    }
-                    TokenKind::Identifier(_) => {
-                        let name = self.type_path_name()?;
-                        self.consume(&TokenKind::RBracket, "`]`")?;
-                        let mut ann = TypeAnnotation::array_sized(inner, 0, start.merge(self.previous().span));
-                        ann.array_size = None;
-                        ann.array_size_name = Some(name);
-                        Ok(ann)
-                    }
-                    _ => self.unexpected("an array size, an integer literal or a const name"),
-                }
+                self.array_type_tail(inner, start)
             }
             TokenKind::LParen => {
                 self.advance();
@@ -153,10 +136,35 @@ impl Parser {
         }
     }
 
+    fn array_type_tail(&mut self, inner: TypeAnnotation, start: Span) -> Result<TypeAnnotation> {
+        self.consume(&TokenKind::Semicolon, "`;` in an array type `[T; N]`")?;
+        match self.peek().kind.clone() {
+            TokenKind::Int(n) if n >= 0 => {
+                self.advance();
+                self.consume(&TokenKind::RBracket, "`]`")?;
+                Ok(TypeAnnotation::array_sized(inner, n as u64, start.merge(self.previous().span)))
+            }
+            TokenKind::Identifier(_) => {
+                let name = self.type_path_name()?;
+                self.consume(&TokenKind::RBracket, "`]`")?;
+                let mut ann = TypeAnnotation::array_sized(inner, 0, start.merge(self.previous().span));
+                ann.array_size = None;
+                ann.array_size_name = Some(name);
+                Ok(ann)
+            }
+            _ => self.unexpected("an array size, an integer literal or a const name"),
+        }
+    }
+
     fn reference_type(&mut self, start: Span, mutable: bool) -> Result<TypeAnnotation> {
         let kind = if mutable { RefKind::Mut } else { RefKind::Shared };
         if self.match_token(&TokenKind::LBracket) {
             let element = self.parse_type()?;
+            if self.check(&TokenKind::Semicolon) {
+                let mut ann = self.array_type_tail(element, start)?;
+                ann.reference = Some(kind);
+                return Ok(ann);
+            }
             self.consume(&TokenKind::RBracket, "`]`")?;
             let mut ann = TypeAnnotation::slice_referent(element, start.merge(self.previous().span));
             ann.reference = Some(kind);

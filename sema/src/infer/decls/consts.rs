@@ -112,6 +112,13 @@ impl<'a> ConstEval<'a> {
         lit
     }
 
+    pub fn eval_int(&mut self, owner: &str, e: &Expr, want: &InferType) -> Option<i128> {
+        match self.eval(owner, e, Some(want)).ok()? {
+            (Val::Int(v), ty) if ty.is_integer() => Some(v),
+            _ => None,
+        }
+    }
+
     fn compute(&mut self, name: &str, src: &ConstSource) -> Option<ConstLit> {
         let Some(ty) = scalar_type(&src.ann) else {
             self.errors.push(TypeError::not_supported_yet(

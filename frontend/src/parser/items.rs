@@ -45,6 +45,11 @@ impl Parser {
         let is_pub = self.visibility()?;
         let kind = self.peek().kind.clone();
         let next = self.peek_at(1).kind.clone();
+        if kind != TokenKind::Enum
+            && let Some(repr) = attrs.iter().find(|a| is_int_repr(a))
+        {
+            return self.fail(130, "`#[repr]` with an integer type applies to an enum", repr.span);
+        }
         let mut stmts = match kind {
             TokenKind::Fn => vec![self.function_stmt(&attrs, is_pub, false)?],
             TokenKind::Nogc if next == TokenKind::Fn => {
@@ -64,7 +69,7 @@ impl Parser {
             }
             TokenKind::Unsafe | TokenKind::Extern => self.extern_block(is_pub)?,
             TokenKind::Struct => vec![self.struct_declaration(is_pub)?],
-            TokenKind::Enum => vec![self.enum_declaration(is_pub)?],
+            TokenKind::Enum => vec![self.enum_declaration(is_pub, &attrs)?],
             TokenKind::Trait => vec![self.trait_declaration(is_pub)?],
             TokenKind::Impl => {
                 if is_pub {
@@ -604,7 +609,17 @@ impl Parser {
         ))
     }
 
-    fn enum_declaration(&mut self, is_pub: bool) -> Result<Stmt> {
+    fn enum_declaration(&mut self, is_pub: bool, attrs: &[Decorator]) -> Result<Stmt> {
+        let mut reprs = attrs.iter().filter(|a| a.name == "repr");
+        let repr = reprs.next().cloned();
+        if let Some(extra) = reprs.next() {
+            return self.fail(130, "an enum takes a single `#[repr(T)]`", extra.span);
+        }
+        if let Some(r) = &repr
+            && !matches!(r.args.as_slice(), [AttrArg::Word(_)])
+        {
+            return self.fail(130, "`#[repr]` takes one integer type, as in `#[repr(i32)]`", r.span);
+        }
         let start = self.peek().span;
         self.advance();
         let name = self.capitalized_name("enum")?;
@@ -630,16 +645,16 @@ impl Parser {
                     "a variant with named fields is not supported; use a tuple variant",
                     variant_span.merge(self.peek().span),
                 );
-            } else if self.check(&TokenKind::Eq) {
-                return self.fail(
-                    127,
-                    "an explicit discriminant is not supported",
-                    variant_span.merge(self.peek().span),
-                );
             }
+            let discriminant = if self.match_token(&TokenKind::Eq) {
+                Some(self.expression()?)
+            } else {
+                None
+            };
             variants.push(EnumVariantDecl {
                 name: variant_name,
                 fields,
+                discriminant,
                 span: variant_span.merge(self.previous().span),
             });
             if !self.match_token(&TokenKind::Comma) {
@@ -653,6 +668,7 @@ impl Parser {
                 type_params,
                 variants,
                 is_pub,
+                repr,
             },
             start.merge(self.previous().span),
         ))
@@ -1052,4 +1068,9 @@ fn needs_stmt(path: Vec<String>, kind: ImportKind, span: Span) -> Stmt {
         }),
         span,
     )
+}
+
+fn is_int_repr(attr: &Decorator) -> bool {
+    const INTS: [&str; 10] = ["i8", "i16", "i32", "i64", "isize", "u8", "u16", "u32", "u64", "usize"];
+    attr.name == "repr" && matches!(attr.args.as_slice(), [AttrArg::Word(w)] if INTS.contains(&w.as_str()))
 }

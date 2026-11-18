@@ -299,11 +299,6 @@ impl TypeInference {
             Some(qualified) => crate::modules::strip_type_head(qualified).replace('.', "$"),
             None => type_name.clone(),
         };
-        let fields: Vec<String> = self
-            .type_table
-            .get_struct(&type_name)
-            .map(|d| d.fields.iter().map(|f| f.name.clone()).collect())
-            .unwrap_or_default();
         let variants: Vec<String> = self
             .type_table
             .get_enum(&type_name)
@@ -314,15 +309,6 @@ impl TypeInference {
         for method in decl.methods {
             let mut func = method.func;
             let mname = func.name.clone();
-            if fields.contains(&mname) {
-                self.errors.push(TypeError::coded(
-                    "E0342",
-                    format!("`{shown}` has a field named `{mname}`; a method cannot share it"),
-                    "clashes with a field",
-                    func.span,
-                ));
-                continue;
-            }
             if variants.contains(&mname) {
                 self.errors.push(TypeError::coded(
                     "E0342",
