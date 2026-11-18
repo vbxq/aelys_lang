@@ -143,9 +143,15 @@ fn a_user_file_named_like_the_object_is_kept_byte_for_byte() {
     fs::create_dir_all(dir.path().join("out dir")).unwrap();
     let keep = dir.path().join("out dir/keep.o");
     fs::write(&keep, b"user data, not an object").unwrap();
-    let c = run(&bin, dir.path(), &["compile", "src/prog.aelys", "-o", "out dir/keep"]);
+    let c = run(
+        &bin,
+        dir.path(),
+        &["compile", "src/prog.aelys", "-o", "out dir/keep"],
+    );
     assert!(c.status.success(), "compile failed:\n{}", text(&c.stderr));
-    let r = Command::new(dir.path().join("out dir/keep")).output().unwrap();
+    let r = Command::new(dir.path().join("out dir/keep"))
+        .output()
+        .unwrap();
     assert_eq!(text(&r.stdout), "ran\n");
     assert_eq!(fs::read(&keep).unwrap(), b"user data, not an object");
 }
@@ -177,7 +183,10 @@ fn an_output_that_names_the_source_is_refused() {
                 "stderr: {}",
                 text(&c.stderr)
             );
-            assert_eq!(fs::read_to_string(dir.path().join("src/prog.aelys")).unwrap(), src);
+            assert_eq!(
+                fs::read_to_string(dir.path().join("src/prog.aelys")).unwrap(),
+                src
+            );
         }
     }
 }

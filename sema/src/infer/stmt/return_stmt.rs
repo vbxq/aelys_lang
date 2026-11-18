@@ -48,7 +48,8 @@ impl TypeInference {
                     fallthrough: false,
                 },
                 (Some(value), InferType::Null) if !matches!(value.ty, InferType::Null) => {
-                    self.errors.push(TypeError::value_in_unit_fn(&func_name, &value.ty, span));
+                    self.errors
+                        .push(TypeError::value_in_unit_fn(&func_name, &value.ty, span));
                     return TypedStmtKind::Return(typed_expr);
                 }
                 _ => ConstraintReason::Return { func_name },

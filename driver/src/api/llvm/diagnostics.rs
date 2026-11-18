@@ -618,7 +618,11 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
                     fallthrough,
                 },
             ) => {
-                let declared = if matches!(expected, InferType::Null) { found } else { expected };
+                let declared = if matches!(expected, InferType::Null) {
+                    found
+                } else {
+                    expected
+                };
                 if *fallthrough {
                     (
                         "E0301",
@@ -631,7 +635,9 @@ fn type_error_to_diagnostic(error: &TypeError, source: &Arc<Source>) -> Diagnost
                 } else {
                     (
                         "E0301",
-                        format!("`{func_name}` returns `{declared}`, but this `return` gives no value"),
+                        format!(
+                            "`{func_name}` returns `{declared}`, but this `return` gives no value"
+                        ),
                         "no value given here".to_string(),
                     )
                 }

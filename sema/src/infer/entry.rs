@@ -563,8 +563,7 @@ impl TypeInference {
                 !(matches!(
                     &err.reason,
                     ConstraintReason::TypeAnnotation { .. } | ConstraintReason::StructField { .. }
-                )
-                    && (is_type_param(inf, expected) || is_type_param(inf, found)))
+                ) && (is_type_param(inf, expected) || is_type_param(inf, found)))
             }
             _ => true,
         };

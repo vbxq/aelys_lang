@@ -50,8 +50,11 @@ impl TypeInference {
                 if matches!(return_type, InferType::Null)
                     && !matches!(typed_expr.ty, InferType::Null)
                 {
-                    self.errors
-                        .push(TypeError::value_in_unit_fn(&func_name, &typed_expr.ty, expr.span));
+                    self.errors.push(TypeError::value_in_unit_fn(
+                        &func_name,
+                        &typed_expr.ty,
+                        expr.span,
+                    ));
                     return TypedStmt {
                         kind: TypedStmtKind::Return(Some(typed_expr)),
                         span: stmt.span,
