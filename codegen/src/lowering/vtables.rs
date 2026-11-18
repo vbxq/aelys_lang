@@ -46,25 +46,6 @@ impl CodegenContext {
             global.set_constant(true);
             global.set_initializer(&ptr_ty.const_array(&slots));
         }
-
-        let entries = &program.rc_type_table.entries;
-        for (q, _) in &program.dyn_tables.slots {
-            let mut row = vec![ptr_ty.const_null()];
-            for entry in entries {
-                let vt = program
-                    .dyn_tables
-                    .vtables
-                    .iter()
-                    .find(|v| v.trait_q == *q && v.self_ty == entry.ty)
-                    .and_then(|v| self.module.get_global(&vtable_symbol(q, &v.self_ty)));
-                row.push(vt.map_or(ptr_ty.const_null(), |g| g.as_pointer_value()));
-            }
-            let table = ptr_ty.array_type(row.len() as u32);
-            let global = self.module.add_global(table, None, &vtable_index_symbol(q));
-            global.set_linkage(Linkage::Internal);
-            global.set_constant(true);
-            global.set_initializer(&ptr_ty.const_array(&row));
-        }
         Ok(())
     }
 }
@@ -75,6 +56,31 @@ impl<'a> FunctionCodegen<'a> {
             .get_global(symbol)
             .map(|g| g.as_pointer_value())
             .ok_or_else(|| llvm_err(format!("trait object table `{symbol}` was not emitted")))
+    }
+
+    fn vtable_index(&self, q: &str) -> PointerValue<'static> {
+        let symbol = vtable_index_symbol(q);
+        if let Some(g) = self.module.get_global(&symbol) {
+            return g.as_pointer_value();
+        }
+        let ptr_ty = self.context.ptr_type(AddressSpace::default());
+        let mut row = vec![ptr_ty.const_null()];
+        for entry in &self.program.rc_type_table.entries {
+            let vt = self
+                .program
+                .dyn_tables
+                .vtables
+                .iter()
+                .find(|v| v.trait_q == q && v.self_ty == entry.ty)
+                .and_then(|v| self.module.get_global(&vtable_symbol(q, &v.self_ty)));
+            row.push(vt.map_or(ptr_ty.const_null(), |g| g.as_pointer_value()));
+        }
+        let table = ptr_ty.array_type(row.len() as u32);
+        let global = self.module.add_global(table, None, &symbol);
+        global.set_linkage(Linkage::Internal);
+        global.set_constant(true);
+        global.set_initializer(&ptr_ty.const_array(&row));
+        global.as_pointer_value()
     }
 
     fn fat_pointer(
@@ -132,7 +138,7 @@ impl<'a> FunctionCodegen<'a> {
                     .build_int_z_extend(id, self.context.i64_type(), "dyn_type_index")
                     .map_err(llvm_err)?;
                 let ptr_ty = self.context.ptr_type(AddressSpace::default());
-                let index = self.dyn_global(&vtable_index_symbol(q))?;
+                let index = self.vtable_index(q);
                 let slot = unsafe {
                     self.builder
                         .build_gep(ptr_ty, index, &[id], "dyn_vtable_slot")
