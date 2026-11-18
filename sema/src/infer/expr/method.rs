@@ -310,6 +310,9 @@ impl TypeInference {
                     }
                     return Ok((TypedExprKind::Null, InferType::Dynamic));
                 }
+                if member == "len" && args.is_empty() {
+                    return Ok(self.member_of_typed(typed_object, member, span));
+                }
                 if self.any_table_has(member) {
                     self.receiver_unknown(member, span);
                     for a in args {
