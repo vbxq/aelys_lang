@@ -1,0 +1,6 @@
+const N: i64 = 3
+type Row = [i64; N]
+fn main() {
+    let r: Row = [1, 2, 3]
+    println(r.len)
+}

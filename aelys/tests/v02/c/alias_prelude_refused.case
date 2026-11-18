@@ -1,0 +1,4 @@
+type Option = i64
+fn main() {
+    println(1)
+}
