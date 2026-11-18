@@ -86,6 +86,7 @@ fn rc_i64() -> AirType {
 
 fn program_with(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> AirProgram {
     let mut p = AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs,
         enums,
@@ -191,6 +192,7 @@ fn unit_mixed_carrier_composes_struct_then_enum() {
 #[test]
 fn unit_missing_field_offset_is_a_hard_error() {
     let mut p = AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs: vec![struct_def("Pair", &[("a", rc_i64())])],
         enums: vec![],
@@ -484,6 +486,7 @@ fn b_extra_collect_dedups_and_orders_by_appearance() {
         span: None,
     };
     let mut p = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "f".into(),
@@ -556,6 +559,7 @@ fn opta_no_real_type_is_zero() {
         span: None,
     };
     let mut p = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "f".into(),

@@ -63,6 +63,7 @@ fn run_air_program(name: &str, program: &AirProgram) -> Option<Vec<(&'static str
 
 fn program_with(locals: Vec<AirLocal>, stmts: Vec<AirStmt>, ret: Operand) -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "main".to_string(),

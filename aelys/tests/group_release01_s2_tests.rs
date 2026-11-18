@@ -1745,6 +1745,7 @@ fn program_with(stmts: Vec<AirStmtKind>, ret: Operand) -> AirProgram {
         span: None,
     };
     AirProgram {
+        impls: Vec::new(),
         functions: vec![
             function(0, "f", vec![param], stmts, ret),
             function(

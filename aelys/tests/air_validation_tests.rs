@@ -724,6 +724,7 @@ fn caller() -> i64 {
 
 fn make_valid_program() -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "test_fn".to_string(),
@@ -803,6 +804,7 @@ fn validate_rejects_void_local_non_return() {
 #[test]
 fn validate_accepts_void_return_local_on_void_function() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "void_fn".to_string(),
@@ -997,6 +999,7 @@ fn main() -> i64 {
 #[test]
 fn validate_rejects_undeclared_block_reference() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "bad_block_ref".to_string(),
@@ -1048,6 +1051,7 @@ fn validate_rejects_undeclared_block_reference() {
 #[test]
 fn validate_rejects_undeclared_local_reference() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "bad_local_ref".to_string(),
@@ -1149,6 +1153,7 @@ fn caller() -> i32 {
 #[test]
 fn validate_collects_multiple_errors() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "multi_bad".to_string(),
@@ -1220,6 +1225,7 @@ fn validate_collects_multiple_errors() {
 #[test]
 fn validate_skips_extern_functions() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "extern_fn".to_string(),
@@ -1345,6 +1351,7 @@ fn validate_rejects_opaque_nested_in_array() {
 #[test]
 fn validate_rejects_opaque_struct_field() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs: vec![AirStructDef {
             name: "BadStruct".to_string(),
@@ -1449,6 +1456,7 @@ fn main() {
 #[test]
 fn validate_rejects_opaque_from_tuple_or_range() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "tuple_leak".to_string(),
@@ -1670,6 +1678,7 @@ fn a_generic_enum_named_without_its_type_arguments_is_refused() {
     };
 
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![seed_i64, seed_str, ambiguous_none],
         structs: vec![],
         enums: vec![option_enum],
@@ -1715,6 +1724,7 @@ fn c_fnptr() -> AirType {
 #[test]
 fn monomorphize_distinguishes_fnptr_calling_conventions_in_enum_type_args() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![
             AirFunction {
                 id: FunctionId(0),
@@ -2106,6 +2116,7 @@ fn program_with_parts(
     globals: Vec<AirGlobal>,
 ) -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions,
         structs: vec![],
         enums,

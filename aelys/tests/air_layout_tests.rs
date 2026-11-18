@@ -24,6 +24,7 @@ fn sdef(name: &str, fields: Vec<AirStructField>) -> AirStructDef {
 
 fn program(structs: Vec<AirStructDef>) -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs,
         enums: vec![],
@@ -54,6 +55,7 @@ fn variant(name: &str, tag: u32, payload: Vec<AirType>) -> AirEnumVariant {
 
 fn program_with_enums(structs: Vec<AirStructDef>, enums: Vec<AirEnumDef>) -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs,
         enums,

@@ -250,6 +250,7 @@ fn opt_enum() -> AirEnumDef {
 
 fn program_of(functions: Vec<AirFunction>) -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions,
         structs: vec![],
         enums: vec![opt_enum()],

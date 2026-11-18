@@ -56,6 +56,7 @@ fn default_attribs() -> FunctionAttribs {
 #[test]
 fn array_index_read_generates_gep_and_bounds_check() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),
@@ -154,6 +155,7 @@ fn array_index_read_generates_gep_and_bounds_check() {
 #[test]
 fn string_index_below_sema_is_refused_by_codegen() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),
@@ -225,6 +227,7 @@ fn string_index_below_sema_is_refused_by_codegen() {
 #[test]
 fn array_index_write_generates_gep_and_store() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),
@@ -313,6 +316,7 @@ fn array_index_write_generates_gep_and_store() {
 #[test]
 fn bounds_check_structure_has_unreachable_after_panic() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),

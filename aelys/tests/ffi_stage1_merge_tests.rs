@@ -397,6 +397,7 @@ fn foreign_declaration(name: &str, params: &[InferType], nogc: bool) -> TypedStm
 
 fn program_of(stmts: Vec<TypedStmt>) -> TypedProgram {
     TypedProgram {
+        impls: Vec::new(), traits: Vec::new(),
         stmts,
         source: Source::new("<unit>", ""),
         type_table: TypeTable::new(),

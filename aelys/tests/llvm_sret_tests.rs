@@ -51,6 +51,7 @@ fn default_attribs() -> FunctionAttribs {
 #[test]
 fn extern_c_struct_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![
             AirFunction {
                 id: FunctionId(0),
@@ -156,6 +157,7 @@ fn extern_c_struct_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
 #[test]
 fn c_convention_aelys_fn_returning_struct_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "make_greeting".to_string(),
@@ -222,6 +224,7 @@ fn c_convention_aelys_fn_returning_struct_uses_sret_on_windows_and_is_rejected_e
 #[test]
 fn fastcc_struct_return_does_not_use_sret() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "internal_fn".to_string(),
@@ -281,6 +284,7 @@ fn fastcc_struct_return_does_not_use_sret() {
 #[test]
 fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![
             AirFunction {
                 id: FunctionId(0),
@@ -408,6 +412,7 @@ fn extern_c_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
 #[test]
 fn extern_c_data_enum_param_is_rejected() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "consume_opt".to_string(),
@@ -469,6 +474,7 @@ fn extern_c_data_enum_param_is_rejected() {
 #[test]
 fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewhere() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![
             AirFunction {
                 id: FunctionId(0),
@@ -626,6 +632,7 @@ fn indirect_c_fnptr_data_enum_return_uses_sret_on_windows_and_is_rejected_elsewh
 #[test]
 fn c_convention_defined_data_enum_param_is_rejected() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "consume_opt".to_string(),

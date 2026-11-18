@@ -44,6 +44,7 @@ fn compile_air_to_verified_ir(program: &AirProgram) -> String {
 #[test]
 fn llvm_panic_uses_ptr_len_signature() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "panic_probe".to_string(),
@@ -96,6 +97,7 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
     assert_eq!(air_layout.align, 8);
 
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "sink".to_string(),
@@ -215,6 +217,7 @@ fn air_and_llvm_string_layout_match_x86_64_abi() {
 #[test]
 fn ssa_params_use_llvm_args_directly() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "echo".to_string(),
@@ -285,6 +288,7 @@ fn ssa_params_use_llvm_args_directly() {
 #[test]
 fn mutable_locals_use_alloca_with_correct_alignment() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "mut_probe".to_string(),

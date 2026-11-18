@@ -47,6 +47,7 @@ fn default_attribs() -> FunctionAttribs {
 #[test]
 fn multi_block_assign_gets_alloca_and_verifies() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),
@@ -143,6 +144,7 @@ fn multi_block_assign_gets_alloca_and_verifies() {
 #[test]
 fn same_block_reassign_stays_ssa() {
     let program = AirProgram {
+        impls: Vec::new(),
         functions: vec![AirFunction {
             id: FunctionId(0),
             name: "probe".to_string(),

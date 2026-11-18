@@ -3,6 +3,7 @@ use aelys_air::*;
 
 fn empty_program() -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: vec![],
         structs: vec![],
         enums: vec![],
@@ -285,6 +286,7 @@ fn mono_instances() {
         span: None,
     });
     p.mono_instances.push(MonoInstance {
+        original_name: String::new(),
         original: FunctionId(0),
         type_args: vec![AirType::I64],
         result: FunctionId(1),

@@ -21,6 +21,7 @@ use tempfile::tempdir;
 
 fn empty_program() -> AirProgram {
     AirProgram {
+        impls: Vec::new(),
         functions: Vec::new(),
         structs: Vec::new(),
         enums: Vec::new(),
@@ -803,6 +804,7 @@ fn declaration(name: &str) -> TypedStmt {
 #[test]
 fn a_body_less_declaration_is_visited_and_the_reserved_prefix_fires_on_it() {
     let program = TypedProgram {
+        impls: Vec::new(), traits: Vec::new(),
         stmts: vec![declaration("__aelys_probe"), declaration("plain")],
         source: Source::new("<unit>", ""),
         type_table: TypeTable::new(),
