@@ -142,3 +142,32 @@ fn check_has_its_own_cache() {
     assert!(!second.stderr.contains("Checking"), "{}", second.stderr);
     assert!(compiles(&ae(&dir, &["build"])));
 }
+
+#[test]
+fn editing_a_module_inside_an_import_cycle_recompiles() {
+    let dir = project(
+        "c_cycle",
+        "",
+        "needs ev\n\nfn main() -> i64 {\n    println(ev.parity(7))\n    return 0\n}\n",
+    );
+    write(
+        &dir.join("src/ev.aelys"),
+        "needs od\n\npub fn is_even(n: i64) -> bool {\n    if n == 0 { return true }\n    return od.is_odd(n - 1)\n}\n\npub fn parity(n: i64) -> i64 {\n    if is_even(n) { return od.base() }\n    return od.base() + 1\n}\n",
+    );
+    let od = dir.join("src/od.aelys");
+    let odd = |base: i64| {
+        format!(
+            "needs ev\n\npub fn is_odd(n: i64) -> bool {{\n    if n == 0 {{ return false }}\n    return ev.is_even(n - 1)\n}}\n\npub fn base() -> i64 {{\n    return {base}\n}}\n"
+        )
+    };
+    write(&od, &odd(10));
+    let first = ae(&dir, &["run"]);
+    assert!(compiles(&first));
+    assert_eq!(first.stdout, "11\n");
+    assert!(!compiles(&ae(&dir, &["build"])));
+
+    write(&od, &odd(20));
+    let edited = ae(&dir, &["run"]);
+    assert!(compiles(&edited));
+    assert_eq!(edited.stdout, "21\n");
+}
