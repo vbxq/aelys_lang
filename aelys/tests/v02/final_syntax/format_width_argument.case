@@ -1,0 +1,10 @@
+fn main() {
+    let w = 6;
+    let p = 2;
+    println!("[{0:>w$}]", 42);
+    println!("[{:>1$}]", 42, 5);
+    println!("[{:<width$}|{:^2$}]", "ab", "c", 5, width = 4);
+    println!("[{:.p$}]", 3.14159);
+    println!("[{:>w$.p$}]", 2.5);
+    println!("[{:$>4}]", 7);
+}

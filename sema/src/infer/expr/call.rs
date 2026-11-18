@@ -149,9 +149,9 @@ impl TypeInference {
         };
         if let ExprKind::Identifier(name) = &callee.kind
             && name == aelys_syntax::FMT_SPEC_MARKER
-            && args.len() == 2
+            && args.len() >= 2
         {
-            return self.infer_fmt_spec(&args[0], &args[1], span);
+            return self.infer_fmt_spec(&args[0], &args[1], &args[2..], span);
         }
         if let ExprKind::Identifier(name) = &callee.kind
             && self.unsafe_depth == 0

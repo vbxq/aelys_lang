@@ -333,43 +333,50 @@ impl Parser {
             match piece {
                 Piece::Text(t) => parts.push(FmtStringPart::Literal(t)),
                 Piece::Arg(arg, spec) => {
-                    let value = match arg {
-                        ArgRef::Next | ArgRef::Index(_) => {
-                            let i = match arg {
-                                ArgRef::Index(i) => i,
-                                _ => {
-                                    next += 1;
-                                    next - 1
-                                }
-                            };
-                            let Some(v) = positional.get(i) else {
-                                let n = positional.len();
-                                let plural = if n == 1 { "argument" } else { "arguments" };
-                                return self.fail(
-                                    394,
-                                    &format!("invalid reference to positional argument {i} (there is {n} {plural})"),
-                                    span,
-                                );
-                            };
-                            used_pos[i] = true;
-                            v.clone()
-                        }
-                        ArgRef::Name(n) => match named.iter().position(|(m, _)| *m == n) {
-                            Some(i) => {
-                                used_named[i] = true;
-                                named[i].1.clone()
+                    let mut resolve = |arg: ArgRef| -> std::result::Result<Expr, String> {
+                        match arg {
+                            ArgRef::Next | ArgRef::Index(_) => {
+                                let i = match arg {
+                                    ArgRef::Index(i) => i,
+                                    _ => {
+                                        next += 1;
+                                        next - 1
+                                    }
+                                };
+                                let Some(v) = positional.get(i) else {
+                                    let n = positional.len();
+                                    let plural = if n == 1 { "argument" } else { "arguments" };
+                                    return Err(format!(
+                                        "invalid reference to positional argument {i} (there is {n} {plural})"
+                                    ));
+                                };
+                                used_pos[i] = true;
+                                Ok(v.clone())
                             }
-                            None => expr(ExprKind::Identifier(n), span),
-                        },
+                            ArgRef::Name(n) => Ok(match named.iter().position(|(m, _)| *m == n) {
+                                Some(i) => {
+                                    used_named[i] = true;
+                                    named[i].1.clone()
+                                }
+                                None => expr(ExprKind::Identifier(n), span),
+                            }),
+                        }
                     };
+                    let value = resolve(arg).or_else(|m| self.fail(394, &m, span))?;
                     let value = match spec {
-                        Some(spec) => expr(
-                            ExprKind::Call {
-                                callee: Box::new(expr(ExprKind::Identifier(FMT_SPEC_MARKER.to_string()), span)),
-                                args: vec![value, expr(ExprKind::String(spec), span)],
-                            },
-                            span,
-                        ),
+                        Some(spec) => {
+                            let mut args = vec![value, expr(ExprKind::String(spec.clone()), span)];
+                            for count in count_args(&spec) {
+                                args.push(resolve(count).or_else(|m| self.fail(394, &m, span))?);
+                            }
+                            expr(
+                                ExprKind::Call {
+                                    callee: Box::new(expr(ExprKind::Identifier(FMT_SPEC_MARKER.to_string()), span)),
+                                    args,
+                                },
+                                span,
+                            )
+                        }
                         None => value,
                     };
                     parts.push(FmtStringPart::Expr(Box::new(value)));
@@ -519,6 +526,22 @@ impl Parser {
             span,
         )
     }
+}
+
+fn count_args(spec: &str) -> Vec<ArgRef> {
+    let mut out = Vec::new();
+    for (at, _) in spec.match_indices('$') {
+        let head = &spec[..at];
+        let name = &head[head.trim_end_matches(|c: char| c.is_alphanumeric() || c == '_').len()..];
+        if name.is_empty() {
+            continue;
+        }
+        out.push(match name.parse() {
+            Ok(i) => ArgRef::Index(i),
+            Err(_) => ArgRef::Name(name.to_string()),
+        });
+    }
+    out
 }
 
 fn is_spec(e: &Expr) -> bool {
