@@ -1,7 +1,7 @@
 use aelys_common::registry;
 
 pub fn run_explain(code: &str) {
-    match registry::lookup(code) {
+    match registry::lookup(&code.to_ascii_uppercase()) {
         Some(info) => {
             println!("{}: {}\n", info.code, info.title);
             println!("{}", info.explanation);

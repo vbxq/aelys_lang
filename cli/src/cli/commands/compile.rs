@@ -51,11 +51,9 @@ pub fn run_with_options(
             }
 
             match artifact {
-                CompiledArtifact::LlvmIr(written) => eprintln!("Wrote {}", written.display()),
-                CompiledArtifact::Executable(written) if requested.is_some() => {
+                CompiledArtifact::LlvmIr(written) | CompiledArtifact::Executable(written) => {
                     eprintln!("Wrote {}", written.display())
                 }
-                CompiledArtifact::Executable(_) => {}
                 CompiledArtifact::Object(written) => eprintln!(
                     "Wrote {} (an object file: no `main`, so nothing was linked)",
                     written.display()

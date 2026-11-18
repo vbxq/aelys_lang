@@ -1,17 +1,28 @@
 use super::{Lexer, Result};
-use aelys_common::error::{AelysError, CompileErrorKind};
-use aelys_syntax::{FmtPart, TokenKind};
+use aelys_common::error::{AelysError, CompileError, CompileErrorKind};
+use aelys_syntax::{FmtPart, Span, TokenKind};
+use std::sync::Arc;
 
 impl Lexer {
     pub(super) fn string(&mut self) -> Result<()> {
         let mut parts: Vec<FmtPart> = Vec::new();
         let mut current_literal = String::new();
         let mut has_format = false;
+        let open_line = self.line;
+        let mut crossed_line = false;
+        let unterminated = |lexer: &Self| {
+            AelysError::Compile(CompileError::new(
+                CompileErrorKind::UnterminatedString,
+                Span::new(lexer.start, lexer.start + 1, open_line, lexer.start_column),
+                Arc::clone(&lexer.source),
+            ))
+        };
 
         while self.peek() != '"' && !self.is_at_end() {
             if self.peek() == '\n' {
                 self.line += 1;
                 self.column = 1;
+                crossed_line = true;
             }
 
             match self.peek() {
@@ -61,6 +72,8 @@ impl Lexer {
                         // }} -> literal }
                         self.advance();
                         current_literal.push('}');
+                    } else if crossed_line {
+                        return Err(unterminated(self));
                     } else {
                         return Err(AelysError::Compile(
                             self.error(CompileErrorKind::UnmatchedCloseBrace),
@@ -74,9 +87,7 @@ impl Lexer {
         }
 
         if self.is_at_end() {
-            return Err(AelysError::Compile(
-                self.error(CompileErrorKind::UnterminatedString),
-            ));
+            return Err(unterminated(self));
         }
 
         self.advance(); // closing "
@@ -94,6 +105,14 @@ impl Lexer {
     }
 
     fn scan_format_expr(&mut self) -> Result<String> {
+        let open = Span::new(self.current - 1, self.current, self.line, self.column - 1);
+        let unterminated = |lexer: &Self| {
+            AelysError::Compile(CompileError::new(
+                CompileErrorKind::UnterminatedFmtExpr,
+                open,
+                Arc::clone(&lexer.source),
+            ))
+        };
         let mut expr = String::new();
         let mut brace_depth = 1;
 
@@ -129,9 +148,7 @@ impl Lexer {
                         }
                     }
                     if self.is_at_end() {
-                        return Err(AelysError::Compile(
-                            self.error(CompileErrorKind::UnterminatedFmtExpr),
-                        ));
+                        return Err(unterminated(self));
                     }
                     expr.push(self.advance());
                 }
@@ -166,8 +183,6 @@ impl Lexer {
             }
         }
 
-        Err(AelysError::Compile(
-            self.error(CompileErrorKind::UnterminatedFmtExpr),
-        ))
+        Err(unterminated(self))
     }
 }

@@ -929,11 +929,14 @@ fn finish_process(program: &str, mut command: Command) -> Result<(), String> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    Err(format!(
-        "`{}` failed with status {:?}\nstdout:\n{}\nstderr:\n{}",
-        program,
-        output.status.code(),
-        stdout.trim(),
-        stderr.trim()
-    ))
+    let mut message = match output.status.code() {
+        Some(code) => format!("`{program}` exited with status {code}"),
+        None => format!("`{program}` was stopped by a signal"),
+    };
+    for (stream, text) in [("stdout", stdout.trim()), ("stderr", stderr.trim())] {
+        if !text.is_empty() {
+            message.push_str(&format!("\n{stream}:\n{text}"));
+        }
+    }
+    Err(message)
 }
