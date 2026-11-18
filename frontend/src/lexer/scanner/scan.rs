@@ -176,6 +176,12 @@ impl Lexer {
 
             c if c.is_ascii_digit() => self.number()?,
 
+            'r' if self.peek() == '#'
+                && (self.peek_next().is_alphabetic() || self.peek_next() == '_') =>
+            {
+                self.raw_identifier()
+            }
+
             c if c.is_alphabetic() || c == '_' => self.identifier(),
 
             _ => {

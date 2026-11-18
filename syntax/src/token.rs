@@ -51,7 +51,6 @@ pub enum TokenKind {
     From, // module system
     For,
     In,
-    Step,
     Struct,
     Enum,
     Match,
@@ -111,6 +110,41 @@ pub enum TokenKind {
 }
 
 impl TokenKind {
+    pub fn keyword_spelling(&self) -> Option<&'static str> {
+        Some(match self {
+            Self::True => "true",
+            Self::False => "false",
+            Self::Null => "null",
+            Self::Let => "let",
+            Self::Mut => "mut",
+            Self::Fn => "fn",
+            Self::If => "if",
+            Self::Else => "else",
+            Self::While => "while",
+            Self::Return => "return",
+            Self::Break => "break",
+            Self::Continue => "continue",
+            Self::And => "and",
+            Self::Or => "or",
+            Self::Not => "not",
+            Self::Pub => "pub",
+            Self::Needs => "needs",
+            Self::As => "as",
+            Self::From => "from",
+            Self::For => "for",
+            Self::In => "in",
+            Self::Struct => "struct",
+            Self::Enum => "enum",
+            Self::Match => "match",
+            Self::Discard => "discard",
+            Self::Catch => "catch",
+            Self::Unsafe => "unsafe",
+            Self::Nogc => "nogc",
+            Self::Extern => "extern",
+            _ => return None,
+        })
+    }
+
     pub fn is_literal(&self) -> bool {
         matches!(
             self,
@@ -187,7 +221,6 @@ impl std::fmt::Display for TokenKind {
             Self::From => write!(f, "from"),
             Self::For => write!(f, "for"),
             Self::In => write!(f, "in"),
-            Self::Step => write!(f, "step"),
             Self::Struct => write!(f, "struct"),
             Self::Enum => write!(f, "enum"),
             Self::Match => write!(f, "match"),

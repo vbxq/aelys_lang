@@ -200,11 +200,30 @@ impl Parser {
                 self.advance();
                 Ok(name)
             }
-            _ => Err(self.error(CompileErrorKind::UnexpectedToken {
-                expected: expected.to_string(),
-                found: self.peek().kind.to_string(),
-            })),
+            kind => {
+                let found = match kind.keyword_spelling() {
+                    Some(word) => {
+                        format!("keyword `{word}`; write `r#{word}` to use it as a name")
+                    }
+                    None => kind.to_string(),
+                };
+                Err(self.error(CompileErrorKind::UnexpectedToken {
+                    expected: expected.to_string(),
+                    found,
+                }))
+            }
         }
+    }
+
+    fn consume_member_name(&mut self, expected: &str) -> Result<String> {
+        let token = self.peek();
+        if let Some(word) = token.kind.keyword_spelling()
+            && token.span.end - token.span.start == word.len()
+        {
+            self.advance();
+            return Ok(word.to_string());
+        }
+        self.consume_identifier(expected)
     }
 
     // the parse goes on after a misnamed binding, so one wrong name gives one diagnostic

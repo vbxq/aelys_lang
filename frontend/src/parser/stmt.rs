@@ -108,7 +108,8 @@ impl Parser {
             };
             let end = self.expression()?;
 
-            let step = if self.match_token(&TokenKind::Step) {
+            let step = if matches!(&self.peek().kind, TokenKind::Identifier(w) if w == "step") {
+                self.advance();
                 Some(self.expression()?)
             } else {
                 None
