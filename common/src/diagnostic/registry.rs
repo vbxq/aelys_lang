@@ -166,8 +166,8 @@ is `nogc`, a builtin trait or a trait declared or imported by the module:
     nogc     a value the managed heap never owns, derived from the type
     eq       `==`: the integers, the floats, `bool`, `char`, `string`,
              or a type with `impl eq`
-    ord      `<`: the integers, the floats, `char`, or a type with
-             `impl ord`; `string` is not one, use `str.compare`
+    ord      `<`: the integers, the floats, `char`, `string` (by its
+             bytes), or a type with `impl ord`
     Display  printing: the integers, the floats, `bool`, `char`,
              `string`, or a type with `impl Display`
 

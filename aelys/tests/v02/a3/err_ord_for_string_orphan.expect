@@ -1,2 +1,2 @@
-refuse E0757
-must live in the module
+refuse E0753
+`string` already implements `ord` structurally
